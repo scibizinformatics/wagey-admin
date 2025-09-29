@@ -1,1274 +1,1163 @@
 <template>
-  <div class="request-page">
-    <!-- Loading State -->
-    <div v-if="loading" class="loading">
-      <div class="spinner"></div>
-      <p>Loading requests...</p>
-    </div>
-
-    <!-- Error State -->
-    <div v-if="error" class="error-state">
-      <div class="error-icon">⚠️</div>
-      <h3>Failed to load requests</h3>
-      <p>{{ error }}</p>
-      <button @click="fetchRequests" class="btn btn-retry">Retry</button>
-    </div>
-
-    <!-- Main Content -->
-    <div v-if="!loading && !error">
-      <!-- Header -->
-      <div class="page-header">
-        <h1 class="page-title">Employee Requests</h1>
-        <div class="header-stats">
-          <div class="stat-card pending">
-            <span class="stat-number">{{ pendingCount }}</span>
-            <span class="stat-label">Pending</span>
-          </div>
-          <div class="stat-card approved">
-            <span class="stat-number">{{ approvedCount }}</span>
-            <span class="stat-label">Approved</span>
-          </div>
-          <div class="stat-card rejected">
-            <span class="stat-number">{{ rejectedCount }}</span>
-            <span class="stat-label">Rejected</span>
-          </div>
+  <q-page class="modern-page">
+    <!-- Minimal Header -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="title-section">
+          <h1 class="page-title">Leave Requests</h1>
+          <p class="page-subtitle">{{ totalRequests }} total requests</p>
         </div>
+        <q-btn
+          icon="refresh"
+          flat
+          round
+          color="grey-6"
+          @click="fetchRequests"
+          :loading="loading"
+          class="refresh-btn"
+        />
+      </div>
+    </div>
+
+    <!-- Elegant Stats Cards -->
+    <div class="stats-section">
+      <div class="stat-card pending">
+        <div class="stat-content">
+          <div class="stat-number">{{ pendingCount }}</div>
+          <div class="stat-label">Pending</div>
+        </div>
+        <div class="stat-indicator"></div>
       </div>
 
-      <!-- Filters -->
-      <div class="filters">
-        <select v-model="selectedType" class="filter-select">
-          <option value="">All Request Types</option>
-          <option value="leave">Leave Request</option>
-          <option value="timeoff">Time-Off</option>
-          <option value="schedule">Schedule Exchange</option>
-          <option value="overtime">Overtime</option>
-        </select>
+      <div class="stat-card approved">
+        <div class="stat-content">
+          <div class="stat-number">{{ approvedCount }}</div>
+          <div class="stat-label">Approved</div>
+        </div>
+        <div class="stat-indicator"></div>
+      </div>
 
-        <select v-model="selectedStatus" class="filter-select">
-          <option value="">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-        </select>
+      <div class="stat-card rejected">
+        <div class="stat-content">
+          <div class="stat-number">{{ rejectedCount }}</div>
+          <div class="stat-label">Rejected</div>
+        </div>
+        <div class="stat-indicator"></div>
+      </div>
+    </div>
 
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search by employee name..."
+    <!-- Minimal Filter Bar -->
+    <div class="filter-bar">
+      <div class="search-container">
+        <q-input
+          v-model="searchTerm"
+          placeholder="Search requests..."
+          outlined
+          dense
+          borderless
           class="search-input"
+        >
+          <template v-slot:prepend>
+            <q-icon name="search" color="grey-5" size="20px" />
+          </template>
+        </q-input>
+      </div>
+
+      <div class="filter-group">
+        <q-select
+          v-model="selectedFilter"
+          :options="filterOptions"
+          outlined
+          dense
+          borderless
+          label="Type"
+          class="filter-select"
+          map-options
+          emit-value
         />
 
-        <button @click="fetchRequests" class="btn btn-refresh" title="Refresh">🔄 Refresh</button>
+        <q-select
+          v-model="statusFilter"
+          :options="statusOptions"
+          outlined
+          dense
+          borderless
+          label="Status"
+          class="filter-select"
+          map-options
+          emit-value
+        />
       </div>
+    </div>
 
-      <!-- Requests List -->
-      <div class="requests-container">
-        <div
-          v-for="request in filteredRequests"
-          :key="request.id"
-          class="request-card"
-          :class="request.status"
-        >
-          <!-- Request Header -->
-          <div class="request-header">
-            <div class="request-info">
-              <h3 class="employee-name">{{ request.employeeName }}</h3>
-              <span class="request-type" :class="request.type">
-                {{ formatRequestType(request.type) }}
-              </span>
-            </div>
-            <div class="request-meta">
-              <span class="request-date">{{ formatDate(request.submittedDate) }}</span>
-              <span class="status-badge" :class="request.status">
-                {{ request.status.toUpperCase() }}
-              </span>
+    <!-- Loading State -->
+    <div v-if="loading" class="loading-state">
+      <div class="loading-spinner">
+        <q-spinner size="32px" color="primary" thickness="3" />
+      </div>
+      <div class="loading-text">Loading requests...</div>
+    </div>
+
+    <!-- Modern Table -->
+    <div v-else-if="filteredRequests.length > 0" class="table-container">
+      <q-table
+        :rows="filteredRequests"
+        :columns="tableColumns"
+        row-key="id"
+        flat
+        class="elegant-table"
+        :pagination="{ rowsPerPage: 15 }"
+        separator="none"
+      >
+        <template v-slot:body="props">
+          <q-tr :props="props" class="table-row" @click="openDetails(props.row)">
+            <q-td key="employeeName" :props="props" class="employee-cell">
+              <div class="employee-info">
+                <div class="employee-avatar">
+                  {{ props.row.employeeName.charAt(0).toUpperCase() }}
+                </div>
+                <div class="employee-details">
+                  <div class="employee-name">{{ props.row.employeeName }}</div>
+                  <div class="employee-dept">{{ props.row.department || 'General' }}</div>
+                </div>
+              </div>
+            </q-td>
+
+            <q-td key="type" :props="props" class="type-cell">
+              <div class="type-chip" :class="props.row.type">
+                {{ getTypeLabel(props.row.type) }}
+              </div>
+            </q-td>
+
+            <q-td key="dates" :props="props" class="dates-cell">
+              <div class="date-range">
+                <div class="start-date">{{ formatDate(props.row.startDate) }}</div>
+                <div class="date-separator">→</div>
+                <div class="end-date">{{ formatDate(props.row.endDate) }}</div>
+              </div>
+              <div class="duration">{{ props.row.duration }}</div>
+            </q-td>
+
+            <q-td key="status" :props="props" class="status-cell">
+              <div class="status-badge" :class="props.row.status">
+                {{ props.row.status }}
+              </div>
+            </q-td>
+
+            <q-td key="actions" :props="props" class="actions-cell">
+              <div class="action-buttons">
+                <q-btn
+                  v-if="props.row.status === 'pending'"
+                  icon="check"
+                  flat
+                  round
+                  size="sm"
+                  color="positive"
+                  class="action-btn approve-btn"
+                  @click.stop="approveRequest(props.row)"
+                  :loading="actionLoading === `approve-${props.row.id}`"
+                />
+                <q-btn
+                  v-if="props.row.status === 'pending'"
+                  icon="close"
+                  flat
+                  round
+                  size="sm"
+                  color="negative"
+                  class="action-btn reject-btn"
+                  @click.stop="rejectRequest(props.row)"
+                  :loading="actionLoading === `reject-${props.row.id}`"
+                />
+                <q-btn
+                  icon="visibility"
+                  flat
+                  round
+                  size="sm"
+                  color="grey-5"
+                  class="action-btn view-btn"
+                  @click.stop="openDetails(props.row)"
+                />
+              </div>
+            </q-td>
+          </q-tr>
+        </template>
+      </q-table>
+    </div>
+
+    <!-- Empty State -->
+    <div v-else class="empty-state">
+      <div class="empty-icon">
+        <q-icon name="search_off" size="48px" color="grey-3" />
+      </div>
+      <div class="empty-title">No requests found</div>
+      <div class="empty-subtitle">Try adjusting your search or filters</div>
+    </div>
+
+    <!-- Elegant Details Dialog -->
+    <q-dialog v-model="showDetails" class="details-dialog">
+      <q-card class="dialog-card">
+        <div class="dialog-header">
+          <div class="dialog-title">Request Details</div>
+          <q-btn icon="close" flat round size="sm" v-close-popup class="close-btn" />
+        </div>
+
+        <div class="dialog-body" v-if="selectedRequest">
+          <!-- Employee Section -->
+          <div class="detail-section">
+            <div class="section-header">
+              <div class="employee-avatar large">
+                {{ selectedRequest.employeeName.charAt(0).toUpperCase() }}
+              </div>
+              <div class="employee-info-detail">
+                <div class="employee-name-detail">{{ selectedRequest.employeeName }}</div>
+                <div class="employee-meta">{{ selectedRequest.department || 'General' }}</div>
+              </div>
+              <div class="status-badge large" :class="selectedRequest.status">
+                {{ selectedRequest.status }}
+              </div>
             </div>
           </div>
 
-          <!-- Request Details -->
-          <div class="request-details">
-            <div class="detail-item">
-              <strong>Period:</strong>
-              {{ formatDate(request.startDate) }} - {{ formatDate(request.endDate) }}
+          <!-- Request Info Grid -->
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="info-label">Type</div>
+              <div class="type-chip" :class="selectedRequest.type">
+                {{ getTypeLabel(selectedRequest.type) }}
+              </div>
             </div>
-            <div class="detail-item" v-if="request.duration">
-              <strong>Duration:</strong> {{ request.duration }}
+
+            <div class="info-item">
+              <div class="info-label">Duration</div>
+              <div class="info-value">{{ selectedRequest.duration }}</div>
             </div>
-            <div class="detail-item" v-if="request.reason">
-              <strong>Reason:</strong> {{ request.reason }}
+
+            <div class="info-item">
+              <div class="info-label">Start Date</div>
+              <div class="info-value">{{ formatDate(selectedRequest.startDate) }}</div>
+            </div>
+
+            <div class="info-item">
+              <div class="info-label">End Date</div>
+              <div class="info-value">{{ formatDate(selectedRequest.endDate) }}</div>
             </div>
           </div>
 
-          <!-- Request Message -->
-          <div class="request-message" v-if="request.message">
-            <h4>Message:</h4>
-            <p>{{ request.message }}</p>
+          <!-- Reason Section -->
+          <div v-if="selectedRequest.reason" class="detail-section">
+            <div class="section-title">Reason</div>
+            <div class="reason-content">{{ selectedRequest.reason }}</div>
+          </div>
+
+          <!-- Message Section -->
+          <div v-if="selectedRequest.message" class="detail-section">
+            <div class="section-title">Additional Message</div>
+            <div class="message-content">{{ selectedRequest.message }}</div>
           </div>
 
           <!-- Admin Response -->
-          <div class="admin-response" v-if="request.adminResponse">
-            <h4>Admin Response:</h4>
-            <p>{{ request.adminResponse }}</p>
-            <small
-              >Responded by {{ request.respondedBy }} on
-              {{ formatDate(request.respondedDate) }}</small
-            >
-          </div>
-
-          <!-- Action Buttons (only for pending requests) -->
-          <div v-if="request.status === 'pending'" class="action-buttons">
-            <button
-              @click="showResponseModal(request, 'approve')"
-              class="btn btn-approve"
-              :disabled="updating"
-            >
-              <i class="icon-check"></i>
-              {{ updating ? 'Processing...' : 'Approve' }}
-            </button>
-            <button
-              @click="showResponseModal(request, 'reject')"
-              class="btn btn-reject"
-              :disabled="updating"
-            >
-              <i class="icon-x"></i>
-              {{ updating ? 'Processing...' : 'Reject' }}
-            </button>
-          </div>
-
-          <!-- View Details Button -->
-          <div class="view-details">
-            <button @click="viewDetails(request)" class="btn btn-details">View Full Details</button>
-          </div>
-        </div>
-
-        <!-- Empty State -->
-        <div v-if="filteredRequests.length === 0 && !loading" class="empty-state">
-          <div class="empty-icon">📋</div>
-          <h3>No requests found</h3>
-          <p>
-            {{
-              requests.length === 0
-                ? 'No requests available.'
-                : 'No requests match your current filters.'
-            }}
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Response Modal -->
-    <div v-if="showModal" class="modal-overlay" @click="closeModal">
-      <div class="modal" @click.stop>
-        <div class="modal-header">
-          <h3>{{ modalAction === 'approve' ? 'Approve' : 'Reject' }} Request</h3>
-          <button @click="closeModal" class="close-btn">&times;</button>
-        </div>
-
-        <div class="modal-body">
-          <div class="request-summary">
-            <p><strong>Employee:</strong> {{ selectedRequest?.employeeName }}</p>
-            <p><strong>Request Type:</strong> {{ formatRequestType(selectedRequest?.type) }}</p>
-            <p>
-              <strong>Period:</strong> {{ formatDate(selectedRequest?.startDate) }} -
-              {{ formatDate(selectedRequest?.endDate) }}
-            </p>
-          </div>
-
-          <div class="response-form">
-            <label for="adminResponse">Response Message:</label>
-            <textarea
-              id="adminResponse"
-              v-model="adminResponseText"
-              :placeholder="
-                modalAction === 'approve'
-                  ? 'Optional approval message...'
-                  : 'Please provide a reason for rejection...'
-              "
-              rows="4"
-            ></textarea>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button @click="closeModal" class="btn btn-cancel" :disabled="updating">Cancel</button>
-          <button
-            @click="submitResponse"
-            class="btn"
-            :class="modalAction === 'approve' ? 'btn-approve' : 'btn-reject'"
-            :disabled="
-              !selectedRequest ||
-              (modalAction === 'reject' && !adminResponseText.trim()) ||
-              updating
-            "
-          >
-            {{
-              updating
-                ? 'Processing...'
-                : modalAction === 'approve'
-                  ? 'Approve Request'
-                  : 'Reject Request'
-            }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Details Modal -->
-    <div v-if="showDetailsModal" class="modal-overlay" @click="closeDetailsModal">
-      <div class="modal modal-large" @click.stop>
-        <div class="modal-header">
-          <h3>Request Details</h3>
-          <button @click="closeDetailsModal" class="close-btn">&times;</button>
-        </div>
-
-        <div class="modal-body">
-          <div class="details-grid" v-if="detailsRequest">
-            <div class="detail-section">
-              <h4>Employee Information</h4>
-              <p><strong>Name:</strong> {{ detailsRequest.employeeName }}</p>
-              <p><strong>Employee ID:</strong> {{ detailsRequest.employeeId }}</p>
-              <p><strong>Department:</strong> {{ detailsRequest.department }}</p>
-              <p><strong>Position:</strong> {{ detailsRequest.position }}</p>
-            </div>
-
-            <div class="detail-section">
-              <h4>Request Information</h4>
-              <p><strong>Type:</strong> {{ formatRequestType(detailsRequest.type) }}</p>
-              <p>
-                <strong>Status:</strong>
-                <span class="status-badge" :class="detailsRequest.status">{{
-                  detailsRequest.status.toUpperCase()
-                }}</span>
-              </p>
-              <p><strong>Submitted:</strong> {{ formatDate(detailsRequest.submittedDate) }}</p>
-              <p>
-                <strong>Period:</strong> {{ formatDate(detailsRequest.startDate) }} -
-                {{ formatDate(detailsRequest.endDate) }}
-              </p>
-              <p v-if="detailsRequest.duration">
-                <strong>Duration:</strong> {{ detailsRequest.duration }}
-              </p>
-            </div>
-
-            <div class="detail-section full-width" v-if="detailsRequest.reason">
-              <h4>Reason</h4>
-              <p>{{ detailsRequest.reason }}</p>
-            </div>
-
-            <div class="detail-section full-width" v-if="detailsRequest.message">
-              <h4>Employee Message</h4>
-              <p>{{ detailsRequest.message }}</p>
-            </div>
-
-            <div class="detail-section full-width" v-if="detailsRequest.adminResponse">
-              <h4>Admin Response</h4>
-              <p>{{ detailsRequest.adminResponse }}</p>
-              <small
-                >Responded by {{ detailsRequest.respondedBy }} on
-                {{ formatDate(detailsRequest.respondedDate) }}</small
-              >
+          <div v-if="selectedRequest.adminResponse" class="detail-section">
+            <div class="section-title">Admin Response</div>
+            <div class="admin-response">{{ selectedRequest.adminResponse }}</div>
+            <div v-if="selectedRequest.respondedBy" class="response-meta">
+              By {{ selectedRequest.respondedBy }} • {{ formatDate(selectedRequest.respondedDate) }}
             </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button @click="closeDetailsModal" class="btn btn-cancel">Close</button>
-          <div v-if="detailsRequest?.status === 'pending'" class="action-buttons-modal">
-            <button @click="approveFromDetails" class="btn btn-approve" :disabled="updating">
-              {{ updating ? 'Processing...' : 'Approve' }}
-            </button>
-            <button @click="rejectFromDetails" class="btn btn-reject" :disabled="updating">
-              {{ updating ? 'Processing...' : 'Reject' }}
-            </button>
+        <div class="dialog-actions">
+          <div class="action-group" v-if="selectedRequest && selectedRequest.status === 'pending'">
+            <q-btn
+              label="Reject"
+              color="negative"
+              flat
+              @click="rejectRequest(selectedRequest)"
+              :loading="actionLoading === `reject-${selectedRequest.id}`"
+              class="action-btn-dialog reject"
+            />
+            <q-btn
+              label="Approve"
+              color="positive"
+              @click="approveRequest(selectedRequest)"
+              :loading="actionLoading === `approve-${selectedRequest.id}`"
+              class="action-btn-dialog approve"
+            />
           </div>
+          <q-btn flat label="Close" color="grey-7" v-close-popup class="close-action" />
         </div>
-      </div>
-    </div>
-
-    <!-- Success Message -->
-    <div v-if="successMessage" class="success-toast">
-      {{ successMessage }}
-    </div>
-  </div>
+      </q-card>
+    </q-dialog>
+  </q-page>
 </template>
 
-<script>
+<script setup>
+import { ref, onMounted, computed } from 'vue'
+import { useQuasar } from 'quasar'
 import axios from 'axios'
 
-export default {
-  name: 'RequestPage',
-  data() {
-    return {
-      // API base URL
-      apiBaseUrl: 'https://staging.wageyapp.com/attendance/leaves/company/',
+const $q = useQuasar()
+const loading = ref(false)
+const actionLoading = ref(null)
+const requests = ref([])
+const selectedFilter = ref('all')
+const statusFilter = ref('all')
+const searchTerm = ref('')
+const selectedRequest = ref(null)
+const showDetails = ref(false)
 
-      // Data states
-      requests: [],
-      loading: false,
-      error: null,
-      updating: false,
-      successMessage: '',
+const filterOptions = [
+  { label: 'All Types', value: 'all' },
+  { label: 'Leave', value: 'leave' },
+  { label: 'Overtime', value: 'overtime' },
+  { label: 'Schedule', value: 'schedule' },
+  { label: 'Time Off', value: 'timeoff' },
+]
 
-      // Filter states
-      selectedType: '',
-      selectedStatus: '',
-      searchQuery: '',
+const statusOptions = [
+  { label: 'All Status', value: 'all' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Rejected', value: 'rejected' },
+]
 
-      // Modal states
-      showModal: false,
-      showDetailsModal: false,
-      modalAction: '',
-      selectedRequest: null,
-      detailsRequest: null,
-      adminResponseText: '',
-    }
-  },
-  computed: {
-    filteredRequests() {
-      let filtered = this.requests
+const tableColumns = [
+  { name: 'employeeName', label: 'Employee', align: 'left', field: 'employeeName' },
+  { name: 'type', label: 'Type', align: 'left', field: 'type' },
+  { name: 'dates', label: 'Period', align: 'left', field: 'startDate' },
+  { name: 'status', label: 'Status', align: 'left', field: 'status' },
+  { name: 'actions', label: '', align: 'right' },
+]
 
-      if (this.selectedType) {
-        filtered = filtered.filter((r) => r.type === this.selectedType)
-      }
-      if (this.selectedStatus) {
-        filtered = filtered.filter((r) => r.status === this.selectedStatus)
-      }
-      if (this.searchQuery) {
-        const query = this.searchQuery.toLowerCase()
-        filtered = filtered.filter(
-          (r) =>
-            r.employeeName?.toLowerCase().includes(query) ||
-            r.department?.toLowerCase().includes(query) ||
-            r.position?.toLowerCase().includes(query),
-        )
-      }
+// Computed properties for stats
+const pendingCount = computed(() => requests.value.filter((r) => r.status === 'pending').length)
+const approvedCount = computed(() => requests.value.filter((r) => r.status === 'approved').length)
+const rejectedCount = computed(() => requests.value.filter((r) => r.status === 'rejected').length)
+const totalRequests = computed(() => requests.value.length)
 
-      return filtered.sort((a, b) => new Date(b.submittedDate) - new Date(a.submittedDate))
-    },
+// ✅ fetch data from API
+const fetchRequests = async () => {
+  loading.value = true
+  try {
+    const token = localStorage.getItem('access_token')
+    const companyId = localStorage.getItem('selectedCompany')
+    if (!token) throw new Error('No access token found')
+    if (!companyId) throw new Error('No company ID found')
 
-    pendingCount() {
-      return this.requests.filter((r) => r.status === 'pending').length
-    },
-    approvedCount() {
-      return this.requests.filter((r) => r.status === 'approved').length
-    },
-    rejectedCount() {
-      return this.requests.filter((r) => r.status === 'rejected').length
-    },
-  },
-  methods: {
-    // ✅ Fetch requests with axios
-    async fetchRequests() {
-      this.loading = true
-      this.error = null
+    const res = await axios.get(
+      `https://staging.wageyapp.com/attendance/admin-requests/${companyId}/`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
 
-      try {
-        const token = localStorage.getItem('access_token')
-        const response = await axios.get(this.apiBaseUrl, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        })
-
-        console.log('API Response:', response.data)
-
-        this.requests = this.mapApiResponseToRequests(
-          Array.isArray(response.data)
-            ? response.data
-            : response.data.results || response.data.data || [],
-        )
-      } catch (err) {
-        console.error('Failed to fetch requests:', err)
-        this.error =
-          err.response?.data?.message ||
-          err.message ||
-          'Failed to fetch requests. Please try again.'
-      } finally {
-        this.loading = false
-      }
-    },
-
-    // ✅ Update request status
-    async updateRequestStatus(requestId, action, responseMessage) {
-      if (!requestId) {
-        console.error('Request ID is missing')
-        this.showSuccessMessage('Request ID is missing.')
-        return
-      }
-
-      this.updating = true
-      try {
-        const token = localStorage.getItem('access_token')
-
-        const payload = {
-          status: action === 'approve' ? 'approved' : 'rejected',
-          admin_response:
-            responseMessage || (action === 'approve' ? 'approved.' : 'Request rejected.'),
-          // Removed approved_by and approved_at to avoid 403 if server handles this automatically
-        }
-
-        await axios.patch(
-          `https://staging.wageyapp.com/attendance/leaves/${requestId}/update/`,
-          payload,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-          },
-        )
-
-        this.showSuccessMessage(`Request ${action}d successfully.`)
-        await this.fetchRequests() // refresh the list
-      } catch (error) {
-        console.error('Error updating request status:', error)
-
-        if (error.response?.status === 403) {
-          this.showSuccessMessage('You are not authorized to update this request.')
-        } else if (error.response?.data?.message) {
-          this.showSuccessMessage(`Failed: ${error.response.data.message}`)
-        } else {
-          this.showSuccessMessage('An unexpected error occurred. Please try again.')
-        }
-      } finally {
-        this.updating = false
-      }
-    },
-
-    // ✅ Map API response to local structure
-    mapApiResponseToRequests(apiData) {
-      return apiData.map((item) => ({
-        id: item.id,
-        employeeId: item.employee_id || item.employee?.id,
-        employeeName: item.employee_name || item.employee?.name || item.employee?.full_name,
-        department: item.department || item.employee?.department,
-        position: item.position || item.employee?.position,
-        type: this.mapLeaveType(item.leave_type || item.type),
-        status: item.status?.toLowerCase(),
-        startDate: item.start_date,
-        endDate: item.end_date,
-        duration: item.duration || this.calculateDuration(item.start_date, item.end_date),
-        reason: item.reason,
-        message: item.message || item.description,
-        submittedDate: item.created_at || item.submitted_date,
-        adminResponse: item.admin_response,
-        respondedBy: item.responded_by,
-        respondedDate: item.responded_date || item.updated_at,
-      }))
-    },
-
-    mapLeaveType(apiLeaveType) {
-      const map = {
-        sick_leave: 'leave',
-        annual_leave: 'leave',
-        personal_leave: 'leave',
-        vacation: 'leave',
-        time_off: 'timeoff',
-        schedule_change: 'schedule',
-        overtime: 'overtime',
-      }
-      return map[apiLeaveType] || 'leave'
-    },
-
-    calculateDuration(startDate, endDate) {
-      if (!startDate || !endDate) return ''
-      const s = new Date(startDate)
-      const e = new Date(endDate)
-      const diffDays = Math.ceil((e - s) / (1000 * 60 * 60 * 24)) + 1
-      return `${diffDays} day${diffDays > 1 ? 's' : ''}`
-    },
-
-    // Helpers
-    getCurrentAdminName() {
-      return 'Admin User'
-    },
-
-    showSuccessMessage(msg) {
-      this.successMessage = msg
-      setTimeout(() => (this.successMessage = ''), 3000)
-    },
-
-    // UI Helpers
-    formatRequestType(type) {
-      const map = {
-        leave: 'Leave Request',
-        timeoff: 'Time-Off',
-        schedule: 'Schedule Exchange',
-        overtime: 'Overtime Request',
-      }
-      return map[type] || type
-    },
-    formatDate(dateStr) {
-      if (!dateStr) return ''
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-    },
-
-    // Modal handlers
-    showResponseModal(request, action) {
-      this.selectedRequest = request
-      this.modalAction = action
-      this.adminResponseText = ''
-      this.showModal = true
-    },
-    closeModal() {
-      this.showModal = false
-      this.selectedRequest = null
-      this.modalAction = ''
-      this.adminResponseText = ''
-    },
-    viewDetails(req) {
-      this.detailsRequest = req
-      this.showDetailsModal = true
-    },
-    closeDetailsModal() {
-      this.showDetailsModal = false
-      this.detailsRequest = null
-    },
-    approveFromDetails() {
-      this.closeDetailsModal()
-      this.showResponseModal(this.detailsRequest, 'approve')
-    },
-    rejectFromDetails() {
-      this.closeDetailsModal()
-      this.showResponseModal(this.detailsRequest, 'reject')
-    },
-    submitResponse() {
-      if (!this.selectedRequest) return
-      this.updateRequestStatus(
-        this.selectedRequest.id, // 👈 id comes from your API response
-        this.modalAction,
-        this.adminResponseText,
-      )
-      this.closeModal()
-    },
-  },
-  async mounted() {
-    await this.fetchRequests()
-  },
+    requests.value = mapApiResponseToRequests(res.data)
+  } catch (e) {
+    console.error('Error fetching requests:', e.response?.data || e.message)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to fetch requests. Please try again.',
+    })
+  } finally {
+    loading.value = false
+  }
 }
+
+// ✅ map API response to request objects for UI
+function mapApiResponseToRequests(apiData) {
+  if (Array.isArray(apiData)) {
+    return apiData.map((item) => formatRequest(item))
+  }
+
+  if (Array.isArray(apiData.results)) {
+    return apiData.results.map((item) => formatRequest(item))
+  }
+
+  console.warn('Unexpected API data shape:', apiData)
+  return []
+}
+
+function formatRequest(item) {
+  return {
+    id: item.id,
+    employeeId: item.employee_id,
+    employeeName: item.employee_name,
+    department: item.department || '',
+    position: item.position || '',
+    type: item.request_type,
+    status: item.status?.toLowerCase(),
+    startDate: item.request_date_start,
+    endDate: item.request_date_end,
+    duration: calculateDuration(item.request_date_start, item.request_date_end),
+    reason: item.reason,
+    message: item.message || '',
+    submittedDate: item.submitted_at,
+    adminResponse: item.admin_response || '',
+    respondedBy: item.responded_by || '',
+    respondedDate: item.responded_date || '',
+  }
+}
+
+function calculateDuration(start, end) {
+  if (!start || !end) return 'N/A'
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+  const diffTime = endDate - startDate
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+  return diffDays > 1 ? `${diffDays} days` : '1 day'
+}
+
+function formatDate(dateString) {
+  if (!dateString) return 'N/A'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+const filteredRequests = computed(() => {
+  let filtered = requests.value
+
+  if (selectedFilter.value !== 'all') {
+    filtered = filtered.filter((r) => r.type === selectedFilter.value)
+  }
+
+  if (statusFilter.value !== 'all') {
+    filtered = filtered.filter((r) => r.status === statusFilter.value)
+  }
+
+  if (searchTerm.value.trim()) {
+    const search = searchTerm.value.toLowerCase()
+    filtered = filtered.filter(
+      (r) =>
+        r.employeeName.toLowerCase().includes(search) ||
+        r.reason.toLowerCase().includes(search) ||
+        r.department.toLowerCase().includes(search),
+    )
+  }
+
+  return filtered
+})
+
+function getTypeLabel(type) {
+  const labels = {
+    leave: 'Leave',
+    timeoff: 'Time Off',
+    schedule: 'Schedule',
+    overtime: 'Overtime',
+  }
+  return labels[type] || 'Request'
+}
+
+function openDetails(request) {
+  selectedRequest.value = request
+  showDetails.value = true
+}
+
+// ✅ approve request
+const approveRequest = async (request) => {
+  try {
+    actionLoading.value = `approve-${request.id}`
+
+    const token = localStorage.getItem('access_token')
+    if (!token) throw new Error('No access token found')
+
+    await axios.patch(
+      `https://staging.wageyapp.com/attendance/admin-requests/${request.id}/`,
+      {
+        status: 'approved',
+        admin_response: 'Request approved',
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+
+    // Update local state
+    const index = requests.value.findIndex((r) => r.id === request.id)
+    if (index !== -1) {
+      requests.value[index].status = 'approved'
+      requests.value[index].adminResponse = 'Request approved'
+      requests.value[index].respondedBy = 'Admin'
+      requests.value[index].respondedDate = new Date().toISOString()
+    }
+
+    $q.notify({
+      type: 'positive',
+      message: `Request approved successfully`,
+      icon: 'check_circle',
+    })
+  } catch (e) {
+    console.error('Error approving request:', e.response?.data || e.message)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to approve request. Please try again.',
+      icon: 'error',
+    })
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+// ✅ reject request
+const rejectRequest = async (request) => {
+  try {
+    actionLoading.value = `reject-${request.id}`
+
+    const token = localStorage.getItem('access_token')
+    if (!token) throw new Error('No access token found')
+
+    await axios.patch(
+      `https://staging.wageyapp.com/attendance/admin-requests/${request.id}/`,
+      {
+        status: 'rejected',
+        admin_response: 'Request rejected',
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+
+    // Update local state
+    const index = requests.value.findIndex((r) => r.id === request.id)
+    if (index !== -1) {
+      requests.value[index].status = 'rejected'
+      requests.value[index].adminResponse = 'Request rejected'
+      requests.value[index].respondedBy = 'Admin'
+      requests.value[index].respondedDate = new Date().toISOString()
+    }
+
+    $q.notify({
+      type: 'negative',
+      message: `Request rejected successfully`,
+      icon: 'cancel',
+    })
+  } catch (e) {
+    console.error('Error rejecting request:', e.response?.data || e.message)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to reject request. Please try again.',
+      icon: 'error',
+    })
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+onMounted(fetchRequests)
 </script>
 
 <style scoped>
-.request-page {
-  max-width: 1200px;
-  margin: 0 auto;
+.modern-page {
+  background: #fafbfc;
+  min-height: 100vh;
   padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Header Styles */
+/* Minimal Header */
 .page-header {
+  margin-bottom: 32px;
+}
+
+.header-content {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #e5e7eb;
+  align-items: flex-end;
 }
 
 .page-title {
-  color: #1f2937;
   font-size: 2rem;
   font-weight: 600;
+  color: #1a1a1a;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
-.header-stats {
+.page-subtitle {
+  color: #6b7280;
+  margin: 4px 0 0 0;
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.refresh-btn {
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.refresh-btn:hover {
+  opacity: 1;
+}
+
+/* Elegant Stats */
+.stats-section {
   display: flex;
   gap: 20px;
+  margin-bottom: 32px;
 }
 
 .stat-card {
   background: white;
-  padding: 15px 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  text-align: center;
-  min-width: 80px;
+  border-radius: 12px;
+  padding: 24px;
+  flex: 1;
+  position: relative;
+  border: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
 }
 
-.stat-card.pending {
-  border-left: 4px solid #f59e0b;
+.stat-card:hover {
+  border-color: #e2e8f0;
+  transform: translateY(-1px);
 }
 
-.stat-card.approved {
-  border-left: 4px solid #10b981;
-}
-
-.stat-card.rejected {
-  border-left: 4px solid #ef4444;
+.stat-content {
+  position: relative;
+  z-index: 1;
 }
 
 .stat-number {
-  display: block;
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #1f2937;
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1;
+  margin-bottom: 4px;
 }
 
 .stat-label {
+  color: #64748b;
   font-size: 0.875rem;
-  color: #6b7280;
+  font-weight: 500;
 }
 
-/* Filter Styles */
-.filters {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 30px;
-  flex-wrap: wrap;
+.stat-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  border-radius: 0 12px 12px 0;
 }
 
-.filter-select,
-.search-input {
-  padding: 10px 15px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-  background: white;
+.stat-card.pending .stat-indicator {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
 }
 
-.filter-select:focus,
-.search-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+.stat-card.approved .stat-indicator {
+  background: linear-gradient(135deg, #10b981, #34d399);
 }
 
-.search-input {
-  flex: 1;
-  min-width: 250px;
+.stat-card.rejected .stat-indicator {
+  background: linear-gradient(135deg, #ef4444, #f87171);
 }
 
-.btn-refresh {
-  background-color: #6366f1;
-  color: white;
-  white-space: nowrap;
-}
-
-.btn-refresh:hover {
-  background-color: #5338f5;
-}
-
-.btn-retry {
-  background-color: #ef4444;
-  color: white;
-}
-
-.btn-retry:hover {
-  background-color: #dc2626;
-}
-
-/* Loading and Error States */
-.loading {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  height: 300px;
-  gap: 20px;
-}
-
-.spinner {
-  border: 3px solid #f3f4f6;
-  border-top: 3px solid #3b82f6;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.error-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: #ef4444;
-}
-
-.error-icon {
-  font-size: 4rem;
-  margin-bottom: 16px;
-}
-
-.error-state h3 {
-  margin: 0 0 8px 0;
-  color: #dc2626;
-}
-
-.error-state p {
-  margin: 0 0 20px 0;
-  color: #6b7280;
-}
-
-/* Success Toast */
-.success-toast {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background-color: #10b981;
-  color: white;
-  padding: 12px 20px;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  z-index: 1001;
-  animation: slideInRight 0.3s ease-out;
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* Request Card Styles */
-.requests-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.request-card {
+/* Minimal Filter Bar */
+.filter-bar {
   background: white;
   border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #e5e7eb;
-  transition:
-    transform 0.2s,
-    box-shadow 0.2s;
-}
-
-.request-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-}
-
-.request-card.pending {
-  border-left-color: #f59e0b;
-}
-
-.request-card.approved {
-  border-left-color: #10b981;
-}
-
-.request-card.rejected {
-  border-left-color: #ef4444;
-}
-
-.request-header {
+  padding: 16px 20px;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+  border: 1px solid #f1f5f9;
+}
+
+.search-container {
+  flex: 1;
+}
+
+.search-input {
+  max-width: 300px;
+}
+
+.search-input :deep(.q-field__control) {
+  background: #f8fafc;
+  border-radius: 8px;
+  border: none;
+}
+
+.filter-group {
+  display: flex;
+  gap: 12px;
+}
+
+.filter-select {
+  min-width: 120px;
+}
+
+.filter-select :deep(.q-field__control) {
+  background: #f8fafc;
+  border-radius: 8px;
+  border: none;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  gap: 16px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+}
+
+.loading-text {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+/* Modern Table */
+.table-container {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #f1f5f9;
+}
+
+.elegant-table {
+  background: transparent;
+}
+
+.elegant-table :deep(.q-table__top) {
+  display: none;
+}
+
+.elegant-table :deep(.q-table__bottom) {
+  border-top: 1px solid #f1f5f9;
+  padding: 16px 20px;
+}
+
+.elegant-table :deep(thead tr) {
+  background: #f8fafc;
+}
+
+.elegant-table :deep(thead th) {
+  font-weight: 600;
+  color: #475569;
+  font-size: 0.875rem;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.table-row {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.table-row:hover {
+  background: #f8fafc;
+}
+
+.table-row :deep(td) {
+  padding: 20px;
+  border-bottom: 1px solid #f8fafc;
+  vertical-align: middle;
+}
+
+/* Employee Cell */
+.employee-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.employee-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.employee-details {
+  min-width: 0;
 }
 
 .employee-name {
-  font-size: 1.25rem;
   font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 4px 0;
+  color: #1a1a1a;
+  font-size: 0.875rem;
+  margin-bottom: 2px;
 }
 
-.request-type {
-  padding: 4px 12px;
-  border-radius: 16px;
+.employee-dept {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+/* Type Chip */
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 500;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
-.request-type.leave {
-  background-color: #dbeafe;
+.type-chip.leave {
+  background: #eff6ff;
   color: #1d4ed8;
 }
 
-.request-type.timeoff {
-  background-color: #f3e8ff;
+.type-chip.timeoff {
+  background: #f3e8ff;
   color: #7c3aed;
 }
 
-.request-type.schedule {
-  background-color: #fef3c7;
+.type-chip.schedule {
+  background: #fef3c7;
   color: #d97706;
 }
 
-.request-type.overtime {
-  background-color: #dcfce7;
-  color: #16a34a;
+.type-chip.overtime {
+  background: #d1fae5;
+  color: #059669;
 }
 
-.request-meta {
-  text-align: right;
+/* Date Cell */
+.dates-cell {
+  min-width: 180px;
 }
 
-.request-date {
-  display: block;
-  color: #6b7280;
+.date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.start-date,
+.end-date {
   font-size: 0.875rem;
-  margin-bottom: 8px;
+  color: #1a1a1a;
+  font-weight: 500;
 }
 
-.status-badge {
-  padding: 4px 12px;
-  border-radius: 16px;
+.date-separator {
+  color: #94a3b8;
   font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
+}
+
+.duration {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+/* Status Badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: capitalize;
 }
 
 .status-badge.pending {
-  background-color: #fef3c7;
+  background: #fef3c7;
   color: #d97706;
 }
 
 .status-badge.approved {
-  background-color: #dcfce7;
-  color: #16a34a;
+  background: #d1fae5;
+  color: #059669;
 }
 
 .status-badge.rejected {
-  background-color: #fee2e2;
+  background: #fee2e2;
   color: #dc2626;
 }
 
-.request-details {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 16px;
-  background-color: #f9fafb;
-  border-radius: 8px;
-}
-
-.detail-item {
+.status-badge.large {
+  padding: 6px 12px;
   font-size: 0.875rem;
-  color: #374151;
 }
 
-.request-message,
-.admin-response {
-  margin-bottom: 16px;
-  padding: 16px;
-  border-radius: 8px;
-}
-
-.request-message {
-  background-color: #f0f9ff;
-  border-left: 3px solid #0ea5e9;
-}
-
-.admin-response {
-  background-color: #f0fdf4;
-  border-left: 3px solid #22c55e;
-}
-
-.request-message h4,
-.admin-response h4 {
-  margin: 0 0 8px 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.request-message p,
-.admin-response p {
-  margin: 0;
-  color: #374151;
-  line-height: 1.5;
-}
-
-.admin-response small {
-  display: block;
-  margin-top: 8px;
-  color: #6b7280;
-  font-style: italic;
-}
-
+/* Action Buttons */
 .action-buttons {
   display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.view-details {
-  display: flex;
-  justify-content: flex-end;
-}
-
-/* Button Styles */
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: inline-flex;
+  gap: 4px;
   align-items: center;
-  gap: 6px;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.action-btn {
+  opacity: 0.6;
+  transition: all 0.2s ease;
 }
 
-.btn-approve {
-  background-color: #10b981;
-  color: white;
+.table-row:hover .action-btn {
+  opacity: 1;
 }
 
-.btn-approve:hover:not(:disabled) {
-  background-color: #059669;
+.approve-btn:hover {
+  background: rgba(76, 175, 80, 0.1);
 }
 
-.btn-reject {
-  background-color: #ef4444;
-  color: white;
+.reject-btn:hover {
+  background: rgba(244, 67, 54, 0.1);
 }
 
-.btn-reject:hover:not(:disabled) {
-  background-color: #dc2626;
-}
-
-.btn-details {
-  background-color: #6b7280;
-  color: white;
-}
-
-.btn-details:hover {
-  background-color: #4b5563;
-}
-
-.btn-cancel {
-  background-color: #e5e7eb;
-  color: #374151;
-}
-
-.btn-cancel:hover {
-  background-color: #d1d5db;
-}
-
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 25px rgba(0, 0, 0, 0.2);
-}
-
-.modal-large {
-  max-width: 800px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #6b7280;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-}
-
-.close-btn:hover {
-  background-color: #f3f4f6;
-}
-
-.modal-body {
-  padding: 24px;
-}
-
-.request-summary {
-  background-color: #f9fafb;
-  padding: 16px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-.request-summary p {
-  margin: 8px 0;
-  font-size: 0.875rem;
-}
-
-.response-form label {
-  display: block;
-  font-weight: 500;
-  margin-bottom: 8px;
-  color: #374151;
-}
-
-.response-form textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-family: inherit;
-  resize: vertical;
-}
-
-.response-form textarea:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px 24px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.action-buttons-modal {
-  display: flex;
-  gap: 12px;
-}
-
-/* Details Modal Specific Styles */
-.details-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-.detail-section {
-  background-color: #f9fafb;
-  padding: 16px;
-  border-radius: 8px;
-}
-
-.detail-section.full-width {
-  grid-column: 1 / -1;
-}
-
-.detail-section h4 {
-  margin: 0 0 12px 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: #4b5563;
-  letter-spacing: 0.05em;
-}
-
-.detail-section p {
-  margin: 8px 0;
-  color: #374151;
+.view-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 /* Empty State */
 .empty-state {
   text-align: center;
   padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+}
+
+.empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #475569;
+  margin: 16px 0 4px 0;
+}
+
+.empty-subtitle {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+/* Elegant Dialog */
+.details-dialog :deep(.q-dialog__inner) {
+  padding: 20px;
+}
+
+.dialog-card {
+  border-radius: 16px;
+  max-width: 600px;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #f1f5f9;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 24px 0 24px;
+}
+
+.dialog-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.close-btn {
   color: #6b7280;
 }
 
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 16px;
+.dialog-body {
+  padding: 24px;
 }
 
-.empty-state h3 {
-  margin: 0 0 8px 0;
-  color: #374151;
+/* Detail Sections */
+.detail-section {
+  margin-bottom: 32px;
 }
 
-.empty-state p {
-  margin: 0;
+.detail-section:last-child {
+  margin-bottom: 0;
 }
 
-/* Icons */
-.icon-check::before {
-  content: '✓';
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.icon-x::before {
-  content: '✕';
+.employee-avatar.large {
+  width: 48px;
+  height: 48px;
+  font-size: 1.125rem;
 }
 
-/* Responsive Design */
+.employee-info-detail {
+  flex: 1;
+}
+
+.employee-name-detail {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 2px;
+}
+
+.employee-meta {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+/* Info Grid */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.info-value {
+  font-size: 0.875rem;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+/* Content Sections */
+.reason-content,
+.message-content {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  color: #475569;
+  line-height: 1.6;
+  border-left: 3px solid #e2e8f0;
+}
+
+.admin-response {
+  background: #f0fdf4;
+  padding: 16px;
+  border-radius: 8px;
+  color: #16a34a;
+  line-height: 1.6;
+  border-left: 3px solid #22c55e;
+}
+
+.response-meta {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* Dialog Actions */
+.dialog-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px 24px 24px;
+}
+
+.action-group {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn-dialog {
+  min-width: 80px;
+  font-weight: 500;
+}
+
+.action-btn-dialog.approve {
+  background: #10b981;
+  color: white;
+}
+
+.action-btn-dialog.approve:hover {
+  background: #059669;
+}
+
+.action-btn-dialog.reject {
+  color: #dc2626;
+}
+
+.action-btn-dialog.reject:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.close-action {
+  font-weight: 500;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
-  .page-header {
+  .modern-page {
+    padding: 16px;
+  }
+
+  .header-content {
     flex-direction: column;
-    gap: 20px;
-    text-align: center;
-  }
-
-  .header-stats {
-    justify-content: center;
-  }
-
-  .filters {
-    flex-direction: column;
-  }
-
-  .filter-select,
-  .search-input {
-    width: 100%;
-  }
-
-  .request-header {
-    flex-direction: column;
+    align-items: flex-start;
     gap: 12px;
   }
 
-  .request-meta {
-    text-align: left;
-  }
-
-  .request-details {
-    grid-template-columns: 1fr;
-  }
-
-  .action-buttons {
+  .stats-section {
     flex-direction: column;
   }
 
-  .modal {
-    margin: 10px;
-    width: calc(100% - 20px);
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
 
-  .details-grid {
+  .filter-group {
+    flex-direction: column;
+  }
+
+  .search-input {
+    max-width: none;
+  }
+
+  .elegant-table :deep(thead th),
+  .table-row :deep(td) {
+    padding: 12px 16px;
+  }
+
+  .info-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
-  .modal-footer {
-    flex-direction: column-reverse;
-  }
-
-  .action-buttons-modal {
-    width: 100%;
-    justify-content: space-between;
-  }
-}
-
-@media (max-width: 480px) {
-  .request-page {
-    padding: 10px;
-  }
-
-  .page-title {
-    font-size: 1.5rem;
-  }
-
-  .request-card {
-    padding: 16px;
-  }
-
-  .btn {
-    padding: 8px 16px;
-    font-size: 0.8rem;
-  }
-
-  .modal-body,
-  .modal-header,
-  .modal-footer {
-    padding: 16px;
-  }
-}
-
-/* Animation for smooth transitions */
-.request-card {
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Accessibility improvements */
-.btn:focus,
-.filter-select:focus,
-.search-input:focus {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
-
-.request-card:focus-within {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-/* Print styles */
-@media print {
-  .action-buttons,
-  .view-details,
-  .filters,
-  .modal-overlay,
-  .btn-refresh {
-    display: none !important;
-  }
-
-  .request-card {
-    break-inside: avoid;
-    box-shadow: none;
-    border: 1px solid #e5e7eb;
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
 }
 </style>

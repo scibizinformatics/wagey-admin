@@ -1,548 +1,158 @@
 <template>
   <q-page class="announcements-page">
-    <!-- Header Section -->
-    <div class="page-header q-pa-lg">
-      <div class="header-content">
-        <div class="title-section">
-          <q-icon name="campaign" class="title-icon" />
-          <div>
-            <h1 class="page-title">Announcements</h1>
-            <p class="page-subtitle">Manage and broadcast important messages</p>
-          </div>
-        </div>
-
-        <div class="header-actions">
-          <q-input
-            v-model="searchQuery"
-            outlined
-            dense
-            placeholder="Search announcements..."
-            class="search-input"
-            bg-color="white"
-            debounce="300"
-          >
-            <template v-slot:prepend>
-              <q-icon name="search" />
-            </template>
-            <template v-slot:append>
-              <q-btn
-                v-if="searchQuery"
-                flat
-                round
-                dense
-                icon="clear"
-                @click="searchQuery = ''"
-                size="sm"
-              />
-            </template>
-          </q-input>
-
-          <q-select
-            v-model="selectedType"
-            :options="typeOptions"
-            outlined
-            dense
-            emit-value
-            map-options
-            placeholder="All Types"
-            bg-color="white"
-            class="filter-select"
-          >
-            <template v-slot:prepend>
-              <q-icon name="filter_list" />
-            </template>
-          </q-select>
-
-          <q-btn color="primary" unelevated @click="openCreateModal" class="add-btn" no-caps>
-            <q-icon name="add" class="q-mr-xs" />
-            New Announcement
-          </q-btn>
-        </div>
-      </div>
+    <!-- Example header -->
+    <div class="row items-center q-pa-md justify-between">
+      <h4 class="q-mt-none">Announcements</h4>
+      <q-btn color="primary" label="New Announcement" icon="add" @click="openCreateDialog" />
     </div>
 
-    <!-- Stats Dashboard -->
-    <div class="stats-section q-px-lg q-pb-lg">
-      <div class="stats-grid">
-        <q-card class="stat-card active-stat">
-          <q-card-section class="stat-content">
-            <div class="stat-icon-wrapper active">
-              <q-icon name="notifications_active" size="md" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ activeAnnouncements }}</div>
-              <div class="stat-label">Active</div>
-            </div>
+    <!-- Announcement cards -->
+    <q-spinner v-if="loading" size="lg" color="primary" class="q-my-xl flex flex-center" />
+    <div v-else class="row q-col-gutter-md q-pa-md">
+      <div v-for="a in announcements" :key="a.id" class="col-12 col-md-4">
+        <q-card>
+          <q-card-section>
+            <div class="text-h6">{{ a.title }}</div>
+            <div class="text-subtitle2 text-grey">{{ a.announcement_type }}</div>
+            <div class="q-mt-sm">{{ a.message }}</div>
           </q-card-section>
-        </q-card>
-
-        <q-card class="stat-card total-stat">
-          <q-card-section class="stat-content">
-            <div class="stat-icon-wrapper total">
-              <q-icon name="campaign" size="md" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ filteredAnnouncements.length }}</div>
-              <div class="stat-label">Total</div>
-            </div>
-          </q-card-section>
-        </q-card>
-
-        <q-card class="stat-card scheduled-stat">
-          <q-card-section class="stat-content">
-            <div class="stat-icon-wrapper scheduled">
-              <q-icon name="schedule" size="md" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ scheduledAnnouncements }}</div>
-              <div class="stat-label">Scheduled</div>
-            </div>
-          </q-card-section>
-        </q-card>
-
-        <q-card class="stat-card views-stat">
-          <q-card-section class="stat-content">
-            <div class="stat-icon-wrapper views">
-              <q-icon name="visibility" size="md" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ totalViews }}</div>
-              <div class="stat-label">Total Views</div>
-            </div>
-          </q-card-section>
-        </q-card>
-      </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="content-section q-px-lg">
-      <!-- Loading State -->
-      <div v-if="loading" class="loading-container">
-        <q-card class="loading-card">
-          <q-card-section class="text-center q-pa-xl">
-            <q-spinner-dots color="primary" size="3em" />
-            <div class="q-mt-md text-h6 text-grey-7">Loading announcements...</div>
-          </q-card-section>
-        </q-card>
-      </div>
-
-      <!-- Empty State -->
-      <div v-else-if="filteredAnnouncements.length === 0" class="empty-container">
-        <q-card class="empty-card">
-          <q-card-section class="text-center q-pa-xl">
-            <q-icon name="campaign" size="4em" color="grey-4" class="q-mb-md" />
-            <div class="text-h5 text-grey-7 q-mb-sm">No announcements found</div>
-            <div class="text-body2 text-grey-6 q-mb-lg">
-              {{
-                searchQuery || selectedType
-                  ? 'Try adjusting your filters'
-                  : 'Create your first announcement to get started'
-              }}
-            </div>
-            <q-btn
-              v-if="!searchQuery && !selectedType"
-              color="primary"
-              unelevated
-              @click="openCreateModal"
-              no-caps
-            >
-              <q-icon name="add" class="q-mr-xs" />
-              Create Announcement
-            </q-btn>
-          </q-card-section>
-        </q-card>
-      </div>
-
-      <!-- Announcements Grid -->
-      <div v-else class="announcements-grid">
-        <q-card
-          v-for="announcement in paginatedAnnouncements"
-          :key="announcement.id"
-          class="announcement-card"
-          :class="getCardClass(announcement)"
-        >
-          <!-- Card Header -->
-          <q-card-section class="card-header">
-            <div class="header-left">
-              <q-chip
-                :color="getTypeColor(announcement.announcement_type)"
-                text-color="white"
-                :icon="getTypeIcon(announcement.announcement_type)"
-                size="sm"
-                class="type-chip"
-              >
-                {{ announcement.announcement_type }}
-              </q-chip>
-
-              <q-chip
-                :color="getStatusColor(announcement)"
-                :text-color="getStatusTextColor(announcement)"
-                :icon="getStatusIcon(announcement)"
-                size="sm"
-                outline
-                class="status-chip"
-              >
-                {{ getStatus(announcement) }}
-              </q-chip>
-            </div>
-
-            <div class="header-actions">
-              <q-btn
-                flat
-                round
-                dense
-                icon="edit"
-                size="sm"
-                @click="editAnnouncement(announcement)"
-                class="action-btn"
-              >
-                <q-tooltip>Edit</q-tooltip>
-              </q-btn>
-              <q-btn
-                flat
-                round
-                dense
-                icon="delete"
-                size="sm"
-                @click="deleteAnnouncement(announcement)"
-                class="action-btn delete-btn"
-              >
-                <q-tooltip>Delete</q-tooltip>
-              </q-btn>
-            </div>
-          </q-card-section>
-
           <q-separator />
-
-          <!-- Card Content -->
-          <q-card-section class="card-content">
-            <h3 class="announcement-title">{{ announcement.title }}</h3>
-            <p class="announcement-message">{{ announcement.message }}</p>
-
-            <!-- Targeting Information -->
-            <div v-if="hasTargeting(announcement)" class="targeting-section q-mt-md">
-              <div class="targeting-label">
-                <q-icon name="group" size="sm" />
-                Targeting:
-              </div>
-              <div class="targeting-chips">
-                <q-chip
-                  v-if="announcement.target_positions"
-                  dense
-                  color="blue-1"
-                  text-color="blue-8"
-                  icon="work"
-                  size="sm"
-                >
-                  Positions: {{ formatArray(announcement.target_positions) }}
-                </q-chip>
-                <q-chip
-                  v-if="announcement.target_users"
-                  dense
-                  color="green-1"
-                  text-color="green-8"
-                  icon="person"
-                  size="sm"
-                >
-                  Users: {{ formatArray(announcement.target_users) }}
-                </q-chip>
-                <q-chip
-                  v-if="announcement.target_roles"
-                  dense
-                  color="purple-1"
-                  text-color="purple-8"
-                  icon="admin_panel_settings"
-                  size="sm"
-                >
-                  Roles: {{ formatArray(announcement.target_roles) }}
-                </q-chip>
-                <q-chip
-                  v-if="announcement.target_sites"
-                  dense
-                  color="orange-1"
-                  text-color="orange-8"
-                  icon="location_on"
-                  size="sm"
-                >
-                  Sites: {{ formatArray(announcement.target_sites) }}
-                </q-chip>
-                <q-chip
-                  v-if="announcement.target_departments"
-                  dense
-                  color="teal-1"
-                  text-color="teal-8"
-                  icon="business"
-                  size="sm"
-                >
-                  Departments: {{ formatArray(announcement.target_departments) }}
-                </q-chip>
-              </div>
-            </div>
-          </q-card-section>
-
-          <q-separator />
-
-          <!-- Card Footer -->
-          <q-card-section class="card-footer">
-            <div class="timing-info">
-              <div class="time-item">
-                <q-icon name="play_arrow" size="sm" color="green" />
-                <span>Start: {{ formatDate(announcement.start_at) }}</span>
-              </div>
-              <div class="time-item">
-                <q-icon name="stop" size="sm" color="red" />
-                <span>End: {{ formatDate(announcement.end_at) }}</span>
-              </div>
-            </div>
-
-            <div class="engagement-info">
-              <q-chip dense outline color="grey-6" size="sm">
-                <q-icon name="visibility" size="xs" class="q-mr-xs" />
-                {{ announcement.views || 0 }} views
-              </q-chip>
-            </div>
-          </q-card-section>
-        </q-card>
-      </div>
-
-      <!-- Pagination -->
-      <div v-if="totalPages > 1" class="pagination-section q-mt-lg">
-        <q-card class="pagination-card">
-          <q-card-section class="pagination-content">
-            <q-pagination
-              v-model="currentPage"
-              :max="totalPages"
-              :max-pages="5"
-              direction-links
-              boundary-links
-              icon-first="skip_previous"
-              icon-last="skip_next"
-              icon-prev="fast_rewind"
-              icon-next="fast_forward"
-              color="primary"
-              active-design="push"
-            />
-            <div class="pagination-info">
-              Showing {{ (currentPage - 1) * itemsPerPage + 1 }}-{{
-                Math.min(currentPage * itemsPerPage, filteredAnnouncements.length)
-              }}
-              of {{ filteredAnnouncements.length }} announcements
-            </div>
-          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat dense icon="edit" @click="editAnnouncement(a)" />
+            <q-btn flat dense icon="delete" color="negative" @click="deleteAnnouncement(a)" />
+          </q-card-actions>
         </q-card>
       </div>
     </div>
 
-    <!-- Create/Edit Modal -->
-    <q-dialog
-      v-model="showModal"
-      persistent
-      maximized
-      transition-show="slide-up"
-      transition-hide="slide-down"
-    >
-      <q-card class="modal-card">
-        <!-- Modal Header -->
-        <q-card-section class="modal-header">
-          <div class="modal-title">
-            <q-icon :name="editingAnnouncement ? 'edit' : 'add'" size="md" class="q-mr-sm" />
+    <!-- Create/Edit Dialog Wizard -->
+    <q-dialog v-model="showDialog" persistent transition-show="scale" transition-hide="scale">
+      <q-card style="width: 800px; max-width: 95vw">
+        <!-- Header -->
+        <q-card-section class="row items-center justify-between">
+          <div class="text-h6">
+            <q-icon :name="editingAnnouncement ? 'edit' : 'add_circle_outline'" class="q-mr-sm" />
             {{ editingAnnouncement ? 'Edit Announcement' : 'New Announcement' }}
           </div>
-          <q-btn flat round dense icon="close" @click="closeModal" />
+          <q-btn flat round dense icon="close" @click="closeDialog" />
         </q-card-section>
 
         <q-separator />
 
-        <!-- Modal Content -->
-        <q-card-section class="modal-content">
-          <q-form @submit="saveAnnouncement" class="announcement-form">
-            <div class="form-grid">
-              <!-- Basic Information -->
-              <q-card class="form-section">
-                <q-card-section>
-                  <div class="section-title">
-                    <q-icon name="info" class="q-mr-sm" />
-                    Basic Information
-                  </div>
+        <!-- Stepper -->
+        <q-card-section>
+          <q-stepper v-model="step" flat animated color="primary" alternative-labels>
+            <!-- Step 1 -->
+            <q-step name="1" title="Basic Info" icon="info" :done="step > 1">
+              <q-input v-model="formData.title" label="Title" outlined class="q-mb-md" required />
+              <q-input
+                v-model="formData.message"
+                label="Message"
+                type="textarea"
+                outlined
+                autogrow
+                class="q-mb-md"
+                required
+              />
+              <q-select
+                v-model="formData.announcement_type"
+                :options="typeOptions.slice(1)"
+                label="Type"
+                outlined
+                class="q-mb-md"
+              />
+              <q-toggle v-model="formData.is_active" label="Active" />
+              <q-stepper-navigation>
+                <q-btn color="primary" label="Next" @click="step = '2'" />
+              </q-stepper-navigation>
+            </q-step>
 
-                  <div class="form-row">
-                    <q-input
-                      v-model="formData.title"
-                      label="Title *"
-                      outlined
-                      required
-                      counter
-                      maxlength="200"
-                      :rules="[(val) => !!val || 'Title is required']"
-                    />
-                  </div>
+            <!-- Step 2 -->
+            <q-step name="2" title="Schedule" icon="event" :done="step > 2">
+              <q-input
+                v-model="formData.start_at"
+                type="datetime-local"
+                label="Start Date"
+                outlined
+                class="q-mb-md"
+              />
+              <q-input v-model="formData.end_at" type="datetime-local" label="End Date" outlined />
+              <q-stepper-navigation>
+                <q-btn flat label="Back" @click="step = '1'" class="q-mr-sm" />
+                <q-btn color="primary" label="Next" @click="step = '3'" />
+              </q-stepper-navigation>
+            </q-step>
 
-                  <div class="form-row">
-                    <q-input
-                      v-model="formData.message"
-                      label="Message *"
-                      type="textarea"
-                      outlined
-                      required
-                      rows="4"
-                      counter
-                      maxlength="1000"
-                      :rules="[(val) => !!val || 'Message is required']"
-                    />
-                  </div>
+            <!-- Step 3 -->
+            <q-step name="3" title="Target Audience" icon="groups">
+              <q-toggle
+                v-model="formData.target_everyone"
+                label="Send to Everyone"
+                class="q-mb-md"
+              />
 
-                  <div class="form-row-split">
-                    <q-select
-                      v-model="formData.announcement_type"
-                      :options="typeOptions"
-                      label="Type *"
-                      outlined
-                      emit-value
-                      map-options
-                      required
-                    />
+              <div v-if="!formData.target_everyone">
+                <q-input
+                  v-model="targetPositionsInput"
+                  label="Target Positions (comma separated)"
+                  outlined
+                  class="q-mb-md"
+                />
+                <q-input
+                  v-model="targetUsersInput"
+                  label="Target Users (IDs comma separated)"
+                  outlined
+                  class="q-mb-md"
+                />
+                <q-input
+                  v-model="targetRolesInput"
+                  label="Target Roles (comma separated)"
+                  outlined
+                />
+              </div>
 
-                    <q-toggle
-                      v-model="formData.is_active"
-                      label="Active"
-                      color="positive"
-                      size="lg"
-                    />
-                  </div>
-                </q-card-section>
-              </q-card>
-
-              <!-- Scheduling -->
-              <q-card class="form-section">
-                <q-card-section>
-                  <div class="section-title">
-                    <q-icon name="schedule" class="q-mr-sm" />
-                    Scheduling
-                  </div>
-
-                  <div class="form-row-split">
-                    <q-input
-                      v-model="formData.start_at"
-                      label="Start Date & Time *"
-                      type="datetime-local"
-                      outlined
-                      required
-                    />
-
-                    <q-input
-                      v-model="formData.end_at"
-                      label="End Date & Time *"
-                      type="datetime-local"
-                      outlined
-                      required
-                    />
-                  </div>
-                </q-card-section>
-              </q-card>
-
-              <!-- Targeting -->
-              <q-card class="form-section">
-                <q-card-section>
-                  <div class="section-title">
-                    <q-icon name="group" class="q-mr-sm" />
-                    Targeting
-                  </div>
-
-                  <div class="form-row">
-                    <q-toggle
-                      v-model="formData.target_everyone"
-                      label="Target Everyone"
-                      color="primary"
-                      size="lg"
-                    />
-                  </div>
-
-                  <div v-if="!formData.target_everyone" class="targeting-inputs">
-                    <q-input
-                      v-model="targetPositionsInput"
-                      label="Target Positions"
-                      placeholder="Enter positions separated by commas"
-                      outlined
-                      hint="Comma-separated list of position names"
-                    />
-
-                    <q-input
-                      v-model="targetUsersInput"
-                      label="Target Users"
-                      placeholder="Enter user IDs separated by commas"
-                      outlined
-                      hint="Comma-separated list of user IDs"
-                    />
-
-                    <q-input
-                      v-model="targetRolesInput"
-                      label="Target Roles"
-                      placeholder="Enter role IDs separated by commas"
-                      outlined
-                      hint="Comma-separated list of role IDs"
-                    />
-
-                    <q-input
-                      v-model="targetSitesInput"
-                      label="Target Sites"
-                      placeholder="Enter site IDs separated by commas"
-                      outlined
-                      hint="Comma-separated list of site IDs"
-                    />
-
-                    <q-input
-                      v-model="targetDepartmentsInput"
-                      label="Target Departments"
-                      placeholder="Enter department IDs separated by commas"
-                      outlined
-                      hint="Comma-separated list of department IDs"
-                    />
-                  </div>
-                </q-card-section>
-              </q-card>
-            </div>
-          </q-form>
+              <q-stepper-navigation>
+                <q-btn flat label="Back" @click="step = '2'" class="q-mr-sm" />
+                <q-btn
+                  color="primary"
+                  label="Save"
+                  @click="saveAnnouncement"
+                  :loading="submitting"
+                  :disable="submitting"
+                />
+              </q-stepper-navigation>
+            </q-step>
+          </q-stepper>
         </q-card-section>
-
-        <q-separator />
-
-        <!-- Modal Actions -->
-        <q-card-actions class="modal-actions">
-          <q-btn flat label="Cancel" @click="closeModal" class="q-mr-sm" />
-          <q-btn
-            unelevated
-            color="primary"
-            :label="submitting ? 'Saving...' : 'Save Announcement'"
-            @click="saveAnnouncement"
-            :loading="submitting"
-            :disable="submitting"
-          />
-        </q-card-actions>
       </q-card>
     </q-dialog>
   </q-page>
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
-import { useQuasar } from 'quasar'
+import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { useQuasar } from 'quasar'
 
 export default {
   name: 'AnnouncementPage',
   setup() {
     const $q = useQuasar()
 
-    // Reactive data
     const announcements = ref([])
     const loading = ref(false)
-    const searchQuery = ref('')
-    const selectedType = ref('')
-    const currentPage = ref(1)
-    const itemsPerPage = ref(6)
-    const showModal = ref(false)
     const submitting = ref(false)
+    const showDialog = ref(false)
     const editingAnnouncement = ref(null)
+    const step = ref('1')
+
+    const typeOptions = [
+      { label: 'All Types', value: null },
+      { label: 'General', value: 'general' },
+      { label: 'Urgent', value: 'urgent' },
+      { label: 'Maintenance', value: 'maintenance' },
+      { label: 'Policy', value: 'policy' },
+    ]
 
     const formData = ref({
       title: '',
@@ -552,96 +162,75 @@ export default {
       start_at: '',
       end_at: '',
       target_everyone: true,
+      target_positions: [],
+      target_users: [],
+      target_roles: [],
     })
 
     const targetPositionsInput = ref('')
     const targetUsersInput = ref('')
     const targetRolesInput = ref('')
-    const targetSitesInput = ref('')
-    const targetDepartmentsInput = ref('')
 
-    // Options
-    const typeOptions = [
-      { label: 'All Types', value: '' },
-      { label: 'General', value: 'general' },
-      { label: 'Urgent', value: 'urgent' },
-      { label: 'Maintenance', value: 'maintenance' },
-      { label: 'Policy', value: 'policy' },
-    ]
-
-    // Computed properties
-    const filteredAnnouncements = computed(() => {
-      let filtered = announcements.value
-
-      if (searchQuery.value) {
-        const q = searchQuery.value.toLowerCase()
-        filtered = filtered.filter(
-          (a) => a.title.toLowerCase().includes(q) || a.message.toLowerCase().includes(q),
-        )
-      }
-
-      if (selectedType.value) {
-        filtered = filtered.filter((a) => a.announcement_type === selectedType.value)
-      }
-
-      return filtered
-    })
-
-    const paginatedAnnouncements = computed(() => {
-      const start = (currentPage.value - 1) * itemsPerPage.value
-      return filteredAnnouncements.value.slice(start, start + itemsPerPage.value)
-    })
-
-    const totalPages = computed(() => {
-      return Math.ceil(filteredAnnouncements.value.length / itemsPerPage.value)
-    })
-
-    const activeAnnouncements = computed(() => {
-      return announcements.value.filter((a) => a.is_active && !isExpired(a)).length
-    })
-
-    const scheduledAnnouncements = computed(() => {
-      return announcements.value.filter((a) => new Date(a.start_at) > new Date()).length
-    })
-
-    const totalViews = computed(() => {
-      return announcements.value.reduce((sum, a) => sum + (a.views || 0), 0)
-    })
-
-    // Methods
-    const loadAnnouncements = async () => {
+    const fetchAnnouncements = async () => {
+      loading.value = true
       try {
-        const companyId = localStorage.getItem('companyId')
         const token = localStorage.getItem('access_token')
-
-        if (!companyId || !token) {
-          console.error('Missing companyId or access_token in localStorage')
-          return
-        }
-
-        const res = await axios.get(`https://staging.wageyapp.com/communication/announcements/`, {
+        const res = await axios.get('https://staging.wageyapp.com/communication/announcements/', {
           headers: { Authorization: `Bearer ${token}` },
         })
-
-        // ✅ Filter only those for this company
-        announcements.value = res.data.filter((a) => String(a.company) === String(companyId))
-      } catch (err) {
-        console.error('Failed to load announcements:', err.response?.data || err)
+        announcements.value = res.data
+      } catch {
+        $q.notify({ type: 'negative', message: 'Failed to load announcements', position: 'top' })
+      } finally {
+        loading.value = false
       }
     }
 
-    const openCreateModal = () => {
-      resetForm()
-      showModal.value = true
+    const saveAnnouncement = async () => {
+      submitting.value = true
+      try {
+        const token = localStorage.getItem('access_token')
+        const payload = {
+          ...formData.value,
+          target_positions: targetPositionsInput.value
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+          target_users: targetUsersInput.value
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+          target_roles: targetRolesInput.value
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+        }
+
+        if (editingAnnouncement.value) {
+          await axios.put(
+            `https://staging.wageyapp.com/communication/announcements/${editingAnnouncement.value.id}/`,
+            payload,
+            { headers: { Authorization: `Bearer ${token}` } },
+          )
+          $q.notify({ type: 'positive', message: 'Updated successfully', position: 'top' })
+        } else {
+          await axios.post('https://staging.wageyapp.com/communication/announcements/', payload, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          $q.notify({ type: 'positive', message: 'Created successfully', position: 'top' })
+        }
+
+        await fetchAnnouncements()
+        showDialog.value = false
+      } catch {
+        $q.notify({ type: 'negative', message: 'Failed to save', position: 'top' })
+      } finally {
+        submitting.value = false
+      }
     }
 
-    const closeModal = () => {
-      showModal.value = false
+    const openCreateDialog = () => {
       editingAnnouncement.value = null
-      resetForm()
-    }
-
-    const resetForm = () => {
       formData.value = {
         title: '',
         message: '',
@@ -654,616 +243,289 @@ export default {
       targetPositionsInput.value = ''
       targetUsersInput.value = ''
       targetRolesInput.value = ''
-      targetSitesInput.value = ''
-      targetDepartmentsInput.value = ''
+      step.value = '1'
+      showDialog.value = true
     }
 
-    const editAnnouncement = (announcement) => {
-      editingAnnouncement.value = announcement
-      formData.value = { ...announcement }
-      targetPositionsInput.value = (announcement.target_positions || []).join(', ')
-      targetUsersInput.value = (announcement.target_users || []).join(', ')
-      targetRolesInput.value = (announcement.target_roles || []).join(', ')
-      targetSitesInput.value = (announcement.target_sites || []).join(', ')
-      targetDepartmentsInput.value = (announcement.target_departments || []).join(', ')
-      showModal.value = true
+    const editAnnouncement = (a) => {
+      editingAnnouncement.value = a
+      formData.value = { ...a }
+      targetPositionsInput.value = (a.target_positions || []).join(', ')
+      targetUsersInput.value = (a.target_users || []).join(', ')
+      targetRolesInput.value = (a.target_roles || []).join(', ')
+      step.value = '1'
+      showDialog.value = true
     }
 
-    const saveAnnouncement = async () => {
-      submitting.value = true
-      try {
-        // ✅ Frontend validation
-        if (!formData.value.title.trim()) {
-          $q.notify({ type: 'warning', message: 'Title is required', position: 'top' })
-          submitting.value = false
-          return
-        }
-
-        if (!formData.value.message.trim()) {
-          $q.notify({ type: 'warning', message: 'Message is required', position: 'top' })
-          submitting.value = false
-          return
-        }
-
-        if (!formData.value.start_at || !formData.value.end_at) {
-          $q.notify({
-            type: 'warning',
-            message: 'Start and End date are required',
-            position: 'top',
+    const deleteAnnouncement = (a) => {
+      $q.dialog({
+        title: 'Delete',
+        message: `Delete "${a.title}"?`,
+        cancel: true,
+        persistent: true,
+      }).onOk(async () => {
+        try {
+          const token = localStorage.getItem('access_token')
+          await axios.delete(`https://staging.wageyapp.com/communication/announcements/${a.id}/`, {
+            headers: { Authorization: `Bearer ${token}` },
           })
-          submitting.value = false
-          return
+          $q.notify({ type: 'positive', message: 'Deleted', position: 'top' })
+          await fetchAnnouncements()
+        } catch {
+          $q.notify({ type: 'negative', message: 'Failed to delete', position: 'top' })
         }
-
-        if (new Date(formData.value.start_at) >= new Date(formData.value.end_at)) {
-          $q.notify({
-            type: 'warning',
-            message: 'Start date must be before End date',
-            position: 'top',
-          })
-          submitting.value = false
-          return
-        }
-
-        const token = localStorage.getItem('access_token')
-        const companyId = localStorage.getItem('companyId')
-
-        const payload = {
-          ...formData.value,
-          target_positions: targetPositionsInput.value
-            ? targetPositionsInput.value.split(',').map((x) => x.trim())
-            : [],
-          target_users: targetUsersInput.value
-            ? targetUsersInput.value.split(',').map((x) => x.trim())
-            : [],
-          target_roles: targetRolesInput.value
-            ? targetRolesInput.value.split(',').map((x) => x.trim())
-            : [],
-          target_sites: targetSitesInput.value
-            ? targetSitesInput.value.split(',').map((x) => x.trim())
-            : [],
-          target_departments: targetDepartmentsInput.value
-            ? targetDepartmentsInput.value.split(',').map((x) => x.trim())
-            : [],
-          company: companyId, // ✅ Always send company id
-        }
-
-        if (editingAnnouncement.value) {
-          // Update existing announcement
-          await axios.patch(
-            `https://staging.wageyapp.com/communication/announcements/${editingAnnouncement.value.id}/`,
-            payload,
-            { headers: { Authorization: `Bearer ${token}` } },
-          )
-          $q.notify({
-            type: 'positive',
-            message: 'Announcement updated successfully',
-            position: 'top',
-          })
-        } else {
-          // Create new announcement
-          await axios.post(
-            `https://staging.wageyapp.com/communication/announcements/create/`,
-            payload,
-            { headers: { Authorization: `Bearer ${token}` } },
-          )
-          $q.notify({
-            type: 'positive',
-            message: 'Announcement created successfully',
-            position: 'top',
-          })
-        }
-
-        await loadAnnouncements()
-        closeModal()
-      } catch (error) {
-        console.error('Save failed:', error.response?.data || error.message)
-        $q.notify({ type: 'negative', message: 'Failed to save announcement', position: 'top' })
-      } finally {
-        submitting.value = false
-      }
+      })
     }
 
-    // Helper methods
-    const formatDate = (date) => {
-      return new Date(date).toLocaleString()
+    const closeDialog = () => {
+      showDialog.value = false
     }
 
-    const isExpired = (announcement) => {
-      return new Date(announcement.end_at) < new Date()
-    }
-
-    const getStatus = (announcement) => {
-      const now = new Date()
-      if (!announcement.is_active) return 'Inactive'
-      if (now < new Date(announcement.start_at)) return 'Scheduled'
-      if (now > new Date(announcement.end_at)) return 'Expired'
-      return 'Active'
-    }
-
-    const getStatusColor = (announcement) => {
-      const status = getStatus(announcement).toLowerCase()
-      const colors = {
-        active: 'positive',
-        scheduled: 'warning',
-        expired: 'negative',
-        inactive: 'grey-6',
-      }
-      return colors[status] || 'grey-6'
-    }
-
-    const getStatusTextColor = (announcement) => {
-      const status = getStatus(announcement).toLowerCase()
-      return status === 'scheduled' ? 'warning' : 'white'
-    }
-
-    const getStatusIcon = (announcement) => {
-      const status = getStatus(announcement).toLowerCase()
-      const icons = {
-        active: 'check_circle',
-        scheduled: 'schedule',
-        expired: 'cancel',
-        inactive: 'pause_circle',
-      }
-      return icons[status] || 'help'
-    }
-
-    const getTypeColor = (type) => {
-      const colors = {
-        general: 'primary',
-        urgent: 'negative',
-        maintenance: 'warning',
-        policy: 'info',
-      }
-      return colors[type] || 'primary'
-    }
-
-    const getTypeIcon = (type) => {
-      const icons = {
-        general: 'info',
-        urgent: 'priority_high',
-        maintenance: 'build',
-        policy: 'policy',
-      }
-      return icons[type] || 'info'
-    }
-
-    const getCardClass = (announcement) => {
-      const status = getStatus(announcement).toLowerCase()
-      return `card-${status} card-${announcement.announcement_type}`
-    }
-
-    const hasTargeting = (announcement) => {
-      return (
-        announcement.target_positions ||
-        announcement.target_users ||
-        announcement.target_roles ||
-        announcement.target_sites ||
-        announcement.target_departments
-      )
-    }
-
-    const formatArray = (arr) => {
-      if (Array.isArray(arr)) {
-        return arr.length > 2
-          ? `${arr.slice(0, 2).join(', ')}... (+${arr.length - 2})`
-          : arr.join(', ')
-      }
-      return arr
-    }
-
-    // Lifecycle
-    onMounted(() => {
-      loadAnnouncements()
-    })
+    onMounted(fetchAnnouncements)
 
     return {
-      // Data
       announcements,
       loading,
-      searchQuery,
-      selectedType,
-      currentPage,
-      itemsPerPage,
-      showModal,
       submitting,
+      showDialog,
       editingAnnouncement,
+      step,
+      typeOptions,
       formData,
       targetPositionsInput,
       targetUsersInput,
       targetRolesInput,
-      targetSitesInput,
-      targetDepartmentsInput,
-      typeOptions,
-
-      // Computed
-      filteredAnnouncements,
-      paginatedAnnouncements,
-      totalPages,
-      activeAnnouncements,
-      scheduledAnnouncements,
-      totalViews,
-
-      // Methods
-      loadAnnouncements,
-      openCreateModal,
-      closeModal,
+      openCreateDialog,
       editAnnouncement,
+      deleteAnnouncement,
+      closeDialog,
       saveAnnouncement,
-      formatDate,
-      isExpired,
-      getStatus,
-      getStatusColor,
-      getStatusTextColor,
-      getStatusIcon,
-      getTypeColor,
-      getTypeIcon,
-      getCardClass,
-      hasTargeting,
-      formatArray,
     }
   },
 }
 </script>
 
 <style scoped>
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+.announcements-page {
+  background: #fafafa;
+  min-height: 100vh;
+  padding: 0;
 }
 
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.modal-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #111827;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.5rem;
-  color: #6b7280;
-  border-radius: 6px;
-}
-
-.close-btn:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.close-btn svg {
-  width: 1.5rem;
-  height: 1.5rem;
-}
-
-.modal-form {
-  padding: 1.5rem;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #374151;
-}
-
-.form-input,
-.form-textarea,
-.form-select {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
-}
-
-.form-input:focus,
-.form-textarea:focus,
-.form-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.form-textarea {
-  resize: vertical;
-  min-height: 100px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.form-checkbox {
-  margin-right: 0.5rem;
-}
-
-.targeting-section {
-  background: #f9fafb;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-top: 1rem;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid #e5e7eb;
-}
-
-.btn-primary,
-.btn-secondary {
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-primary:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-}
-
-.btn-secondary:hover {
-  background: #e5e7eb;
-}
-
-/* Existing styles for the main component */
-.announcement-page {
-  padding: 1.5rem;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
+/* Header */
 .page-header {
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 32px 40px;
+}
+
+.header-content {
+  max-width: 1400px;
+  margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  gap: 32px;
+}
+
+.title-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.title-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.title-icon {
+  font-size: 24px;
 }
 
 .page-title {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #111827;
+  font-size: 28px;
+  font-weight: 600;
+  color: #212121;
   margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: #757575;
+  margin: 4px 0 0 0;
+  font-weight: 400;
 }
 
 .header-actions {
   display: flex;
-  gap: 1rem;
+  gap: 12px;
   align-items: center;
-}
-
-.search-container {
-  position: relative;
 }
 
 .search-input {
-  padding: 0.75rem 1rem;
-  padding-left: 2.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  width: 300px;
-  font-size: 0.875rem;
-}
-
-.search-icon {
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 1.25rem;
-  height: 1.25rem;
-  color: #6b7280;
+  width: 240px;
 }
 
 .filter-select {
-  padding: 0.75rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: white;
-  font-size: 0.875rem;
+  width: 140px;
 }
 
 .add-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
   border-radius: 8px;
   font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
+  letter-spacing: 0.2px;
 }
 
-.add-btn:hover {
-  background: #2563eb;
-}
-
-.add-btn svg {
-  width: 1.25rem;
-  height: 1.25rem;
+/* Stats Section */
+.stats-section {
+  max-width: 1400px;
+  margin: 32px auto;
+  padding: 0 40px;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
 }
 
 .stat-card {
   background: white;
-  padding: 1.5rem;
+  border: 1px solid #e0e0e0;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+  transition: all 0.2s;
 }
 
-.stat-icon {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 8px;
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.stat-content {
+  padding: 24px !important;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.stat-icon.active {
-  background: #dcfce7;
-  color: #16a34a;
+.stat-icon-wrapper.active {
+  background: #e8f5e9;
+  color: #2e7d32;
 }
 
-.stat-icon.total {
-  background: #dbeafe;
-  color: #2563eb;
+.stat-icon-wrapper.total {
+  background: #e3f2fd;
+  color: #1565c0;
 }
 
-.stat-icon.scheduled {
-  background: #fef3c7;
-  color: #d97706;
+.stat-icon-wrapper.scheduled {
+  background: #fff3e0;
+  color: #ef6c00;
 }
 
-.stat-icon svg {
-  width: 1.5rem;
-  height: 1.5rem;
+.stat-icon-wrapper.views {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.stat-info {
+  flex: 1;
 }
 
 .stat-number {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #111827;
+  font-size: 28px;
+  font-weight: 600;
+  color: #212121;
+  line-height: 1;
 }
 
 .stat-label {
-  color: #6b7280;
-  font-size: 0.875rem;
+  font-size: 13px;
+  color: #757575;
+  margin-top: 4px;
+  font-weight: 500;
 }
 
-.announcements-container {
+/* Content Section */
+.content-section {
+  max-width: 1400px;
+  margin: 0 auto 40px;
+  padding: 0 40px;
+}
+
+.state-container {
   background: white;
+  border: 1px solid #e0e0e0;
   border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.loading-state,
-.empty-state {
+  padding: 80px 40px;
   text-align: center;
-  padding: 3rem;
-}
-
-.loading-spinner {
-  width: 2rem;
-  height: 2rem;
-  border: 3px solid #f3f4f6;
-  border-top: 3px solid #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .empty-icon {
-  width: 4rem;
-  height: 4rem;
-  color: #9ca3af;
-  margin-bottom: 1rem;
+  margin-bottom: 16px;
 }
 
+.state-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #424242;
+  margin-bottom: 8px;
+}
+
+.state-subtitle {
+  font-size: 14px;
+  color: #757575;
+}
+
+.state-text {
+  font-size: 15px;
+  color: #757575;
+  margin-top: 16px;
+}
+
+/* Announcements Grid */
 .announcements-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
 }
 
 .announcement-card {
-  border: 1px solid #e5e7eb;
+  background: white;
+  border: 1px solid #e0e0e0;
   border-radius: 12px;
-  padding: 1.5rem;
   transition: all 0.2s;
+  overflow: hidden;
 }
 
 .announcement-card:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
 .announcement-card.urgent {
-  border-left: 4px solid #ef4444;
+  border-left: 3px solid #d32f2f;
 }
 
 .announcement-card.active {
-  border-left: 4px solid #10b981;
+  border-left: 3px solid #2e7d32;
 }
 
 .announcement-card.expired {
@@ -1271,243 +533,301 @@ export default {
 }
 
 .card-header {
+  padding: 20px 20px 16px !important;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1rem;
 }
 
-.announcement-meta {
+.header-chips {
   display: flex;
-  gap: 0.5rem;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.announcement-type {
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.announcement-type.general {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.announcement-type.urgent {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.announcement-type.maintenance {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.announcement-type.policy {
-  background: #e0e7ff;
-  color: #3730a3;
+.type-chip {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .status-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
+  font-size: 11px;
   font-weight: 500;
+  padding: 4px 8px;
 }
 
-.status-badge.active {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.status-badge.scheduled {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.status-badge.expired {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.status-badge.inactive {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.card-actions {
+.header-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 4px;
 }
 
 .action-btn {
-  width: 2rem;
-  height: 2rem;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-  background: #f3f4f6;
-  color: #6b7280;
+  color: #757575;
+  transition: all 0.2s;
 }
 
 .action-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: #f5f5f5;
+  color: #424242;
 }
 
-.action-btn.delete:hover {
-  background: #fee2e2;
-  color: #dc2626;
+.delete-btn:hover {
+  background: #ffebee;
+  color: #d32f2f;
 }
 
-.action-btn svg {
-  width: 1rem;
-  height: 1rem;
+.card-content {
+  padding: 0 20px 20px !important;
 }
 
 .announcement-title {
-  font-size: 1.125rem;
+  font-size: 18px;
   font-weight: 600;
-  color: #111827;
-  margin: 0 0 0.5rem 0;
+  color: #212121;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+  letter-spacing: -0.2px;
 }
 
 .announcement-message {
-  color: #6b7280;
-  line-height: 1.5;
-  margin: 0 0 1rem 0;
+  font-size: 14px;
+  color: #616161;
+  line-height: 1.6;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.targeting-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f5f5f5;
+}
+
+.targeting-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .card-footer {
-  border-top: 1px solid #f3f4f6;
-  padding-top: 1rem;
+  padding: 16px 20px !important;
+  background: #fafafa;
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 1rem;
+  align-items: center;
 }
 
 .timing-info {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 4px;
 }
 
 .time-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #6b7280;
+  gap: 6px;
+  font-size: 12px;
+  color: #757575;
 }
 
-.time-icon {
-  width: 1rem;
-  height: 1rem;
-}
-
-.targeting-info {
+.engagement-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-}
-
-.target-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.75rem;
-  background: #dcfce7;
-  color: #16a34a;
-  border-radius: 20px;
-  font-size: 0.75rem;
+  gap: 6px;
+  font-size: 12px;
+  color: #757575;
   font-weight: 500;
 }
 
-.target-badge svg {
-  width: 0.875rem;
-  height: 0.875rem;
-}
-
-.target-info {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.target-count {
-  padding: 0.25rem 0.5rem;
-  background: #f3f4f6;
-  color: #6b7280;
-  border-radius: 12px;
-  font-size: 0.75rem;
-}
-
-.pagination {
+/* Pagination */
+.pagination-section {
+  margin-top: 40px;
   display: flex;
   justify-content: center;
+}
+
+/* Modal */
+.modal-card {
+  background: white;
+}
+
+.modal-header {
+  padding: 24px 32px !important;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  background: #fafafa;
+  border-bottom: 1px solid #e0e0e0;
 }
 
-.pagination-btn {
-  padding: 0.5rem 1rem;
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.2s;
+.modal-title {
+  display: flex;
+  align-items: center;
+  font-size: 20px;
+  font-weight: 600;
+  color: #212121;
 }
 
-.pagination-btn:hover:not(:disabled) {
-  background: #e5e7eb;
+.modal-content {
+  padding: 32px !important;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
 }
 
-.pagination-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
-.pagination-info {
-  color: #6b7280;
-  font-size: 0.875rem;
+.form-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #424242;
+  margin-bottom: 20px;
+}
+
+.form-row {
+  margin-bottom: 20px;
+}
+
+.form-row:last-child {
+  margin-bottom: 0;
+}
+
+.form-row-split {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.form-row-split:last-child {
+  margin-bottom: 0;
+}
+
+.targeting-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.modal-actions {
+  padding: 20px 32px !important;
+  background: #fafafa;
+  border-top: 1px solid #e0e0e0;
+  justify-content: flex-end;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .page-header,
+  .stats-section,
+  .content-section {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .announcements-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
   .page-header {
+    padding: 24px 20px;
+  }
+
+  .header-content {
     flex-direction: column;
-    gap: 1rem;
+    align-items: stretch;
+    gap: 20px;
+  }
+
+  .title-section {
+    flex-direction: row;
   }
 
   .header-actions {
-    flex-direction: column;
-    width: 100%;
+    flex-wrap: wrap;
   }
 
-  .search-input {
-    width: 100%;
+  .search-input,
+  .filter-select {
+    flex: 1;
+    min-width: 140px;
   }
 
-  .form-row {
-    grid-template-columns: 1fr;
+  .add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .stats-section,
+  .content-section {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
 
   .announcements-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
-  .card-footer {
-    flex-direction: column;
-    align-items: flex-start;
+  .modal-header,
+  .modal-content,
+  .modal-actions {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+
+  .form-row-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 24px;
+  }
+
+  .page-subtitle {
+    font-size: 13px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-content {
+    padding: 20px !important;
+  }
+
+  .stat-number {
+    font-size: 24px;
   }
 }
 </style>

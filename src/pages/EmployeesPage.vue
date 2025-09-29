@@ -6,7 +6,6 @@
         <div class="header-content">
           <div class="header-left">
             <h1 class="page-title">Employee Management</h1>
-            <p class="page-subtitle">Manage your team members and their information</p>
           </div>
           <div class="header-actions">
             <q-input

@@ -6,7 +6,6 @@
         <div class="header-content">
           <div class="header-left">
             <h1 class="page-title">Attendance Management</h1>
-            <p class="page-subtitle">Track and manage employee attendance records</p>
           </div>
           <div class="header-actions">
             <q-btn

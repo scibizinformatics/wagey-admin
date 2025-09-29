@@ -3,14 +3,7 @@
     <!-- Header -->
     <div class="header-bar bg-white shadow-2 q-pa-md">
       <div class="row items-center justify-between q-col-gutter-sm">
-        <div class="col-12 col-sm-6 row items-center">
-          <q-avatar size="36px" class="q-mr-sm" color="primary">
-            <img src="quasar-logo-vertical.svg" style="width: 24px; height: 24px" />
-          </q-avatar>
-          <div>
-            <div class="text-caption text-grey-7">Scibiz Informatics Inc.</div>
-          </div>
-        </div>
+        <div class="col-12 col-sm-6 row items-center"></div>
         <div class="col-12 col-sm-6 row items-center justify-end q-gutter-sm">
           <span class="text-body2">drake.carcellar16@gmail.com</span>
           <q-btn flat round icon="notifications" size="sm">
@@ -29,7 +22,7 @@
       <div class="sidebar-header q-pa-lg">
         <div class="row items-center no-wrap">
           <q-avatar size="40px" class="sidebar-logo">
-            <img src="quasar-logo-vertical.svg" alt="Wagey Logo" />
+            <img :src="logo" alt="Wagey Logo" />
           </q-avatar>
           <div class="q-ml-md">
             <div class="sidebar-title">Wagey</div>
@@ -117,6 +110,7 @@
 
 <script>
 import { api } from 'src/boot/axios'
+import wageyLogo from 'src/assets/wagey_logo.png'
 
 export default {
   name: 'MainLayout',
@@ -125,6 +119,7 @@ export default {
       leftDrawerOpen: true,
       selectedCompany: null,
       companyOptions: [],
+      logo: wageyLogo,
       loadingCompanies: false,
       links: [
         { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
@@ -142,7 +137,7 @@ export default {
 
   async mounted() {
     await this.fetchCompanies()
-    this.loadSavedCompany()
+    this.loadSavedCompany() // ✅ ensure company loads AFTER options
   },
 
   methods: {
@@ -153,9 +148,9 @@ export default {
         const res = await api.get('/user/current-user-companies/', {
           headers: { Authorization: `Bearer ${token}` },
         })
-
+        console.log(res)
         this.companyOptions = res.data.map((company) => ({
-          siteId: company.id || company.company_id,
+          siteId: String(company.company), // ✅ always store as string
           siteName: company.name || company.company_name || `Company ${company.id}`,
         }))
 
@@ -178,18 +173,22 @@ export default {
     onCompanyChange(siteId) {
       this.setSelectedCompany(siteId)
       this.$root.$emit('company-changed', siteId)
+      window.location.reload()
     },
 
     setSelectedCompany(siteId) {
-      this.selectedCompany = siteId
-      localStorage.setItem('selectedCompany', siteId) // ✅ overwrite only one
+      this.selectedCompany = String(siteId) // ✅ store as string
+      localStorage.setItem('selectedCompany', String(siteId))
       console.log('✅ Selected company saved:', siteId)
     },
 
     loadSavedCompany() {
       const saved = localStorage.getItem('selectedCompany')
-      if (saved && this.companyOptions.some((opt) => opt.siteId == saved)) {
-        this.selectedCompany = saved
+      if (saved) {
+        const match = this.companyOptions.find((opt) => String(opt.siteId) === String(saved))
+        if (match) {
+          this.selectedCompany = String(match.siteId) // ✅ ensures label shows
+        }
       }
     },
 
@@ -222,10 +221,6 @@ export default {
   margin: 16px;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.sidebar-logo {
-  border-radius: 10px;
 }
 
 .sidebar-title {

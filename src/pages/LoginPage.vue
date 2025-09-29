@@ -1,73 +1,97 @@
 <template>
-  <q-page class="flex flex-center bg-gradient">
+  <q-page class="flex flex-center bg-white">
     <div class="login-container">
-      <!-- Header -->
-      <div class="text-center q-mb-lg q-mb-xl-md">
-        <h3 class="login-title text-weight-bold text-grey-8 q-mb-sm">Welcome Back</h3>
-        <p class="login-subtitle text-grey-6">Sign in to your account</p>
+      <!-- Header with Logo/Branding -->
+      <div class="text-center q-mb-lg">
+        <div class="brand-logo q-mb-sm">
+          <q-icon name="diamond" size="28px" color="primary" />
+        </div>
+        <h2 class="login-title text-weight-light text-grey-9 q-ma-none q-mb-xs">Sign In</h2>
+        <p class="login-subtitle text-grey-6 q-ma-none">Sign in to stay connected</p>
       </div>
 
       <!-- Login Form -->
-      <q-form @submit="handleLogin" class="q-gutter-md">
-        <q-input
-          v-model="formData.username"
-          outlined
-          label="Username or Email"
-          lazy-rules
-          :rules="[(val) => !!val || 'Username is required']"
-          autocomplete="username"
-          :dense="$q.screen.xs"
-        >
-          <template v-slot:prepend>
-            <q-icon name="person" :size="$q.screen.xs ? 'sm' : 'md'" />
-          </template>
-        </q-input>
-
-        <q-input
-          v-model="formData.password"
-          outlined
-          :type="showPassword ? 'text' : 'password'"
-          label="Password"
-          lazy-rules
-          :rules="[(val) => !!val || 'Password is required']"
-          autocomplete="current-password"
-          :dense="$q.screen.xs"
-        >
-          <template v-slot:prepend>
-            <q-icon name="lock" :size="$q.screen.xs ? 'sm' : 'md'" />
-          </template>
-          <template v-slot:append>
-            <q-icon
-              :name="showPassword ? 'visibility_off' : 'visibility'"
-              class="cursor-pointer"
-              @click="showPassword = !showPassword"
-            />
-          </template>
-        </q-input>
-
-        <!-- Options -->
-        <div class="row justify-between items-center">
-          <q-checkbox v-model="formData.rememberMe" label="Remember me" class="text-grey-7" />
-          <q-btn flat dense color="primary" label="Forgot Password?" @click="goToForgotPassword" />
+      <q-form @submit="handleLogin" class="login-form">
+        <!-- Email Input -->
+        <div class="q-mb-md">
+          <label class="input-label text-grey-7 text-weight-medium">Email</label>
+          <q-input
+            v-model="formData.username"
+            outlined
+            placeholder="Enter your email"
+            lazy-rules
+            :rules="[(val) => !!val || 'Email is required']"
+            autocomplete="username"
+            class="modern-input"
+            hide-bottom-space
+          />
         </div>
 
-        <!-- Login Button -->
+        <!-- Password Input -->
+        <div class="q-mb-md">
+          <label class="input-label text-grey-7 text-weight-medium">Password</label>
+          <q-input
+            v-model="formData.password"
+            outlined
+            :type="showPassword ? 'text' : 'password'"
+            placeholder="Enter your password"
+            lazy-rules
+            :rules="[(val) => !!val || 'Password is required']"
+            autocomplete="current-password"
+            class="modern-input"
+            hide-bottom-space
+          >
+            <template v-slot:append>
+              <q-icon
+                :name="showPassword ? 'visibility_off' : 'visibility'"
+                class="cursor-pointer text-grey-5"
+                @click="showPassword = !showPassword"
+              />
+            </template>
+          </q-input>
+        </div>
+
+        <!-- Options Row -->
+        <div class="row justify-between items-center q-mb-lg">
+          <q-checkbox
+            v-model="formData.rememberMe"
+            label="Remember me?"
+            class="remember-checkbox text-grey-7"
+          />
+          <q-btn
+            flat
+            no-caps
+            color="primary"
+            label="Forgot Password?"
+            @click="goToForgotPassword"
+            class="forgot-btn"
+          />
+        </div>
+
+        <!-- Sign In Button -->
         <q-btn
           type="submit"
           color="primary"
-          label="Sign In"
-          class="full-width q-mt-lg"
-          rounded
+          label="Sign in"
+          class="full-width sign-in-btn"
           unelevated
+          no-caps
           :loading="isSubmitting"
           :disable="!isFormValid"
         />
       </q-form>
 
-      <!-- Register -->
+      <!-- Sign Up Link -->
       <div class="text-center q-mt-lg">
         <span class="text-grey-6">Don't have an account? </span>
-        <q-btn flat dense color="primary" label="Sign Up" @click="goToRegister" />
+        <q-btn
+          flat
+          no-caps
+          color="primary"
+          label="Click here to sign up."
+          @click="goToRegister"
+          class="signup-link"
+        />
       </div>
     </div>
   </q-page>
@@ -97,11 +121,25 @@ const formData = ref({
 const isFormValid = computed(() => formData.value.username && formData.value.password)
 
 const showErrorNotification = (message) => {
-  $q.notify({ type: 'negative', message, position: 'top', timeout: 3000, icon: 'error_outline' })
+  $q.notify({
+    type: 'negative',
+    message,
+    position: 'top',
+    timeout: 3000,
+    icon: 'error_outline',
+    classes: 'modern-notification',
+  })
 }
 
 const showSuccessNotification = (message) => {
-  $q.notify({ type: 'positive', message, position: 'top', timeout: 2000, icon: 'check_circle' })
+  $q.notify({
+    type: 'positive',
+    message,
+    position: 'top',
+    timeout: 2000,
+    icon: 'check_circle',
+    classes: 'modern-notification',
+  })
 }
 
 const handleLogin = async () => {
@@ -127,9 +165,15 @@ const handleLogin = async () => {
       return
     }
 
-    // ✅ Store token only
+    // ✅ Save token
     authStore.setToken(token)
     localStorage.setItem('authToken', token)
+
+    // ✅ Save user info
+    if (loginData.user) {
+      localStorage.setItem('user_id', loginData.user.id)
+      localStorage.setItem('selectedCompany', loginData.user.company)
+    }
 
     showSuccessNotification('Login successful!')
 
@@ -147,239 +191,399 @@ const handleLogin = async () => {
   }
 }
 
+// Social login placeholders - removed
+
 const goToForgotPassword = () => router.push('/forgot-password')
 const goToRegister = () => router.push('/register')
 </script>
 
 <style lang="scss" scoped>
-.bg-gradient {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.bg-white {
+  background: #ffffff;
   min-height: 100vh;
-  padding: 0.5rem;
+  padding: 1rem;
 
-  @media (min-width: 600px) {
-    padding: 1rem;
+  // Desktop and larger screens
+  @media (min-width: 1024px) {
+    padding: 2rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  }
+
+  @media (min-width: 1440px) {
+    padding: 3rem;
   }
 }
 
 .login-container {
   background: white;
-  border-radius: 16px;
+  border-radius: 0;
   width: 100%;
-  max-width: 400px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  max-width: 320px;
+  padding: 1rem 0;
 
-  // Mobile-first padding
-  padding: 1.5rem 1rem;
-
-  // Tablet and up
-  @media (min-width: 480px) {
-    padding: 2rem 1.5rem;
-  }
-
-  // Desktop
   @media (min-width: 768px) {
-    padding: 3rem 2rem;
+    padding: 1.5rem 0;
+    max-width: 340px;
   }
 
-  // Ensure it doesn't get too wide on very large screens
-  @media (min-width: 1200px) {
-    max-width: 450px;
+  // Enhanced desktop styling
+  @media (min-width: 1024px) {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem 1.5rem;
+    max-width: 360px;
+    box-shadow:
+      0 10px 25px rgba(0, 0, 0, 0.08),
+      0 4px 15px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+  }
+
+  @media (min-width: 1440px) {
+    padding: 2rem 2rem;
+    max-width: 380px;
+    box-shadow:
+      0 15px 35px rgba(0, 0, 0, 0.1),
+      0 6px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  // Ultra-wide screens
+  @media (min-width: 1920px) {
+    padding: 2.5rem 2.5rem;
+    max-width: 400px;
   }
 }
 
-// Mobile-optimized typography
-.login-title {
-  font-size: 1.5rem;
-  line-height: 1.3;
+// Brand and Header
+.brand-logo {
+  .q-icon {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    padding: 8px;
 
-  @media (min-width: 480px) {
-    font-size: 1.75rem;
+    @media (min-width: 1024px) {
+      border-radius: 12px;
+      padding: 12px;
+    }
+  }
+}
+
+.login-title {
+  font-size: 1.75rem;
+  font-weight: 300;
+  letter-spacing: -0.4px;
+
+  @media (max-width: 599px) {
+    font-size: 1.5rem;
   }
 
-  @media (min-width: 768px) {
+  @media (min-width: 1024px) {
+    font-size: 1.9rem;
+    letter-spacing: -0.5px;
+  }
+
+  @media (min-width: 1440px) {
     font-size: 2rem;
+    letter-spacing: -0.6px;
   }
 }
 
 .login-subtitle {
-  font-size: 0.875rem;
+  font-size: 0.85rem;
+  font-weight: 400;
 
-  @media (min-width: 480px) {
-    font-size: 1rem;
-  }
-}
-
-// Mobile input optimizations
-.mobile-input {
-  .q-field__control {
-    min-height: 48px; // Ensure good touch target size
-  }
-
-  @media (max-width: 599px) {
-    .q-field__control {
-      min-height: 44px;
-    }
-  }
-}
-
-// Mobile options container
-.mobile-options-container {
-  @media (max-width: 599px) {
-    margin-top: 0.75rem;
-    margin-bottom: 0.75rem;
-  }
-}
-
-// Remember checkbox mobile styles
-.remember-checkbox {
-  font-size: 0.875rem;
-
-  @media (max-width: 599px) {
-    font-size: 0.8rem;
-  }
-}
-
-.remember-checkbox-mobile {
-  font-size: 0.8rem;
-  align-self: flex-start;
-}
-
-// Forgot password button styles
-.forgot-password-btn {
-  font-size: 0.75rem;
-  padding: 2px 4px;
-
-  @media (min-width: 480px) {
-    font-size: 0.8rem;
-  }
-}
-
-.forgot-password-btn-mobile {
-  font-size: 0.8rem;
-  padding: 4px 8px;
-}
-
-// Login button mobile styles
-.login-btn {
-  height: 48px;
-  font-weight: 600;
-
-  @media (max-width: 599px) {
-    height: 44px;
+  @media (min-width: 1024px) {
     font-size: 0.9rem;
   }
 
-  @media (min-width: 768px) {
-    height: 52px;
-    font-size: 1rem;
+  @media (min-width: 1440px) {
+    font-size: 0.95rem;
   }
 }
 
-// Register section mobile styles
-.register-section {
-  margin-top: 1rem;
+// Form Styling
+.login-form {
+  .input-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
 
-  @media (min-width: 480px) {
-    margin-top: 1.5rem;
+    @media (min-width: 1024px) {
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+    }
+
+    @media (min-width: 1440px) {
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+    }
   }
 }
 
-.register-text-mobile {
+.modern-input {
+  :deep(.q-field__control) {
+    border-radius: 6px;
+    min-height: 42px;
+    border-color: #e0e0e0;
+
+    @media (min-width: 1024px) {
+      min-height: 46px;
+      border-radius: 8px;
+    }
+
+    @media (min-width: 1440px) {
+      min-height: 48px;
+      border-radius: 10px;
+    }
+
+    &:before {
+      border-color: #e0e0e0;
+    }
+
+    &:hover:before {
+      border-color: #bdbdbd;
+    }
+  }
+
+  :deep(.q-field__native) {
+    padding-left: 14px;
+    font-size: 0.9rem;
+
+    @media (min-width: 1024px) {
+      padding-left: 16px;
+      font-size: 0.95rem;
+    }
+
+    @media (min-width: 1440px) {
+      padding-left: 18px;
+      font-size: 1rem;
+    }
+  }
+
+  :deep(.q-placeholder) {
+    color: #9e9e9e;
+  }
+
+  :deep(.q-field--focused) {
+    .q-field__control:before {
+      border-color: #1976d2;
+      border-width: 2px;
+    }
+  }
+
+  :deep(.q-field__append) {
+    padding-right: 14px;
+
+    @media (min-width: 1024px) {
+      padding-right: 16px;
+    }
+
+    @media (min-width: 1440px) {
+      padding-right: 18px;
+    }
+  }
+}
+
+// Options Row
+.remember-checkbox {
   font-size: 0.875rem;
 
-  .text-grey-6 {
-    font-size: 0.875rem;
+  @media (min-width: 1024px) {
+    font-size: 1rem;
+  }
+
+  @media (min-width: 1440px) {
+    font-size: 1.1rem;
+  }
+
+  :deep(.q-checkbox__bg) {
+    border-radius: 4px;
+
+    @media (min-width: 1024px) {
+      border-radius: 6px;
+      width: 20px;
+      height: 20px;
+    }
   }
 }
 
-.signup-btn-mobile {
-  font-size: 0.9rem;
-  padding: 6px 12px;
-  min-height: 36px;
+.forgot-btn {
+  font-size: 0.875rem;
+  padding: 4px 8px;
+  font-weight: 400;
+
+  @media (min-width: 1024px) {
+    font-size: 1rem;
+    padding: 8px 12px;
+  }
+
+  @media (min-width: 1440px) {
+    font-size: 1.1rem;
+    padding: 10px 16px;
+  }
+
+  &:hover {
+    background: rgba(25, 118, 210, 0.04);
+  }
 }
 
-// Touch-friendly improvements
+// Sign In Button
+.sign-in-btn {
+  height: 42px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-transform: none;
+  box-shadow: none;
+
+  @media (min-width: 1024px) {
+    height: 46px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  @media (min-width: 1440px) {
+    height: 48px;
+    border-radius: 10px;
+    font-size: 1.05rem;
+  }
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+
+    @media (min-width: 1024px) {
+      box-shadow: 0 3px 12px rgba(25, 118, 210, 0.35);
+    }
+  }
+
+  @media (max-width: 599px) {
+    height: 40px;
+    font-size: 0.9rem;
+  }
+}
+
+// Sign Up Link
+.signup-link {
+  font-size: 0.875rem;
+  padding: 2px 4px;
+  font-weight: 400;
+  text-decoration: underline;
+
+  @media (min-width: 1024px) {
+    font-size: 1rem;
+    padding: 6px 8px;
+  }
+
+  @media (min-width: 1440px) {
+    font-size: 1.1rem;
+    padding: 8px 12px;
+  }
+
+  &:hover {
+    background: rgba(25, 118, 210, 0.04);
+  }
+}
+
+// Desktop-specific enhancements
+@media (min-width: 1024px) {
+  .q-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  // Add subtle animations for desktop
+  .login-container {
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 25px 70px rgba(0, 0, 0, 0.12),
+        0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+  }
+
+  .modern-input {
+    transition: all 0.2s ease;
+
+    &:hover {
+      :deep(.q-field__control:before) {
+        border-color: #9e9e9e;
+      }
+    }
+  }
+
+  .sign-in-btn {
+    transition: all 0.2s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+    }
+  }
+}
+
+// Mobile Optimizations
 @media (max-width: 599px) {
-  .q-btn--flat.q-btn--dense {
-    padding: 4px 8px;
-    min-height: 36px;
+  .bg-white {
+    padding: 0.5rem;
   }
 
-  .q-checkbox {
-    .q-checkbox__bg {
-      width: 18px;
-      height: 18px;
-    }
-  }
-}
-
-// Landscape mobile optimization
-@media (max-height: 600px) and (orientation: landscape) {
   .login-container {
-    padding: 1rem 1.5rem;
-    max-height: 90vh;
-    overflow-y: auto;
+    padding: 1.5rem 0;
   }
 
-  .login-title {
-    font-size: 1.25rem;
-    margin-bottom: 0.25rem;
+  .brand-logo .q-icon {
+    font-size: 28px;
+    padding: 6px;
   }
 
-  .login-subtitle {
-    font-size: 0.8rem;
-    margin-bottom: 0.5rem;
+  .modern-input :deep(.q-field__control) {
+    min-height: 44px;
   }
 
-  .q-form {
-    .q-gutter-md > * + * {
-      margin-top: 0.75rem;
-    }
+  .social-buttons .social-btn {
+    width: 36px;
+    height: 36px;
   }
 }
 
-// Very small screens (iPhone SE, etc.)
+// Very small screens
 @media (max-width: 375px) {
-  .bg-gradient {
-    padding: 0.25rem;
+  .login-title {
+    font-size: 1.5rem;
   }
 
   .login-container {
-    padding: 1.25rem 0.875rem;
-    border-radius: 12px;
-  }
-
-  .login-title {
-    font-size: 1.375rem;
-  }
-
-  .mobile-input {
-    .q-field__control {
-      min-height: 42px;
-    }
-  }
-
-  .login-btn {
-    height: 42px;
-    font-size: 0.875rem;
+    padding: 1rem 0;
   }
 }
 
-// Accessibility improvements
+// Accessibility
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-// High contrast mode support
-@media (prefers-contrast: high) {
-  .login-container {
-    border: 2px solid #000;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+// Custom notification styling
+:deep(.modern-notification) {
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+// Focus styles for better accessibility
+.modern-input:focus-within {
+  :deep(.q-field__control) {
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
   }
+}
+
+.sign-in-btn:focus {
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.3);
 }
 </style>

@@ -1,19 +1,19 @@
 <template>
-  <q-page class="payroll-style-page">
+  <q-page class="modern-page">
     <!-- Header Section -->
     <div class="page-header">
       <div class="header-content">
         <div class="header-left">
           <h1 class="page-title">Weekly Schedule</h1>
-          <p class="page-subtitle">Manage your team's work schedule efficiently</p>
         </div>
         <div class="header-actions">
           <q-btn
             flat
+            round
             color="grey-7"
             icon="refresh"
             @click="fetchData"
-            class="header-btn"
+            class="header-btn refresh-btn"
             size="md"
           />
           <q-btn
@@ -28,10 +28,10 @@
       </div>
     </div>
 
-    <!-- Summary Cards -->
+    <!-- Summary Cards Section -->
     <div class="summary-section">
       <div class="summary-grid">
-        <div class="summary-card purple">
+        <div class="summary-card card-purple">
           <div class="card-icon">
             <q-icon name="groups" size="24px" />
           </div>
@@ -41,7 +41,7 @@
           </div>
         </div>
 
-        <div class="summary-card yellow">
+        <div class="summary-card card-yellow">
           <div class="card-icon">
             <q-icon name="schedule" size="24px" />
           </div>
@@ -51,7 +51,7 @@
           </div>
         </div>
 
-        <div class="summary-card green">
+        <div class="summary-card card-green">
           <div class="card-icon">
             <q-icon name="business_center" size="24px" />
           </div>
@@ -61,7 +61,7 @@
           </div>
         </div>
 
-        <div class="summary-card blue">
+        <div class="summary-card card-blue">
           <div class="card-icon">
             <q-icon name="schedule" size="24px" />
           </div>
@@ -674,8 +674,10 @@ const filteredUsers = computed(() =>
 const fetchData = async () => {
   try {
     const token = localStorage.getItem('access_token')
+    const companyId = localStorage.getItem('selectedCompany') // make sure you store this somewhere!
+
     if (!token) {
-      // Mock data for demo
+      console.warn('No token found, using mock data')
       users.value = [
         { id: 1, name: 'John Doe', avatar: 'https://cdn.quasar.dev/img/avatar.png' },
         { id: 2, name: 'Jane Smith', avatar: 'https://cdn.quasar.dev/img/avatar2.png' },
@@ -689,8 +691,13 @@ const fetchData = async () => {
       return
     }
 
+    if (!companyId) {
+      console.error('No company selected. Please select a company first.')
+      return
+    }
+
     const res = await axios.get(
-      'https://staging.wageyapp.com/organization/schedules/company/monthly/?company={selectedCompany}/',
+      `https://staging.wageyapp.com/organization/schedules/company/monthly/?company=${companyId}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -723,8 +730,13 @@ const fetchData = async () => {
         })),
     )
   } catch (e) {
-    console.error('Error fetching schedules:', e)
-    // Fallback to mock data
+    if (e.response) {
+      console.error('Server responded with:', e.response.status, e.response.data)
+    } else {
+      console.error('Network/Config error:', e.message)
+    }
+
+    // fallback mock data
     users.value = [
       { id: 1, name: 'John Doe', avatar: 'https://cdn.quasar.dev/img/avatar.png' },
       { id: 2, name: 'Jane Smith', avatar: 'https://cdn.quasar.dev/img/avatar2.png' },
@@ -794,7 +806,6 @@ const quickAddSchedule = () => {
 
 // --- Drag and drop ---
 const onAdd = (event, userId, dayIdx) => {
-  // Handle drag and drop functionality
   console.log('Shift moved', { event, userId, dayIdx })
 }
 
@@ -806,18 +817,21 @@ const exportSchedule = () => {
 </script>
 
 <style scoped>
-/* Base Styles - Matching Payroll Design */
-.payroll-style-page {
+/* Modern Page Design - Matching Payroll Style */
+.modern-page {
   background: #f8fafc;
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  padding: 0;
 }
 
-/* Header Section */
+/* Header Section - Matching Attendance Management Style */
 .page-header {
-  background: white;
-  padding: 2rem 2rem 1.5rem 2rem;
-  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 2rem 2rem 0 2rem;
+  border-bottom: none;
+  box-shadow: none;
 }
 
 .header-content {
@@ -825,8 +839,9 @@ const exportSchedule = () => {
   margin: 0 auto;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 2rem;
+  margin-bottom: 2rem;
 }
 
 .header-left {
@@ -836,16 +851,9 @@ const exportSchedule = () => {
 .page-title {
   font-size: 2rem;
   font-weight: 700;
-  color: #1a202c;
-  margin: 0 0 0.5rem 0;
-  line-height: 1.2;
-}
-
-.page-subtitle {
-  font-size: 1rem;
-  color: #718096;
+  color: #111827;
   margin: 0;
-  font-weight: 400;
+  line-height: 1.2;
 }
 
 .header-actions {
@@ -854,81 +862,121 @@ const exportSchedule = () => {
   align-items: center;
 }
 
-.header-btn {
+.refresh-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 6px;
+}
+
+.refresh-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.export-btn {
+  background: #1d4ed8;
+  color: white;
+  border: 1px solid #1d4ed8;
   height: 40px;
   padding: 0 1rem;
   border-radius: 6px;
   font-weight: 500;
   text-transform: none;
   font-size: 0.875rem;
-  border: 1px solid #e2e8f0;
 }
 
-.export-btn {
-  background: #1a365d;
-  color: white;
-  border: 1px solid #1a365d;
+.export-btn:hover {
+  background: #1e40af;
+  border-color: #1e40af;
 }
 
-/* Summary Cards Section */
+/* Summary Cards Section - Updated positioning */
 .summary-section {
-  padding: 2rem;
+  padding: 0 2rem 2rem 2rem;
   max-width: 1400px;
   margin: 0 auto;
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1rem;
 }
 
 .summary-card {
-  background: white;
-  border-radius: 12px;
+  background: #ffffff;
+  border-radius: 16px;
   padding: 1.5rem;
   display: flex;
   align-items: center;
   gap: 1rem;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
+  border: 0;
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
 .summary-card:hover {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 25px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
-.summary-card.purple {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
+/* Card Color Variants */
+.card-purple {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  color: #1e1b4b;
+  border: 1px solid #e0e7ff;
 }
 
-.summary-card.yellow {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  color: white;
-  border: none;
+.card-purple .card-icon {
+  background: rgba(67, 56, 202, 0.15);
+  color: #4338ca;
 }
 
-.summary-card.green {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  color: white;
-  border: none;
+.card-yellow {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #78350f;
+  border: 1px solid #fef3c7;
 }
 
-.summary-card.blue {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-  color: white;
-  border: none;
+.card-yellow .card-icon {
+  background: rgba(217, 119, 6, 0.15);
+  color: #d97706;
+}
+
+.card-green {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #064e3b;
+  border: 1px solid #d1fae5;
+}
+
+.card-green .card-icon {
+  background: rgba(5, 150, 105, 0.15);
+  color: #059669;
+}
+
+.card-blue {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1e3a8a;
+  border: 1px solid #dbeafe;
+}
+
+.card-blue .card-icon {
+  background: rgba(37, 99, 235, 0.15);
+  color: #2563eb;
 }
 
 .card-icon {
   width: 48px;
   height: 48px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -948,7 +996,7 @@ const exportSchedule = () => {
 
 .card-label {
   font-size: 0.875rem;
-  opacity: 0.9;
+  opacity: 0.8;
   font-weight: 500;
 }
 
@@ -960,17 +1008,19 @@ const exportSchedule = () => {
 }
 
 .filter-container {
-  background: white;
-  border-radius: 8px;
+  background: #ffffff;
+  border-radius: 12px;
   padding: 1.5rem;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 .filter-title {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #2d3748;
+  color: #374151;
   margin: 0 0 1.5rem 0;
 }
 
@@ -1004,16 +1054,20 @@ const exportSchedule = () => {
 }
 
 .view-toggle {
-  border: 1px solid #e2e8f0;
+  border: 1px solid #d1d5db;
   border-radius: 6px;
 }
 
 .add-btn {
-  background: #1a365d;
+  background: #1d4ed8;
   color: white;
   height: 40px;
   padding: 0 1.5rem;
   border-radius: 6px;
+}
+
+.add-btn:hover {
+  background: #1e40af;
 }
 
 /* Week Navigation */
@@ -1028,15 +1082,22 @@ const exportSchedule = () => {
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  background: white;
+  background: #ffffff;
   padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 .nav-btn {
-  color: #4a5568;
+  color: #6b7280;
+}
+
+.nav-btn:hover {
+  color: #374151;
+  background: #f3f4f6;
 }
 
 .week-display {
@@ -1047,7 +1108,7 @@ const exportSchedule = () => {
 .week-range {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #2d3748;
+  color: #374151;
 }
 
 /* Content Section */
@@ -1068,23 +1129,27 @@ const exportSchedule = () => {
 }
 
 .employee-card {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
   overflow: hidden;
-  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
-  transition: all 0.2s ease;
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
 }
 
 .employee-card:hover {
-  box-shadow: 0 8px 25px 0 rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 10px 25px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
   transform: translateY(-2px);
 }
 
 .employee-header {
-  background: #f7fafc;
+  background: #f9fafb;
   padding: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .employee-info {
@@ -1094,44 +1159,44 @@ const exportSchedule = () => {
 }
 
 .employee-avatar {
-  border: 2px solid #e2e8f0;
+  border: 2px solid #e5e7eb;
 }
 
 .employee-name {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #2d3748;
+  color: #374151;
   margin-bottom: 0.25rem;
 }
 
 .employee-stats {
   font-size: 0.875rem;
-  color: #718096;
+  color: #6b7280;
 }
 
 .schedule-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 1px;
-  background: #e2e8f0;
+  background: #e5e7eb;
   padding: 1px;
 }
 
 .day-column {
-  background: white;
+  background: #ffffff;
   min-height: 120px;
 }
 
 .day-header {
-  background: #f7fafc;
+  background: #f9fafb;
   padding: 0.75rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #4a5568;
+  color: #6b7280;
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .day-shifts {
@@ -1148,17 +1213,17 @@ const exportSchedule = () => {
 }
 
 .add-shift-btn {
-  color: #718096;
+  color: #6b7280;
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
-  border: 1px dashed #cbd5e0;
-  border-radius: 4px;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
 }
 
 .add-shift-btn:hover {
-  color: #1a365d;
-  border-color: #1a365d;
-  background: #f7fafc;
+  color: #1d4ed8;
+  border-color: #1d4ed8;
+  background: #f8fafc;
 }
 
 .shift-items {
@@ -1168,9 +1233,9 @@ const exportSchedule = () => {
 }
 
 .shift-card {
-  background: #1a365d;
+  background: #1d4ed8;
   color: white;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 0.75rem;
   font-size: 0.75rem;
   cursor: pointer;
@@ -1179,7 +1244,7 @@ const exportSchedule = () => {
 }
 
 .shift-card:hover {
-  background: #2c5282;
+  background: #1e40af;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
@@ -1200,7 +1265,7 @@ const exportSchedule = () => {
   top: -8px;
   right: -8px;
   background: white;
-  color: #e53e3e;
+  color: #dc2626;
   width: 20px;
   height: 20px;
   min-height: 20px;
@@ -1220,11 +1285,13 @@ const exportSchedule = () => {
 }
 
 .table-container {
-  background: white;
-  border-radius: 12px;
+  background: #ffffff;
+  border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 .data-table {
@@ -1234,19 +1301,19 @@ const exportSchedule = () => {
 }
 
 .data-table thead {
-  background: #f7fafc;
-  border-bottom: 2px solid #e2e8f0;
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 .data-table th {
   padding: 1rem;
   text-align: left;
   font-weight: 600;
-  color: #4a5568;
+  color: #6b7280;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid #e5e7eb;
 }
 
 .data-table th:last-child {
@@ -1273,23 +1340,23 @@ const exportSchedule = () => {
 
 .day-name {
   font-weight: 600;
-  color: #2d3748;
+  color: #374151;
 }
 
 .day-count {
   font-size: 0.625rem;
-  color: #718096;
+  color: #6b7280;
   font-weight: 400;
   text-transform: none;
 }
 
 .employee-row {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e5e7eb;
   transition: background-color 0.15s ease;
 }
 
 .employee-row:hover {
-  background: #f7fafc;
+  background: #f9fafb;
 }
 
 .employee-row:last-child {
@@ -1298,7 +1365,7 @@ const exportSchedule = () => {
 
 .employee-cell {
   padding: 1rem;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid #e5e7eb;
 }
 
 .employee-details {
@@ -1307,13 +1374,13 @@ const exportSchedule = () => {
 
 .employee-shifts {
   font-size: 0.75rem;
-  color: #718096;
+  color: #6b7280;
   margin-top: 0.125rem;
 }
 
 .schedule-cell {
   padding: 0.75rem;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid #e5e7eb;
   vertical-align: top;
   min-height: 80px;
 }
@@ -1330,9 +1397,9 @@ const exportSchedule = () => {
 }
 
 .shift-item {
-  background: #1a365d;
+  background: #1d4ed8;
   color: white;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 0.75rem;
   font-size: 0.75rem;
   position: relative;
@@ -1341,7 +1408,7 @@ const exportSchedule = () => {
 }
 
 .shift-item:hover {
-  background: #2c5282;
+  background: #1e40af;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
@@ -1351,7 +1418,7 @@ const exportSchedule = () => {
   top: -8px;
   right: -8px;
   background: white;
-  color: #e53e3e;
+  color: #dc2626;
   width: 18px;
   height: 18px;
   min-height: 18px;
@@ -1370,19 +1437,19 @@ const exportSchedule = () => {
   align-items: center;
   justify-content: center;
   min-height: 60px;
-  border: 1px dashed #cbd5e0;
-  border-radius: 6px;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
 }
 
 .add-shift-button {
-  color: #718096;
+  color: #6b7280;
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
 }
 
 .add-shift-button:hover {
-  color: #1a365d;
-  background: #f7fafc;
+  color: #1d4ed8;
+  background: #f8fafc;
 }
 
 /* Dialog Styles */
@@ -1391,7 +1458,7 @@ const exportSchedule = () => {
 }
 
 .dialog-card {
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   border: 0;
   max-width: 500px;
@@ -1399,8 +1466,8 @@ const exportSchedule = () => {
 }
 
 .dialog-header {
-  background: #f7fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1410,11 +1477,11 @@ const exportSchedule = () => {
 .dialog-title {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #2d3748;
+  color: #374151;
 }
 
 .dialog-close {
-  color: #718096;
+  color: #6b7280;
 }
 
 .dialog-content {
@@ -1442,9 +1509,9 @@ const exportSchedule = () => {
 }
 
 .conflict-banner {
-  background: #fef5e7;
-  color: #c05621;
-  border: 1px solid #f6ad55;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
   border-radius: 8px;
 }
 
@@ -1454,19 +1521,23 @@ const exportSchedule = () => {
   gap: 0.75rem;
   margin-top: 1.5rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #e5e7eb;
 }
 
 .cancel-btn {
-  color: #718096;
+  color: #6b7280;
 }
 
 .submit-btn {
-  background: #1a365d;
+  background: #1d4ed8;
   color: white;
   padding: 0.5rem 1.5rem;
   border-radius: 8px;
   font-size: 0.875rem;
+}
+
+.submit-btn:hover {
+  background: #1e40af;
 }
 
 .quick-add {
@@ -1474,7 +1545,7 @@ const exportSchedule = () => {
 }
 
 .quick-info {
-  background: #f7fafc;
+  background: #f9fafb;
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -1487,13 +1558,13 @@ const exportSchedule = () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: #2d3748;
+  color: #374151;
   font-size: 0.875rem;
   font-weight: 500;
 }
 
 .info-row .q-icon {
-  color: #2563eb;
+  color: #1d4ed8;
 }
 
 /* Responsive Design */
@@ -1556,7 +1627,7 @@ const exportSchedule = () => {
   }
 
   .day-column {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e5e7eb;
   }
 
   .day-column:last-child {
@@ -1586,6 +1657,19 @@ const exportSchedule = () => {
   .page-title {
     font-size: 1.5rem;
   }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .summary-card {
+    padding: 1rem;
+  }
+
+  .card-value {
+    font-size: 1.5rem;
+  }
 }
 
 /* Drag and Drop States */
@@ -1595,7 +1679,7 @@ const exportSchedule = () => {
 
 .sortable-ghost {
   opacity: 0.3;
-  background: #bee3f8 !important;
+  background: #dbeafe !important;
 }
 
 /* Print Styles */
@@ -1612,7 +1696,7 @@ const exportSchedule = () => {
     display: none !important;
   }
 
-  .payroll-style-page {
+  .modern-page {
     background: white;
   }
 
@@ -1624,7 +1708,7 @@ const exportSchedule = () => {
 
   .shift-card,
   .shift-item {
-    background: #f7fafc !important;
+    background: #f9fafb !important;
     color: #000 !important;
     border: 1px solid #000;
   }

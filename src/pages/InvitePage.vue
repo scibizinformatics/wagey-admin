@@ -13,7 +13,7 @@
               color="primary"
               icon="add"
               label="Invite Employee"
-              @click="showInviteModal = true"
+              @click="openInviteModal"
               no-caps
               class="invite-btn"
             />
@@ -69,11 +69,11 @@
                 </q-td>
               </template>
 
-              <template v-slot:body-cell-expires_at="props">
+              <template v-slot:body-cell-created_at="props">
                 <q-td :props="props">{{ formatDate(props.value) }}</q-td>
               </template>
 
-              <template v-slot:body-cell-date_sent="props">
+              <template v-slot:body-cell-expires_at="props">
                 <q-td :props="props">{{ formatDate(props.value) }}</q-td>
               </template>
 
@@ -100,7 +100,7 @@
                 color="primary"
                 icon="add"
                 label="Send First Invitation"
-                @click="showInviteModal = true"
+                @click="openInviteModal"
                 no-caps
                 class="q-mt-md"
               />
@@ -144,11 +144,11 @@
 
               <!-- Role -->
               <q-select
-                v-model="invitationForm.user_role"
+                v-model="invitationForm.role"
                 :options="userRoleOptions"
                 outlined
-                option-value="value"
-                option-label="label"
+                option-value="id"
+                option-label="name"
                 emit-value
                 map-options
                 placeholder="Select role"
@@ -173,154 +173,158 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useQuasar } from 'quasar'
+import { ref, onMounted, computed } from 'vue'
+import { useQuasar, date } from 'quasar'
 import axios from 'axios'
 
 const $q = useQuasar()
 
-// State
-const showInviteModal = ref(false)
-const loadingTable = ref(false)
-const sending = ref(false)
+// state
 const invitations = ref([])
-const userRoleOptions = ref([])
+const userRoles = ref([])
+const loadingTable = ref(false)
 const loadingRoles = ref(false)
+const sending = ref(false)
 
+const showInviteModal = ref(false)
 const invitationForm = ref({
   email: '',
-  user_role: null,
+  role: null,
 })
 
-// Table columns
+// ✅ Table Columns
 const columns = [
-  { name: 'email', label: 'Email', field: (row) => row.email, align: 'left' },
-  { name: 'role', label: 'Role', field: (row) => row.role, align: 'left' },
-  { name: 'expires_at', label: 'Expires', field: (row) => row.expires_at, align: 'left' },
-  { name: 'date_sent', label: 'Date Sent', field: (row) => row.created_at, align: 'left' },
+  { name: 'email', label: 'Email', field: 'email', align: 'left' },
+  { name: 'role', label: 'Role', field: 'role', align: 'left' },
+  { name: 'created_at', label: 'Date Sent', field: 'created_at', align: 'left' },
+  { name: 'expires_at', label: 'Expires At', field: 'expires_at', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
 
-// Format date
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+// ✅ Format date safely
+const formatDate = (val) => {
+  if (!val) return '-'
+  return date.formatDate(val, 'MMM D, YYYY HH:mm')
 }
 
-// Fetch invitations
+const openInviteModal = async () => {
+  showInviteModal.value = true
+  await fetchUserRoles()
+}
+
+// ✅ Fetch Invitations
 const fetchInvitations = async () => {
   try {
     loadingTable.value = true
     const token = localStorage.getItem('access_token')
-    const res = await axios.get('https://staging.wageyapp.com/user/invite-list/', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    invitations.value = res.data.results || res.data || []
+    const companyId = localStorage.getItem('selectedCompany')
+
+    if (!companyId) {
+      console.error('❌ No company selected in localStorage')
+      invitations.value = []
+      return
+    }
+
+    const res = await axios.get(
+      `https://staging.wageyapp.com/user/invite-list/?company=${companyId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    invitations.value = res.data || []
   } catch (err) {
-    console.error(err)
+    console.error('❌ Error fetching invitations:', err)
     invitations.value = []
   } finally {
     loadingTable.value = false
   }
 }
 
-// Fetch roles
+// ✅ Fetch User Roles
 const fetchUserRoles = async () => {
   try {
     loadingRoles.value = true
     const token = localStorage.getItem('access_token')
-    const selectedCompany = localStorage.getItem('selectedCompany')
+    const companyId = localStorage.getItem('selectedCompany')
+    console.log('🔍 Fetching roles for company:', companyId)
 
-    const res = await axios.get(
-      `https://staging.wageyapp.com/user/user-roles/?company=${selectedCompany}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-
-    userRoleOptions.value = (res.data.results || res.data).map((r) => ({
-      label: r.name || `Role ${r.id}`,
-      value: r.id,
-    }))
+    const res = await axios.get('https://staging.wageyapp.com/user/user-roles/', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { company: companyId },
+    })
+    console.log(res)
+    userRoles.value = res.data || []
   } catch (err) {
-    console.error('Error fetching roles:', err)
-    userRoleOptions.value = []
+    console.error('❌ Error fetching roles:', err)
+    userRoles.value = []
   } finally {
     loadingRoles.value = false
   }
 }
 
-// Send invitation
+const userRoleOptions = computed(() =>
+  userRoles.value.map((role) => ({
+    id: role.id,
+    name: role.name,
+  })),
+)
+
+// ✅ Send Invitation
 const sendInvitation = async () => {
   try {
     sending.value = true
     const token = localStorage.getItem('access_token')
     const companyId = localStorage.getItem('selectedCompany')
 
-    const payload = {
-      email: invitationForm.value.email.trim(),
-      user_role: String(invitationForm.value.user_role), // force string
-      company_id: companyId, // don’t parse, keep raw
+    if (!invitationForm.value.email || !invitationForm.value.role || !companyId) {
+      $q.notify({ type: 'negative', message: 'Please fill in all fields' })
+      return
     }
 
-    console.log('Payload:', payload)
+    const payload = {
+      email: invitationForm.value.email,
+      user_role: invitationForm.value.role, // role ID
+      company_id: companyId, // required by backend
+    }
 
-    const res = await axios.post('https://staging.wageyapp.com/user/invite/', payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+    await axios.post('https://staging.wageyapp.com/user/invite/', payload, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     })
 
-    console.log('Invitation response:', res.data)
+    $q.notify({ type: 'positive', message: 'Invitation sent successfully' })
 
-    $q.notify({ type: 'positive', message: 'Invitation sent!' })
     showInviteModal.value = false
-    invitationForm.value = { email: '', user_role: null }
+    invitationForm.value = { email: '', role: null }
     fetchInvitations()
   } catch (err) {
-    console.error('Error sending invitation:', err)
-    console.error('Error response:', err.response?.data)
-
-    $q.notify({
-      type: 'negative',
-      message:
-        err.response?.data?.message || err.response?.data?.detail || 'Failed to send invitation',
-      position: 'top',
-      timeout: 10000,
-    })
+    console.error('❌ Error sending invitation:', err.response?.data || err)
+    $q.notify({ type: 'negative', message: 'Failed to send invitation' })
   } finally {
     sending.value = false
   }
 }
 
-// Delete invitation
-const deleteInvitation = async (inv) => {
+// ✅ Delete Invitation
+const deleteInvitation = async (row) => {
   try {
     const token = localStorage.getItem('access_token')
-    await axios.delete(`https://staging.wageyapp.com/user/invite/${inv.id}/`, {
+    await axios.delete(`https://staging.wageyapp.com/user/invite/${row.id}/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     $q.notify({ type: 'positive', message: 'Invitation deleted' })
     fetchInvitations()
   } catch (err) {
-    console.error(err)
-    $q.notify({ type: 'negative', message: 'Delete failed' })
+    console.error('❌ Error deleting invitation:', err)
+    $q.notify({ type: 'negative', message: 'Failed to delete invitation' })
   }
 }
 
 const closeModal = () => {
   showInviteModal.value = false
-  invitationForm.value = { email: '', user_role: null }
+  invitationForm.value = { email: '', role: null }
 }
 
-// Init
+// ✅ Auto fetch when mounted
 onMounted(() => {
-  fetchUserRoles()
   fetchInvitations()
 })
 </script>
