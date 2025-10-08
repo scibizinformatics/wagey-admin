@@ -8,6 +8,13 @@
             <h1 class="page-title">Employee Management</h1>
           </div>
           <div class="header-actions">
+            <q-btn
+              color="primary"
+              label="Add Employee"
+              icon="add"
+              class="add-employee-btn"
+              @click="openAddModal"
+            />
             <q-input
               v-model="searchTerm"
               placeholder="Search employees..."
@@ -55,16 +62,6 @@
             <div class="stats-label">Inactive</div>
           </div>
         </div>
-
-        <div class="stats-card custom-card">
-          <div class="stats-icon-wrapper">
-            <q-icon name="settings" class="stats-icon" />
-          </div>
-          <div class="stats-content">
-            <div class="stats-label">Manage Team</div>
-            <div class="stats-sublabel">Choose Action</div>
-          </div>
-        </div>
       </div>
 
       <!-- Main Table Section -->
@@ -77,7 +74,7 @@
             <q-select
               v-model="sortBy"
               :options="['Newest', 'Oldest', 'A-Z', 'Z-A']"
-              label="Sort by: Newest"
+              label="Sort by"
               class="sort-select"
               dense
               outlined
@@ -103,15 +100,15 @@
                 <q-th class="table-header-cell">SL No</q-th>
                 <q-th class="table-header-cell">Employee Name</q-th>
                 <q-th class="table-header-cell">Email</q-th>
-                <q-th class="table-header-cell">Position</q-th>
+                <q-th class="table-header-cell">Phone</q-th>
                 <q-th class="table-header-cell">Role</q-th>
-                <q-th class="table-header-cell">Status</q-th>
+                <q-th class="table-header-cell">Civil Status</q-th>
                 <q-th class="table-header-cell">Actions</q-th>
               </q-tr>
             </template>
 
             <template v-slot:body="props">
-              <q-tr class="table-body-row" :class="{ 'total-row': props.row.isTotal }">
+              <q-tr class="table-body-row">
                 <q-td class="table-body-cell">
                   {{ String(props.rowIndex + 1).padStart(2, '0') }}.
                 </q-td>
@@ -129,17 +126,14 @@
                   </a>
                 </q-td>
                 <q-td class="table-body-cell">
-                  {{ props.row.position || 'N/A' }}
+                  {{ getPhoneNumber(props.row) }}
                 </q-td>
                 <q-td class="table-body-cell">
-                  {{ props.row.user_role_name || 'N/A' }}
+                  {{ getRole(props.row) }}
                 </q-td>
                 <q-td class="table-body-cell">
-                  <div
-                    class="status-badge"
-                    :class="getModernStatusClass(props.row.employment_status)"
-                  >
-                    {{ props.row.employment_status || 'N/A' }}
+                  <div class="civil-status-badge">
+                    {{ getCivilStatus(props.row) }}
                   </div>
                 </q-td>
                 <q-td class="table-body-cell actions-cell">
@@ -151,7 +145,9 @@
                       size="sm"
                       class="action-btn view-btn"
                       @click="viewEmployee(props.row)"
-                    />
+                    >
+                      <q-tooltip>View Details</q-tooltip>
+                    </q-btn>
                     <q-btn
                       flat
                       round
@@ -159,32 +155,179 @@
                       size="sm"
                       class="action-btn edit-btn"
                       @click="editEmployee(props.row)"
-                    />
+                    >
+                      <q-tooltip>Edit Employee</q-tooltip>
+                    </q-btn>
                     <q-btn
                       flat
                       round
-                      icon="update"
+                      icon="delete"
                       size="sm"
-                      class="action-btn update-btn"
-                      @click="updateEmployee(props.row)"
-                    />
+                      class="action-btn delete-btn"
+                      @click="confirmDelete(props.row)"
+                    >
+                      <q-tooltip>Delete Employee</q-tooltip>
+                    </q-btn>
                   </div>
                 </q-td>
               </q-tr>
             </template>
           </q-table>
-
-          <!-- Table Footer -->
-          <div class="table-footer">
-            <div class="footer-info">
-              <span class="total-label">Total</span>
-              <span class="total-employees">{{ filteredEmployees.length }} Employees</span>
-              <span class="total-active">{{ employeeStats.active }} Active</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
+
+    <!-- Add Employee Modal -->
+    <q-dialog v-model="showAddModal" persistent>
+      <q-card class="modal-card add-modal">
+        <q-card-section class="modal-header">
+          <div class="modal-title-section">
+            <q-icon name="person_add" class="modal-icon" />
+            <div>
+              <div class="modal-title">Add New Employee</div>
+              <div class="modal-subtitle">Fill in the employee details</div>
+            </div>
+          </div>
+          <q-btn icon="close" flat round class="modal-close-btn" @click="cancelAdd" />
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="modal-content">
+          <q-form @submit="addEmployee" class="edit-form">
+            <div class="form-sections">
+              <!-- User Information Section -->
+              <div class="form-section">
+                <div class="section-title">User Information</div>
+                <div class="form-grid">
+                  <q-input
+                    v-model="addForm.user.username"
+                    label="Username *"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'Username is required']"
+                  />
+                  <q-input
+                    v-model="addForm.user.email"
+                    label="Email *"
+                    type="email"
+                    outlined
+                    dense
+                    :rules="[
+                      (val) => !!val || 'Email is required',
+                      (val) => /.+@.+\..+/.test(val) || 'Please enter a valid email',
+                    ]"
+                  />
+                  <q-input
+                    v-model="addForm.user.first_name"
+                    label="First Name *"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'First name is required']"
+                  />
+                  <q-input
+                    v-model="addForm.user.last_name"
+                    label="Last Name *"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'Last name is required']"
+                  />
+                  <q-input
+                    v-model="addForm.password"
+                    label="Password *"
+                    type="password"
+                    outlined
+                    dense
+                    :rules="[
+                      (val) => !!val || 'Password is required',
+                      (val) => val.length >= 8 || 'Password must be at least 8 characters',
+                    ]"
+                  />
+                  <q-input
+                    v-model="confirmPassword"
+                    label="Confirm Password *"
+                    type="password"
+                    outlined
+                    dense
+                    :rules="[
+                      (val) => !!val || 'Please confirm password',
+                      (val) => val === addForm.password || 'Passwords do not match',
+                    ]"
+                  />
+                </div>
+              </div>
+
+              <!-- Personal Information Section -->
+              <div class="form-section">
+                <div class="section-title">Personal Information</div>
+                <div class="form-grid">
+                  <q-select
+                    v-model="addForm.civil_status"
+                    :options="civilStatusOptions"
+                    label="Civil Status"
+                    outlined
+                    dense
+                  />
+                  <q-input v-model="addForm.birthday" label="Birthday" type="date" outlined dense />
+                  <q-input
+                    v-model="addForm.phone_number"
+                    label="Phone Number"
+                    outlined
+                    dense
+                    mask="(###) ###-####"
+                  />
+                  <q-input
+                    v-model="addForm.emergency_contact"
+                    label="Emergency Contact"
+                    outlined
+                    dense
+                  />
+                  <q-input
+                    v-model="addForm.address"
+                    label="Address"
+                    outlined
+                    dense
+                    type="textarea"
+                    rows="2"
+                    class="col-span-2"
+                  />
+                </div>
+              </div>
+
+              <!-- Employment Information Section -->
+              <div class="form-section">
+                <div class="section-title">Employment Information</div>
+                <div class="form-grid">
+                  <q-select
+                    v-model="addForm.user_role"
+                    :options="roleOptions"
+                    option-label="name"
+                    option-value="id"
+                    label="Role *"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'Role is required']"
+                  />
+                  <q-input v-model="addForm.bank_acct" label="Bank Account" outlined dense />
+                  <q-select
+                    v-model="addForm.timezone"
+                    :options="timezoneOptions"
+                    label="Timezone"
+                    outlined
+                    dense
+                    use-input
+                    @filter="filterTimezones"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <q-btn label="Cancel" flat color="grey-7" @click="cancelAdd" />
+              <q-btn label="Add Employee" type="submit" color="primary" :loading="savingEmployee" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
 
     <!-- View Employee Modal -->
     <q-dialog v-model="showViewModal" persistent>
@@ -201,64 +344,85 @@
           </div>
           <q-btn icon="close" flat round class="modal-close-btn" @click="showViewModal = false" />
         </q-card-section>
-
         <q-separator />
-
         <q-card-section class="modal-content">
-          <div class="detail-grid">
+          <div class="detail-sections">
+            <!-- User Information -->
             <div class="detail-section">
-              <h3 class="section-title">Personal Information</h3>
-              <div class="detail-row">
-                <span class="detail-label">Full Name:</span>
-                <span class="detail-value">{{ getFullName(selectedEmployee) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Email:</span>
-                <span class="detail-value">{{ getEmail(selectedEmployee) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Username:</span>
-                <span class="detail-value">{{ selectedEmployee?.user?.username || 'N/A' }}</span>
+              <div class="section-title">User Information</div>
+              <div class="detail-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Username:</span>
+                  <span class="detail-value">{{ selectedEmployee?.user?.username || 'N/A' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Email:</span>
+                  <span class="detail-value">{{ getEmail(selectedEmployee) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Full Name:</span>
+                  <span class="detail-value">{{ getFullName(selectedEmployee) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Role:</span>
+                  <span class="detail-value">{{ getRole(selectedEmployee) }}</span>
+                </div>
               </div>
             </div>
 
+            <!-- Personal Information -->
             <div class="detail-section">
-              <h3 class="section-title">Employment Information</h3>
-              <div class="detail-row">
-                <span class="detail-label">Position:</span>
-                <span class="detail-value">{{ selectedEmployee?.position || 'N/A' }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Role:</span>
-                <span class="detail-value">{{ selectedEmployee?.user_role_name || 'N/A' }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Status:</span>
-                <q-chip
-                  :label="selectedEmployee?.employment_status || 'N/A'"
-                  :class="getModernStatusClass(selectedEmployee?.employment_status)"
-                  class="status-chip"
-                />
+              <div class="section-title">Personal Information</div>
+              <div class="detail-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Civil Status:</span>
+                  <span class="detail-value">{{ getCivilStatus(selectedEmployee) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Birthday:</span>
+                  <span class="detail-value">{{
+                    formatDate(selectedEmployee?.birthday) || 'N/A'
+                  }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Phone:</span>
+                  <span class="detail-value">{{ getPhoneNumber(selectedEmployee) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Emergency Contact:</span>
+                  <span class="detail-value">{{
+                    selectedEmployee?.emergency_contact || 'N/A'
+                  }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Address:</span>
+                  <span class="detail-value">{{ selectedEmployee?.address || 'N/A' }}</span>
+                </div>
               </div>
             </div>
 
+            <!-- Employment Information -->
             <div class="detail-section">
-              <h3 class="section-title">Additional Details</h3>
-              <div class="detail-row">
-                <span class="detail-label">Employee ID:</span>
-                <span class="detail-value">{{ selectedEmployee?.id || 'N/A' }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">User ID:</span>
-                <span class="detail-value">{{ selectedEmployee?.user?.id || 'N/A' }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Date Active:</span>
-                <span class="detail-value">{{
-                  selectedEmployee?.date_created
-                    ? new Date(selectedEmployee.date_created).toLocaleDateString()
-                    : 'N/A'
-                }}</span>
+              <div class="section-title">Employment Information</div>
+              <div class="detail-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Bank Account:</span>
+                  <span class="detail-value">{{ selectedEmployee?.bank_acct || 'N/A' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Timezone:</span>
+                  <span class="detail-value">{{ selectedEmployee?.timezone || 'N/A' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Last Updated:</span>
+                  <span class="detail-value">{{
+                    formatDateTime(selectedEmployee?.last_date_updated) || 'N/A'
+                  }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Updated By:</span>
+                  <span class="detail-value">{{ selectedEmployee?.updated_by || 'N/A' }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -279,113 +443,158 @@
           </div>
           <q-btn icon="close" flat round class="modal-close-btn" @click="cancelEdit" />
         </q-card-section>
-
         <q-separator />
-
         <q-card-section class="modal-content">
           <q-form @submit="saveEmployee" class="edit-form">
-            <div class="form-grid">
+            <div class="form-sections">
+              <!-- User Information Section -->
               <div class="form-section">
-                <h3 class="section-title">Personal Information</h3>
-
-                <q-input
-                  v-model="editForm.first_name"
-                  label="First Name"
-                  outlined
-                  dense
-                  class="form-input"
-                  :rules="[(val) => !!val || 'First name is required']"
-                />
-
-                <q-input
-                  v-model="editForm.last_name"
-                  label="Last Name"
-                  outlined
-                  dense
-                  class="form-input"
-                  :rules="[(val) => !!val || 'Last name is required']"
-                />
-
-                <q-input
-                  v-model="editForm.email"
-                  label="Email"
-                  type="email"
-                  outlined
-                  dense
-                  class="form-input"
-                  :rules="[
-                    (val) => !!val || 'Email is required',
-                    (val) => /.+@.+\..+/.test(val) || 'Email must be valid',
-                  ]"
-                />
-
-                <q-input
-                  v-model="editForm.username"
-                  label="Username"
-                  outlined
-                  dense
-                  class="form-input"
-                />
+                <div class="section-title">User Information</div>
+                <div class="form-grid">
+                  <q-input
+                    v-model="editForm.user.username"
+                    label="Username *"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'Username is required']"
+                  />
+                  <q-input
+                    v-model="editForm.user.email"
+                    label="Email *"
+                    type="email"
+                    outlined
+                    dense
+                    :rules="[
+                      (val) => !!val || 'Email is required',
+                      (val) => /.+@.+\..+/.test(val) || 'Please enter a valid email',
+                    ]"
+                  />
+                  <q-input
+                    v-model="editForm.user.first_name"
+                    label="First Name *"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'First name is required']"
+                  />
+                  <q-input
+                    v-model="editForm.user.last_name"
+                    label="Last Name *"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'Last name is required']"
+                  />
+                </div>
               </div>
 
+              <!-- Personal Information Section -->
               <div class="form-section">
-                <h3 class="section-title">Employment Information</h3>
+                <div class="section-title">Personal Information</div>
+                <div class="form-grid">
+                  <q-select
+                    v-model="editForm.civil_status"
+                    :options="civilStatusOptions"
+                    label="Civil Status"
+                    outlined
+                    dense
+                  />
+                  <q-input
+                    v-model="editForm.birthday"
+                    label="Birthday"
+                    type="date"
+                    outlined
+                    dense
+                  />
+                  <q-input
+                    v-model="editForm.phone_number"
+                    label="Phone Number"
+                    outlined
+                    dense
+                    mask="(###) ###-####"
+                  />
+                  <q-input
+                    v-model="editForm.emergency_contact"
+                    label="Emergency Contact"
+                    outlined
+                    dense
+                  />
+                  <q-input
+                    v-model="editForm.address"
+                    label="Address"
+                    outlined
+                    dense
+                    type="textarea"
+                    rows="2"
+                    class="col-span-2"
+                  />
+                </div>
+              </div>
 
-                <q-input
-                  v-model="editForm.position"
-                  label="Position"
-                  outlined
-                  dense
-                  class="form-input"
-                />
-
-                <q-select
-                  v-model="editForm.user_role_name"
-                  :options="roleOptions"
-                  label="Role"
-                  outlined
-                  dense
-                  class="form-input"
-                  emit-value
-                  map-options
-                />
-
-                <q-select
-                  v-model="editForm.employment_status"
-                  :options="statusOptions"
-                  label="Employment Status"
-                  outlined
-                  dense
-                  class="form-input"
-                  emit-value
-                  map-options
-                />
+              <!-- Employment Information Section -->
+              <div class="form-section">
+                <div class="section-title">Employment Information</div>
+                <div class="form-grid">
+                  <q-select
+                    v-model="editForm.user_role"
+                    :options="roleOptions"
+                    option-label="name"
+                    option-value="id"
+                    label="Role *"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'Role is required']"
+                  />
+                  <q-input v-model="editForm.bank_acct" label="Bank Account" outlined dense />
+                  <q-select
+                    v-model="editForm.timezone"
+                    :options="timezoneOptions"
+                    label="Timezone"
+                    outlined
+                    dense
+                    use-input
+                    @filter="filterTimezones"
+                  />
+                </div>
               </div>
             </div>
 
             <div class="form-actions">
-              <q-btn label="Cancel" flat color="grey-7" @click="cancelEdit" class="cancel-btn" />
-              <q-btn
-                label="Save Changes"
-                type="submit"
-                color="primary"
-                :loading="savingEmployee"
-                class="save-btn"
-              />
+              <q-btn label="Cancel" flat color="grey-7" @click="cancelEdit" />
+              <q-btn label="Save Changes" type="submit" color="primary" :loading="savingEmployee" />
             </div>
           </q-form>
         </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- Delete Confirmation Dialog -->
+    <q-dialog v-model="showDeleteDialog" persistent>
+      <q-card class="delete-dialog">
+        <q-card-section class="delete-header">
+          <q-icon name="warning" class="delete-icon" />
+          <div class="delete-title">Confirm Delete</div>
+        </q-card-section>
+        <q-card-section class="delete-content">
+          Are you sure you want to delete employee
+          <strong>{{ getFullName(employeeToDelete) }}</strong
+          >? This action cannot be undone.
+        </q-card-section>
+        <q-card-actions align="right" class="delete-actions">
+          <q-btn flat label="Cancel" color="grey-7" @click="showDeleteDialog = false" />
+          <q-btn flat label="Delete" color="negative" @click="deleteEmployee" :loading="deleting" />
+        </q-card-actions>
       </q-card>
     </q-dialog>
   </q-page>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useAuthStore } from 'src/boot/auth'
 import axios from 'axios'
 import { useQuasar } from 'quasar'
 
 const $q = useQuasar()
+const authStore = useAuthStore()
 const employees = ref([])
 const filteredEmployees = ref([])
 const searchTerm = ref('')
@@ -393,96 +602,126 @@ const loading = ref(false)
 const sortBy = ref('Newest')
 
 // Modal states
+const showAddModal = ref(false)
 const showViewModal = ref(false)
 const showEditModal = ref(false)
+const showDeleteDialog = ref(false)
 const selectedEmployee = ref({})
+const employeeToDelete = ref({})
 const savingEmployee = ref(false)
+const deleting = ref(false)
 
-// Edit form data
-const editForm = ref({
-  first_name: '',
-  last_name: '',
-  email: '',
-  username: '',
-  position: '',
-  user_role_name: '',
-  employment_status: '',
-  address: '',
+// Form states
+const confirmPassword = ref('')
+const addForm = ref({
+  user: {
+    username: '',
+    email: '',
+    first_name: '',
+    last_name: '',
+  },
   password: '',
+  user_role: null,
+  civil_status: '',
+  address: '',
+  phone_number: '',
+  emergency_contact: '',
+  birthday: '',
+  bank_acct: '',
+  timezone: '',
+})
+
+const editForm = ref({
+  user: {
+    id: 0,
+    username: '',
+    email: '',
+    first_name: '',
+    last_name: '',
+  },
+  user_role: null,
+  civil_status: '',
+  address: '',
+  phone_number: '',
+  emergency_contact: '',
+  birthday: '',
+  bank_acct: '',
+  timezone: '',
 })
 
 // Options for dropdowns
-const roleOptions = [
-  { label: 'Admin', value: 'admin' },
-  { label: 'Manager', value: 'manager' },
-  { label: 'Employee', value: 'employee' },
-  { label: 'Supervisor', value: 'supervisor' },
-  { label: 'HR', value: 'hr' },
-]
+const civilStatusOptions = ref(['Single', 'Married', 'Divorced', 'Widowed', 'Separated'])
 
-const statusOptions = [
-  { label: 'Active', value: 'active' },
-  { label: 'Inactive', value: 'inactive' },
-  { label: 'Terminated', value: 'terminated' },
-]
+const roleOptions = ref([])
+const timezoneOptions = ref([
+  'UTC',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'Europe/London',
+  'Europe/Paris',
+  'Asia/Tokyo',
+  'Asia/Shanghai',
+  'Asia/Manila',
+  'Australia/Sydney',
+])
+const filteredTimezoneOptions = ref([])
 
-const columns = [
-  {
-    name: 'full_name',
-    label: 'Full Name',
-    align: 'left',
-    field: (row) => getFullName(row),
-    sortable: true,
-  },
-  { name: 'email', label: 'Email', align: 'left', field: (row) => getEmail(row), sortable: true },
-  {
-    name: 'position',
-    label: 'Position',
-    align: 'left',
-    field: (row) => row.position,
-    sortable: true,
-  },
-  {
-    name: 'role',
-    label: 'Role',
-    align: 'left',
-    field: (row) => row.user_role_name,
-    sortable: true,
-  },
-  {
-    name: 'status',
-    label: 'Status',
-    align: 'left',
-    field: (row) => row.employment_status,
-    sortable: true,
-  },
-  { name: 'actions', label: 'Actions', align: 'center', field: () => '' },
-]
+// Table columns (required by q-table even though we use custom slots)
+const columns = ref([
+  { name: 'sl_no', label: 'SL No', field: 'id', align: 'left' },
+  { name: 'name', label: 'Employee Name', field: 'full_name', align: 'left' },
+  { name: 'email', label: 'Email', field: (row) => row.user?.email, align: 'left' },
+  { name: 'phone', label: 'Phone', field: 'phone_number', align: 'left' },
+  { name: 'role', label: 'Role', field: 'user_role_name', align: 'left' },
+  { name: 'civil_status', label: 'Civil Status', field: 'civil_status', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+])
 
 // --- Computed ---
 const employeeStats = computed(() => {
   const total = employees.value.length
-  const active = employees.value.filter(
-    (emp) => emp.employment_status?.toLowerCase() === 'active',
-  ).length
+  const active = employees.value.filter((emp) => emp.is_active !== false).length
   const inactive = total - active
   return { total, active, inactive }
 })
 
 // --- Helpers ---
 const getFullName = (employee) => {
+  if (!employee) return 'N/A'
   return (
-    employee.full_name ||
     `${employee.user?.first_name || ''} ${employee.user?.last_name || ''}`.trim() ||
     employee.user?.username ||
     'N/A'
   )
 }
 
-const getEmail = (employee) => employee.user?.email || 'N/A'
+const getEmail = (employee) => employee?.user?.email || 'N/A'
+
+// NEW HELPER FUNCTIONS FOR API STRUCTURE
+const getRole = (employee) => {
+  if (!employee) return 'N/A'
+  // Try user_role_name (new API structure)
+  if (employee.user_role_name) return employee.user_role_name
+  // Fallback to user_role.name (old structure)
+  if (employee.user_role?.name) return employee.user_role.name
+  // Try to get from companies array
+  if (employee.companies && employee.companies.length > 0) {
+    return employee.companies[0].user_role || 'N/A'
+  }
+  return 'N/A'
+}
+
+const getPhoneNumber = (employee) => {
+  return employee?.phone_number || 'N/A'
+}
+
+const getCivilStatus = (employee) => {
+  return employee?.civil_status || 'N/A'
+}
 
 const getInitials = (name) =>
-  name
+  name && name !== 'N/A'
     ? name
         .split(' ')
         .map((n) => n[0])
@@ -491,48 +730,186 @@ const getInitials = (name) =>
         .slice(0, 2)
     : '?'
 
-const getModernStatusClass = (status) => {
-  switch (status?.toLowerCase()) {
-    case 'active':
-      return 'status-active'
-    case 'terminated':
-    case 'inactive':
-      return 'status-inactive'
-    default:
-      return 'status-active'
-  }
+const formatDate = (dateString) => {
+  if (!dateString) return null
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return null
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 // --- API Calls ---
 const fetchEmployees = async () => {
   try {
     const token = localStorage.getItem('access_token')
-    const companyId = localStorage.getItem('selectedCompany')
+    let storedCompany = localStorage.getItem('selectedCompany')
+    let companyId = null
+
+    try {
+      const parsed = JSON.parse(storedCompany)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = storedCompany
+    }
 
     if (!token || !companyId) {
       $q.notify({
         type: 'negative',
-        message: 'Missing token or company ID. Please log in again.',
+        message: 'Missing token or company ID.',
         position: 'top',
       })
       return
     }
 
     loading.value = true
+
     const response = await axios.get(
       `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
+      { headers: { Authorization: `Bearer ${token}` } },
     )
 
-    employees.value = response.data
+    employees.value = response.data || []
     filteredEmployees.value = employees.value
+    sortEmployees()
   } catch (error) {
-    console.error('Error fetching employees:', error.response?.data || error.message)
-    $q.notify({ type: 'negative', message: 'Failed to fetch employees', position: 'top' })
+    console.error('Error fetching employees:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to fetch employees',
+      position: 'top',
+    })
   } finally {
     loading.value = false
+  }
+}
+
+const fetchRoles = async () => {
+  try {
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+
+    const response = await axios.get('https://staging.wageyapp.com/user/user-roles/', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    roleOptions.value = response.data
+  } catch (error) {
+    console.error('Error fetching roles:', error)
+    roleOptions.value = [
+      { id: 1, name: 'Admin' },
+      { id: 2, name: 'Manager' },
+      { id: 3, name: 'Employee' },
+      { id: 4, name: 'HR' },
+    ]
+  }
+}
+
+async function addEmployee() {
+  try {
+    const token = authStore.token || localStorage.getItem('access_token')
+    const user = authStore.user || JSON.parse(localStorage.getItem('user'))
+    const userId = user?.id || JSON.parse(localStorage.getItem('user_id')) || null
+
+    let storedCompany = localStorage.getItem('selectedCompany')
+    let companyId = null
+
+    try {
+      const parsed = JSON.parse(storedCompany)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = storedCompany
+    }
+
+    if (!token) {
+      $q.notify({
+        type: 'negative',
+        message: 'Missing authentication token. Please log in again.',
+        position: 'top',
+      })
+      return
+    }
+
+    if (!companyId) {
+      $q.notify({
+        type: 'negative',
+        message: 'No company selected. Please select a company first.',
+        position: 'top',
+      })
+      return
+    }
+
+    if (!userId) {
+      $q.notify({
+        type: 'negative',
+        message: 'Unable to identify logged-in user (updated_by). Please re-login.',
+        position: 'top',
+      })
+      return
+    }
+
+    const payload = {
+      username: addForm.value.user.username,
+      email: addForm.value.user.email,
+      password: addForm.value.password,
+      first_name: addForm.value.user.first_name,
+      middle_name: addForm.value.user.middle_name || '',
+      last_name: addForm.value.user.last_name,
+      flow: 'admin',
+      civil_status: addForm.value.civil_status || '',
+      address: addForm.value.address || '',
+      phone_number: addForm.value.phone_number || '',
+      emergency_contact: addForm.value.emergency_contact || '',
+      birthday: addForm.value.birthday || null,
+      bank_acct: addForm.value.bank_acct || '',
+      timezone: addForm.value.timezone || '',
+      last_date_updated: new Date().toISOString(),
+      user_role: addForm.value.user_role?.id || 0,
+      updated_by: userId,
+      companies: [{ company_id: companyId }],
+    }
+
+    await axios.post(`https://staging.wageyapp.com/user/employees/`, payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    $q.notify({
+      type: 'positive',
+      message: 'Employee added successfully!',
+      position: 'top',
+    })
+
+    await fetchEmployees()
+    resetAddForm()
+    showAddModal.value = false
+  } catch (error) {
+    console.error('❌ Error adding employee:', error)
+    console.log('🔍 Response data:', error.response?.data)
+
+    $q.notify({
+      type: 'negative',
+      message:
+        error.response?.data?.message ||
+        error.response?.data?.detail ||
+        JSON.stringify(error.response?.data) ||
+        'Failed to add employee',
+      position: 'top',
+    })
   }
 }
 
@@ -540,35 +917,41 @@ const saveEmployee = async () => {
   try {
     savingEmployee.value = true
     const token = localStorage.getItem('access_token')
-    const companyId = localStorage.getItem('companyId')
+    let storedCompany = localStorage.getItem('selectedCompany')
+    let companyId = null
+
+    try {
+      const parsed = JSON.parse(storedCompany)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = storedCompany
+    }
 
     if (!token || !companyId) {
-      $q.notify({
-        type: 'negative',
-        message: 'Missing token or company ID. Please log in again.',
-        position: 'top',
-      })
+      $q.notify({ type: 'negative', message: 'Missing token or company ID.', position: 'top' })
       return
     }
 
     const payload = {
-      first_name: editForm.value.first_name,
-      last_name: editForm.value.last_name,
-      email: editForm.value.email,
-      username: editForm.value.username,
-      position: editForm.value.position,
-      user_role_name: editForm.value.user_role_name,
-      employment_status: editForm.value.employment_status,
+      user: {
+        id: editForm.value.user.id,
+        username: editForm.value.user.username,
+        email: editForm.value.user.email,
+        first_name: editForm.value.user.first_name,
+        last_name: editForm.value.user.last_name,
+      },
+      user_role_id: editForm.value.user_role?.id,
+      civil_status: editForm.value.civil_status,
       address: editForm.value.address,
-      company_id: companyId,
+      phone_number: editForm.value.phone_number,
+      emergency_contact: editForm.value.emergency_contact,
+      birthday: editForm.value.birthday || null,
+      bank_acct: editForm.value.bank_acct,
+      timezone: editForm.value.timezone,
     }
 
-    if (editForm.value.password) {
-      payload.password = editForm.value.password
-    }
-
-    const response = await axios.put(
-      `https://staging.wageyapp.com/user/employees/${selectedEmployee.value.id}/update/`,
+    const response = await axios.patch(
+      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${selectedEmployee.value.id}/`,
       payload,
       { headers: { Authorization: `Bearer ${token}` } },
     )
@@ -578,8 +961,8 @@ const saveEmployee = async () => {
     if (employeeIndex !== -1) {
       employees.value[employeeIndex] = updatedEmployee
     }
-
     filteredEmployees.value = employees.value
+    sortEmployees()
 
     $q.notify({
       type: 'positive',
@@ -588,7 +971,7 @@ const saveEmployee = async () => {
     })
     showEditModal.value = false
   } catch (error) {
-    console.error('Error updating employee:', error.response?.data || error.message)
+    console.error('Error updating employee:', error)
     $q.notify({
       type: 'negative',
       message: error.response?.data?.detail || 'Failed to update employee',
@@ -596,6 +979,51 @@ const saveEmployee = async () => {
     })
   } finally {
     savingEmployee.value = false
+  }
+}
+
+const deleteEmployee = async () => {
+  try {
+    deleting.value = true
+    const token = localStorage.getItem('access_token')
+    let storedCompany = localStorage.getItem('selectedCompany')
+    let companyId = null
+
+    try {
+      const parsed = JSON.parse(storedCompany)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = storedCompany
+    }
+
+    if (!token || !companyId) {
+      $q.notify({ type: 'negative', message: 'Missing token or company ID.', position: 'top' })
+      return
+    }
+
+    await axios.delete(
+      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${employeeToDelete.value.id}/`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    employees.value = employees.value.filter((e) => e.id !== employeeToDelete.value.id)
+    filteredEmployees.value = employees.value
+
+    $q.notify({
+      type: 'positive',
+      message: `Employee ${getFullName(employeeToDelete.value)} deleted successfully`,
+      position: 'top',
+    })
+    showDeleteDialog.value = false
+  } catch (error) {
+    console.error('Error deleting employee:', error)
+    $q.notify({
+      type: 'negative',
+      message: error.response?.data?.detail || 'Failed to delete employee',
+      position: 'top',
+    })
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -610,9 +1038,54 @@ const filterEmployees = () => {
     return (
       getFullName(emp).toLowerCase().includes(term) ||
       getEmail(emp).toLowerCase().includes(term) ||
-      (emp.position || '').toLowerCase().includes(term)
+      getPhoneNumber(emp).toLowerCase().includes(term) ||
+      getRole(emp).toLowerCase().includes(term) ||
+      getCivilStatus(emp).toLowerCase().includes(term)
     )
   })
+}
+
+const sortEmployees = () => {
+  const sorted = [...filteredEmployees.value]
+
+  switch (sortBy.value) {
+    case 'Newest':
+      sorted.sort((a, b) => new Date(b.last_date_updated || 0) - new Date(a.last_date_updated || 0))
+      break
+    case 'Oldest':
+      sorted.sort((a, b) => new Date(a.last_date_updated || 0) - new Date(b.last_date_updated || 0))
+      break
+    case 'A-Z':
+      sorted.sort((a, b) => getFullName(a).localeCompare(getFullName(b)))
+      break
+    case 'Z-A':
+      sorted.sort((a, b) => getFullName(b).localeCompare(getFullName(a)))
+      break
+  }
+
+  filteredEmployees.value = sorted
+}
+
+const filterTimezones = (val, update) => {
+  if (val === '') {
+    update(() => {
+      filteredTimezoneOptions.value = timezoneOptions.value
+    })
+    return
+  }
+
+  update(() => {
+    const needle = val.toLowerCase()
+    filteredTimezoneOptions.value = timezoneOptions.value.filter(
+      (v) => v.toLowerCase().indexOf(needle) > -1,
+    )
+  })
+}
+
+// Modal Actions
+const openAddModal = () => {
+  resetAddForm()
+  showAddModal.value = true
 }
 
 const viewEmployee = (emp) => {
@@ -622,40 +1095,90 @@ const viewEmployee = (emp) => {
 
 const editEmployee = (emp) => {
   selectedEmployee.value = emp
+
+  // Find matching role from roleOptions based on user_role_name
+  const matchingRole = roleOptions.value.find((role) => role.name === emp.user_role_name)
+
   editForm.value = {
-    first_name: emp.user?.first_name || '',
-    last_name: emp.user?.last_name || '',
-    email: emp.user?.email || '',
-    username: emp.user?.username || '',
-    position: emp.position || '',
-    user_role_name: emp.user_role_name || '',
-    employment_status: emp.employment_status || '',
+    user: {
+      id: emp.user?.id || 0,
+      username: emp.user?.username || '',
+      email: emp.user?.email || '',
+      first_name: emp.user?.first_name || '',
+      last_name: emp.user?.last_name || '',
+    },
+    user_role: matchingRole || null,
+    civil_status: emp.civil_status || '',
     address: emp.address || '',
-    password: '',
+    phone_number: emp.phone_number || '',
+    emergency_contact: emp.emergency_contact || '',
+    birthday: emp.birthday || '',
+    bank_acct: emp.bank_acct || '',
+    timezone: emp.timezone || '',
   }
   showEditModal.value = true
+}
+
+const confirmDelete = (emp) => {
+  employeeToDelete.value = emp
+  showDeleteDialog.value = true
+}
+
+const cancelAdd = () => {
+  showAddModal.value = false
+  resetAddForm()
 }
 
 const cancelEdit = () => {
   showEditModal.value = false
   editForm.value = {
-    first_name: '',
-    last_name: '',
-    email: '',
-    username: '',
-    position: '',
-    user_role_name: '',
-    employment_status: '',
+    user: {
+      id: 0,
+      username: '',
+      email: '',
+      first_name: '',
+      last_name: '',
+    },
+    user_role: null,
+    civil_status: '',
     address: '',
-    password: '',
+    phone_number: '',
+    emergency_contact: '',
+    birthday: '',
+    bank_acct: '',
+    timezone: '',
   }
 }
 
-const updateEmployee = (emp) =>
-  $q.notify({ type: 'info', message: `Updating ${getFullName(emp)}`, position: 'top' })
+const resetAddForm = () => {
+  addForm.value = {
+    user: {
+      username: '',
+      email: '',
+      first_name: '',
+      last_name: '',
+    },
+    password: '',
+    user_role: null,
+    civil_status: '',
+    address: '',
+    phone_number: '',
+    emergency_contact: '',
+    birthday: '',
+    bank_acct: '',
+    timezone: '',
+  }
+  confirmPassword.value = ''
+}
+
+// Watch for sort changes
+watch(sortBy, () => {
+  sortEmployees()
+})
 
 onMounted(() => {
   fetchEmployees()
+  fetchRoles()
 })
 </script>
 
@@ -694,10 +1217,17 @@ onMounted(() => {
   margin: 0 0 4px 0;
 }
 
-.page-subtitle {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.add-employee-btn {
+  height: 40px;
+  border-radius: 8px;
+  font-weight: 500;
+  text-transform: none;
 }
 
 .header-search {
@@ -749,10 +1279,6 @@ onMounted(() => {
   background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
 }
 
-.custom-card {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-}
-
 .stats-icon-wrapper {
   width: 56px;
   height: 56px;
@@ -786,11 +1312,6 @@ onMounted(() => {
   font-weight: 600;
   color: #374151;
   margin-bottom: 2px;
-}
-
-.stats-sublabel {
-  font-size: 14px;
-  color: #64748b;
 }
 
 /* Table Section */
@@ -890,24 +1411,15 @@ onMounted(() => {
   text-decoration: underline;
 }
 
-.status-badge {
+.civil-status-badge {
   display: inline-flex;
   align-items: center;
   padding: 6px 12px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
-  text-transform: capitalize;
-}
-
-.status-active {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.status-inactive {
-  background: #fef2f2;
-  color: #991b1b;
+  background: #f3f4f6;
+  color: #374151;
 }
 
 .action-buttons {
@@ -920,6 +1432,7 @@ onMounted(() => {
   width: 32px;
   height: 32px;
   border-radius: 6px;
+  transition: all 0.2s ease;
 }
 
 .view-btn {
@@ -940,62 +1453,31 @@ onMounted(() => {
   background: #fde68a;
 }
 
-.update-btn {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.update-btn:hover {
-  background: #bbf7d0;
-}
-
-/* Table Footer */
-.table-footer {
-  background: #f8fafc;
-  padding: 16px 24px;
-  border-top: 2px solid #3b82f6;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.footer-info {
-  display: flex;
-  gap: 24px;
-  align-items: center;
-}
-
-.total-label {
-  font-size: 14px;
-  font-weight: 600;
+.delete-btn {
+  background: #fef2f2;
   color: #ef4444;
 }
 
-.total-employees {
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-}
-
-.total-active {
-  font-size: 14px;
-  font-weight: 600;
-  color: #16a34a;
+.delete-btn:hover {
+  background: #fee2e2;
 }
 
 /* Modal Styles */
 .modal-card {
   width: 100%;
   max-width: 900px;
-  max-height: 80vh;
+  max-height: 85vh;
   border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.add-modal,
+.edit-modal {
+  max-width: 1000px;
 }
 
 .view-modal {
-  max-width: 800px;
-}
-
-.edit-modal {
   max-width: 900px;
 }
 
@@ -1005,6 +1487,7 @@ onMounted(() => {
   align-items: center;
   padding: 20px 24px;
   background: #f9fafb;
+  flex-shrink: 0;
 }
 
 .modal-title-section {
@@ -1048,17 +1531,19 @@ onMounted(() => {
 
 .modal-content {
   padding: 24px;
-  max-height: 60vh;
   overflow-y: auto;
+  flex: 1;
 }
 
-/* View Modal Styles */
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+/* Form Sections */
+.form-sections,
+.detail-sections {
+  display: flex;
+  flex-direction: column;
   gap: 24px;
 }
 
+.form-section,
 .detail-section {
   background: #f9fafb;
   border-radius: 8px;
@@ -1072,6 +1557,23 @@ onMounted(() => {
   margin: 0 0 16px 0;
   padding-bottom: 8px;
   border-bottom: 1px solid #e5e7eb;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.col-span-2 {
+  grid-column: span 2;
+}
+
+/* Detail Grid */
+.detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .detail-row {
@@ -1101,58 +1603,54 @@ onMounted(() => {
   word-break: break-word;
 }
 
-/* Edit Modal Styles */
-.edit-form {
-  width: 100%;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 24px;
-  margin-bottom: 32px;
-}
-
-.form-section {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 20px;
-}
-
-.form-input {
-  margin-bottom: 16px;
-}
-
-.form-input:last-child {
-  margin-bottom: 0;
-}
-
+/* Form Actions */
 .form-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   padding-top: 20px;
   border-top: 1px solid #e5e7eb;
+  margin-top: 24px;
 }
 
-.cancel-btn {
-  padding: 8px 24px;
-  border-radius: 6px;
+/* Delete Dialog */
+.delete-dialog {
+  max-width: 400px;
+  border-radius: 12px;
 }
 
-.save-btn {
-  padding: 8px 24px;
-  border-radius: 6px;
-  font-weight: 500;
+.delete-header {
+  text-align: center;
+  padding: 24px 24px 16px;
 }
 
-/* Status Chip */
-.status-chip {
-  font-size: 12px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 20px;
-  text-transform: none;
+.delete-icon {
+  font-size: 48px;
+  color: #ef4444;
+  margin-bottom: 12px;
+}
+
+.delete-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.delete-content {
+  padding: 0 24px 16px;
+  text-align: center;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.delete-content strong {
+  color: #111827;
+}
+
+.delete-actions {
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
 }
 
 /* Responsive Design */
@@ -1167,6 +1665,13 @@ onMounted(() => {
     align-items: flex-start;
   }
 
+  .header-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .add-employee-btn,
   .header-search {
     width: 100%;
   }
@@ -1188,6 +1693,7 @@ onMounted(() => {
 
   .modern-table-container {
     margin: 0 16px 16px 16px;
+    overflow-x: auto;
   }
 
   .table-body-cell {
@@ -1204,34 +1710,35 @@ onMounted(() => {
     gap: 4px;
   }
 
-  .footer-info {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-  }
-
   .modal-card {
     margin: 16px;
     max-width: calc(100vw - 32px);
     max-height: calc(100vh - 32px);
   }
 
-  .detail-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
   .form-grid {
     grid-template-columns: 1fr;
-    gap: 16px;
+  }
+
+  .col-span-2 {
+    grid-column: span 1;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .detail-value {
+    text-align: left;
   }
 
   .form-actions {
     flex-direction: column-reverse;
   }
 
-  .cancel-btn,
-  .save-btn {
+  .form-actions button {
     width: 100%;
   }
 }
@@ -1256,19 +1763,18 @@ onMounted(() => {
 }
 
 /* Loading States */
-.form-input .q-field--loading .q-field__control::before {
+.q-field--loading .q-field__control::before {
   background: #f3f4f6;
 }
 
 /* Focus States */
 .modal-close-btn:focus,
-.cancel-btn:focus,
-.save-btn:focus {
+.form-actions button:focus {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
 }
 
-.form-input .q-field--focused .q-field__control {
+.q-field--focused .q-field__control {
   border-color: #3b82f6;
   box-shadow: 0 0 0 1px #3b82f6;
 }
