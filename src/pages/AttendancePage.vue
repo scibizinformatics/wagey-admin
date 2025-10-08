@@ -118,6 +118,9 @@
               clearable
               map-options
               emit-value
+              behavior="menu"
+              menu-anchor="bottom left"
+              menu-self="top left"
             />
 
             <q-select
@@ -134,7 +137,31 @@
               use-input
               input-debounce="300"
               @filter="filterEmployees"
-            />
+              option-label="label"
+              option-value="value"
+              behavior="menu"
+              menu-anchor="bottom left"
+              menu-self="top left"
+            >
+              <template v-slot:no-option>
+                <q-item>
+                  <q-item-section class="text-grey"> No employees found </q-item-section>
+                </q-item>
+              </template>
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section avatar>
+                    <q-avatar size="32px" color="primary" text-color="white">
+                      {{ scope.opt.label.charAt(0) }}
+                    </q-avatar>
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                    <q-item-label caption>ID: {{ scope.opt.value }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
 
             <q-select
               dense
@@ -147,6 +174,9 @@
               clearable
               map-options
               emit-value
+              behavior="menu"
+              menu-anchor="bottom left"
+              menu-self="top left"
             />
           </div>
         </div>
@@ -158,8 +188,9 @@
           <div class="table-title-section">
             <h2 class="table-title">Attendance Overview</h2>
           </div>
-          <div class="table-actions" v-if="selected.length > 0">
+          <div class="table-actions">
             <q-btn
+              v-if="selected.length > 0"
               color="negative"
               icon="delete"
               :label="`Delete ${selected.length} items`"
@@ -168,12 +199,23 @@
               no-caps
             />
             <q-btn
+              v-if="selected.length > 0"
               color="primary"
               icon="file_download"
               label="Export Selected"
               @click="exportSelected"
               size="sm"
               no-caps
+            />
+            <q-btn
+              unelevated
+              color="primary"
+              icon="add"
+              label="Add Attendance"
+              @click="openAddDialog"
+              size="sm"
+              no-caps
+              class="add-attendance-btn"
             />
           </div>
         </div>
@@ -211,9 +253,6 @@
                   <q-card-actions align="right">
                     <q-btn flat size="sm" color="primary" @click="editAttendance(props.row)"
                       >Edit</q-btn
-                    >
-                    <q-btn flat size="sm" color="negative" @click="confirmDelete(props.row)"
-                      >Delete</q-btn
                     >
                   </q-card-actions>
                 </q-card>
@@ -287,14 +326,6 @@
                       class="action-btn edit-btn"
                       @click="editAttendance(props.row)"
                     />
-                    <q-btn
-                      flat
-                      round
-                      icon="delete"
-                      size="sm"
-                      class="action-btn delete-btn"
-                      @click="confirmDelete(props.row)"
-                    />
                   </div>
                 </q-td>
               </q-tr>
@@ -357,6 +388,96 @@
       </q-card>
     </q-dialog>
 
+    <!-- Add Attendance Dialog -->
+    <q-dialog v-model="showAddDialog" persistent>
+      <q-card class="edit-dialog-card">
+        <q-card-section>
+          <div class="dialog-title">Add New Attendance</div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <q-form @submit.prevent="createAttendance" class="edit-form">
+            <q-select
+              filled
+              v-model="newRecord.employee"
+              :options="employeeOptions"
+              label="Employee *"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              use-input
+              input-debounce="300"
+              @filter="filterEmployees"
+              class="form-field"
+              :rules="[(val) => !!val || 'Employee is required']"
+              behavior="menu"
+              menu-anchor="bottom left"
+              menu-self="top left"
+            >
+              <template v-slot:no-option>
+                <q-item>
+                  <q-item-section class="text-grey"> No employees found </q-item-section>
+                </q-item>
+              </template>
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section avatar>
+                    <q-avatar size="32px" color="primary" text-color="white">
+                      {{ scope.opt.label.charAt(0) }}
+                    </q-avatar>
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                    <q-item-label caption>ID: {{ scope.opt.value }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+
+            <q-input
+              filled
+              v-model="newRecord.date"
+              label="Date *"
+              type="date"
+              class="form-field"
+              :rules="[(val) => !!val || 'Date is required']"
+            />
+
+            <div class="time-inputs">
+              <q-input
+                filled
+                v-model="newRecord.time_in"
+                label="Time In *"
+                type="time"
+                class="form-field"
+                :rules="[(val) => !!val || 'Time In is required']"
+              />
+
+              <q-input
+                filled
+                v-model="newRecord.time_out"
+                label="Time Out"
+                type="time"
+                class="form-field"
+              />
+            </div>
+          </q-form>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" @click="closeAddDialog" class="dialog-btn" />
+          <q-btn
+            color="primary"
+            label="Create"
+            @click="createAttendance"
+            :loading="creating"
+            class="dialog-btn primary-btn"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Edit Attendance Dialog -->
     <q-dialog v-model="showEditDialog" persistent>
       <q-card class="edit-dialog-card">
@@ -365,7 +486,7 @@
         </q-card-section>
 
         <q-card-section class="q-pt-none" v-if="editingRecord">
-          <q-form @submit="updateAttendance" class="edit-form">
+          <q-form @submit.prevent="updateAttendance" class="edit-form">
             <q-input
               filled
               v-model="editingRecord.date"
@@ -391,16 +512,6 @@
                 class="form-field"
               />
             </div>
-
-            <q-select
-              filled
-              v-model="editingRecord.source"
-              :options="sourceOptions"
-              label="Source"
-              map-options
-              emit-value
-              class="form-field"
-            />
           </q-form>
         </q-card-section>
 
@@ -418,6 +529,7 @@
     </q-dialog>
   </q-page>
 </template>
+
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
@@ -436,9 +548,11 @@ const selectAll = ref(false)
 // Dialog states
 const showDatePicker = ref(false)
 const showEditDialog = ref(false)
+const showAddDialog = ref(false)
 
 // Loading states
 const updating = ref(false)
+const creating = ref(false)
 
 const pagination = ref({
   page: 1,
@@ -464,12 +578,21 @@ const tempDateRange = ref({
 // Edit form
 const editingRecord = ref(null)
 
+// Add form
+const newRecord = ref({
+  employee: '',
+  date: '',
+  time_in: '',
+  time_out: '',
+  source: 'admin',
+})
+
 // Filter options
 const employeeOptions = ref([])
 const businessOwnerOptions = ref([])
 const sourceOptions = ref([
   { label: 'QR Scan', value: 'qr_scan' },
-  { label: 'Manual Entry', value: 'manual' },
+  { label: 'Manual Entry', value: 'admin' },
   { label: 'Auto Login', value: 'auto_login' },
 ])
 
@@ -515,8 +638,55 @@ async function fetchAttendanceData(params = {}) {
       },
     )
 
+    // Debug: Log the raw response
+    console.log('Raw Attendance Response:', response.data)
+    console.log('Available Employees:', employees.value)
+
     const data = Array.isArray(response.data) ? response.data : response.data.data
-    attendanceData.value = data || []
+
+    // Debug: Log first record to see structure
+    if (data && data.length > 0) {
+      console.log('First Attendance Record:', data[0])
+    }
+
+    // Enrich attendance data with employee details
+    attendanceData.value = (data || []).map((record) => {
+      console.log('Processing record:', record)
+
+      // The employee field is already an object with employee details
+      if (record.employee && typeof record.employee === 'object') {
+        console.log('Employee is already an object:', record.employee)
+        return record
+      }
+
+      // If employee is just an ID, try to find the full employee details
+      const employeeId = record.employee || record.employee_id || record.site_id || record.user_id
+
+      console.log('Employee ID found:', employeeId)
+
+      if (employeeId) {
+        // Try to find employee in the employees list
+        const employeeDetails = employees.value.find(
+          (emp) =>
+            emp.id === employeeId ||
+            emp.id === String(employeeId) ||
+            String(emp.id) === String(employeeId),
+        )
+
+        console.log('Found employee details:', employeeDetails)
+
+        if (employeeDetails) {
+          return {
+            ...record,
+            employee: employeeDetails,
+          }
+        }
+      }
+
+      return record
+    })
+
+    console.log('Processed Attendance Data:', attendanceData.value)
 
     pagination.value.rowsNumber =
       response.data.total || response.data.meta?.total || attendanceData.value.length
@@ -537,20 +707,221 @@ async function fetchEmployeeDetails() {
     return
   }
 
+  filtersLoading.value = true
   try {
     const response = await api.get(`/user/companies/${companyId.value}/employees/`)
-    const data = Array.isArray(response.data) ? response.data : response.data.data
+
+    // Debug: Log employee response
+    console.log('Raw Employee Response:', response.data)
+
+    const data = Array.isArray(response.data)
+      ? response.data
+      : response.data.data || response.data.results
     employees.value = data || []
 
-    employeeOptions.value = employees.value.map((emp) => ({
-      label: getEmployeeName(emp),
-      value: emp.id,
-    }))
+    console.log('Processed Employees:', employees.value)
+
+    // Create employee options with better name handling
+    employeeOptions.value = employees.value
+      .map((emp) => {
+        const name = getEmployeeName(emp)
+        console.log(`Employee: ${name}, ID: ${emp.id}`)
+        return {
+          label: name,
+          value: emp.id, // This should be the UUID string
+          employee: emp, // Store full employee object for reference
+        }
+      })
+      .filter((opt) => opt.label !== 'Unknown Employee') // Filter out unknown employees
+
+    console.log('Employee Options Created:', employeeOptions.value)
+
+    // If no employees found, show a warning
+    if (employeeOptions.value.length === 0) {
+      console.warn('No employees loaded! Check API response structure')
+      showErrorNotification('No employees found. Please check if employees exist.')
+    }
   } catch (error) {
     console.error('Error fetching employee details:', error)
     showErrorNotification('Failed to load employees')
     employees.value = []
     employeeOptions.value = []
+  } finally {
+    filtersLoading.value = false
+  }
+}
+
+// ✅ SINGLE WORKING VERSION - Replace your existing createAttendance function with this
+
+async function createAttendance() {
+  // 🧩 Validate company ID
+  if (!companyId.value) {
+    showErrorNotification('Company ID not found. Please log in again.')
+    return
+  }
+
+  // 🧩 Try to get UUID from localStorage
+  let userId =
+    localStorage.getItem('userUUID') ||
+    localStorage.getItem('user_uuid') ||
+    localStorage.getItem('uuid') ||
+    localStorage.getItem('userId') ||
+    localStorage.getItem('user_id') ||
+    localStorage.getItem('id')
+
+  console.log('🔍 All localStorage keys:', Object.keys(localStorage))
+  console.log('🔍 Found User ID (raw):', userId)
+
+  // Regex for UUID validation
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+  // 🧩 If not UUID, try to recover from stored user data
+  if (!userId || !uuidRegex.test(userId)) {
+    console.warn('⚠️ User ID is not a valid UUID:', userId)
+
+    const userJSON =
+      localStorage.getItem('user') ||
+      localStorage.getItem('user_data') ||
+      localStorage.getItem('currentUser') ||
+      localStorage.getItem('userData')
+
+    if (userJSON) {
+      try {
+        const user = JSON.parse(userJSON)
+        console.log('🔍 Parsed user:', user)
+
+        userId =
+          user.profile?.user?.id ||
+          user.profile?.id ||
+          user.id ||
+          user.uuid ||
+          user.user_uuid ||
+          user.uid ||
+          null
+
+        if (uuidRegex.test(userId)) {
+          console.log('✅ Recovered valid UUID from user data:', userId)
+          localStorage.setItem('userUUID', userId)
+        } else {
+          console.warn('⚠️ Still no valid UUID after parsing user data')
+        }
+      } catch (e) {
+        console.error('❌ Failed to parse user JSON:', e)
+      }
+    }
+  }
+
+  // 🧩 If still missing, fetch UUID from API
+  if (!userId || !uuidRegex.test(userId)) {
+    try {
+      console.log('🔄 Fetching user UUID from API...')
+      const res =
+        (await api.get('/user/me/')) ||
+        (await api.get('/auth/user/')) ||
+        (await api.get(`/user/${userId}/`))
+
+      if (res?.data) {
+        const data = res.data
+        const fetchedUUID = data.uuid || data.id || data.user_id
+        if (uuidRegex.test(fetchedUUID)) {
+          userId = fetchedUUID
+          localStorage.setItem('userUUID', fetchedUUID)
+          console.log('✅ Successfully fetched UUID:', userId)
+        }
+      }
+    } catch (err) {
+      console.error('❌ Could not fetch user UUID:', err)
+    }
+  }
+
+  // 🧩 Final UUID validation
+  if (!userId || !uuidRegex.test(userId)) {
+    console.error('❌ No valid user UUID found')
+    showErrorNotification('Unable to find your user ID. Please log out and log in again.')
+    return
+  }
+
+  console.log('✅ Using User UUID:', userId)
+
+  // 🧩 Validate required attendance fields
+  if (!newRecord.value.employee || !newRecord.value.date || !newRecord.value.time_in) {
+    showErrorNotification('Please fill in all required fields (Employee, Date, Time In)')
+    return
+  }
+
+  creating.value = true
+
+  try {
+    // Find selected employee object
+    const selectedEmployee = employees.value.find(
+      (emp) => emp.id === newRecord.value.employee || emp.uuid === newRecord.value.employee,
+    )
+
+    console.log('🔍 Selected Employee:', selectedEmployee)
+    console.log('🧠 Employee keys:', Object.keys(selectedEmployee || {}))
+    console.log('🧩 Employee JSON:', JSON.stringify(selectedEmployee, null, 2))
+
+    if (!selectedEmployee) {
+      showErrorNotification('Employee not found or missing site assignment.')
+      creating.value = false
+      return
+    }
+
+    // Extract a valid site_id (must be integer, not null)
+    let finalSiteId = Number(
+      selectedEmployee.site_id || selectedEmployee.siteId || selectedEmployee.site || 0,
+    )
+
+    if (!finalSiteId || isNaN(finalSiteId)) {
+      console.error('❌ Invalid or missing site_id for employee:', selectedEmployee)
+      showErrorNotification('This employee has no valid Site assigned.')
+      creating.value = false
+      return
+    }
+
+    console.log('✅ Final Site ID:', finalSiteId)
+
+    // 🧩 Combine date + time into ISO timestamp
+    const timestamp = `${newRecord.value.date}T${newRecord.value.time_in}:00.000Z`
+
+    // 🧩 Prepare payload
+    const attendanceData = {
+      site_id: finalSiteId,
+      timestamp: timestamp,
+      source: 'admin',
+      created_by: userId,
+    }
+
+    console.log('📤 Sending Payload:', attendanceData)
+    console.log('📤 Endpoint:', `/attendance/log/${companyId.value}/`)
+
+    const response = await api.post(`/attendance/log/${companyId.value}/`, attendanceData)
+
+    console.log('✅ Success Response:', response.data)
+    showSuccessNotification('Attendance created successfully')
+    closeAddDialog()
+    await fetchAttendanceData()
+  } catch (error) {
+    console.error('❌ Full Error Object:', error)
+    console.error('❌ Response Data:', error.response?.data)
+    console.error('❌ Status Code:', error.response?.status)
+
+    let errorMessage = 'Failed to create attendance'
+
+    if (error.response?.data) {
+      const data = error.response.data
+      if (typeof data === 'string') errorMessage = data
+      else if (data.detail) errorMessage = data.detail
+      else if (data.site_id) errorMessage = `Site ID error: ${data.site_id}`
+      else if (data.timestamp) errorMessage = `Timestamp error: ${data.timestamp}`
+      else errorMessage = JSON.stringify(data)
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+
+    showErrorNotification(errorMessage)
+  } finally {
+    creating.value = false
   }
 }
 
@@ -559,28 +930,28 @@ async function updateAttendance() {
 
   updating.value = true
   try {
-    await api.put(`/attendance/${editingRecord.value.id}/`, editingRecord.value)
+    // Prepare the data for the API
+    const attendanceData = {
+      date: editingRecord.value.date,
+      time_in: editingRecord.value.time_in
+        ? `${editingRecord.value.date}T${editingRecord.value.time_in}:00`
+        : null,
+      time_out: editingRecord.value.time_out
+        ? `${editingRecord.value.date}T${editingRecord.value.time_out}:00`
+        : null,
+      source: editingRecord.value.source || 'admin', // Keep existing source or default to 'admin'
+    }
+
+    await api.patch(`/attendance/${editingRecord.value.id}/`, attendanceData)
 
     showSuccessNotification('Attendance updated successfully')
     showEditDialog.value = false
-    editingRecord.value = null
     await fetchAttendanceData()
   } catch (error) {
     console.error('Error updating attendance:', error)
-    showErrorNotification('Failed to update attendance')
+    showErrorNotification(error.response?.data?.message || 'Failed to update attendance')
   } finally {
     updating.value = false
-  }
-}
-
-async function deleteAttendance(record) {
-  try {
-    await api.delete(`/attendance/${record.id}/`)
-    showSuccessNotification('Attendance deleted successfully')
-    await fetchAttendanceData()
-  } catch (error) {
-    console.error('Error deleting attendance:', error)
-    showErrorNotification('Failed to delete attendance')
   }
 }
 
@@ -599,6 +970,30 @@ async function batchDelete(records) {
 }
 
 // ================= Dialog handlers =================
+function openAddDialog() {
+  // Reset the form
+  newRecord.value = {
+    employee: '',
+    date: new Date().toISOString().split('T')[0], // Set today's date as default
+    time_in: '',
+    time_out: '',
+    source: 'admin',
+  }
+  showAddDialog.value = true
+}
+
+function closeAddDialog() {
+  showAddDialog.value = false
+  // Reset the form
+  newRecord.value = {
+    employee: '',
+    date: '',
+    time_in: '',
+    time_out: '',
+    source: 'admin',
+  }
+}
+
 function editAttendance(record) {
   editingRecord.value = { ...record }
 
@@ -610,17 +1005,6 @@ function editAttendance(record) {
   }
 
   showEditDialog.value = true
-}
-
-function confirmDelete(record) {
-  $q.dialog({
-    title: 'Confirm Delete',
-    message: `Are you sure you want to delete this attendance record for ${getEmployeeName(record.employee)}?`,
-    cancel: true,
-    persistent: true,
-  }).onOk(() => {
-    deleteAttendance(record)
-  })
 }
 
 function confirmBatchDelete() {
@@ -769,9 +1153,48 @@ function downloadFile(data, filename) {
 // ================= Helpers =================
 function getEmployeeName(employee) {
   if (!employee) return 'Unknown Employee'
-  const firstName = employee.first_name || ''
-  const lastName = employee.last_name || ''
-  return `${firstName} ${lastName}`.trim() || 'Unknown Employee'
+
+  // Handle if employee is just an ID (number or string)
+  if (typeof employee === 'number' || typeof employee === 'string') {
+    // Find the employee from the employees list
+    const foundEmployee = employees.value.find(
+      (emp) => emp.id === employee || emp.id === parseInt(employee),
+    )
+    if (foundEmployee) {
+      const firstName = foundEmployee.first_name || foundEmployee.firstName || ''
+      const lastName = foundEmployee.last_name || foundEmployee.lastName || ''
+      const fullName = `${firstName} ${lastName}`.trim()
+      return (
+        fullName ||
+        foundEmployee.name ||
+        foundEmployee.username ||
+        foundEmployee.email ||
+        'Unknown Employee'
+      )
+    }
+    return `Employee #${employee}`
+  }
+
+  // Handle if employee is an object
+  if (typeof employee === 'object') {
+    // Try multiple field name variations
+    const firstName = employee.first_name || employee.firstName || employee.firstname || ''
+    const lastName = employee.last_name || employee.lastName || employee.lastname || ''
+    const fullName = `${firstName} ${lastName}`.trim()
+
+    // Return fullName if available, otherwise try other fields
+    return (
+      fullName ||
+      employee.name ||
+      employee.fullName ||
+      employee.full_name ||
+      employee.username ||
+      employee.email ||
+      'Unknown Employee'
+    )
+  }
+
+  return 'Unknown Employee'
 }
 
 function getSourceClass(source) {
@@ -863,7 +1286,9 @@ watch(
 )
 
 onMounted(async () => {
-  await Promise.all([fetchAttendanceData(), fetchEmployeeDetails()])
+  // Fetch employees first, then attendance data
+  await fetchEmployeeDetails()
+  await fetchAttendanceData()
 })
 
 // ================= Table columns =================
@@ -1089,6 +1514,15 @@ const columns = [
 .table-actions {
   display: flex;
   gap: 12px;
+}
+
+.add-attendance-btn {
+  background: #10b981;
+  font-weight: 600;
+}
+
+.add-attendance-btn:hover {
+  background: #059669;
 }
 
 /* Modern Table */
@@ -1409,6 +1843,11 @@ const columns = [
     flex-direction: column;
     gap: 16px;
     align-items: flex-start;
+  }
+
+  .table-actions {
+    width: 100%;
+    flex-wrap: wrap;
   }
 
   .modern-table-container {
