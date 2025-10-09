@@ -25,7 +25,6 @@
           <div class="header-content">
             <div class="header-left">
               <h1 class="page-title">Payroll Management</h1>
-              <p class="page-subtitle">Track and manage employee payroll records</p>
             </div>
             <div class="header-actions">
               <q-btn
