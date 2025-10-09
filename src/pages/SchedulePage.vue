@@ -95,7 +95,7 @@
 
             <q-select
               v-model="filters.position"
-              :options="['All', ...positions]"
+              :options="['All', ...positions.map((p) => p.name)]"
               label="Position"
               outlined
               dense
@@ -209,7 +209,7 @@
                       <div class="shift-time">
                         {{ shift.time || `${shift.startTime}-${shift.endTime}` }}
                       </div>
-                      <div class="shift-position">{{ shift.position }}</div>
+                      <div class="shift-position">{{ getPositionName(shift.position) }}</div>
                       <q-btn
                         flat
                         dense
@@ -269,7 +269,7 @@
                         <div class="shift-time">
                           {{ element.time || `${element.startTime}-${element.endTime}` }}
                         </div>
-                        <div class="shift-position">{{ element.position }}</div>
+                        <div class="shift-position">{{ getPositionName(element.position) }}</div>
                         <q-btn
                           flat
                           dense
@@ -341,6 +341,34 @@
             </div>
 
             <div class="form-row">
+              <q-select
+                v-model="newSchedule.site"
+                :options="siteOptions"
+                option-value="value"
+                option-label="label"
+                label="Select Site"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                :rules="[(val) => !!val || 'Please select a site']"
+              />
+
+              <q-select
+                v-model="newSchedule.department"
+                :options="departmentOptions"
+                option-value="value"
+                option-label="label"
+                label="Select Department"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                :rules="[(val) => !!val || 'Please select a department']"
+              />
+            </div>
+
+            <div class="form-row">
               <q-input
                 v-model="newSchedule.startTime"
                 label="Start Time"
@@ -358,15 +386,18 @@
                 placeholder="17:00"
                 outlined
                 class="form-field"
-                :rules="[timeValidation, (val) => validateEndTime(val)]"
+                :rules="[timeValidation, validateEndTime]"
               />
             </div>
-
             <q-select
               v-model="newSchedule.position"
               :options="positionOptions"
+              option-value="value"
+              option-label="label"
               label="Position"
               outlined
+              emit-value
+              map-options
               class="form-field full-width"
               :rules="[(val) => !!val || 'Please select a position']"
             />
@@ -432,6 +463,34 @@
             </div>
 
             <div class="form-row">
+              <q-select
+                v-model="editingSchedule.site"
+                :options="siteOptions"
+                option-value="value"
+                option-label="label"
+                label="Select Site"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                :rules="[(val) => !!val || 'Please select a site']"
+              />
+
+              <q-select
+                v-model="editingSchedule.department"
+                :options="departmentOptions"
+                option-value="value"
+                option-label="label"
+                label="Select Department"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                :rules="[(val) => !!val || 'Please select a department']"
+              />
+            </div>
+
+            <div class="form-row">
               <q-input
                 v-model="editingSchedule.startTime"
                 label="Start Time"
@@ -456,8 +515,12 @@
             <q-select
               v-model="editingSchedule.position"
               :options="positionOptions"
+              option-value="value"
+              option-label="label"
               label="Position"
               outlined
+              emit-value
+              map-options
               class="form-field full-width"
               :rules="[(val) => !!val || 'Please select a position']"
             />
@@ -506,6 +569,34 @@
 
           <q-form @submit="quickAddSchedule" class="schedule-form">
             <div class="form-row">
+              <q-select
+                v-model="quickAdd.site"
+                :options="siteOptions"
+                option-value="value"
+                option-label="label"
+                label="Select Site"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                :rules="[(val) => !!val || 'Please select a site']"
+              />
+
+              <q-select
+                v-model="quickAdd.department"
+                :options="departmentOptions"
+                option-value="value"
+                option-label="label"
+                label="Select Department"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                :rules="[(val) => !!val || 'Please select a department']"
+              />
+            </div>
+
+            <div class="form-row">
               <q-input
                 v-model="quickAdd.startTime"
                 label="Start Time"
@@ -530,8 +621,12 @@
             <q-select
               v-model="quickAdd.position"
               :options="positionOptions"
+              option-value="value"
+              option-label="label"
               label="Position"
               outlined
+              emit-value
+              map-options
               class="form-field full-width"
               :rules="[(val) => !!val || 'Please select a position']"
             />
@@ -561,7 +656,9 @@ import draggable from 'vuedraggable'
 // --- State ---
 const users = ref([]) // employees
 const shifts = ref([]) // schedules
-const positions = ref(['Cashier', 'Manager', 'Staff'])
+const positions = ref([]) // company positions
+const sites = ref([]) // company sites
+const departments = ref([]) // company departments
 const viewMode = ref('table')
 
 const filters = ref({ position: 'All', employee: null })
@@ -574,7 +671,16 @@ const showAddModal = ref(false)
 const showEditModal = ref(false)
 const showQuickAddModal = ref(false)
 
-const newSchedule = ref({ userId: null, day: null, startTime: '', endTime: '', position: '' })
+const newSchedule = ref({
+  userId: null,
+  day: null,
+  startTime: '',
+  endTime: '',
+  position: '',
+  site: null,
+  department: null,
+})
+
 const editingSchedule = ref({
   id: null,
   userId: null,
@@ -582,8 +688,19 @@ const editingSchedule = ref({
   startTime: '',
   endTime: '',
   position: '',
+  site: null,
+  department: null,
 })
-const quickAdd = ref({ userId: null, day: null, startTime: '', endTime: '', position: '' })
+
+const quickAdd = ref({
+  userId: null,
+  day: null,
+  startTime: '',
+  endTime: '',
+  position: '',
+  site: null,
+  department: null,
+})
 
 const addConflictWarning = ref(false)
 const editConflictWarning = ref(false)
@@ -639,6 +756,11 @@ const mapDateToDayIdx = (dateStr) => {
   return jsDay === 0 ? 6 : jsDay - 1 // Mon=0 … Sun=6
 }
 
+const getPositionName = (positionId) => {
+  const position = positions.value.find((p) => p.id === positionId)
+  return position?.name || positionId
+}
+
 // --- Summaries ---
 const totalShifts = computed(() => shifts.value.length)
 const activeEmployees = computed(() => new Set(shifts.value.map((s) => s.userId)).size)
@@ -655,7 +777,11 @@ const weekHours = computed(() =>
 
 // --- Options / filters ---
 const userOptions = computed(() => users.value.map((u) => ({ label: u.name, value: u.id })))
-const positionOptions = computed(() => positions.value.map((p) => ({ label: p, value: p })))
+const positionOptions = computed(() => positions.value.map((p) => ({ label: p.name, value: p.id })))
+const siteOptions = computed(() => sites.value.map((s) => ({ label: s.name, value: s.id })))
+const departmentOptions = computed(() =>
+  departments.value.map((d) => ({ label: d.name, value: d.id })),
+)
 
 const filteredUsers = computed(() =>
   users.value.filter((u) => {
@@ -671,10 +797,84 @@ const filteredUsers = computed(() =>
 )
 
 // --- API ---
+const fetchSitesAndDepartments = async () => {
+  try {
+    const token = localStorage.getItem('access_token')
+    const companyId = localStorage.getItem('selectedCompany')
+
+    if (!token || !companyId) {
+      console.warn('No token or company found, using mock data for sites/departments/positions')
+      sites.value = [
+        { id: 1, name: 'Main Office' },
+        { id: 2, name: 'Branch 1' },
+        { id: 3, name: 'Branch 2' },
+      ]
+      departments.value = [
+        { id: 1, name: 'Sales' },
+        { id: 2, name: 'Operations' },
+        { id: 3, name: 'Management' },
+      ]
+      positions.value = [
+        { id: 1, name: 'Cashier' },
+        { id: 2, name: 'Manager' },
+        { id: 3, name: 'Staff' },
+      ]
+      return
+    }
+
+    // Fetch sites
+    const sitesRes = await axios.get(
+      `https://staging.wageyapp.com/organization/sites/?company=${companyId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    sites.value = sitesRes.data.results || sitesRes.data || []
+
+    // Fetch departments
+    const deptsRes = await axios.get(
+      `https://staging.wageyapp.com/organization/departments/?company=${companyId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    departments.value = deptsRes.data.results || deptsRes.data || []
+
+    // Fetch positions
+    const positionsRes = await axios.get(
+      `https://staging.wageyapp.com/user/positions/?company=${companyId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    positions.value = positionsRes.data.results || positionsRes.data || []
+
+    console.log('Sites loaded:', sites.value.length)
+    console.log('Departments loaded:', departments.value.length)
+    console.log('Positions loaded:', positions.value.length)
+  } catch (e) {
+    console.error('Failed to fetch sites/departments/positions:', e.response?.data || e.message)
+    // Fallback to mock data
+    sites.value = [
+      { id: 1, name: 'Main Office' },
+      { id: 2, name: 'Branch 1' },
+    ]
+    departments.value = [
+      { id: 1, name: 'Sales' },
+      { id: 2, name: 'Operations' },
+    ]
+    positions.value = [
+      { id: 1, name: 'Cashier' },
+      { id: 2, name: 'Manager' },
+      { id: 3, name: 'Staff' },
+    ]
+  }
+}
+
 const fetchData = async () => {
   try {
     const token = localStorage.getItem('access_token')
-    const companyId = localStorage.getItem('selectedCompany') // make sure you store this somewhere!
+    const companyId = localStorage.getItem('selectedCompany')
 
     if (!token) {
       console.warn('No token found, using mock data')
@@ -684,9 +884,36 @@ const fetchData = async () => {
         { id: 3, name: 'Bob Johnson', avatar: 'https://cdn.quasar.dev/img/avatar3.png' },
       ]
       shifts.value = [
-        { id: 1, userId: 1, day: 0, startTime: '09:00', endTime: '17:00', position: 'Manager' },
-        { id: 2, userId: 2, day: 0, startTime: '10:00', endTime: '18:00', position: 'Cashier' },
-        { id: 3, userId: 1, day: 2, startTime: '08:00', endTime: '16:00', position: 'Manager' },
+        {
+          id: 1,
+          userId: 1,
+          day: 0,
+          startTime: '09:00',
+          endTime: '17:00',
+          position: 1,
+          site: 1,
+          department: 1,
+        },
+        {
+          id: 2,
+          userId: 2,
+          day: 0,
+          startTime: '10:00',
+          endTime: '18:00',
+          position: 2,
+          site: 1,
+          department: 2,
+        },
+        {
+          id: 3,
+          userId: 1,
+          day: 2,
+          startTime: '08:00',
+          endTime: '16:00',
+          position: 1,
+          site: 2,
+          department: 1,
+        },
       ]
       return
     }
@@ -724,9 +951,9 @@ const fetchData = async () => {
           day: mapDateToDayIdx(s.date),
           startTime: s.actual_start_time,
           endTime: s.actual_end_time,
-          site: s.site_name,
-          department: s.department_name,
-          position: s.department_name,
+          site: s.site,
+          department: s.department,
+          position: s.position,
         })),
     )
   } catch (e) {
@@ -745,7 +972,10 @@ const fetchData = async () => {
   }
 }
 
-onMounted(fetchData)
+onMounted(() => {
+  fetchSitesAndDepartments()
+  fetchData()
+})
 
 // --- Helpers ---
 const getShifts = (employeeId, dayIdx) =>
@@ -757,19 +987,71 @@ const getEmployeeName = (id) => users.value.find((u) => u.id === id)?.name || 'U
 
 // --- Actions ---
 const openAddModal = () => {
-  newSchedule.value = { userId: null, day: null, startTime: '', endTime: '', position: '' }
+  newSchedule.value = {
+    userId: null,
+    day: null,
+    startTime: '',
+    endTime: '',
+    position: '',
+    site: null,
+    department: null,
+  }
   addConflictWarning.value = false
   showAddModal.value = true
 }
+
 const closeAddModal = () => (showAddModal.value = false)
-const addSchedule = () => {
+
+const addSchedule = async () => {
   const n = newSchedule.value
-  if (!n.userId && n.userId !== 0) return
-  if (n.day == null) return
-  if (!isValidTime(n.startTime) || !isValidTime(n.endTime)) return
-  const id = Date.now()
-  shifts.value.push({ id, ...n })
-  showAddModal.value = false
+  if (!n.day || !isValidTime(n.startTime) || !isValidTime(n.endTime)) return
+
+  try {
+    const token = localStorage.getItem('access_token')
+    const companyId = localStorage.getItem('selectedCompany')
+
+    if (!token || !companyId) {
+      console.warn('Missing auth token or company, adding locally only')
+      return
+    }
+
+    const today = new Date().toISOString().split('T')[0] // e.g. "2025-10-09"
+
+    // Format time as HH:MM:SS (API expects this format)
+    const startTime = `${n.startTime}:00`
+    const endTime = `${n.endTime}:00`
+
+    const payload = {
+      company: parseInt(companyId),
+      name: `Schedule for ${getEmployeeName(n.userId)} - ${days[n.day]}`,
+      shift_type: 1, // You may adjust this based on your backend enum
+      start_date: today,
+      end_date: today,
+      start_time: startTime,
+      end_time: endTime,
+      weekdays: days[n.day],
+      repeat_interval: 7, // weekly
+      targets: [
+        {
+          site: n.site,
+          department: n.department,
+        },
+      ],
+    }
+
+    const res = await axios.post(
+      'https://staging.wageyapp.com/organization/recurring-schedules/',
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    console.log('✅ Schedule created successfully:', res.data)
+    showAddModal.value = false
+    fetchData()
+  } catch (e) {
+    console.error('❌ Failed to create schedule:', e.response?.data || e.message)
+    alert('Failed to create schedule. Please try again.')
+  }
 }
 
 const openEditModal = (schedule) => {
@@ -777,31 +1059,140 @@ const openEditModal = (schedule) => {
   editConflictWarning.value = false
   showEditModal.value = true
 }
+
 const closeEditModal = () => (showEditModal.value = false)
-const updateSchedule = () => {
+
+const updateSchedule = async () => {
   const es = editingSchedule.value
-  const idx = shifts.value.findIndex((s) => s.id === es.id)
-  if (idx !== -1) shifts.value[idx] = { ...es }
-  showEditModal.value = false
+  if (!es.id) return
+
+  try {
+    const token = localStorage.getItem('access_token')
+    const companyId = localStorage.getItem('selectedCompany')
+
+    if (!token || !companyId) {
+      console.warn('Missing auth token or company, updating locally only')
+      const idx = shifts.value.findIndex((s) => s.id === es.id)
+      if (idx !== -1) shifts.value[idx] = { ...es }
+      showEditModal.value = false
+      return
+    }
+
+    const payload = {
+      employee: es.userId,
+      company: parseInt(companyId),
+      day_of_week: es.day,
+      start_time: es.startTime,
+      end_time: es.endTime,
+      position: es.position,
+      site: es.site,
+      department: es.department,
+      is_active: true,
+    }
+
+    await axios.put(
+      `https://staging.wageyapp.com/organization/recurring-schedules/${es.id}/`,
+      payload,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+
+    const idx = shifts.value.findIndex((s) => s.id === es.id)
+    if (idx !== -1) shifts.value[idx] = { ...es }
+
+    showEditModal.value = false
+    console.log('Schedule updated successfully')
+  } catch (e) {
+    console.error('Failed to update schedule:', e.response?.data || e.message)
+    alert('Failed to update schedule. Please try again.')
+  }
 }
 
-const deleteShift = (id) => {
-  shifts.value = shifts.value.filter((s) => s.id !== id)
+const deleteShift = async (id) => {
+  try {
+    const token = localStorage.getItem('access_token')
+
+    if (!token) {
+      console.warn('Missing auth token, deleting locally only')
+      shifts.value = shifts.value.filter((s) => s.id !== id)
+      return
+    }
+
+    await axios.delete(`https://staging.wageyapp.com/organization/recurring-schedules/${id}/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    shifts.value = shifts.value.filter((s) => s.id !== id)
+    console.log('Schedule deleted successfully')
+  } catch (e) {
+    console.error('Failed to delete schedule:', e.response?.data || e.message)
+    alert('Failed to delete schedule. Please try again.')
+  }
 }
 
 const openQuickAddModal = (userId, dayIdx) => {
-  quickAdd.value = { userId, day: dayIdx, startTime: '', endTime: '', position: '' }
+  quickAdd.value = {
+    userId,
+    day: dayIdx,
+    startTime: '',
+    endTime: '',
+    position: '',
+    site: null,
+    department: null,
+  }
   showQuickAddModal.value = true
 }
+
 const closeQuickAddModal = () => (showQuickAddModal.value = false)
-const quickAddSchedule = () => {
+
+const quickAddSchedule = async () => {
   const q = quickAdd.value
-  if (!q.userId && q.userId !== 0) return
-  if (q.day == null) return
-  if (!isValidTime(q.startTime) || !isValidTime(q.endTime)) return
-  const id = Date.now()
-  shifts.value.push({ id, ...q })
-  showQuickAddModal.value = false
+  if (!q.day || !isValidTime(q.startTime) || !isValidTime(q.endTime)) return
+
+  try {
+    const token = localStorage.getItem('access_token')
+    const companyId = localStorage.getItem('selectedCompany')
+
+    if (!token || !companyId) {
+      console.warn('Missing auth token or company, adding locally only')
+      return
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+    const startIso = `${today}T${q.startTime}:00Z`
+    const endIso = `${today}T${q.endTime}:00Z`
+
+    const payload = {
+      name: `Quick Schedule - ${getEmployeeName(q.userId)} (${days[q.day]})`,
+      shift_type: 1,
+      start_date: today,
+      end_date: today,
+      start_time: startIso,
+      end_time: endIso,
+      weekdays: days[q.day],
+      repeat_interval: 7,
+      targets: [
+        {
+          site: q.site,
+          department: q.department,
+        },
+      ],
+    }
+
+    const res = await axios.post(
+      'https://staging.wageyapp.com/organization/recurring-schedules/',
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    console.log('✅ Quick schedule created successfully:', res.data)
+    showQuickAddModal.value = false
+    fetchData()
+  } catch (e) {
+    console.error('❌ Failed to create quick schedule:', e.response?.data || e.message)
+    alert('Failed to create schedule. Please try again.')
+  }
 }
 
 // --- Drag and drop ---
