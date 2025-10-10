@@ -127,7 +127,6 @@ const showErrorNotification = (message) => {
     position: 'top',
     timeout: 3000,
     icon: 'error_outline',
-    classes: 'modern-notification',
   })
 }
 
@@ -138,7 +137,6 @@ const showSuccessNotification = (message) => {
     position: 'top',
     timeout: 2000,
     icon: 'check_circle',
-    classes: 'modern-notification',
   })
 }
 
@@ -147,6 +145,7 @@ const handleLogin = async () => {
   isSubmitting.value = true
 
   try {
+    // 🔹 Step 1: Login
     const loginPayload = {
       username: formData.value.username,
       password: formData.value.password,
@@ -157,26 +156,56 @@ const handleLogin = async () => {
       loginPayload,
     )
 
-    const loginData = loginResponse.data
-    const token = loginData.token || loginData.access_token || loginData.access
-
-    if (!token) {
-      showErrorNotification('Login succeeded but no token received.')
+    const { access, refresh } = loginResponse.data
+    if (!access) {
+      showErrorNotification('Login succeeded but no access token received.')
       return
     }
 
-    // ✅ Save token
-    authStore.setToken(token)
-    localStorage.setItem('authToken', token)
+    // 🔹 Step 2: Save tokens
+    authStore.setToken(access)
+    localStorage.setItem('access_token', access)
+    localStorage.setItem('refresh_token', refresh)
 
-    // ✅ Save user info
-    if (loginData.user) {
-      localStorage.setItem('user_id', loginData.user.id)
-      localStorage.setItem('selectedCompany', loginData.user.company)
+    // 🔹 Step 3: Fetch current user info (temporary company ID)
+    const companyId = 2
+    const userResponse = await axios.get(
+      `https://staging.wageyapp.com/user/current-user/${companyId}/`,
+      {
+        headers: { Authorization: `Bearer ${access}` },
+      },
+    )
+
+    console.log('🧩 userResponse.data:', userResponse.data)
+
+    const profile = userResponse.data?.profile
+    const accountUuid = profile?.id // 👈 This is your UUID (b2c56ecd-8250-4d8a-81fa-0227113ae14e)
+    const userId = profile?.user?.id // numeric internal user ID if needed
+
+    if (!accountUuid) {
+      console.warn('⚠️ No UUID found in user data:', userResponse.data)
+      showErrorNotification('Failed to get account UUID after login.')
+      return
     }
+
+    // 🔹 Step 4: Store data locally
+    localStorage.setItem('account_uuid', accountUuid)
+    localStorage.setItem('user_id', userId)
+    localStorage.setItem('company_id', companyId)
+
+    // Also store in Pinia
+    authStore.setAuth(access, {
+      uuid: accountUuid,
+      userId: userId,
+      companyId: companyId,
+    })
+
+    console.log('✅ Stored UUID:', accountUuid)
+    console.log('✅ Stored user ID:', userId)
 
     showSuccessNotification('Login successful!')
 
+    // 🔹 Step 5: Redirect
     const redirectPath = route.query.redirect || '/dashboard'
     router.push(redirectPath)
   } catch (error) {
@@ -190,8 +219,6 @@ const handleLogin = async () => {
     isSubmitting.value = false
   }
 }
-
-// Social login placeholders - removed
 
 const goToForgotPassword = () => router.push('/forgot-password')
 const goToRegister = () => router.push('/register')
