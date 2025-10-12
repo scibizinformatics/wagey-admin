@@ -456,6 +456,7 @@ function openDetails(request) {
 }
 
 // ✅ approve request
+// ✅ approve request
 const approveRequest = async (request) => {
   try {
     actionLoading.value = `approve-${request.id}`
@@ -463,12 +464,16 @@ const approveRequest = async (request) => {
     const token = localStorage.getItem('access_token')
     if (!token) throw new Error('No access token found')
 
-    await axios.patch(
-      `https://staging.wageyapp.com/attendance/admin-requests/${request.id}/`,
-      {
-        status: 'approved',
-        admin_response: 'Request approved',
-      },
+    const payload = {
+      type: request.type,
+      status: 'approve',
+      action: 'approve',
+      convert_to_cto: false,
+    }
+
+    await axios.put(
+      `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
+      payload,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -485,7 +490,7 @@ const approveRequest = async (request) => {
 
     $q.notify({
       type: 'positive',
-      message: `Request approved successfully`,
+      message: 'Request approved successfully',
       icon: 'check_circle',
     })
   } catch (e) {
@@ -508,12 +513,16 @@ const rejectRequest = async (request) => {
     const token = localStorage.getItem('access_token')
     if (!token) throw new Error('No access token found')
 
-    await axios.patch(
-      `https://staging.wageyapp.com/attendance/admin-requests/${request.id}/`,
-      {
-        status: 'rejected',
-        admin_response: 'Request rejected',
-      },
+    const payload = {
+      type: request.type,
+      status: 'reject',
+      action: 'reject',
+      convert_to_cto: false,
+    }
+
+    await axios.put(
+      `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
+      payload,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -530,7 +539,7 @@ const rejectRequest = async (request) => {
 
     $q.notify({
       type: 'negative',
-      message: `Request rejected successfully`,
+      message: 'Request rejected successfully',
       icon: 'cancel',
     })
   } catch (e) {
