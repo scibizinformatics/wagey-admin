@@ -649,24 +649,35 @@
 </template>
 
 <script setup>
+/* Complete script setup that matches your template exactly.
+   - Unified createSchedule used by Add Schedule and Quick Add
+   - All functions/refs used by template are present
+   - No unused vars to satisfy eslint
+*/
+
 import { ref, computed, onMounted } from 'vue'
+import { useQuasar } from 'quasar'
 import axios from 'axios'
 import draggable from 'vuedraggable'
 
-// --- State ---
+const $q = useQuasar()
+
+// --- State (names match template) ---
 const users = ref([]) // employees
-const shifts = ref([]) // schedules
+const shifts = ref([]) // schedule items
 const positions = ref([]) // company positions
 const sites = ref([]) // company sites
 const departments = ref([]) // company departments
-const viewMode = ref('table')
 
+const viewMode = ref('table')
 const filters = ref({ position: 'All', employee: null })
 const searchQuery = ref('')
 
+// Days
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const dayOptions = days.map((d, i) => ({ label: d, value: i }))
 
+// Modals and forms (names match template)
 const showAddModal = ref(false)
 const showEditModal = ref(false)
 const showQuickAddModal = ref(false)
@@ -705,7 +716,7 @@ const quickAdd = ref({
 const addConflictWarning = ref(false)
 const editConflictWarning = ref(false)
 
-// --- Week helpers ---
+// --- Week helpers (keeps your original behavior) ---
 const getWeekRange = (date = new Date()) => {
   const d = new Date(date)
   const day = d.getDay() // 0=Sun … 6=Sat
@@ -761,7 +772,7 @@ const getPositionName = (positionId) => {
   return position?.name || positionId
 }
 
-// --- Summaries ---
+// --- Summaries (used in template) ---
 const totalShifts = computed(() => shifts.value.length)
 const activeEmployees = computed(() => new Set(shifts.value.map((s) => s.userId)).size)
 const positionsCount = computed(() => new Set(shifts.value.map((s) => s.position)).size)
@@ -775,7 +786,7 @@ const weekHours = computed(() =>
   }, 0),
 )
 
-// --- Options / filters ---
+// --- Options / filters (names used by template) ---
 const userOptions = computed(() => users.value.map((u) => ({ label: u.name, value: u.id })))
 const positionOptions = computed(() => positions.value.map((p) => ({ label: p.name, value: p.id })))
 const siteOptions = computed(() => sites.value.map((s) => ({ label: s.name, value: s.id })))
@@ -796,14 +807,14 @@ const filteredUsers = computed(() =>
   }),
 )
 
-// --- API ---
+// --- API: fetch sites/departments/positions (keeps your original fallback logic) ---
 const fetchSitesAndDepartments = async () => {
   try {
     const token = localStorage.getItem('access_token')
     const companyId = localStorage.getItem('selectedCompany')
 
     if (!token || !companyId) {
-      console.warn('No token or company found, using mock data for sites/departments/positions')
+      // fallback mock data
       sites.value = [
         { id: 1, name: 'Main Office' },
         { id: 2, name: 'Branch 1' },
@@ -822,39 +833,24 @@ const fetchSitesAndDepartments = async () => {
       return
     }
 
-    // Fetch sites
-    const sitesRes = await axios.get(
-      `https://staging.wageyapp.com/organization/sites/?company=${companyId}`,
-      {
+    const [sitesRes, deptsRes, positionsRes] = await Promise.all([
+      axios.get(`https://staging.wageyapp.com/organization/sites/?company=${companyId}`, {
         headers: { Authorization: `Bearer ${token}` },
-      },
-    )
+      }),
+      axios.get(`https://staging.wageyapp.com/organization/departments/?company=${companyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      axios.get(`https://staging.wageyapp.com/user/positions/?company=${companyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+
     sites.value = sitesRes.data.results || sitesRes.data || []
-
-    // Fetch departments
-    const deptsRes = await axios.get(
-      `https://staging.wageyapp.com/organization/departments/?company=${companyId}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
     departments.value = deptsRes.data.results || deptsRes.data || []
-
-    // Fetch positions
-    const positionsRes = await axios.get(
-      `https://staging.wageyapp.com/user/positions/?company=${companyId}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
     positions.value = positionsRes.data.results || positionsRes.data || []
-
-    console.log('Sites loaded:', sites.value.length)
-    console.log('Departments loaded:', departments.value.length)
-    console.log('Positions loaded:', positions.value.length)
   } catch (e) {
     console.error('Failed to fetch sites/departments/positions:', e.response?.data || e.message)
-    // Fallback to mock data
+    // fallback
     sites.value = [
       { id: 1, name: 'Main Office' },
       { id: 2, name: 'Branch 1' },
@@ -871,13 +867,14 @@ const fetchSitesAndDepartments = async () => {
   }
 }
 
+// --- API: fetchData (matches template API usage) ---
 const fetchData = async () => {
   try {
     const token = localStorage.getItem('access_token')
     const companyId = localStorage.getItem('selectedCompany')
 
     if (!token) {
-      console.warn('No token found, using mock data')
+      // fallback mock users & shifts
       users.value = [
         { id: 1, name: 'John Doe', avatar: 'https://cdn.quasar.dev/img/avatar.png' },
         { id: 2, name: 'Jane Smith', avatar: 'https://cdn.quasar.dev/img/avatar2.png' },
@@ -925,9 +922,7 @@ const fetchData = async () => {
 
     const res = await axios.get(
       `https://staging.wageyapp.com/organization/schedules/company/monthly/?company=${companyId}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
+      { headers: { Authorization: `Bearer ${token}` } },
     )
 
     const employeesData = res.data || []
@@ -972,12 +967,13 @@ const fetchData = async () => {
   }
 }
 
+// Run initial fetches
 onMounted(() => {
   fetchSitesAndDepartments()
   fetchData()
 })
 
-// --- Helpers ---
+// --- Helpers used by template ---
 const getShifts = (employeeId, dayIdx) =>
   shifts.value.filter((shift) => shift.userId === employeeId && shift.day === dayIdx)
 
@@ -985,7 +981,127 @@ const getDayShiftCount = (dayIdx) => shifts.value.filter((s) => s.day === dayIdx
 const getUserShiftCount = (userId) => shifts.value.filter((s) => s.userId === userId).length
 const getEmployeeName = (id) => users.value.find((u) => u.id === id)?.name || 'Unknown'
 
-// --- Actions ---
+// --- Actions & Unified createSchedule (both Add and Quick Add use it) ---
+// --- Unified createSchedule (accepts day 0) ---
+const createSchedule = async (n = { isQuick: false }) => {
+  // n: schedule object (newSchedule.value or quickAdd.value)
+  // Validate day properly (allow 0)
+  if (n.day === null || n.day === undefined) {
+    $q.notify({ type: 'negative', message: 'Please select a day.' })
+    return
+  }
+  if (!isValidTime(n.startTime) || !isValidTime(n.endTime)) {
+    $q.notify({ type: 'negative', message: 'Please provide valid start/end times (HH:MM).' })
+    return
+  }
+
+  try {
+    const token = localStorage.getItem('access_token')
+    const companyId = localStorage.getItem('selectedCompany')
+
+    if (!token || !companyId) {
+      // Local fallback: insert locally for immediate feedback
+      const id = Math.max(0, ...shifts.value.map((s) => s.id || 0)) + 1
+      shifts.value.push({
+        id,
+        userId: n.userId,
+        day: n.day,
+        startTime: n.startTime,
+        endTime: n.endTime,
+        position: n.position,
+        site: n.site,
+        department: n.department,
+      })
+      $q.notify({ type: 'positive', message: 'Schedule added (local)' })
+      console.log('Local schedule added', shifts.value[shifts.value.length - 1])
+      return shifts.value[shifts.value.length - 1]
+    }
+
+    // server payload (adjust if backend requires ISO datetimes)
+    const today = new Date().toISOString().split('T')[0]
+    const payload = {
+      company: parseInt(companyId),
+      name: `Schedule for ${getEmployeeName(n.userId)} - ${days[n.day]}`,
+      shift_type: 1,
+      start_date: today,
+      end_date: today,
+      start_time: `${n.startTime}:00`,
+      end_time: `${n.endTime}:00`,
+      weekdays: days[n.day],
+      repeat_interval: 7,
+      targets: [{ site: n.site, department: n.department }],
+    }
+
+    const res = await axios.post(
+      'https://staging.wageyapp.com/organization/recurring-schedules/',
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    $q.notify({ type: 'positive', message: 'Schedule created successfully' })
+    console.log('Server response createSchedule:', res.data)
+    return res.data
+  } catch (e) {
+    console.error('Failed to create schedule:', e.response?.data || e.message)
+    $q.notify({ type: 'negative', message: 'Failed to create schedule' })
+    throw e
+  }
+}
+
+// --- Add Schedule (main modal) ---
+const addSchedule = async () => {
+  const n = newSchedule.value
+  // Allow day = 0 (explicit null/undefined check)
+  if (n.userId == null || n.day === null || n.day === undefined) {
+    addConflictWarning.value = false
+    $q.notify({ type: 'negative', message: 'Please select employee and day.' })
+    return
+  }
+
+  // duplicate check (works with day 0)
+  const exists = shifts.value.some((s) => s.userId === n.userId && s.day === n.day)
+  if (exists) {
+    addConflictWarning.value = true
+    return
+  }
+
+  try {
+    await createSchedule(n)
+    showAddModal.value = false
+    fetchData()
+  } catch {
+    // createSchedule already notifies
+  }
+}
+
+// --- Quick Add Shift (calls same create function) ---
+const quickAddSchedule = async () => {
+  const q = quickAdd.value
+  if (q.userId == null || q.day === null || q.day === undefined) {
+    $q.notify({ type: 'negative', message: 'Please select employee and day.' })
+    return
+  }
+  if (!isValidTime(q.startTime) || !isValidTime(q.endTime)) {
+    $q.notify({ type: 'negative', message: 'Please provide valid start/end times (HH:MM).' })
+    return
+  }
+
+  const exists = shifts.value.some((s) => s.userId === q.userId && s.day === q.day)
+  if (exists) {
+    $q.notify({ type: 'warning', message: 'This employee already has a shift on this day.' })
+    return
+  }
+
+  try {
+    await createSchedule(q, { isQuick: true })
+    showQuickAddModal.value = false
+    fetchData()
+  } catch {
+    // handled inside createSchedule
+  }
+}
+
+// --- Edit / Update ---
 const openAddModal = () => {
   newSchedule.value = {
     userId: null,
@@ -1002,59 +1118,8 @@ const openAddModal = () => {
 
 const closeAddModal = () => (showAddModal.value = false)
 
-const addSchedule = async () => {
-  const n = newSchedule.value
-  if (!n.day || !isValidTime(n.startTime) || !isValidTime(n.endTime)) return
-
-  try {
-    const token = localStorage.getItem('access_token')
-    const companyId = localStorage.getItem('selectedCompany')
-
-    if (!token || !companyId) {
-      console.warn('Missing auth token or company, adding locally only')
-      return
-    }
-
-    const today = new Date().toISOString().split('T')[0] // e.g. "2025-10-09"
-
-    // Format time as HH:MM:SS (API expects this format)
-    const startTime = `${n.startTime}:00`
-    const endTime = `${n.endTime}:00`
-
-    const payload = {
-      company: parseInt(companyId),
-      name: `Schedule for ${getEmployeeName(n.userId)} - ${days[n.day]}`,
-      shift_type: 1, // You may adjust this based on your backend enum
-      start_date: today,
-      end_date: today,
-      start_time: startTime,
-      end_time: endTime,
-      weekdays: days[n.day],
-      repeat_interval: 7, // weekly
-      targets: [
-        {
-          site: n.site,
-          department: n.department,
-        },
-      ],
-    }
-
-    const res = await axios.post(
-      'https://staging.wageyapp.com/organization/recurring-schedules/',
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-
-    console.log('✅ Schedule created successfully:', res.data)
-    showAddModal.value = false
-    fetchData()
-  } catch (e) {
-    console.error('❌ Failed to create schedule:', e.response?.data || e.message)
-    alert('Failed to create schedule. Please try again.')
-  }
-}
-
 const openEditModal = (schedule) => {
+  // schedule originates from getShifts() or table; make sure shapes align
   editingSchedule.value = { ...schedule }
   editConflictWarning.value = false
   showEditModal.value = true
@@ -1071,7 +1136,7 @@ const updateSchedule = async () => {
     const companyId = localStorage.getItem('selectedCompany')
 
     if (!token || !companyId) {
-      console.warn('Missing auth token or company, updating locally only')
+      // update locally
       const idx = shifts.value.findIndex((s) => s.id === es.id)
       if (idx !== -1) shifts.value[idx] = { ...es }
       showEditModal.value = false
@@ -1093,29 +1158,27 @@ const updateSchedule = async () => {
     await axios.put(
       `https://staging.wageyapp.com/organization/recurring-schedules/${es.id}/`,
       payload,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
+      { headers: { Authorization: `Bearer ${token}` } },
     )
 
     const idx = shifts.value.findIndex((s) => s.id === es.id)
     if (idx !== -1) shifts.value[idx] = { ...es }
 
     showEditModal.value = false
-    console.log('Schedule updated successfully')
+    $q.notify({ type: 'positive', message: 'Schedule updated' })
   } catch (e) {
     console.error('Failed to update schedule:', e.response?.data || e.message)
-    alert('Failed to update schedule. Please try again.')
+    $q.notify({ type: 'negative', message: 'Failed to update schedule' })
   }
 }
 
+// --- Delete ---
 const deleteShift = async (id) => {
   try {
     const token = localStorage.getItem('access_token')
-
     if (!token) {
-      console.warn('Missing auth token, deleting locally only')
       shifts.value = shifts.value.filter((s) => s.id !== id)
+      $q.notify({ type: 'positive', message: 'Shift removed (local)' })
       return
     }
 
@@ -1124,13 +1187,14 @@ const deleteShift = async (id) => {
     })
 
     shifts.value = shifts.value.filter((s) => s.id !== id)
-    console.log('Schedule deleted successfully')
+    $q.notify({ type: 'positive', message: 'Schedule deleted successfully' })
   } catch (e) {
     console.error('Failed to delete schedule:', e.response?.data || e.message)
-    alert('Failed to delete schedule. Please try again.')
+    $q.notify({ type: 'negative', message: 'Failed to delete schedule' })
   }
 }
 
+// --- Quick Add helpers ---
 const openQuickAddModal = (userId, dayIdx) => {
   quickAdd.value = {
     userId,
@@ -1143,67 +1207,23 @@ const openQuickAddModal = (userId, dayIdx) => {
   }
   showQuickAddModal.value = true
 }
-
 const closeQuickAddModal = () => (showQuickAddModal.value = false)
 
-const quickAddSchedule = async () => {
-  const q = quickAdd.value
-  if (!q.day || !isValidTime(q.startTime) || !isValidTime(q.endTime)) return
-
-  try {
-    const token = localStorage.getItem('access_token')
-    const companyId = localStorage.getItem('selectedCompany')
-
-    if (!token || !companyId) {
-      console.warn('Missing auth token or company, adding locally only')
-      return
-    }
-
-    const today = new Date().toISOString().split('T')[0]
-    const startIso = `${today}T${q.startTime}:00Z`
-    const endIso = `${today}T${q.endTime}:00Z`
-
-    const payload = {
-      name: `Quick Schedule - ${getEmployeeName(q.userId)} (${days[q.day]})`,
-      shift_type: 1,
-      start_date: today,
-      end_date: today,
-      start_time: startIso,
-      end_time: endIso,
-      weekdays: days[q.day],
-      repeat_interval: 7,
-      targets: [
-        {
-          site: q.site,
-          department: q.department,
-        },
-      ],
-    }
-
-    const res = await axios.post(
-      'https://staging.wageyapp.com/organization/recurring-schedules/',
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-
-    console.log('✅ Quick schedule created successfully:', res.data)
-    showQuickAddModal.value = false
-    fetchData()
-  } catch (e) {
-    console.error('❌ Failed to create quick schedule:', e.response?.data || e.message)
-    alert('Failed to create schedule. Please try again.')
-  }
-}
-
-// --- Drag and drop ---
+// --- Drag & drop ---
 const onAdd = (event, userId, dayIdx) => {
+  // stub — you can implement API update when dragging to another user/day
   console.log('Shift moved', { event, userId, dayIdx })
 }
 
-// --- Filters / export ---
-const applyFilters = () => {}
+// --- Filters / export / applyFilters (template uses applyFilters and exportSchedule) ---
+const applyFilters = () => {
+  // No-op because filteredUsers is computed. Keep this so template calls don't error.
+  // You can extend this to fetch server-side filtered results if desired.
+}
+
 const exportSchedule = () => {
   console.log('Exporting schedule...', shifts.value)
+  // implement CSV/Excel export if needed
 }
 </script>
 
