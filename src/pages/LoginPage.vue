@@ -1,97 +1,96 @@
 <template>
-  <q-page class="flex flex-center bg-white">
-    <div class="login-container">
-      <!-- Header with Logo/Branding -->
-      <div class="text-center q-mb-lg">
-        <div class="brand-logo q-mb-sm">
-          <q-icon name="diamond" size="28px" color="primary" />
+  <q-page class="auth-page">
+    <div class="auth-container">
+      <!-- Left Side - Login Form -->
+      <div class="form-section">
+        <div class="form-content">
+          <!-- Header -->
+          <div class="form-header">
+            <img src="../assets/wagey_logo.png" alt="Logo" class="brand-logo" />
+            <h1 class="form-title">Sign In</h1>
+            <p class="form-subtitle">Welcome back! Please enter your details</p>
+          </div>
+          <!-- Login Form -->
+          <q-form @submit="handleLogin" class="login-form">
+            <div class="input-group">
+              <label class="input-label">Email</label>
+              <q-input
+                v-model="formData.username"
+                outlined
+                placeholder="Enter your email"
+                lazy-rules
+                :rules="[(val) => !!val || 'Email is required']"
+                autocomplete="username"
+                class="custom-input"
+                hide-bottom-space
+              >
+                <template v-slot:prepend>
+                  <q-icon name="email" size="20px" class="input-icon" />
+                </template>
+              </q-input>
+            </div>
+
+            <div class="input-group">
+              <label class="input-label">Password</label>
+              <q-input
+                v-model="formData.password"
+                outlined
+                :type="showPassword ? 'text' : 'password'"
+                placeholder="Enter your password"
+                lazy-rules
+                :rules="[(val) => !!val || 'Password is required']"
+                autocomplete="current-password"
+                class="custom-input"
+                hide-bottom-space
+              >
+                <template v-slot:prepend>
+                  <q-icon name="lock" size="20px" class="input-icon" />
+                </template>
+                <template v-slot:append>
+                  <q-icon
+                    :name="showPassword ? 'visibility_off' : 'visibility'"
+                    class="cursor-pointer toggle-password"
+                    @click="showPassword = !showPassword"
+                  />
+                </template>
+              </q-input>
+            </div>
+
+            <div class="form-options">
+              <q-checkbox
+                v-model="formData.rememberMe"
+                label="Remember me"
+                class="remember-checkbox"
+              />
+              <a href="#" @click.prevent="goToForgotPassword" class="forgot-link">
+                Forget Your Password?
+              </a>
+            </div>
+
+            <q-btn
+              type="submit"
+              class="submit-btn"
+              unelevated
+              no-caps
+              :loading="isSubmitting"
+              :disable="!isFormValid"
+            >
+              SIGN IN
+            </q-btn>
+          </q-form>
         </div>
-        <h2 class="login-title text-weight-light text-grey-9 q-ma-none q-mb-xs">Sign In</h2>
-        <p class="login-subtitle text-grey-6 q-ma-none">Sign in to stay connected</p>
       </div>
 
-      <!-- Login Form -->
-      <q-form @submit="handleLogin" class="login-form">
-        <!-- Email Input -->
-        <div class="q-mb-md">
-          <label class="input-label text-grey-7 text-weight-medium">Email</label>
-          <q-input
-            v-model="formData.username"
-            outlined
-            placeholder="Enter your email"
-            lazy-rules
-            :rules="[(val) => !!val || 'Email is required']"
-            autocomplete="username"
-            class="modern-input"
-            hide-bottom-space
-          />
+      <!-- Right Side - Welcome Panel -->
+      <div class="welcome-section">
+        <div class="welcome-background">
+          <img src="../assets/wiggly.svg" alt="Welcome" class="background-image" />
         </div>
-
-        <!-- Password Input -->
-        <div class="q-mb-md">
-          <label class="input-label text-grey-7 text-weight-medium">Password</label>
-          <q-input
-            v-model="formData.password"
-            outlined
-            :type="showPassword ? 'text' : 'password'"
-            placeholder="Enter your password"
-            lazy-rules
-            :rules="[(val) => !!val || 'Password is required']"
-            autocomplete="current-password"
-            class="modern-input"
-            hide-bottom-space
-          >
-            <template v-slot:append>
-              <q-icon
-                :name="showPassword ? 'visibility_off' : 'visibility'"
-                class="cursor-pointer text-grey-5"
-                @click="showPassword = !showPassword"
-              />
-            </template>
-          </q-input>
+        <div class="welcome-overlay"></div>
+        <div class="welcome-content">
+          <h2 class="welcome-title">Welcome to Wagey</h2>
+          <p class="welcome-text">Manage your workforce efficiently and securely</p>
         </div>
-
-        <!-- Options Row -->
-        <div class="row justify-between items-center q-mb-lg">
-          <q-checkbox
-            v-model="formData.rememberMe"
-            label="Remember me?"
-            class="remember-checkbox text-grey-7"
-          />
-          <q-btn
-            flat
-            no-caps
-            color="primary"
-            label="Forgot Password?"
-            @click="goToForgotPassword"
-            class="forgot-btn"
-          />
-        </div>
-
-        <!-- Sign In Button -->
-        <q-btn
-          type="submit"
-          color="primary"
-          label="Sign in"
-          class="full-width sign-in-btn"
-          unelevated
-          no-caps
-          :loading="isSubmitting"
-          :disable="!isFormValid"
-        />
-      </q-form>
-
-      <!-- Sign Up Link -->
-      <div class="text-center q-mt-lg">
-        <span class="text-grey-6">Don't have an account? </span>
-        <q-btn
-          flat
-          no-caps
-          color="primary"
-          label="Click here to sign up."
-          @click="goToRegister"
-          class="signup-link"
-        />
       </div>
     </div>
   </q-page>
@@ -145,7 +144,6 @@ const handleLogin = async () => {
   isSubmitting.value = true
 
   try {
-    // 🔹 Step 1: Login
     const loginPayload = {
       username: formData.value.username,
       password: formData.value.password,
@@ -162,56 +160,54 @@ const handleLogin = async () => {
       return
     }
 
-    // 🔹 Step 2: Save tokens
     authStore.setToken(access)
     localStorage.setItem('access_token', access)
     localStorage.setItem('refresh_token', refresh)
 
-    // 🔹 Step 3: Fetch current user info (temporary company ID)
-    const companyId = 2
-    const userResponse = await axios.get(
-      `https://staging.wageyapp.com/user/current-user/${companyId}/`,
+    const companiesResponse = await axios.get(
+      'https://staging.wageyapp.com/user/current-user-companies/',
       {
         headers: { Authorization: `Bearer ${access}` },
       },
     )
 
-    console.log('🧩 userResponse.data:', userResponse.data)
+    const companiesData = companiesResponse.data
 
-    const profile = userResponse.data?.profile
-    const accountUuid = profile?.id // 👈 This is your UUID (b2c56ecd-8250-4d8a-81fa-0227113ae14e)
-    const userId = profile?.user?.id // numeric internal user ID if needed
+    if (!companiesData || companiesData.length === 0) {
+      showErrorNotification('No company associated with this account.')
+      return
+    }
+
+    const firstCompany = companiesData[0]
+    const companyId = firstCompany.company?.id || firstCompany.id
+    const accountUuid = firstCompany.id
+    const userId = firstCompany.user?.id
 
     if (!accountUuid) {
-      console.warn('⚠️ No UUID found in user data:', userResponse.data)
       showErrorNotification('Failed to get account UUID after login.')
       return
     }
 
-    // 🔹 Step 4: Store data locally
     localStorage.setItem('account_uuid', accountUuid)
     localStorage.setItem('user_id', userId)
     localStorage.setItem('company_id', companyId)
 
-    // Also store in Pinia
     authStore.setAuth(access, {
       uuid: accountUuid,
       userId: userId,
       companyId: companyId,
     })
 
-    console.log('✅ Stored UUID:', accountUuid)
-    console.log('✅ Stored user ID:', userId)
-
     showSuccessNotification('Login successful!')
 
-    // 🔹 Step 5: Redirect
     const redirectPath = route.query.redirect || '/dashboard'
     router.push(redirectPath)
   } catch (error) {
     console.error('Login error:', error)
     if (error.response) {
-      showErrorNotification(error.response.data?.message || 'Invalid login credentials.')
+      const errorMessage =
+        error.response.data?.detail || error.response.data?.message || 'Invalid login credentials.'
+      showErrorNotification(errorMessage)
     } else {
       showErrorNotification('Login failed. Please try again.')
     }
@@ -221,371 +217,476 @@ const handleLogin = async () => {
 }
 
 const goToForgotPassword = () => router.push('/forgot-password')
-const goToRegister = () => router.push('/register')
 </script>
 
 <style lang="scss" scoped>
-.bg-white {
-  background: #ffffff;
+.auth-page {
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
   padding: 1rem;
+}
 
-  // Desktop and larger screens
+.brand-logo {
+  height: 45px;
+  width: 45px;
+
+  @media (min-width: 768px) {
+    height: 50px;
+    width: 50px;
+  }
+
   @media (min-width: 1024px) {
-    padding: 2rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    height: 55px;
+    width: 55px;
   }
 
   @media (min-width: 1440px) {
-    padding: 3rem;
+    height: 60px;
+    width: 60px;
   }
 }
 
-.login-container {
-  background: white;
-  border-radius: 0;
+.auth-container {
+  display: flex;
   width: 100%;
-  max-width: 320px;
-  padding: 1rem 0;
+  max-width: 400px;
+  min-height: 500px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  flex-direction: column;
 
   @media (min-width: 768px) {
-    padding: 1.5rem 0;
+    flex-direction: row;
+    max-width: 750px;
+    min-height: 520px;
+    border-radius: 20px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.12);
+  }
+
+  @media (min-width: 1024px) {
+    max-width: 900px;
+    min-height: 560px;
+    border-radius: 22px;
+  }
+
+  @media (min-width: 1440px) {
+    max-width: 1100px;
+    min-height: 600px;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// Form Section (Left Side)
+.form-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  background: white;
+
+  @media (min-width: 768px) {
+    padding: 2.5rem 2rem;
+  }
+
+  @media (min-width: 1024px) {
+    padding: 3rem 2.5rem;
+  }
+
+  @media (min-width: 1440px) {
+    padding: 3.5rem 3rem;
+  }
+}
+
+.form-content {
+  width: 100%;
+  max-width: 100%;
+
+  @media (min-width: 768px) {
     max-width: 340px;
   }
 
-  // Enhanced desktop styling
   @media (min-width: 1024px) {
-    background: white;
-    border-radius: 12px;
-    padding: 1.5rem 1.5rem;
-    max-width: 360px;
-    box-shadow:
-      0 10px 25px rgba(0, 0, 0, 0.08),
-      0 4px 15px rgba(0, 0, 0, 0.06);
-    border: 1px solid rgba(0, 0, 0, 0.04);
-  }
-
-  @media (min-width: 1440px) {
-    padding: 2rem 2rem;
     max-width: 380px;
-    box-shadow:
-      0 15px 35px rgba(0, 0, 0, 0.1),
-      0 6px 20px rgba(0, 0, 0, 0.08);
   }
 
-  // Ultra-wide screens
-  @media (min-width: 1920px) {
-    padding: 2.5rem 2.5rem;
-    max-width: 400px;
+  @media (min-width: 1440px) {
+    max-width: 420px;
   }
 }
 
-// Brand and Header
-.brand-logo {
-  .q-icon {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 8px;
-    padding: 8px;
+.form-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
 
-    @media (min-width: 1024px) {
-      border-radius: 12px;
-      padding: 12px;
-    }
+  @media (min-width: 768px) {
+    margin-bottom: 1.75rem;
   }
-}
 
-.login-title {
-  font-size: 1.75rem;
-  font-weight: 300;
-  letter-spacing: -0.4px;
+  @media (min-width: 1024px) {
+    margin-bottom: 2rem;
+  }
 
-  @media (max-width: 599px) {
+  @media (min-width: 1440px) {
+    margin-bottom: 2.25rem;
+  }
+
+  .form-title {
     font-size: 1.5rem;
-  }
-
-  @media (min-width: 1024px) {
-    font-size: 1.9rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0.75rem 0 0.5rem 0;
     letter-spacing: -0.5px;
-  }
 
-  @media (min-width: 1440px) {
-    font-size: 2rem;
-    letter-spacing: -0.6px;
-  }
-}
-
-.login-subtitle {
-  font-size: 0.85rem;
-  font-weight: 400;
-
-  @media (min-width: 1024px) {
-    font-size: 0.9rem;
-  }
-
-  @media (min-width: 1440px) {
-    font-size: 0.95rem;
-  }
-}
-
-// Form Styling
-.login-form {
-  .input-label {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 0.8rem;
-    font-weight: 500;
+    @media (min-width: 768px) {
+      font-size: 1.75rem;
+      margin: 1rem 0 0.5rem 0;
+    }
 
     @media (min-width: 1024px) {
-      font-size: 0.85rem;
-      margin-bottom: 8px;
+      font-size: 2rem;
     }
 
     @media (min-width: 1440px) {
+      font-size: 2.25rem;
+    }
+  }
+
+  .form-subtitle {
+    font-size: 0.85rem;
+    color: #757575;
+    margin: 0;
+    font-weight: 400;
+
+    @media (min-width: 768px) {
       font-size: 0.9rem;
-      margin-bottom: 10px;
     }
-  }
-}
-
-.modern-input {
-  :deep(.q-field__control) {
-    border-radius: 6px;
-    min-height: 42px;
-    border-color: #e0e0e0;
 
     @media (min-width: 1024px) {
-      min-height: 46px;
-      border-radius: 8px;
-    }
-
-    @media (min-width: 1440px) {
-      min-height: 48px;
-      border-radius: 10px;
-    }
-
-    &:before {
-      border-color: #e0e0e0;
-    }
-
-    &:hover:before {
-      border-color: #bdbdbd;
-    }
-  }
-
-  :deep(.q-field__native) {
-    padding-left: 14px;
-    font-size: 0.9rem;
-
-    @media (min-width: 1024px) {
-      padding-left: 16px;
       font-size: 0.95rem;
     }
 
     @media (min-width: 1440px) {
-      padding-left: 18px;
       font-size: 1rem;
     }
   }
+}
 
-  :deep(.q-placeholder) {
-    color: #9e9e9e;
-  }
+// Form Inputs
+.login-form {
+  .input-group {
+    margin-bottom: 1rem;
 
-  :deep(.q-field--focused) {
-    .q-field__control:before {
-      border-color: #1976d2;
-      border-width: 2px;
-    }
-  }
-
-  :deep(.q-field__append) {
-    padding-right: 14px;
-
-    @media (min-width: 1024px) {
-      padding-right: 16px;
+    @media (min-width: 768px) {
+      margin-bottom: 1.25rem;
     }
 
     @media (min-width: 1440px) {
-      padding-right: 18px;
+      margin-bottom: 1.5rem;
     }
-  }
-}
 
-// Options Row
-.remember-checkbox {
-  font-size: 0.875rem;
+    .input-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #424242;
+      margin-bottom: 0.5rem;
 
-  @media (min-width: 1024px) {
-    font-size: 1rem;
-  }
+      @media (min-width: 768px) {
+        font-size: 0.9rem;
+      }
 
-  @media (min-width: 1440px) {
-    font-size: 1.1rem;
-  }
-
-  :deep(.q-checkbox__bg) {
-    border-radius: 4px;
-
-    @media (min-width: 1024px) {
-      border-radius: 6px;
-      width: 20px;
-      height: 20px;
-    }
-  }
-}
-
-.forgot-btn {
-  font-size: 0.875rem;
-  padding: 4px 8px;
-  font-weight: 400;
-
-  @media (min-width: 1024px) {
-    font-size: 1rem;
-    padding: 8px 12px;
-  }
-
-  @media (min-width: 1440px) {
-    font-size: 1.1rem;
-    padding: 10px 16px;
-  }
-
-  &:hover {
-    background: rgba(25, 118, 210, 0.04);
-  }
-}
-
-// Sign In Button
-.sign-in-btn {
-  height: 42px;
-  border-radius: 6px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  text-transform: none;
-  box-shadow: none;
-
-  @media (min-width: 1024px) {
-    height: 46px;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
-  }
-
-  @media (min-width: 1440px) {
-    height: 48px;
-    border-radius: 10px;
-    font-size: 1.05rem;
-  }
-
-  &:hover {
-    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
-
-    @media (min-width: 1024px) {
-      box-shadow: 0 3px 12px rgba(25, 118, 210, 0.35);
-    }
-  }
-
-  @media (max-width: 599px) {
-    height: 40px;
-    font-size: 0.9rem;
-  }
-}
-
-// Sign Up Link
-.signup-link {
-  font-size: 0.875rem;
-  padding: 2px 4px;
-  font-weight: 400;
-  text-decoration: underline;
-
-  @media (min-width: 1024px) {
-    font-size: 1rem;
-    padding: 6px 8px;
-  }
-
-  @media (min-width: 1440px) {
-    font-size: 1.1rem;
-    padding: 8px 12px;
-  }
-
-  &:hover {
-    background: rgba(25, 118, 210, 0.04);
-  }
-}
-
-// Desktop-specific enhancements
-@media (min-width: 1024px) {
-  .q-page {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-  }
-
-  // Add subtle animations for desktop
-  .login-container {
-    transition: all 0.3s ease;
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow:
-        0 25px 70px rgba(0, 0, 0, 0.12),
-        0 10px 30px rgba(0, 0, 0, 0.08);
-    }
-  }
-
-  .modern-input {
-    transition: all 0.2s ease;
-
-    &:hover {
-      :deep(.q-field__control:before) {
-        border-color: #9e9e9e;
+      @media (min-width: 1440px) {
+        font-size: 0.95rem;
       }
     }
   }
 
-  .sign-in-btn {
-    transition: all 0.2s ease;
+  .custom-input {
+    :deep(.q-field__control) {
+      border-radius: 10px;
+      height: 46px;
+      background: #f8f9fa;
+      border: 2px solid transparent;
 
-    &:hover {
-      transform: translateY(-1px);
+      @media (min-width: 768px) {
+        height: 50px;
+        border-radius: 12px;
+      }
+
+      @media (min-width: 1440px) {
+        height: 54px;
+        border-radius: 14px;
+      }
+
+      &:before {
+        border: none;
+      }
+
+      &:hover {
+        background: #f1f3f5;
+      }
+    }
+
+    :deep(.q-field--focused) {
+      .q-field__control {
+        background: white;
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+      }
+    }
+
+    :deep(.q-field__native) {
+      padding-left: 1rem;
+      font-size: 0.9rem;
+      color: #1a1a1a;
+
+      @media (min-width: 768px) {
+        font-size: 0.95rem;
+      }
+
+      @media (min-width: 1440px) {
+        font-size: 1rem;
+      }
+    }
+
+    :deep(.q-field__prepend) {
+      padding-left: 1rem;
+
+      .input-icon {
+        color: #9e9e9e;
+      }
+    }
+
+    :deep(.q-field__append) {
+      padding-right: 1rem;
+
+      .toggle-password {
+        color: #9e9e9e;
+      }
     }
   }
 }
 
-// Mobile Optimizations
-@media (max-width: 599px) {
-  .bg-white {
-    padding: 0.5rem;
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  @media (min-width: 768px) {
+    margin-bottom: 1.5rem;
+    flex-wrap: nowrap;
   }
 
-  .login-container {
-    padding: 1.5rem 0;
+  @media (min-width: 1440px) {
+    margin-bottom: 2rem;
   }
 
-  .brand-logo .q-icon {
-    font-size: 28px;
-    padding: 6px;
+  .remember-checkbox {
+    font-size: 0.85rem;
+    color: #616161;
+
+    @media (min-width: 768px) {
+      font-size: 0.9rem;
+    }
+
+    @media (min-width: 1440px) {
+      font-size: 0.95rem;
+    }
+
+    :deep(.q-checkbox__bg) {
+      border-radius: 6px;
+    }
   }
 
-  .modern-input :deep(.q-field__control) {
-    min-height: 44px;
-  }
+  .forgot-link {
+    font-size: 0.85rem;
+    color: #757575;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
 
-  .social-buttons .social-btn {
-    width: 36px;
-    height: 36px;
+    @media (min-width: 768px) {
+      font-size: 0.9rem;
+    }
+
+    @media (min-width: 1440px) {
+      font-size: 0.95rem;
+    }
+
+    &:hover {
+      color: #667eea;
+    }
   }
 }
 
-// Very small screens
-@media (max-width: 375px) {
-  .login-title {
-    font-size: 1.5rem;
+.submit-btn {
+  width: 100%;
+  height: 46px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+
+  @media (min-width: 768px) {
+    height: 50px;
+    border-radius: 12px;
+    font-size: 0.95rem;
   }
 
-  .login-container {
-    padding: 1rem 0;
+  @media (min-width: 1440px) {
+    height: 54px;
+    font-size: 1rem;
+    border-radius: 14px;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(102, 126, 234, 0.4);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+// Welcome Section (Right Side)
+.welcome-section {
+  display: none;
+  position: relative;
+  overflow: hidden;
+
+  @media (min-width: 768px) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 2rem;
+  }
+
+  @media (min-width: 1024px) {
+    flex: 1.1;
+    padding: 3rem 2.5rem;
+  }
+
+  @media (min-width: 1440px) {
+    flex: 1.2;
+    padding: 4rem 3rem;
+  }
+}
+
+.welcome-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #2862a8 0%, #1e4d8b 100%);
+  z-index: 0;
+
+  &::before {
+    content: '';
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    background-image:
+      radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.06) 0%, transparent 50%),
+      radial-gradient(circle at 40% 20%, rgba(102, 126, 234, 0.1) 0%, transparent 50%);
+    animation: drift 60s linear infinite;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 50px,
+        rgba(255, 255, 255, 0.03) 50px,
+        rgba(255, 255, 255, 0.03) 51px
+      ),
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 50px,
+        rgba(255, 255, 255, 0.03) 50px,
+        rgba(255, 255, 255, 0.03) 51px
+      );
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  to {
+    transform: translate(30px, 30px) rotate(360deg);
+  }
+}
+
+.welcome-content {
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+
+  @media (min-width: 1024px) {
+    max-width: 400px;
+  }
+
+  @media (min-width: 1440px) {
+    max-width: 450px;
+  }
+
+  .welcome-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: white;
+    margin: 0 0 1rem 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    line-height: 1.3;
+
+    @media (min-width: 1024px) {
+      font-size: 2.25rem;
+      margin: 0 0 1.25rem 0;
+    }
+
+    @media (min-width: 1440px) {
+      font-size: 2.75rem;
+      margin: 0 0 1.5rem 0;
+    }
+  }
+
+  .welcome-text {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0;
+    font-weight: 400;
+    line-height: 1.6;
+
+    @media (min-width: 1024px) {
+      font-size: 1.05rem;
+    }
+
+    @media (min-width: 1440px) {
+      font-size: 1.15rem;
+    }
   }
 }
 
@@ -595,22 +696,5 @@ const goToRegister = () => router.push('/register')
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-// Custom notification styling
-:deep(.modern-notification) {
-  border-radius: 8px;
-  font-weight: 500;
-}
-
-// Focus styles for better accessibility
-.modern-input:focus-within {
-  :deep(.q-field__control) {
-    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
-  }
-}
-
-.sign-in-btn:focus {
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.3);
 }
 </style>

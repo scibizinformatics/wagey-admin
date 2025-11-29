@@ -3,25 +3,38 @@
     <!-- Header Section -->
     <div class="page-header">
       <div class="header-content">
-        <div class="header-left">
-          <h1 class="page-title">Weekly Schedule</h1>
+        <div class="title-section">
+          <h1 class="page-title">Schedule</h1>
+          <div class="timezone-badge">
+            <q-icon name="schedule" size="16px" />
+            <span>{{ userTimezone }}</span>
+          </div>
         </div>
+
         <div class="header-actions">
+          <!-- Search Input -->
+          <q-input
+            v-model="searchTerm"
+            placeholder="Search employees..."
+            outlined
+            dense
+            class="search-input"
+            debounce="300"
+            @update:model-value="filterEmployees"
+          >
+            <template #prepend>
+              <q-icon name="search" size="20px" />
+            </template>
+          </q-input>
+
+          <!-- Add Employee Button -->
           <q-btn
-            flat
-            round
-            color="grey-7"
-            icon="refresh"
-            @click="fetchData"
-            class="header-btn refresh-btn"
-            size="md"
-          />
-          <q-btn
+            v-if="true"
             color="primary"
-            icon="download"
-            label="Export All"
-            @click="exportSchedule"
-            class="header-btn export-btn"
+            icon="add"
+            label="Add Schedule"
+            @click="openAddModal"
+            class="add-btn"
             unelevated
           />
         </div>
@@ -33,7 +46,7 @@
       <div class="summary-grid">
         <div class="summary-card card-purple">
           <div class="card-icon">
-            <q-icon name="groups" size="24px" />
+            <q-icon name="groups" size="32px" />
           </div>
           <div class="card-content">
             <div class="card-value">{{ activeEmployees }}</div>
@@ -43,113 +56,59 @@
 
         <div class="summary-card card-yellow">
           <div class="card-icon">
-            <q-icon name="schedule" size="24px" />
+            <q-icon name="event" size="32px" />
           </div>
           <div class="card-content">
             <div class="card-value">{{ totalShifts }}</div>
-            <div class="card-label">Total Shifts</div>
+            <div class="card-label">Active</div>
           </div>
         </div>
 
-        <div class="summary-card card-green">
+        <div class="summary-card card-pink">
           <div class="card-icon">
-            <q-icon name="business_center" size="24px" />
+            <q-icon name="schedule" size="32px" />
           </div>
           <div class="card-content">
             <div class="card-value">{{ positionsCount }}</div>
             <div class="card-label">Positions Filled</div>
           </div>
         </div>
-
-        <div class="summary-card card-blue">
-          <div class="card-icon">
-            <q-icon name="schedule" size="24px" />
-          </div>
-          <div class="card-content">
-            <div class="card-value">{{ weekHours.toFixed(1) }}h</div>
-            <div class="card-label">Total Hours</div>
-          </div>
-        </div>
       </div>
     </div>
 
-    <!-- Filter Section -->
-    <div class="filter-section">
-      <div class="filter-container">
-        <h2 class="filter-title">Filter Records</h2>
-        <div class="filter-controls">
-          <div class="filter-inputs">
-            <q-input
-              v-model="searchQuery"
-              placeholder="Search employees..."
-              outlined
-              dense
-              class="search-field"
-              debounce="300"
-              @update:model-value="applyFilters"
-            >
-              <template #prepend>
-                <q-icon name="search" size="20px" />
-              </template>
-            </q-input>
-
-            <q-select
-              v-model="filters.position"
-              :options="['All', ...positions.map((p) => p.name)]"
-              label="Position"
-              outlined
-              dense
-              class="filter-field"
-              clearable
-              @update:model-value="applyFilters"
-            />
-
-            <q-select
-              v-model="filters.employee"
-              :options="[{ label: 'All Employees', value: null }, ...userOptions]"
-              option-value="value"
-              option-label="label"
-              label="Employee"
-              outlined
-              dense
-              class="filter-field"
-              clearable
-              emit-value
-              map-options
-              @update:model-value="applyFilters"
-            />
-          </div>
-
-          <div class="view-controls">
-            <q-btn-toggle
-              v-model="viewMode"
-              toggle-color="primary"
-              :options="[
-                { label: 'Table', value: 'table', icon: 'table_view' },
-                { label: 'Cards', value: 'cards', icon: 'view_module' },
-              ]"
-              class="view-toggle"
-              unelevated
-            />
-            <q-btn
-              color="primary"
-              icon="add"
-              label="Add Schedule"
-              @click="openAddModal"
-              class="add-btn"
-              unelevated
-            />
-          </div>
+    <!-- Filter and Controls Section -->
+    <div class="controls-section">
+      <h2 class="section-title">Schedule Overview</h2>
+      <div class="controls-row">
+        <div class="filter-group">
+          <q-select
+            v-model="filters.position"
+            :options="['All', ...positions.map((p) => p.name)]"
+            label="Position"
+            outlined
+            dense
+            class="filter-select"
+            clearable
+            @update:model-value="applyFilters"
+          />
+          <q-select
+            v-model="filters.employee"
+            :options="[{ label: 'All Employees', value: null }, ...userOptions]"
+            option-value="value"
+            option-label="label"
+            label="Employee"
+            outlined
+            dense
+            class="filter-select"
+            clearable
+            emit-value
+            map-options
+            @update:model-value="applyFilters"
+          />
         </div>
-      </div>
-    </div>
-
-    <!-- Week Navigation -->
-    <div class="week-nav-section">
-      <div class="week-nav">
-        <q-btn flat round icon="chevron_left" @click="prevWeek" class="nav-btn" size="md" />
-        <div class="week-display">
-          <div class="week-range">
+        <div class="week-nav">
+          <q-btn flat round icon="chevron_left" @click="prevWeek" class="nav-btn" size="sm" />
+          <div class="week-display">
             {{ selectedWeek.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
             –
             {{
@@ -160,21 +119,122 @@
               })
             }}
           </div>
+          <q-btn flat round icon="chevron_right" @click="nextWeek" class="nav-btn" size="sm" />
         </div>
-        <q-btn flat round icon="chevron_right" @click="nextWeek" class="nav-btn" size="md" />
+        <q-select
+          v-model="viewMode"
+          :options="[
+            { label: 'Table View', value: 'table' },
+            { label: 'Card View', value: 'cards' },
+          ]"
+          outlined
+          dense
+          emit-value
+          map-options
+          class="view-select"
+          label="Sort by"
+        />
       </div>
     </div>
 
     <!-- Schedule Content -->
     <div class="content-section">
+      <!-- Desktop Table View -->
+      <div v-if="viewMode === 'table' && !$q.screen.lt.lg" class="table-view">
+        <div class="table-wrapper">
+          <table class="schedule-table">
+            <thead>
+              <tr>
+                <th class="employee-col">Employee</th>
+                <th v-for="(day, i) in days" :key="i" class="day-col">
+                  {{ day }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in filteredUsers" :key="user.id" class="table-row">
+                <td class="employee-cell">
+                  <div class="employee-info">
+                    <q-avatar
+                      size="32px"
+                      class="employee-avatar"
+                      :style="{ backgroundColor: getAvatarColor(user.name) }"
+                    >
+                      <span class="avatar-text">{{ getInitials(user.name) }}</span>
+                    </q-avatar>
+                    <span class="employee-name">{{ user.name }}</span>
+                  </div>
+                </td>
+                <td v-for="(day, dayIdx) in days" :key="dayIdx" class="schedule-cell">
+                  <div class="shifts-wrapper">
+                    <div
+                      v-for="element in getShifts(user.id, dayIdx)"
+                      :key="element.id"
+                      class="shift-badge"
+                    >
+                      <div class="shift-time">
+                        {{ formatTimeWithTimezone(element.startTime) }} - {{ element.endTime }}
+                      </div>
+                      <div class="shift-position">{{ getPositionName(element.position) }}</div>
+                      <div class="shift-actions">
+                        <q-btn
+                          flat
+                          dense
+                          round
+                          icon="visibility"
+                          size="xs"
+                          class="action-btn view-btn"
+                          @click="openEditModal(element)"
+                        />
+                        <q-btn
+                          flat
+                          dense
+                          round
+                          icon="edit"
+                          size="xs"
+                          class="action-btn edit-btn"
+                          @click="openEditModal(element)"
+                        />
+                        <q-btn
+                          flat
+                          dense
+                          round
+                          icon="close"
+                          size="xs"
+                          class="action-btn delete-btn"
+                          @click.stop="deleteShift(element.id)"
+                        />
+                      </div>
+                    </div>
+                    <q-btn
+                      v-if="getShifts(user.id, dayIdx).length === 0"
+                      flat
+                      dense
+                      size="sm"
+                      label="+ Add"
+                      @click="openQuickAddModal(user.id, dayIdx)"
+                      class="add-shift-btn"
+                    />
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Mobile/Cards View -->
-      <div v-if="viewMode === 'cards' || $q.screen.lt.lg" class="cards-view">
+      <div v-else class="cards-view">
         <div class="employee-cards">
           <div v-for="user in filteredUsers" :key="user.id" class="employee-card">
-            <div class="employee-header">
+            <div class="card-header">
               <div class="employee-info">
-                <q-avatar size="40px" class="employee-avatar">
-                  <img :src="user.avatar" :alt="user.name" />
+                <q-avatar
+                  size="40px"
+                  class="employee-avatar"
+                  :style="{ backgroundColor: getAvatarColor(user.name) }"
+                >
+                  <span class="avatar-text">{{ getInitials(user.name) }}</span>
                 </q-avatar>
                 <div class="employee-details">
                   <div class="employee-name">{{ user.name }}</div>
@@ -188,13 +248,13 @@
             <div class="schedule-grid">
               <div v-for="(day, dayIdx) in days" :key="dayIdx" class="day-column">
                 <div class="day-header">{{ day }}</div>
-                <div class="day-shifts">
+                <div class="day-content">
                   <div v-if="getShifts(user.id, dayIdx).length === 0" class="empty-slot">
                     <q-btn
                       flat
                       dense
                       size="sm"
-                      label="Add Shift"
+                      label="Add"
                       @click="openQuickAddModal(user.id, dayIdx)"
                       class="add-shift-btn"
                     />
@@ -207,18 +267,9 @@
                       @click="openEditModal(shift)"
                     >
                       <div class="shift-time">
-                        {{ shift.time || `${shift.startTime}-${shift.endTime}` }}
+                        {{ formatTimeWithTimezone(shift.startTime) }} - {{ shift.endTime }}
                       </div>
                       <div class="shift-position">{{ getPositionName(shift.position) }}</div>
-                      <q-btn
-                        flat
-                        dense
-                        round
-                        icon="close"
-                        size="xs"
-                        class="shift-remove"
-                        @click.stop="deleteShift(shift.id)"
-                      />
                     </div>
                   </div>
                 </div>
@@ -227,90 +278,17 @@
           </div>
         </div>
       </div>
-
-      <!-- Desktop Table View -->
-      <div v-else class="table-view">
-        <div class="table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th class="employee-col">Employee</th>
-                <th v-for="(day, i) in days" :key="i" class="day-col">
-                  <div class="day-header-content">
-                    <span class="day-name">{{ day }}</span>
-                    <span class="day-count">{{ getDayShiftCount(i) }}</span>
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="user in filteredUsers" :key="user.id" class="employee-row">
-                <td class="employee-cell">
-                  <div class="employee-info">
-                    <q-avatar size="32px" class="employee-avatar">
-                      <img :src="user.avatar" :alt="user.name" />
-                    </q-avatar>
-                    <div class="employee-details">
-                      <div class="employee-name">{{ user.name }}</div>
-                      <div class="employee-shifts">{{ getUserShiftCount(user.id) }} shifts</div>
-                    </div>
-                  </div>
-                </td>
-                <td v-for="(day, dayIdx) in days" :key="dayIdx" class="schedule-cell">
-                  <draggable
-                    :list="getShifts(user.id, dayIdx)"
-                    :group="'shifts'"
-                    class="shifts-list"
-                    item-key="id"
-                    @add="onAdd($event, user.id, dayIdx)"
-                  >
-                    <template #item="{ element }">
-                      <div class="shift-item" @click="openEditModal(element)">
-                        <div class="shift-time">
-                          {{ element.time || `${element.startTime}-${element.endTime}` }}
-                        </div>
-                        <div class="shift-position">{{ getPositionName(element.position) }}</div>
-                        <q-btn
-                          flat
-                          dense
-                          round
-                          icon="close"
-                          size="xs"
-                          class="shift-delete"
-                          @click.stop="deleteShift(element.id)"
-                        />
-                      </div>
-                    </template>
-                    <template #footer>
-                      <div v-if="getShifts(user.id, dayIdx).length === 0" class="empty-cell">
-                        <q-btn
-                          flat
-                          dense
-                          size="sm"
-                          label="Add"
-                          @click="openQuickAddModal(user.id, dayIdx)"
-                          class="add-shift-button"
-                        />
-                      </div>
-                    </template>
-                  </draggable>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
 
     <!-- Add Schedule Modal -->
-    <q-dialog v-model="showAddModal" persistent class="schedule-dialog">
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="dialog-title">Add New Schedule</div>
-          <q-btn flat round dense icon="close" @click="closeAddModal" class="dialog-close" />
+    <q-dialog v-model="showAddModal" persistent>
+      <q-card class="modal-card">
+        <q-card-section class="modal-header">
+          <div class="modal-title">Add New Schedule</div>
+          <q-btn flat round dense icon="close" @click="closeAddModal" />
         </q-card-section>
 
-        <q-card-section class="dialog-content">
+        <q-card-section class="modal-body">
           <q-form @submit="addSchedule" class="schedule-form">
             <div class="form-row">
               <q-select
@@ -340,6 +318,24 @@
               />
             </div>
 
+            <q-select
+              v-model="newSchedule.recurringSchedule"
+              :options="recurringScheduleOptions"
+              option-value="value"
+              option-label="label"
+              label="Recurring Schedule (Optional)"
+              outlined
+              emit-value
+              map-options
+              class="form-field full-width"
+              clearable
+              @update:model-value="onRecurringScheduleChange"
+            >
+              <template #hint>
+                Select a recurring schedule to auto-fill times and details
+              </template>
+            </q-select>
+
             <div class="form-row">
               <q-select
                 v-model="newSchedule.site"
@@ -351,7 +347,7 @@
                 emit-value
                 map-options
                 class="form-field"
-                :rules="[(val) => !!val || 'Please select a site']"
+                :rules="[(val) => !!val || 'Site is required']"
               />
 
               <q-select
@@ -359,12 +355,40 @@
                 :options="departmentOptions"
                 option-value="value"
                 option-label="label"
-                label="Select Department"
+                label="Department (Optional)"
                 outlined
                 emit-value
                 map-options
                 class="form-field"
-                :rules="[(val) => !!val || 'Please select a department']"
+                clearable
+              />
+            </div>
+
+            <div v-if="!newSchedule.recurringSchedule" class="form-row">
+              <q-select
+                v-model="newSchedule.contractType"
+                :options="contractTypeOptions"
+                option-value="value"
+                option-label="label"
+                label="Contract Type (Optional)"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                clearable
+              />
+
+              <q-select
+                v-model="newSchedule.position"
+                :options="positionOptions"
+                option-value="value"
+                option-label="label"
+                label="Position / Shift Type"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                :rules="[(val) => !!val || 'Position is required for custom schedules']"
               />
             </div>
 
@@ -377,7 +401,12 @@
                 outlined
                 class="form-field"
                 :rules="[timeValidation]"
-              />
+              >
+                <template #append>
+                  <q-icon name="access_time" />
+                </template>
+                <template #hint> {{ userTimezone }} ({{ getTimezoneAbbreviation() }}) </template>
+              </q-input>
 
               <q-input
                 v-model="newSchedule.endTime"
@@ -387,36 +416,51 @@
                 outlined
                 class="form-field"
                 :rules="[timeValidation, validateEndTime]"
-              />
+              >
+                <template #append>
+                  <q-icon name="access_time" />
+                </template>
+                <template #hint> {{ userTimezone }} ({{ getTimezoneAbbreviation() }}) </template>
+              </q-input>
             </div>
-            <q-select
-              v-model="newSchedule.position"
-              :options="positionOptions"
-              option-value="value"
-              option-label="label"
-              label="Position"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-              :rules="[(val) => !!val || 'Please select a position']"
-            />
 
-            <q-banner v-if="addConflictWarning" class="conflict-banner">
+            <q-banner v-if="addConflictWarning" class="warning-banner">
               <template #avatar>
                 <q-icon name="warning" />
               </template>
-              Warning: This employee already has a shift on this day!
+              <strong>Schedule Conflict Detected!</strong><br />
+              This employee already has a schedule on the selected date. Each employee can only have
+              one schedule per day.
+              <br /><br />
+              <small
+                >This may include schedules from recurring patterns or schedules created in other
+                weeks not currently visible.</small
+              >
             </q-banner>
 
-            <div class="dialog-actions">
-              <q-btn flat label="Cancel" @click="closeAddModal" class="cancel-btn" />
+            <q-banner v-if="isCheckingConflict" class="info-banner">
+              <template #avatar>
+                <q-spinner color="primary" size="20px" />
+              </template>
+              Checking for schedule conflicts...
+            </q-banner>
+
+            <div class="modal-actions">
+              <q-btn
+                flat
+                label="Cancel"
+                @click="closeAddModal"
+                class="cancel-btn"
+                :disable="isCheckingConflict"
+              />
               <q-btn
                 type="submit"
                 color="primary"
                 label="Add Schedule"
                 unelevated
                 class="submit-btn"
+                :loading="isCheckingConflict"
+                :disable="isCheckingConflict"
               />
             </div>
           </q-form>
@@ -425,14 +469,14 @@
     </q-dialog>
 
     <!-- Edit Schedule Modal -->
-    <q-dialog v-model="showEditModal" persistent class="schedule-dialog">
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="dialog-title">Edit Schedule</div>
-          <q-btn flat round dense icon="close" @click="closeEditModal" class="dialog-close" />
+    <q-dialog v-model="showEditModal" persistent>
+      <q-card class="modal-card">
+        <q-card-section class="modal-header">
+          <div class="modal-title">Edit Schedule</div>
+          <q-btn flat round dense icon="close" @click="closeEditModal" />
         </q-card-section>
 
-        <q-card-section class="dialog-content">
+        <q-card-section class="modal-body">
           <q-form @submit="updateSchedule" class="schedule-form">
             <div class="form-row">
               <q-select
@@ -499,7 +543,12 @@
                 outlined
                 class="form-field"
                 :rules="[timeValidation]"
-              />
+              >
+                <template #append>
+                  <q-icon name="access_time" />
+                </template>
+                <template #hint> {{ userTimezone }} ({{ getTimezoneAbbreviation() }}) </template>
+              </q-input>
 
               <q-input
                 v-model="editingSchedule.endTime"
@@ -509,7 +558,12 @@
                 outlined
                 class="form-field"
                 :rules="[timeValidation, (val) => validateEndTime(val, editingSchedule.startTime)]"
-              />
+              >
+                <template #append>
+                  <q-icon name="access_time" />
+                </template>
+                <template #hint> {{ userTimezone }} ({{ getTimezoneAbbreviation() }}) </template>
+              </q-input>
             </div>
 
             <q-select
@@ -525,14 +579,14 @@
               :rules="[(val) => !!val || 'Please select a position']"
             />
 
-            <q-banner v-if="editConflictWarning" class="conflict-banner">
+            <q-banner v-if="editConflictWarning" class="warning-banner">
               <template #avatar>
                 <q-icon name="warning" />
               </template>
               Warning: This employee already has a shift on this day!
             </q-banner>
 
-            <div class="dialog-actions">
+            <div class="modal-actions">
               <q-btn flat label="Cancel" @click="closeEditModal" class="cancel-btn" />
               <q-btn
                 type="submit"
@@ -548,26 +602,44 @@
     </q-dialog>
 
     <!-- Quick Add Modal -->
-    <q-dialog v-model="showQuickAddModal" persistent class="schedule-dialog">
-      <q-card class="dialog-card quick-add">
-        <q-card-section class="dialog-header">
-          <div class="dialog-title">Quick Add Shift</div>
-          <q-btn flat round dense icon="close" @click="closeQuickAddModal" class="dialog-close" />
+    <q-dialog v-model="showQuickAddModal" persistent>
+      <q-card class="modal-card">
+        <q-card-section class="modal-header">
+          <div class="modal-title">Quick Add Shift</div>
+          <q-btn flat round dense icon="close" @click="closeQuickAddModal" />
         </q-card-section>
 
-        <q-card-section class="dialog-content">
+        <q-card-section class="modal-body">
           <div class="quick-info">
-            <div class="info-row">
+            <div class="info-item">
               <q-icon name="person" size="20px" />
               <span>{{ getEmployeeName(quickAdd.userId) }}</span>
             </div>
-            <div class="info-row">
+            <div class="info-item">
               <q-icon name="today" size="20px" />
               <span>{{ days[quickAdd.day] }}</span>
             </div>
           </div>
 
           <q-form @submit="quickAddSchedule" class="schedule-form">
+            <q-select
+              v-model="quickAdd.recurringSchedule"
+              :options="recurringScheduleOptions"
+              option-value="value"
+              option-label="label"
+              label="Recurring Schedule (Optional)"
+              outlined
+              emit-value
+              map-options
+              class="form-field full-width"
+              clearable
+              @update:model-value="onRecurringScheduleChange"
+            >
+              <template #hint>
+                Select a recurring schedule to auto-fill times and details
+              </template>
+            </q-select>
+
             <div class="form-row">
               <q-select
                 v-model="quickAdd.site"
@@ -579,7 +651,7 @@
                 emit-value
                 map-options
                 class="form-field"
-                :rules="[(val) => !!val || 'Please select a site']"
+                :rules="[(val) => !!val || 'Site is required']"
               />
 
               <q-select
@@ -587,12 +659,40 @@
                 :options="departmentOptions"
                 option-value="value"
                 option-label="label"
-                label="Select Department"
+                label="Department (Optional)"
                 outlined
                 emit-value
                 map-options
                 class="form-field"
-                :rules="[(val) => !!val || 'Please select a department']"
+                clearable
+              />
+            </div>
+
+            <div v-if="!quickAdd.recurringSchedule" class="form-row">
+              <q-select
+                v-model="quickAdd.contractType"
+                :options="contractTypeOptions"
+                option-value="value"
+                option-label="label"
+                label="Contract Type (Optional)"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                clearable
+              />
+
+              <q-select
+                v-model="quickAdd.position"
+                :options="positionOptions"
+                option-value="value"
+                option-label="label"
+                label="Position / Shift Type"
+                outlined
+                emit-value
+                map-options
+                class="form-field"
+                :rules="[(val) => !!val || 'Position is required for custom schedules']"
               />
             </div>
 
@@ -605,7 +705,12 @@
                 outlined
                 class="form-field"
                 :rules="[timeValidation]"
-              />
+              >
+                <template #append>
+                  <q-icon name="access_time" />
+                </template>
+                <template #hint> {{ userTimezone }} ({{ getTimezoneAbbreviation() }}) </template>
+              </q-input>
 
               <q-input
                 v-model="quickAdd.endTime"
@@ -615,23 +720,15 @@
                 outlined
                 class="form-field"
                 :rules="[timeValidation, (val) => validateEndTime(val, quickAdd.startTime)]"
-              />
+              >
+                <template #append>
+                  <q-icon name="access_time" />
+                </template>
+                <template #hint> {{ userTimezone }} ({{ getTimezoneAbbreviation() }}) </template>
+              </q-input>
             </div>
 
-            <q-select
-              v-model="quickAdd.position"
-              :options="positionOptions"
-              option-value="value"
-              option-label="label"
-              label="Position"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-              :rules="[(val) => !!val || 'Please select a position']"
-            />
-
-            <div class="dialog-actions">
+            <div class="modal-actions">
               <q-btn flat label="Cancel" @click="closeQuickAddModal" class="cancel-btn" />
               <q-btn
                 type="submit"
@@ -649,38 +746,33 @@
 </template>
 
 <script setup>
-/* Complete script setup that matches your template exactly.
-   - Unified createSchedule used by Add Schedule and Quick Add
-   - All functions/refs used by template are present
-   - No unused vars to satisfy eslint
-*/
-
 import { ref, computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import axios from 'axios'
-import draggable from 'vuedraggable'
 
 const $q = useQuasar()
 
-// --- State (names match template) ---
-const users = ref([]) // employees
-const shifts = ref([]) // schedule items
-const positions = ref([]) // company positions
-const sites = ref([]) // company sites
-const departments = ref([]) // company departments
+// State
+const users = ref([])
+const shifts = ref([])
+const positions = ref([])
+const sites = ref([])
+const departments = ref([])
+const contractTypes = ref([])
+const recurringSchedules = ref([])
+const userTimezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
 const viewMode = ref('table')
 const filters = ref({ position: 'All', employee: null })
-const searchQuery = ref('')
+const searchTerm = ref('')
 
-// Days
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const dayOptions = days.map((d, i) => ({ label: d, value: i }))
 
-// Modals and forms (names match template)
 const showAddModal = ref(false)
 const showEditModal = ref(false)
 const showQuickAddModal = ref(false)
+const isCheckingConflict = ref(false)
 
 const newSchedule = ref({
   userId: null,
@@ -690,6 +782,9 @@ const newSchedule = ref({
   position: '',
   site: null,
   department: null,
+  contractType: null,
+  recurringSchedule: null,
+  isRecurring: false,
 })
 
 const editingSchedule = ref({
@@ -701,6 +796,9 @@ const editingSchedule = ref({
   position: '',
   site: null,
   department: null,
+  contractType: null,
+  recurringSchedule: null,
+  isRecurring: false,
 })
 
 const quickAdd = ref({
@@ -711,16 +809,19 @@ const quickAdd = ref({
   position: '',
   site: null,
   department: null,
+  contractType: null,
+  recurringSchedule: null,
+  isRecurring: false,
 })
 
 const addConflictWarning = ref(false)
 const editConflictWarning = ref(false)
 
-// --- Week helpers (keeps your original behavior) ---
+// Week helpers
 const getWeekRange = (date = new Date()) => {
   const d = new Date(date)
-  const day = d.getDay() // 0=Sun … 6=Sat
-  const diffToMonday = day === 0 ? -6 : 1 - day // shift to Monday
+  const day = d.getDay()
+  const diffToMonday = day === 0 ? -6 : 1 - day
   const monday = new Date(d)
   monday.setDate(d.getDate() + diffToMonday)
   monday.setHours(0, 0, 0, 0)
@@ -748,7 +849,20 @@ const prevWeek = () => {
   fetchData()
 }
 
-// --- Utilities ---
+// Utilities
+const getTimezoneAbbreviation = () => {
+  const date = new Date()
+  const shortFormat = date.toLocaleTimeString('en-US', { timeZoneName: 'short' })
+  const match = shortFormat.match(/\b[A-Z]{3,4}\b/)
+  return match ? match[0] : ''
+}
+
+const formatTimeWithTimezone = (time) => {
+  if (!time) return ''
+  const abbr = getTimezoneAbbreviation()
+  return abbr ? `${time} ${abbr}` : time
+}
+
 const isValidTime = (val) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(val || '')
 const timeValidation = (val) => isValidTime(val) || 'Please use HH:MM (24h)'
 
@@ -763,8 +877,8 @@ const validateEndTime = (val, start = null) => {
 }
 
 const mapDateToDayIdx = (dateStr) => {
-  const jsDay = new Date(dateStr).getDay() // 0=Sun
-  return jsDay === 0 ? 6 : jsDay - 1 // Mon=0 … Sun=6
+  const jsDay = new Date(dateStr).getDay()
+  return jsDay === 0 ? 6 : jsDay - 1
 }
 
 const getPositionName = (positionId) => {
@@ -772,26 +886,38 @@ const getPositionName = (positionId) => {
   return position?.name || positionId
 }
 
-// --- Summaries (used in template) ---
+const getInitials = (name) => {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2)
+}
+
+const getAvatarColor = (name) => {
+  const colors = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6']
+  const index = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  return colors[index % colors.length]
+}
+
+// Summaries
 const totalShifts = computed(() => shifts.value.length)
 const activeEmployees = computed(() => new Set(shifts.value.map((s) => s.userId)).size)
 const positionsCount = computed(() => new Set(shifts.value.map((s) => s.position)).size)
-const weekHours = computed(() =>
-  shifts.value.reduce((acc, s) => {
-    if (!isValidTime(s.startTime) || !isValidTime(s.endTime)) return acc
-    const [sh, sm] = s.startTime.split(':').map(Number)
-    const [eh, em] = s.endTime.split(':').map(Number)
-    const hours = eh + em / 60 - (sh + sm / 60)
-    return acc + (hours > 0 ? hours : 0)
-  }, 0),
-)
 
-// --- Options / filters (names used by template) ---
+// Options
 const userOptions = computed(() => users.value.map((u) => ({ label: u.name, value: u.id })))
 const positionOptions = computed(() => positions.value.map((p) => ({ label: p.name, value: p.id })))
 const siteOptions = computed(() => sites.value.map((s) => ({ label: s.name, value: s.id })))
 const departmentOptions = computed(() =>
   departments.value.map((d) => ({ label: d.name, value: d.id })),
+)
+const contractTypeOptions = computed(() =>
+  contractTypes.value.map((c) => ({ label: c.name, value: c.id })),
+)
+const recurringScheduleOptions = computed(() =>
+  recurringSchedules.value.map((r) => ({ label: r.name, value: r.id })),
 )
 
 const filteredUsers = computed(() =>
@@ -799,7 +925,7 @@ const filteredUsers = computed(() =>
     const matchEmployee = !filters.value.employee || u.id === filters.value.employee
     const matchSearch = (u.name || '')
       .toLowerCase()
-      .includes((searchQuery.value || '').toLowerCase())
+      .includes((searchTerm.value || '').toLowerCase())
     const matchPosition =
       filters.value.position === 'All' ||
       shifts.value.some((s) => s.userId === u.id && s.position === filters.value.position)
@@ -807,14 +933,33 @@ const filteredUsers = computed(() =>
   }),
 )
 
-// --- API: fetch sites/departments/positions (keeps your original fallback logic) ---
+// When recurring schedule is selected, populate times
+const onRecurringScheduleChange = (recurringId) => {
+  if (!recurringId) return
+
+  const recurring = recurringSchedules.value.find((r) => r.id === recurringId)
+  if (!recurring) return
+
+  // Auto-fill start and end times from recurring schedule
+  if (recurring.start_time) {
+    const startTime = recurring.start_time.substring(0, 5)
+    newSchedule.value.startTime = startTime
+    quickAdd.value.startTime = startTime
+  }
+  if (recurring.end_time) {
+    const endTime = recurring.end_time.substring(0, 5)
+    newSchedule.value.endTime = endTime
+    quickAdd.value.endTime = endTime
+  }
+}
+
+// API functions
 const fetchSitesAndDepartments = async () => {
   try {
     const token = localStorage.getItem('access_token')
     const companyId = localStorage.getItem('selectedCompany')
 
     if (!token || !companyId) {
-      // fallback mock data
       sites.value = [
         { id: 1, name: 'Main Office' },
         { id: 2, name: 'Branch 1' },
@@ -830,10 +975,19 @@ const fetchSitesAndDepartments = async () => {
         { id: 2, name: 'Manager' },
         { id: 3, name: 'Staff' },
       ]
+      contractTypes.value = [
+        { id: 1, name: 'Full-time' },
+        { id: 2, name: 'Part-time' },
+        { id: 3, name: 'Contract' },
+      ]
+      recurringSchedules.value = [
+        { id: 1, name: 'Morning Shift (8AM-5PM)', start_time: '08:00', end_time: '17:00' },
+        { id: 2, name: 'Night Shift (9PM-6AM)', start_time: '21:00', end_time: '06:00' },
+      ]
       return
     }
 
-    const [sitesRes, deptsRes, positionsRes] = await Promise.all([
+    const [sitesRes, deptsRes, positionsRes, contractTypesRes, recurringRes] = await Promise.all([
       axios.get(`https://staging.wageyapp.com/organization/sites/?company=${companyId}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
@@ -843,14 +997,21 @@ const fetchSitesAndDepartments = async () => {
       axios.get(`https://staging.wageyapp.com/user/positions/?company=${companyId}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
+      axios.get(`https://staging.wageyapp.com/organization/contract-types/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      axios.get(`https://staging.wageyapp.com/organization/recurring-schedules/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
     ])
 
     sites.value = sitesRes.data.results || sitesRes.data || []
     departments.value = deptsRes.data.results || deptsRes.data || []
     positions.value = positionsRes.data.results || positionsRes.data || []
+    contractTypes.value = contractTypesRes.data.results || contractTypesRes.data || []
+    recurringSchedules.value = recurringRes.data.results || recurringRes.data || []
   } catch (e) {
-    console.error('Failed to fetch sites/departments/positions:', e.response?.data || e.message)
-    // fallback
+    console.error('Failed to fetch data:', e.response?.data || e.message)
     sites.value = [
       { id: 1, name: 'Main Office' },
       { id: 2, name: 'Branch 1' },
@@ -864,17 +1025,23 @@ const fetchSitesAndDepartments = async () => {
       { id: 2, name: 'Manager' },
       { id: 3, name: 'Staff' },
     ]
+    contractTypes.value = [
+      { id: 1, name: 'Full-time' },
+      { id: 2, name: 'Part-time' },
+    ]
+    recurringSchedules.value = [
+      { id: 1, name: 'Morning Shift', start_time: '08:00', end_time: '17:00' },
+      { id: 2, name: 'Night Shift', start_time: '21:00', end_time: '06:00' },
+    ]
   }
 }
 
-// --- API: fetchData (matches template API usage) ---
 const fetchData = async () => {
   try {
     const token = localStorage.getItem('access_token')
     const companyId = localStorage.getItem('selectedCompany')
 
     if (!token) {
-      // fallback mock users & shifts
       users.value = [
         { id: 1, name: 'John Doe', avatar: 'https://cdn.quasar.dev/img/avatar.png' },
         { id: 2, name: 'Jane Smith', avatar: 'https://cdn.quasar.dev/img/avatar2.png' },
@@ -940,25 +1107,26 @@ const fetchData = async () => {
           const d = new Date(s.date)
           return d >= start && d <= end
         })
-        .map((s) => ({
-          id: s.id,
-          userId: emp.employee.id,
-          day: mapDateToDayIdx(s.date),
-          startTime: s.actual_start_time,
-          endTime: s.actual_end_time,
-          site: s.site,
-          department: s.department,
-          position: s.position,
-        })),
+        .map((s) => {
+          const stripSeconds = (timeStr) => {
+            if (!timeStr) return '00:00'
+            return timeStr.substring(0, 5)
+          }
+
+          return {
+            id: s.id,
+            userId: emp.employee.id,
+            day: mapDateToDayIdx(s.date),
+            startTime: stripSeconds(s.actual_start_time || s.start_time),
+            endTime: stripSeconds(s.actual_end_time || s.end_time),
+            site: s.site,
+            department: s.department,
+            position: s.position,
+          }
+        }),
     )
   } catch (e) {
-    if (e.response) {
-      console.error('Server responded with:', e.response.status, e.response.data)
-    } else {
-      console.error('Network/Config error:', e.message)
-    }
-
-    // fallback mock data
+    console.error('Failed to fetch data:', e.response?.data || e.message)
     users.value = [
       { id: 1, name: 'John Doe', avatar: 'https://cdn.quasar.dev/img/avatar.png' },
       { id: 2, name: 'Jane Smith', avatar: 'https://cdn.quasar.dev/img/avatar2.png' },
@@ -967,25 +1135,77 @@ const fetchData = async () => {
   }
 }
 
-// Run initial fetches
 onMounted(() => {
   fetchSitesAndDepartments()
   fetchData()
 })
 
-// --- Helpers used by template ---
+// Check if employee has any schedule on a specific date (API call)
+const checkEmployeeScheduleOnDate = async (employeeId, dateStr, startTime, endTime) => {
+  try {
+    const token = localStorage.getItem('access_token')
+    const companyId = localStorage.getItem('selectedCompany')
+
+    if (!token || !companyId) {
+      // In local mode, check for time overlap
+      return shifts.value.some((s) => {
+        if (s.userId !== employeeId) return false
+        const { start } = selectedWeek.value
+        const shiftDate = new Date(start)
+        shiftDate.setDate(start.getDate() + s.day)
+        const shiftDateStr = shiftDate.toISOString().split('T')[0]
+
+        if (shiftDateStr !== dateStr) return false
+
+        // Check for time overlap
+        return startTime < s.endTime && endTime > s.startTime
+      })
+    }
+
+    // Check with API for all schedules on that date
+    const response = await axios.get(
+      `https://staging.wageyapp.com/organization/schedules/company/monthly/?company=${companyId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    const employeesData = response.data || []
+    const employeeData = employeesData.find((emp) => emp.employee.id === employeeId)
+
+    if (!employeeData) return false
+
+    // Check if employee has any schedule on the target date with time overlap
+    return employeeData.schedules.some((schedule) => {
+      const scheduleDate = schedule.date.split('T')[0]
+      if (scheduleDate !== dateStr) return false
+
+      const schedStartTime = schedule.actual_start_time || schedule.start_time
+      const schedEndTime = schedule.actual_end_time || schedule.end_time
+
+      if (!schedStartTime || !schedEndTime) {
+        return true
+      }
+
+      const schedStart = schedStartTime.substring(0, 5)
+      const schedEnd = schedEndTime.substring(0, 5)
+
+      // Check for time overlap
+      return startTime < schedEnd && endTime > schedStart
+    })
+  } catch (error) {
+    console.error('Error checking employee schedule:', error)
+    return false
+  }
+}
+
+// Helpers
 const getShifts = (employeeId, dayIdx) =>
   shifts.value.filter((shift) => shift.userId === employeeId && shift.day === dayIdx)
 
-const getDayShiftCount = (dayIdx) => shifts.value.filter((s) => s.day === dayIdx).length
 const getUserShiftCount = (userId) => shifts.value.filter((s) => s.userId === userId).length
 const getEmployeeName = (id) => users.value.find((u) => u.id === id)?.name || 'Unknown'
 
-// --- Actions & Unified createSchedule (both Add and Quick Add use it) ---
-// --- Unified createSchedule (accepts day 0) ---
-const createSchedule = async (n = { isQuick: false }) => {
-  // n: schedule object (newSchedule.value or quickAdd.value)
-  // Validate day properly (allow 0)
+// Create schedule using /organization/assignments/assign/ endpoint
+const createSchedule = async (n) => {
   if (n.day === null || n.day === undefined) {
     $q.notify({ type: 'negative', message: 'Please select a day.' })
     return
@@ -995,12 +1215,12 @@ const createSchedule = async (n = { isQuick: false }) => {
     return
   }
 
-  try {
-    const token = localStorage.getItem('access_token')
-    const companyId = localStorage.getItem('selectedCompany')
+  const token = localStorage.getItem('access_token')
+  const companyId = localStorage.getItem('selectedCompany')
 
+  try {
+    // Local mode fallback
     if (!token || !companyId) {
-      // Local fallback: insert locally for immediate feedback
       const id = Math.max(0, ...shifts.value.map((s) => s.id || 0)) + 1
       shifts.value.push({
         id,
@@ -1013,68 +1233,232 @@ const createSchedule = async (n = { isQuick: false }) => {
         department: n.department,
       })
       $q.notify({ type: 'positive', message: 'Schedule added (local)' })
-      console.log('Local schedule added', shifts.value[shifts.value.length - 1])
       return shifts.value[shifts.value.length - 1]
     }
 
-    // server payload (adjust if backend requires ISO datetimes)
-    const today = new Date().toISOString().split('T')[0]
-    const payload = {
-      company: parseInt(companyId),
-      name: `Schedule for ${getEmployeeName(n.userId)} - ${days[n.day]}`,
-      shift_type: 1,
-      start_date: today,
-      end_date: today,
-      start_time: `${n.startTime}:00`,
-      end_time: `${n.endTime}:00`,
-      weekdays: days[n.day],
-      repeat_interval: 7,
-      targets: [{ site: n.site, department: n.department }],
+    // Validate required fields
+    const isRecurring = !!n.recurringSchedule
+
+    if (!n.site) {
+      $q.notify({
+        type: 'negative',
+        message: 'Please select Site',
+        timeout: 5000,
+      })
+      return
     }
 
-    const res = await axios.post(
-      'https://staging.wageyapp.com/organization/recurring-schedules/',
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
+    // For custom (non-recurring) schedules, shift_type_id is required
+    if (!isRecurring && !n.position) {
+      $q.notify({
+        type: 'negative',
+        message: 'Please select Position/Shift Type for custom schedules',
+        timeout: 5000,
+      })
+      return
+    }
 
-    $q.notify({ type: 'positive', message: 'Schedule created successfully' })
-    console.log('Server response createSchedule:', res.data)
+    // Calculate target date
+    const { start } = selectedWeek.value
+    const targetDate = new Date(start)
+    targetDate.setDate(start.getDate() + n.day)
+    const dateStr = targetDate.toISOString().split('T')[0]
+
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('📋 CREATING SCHEDULE ASSIGNMENT')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('Type:', isRecurring ? 'RECURRING SCHEDULE' : 'CUSTOM SCHEDULE')
+    console.log('Employee ID:', n.userId)
+    console.log('Company ID:', companyId)
+    console.log('Date:', dateStr)
+    console.log('Site ID:', n.site)
+    console.log('Department ID:', n.department || 'Optional - Not provided')
+    console.log('Shift Type ID:', isRecurring ? 'Not needed for recurring' : n.position)
+    console.log('Recurring Schedule ID:', n.recurringSchedule || 'None')
+
+    // Build payload according to new API spec
+    const payload = {
+      company_id: parseInt(companyId),
+      employee_ids: [n.userId],
+      site_id: parseInt(n.site),
+      dates: [dateStr],
+      start_date: dateStr,
+      end_date: dateStr,
+    }
+
+    // Department is always optional
+    if (n.department) {
+      payload.department_id = parseInt(n.department)
+    }
+
+    // For recurring schedules
+    if (isRecurring) {
+      payload.recurring = parseInt(n.recurringSchedule)
+    }
+    // For custom schedules (non-recurring) - shift_type_id is required
+    else {
+      payload.shift_type_id = parseInt(n.position)
+
+      // Add position_id if present (same as shift_type_id)
+      if (n.position) {
+        payload.position_id = parseInt(n.position)
+      }
+    }
+
+    console.log('\n📦 Payload:')
+    console.log(JSON.stringify(payload, null, 2))
+
+    const endpoint = 'https://staging.wageyapp.com/organization/assignments/assign/'
+    console.log(`\n🔄 POST ${endpoint}`)
+
+    const res = await axios.post(endpoint, payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    console.log('✅ SUCCESS!')
+    console.log('Response:', res.data)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+
+    $q.notify({
+      type: 'positive',
+      message: 'Schedule assigned successfully',
+    })
+
     return res.data
   } catch (e) {
-    console.error('Failed to create schedule:', e.response?.data || e.message)
-    $q.notify({ type: 'negative', message: 'Failed to create schedule' })
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('❌ ERROR')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('Status:', e.response?.status)
+    console.log('Status Text:', e.response?.statusText)
+    console.log('Full Error:', e.response?.data)
+    console.log('Error Message:', e.message)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+
+    let errorMessage = 'Failed to create schedule'
+    let errorCaption = ''
+
+    if (e.response?.data) {
+      const data = e.response.data
+
+      if (typeof data === 'object') {
+        const errorFields = []
+        Object.keys(data).forEach((key) => {
+          const value = data[key]
+          const message = Array.isArray(value) ? value[0] : value
+          errorFields.push(`${key}: ${message}`)
+        })
+
+        if (errorFields.length > 0) {
+          errorMessage = errorFields.join('; ')
+        } else if (data.detail) {
+          errorMessage = data.detail
+        } else if (data.error) {
+          errorMessage = data.error
+        }
+      } else if (typeof data === 'string') {
+        errorMessage = data
+      }
+    } else if (!e.response) {
+      errorMessage = 'Network Error - Unable to reach server'
+      errorCaption = 'Check your internet connection or contact support'
+    }
+
+    $q.notify({
+      type: 'negative',
+      message: errorMessage,
+      caption: errorCaption || 'Check console for details',
+      timeout: 8000,
+      position: 'top',
+      multiLine: true,
+    })
+
     throw e
   }
 }
 
-// --- Add Schedule (main modal) ---
 const addSchedule = async () => {
   const n = newSchedule.value
-  // Allow day = 0 (explicit null/undefined check)
   if (n.userId == null || n.day === null || n.day === undefined) {
     addConflictWarning.value = false
     $q.notify({ type: 'negative', message: 'Please select employee and day.' })
     return
   }
 
-  // duplicate check (works with day 0)
-  const exists = shifts.value.some((s) => s.userId === n.userId && s.day === n.day)
-  if (exists) {
-    addConflictWarning.value = true
+  if (!isValidTime(n.startTime) || !isValidTime(n.endTime)) {
+    addConflictWarning.value = false
+    $q.notify({ type: 'negative', message: 'Please provide valid start/end times (HH:MM).' })
     return
   }
 
+  // Validate end time is after start time
+  const [startHour, startMin] = n.startTime.split(':').map(Number)
+  const [endHour, endMin] = n.endTime.split(':').map(Number)
+  if (endHour < startHour || (endHour === startHour && endMin <= startMin)) {
+    addConflictWarning.value = false
+    $q.notify({ type: 'negative', message: 'End time must be after start time.' })
+    return
+  }
+
+  // Calculate target date
+  const { start } = selectedWeek.value
+  const targetDate = new Date(start)
+  targetDate.setDate(start.getDate() + n.day)
+  const dateStr = targetDate.toISOString().split('T')[0]
+
+  // Show loading state
+  isCheckingConflict.value = true
+  addConflictWarning.value = false
+
   try {
+    // Check for conflicts with API (includes time overlap check)
+    const hasConflict = await checkEmployeeScheduleOnDate(n.userId, dateStr, n.startTime, n.endTime)
+
+    isCheckingConflict.value = false
+
+    if (hasConflict) {
+      addConflictWarning.value = true
+      const employeeName = getEmployeeName(n.userId)
+      $q.notify({
+        type: 'warning',
+        message: `${employeeName} already has an overlapping schedule on ${dateStr}. Cannot create overlapping schedules.`,
+        timeout: 6000,
+        actions: [{ label: 'Dismiss', color: 'white' }],
+      })
+      return
+    }
+
+    // Proceed with creation
     await createSchedule(n)
     showAddModal.value = false
-    fetchData()
+    addConflictWarning.value = false
+
+    // Reset form
+    newSchedule.value = {
+      userId: null,
+      day: null,
+      startTime: '',
+      endTime: '',
+      position: '',
+      site: null,
+      department: null,
+      contractType: null,
+      recurringSchedule: null,
+      isRecurring: false,
+    }
+
+    // Refresh data
+    setTimeout(async () => {
+      await fetchData()
+    }, 500)
   } catch {
-    // createSchedule already notifies
+    isCheckingConflict.value = false
   }
 }
 
-// --- Quick Add Shift (calls same create function) ---
 const quickAddSchedule = async () => {
   const q = quickAdd.value
   if (q.userId == null || q.day === null || q.day === undefined) {
@@ -1086,22 +1470,57 @@ const quickAddSchedule = async () => {
     return
   }
 
-  const exists = shifts.value.some((s) => s.userId === q.userId && s.day === q.day)
+  // Check for local conflicts
+  const { start } = selectedWeek.value
+  const targetDate = new Date(start)
+  targetDate.setDate(start.getDate() + q.day)
+  const dateStr = targetDate.toISOString().split('T')[0]
+
+  const exists = shifts.value.some((s) => {
+    if (s.userId !== q.userId) return false
+
+    const shiftDate = new Date(start)
+    shiftDate.setDate(start.getDate() + s.day)
+    const shiftDateStr = shiftDate.toISOString().split('T')[0]
+
+    return shiftDateStr === dateStr
+  })
+
   if (exists) {
-    $q.notify({ type: 'warning', message: 'This employee already has a shift on this day.' })
+    $q.notify({
+      type: 'warning',
+      message:
+        'Warning: This employee already has a shift on this day. The API may reject this if times overlap.',
+      timeout: 5000,
+    })
     return
   }
 
   try {
-    await createSchedule(q, { isQuick: true })
+    await createSchedule(q)
     showQuickAddModal.value = false
-    fetchData()
+
+    quickAdd.value = {
+      userId: null,
+      day: null,
+      startTime: '',
+      endTime: '',
+      position: '',
+      site: null,
+      department: null,
+      contractType: null,
+      recurringSchedule: null,
+      isRecurring: false,
+    }
+
+    setTimeout(async () => {
+      await fetchData()
+    }, 500)
   } catch {
-    // handled inside createSchedule
+    // Error is already handled in createSchedule
   }
 }
 
-// --- Edit / Update ---
 const openAddModal = () => {
   newSchedule.value = {
     userId: null,
@@ -1111,6 +1530,9 @@ const openAddModal = () => {
     position: '',
     site: null,
     department: null,
+    contractType: null,
+    recurringSchedule: null,
+    isRecurring: false,
   }
   addConflictWarning.value = false
   showAddModal.value = true
@@ -1119,7 +1541,6 @@ const openAddModal = () => {
 const closeAddModal = () => (showAddModal.value = false)
 
 const openEditModal = (schedule) => {
-  // schedule originates from getShifts() or table; make sure shapes align
   editingSchedule.value = { ...schedule }
   editConflictWarning.value = false
   showEditModal.value = true
@@ -1136,7 +1557,6 @@ const updateSchedule = async () => {
     const companyId = localStorage.getItem('selectedCompany')
 
     if (!token || !companyId) {
-      // update locally
       const idx = shifts.value.findIndex((s) => s.id === es.id)
       if (idx !== -1) shifts.value[idx] = { ...es }
       showEditModal.value = false
@@ -1172,7 +1592,6 @@ const updateSchedule = async () => {
   }
 }
 
-// --- Delete ---
 const deleteShift = async (id) => {
   try {
     const token = localStorage.getItem('access_token')
@@ -1194,7 +1613,6 @@ const deleteShift = async (id) => {
   }
 }
 
-// --- Quick Add helpers ---
 const openQuickAddModal = (userId, dayIdx) => {
   quickAdd.value = {
     userId,
@@ -1204,157 +1622,174 @@ const openQuickAddModal = (userId, dayIdx) => {
     position: '',
     site: null,
     department: null,
+    contractType: null,
+    recurringSchedule: null,
+    isRecurring: false,
   }
   showQuickAddModal.value = true
 }
+
 const closeQuickAddModal = () => (showQuickAddModal.value = false)
-
-// --- Drag & drop ---
-const onAdd = (event, userId, dayIdx) => {
-  // stub — you can implement API update when dragging to another user/day
-  console.log('Shift moved', { event, userId, dayIdx })
-}
-
-// --- Filters / export / applyFilters (template uses applyFilters and exportSchedule) ---
-const applyFilters = () => {
-  // No-op because filteredUsers is computed. Keep this so template calls don't error.
-  // You can extend this to fetch server-side filtered results if desired.
-}
-
-const exportSchedule = () => {
-  console.log('Exporting schedule...', shifts.value)
-  // implement CSV/Excel export if needed
-}
+const applyFilters = () => {}
+const filterEmployees = () => {}
 </script>
 
-<style scoped>
-/* Modern Page Design - Matching Payroll Style */
-.modern-page {
-  background: #f8fafc;
-  min-height: 100vh;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-  padding: 0;
+<style scoped lang="scss">
+.recurring-badge {
+  font-size: 10px;
+  margin-left: 4px;
 }
 
-/* Header Section - Matching Attendance Management Style */
+.warning-banner {
+  margin-top: 14px;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.info-banner {
+  margin-top: 14px;
+  background-color: #e3f2fd;
+  border: 1px solid #2196f3;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.quick-info {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.modern-page {
+  background: #f5f5f5;
+  min-height: 100vh;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+/* Header Section */
 .page-header {
-  background: #f8fafc;
-  padding: 2rem 2rem 0 2rem;
-  border-bottom: none;
-  box-shadow: none;
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #e2e8f0;
 }
 
 .header-content {
-  max-width: 1400px;
-  margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 2rem;
-  margin-bottom: 2rem;
+  gap: 12px;
 }
 
-.header-left {
-  flex: 1;
+.title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 2rem;
+  font-size: 20px;
   font-weight: 700;
-  color: #111827;
+  color: #1a202c;
   margin: 0;
-  line-height: 1.2;
+}
+
+.timezone-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+  font-size: 11px;
+  color: #1e40af;
+  font-weight: 500;
+}
+
+.timezone-badge .q-icon {
+  color: #3b82f6;
+  font-size: 14px;
 }
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: 10px;
   align-items: center;
 }
 
-.refresh-btn {
-  width: 40px;
-  height: 40px;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  border-radius: 6px;
+.search-input {
+  width: 260px;
+  background: white;
 }
 
-.refresh-btn:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-}
-
-.export-btn {
-  background: #1d4ed8;
+.add-btn {
+  background: #2563eb;
   color: white;
-  border: 1px solid #1d4ed8;
-  height: 40px;
-  padding: 0 1rem;
-  border-radius: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
   font-weight: 500;
   text-transform: none;
-  font-size: 0.875rem;
+  font-size: 13px;
 }
 
-.export-btn:hover {
-  background: #1e40af;
-  border-color: #1e40af;
+.add-btn:hover {
+  background: #1d4ed8;
 }
 
-/* Summary Cards Section - Updated positioning */
+/* Summary Cards */
 .summary-section {
-  padding: 0 2rem 2rem 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  margin-bottom: 16px;
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
 }
 
 .summary-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 1.5rem;
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  border: 0;
-  box-shadow:
-    0 1px 3px 0 rgba(0, 0, 0, 0.1),
-    0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
+  gap: 12px;
+  transition: transform 0.2s;
+  min-width: 0;
 }
 
 .summary-card:hover {
   transform: translateY(-2px);
-  box-shadow:
-    0 10px 25px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-/* Card Color Variants */
 .card-purple {
-  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-  color: #1e1b4b;
-  border: 1px solid #e0e7ff;
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
 }
 
 .card-purple .card-icon {
-  background: rgba(67, 56, 202, 0.15);
-  color: #4338ca;
+  background: rgba(109, 40, 217, 0.15);
+  color: #6d28d9;
 }
 
 .card-yellow {
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  color: #78350f;
-  border: 1px solid #fef3c7;
 }
 
 .card-yellow .card-icon {
@@ -1362,766 +1797,889 @@ const exportSchedule = () => {
   color: #d97706;
 }
 
-.card-green {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  color: #064e3b;
-  border: 1px solid #d1fae5;
+.card-pink {
+  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
 }
 
-.card-green .card-icon {
-  background: rgba(5, 150, 105, 0.15);
-  color: #059669;
-}
-
-.card-blue {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  color: #1e3a8a;
-  border: 1px solid #dbeafe;
-}
-
-.card-blue .card-icon {
-  background: rgba(37, 99, 235, 0.15);
-  color: #2563eb;
+.card-pink .card-icon {
+  background: rgba(219, 39, 119, 0.15);
+  color: #db2777;
 }
 
 .card-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
+.card-icon .q-icon {
+  font-size: 28px;
+}
+
 .card-content {
   flex: 1;
+  min-width: 0;
 }
 
 .card-value {
-  font-size: 1.875rem;
+  font-size: 28px;
   font-weight: 700;
-  margin-bottom: 0.25rem;
+  color: #1f2937;
   line-height: 1;
+  margin-bottom: 4px;
 }
 
 .card-label {
-  font-size: 0.875rem;
-  opacity: 0.8;
+  font-size: 13px;
+  color: #6b7280;
   font-weight: 500;
 }
 
-/* Filter Section */
-.filter-section {
-  padding: 0 2rem 1.5rem 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.filter-container {
-  background: #ffffff;
+/* Controls Section */
+.controls-section {
+  background: white;
   border-radius: 12px;
-  padding: 1.5rem;
-  border: 1px solid #e5e7eb;
-  box-shadow:
-    0 1px 3px 0 rgba(0, 0, 0, 0.1),
-    0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  padding: 16px;
+  margin-bottom: 16px;
 }
 
-.filter-title {
-  font-size: 1.125rem;
+.section-title {
+  font-size: 17px;
   font-weight: 600;
-  color: #374151;
-  margin: 0 0 1.5rem 0;
+  color: #1f2937;
+  margin: 0 0 14px 0;
 }
 
-.filter-controls {
+.controls-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
-.filter-inputs {
+.filter-group {
   display: flex;
-  gap: 1rem;
+  gap: 10px;
   flex: 1;
-  flex-wrap: wrap;
 }
 
-.search-field {
-  min-width: 250px;
-}
-
-.filter-field {
+.filter-select {
   min-width: 160px;
-}
-
-.view-controls {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.view-toggle {
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-}
-
-.add-btn {
-  background: #1d4ed8;
-  color: white;
-  height: 40px;
-  padding: 0 1.5rem;
-  border-radius: 6px;
-}
-
-.add-btn:hover {
-  background: #1e40af;
-}
-
-/* Week Navigation */
-.week-nav-section {
-  padding: 0 2rem 1.5rem 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
 }
 
 .week-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  background: #ffffff;
-  padding: 1rem;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  box-shadow:
-    0 1px 3px 0 rgba(0, 0, 0, 0.1),
-    0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  gap: 10px;
+  padding: 6px 12px;
+  background: #f9fafb;
+  border-radius: 8px;
 }
 
 .nav-btn {
   color: #6b7280;
+  width: 32px;
+  height: 32px;
 }
 
 .nav-btn:hover {
-  color: #374151;
-  background: #f3f4f6;
+  background: #e5e7eb;
 }
 
 .week-display {
-  text-align: center;
-  min-width: 200px;
-}
-
-.week-range {
-  font-size: 1.125rem;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
+  min-width: 160px;
+  text-align: center;
+}
+
+.view-select {
+  min-width: 140px;
 }
 
 /* Content Section */
 .content-section {
-  padding: 0 2rem 2rem 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-/* Cards View */
-.cards-view {
-  display: block;
-}
-
-.employee-cards {
-  display: grid;
-  gap: 1.5rem;
-}
-
-.employee-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow:
-    0 1px 3px 0 rgba(0, 0, 0, 0.1),
-    0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease;
 }
 
-.employee-card:hover {
-  box-shadow:
-    0 10px 25px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  transform: translateY(-2px);
+/* Table View */
+.table-wrapper {
+  overflow-x: auto;
+  border: 2px solid #3b82f6;
+  border-radius: 10px;
 }
 
-.employee-header {
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.schedule-table thead {
   background: #f9fafb;
-  padding: 1.5rem;
+}
+
+.schedule-table th {
+  padding: 12px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
   border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.employee-col {
+  width: 180px;
+  min-width: 180px;
+}
+
+.day-col {
+  width: 120px;
+  min-width: 120px;
+  text-align: center !important;
+}
+
+.table-row {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background 0.15s;
+}
+
+.table-row:hover {
+  background: #f9fafb;
+}
+
+.employee-cell {
+  padding: 12px 10px;
 }
 
 .employee-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 10px;
 }
 
 .employee-avatar {
-  border: 2px solid #e5e7eb;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.avatar-text {
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .employee-name {
-  font-size: 1.125rem;
+  font-weight: 500;
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.schedule-cell {
+  padding: 10px 8px;
+  vertical-align: top;
+}
+
+.shifts-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 50px;
+}
+
+.shift-badge {
+  background: #dbeafe;
+  border-radius: 8px;
+  padding: 10px;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.shift-badge:hover {
+  background: #bfdbfe;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.shift-time {
+  font-size: 12px;
   font-weight: 600;
-  color: #374151;
-  margin-bottom: 0.25rem;
+  color: #1e40af;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.shift-position {
+  font-size: 11px;
+  color: #3b82f6;
+}
+
+.shift-actions {
+  display: none;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  gap: 3px;
+  background: white;
+  padding: 4px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.shift-badge:hover .shift-actions {
+  display: flex;
+}
+
+.action-btn {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  border-radius: 4px;
+}
+
+.view-btn {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.view-btn:hover {
+  background: #bfdbfe;
+}
+
+.edit-btn {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.edit-btn:hover {
+  background: #fde68a;
+}
+
+.delete-btn {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.delete-btn:hover {
+  background: #fecaca;
+}
+
+.add-shift-btn {
+  color: #6b7280;
+  font-size: 11px;
+  padding: 6px 8px;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
+  width: 100%;
+  min-height: 32px;
+}
+
+.add-shift-btn:hover {
+  color: #2563eb;
+  border-color: #2563eb;
+  background: #f0f9ff;
+}
+
+/* Cards View */
+.cards-view {
+  padding: 16px;
+}
+
+.employee-cards {
+  display: grid;
+  gap: 16px;
+}
+
+.employee-card {
+  background: white;
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.card-header {
+  background: #f9fafb;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.employee-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .employee-stats {
-  font-size: 0.875rem;
+  font-size: 12px;
   color: #6b7280;
 }
 
 .schedule-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 1px;
   background: #e5e7eb;
-  padding: 1px;
 }
 
 .day-column {
-  background: #ffffff;
-  min-height: 120px;
+  background: white;
 }
 
 .day-header {
   background: #f9fafb;
-  padding: 0.75rem;
-  font-size: 0.75rem;
+  padding: 10px;
+  font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: #374151;
   text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   border-bottom: 1px solid #e5e7eb;
 }
 
-.day-shifts {
-  padding: 0.75rem;
-  min-height: 80px;
+.day-content {
+  padding: 10px;
+  min-height: 90px;
 }
 
 .empty-slot {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  min-height: 60px;
-}
-
-.add-shift-btn {
-  color: #6b7280;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px dashed #d1d5db;
-  border-radius: 6px;
-}
-
-.add-shift-btn:hover {
-  color: #1d4ed8;
-  border-color: #1d4ed8;
-  background: #f8fafc;
+  min-height: 70px;
 }
 
 .shift-items {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 6px;
 }
 
 .shift-card {
-  background: #1d4ed8;
-  color: white;
+  background: #dbeafe;
   border-radius: 8px;
-  padding: 0.75rem;
-  font-size: 0.75rem;
+  padding: 10px;
   cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
 }
 
 .shift-card:hover {
-  background: #1e40af;
+  background: #bfdbfe;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.shift-time {
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-  font-size: 0.8rem;
-}
-
-.shift-position {
-  font-size: 0.7rem;
-  opacity: 0.9;
-}
-
-.shift-remove {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  background: white;
-  color: #dc2626;
-  width: 20px;
-  height: 20px;
-  min-height: 20px;
-  border-radius: 50%;
-  opacity: 0;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.shift-card:hover .shift-remove {
-  opacity: 1;
-}
-
-/* Table View */
-.table-view {
-  display: block;
-}
-
-.table-container {
-  background: #ffffff;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid #e5e7eb;
-  box-shadow:
-    0 1px 3px 0 rgba(0, 0, 0, 0.1),
-    0 1px 2px 0 rgba(0, 0, 0, 0.06);
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-.data-table thead {
-  background: #f9fafb;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-.data-table th {
-  padding: 1rem;
-  text-align: left;
-  font-weight: 600;
-  color: #6b7280;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-right: 1px solid #e5e7eb;
-}
-
-.data-table th:last-child {
-  border-right: none;
-}
-
-.employee-col {
-  width: 200px;
-  min-width: 200px;
-}
-
-.day-col {
-  text-align: center !important;
-  width: 140px;
-  min-width: 140px;
-}
-
-.day-header-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.day-name {
-  font-weight: 600;
-  color: #374151;
-}
-
-.day-count {
-  font-size: 0.625rem;
-  color: #6b7280;
-  font-weight: 400;
-  text-transform: none;
-}
-
-.employee-row {
-  border-bottom: 1px solid #e5e7eb;
-  transition: background-color 0.15s ease;
-}
-
-.employee-row:hover {
-  background: #f9fafb;
-}
-
-.employee-row:last-child {
-  border-bottom: none;
-}
-
-.employee-cell {
-  padding: 1rem;
-  border-right: 1px solid #e5e7eb;
-}
-
-.employee-details {
-  margin-left: 0.75rem;
-}
-
-.employee-shifts {
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin-top: 0.125rem;
-}
-
-.schedule-cell {
-  padding: 0.75rem;
-  border-right: 1px solid #e5e7eb;
-  vertical-align: top;
-  min-height: 80px;
-}
-
-.schedule-cell:last-child {
-  border-right: none;
-}
-
-.shifts-list {
-  min-height: 60px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.shift-item {
-  background: #1d4ed8;
-  color: white;
-  border-radius: 8px;
-  padding: 0.75rem;
-  font-size: 0.75rem;
-  position: relative;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.shift-item:hover {
-  background: #1e40af;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.shift-delete {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  background: white;
-  color: #dc2626;
-  width: 18px;
-  height: 18px;
-  min-height: 18px;
-  border-radius: 50%;
-  opacity: 0;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.shift-item:hover .shift-delete {
-  opacity: 1;
-}
-
-.empty-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60px;
-  border: 1px dashed #d1d5db;
-  border-radius: 8px;
-}
-
-.add-shift-button {
-  color: #6b7280;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-}
-
-.add-shift-button:hover {
-  color: #1d4ed8;
-  background: #f8fafc;
-}
-
-/* Dialog Styles */
-.schedule-dialog .q-dialog__inner {
-  padding: 1rem;
-}
-
-.dialog-card {
-  border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  border: 0;
-  max-width: 500px;
+/* Modal Styles */
+.modal-card {
+  border-radius: 12px;
+  max-width: 480px;
   width: 100%;
 }
 
-.dialog-header {
+.modal-header {
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: 16px;
 }
 
-.dialog-title {
-  font-size: 1.125rem;
+.modal-title {
+  font-size: 18px;
   font-weight: 600;
-  color: #374151;
+  color: #1f2937;
 }
 
-.dialog-close {
-  color: #6b7280;
-}
-
-.dialog-content {
-  padding: 1.5rem;
+.modal-body {
+  padding: 16px;
 }
 
 .schedule-form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 12px;
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: 12px;
 }
 
 .form-field {
-  border-radius: 8px;
+  width: 100%;
 }
 
 .full-width {
   grid-column: 1 / -1;
 }
 
-.conflict-banner {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #f59e0b;
-  border-radius: 8px;
-}
-
-.dialog-actions {
+.modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-  padding-top: 1.5rem;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid #e5e7eb;
 }
 
 .cancel-btn {
   color: #6b7280;
+  padding: 6px 14px;
 }
 
 .submit-btn {
-  background: #1d4ed8;
+  background: #2563eb;
   color: white;
-  padding: 0.5rem 1.5rem;
+  padding: 6px 16px;
   border-radius: 8px;
-  font-size: 0.875rem;
+  font-size: 13px;
 }
 
 .submit-btn:hover {
-  background: #1e40af;
+  background: #1d4ed8;
 }
 
-.quick-add {
-  max-width: 400px;
-}
+/* ===================================
+   RESPONSIVE BREAKPOINTS
+   =================================== */
 
-.quick-info {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
+/* 1440px - Large Desktop */
+@media (min-width: 1440px) {
+  .modern-page {
+    padding: 20px;
+  }
 
-.info-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #374151;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
+  .summary-grid {
+    gap: 16px;
+  }
 
-.info-row .q-icon {
-  color: #1d4ed8;
-}
+  .card-value {
+    font-size: 30px;
+  }
 
-/* Responsive Design */
-@media (max-width: 1200px) {
-  .header-content,
-  .summary-section,
-  .filter-section,
-  .week-nav-section,
-  .content-section {
-    max-width: 100%;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
+  .schedule-table th,
+  .employee-cell,
+  .schedule-cell {
+    padding: 14px 12px;
+  }
+
+  .shift-badge {
+    padding: 12px;
   }
 }
 
-@media (max-width: 992px) {
-  .schedule-grid {
-    grid-template-columns: repeat(4, 1fr);
+/* 1024px - Desktop / Tablet Landscape */
+@media (max-width: 1024px) {
+  .modern-page {
+    padding: 14px;
   }
 
-  .day-column:nth-child(n + 5) {
-    margin-top: 1px;
+  .header-content {
+    flex-wrap: wrap;
+  }
+
+  .title-section {
+    width: 100%;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .search-input {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .summary-card {
+    padding: 14px;
+  }
+
+  .card-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .card-icon .q-icon {
+    font-size: 26px;
+  }
+
+  .card-value {
+    font-size: 26px;
+  }
+
+  .card-label {
+    font-size: 12px;
+  }
+
+  .controls-row {
+    gap: 10px;
+  }
+
+  .filter-group {
+    flex-wrap: wrap;
+  }
+
+  .filter-select {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .week-nav {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .view-select {
+    width: 100%;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  .schedule-table {
+    min-width: 800px;
+  }
+
+  .employee-col {
+    width: 160px;
+    min-width: 160px;
+  }
+
+  .day-col {
+    width: 110px;
+    min-width: 110px;
+  }
+
+  .schedule-table th {
+    padding: 11px 8px;
+    font-size: 12px;
+  }
+
+  .employee-cell,
+  .schedule-cell {
+    padding: 10px 8px;
+  }
+
+  .shift-time {
+    font-size: 11px;
+  }
+
+  .shift-position {
+    font-size: 10px;
+  }
+
+  .action-btn {
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
   }
 }
 
+/* 768px - Tablet Portrait */
 @media (max-width: 768px) {
+  .modern-page {
+    padding: 12px;
+  }
+
+  .page-header {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
   .header-content {
     flex-direction: column;
     align-items: stretch;
-    gap: 1.5rem;
-    text-align: center;
   }
 
-  .filter-controls {
+  .title-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
+  .timezone-badge {
+    font-size: 10px;
+    padding: 4px 10px;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .search-input,
+  .add-btn {
+    width: 100%;
+  }
+
+  .summary-section {
+    margin-bottom: 12px;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .summary-card {
+    padding: 12px;
+  }
+
+  .card-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .card-icon .q-icon {
+    font-size: 24px;
+  }
+
+  .card-value {
+    font-size: 24px;
+  }
+
+  .card-label {
+    font-size: 11px;
+  }
+
+  .controls-section {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .controls-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 1.5rem;
   }
 
-  .filter-inputs {
+  .filter-group {
     flex-direction: column;
     width: 100%;
   }
 
-  .search-field,
-  .filter-field {
-    min-width: 100%;
+  .filter-select,
+  .view-select {
+    width: 100%;
   }
 
-  .view-controls {
-    justify-content: center;
+  .week-nav {
+    width: 100%;
   }
 
-  .summary-grid {
-    grid-template-columns: 1fr;
+  .week-display {
+    min-width: 140px;
+    font-size: 12px;
+  }
+
+  .table-wrapper {
+    border-radius: 8px;
+  }
+
+  .cards-view {
+    padding: 12px;
+  }
+
+  .employee-cards {
+    gap: 12px;
+  }
+
+  .card-header {
+    padding: 12px;
+  }
+
+  .employee-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .employee-name {
+    font-size: 14px;
   }
 
   .schedule-grid {
     grid-template-columns: 1fr;
   }
 
-  .day-column {
-    border-bottom: 1px solid #e5e7eb;
+  .day-content {
+    min-height: 80px;
+    padding: 8px;
   }
 
-  .day-column:last-child {
-    border-bottom: none;
+  .modal-card {
+    max-width: 95vw;
+    margin: 12px;
+  }
+
+  .modal-header,
+  .modal-body {
+    padding: 14px;
+  }
+
+  .modal-title {
+    font-size: 17px;
   }
 
   .form-row {
     grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .cancel-btn,
+  .submit-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .quick-info {
+    flex-direction: column;
+    gap: 10px;
   }
 }
 
+/* Small Mobile - 480px and below */
 @media (max-width: 480px) {
-  .page-header,
-  .summary-section,
-  .filter-section,
-  .week-nav-section,
-  .content-section {
-    padding-left: 1rem;
-    padding-right: 1rem;
+  .modern-page {
+    padding: 10px;
   }
 
-  .dialog-card {
-    margin: 0.5rem;
-    max-width: calc(100vw - 1rem);
+  .page-header {
+    padding: 10px;
+    border-radius: 10px;
   }
 
   .page-title {
-    font-size: 1.5rem;
+    font-size: 16px;
   }
 
-  .summary-grid {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
+  .timezone-badge {
+    font-size: 9px;
+    padding: 4px 8px;
+  }
+
+  .add-btn {
+    height: 32px;
+    font-size: 12px;
   }
 
   .summary-card {
-    padding: 1rem;
+    padding: 10px;
+  }
+
+  .card-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .card-icon .q-icon {
+    font-size: 22px;
   }
 
   .card-value {
-    font-size: 1.5rem;
-  }
-}
-
-/* Drag and Drop States */
-.sortable-chosen {
-  opacity: 0.6;
-}
-
-.sortable-ghost {
-  opacity: 0.3;
-  background: #dbeafe !important;
-}
-
-/* Print Styles */
-@media print {
-  .header-actions,
-  .filter-section,
-  .week-nav-section,
-  .view-controls,
-  .dialog-close,
-  .shift-delete,
-  .shift-remove,
-  .add-shift-btn,
-  .add-shift-button {
-    display: none !important;
+    font-size: 22px;
   }
 
-  .modern-page {
-    background: white;
+  .card-label {
+    font-size: 10px;
   }
 
-  .employee-card,
-  .table-container {
-    border: 1px solid #000;
-    box-shadow: none;
+  .controls-section {
+    padding: 10px;
   }
 
-  .shift-card,
-  .shift-item {
-    background: #f9fafb !important;
-    color: #000 !important;
-    border: 1px solid #000;
+  .section-title {
+    font-size: 15px;
+  }
+
+  .week-nav {
+    padding: 4px 8px;
+  }
+
+  .nav-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .week-display {
+    font-size: 11px;
+  }
+
+  .cards-view {
+    padding: 10px;
+  }
+
+  .card-header {
+    padding: 10px;
+  }
+
+  .employee-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .employee-name {
+    font-size: 13px;
+  }
+
+  .day-header {
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .day-content {
+    padding: 6px;
+    min-height: 70px;
+  }
+
+  .shift-card {
+    padding: 8px;
+  }
+
+  .shift-time {
+    font-size: 11px;
+  }
+
+  .shift-position {
+    font-size: 10px;
+  }
+
+  .modal-header,
+  .modal-body {
+    padding: 12px;
+  }
+
+  .modal-title {
+    font-size: 16px;
   }
 }
 </style>

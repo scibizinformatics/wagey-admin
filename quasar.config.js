@@ -73,10 +73,17 @@ export default defineConfig((ctx) => {
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-webpack/quasar-config-file#devserver
     devServer: {
-      server: {
-        type: 'http',
-      },
-      open: true, // opens browser window automatically
+      server: { type: 'http' },
+      open: true, // open browser
+      proxy: [
+        {
+          context: ['/api'], // proxy all /api requests
+          target: 'https://staging.wageyapp.com',
+          changeOrigin: true,
+          secure: false, // set true if backend has valid SSL
+          pathRewrite: { '^/api': '/api' }, // keep path as-is
+        },
+      ],
     },
 
     // https://v2.quasar.dev/quasar-cli-webpack/quasar-config-file#framework
@@ -94,6 +101,7 @@ export default defineConfig((ctx) => {
       // directives: [],
 
       // Quasar plugins
+      css: ['app'],
       plugins: ['Notify', 'Dialog'],
     },
 
@@ -175,8 +183,9 @@ export default defineConfig((ctx) => {
       // specify the debugging port to use for the Electron app when running in development mode
       inspectPort: 5858,
 
-      bundler: 'packager', // 'packager' or 'builder'
-
+      bundler: 'builder',
+      // 'packager' or 'builder'
+      nodeIntegration: false,
       packager: {
         // https://github.com/electron-userland/electron-packager/blob/master/docs/api.md#options
         // OS X / Mac App Store
@@ -187,7 +196,6 @@ export default defineConfig((ctx) => {
         // Windows only
         // win32metadata: { ... }
       },
-
       builder: {
         // https://www.electron.build/configuration/configuration
 

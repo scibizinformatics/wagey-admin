@@ -5,7 +5,7 @@
       <div class="page-header">
         <div class="header-content">
           <div class="header-left">
-            <h1 class="page-title">Employee Management</h1>
+            <h1 class="page-title">Employees</h1>
           </div>
           <div class="header-actions">
             <q-btn
@@ -55,11 +55,11 @@
 
         <div class="stats-card business-card">
           <div class="stats-icon-wrapper">
-            <q-icon name="trending_up" class="stats-icon" />
+            <q-icon name="trending_down" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ employeeStats.inactive }}</div>
-            <div class="stats-label">Inactive</div>
+            <div class="stats-amount">{{ employeeStats.terminated }}</div>
+            <div class="stats-label">Terminated</div>
           </div>
         </div>
       </div>
@@ -102,19 +102,29 @@
                 <q-th class="table-header-cell">Email</q-th>
                 <q-th class="table-header-cell">Phone</q-th>
                 <q-th class="table-header-cell">Role</q-th>
-                <q-th class="table-header-cell">Civil Status</q-th>
+                <q-th class="table-header-cell">Status</q-th>
                 <q-th class="table-header-cell">Actions</q-th>
               </q-tr>
             </template>
 
             <template v-slot:body="props">
-              <q-tr class="table-body-row">
+              <q-tr
+                class="table-body-row"
+                :class="{ 'terminated-row': getStatus(props.row) === 'Terminated' }"
+              >
                 <q-td class="table-body-cell">
                   {{ String(props.rowIndex + 1).padStart(2, '0') }}.
                 </q-td>
                 <q-td class="table-body-cell employee-name-cell">
                   <div class="employee-info">
-                    <q-avatar size="32px" color="primary" text-color="white">
+                    <q-avatar size="32px" v-if="props.row.user?.picture_url">
+                      <img
+                        :src="props.row.user.picture_url"
+                        :alt="getFullName(props.row)"
+                        @error="handleImageError"
+                      />
+                    </q-avatar>
+                    <q-avatar v-else size="32px" color="primary" text-color="white">
                       {{ getInitials(getFullName(props.row)) }}
                     </q-avatar>
                     <span class="employee-name">{{ getFullName(props.row) }}</span>
@@ -132,8 +142,8 @@
                   {{ getRole(props.row) }}
                 </q-td>
                 <q-td class="table-body-cell">
-                  <div class="civil-status-badge">
-                    {{ getCivilStatus(props.row) }}
+                  <div :class="['status-badge', getStatusClass(props.row)]">
+                    {{ getStatus(props.row) }}
                   </div>
                 </q-td>
                 <q-td class="table-body-cell actions-cell">
@@ -155,18 +165,31 @@
                       size="sm"
                       class="action-btn edit-btn"
                       @click="editEmployee(props.row)"
+                      :disable="getStatus(props.row) === 'Terminated'"
                     >
                       <q-tooltip>Edit Employee</q-tooltip>
                     </q-btn>
                     <q-btn
+                      v-if="getStatus(props.row) !== 'Terminated'"
                       flat
                       round
-                      icon="delete"
+                      icon="block"
                       size="sm"
-                      class="action-btn delete-btn"
-                      @click="confirmDelete(props.row)"
+                      class="action-btn terminate-btn"
+                      @click="confirmTerminate(props.row)"
                     >
-                      <q-tooltip>Delete Employee</q-tooltip>
+                      <q-tooltip>Terminate Employee</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-else
+                      flat
+                      round
+                      icon="restore"
+                      size="sm"
+                      class="action-btn restore-btn"
+                      @click="confirmRestore(props.row)"
+                    >
+                      <q-tooltip>Restore Employee</q-tooltip>
                     </q-btn>
                   </div>
                 </q-td>
@@ -194,6 +217,49 @@
         <q-card-section class="modal-content">
           <q-form @submit="addEmployee" class="edit-form">
             <div class="form-sections">
+              <!-- Avatar Upload Section -->
+              <div class="avatar-upload-section">
+                <div class="avatar-preview-wrapper">
+                  <q-avatar size="120px" v-if="avatarPreview">
+                    <img :src="avatarPreview" alt="Avatar Preview" />
+                  </q-avatar>
+                  <q-avatar v-else size="120px" color="grey-3" text-color="grey-6">
+                    <q-icon name="person" size="60px" />
+                  </q-avatar>
+
+                  <input
+                    type="file"
+                    ref="avatarInputAdd"
+                    accept="image/*"
+                    style="display: none"
+                    @change="handleAvatarSelect"
+                  />
+
+                  <div class="avatar-actions">
+                    <q-btn
+                      flat
+                      dense
+                      color="primary"
+                      icon="upload"
+                      label="Upload Photo"
+                      @click="$refs.avatarInputAdd.click()"
+                    />
+                    <q-btn
+                      v-if="avatarPreview"
+                      flat
+                      dense
+                      color="negative"
+                      icon="delete"
+                      label="Remove"
+                      @click="removeAvatar"
+                    />
+                  </div>
+                  <div class="avatar-hint">
+                    Maximum file size: 5MB. Accepted formats: JPG, PNG, GIF
+                  </div>
+                </div>
+              </div>
+
               <!-- User Information Section -->
               <div class="form-section">
                 <div class="section-title">User Information</div>
@@ -272,7 +338,7 @@
                     label="Phone Number"
                     outlined
                     dense
-                    mask="(###) ###-####"
+                    mask="###########"
                   />
                   <q-input
                     v-model="addForm.emergency_contact"
@@ -322,7 +388,12 @@
 
             <div class="form-actions">
               <q-btn label="Cancel" flat color="grey-7" @click="cancelAdd" />
-              <q-btn label="Add Employee" type="submit" color="primary" :loading="savingEmployee" />
+              <q-btn
+                label="Add Employee"
+                type="submit"
+                color="primary"
+                :loading="savingEmployee || uploadingAvatar"
+              />
             </div>
           </q-form>
         </q-card-section>
@@ -334,7 +405,10 @@
       <q-card class="modal-card view-modal">
         <q-card-section class="modal-header">
           <div class="modal-title-section">
-            <q-avatar size="48px" color="primary" text-color="white" class="modal-avatar">
+            <q-avatar size="80px" v-if="selectedEmployee?.user?.picture_url">
+              <img :src="selectedEmployee.user.picture_url" :alt="getFullName(selectedEmployee)" />
+            </q-avatar>
+            <q-avatar v-else size="80px" color="primary" text-color="white" class="modal-avatar">
               {{ getInitials(getFullName(selectedEmployee)) }}
             </q-avatar>
             <div>
@@ -366,6 +440,14 @@
                 <div class="detail-row">
                   <span class="detail-label">Role:</span>
                   <span class="detail-value">{{ getRole(selectedEmployee) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Status:</span>
+                  <span class="detail-value">
+                    <div :class="['status-badge', getStatusClass(selectedEmployee)]">
+                      {{ getStatus(selectedEmployee) }}
+                    </div>
+                  </span>
                 </div>
               </div>
             </div>
@@ -447,6 +529,55 @@
         <q-card-section class="modal-content">
           <q-form @submit="saveEmployee" class="edit-form">
             <div class="form-sections">
+              <!-- Avatar Upload Section for Edit -->
+              <div class="avatar-upload-section">
+                <div class="avatar-preview-wrapper">
+                  <q-avatar size="120px" v-if="editAvatarPreview">
+                    <img :src="editAvatarPreview" alt="Avatar Preview" />
+                  </q-avatar>
+                  <q-avatar v-else-if="selectedEmployee?.user?.picture_url" size="120px">
+                    <img
+                      :src="selectedEmployee.user.picture_url"
+                      :alt="getFullName(selectedEmployee)"
+                    />
+                  </q-avatar>
+                  <q-avatar v-else size="120px" color="grey-3" text-color="grey-6">
+                    <q-icon name="person" size="60px" />
+                  </q-avatar>
+
+                  <input
+                    type="file"
+                    ref="avatarInputEdit"
+                    accept="image/*"
+                    style="display: none"
+                    @change="handleEditAvatarSelect"
+                  />
+
+                  <div class="avatar-actions">
+                    <q-btn
+                      flat
+                      dense
+                      color="primary"
+                      icon="upload"
+                      label="Change Photo"
+                      @click="$refs.avatarInputEdit.click()"
+                    />
+                    <q-btn
+                      v-if="editAvatarPreview"
+                      flat
+                      dense
+                      color="negative"
+                      icon="delete"
+                      label="Remove"
+                      @click="removeEditAvatar"
+                    />
+                  </div>
+                  <div class="avatar-hint">
+                    Maximum file size: 5MB. Accepted formats: JPG, PNG, GIF
+                  </div>
+                </div>
+              </div>
+
               <!-- User Information Section -->
               <div class="form-section">
                 <div class="section-title">User Information</div>
@@ -509,7 +640,7 @@
                     label="Phone Number"
                     outlined
                     dense
-                    mask="(###) ###-####"
+                    mask="############"
                   />
                   <q-input
                     v-model="editForm.emergency_contact"
@@ -559,28 +690,65 @@
 
             <div class="form-actions">
               <q-btn label="Cancel" flat color="grey-7" @click="cancelEdit" />
-              <q-btn label="Save Changes" type="submit" color="primary" :loading="savingEmployee" />
+              <q-btn
+                label="Save Changes"
+                type="submit"
+                color="primary"
+                :loading="savingEmployee || uploadingAvatar"
+              />
             </div>
           </q-form>
         </q-card-section>
       </q-card>
     </q-dialog>
 
-    <!-- Delete Confirmation Dialog -->
-    <q-dialog v-model="showDeleteDialog" persistent>
-      <q-card class="delete-dialog">
-        <q-card-section class="delete-header">
-          <q-icon name="warning" class="delete-icon" />
-          <div class="delete-title">Confirm Delete</div>
+    <!-- Terminate Confirmation Dialog -->
+    <q-dialog v-model="showTerminateDialog" persistent>
+      <q-card class="terminate-dialog">
+        <q-card-section class="terminate-header">
+          <q-icon name="block" class="terminate-icon" />
+          <div class="terminate-title">Confirm Termination</div>
         </q-card-section>
-        <q-card-section class="delete-content">
-          Are you sure you want to delete employee
-          <strong>{{ getFullName(employeeToDelete) }}</strong
-          >? This action cannot be undone.
+        <q-card-section class="terminate-content">
+          Are you sure you want to terminate employee
+          <strong>{{ getFullName(employeeToTerminate) }}</strong
+          >? This will change their status to "Terminated" and they will no longer have access to
+          the system.
         </q-card-section>
-        <q-card-actions align="right" class="delete-actions">
-          <q-btn flat label="Cancel" color="grey-7" @click="showDeleteDialog = false" />
-          <q-btn flat label="Delete" color="negative" @click="deleteEmployee" :loading="deleting" />
+        <q-card-actions align="right" class="terminate-actions">
+          <q-btn flat label="Cancel" color="grey-7" @click="showTerminateDialog = false" />
+          <q-btn
+            flat
+            label="Terminate"
+            color="negative"
+            @click="terminateEmployee"
+            :loading="terminating"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Restore Confirmation Dialog -->
+    <q-dialog v-model="showRestoreDialog" persistent>
+      <q-card class="restore-dialog">
+        <q-card-section class="restore-header">
+          <q-icon name="restore" class="restore-icon" />
+          <div class="restore-title">Confirm Restoration</div>
+        </q-card-section>
+        <q-card-section class="restore-content">
+          Are you sure you want to restore employee
+          <strong>{{ getFullName(employeeToRestore) }}</strong
+          >? This will change their status back to "Active" and restore their system access.
+        </q-card-section>
+        <q-card-actions align="right" class="restore-actions">
+          <q-btn flat label="Cancel" color="grey-7" @click="showRestoreDialog = false" />
+          <q-btn
+            flat
+            label="Restore"
+            color="positive"
+            @click="restoreEmployee"
+            :loading="restoring"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -600,16 +768,22 @@ const filteredEmployees = ref([])
 const searchTerm = ref('')
 const loading = ref(false)
 const sortBy = ref('Newest')
+//const avatarFile = ref(null)
+const avatarPreview = ref(null)
+const uploadingAvatar = ref(false)
 
 // Modal states
 const showAddModal = ref(false)
 const showViewModal = ref(false)
 const showEditModal = ref(false)
-const showDeleteDialog = ref(false)
+const showTerminateDialog = ref(false)
+const showRestoreDialog = ref(false)
 const selectedEmployee = ref({})
-const employeeToDelete = ref({})
+const employeeToTerminate = ref({})
+const employeeToRestore = ref({})
 const savingEmployee = ref(false)
-const deleting = ref(false)
+const terminating = ref(false)
+const restoring = ref(false)
 
 // Form states
 const confirmPassword = ref('')
@@ -667,23 +841,23 @@ const timezoneOptions = ref([
 ])
 const filteredTimezoneOptions = ref([])
 
-// Table columns (required by q-table even though we use custom slots)
+// Table columns
 const columns = ref([
   { name: 'sl_no', label: 'SL No', field: 'id', align: 'left' },
   { name: 'name', label: 'Employee Name', field: 'full_name', align: 'left' },
   { name: 'email', label: 'Email', field: (row) => row.user?.email, align: 'left' },
   { name: 'phone', label: 'Phone', field: 'phone_number', align: 'left' },
   { name: 'role', label: 'Role', field: 'user_role_name', align: 'left' },
-  { name: 'civil_status', label: 'Civil Status', field: 'civil_status', align: 'left' },
+  { name: 'status', label: 'Status', field: 'status', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ])
 
 // --- Computed ---
 const employeeStats = computed(() => {
   const total = employees.value.length
-  const active = employees.value.filter((emp) => emp.is_active !== false).length
-  const inactive = total - active
-  return { total, active, inactive }
+  const active = employees.value.filter((emp) => getStatus(emp) === 'Active').length
+  const terminated = employees.value.filter((emp) => getStatus(emp) === 'Terminated').length
+  return { total, active, terminated }
 })
 
 // --- Helpers ---
@@ -698,14 +872,10 @@ const getFullName = (employee) => {
 
 const getEmail = (employee) => employee?.user?.email || 'N/A'
 
-// NEW HELPER FUNCTIONS FOR API STRUCTURE
 const getRole = (employee) => {
   if (!employee) return 'N/A'
-  // Try user_role_name (new API structure)
   if (employee.user_role_name) return employee.user_role_name
-  // Fallback to user_role.name (old structure)
   if (employee.user_role?.name) return employee.user_role.name
-  // Try to get from companies array
   if (employee.companies && employee.companies.length > 0) {
     return employee.companies[0].user_role || 'N/A'
   }
@@ -718,6 +888,25 @@ const getPhoneNumber = (employee) => {
 
 const getCivilStatus = (employee) => {
   return employee?.civil_status || 'N/A'
+}
+
+const getStatus = (employee) => {
+  if (!employee) return 'N/A'
+  // Check for status field first
+  if (employee.status && employee.status.toLowerCase() === 'terminated') {
+    return 'Terminated'
+  }
+  // Check is_active field
+  if (employee.is_active === false) return 'Terminated'
+  // Default to Active
+  return 'Active'
+}
+
+const getStatusClass = (employee) => {
+  const status = getStatus(employee)
+  if (status === 'Active') return 'status-active'
+  if (status === 'Terminated') return 'status-terminated'
+  return 'status-default'
 }
 
 const getInitials = (name) =>
@@ -782,6 +971,10 @@ const fetchEmployees = async () => {
       { headers: { Authorization: `Bearer ${token}` } },
     )
 
+    console.log('=== EMPLOYEES FETCHED ===')
+    console.log('Sample employee data:', response.data[0])
+    console.log('Total employees:', response.data.length)
+
     employees.value = response.data || []
     filteredEmployees.value = employees.value
     sortEmployees()
@@ -817,6 +1010,65 @@ const fetchRoles = async () => {
   }
 }
 
+// Fetch full employee details
+const fetchEmployeeDetails = async (employeeId) => {
+  try {
+    const token = localStorage.getItem('access_token')
+    let storedCompany = localStorage.getItem('selectedCompany')
+    let companyId = null
+
+    try {
+      const parsed = JSON.parse(storedCompany)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = storedCompany
+    }
+
+    if (!token || !companyId) {
+      $q.notify({ type: 'negative', message: 'Missing token or company ID.', position: 'top' })
+      return null
+    }
+
+    const response = await axios.get(
+      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${employeeId}/`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    return response.data
+  } catch (error) {
+    console.error('❌ Error fetching employee details:', error)
+    $q.notify({ type: 'negative', message: 'Failed to fetch employee details', position: 'top' })
+    return null
+  }
+}
+
+// Utility function for PH phone number formatting
+function formatPhilippinePhone(number) {
+  if (!number) return ''
+
+  let cleaned = number.replace(/\D/g, '') // remove non-digits
+
+  // If number starts with '0' (ex: 09123456789) → convert to +63 format
+  if (cleaned.startsWith('0')) {
+    cleaned = '+63' + cleaned.slice(1)
+  }
+  // If number starts with '9' (ex: 9123456789) → add +63
+  else if (cleaned.startsWith('9')) {
+    cleaned = '+63' + cleaned
+  }
+  // If already starts with '63' (ex: 639123456789) → add '+'
+  else if (cleaned.startsWith('63')) {
+    cleaned = '+' + cleaned
+  }
+
+  // Validate correct PH mobile number format
+  const valid = /^\+639\d{9}$/.test(cleaned)
+  return valid ? cleaned : ''
+}
+
+// -----------------------------
+// Add Employee
+// -----------------------------
 async function addEmployee() {
   try {
     const token = authStore.token || localStorage.getItem('access_token')
@@ -834,30 +1086,39 @@ async function addEmployee() {
     }
 
     if (!token) {
-      $q.notify({
+      return $q.notify({
         type: 'negative',
         message: 'Missing authentication token. Please log in again.',
         position: 'top',
       })
-      return
     }
 
     if (!companyId) {
-      $q.notify({
+      return $q.notify({
         type: 'negative',
         message: 'No company selected. Please select a company first.',
         position: 'top',
       })
-      return
     }
 
     if (!userId) {
-      $q.notify({
+      return $q.notify({
         type: 'negative',
-        message: 'Unable to identify logged-in user (updated_by). Please re-login.',
+        message: 'Unable to identify logged-in user. Please re-login.',
         position: 'top',
       })
-      return
+    }
+
+    // ✅ Format phone numbers properly
+    const formattedPhone = formatPhilippinePhone(addForm.value.phone_number)
+    const formattedEmergency = formatPhilippinePhone(addForm.value.emergency_contact)
+
+    if (!formattedPhone) {
+      return $q.notify({
+        type: 'warning',
+        message: 'Invalid phone number format. Please use +639XXXXXXXXX or 09XXXXXXXXX.',
+        position: 'top',
+      })
     }
 
     const payload = {
@@ -870,14 +1131,15 @@ async function addEmployee() {
       flow: 'admin',
       civil_status: addForm.value.civil_status || '',
       address: addForm.value.address || '',
-      phone_number: addForm.value.phone_number || '',
-      emergency_contact: addForm.value.emergency_contact || '',
+      phone_number: formattedPhone,
+      emergency_contact: formattedEmergency,
       birthday: addForm.value.birthday || null,
       bank_acct: addForm.value.bank_acct || '',
       timezone: addForm.value.timezone || '',
       last_date_updated: new Date().toISOString(),
       user_role: addForm.value.user_role?.id || 0,
       updated_by: userId,
+      status: 'active',
       companies: [{ company_id: companyId }],
     }
 
@@ -899,8 +1161,6 @@ async function addEmployee() {
     showAddModal.value = false
   } catch (error) {
     console.error('❌ Error adding employee:', error)
-    console.log('🔍 Response data:', error.response?.data)
-
     $q.notify({
       type: 'negative',
       message:
@@ -913,10 +1173,14 @@ async function addEmployee() {
   }
 }
 
+// -----------------------------
+// Save Employee (Edit)
+// -----------------------------
 const saveEmployee = async () => {
   try {
     savingEmployee.value = true
     const token = localStorage.getItem('access_token')
+
     let storedCompany = localStorage.getItem('selectedCompany')
     let companyId = null
 
@@ -928,8 +1192,23 @@ const saveEmployee = async () => {
     }
 
     if (!token || !companyId) {
-      $q.notify({ type: 'negative', message: 'Missing token or company ID.', position: 'top' })
-      return
+      return $q.notify({
+        type: 'negative',
+        message: 'Missing token or company ID.',
+        position: 'top',
+      })
+    }
+
+    // ✅ Format and validate phone numbers before saving
+    const formattedPhone = formatPhilippinePhone(editForm.value.phone_number)
+    const formattedEmergency = formatPhilippinePhone(editForm.value.emergency_contact)
+
+    if (!formattedPhone) {
+      return $q.notify({
+        type: 'warning',
+        message: 'Invalid phone number format. Please use +639XXXXXXXXX or 09XXXXXXXXX.',
+        position: 'top',
+      })
     }
 
     const payload = {
@@ -943,8 +1222,8 @@ const saveEmployee = async () => {
       user_role_id: editForm.value.user_role?.id,
       civil_status: editForm.value.civil_status,
       address: editForm.value.address,
-      phone_number: editForm.value.phone_number,
-      emergency_contact: editForm.value.emergency_contact,
+      phone_number: formattedPhone,
+      emergency_contact: formattedEmergency,
       birthday: editForm.value.birthday || null,
       bank_acct: editForm.value.bank_acct,
       timezone: editForm.value.timezone,
@@ -957,21 +1236,20 @@ const saveEmployee = async () => {
     )
 
     const updatedEmployee = response.data
-    const employeeIndex = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
-    if (employeeIndex !== -1) {
-      employees.value[employeeIndex] = updatedEmployee
-    }
+    const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
+    if (index !== -1) employees.value[index] = updatedEmployee
     filteredEmployees.value = employees.value
     sortEmployees()
 
     $q.notify({
       type: 'positive',
-      message: `Employee ${getFullName(updatedEmployee)} updated successfully`,
+      message: `Employee ${getFullName(updatedEmployee)} updated successfully.`,
       position: 'top',
     })
+
     showEditModal.value = false
   } catch (error) {
-    console.error('Error updating employee:', error)
+    console.error('❌ Error updating employee:', error)
     $q.notify({
       type: 'negative',
       message: error.response?.data?.detail || 'Failed to update employee',
@@ -982,9 +1260,9 @@ const saveEmployee = async () => {
   }
 }
 
-const deleteEmployee = async () => {
+const terminateEmployee = async () => {
   try {
-    deleting.value = true
+    terminating.value = true
     const token = localStorage.getItem('access_token')
     let storedCompany = localStorage.getItem('selectedCompany')
     let companyId = null
@@ -1001,29 +1279,139 @@ const deleteEmployee = async () => {
       return
     }
 
-    await axios.delete(
-      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${employeeToDelete.value.id}/`,
+    // Use the correct payload structure based on the API documentation
+    const payload = {
+      companies: [
+        {
+          company_id: parseInt(companyId),
+          employment_status: 'terminated',
+        },
+      ],
+    }
+
+    const response = await axios.patch(
+      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${employeeToTerminate.value.id}/`,
+      payload,
       { headers: { Authorization: `Bearer ${token}` } },
     )
 
-    employees.value = employees.value.filter((e) => e.id !== employeeToDelete.value.id)
-    filteredEmployees.value = employees.value
+    // Update the employee in the local list immediately
+    const employeeIndex = employees.value.findIndex((e) => e.id === employeeToTerminate.value.id)
+    if (employeeIndex !== -1) {
+      // Update the employee with the response data
+      employees.value[employeeIndex] = {
+        ...response.data,
+        is_active: false,
+        status: 'terminated',
+      }
+    }
+
+    // Update filtered list as well
+    filteredEmployees.value = [...employees.value]
+    sortEmployees()
 
     $q.notify({
       type: 'positive',
-      message: `Employee ${getFullName(employeeToDelete.value)} deleted successfully`,
+      message: `Employee ${getFullName(employeeToTerminate.value)} has been terminated`,
       position: 'top',
     })
-    showDeleteDialog.value = false
+    showTerminateDialog.value = false
+    employeeToTerminate.value = {}
   } catch (error) {
-    console.error('Error deleting employee:', error)
+    console.error('Error terminating employee:', error)
+    console.error('Error details:', error.response?.data)
     $q.notify({
       type: 'negative',
-      message: error.response?.data?.detail || 'Failed to delete employee',
+      message:
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        'Failed to terminate employee',
       position: 'top',
     })
   } finally {
-    deleting.value = false
+    terminating.value = false
+  }
+}
+
+const restoreEmployee = async () => {
+  try {
+    restoring.value = true
+    const token = localStorage.getItem('access_token')
+    let storedCompany = localStorage.getItem('selectedCompany')
+    let companyId = null
+
+    try {
+      const parsed = JSON.parse(storedCompany)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = storedCompany
+    }
+
+    if (!token || !companyId) {
+      $q.notify({
+        type: 'negative',
+        message: 'Missing token or company ID.',
+        position: 'top',
+      })
+      return
+    }
+
+    // ✅ match the structure used in terminateEmployee()
+    const payload = {
+      companies: [
+        {
+          company_id: parseInt(companyId),
+          employment_status: 'active', // 🔑 this is the key change
+        },
+      ],
+      is_active: true, // for safety
+      status: 'active',
+    }
+
+    console.log('Restoring employee with payload:', payload)
+
+    const response = await axios.patch(
+      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${employeeToRestore.value.id}/`,
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    console.log('Restore response:', response.data)
+
+    // ✅ Update employee locally
+    const employeeIndex = employees.value.findIndex((e) => e.id === employeeToRestore.value.id)
+    if (employeeIndex !== -1) {
+      employees.value[employeeIndex] = {
+        ...response.data,
+        is_active: true,
+        status: 'active',
+      }
+    }
+
+    filteredEmployees.value = [...employees.value]
+    sortEmployees()
+
+    $q.notify({
+      type: 'positive',
+      message: `Employee ${getFullName(employeeToRestore.value)} has been restored successfully.`,
+      position: 'top',
+    })
+
+    showRestoreDialog.value = false
+    employeeToRestore.value = {}
+  } catch (error) {
+    console.error('Error restoring employee:', error)
+    console.error('Error details:', error.response?.data)
+    $q.notify({
+      type: 'negative',
+      message:
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        'Failed to restore employee',
+      position: 'top',
+    })
+  } finally {
+    restoring.value = false
   }
 }
 
@@ -1040,7 +1428,7 @@ const filterEmployees = () => {
       getEmail(emp).toLowerCase().includes(term) ||
       getPhoneNumber(emp).toLowerCase().includes(term) ||
       getRole(emp).toLowerCase().includes(term) ||
-      getCivilStatus(emp).toLowerCase().includes(term)
+      getStatus(emp).toLowerCase().includes(term)
     )
   })
 }
@@ -1088,40 +1476,66 @@ const openAddModal = () => {
   showAddModal.value = true
 }
 
-const viewEmployee = (emp) => {
-  selectedEmployee.value = emp
-  showViewModal.value = true
+const viewEmployee = async (emp) => {
+  // fetch full details then show
+  const detailed = await fetchEmployeeDetails(emp.id)
+  if (detailed) {
+    selectedEmployee.value = detailed
+    showViewModal.value = true
+  }
 }
 
-const editEmployee = (emp) => {
-  selectedEmployee.value = emp
+const editEmployee = async (emp) => {
+  // fetch full details then populate edit form
+  const detailed = await fetchEmployeeDetails(emp.id)
+  if (!detailed) return
 
-  // Find matching role from roleOptions based on user_role_name
-  const matchingRole = roleOptions.value.find((role) => role.name === emp.user_role_name)
+  selectedEmployee.value = detailed
 
+  // Match the role object correctly
+  const matchingRole =
+    roleOptions.value.find(
+      (role) =>
+        role.name?.toLowerCase() ===
+        (detailed.user_role_name || detailed.user_role?.name || '').toLowerCase(),
+    ) || null
+
+  // Fill the form with the employee’s existing data
   editForm.value = {
     user: {
-      id: emp.user?.id || 0,
-      username: emp.user?.username || '',
-      email: emp.user?.email || '',
-      first_name: emp.user?.first_name || '',
-      last_name: emp.user?.last_name || '',
+      id: detailed.user?.id || 0,
+      username: detailed.user?.username || '',
+      email: detailed.user?.email || '',
+      first_name: detailed.user?.first_name || '',
+      middle_name: detailed.user?.middle_name || '',
+      last_name: detailed.user?.last_name || '',
     },
-    user_role: matchingRole || null,
-    civil_status: emp.civil_status || '',
-    address: emp.address || '',
-    phone_number: emp.phone_number || '',
-    emergency_contact: emp.emergency_contact || '',
-    birthday: emp.birthday || '',
-    bank_acct: emp.bank_acct || '',
-    timezone: emp.timezone || '',
+    user_role: matchingRole || detailed.user_role || null,
+    civil_status: detailed.civil_status || '',
+    address: detailed.address || '',
+    phone_number: detailed.phone_number || '',
+    emergency_contact: detailed.emergency_contact || '',
+    birthday: detailed.birthday || '',
+    bank_acct: detailed.bank_acct || '',
+    timezone: detailed.timezone || '',
   }
+
   showEditModal.value = true
 }
 
-const confirmDelete = (emp) => {
-  employeeToDelete.value = emp
-  showDeleteDialog.value = true
+const confirmTerminate = (emp) => {
+  console.log('=== TERMINATE DEBUG ===')
+  console.log('Employee to terminate:', emp)
+  console.log('Current status:', getStatus(emp))
+  console.log('is_active:', emp.is_active)
+  console.log('status field:', emp.status)
+  employeeToTerminate.value = emp
+  showTerminateDialog.value = true
+}
+
+const confirmRestore = (emp) => {
+  employeeToRestore.value = emp
+  showRestoreDialog.value = true
 }
 
 const cancelAdd = () => {
@@ -1171,7 +1585,6 @@ const resetAddForm = () => {
   confirmPassword.value = ''
 }
 
-// Watch for sort changes
 watch(sortBy, () => {
   sortEmployees()
 })
@@ -1192,15 +1605,14 @@ onMounted(() => {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 16px;
 }
 
-/* Header Section */
 .page-header {
   background: white;
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 24px;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
   border: 1px solid #e2e8f0;
 }
 
@@ -1208,10 +1620,11 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
   color: #1a202c;
   margin: 0 0 4px 0;
@@ -1219,47 +1632,53 @@ onMounted(() => {
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .add-employee-btn {
-  height: 40px;
+  height: 36px;
   border-radius: 8px;
   font-weight: 500;
   text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
 }
 
 .header-search {
-  width: 300px;
+  min-width: 180px;
+  max-width: 250px;
+  flex: 1;
 }
 
 .header-search .q-field__control {
   border-radius: 8px;
-  height: 40px;
+  height: 36px;
 }
 
 .search-icon {
   color: #9ca3af;
 }
 
-/* Stats Section */
 .stats-section {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .stats-card {
   background: white;
-  border-radius: 16px;
-  padding: 24px;
+  border-radius: 12px;
+  padding: 16px;
   border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   transition: all 0.2s ease;
+  min-width: 0;
 }
 
 .stats-card:hover {
@@ -1276,31 +1695,33 @@ onMounted(() => {
 }
 
 .business-card {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
 }
 
 .stats-icon-wrapper {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 
 .stats-icon {
-  font-size: 28px;
+  font-size: 24px;
   color: #374151;
 }
 
 .stats-content {
   flex: 1;
+  min-width: 0;
 }
 
 .stats-amount {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 700;
   color: #1a202c;
   line-height: 1;
@@ -1308,55 +1729,54 @@ onMounted(() => {
 }
 
 .stats-label {
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
   margin-bottom: 2px;
 }
 
-/* Table Section */
 .table-section {
   background: white;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
   overflow: hidden;
 }
 
 .table-header {
-  padding: 24px;
+  padding: 16px;
   border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .table-title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
   color: #1a202c;
   margin: 0;
 }
 
 .sort-select {
-  width: 180px;
+  width: 160px;
 }
 
 .sort-select .q-field__control {
   border-radius: 8px;
-  height: 40px;
+  height: 36px;
 }
 
-/* Modern Table */
 .modern-table-container {
   border: 2px solid #3b82f6;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
-  margin: 0 24px 24px 24px;
+  margin: 0 16px 16px 16px;
 }
 
 .loan-table {
   background: white;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
@@ -1366,12 +1786,13 @@ onMounted(() => {
 }
 
 .table-header-cell {
-  padding: 16px;
-  font-size: 14px;
+  padding: 12px 10px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
   text-align: left;
   border: none;
+  white-space: nowrap;
 }
 
 .table-body-row {
@@ -1383,9 +1804,18 @@ onMounted(() => {
   background: #f8fafc;
 }
 
+.terminated-row {
+  opacity: 0.6;
+  background: #fef2f2;
+}
+
+.terminated-row:hover {
+  background: #fee2e2;
+}
+
 .table-body-cell {
-  padding: 16px;
-  font-size: 14px;
+  padding: 12px 10px;
+  font-size: 13px;
   color: #374151;
   border: none;
   vertical-align: middle;
@@ -1394,12 +1824,13 @@ onMounted(() => {
 .employee-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .employee-name {
   font-weight: 500;
   color: #1a202c;
+  font-size: 13px;
 }
 
 .email-cell .email-link {
@@ -1411,28 +1842,51 @@ onMounted(() => {
   text-decoration: underline;
 }
 
-.civil-status-badge {
+.status-badge {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-active {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-terminated {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.status-default {
   background: #f3f4f6;
   color: #374151;
 }
 
+.actions-cell {
+  width: 120px;
+  min-width: 120px;
+}
+
 .action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
 }
 
 .action-btn {
   width: 32px;
   height: 32px;
+  min-width: 32px;
   border-radius: 6px;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .view-btn {
@@ -1453,19 +1907,32 @@ onMounted(() => {
   background: #fde68a;
 }
 
-.delete-btn {
+.edit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.terminate-btn {
   background: #fef2f2;
   color: #ef4444;
 }
 
-.delete-btn:hover {
+.terminate-btn:hover {
   background: #fee2e2;
 }
 
-/* Modal Styles */
+.restore-btn {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.restore-btn:hover {
+  background: #bbf7d0;
+}
+
 .modal-card {
   width: 100%;
-  max-width: 900px;
+  max-width: 800px;
   max-height: 85vh;
   border-radius: 12px;
   display: flex;
@@ -1474,18 +1941,18 @@ onMounted(() => {
 
 .add-modal,
 .edit-modal {
-  max-width: 1000px;
+  max-width: 900px;
 }
 
 .view-modal {
-  max-width: 900px;
+  max-width: 800px;
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 16px 20px;
   background: #f9fafb;
   flex-shrink: 0;
 }
@@ -1493,7 +1960,7 @@ onMounted(() => {
 .modal-title-section {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .modal-avatar {
@@ -1501,7 +1968,7 @@ onMounted(() => {
 }
 
 .modal-icon {
-  font-size: 32px;
+  font-size: 28px;
   color: #3b82f6;
   background: #dbeafe;
   padding: 8px;
@@ -1509,14 +1976,14 @@ onMounted(() => {
 }
 
 .modal-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: #111827;
   margin: 0;
 }
 
 .modal-subtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: #6b7280;
   margin-top: 2px;
 }
@@ -1530,50 +1997,77 @@ onMounted(() => {
 }
 
 .modal-content {
-  padding: 24px;
+  padding: 20px;
   overflow-y: auto;
   flex: 1;
 }
 
-/* Form Sections */
+.avatar-upload-section {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.avatar-preview-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.avatar-hint {
+  font-size: 11px;
+  color: #6b7280;
+  text-align: center;
+  max-width: 280px;
+}
+
 .form-sections,
 .detail-sections {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .form-section,
 .detail-section {
   background: #f9fafb;
   border-radius: 8px;
-  padding: 20px;
+  padding: 16px;
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #111827;
-  margin: 0 0 16px 0;
+  margin: 0 0 12px 0;
   padding-bottom: 8px;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
 }
 
 .col-span-2 {
   grid-column: span 2;
 }
 
-/* Detail Grid */
 .detail-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .detail-row {
@@ -1589,7 +2083,7 @@ onMounted(() => {
 }
 
 .detail-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #6b7280;
   flex-shrink: 0;
@@ -1597,153 +2091,72 @@ onMounted(() => {
 }
 
 .detail-value {
-  font-size: 14px;
+  font-size: 13px;
   color: #111827;
   text-align: right;
   word-break: break-word;
 }
 
-/* Form Actions */
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  padding-top: 20px;
+  gap: 10px;
+  padding-top: 16px;
   border-top: 1px solid #e5e7eb;
-  margin-top: 24px;
+  margin-top: 16px;
 }
 
-/* Delete Dialog */
-.delete-dialog {
-  max-width: 400px;
+.terminate-dialog,
+.restore-dialog {
+  max-width: 420px;
   border-radius: 12px;
 }
 
-.delete-header {
+.terminate-header,
+.restore-header {
   text-align: center;
-  padding: 24px 24px 16px;
+  padding: 20px 20px 12px;
 }
 
-.delete-icon {
-  font-size: 48px;
+.terminate-icon {
+  font-size: 42px;
   color: #ef4444;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
-.delete-title {
-  font-size: 20px;
+.restore-icon {
+  font-size: 42px;
+  color: #16a34a;
+  margin-bottom: 10px;
+}
+
+.terminate-title,
+.restore-title {
+  font-size: 18px;
   font-weight: 600;
   color: #111827;
 }
 
-.delete-content {
-  padding: 0 24px 16px;
+.terminate-content,
+.restore-content {
+  padding: 0 20px 12px;
   text-align: center;
   color: #4b5563;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.delete-content strong {
+.terminate-content strong,
+.restore-content strong {
   color: #111827;
 }
 
-.delete-actions {
-  padding: 16px 24px;
+.terminate-actions,
+.restore-actions {
+  padding: 12px 20px;
   border-top: 1px solid #e5e7eb;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  .dashboard-container {
-    padding: 16px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-
-  .header-actions {
-    width: 100%;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .add-employee-btn,
-  .header-search {
-    width: 100%;
-  }
-
-  .stats-section {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .table-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-
-  .sort-select {
-    width: 100%;
-  }
-
-  .modern-table-container {
-    margin: 0 16px 16px 16px;
-    overflow-x: auto;
-  }
-
-  .table-body-cell {
-    padding: 12px 8px;
-    font-size: 12px;
-  }
-
-  .employee-info {
-    gap: 8px;
-  }
-
-  .action-buttons {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .modal-card {
-    margin: 16px;
-    max-width: calc(100vw - 32px);
-    max-height: calc(100vh - 32px);
-  }
-
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .col-span-2 {
-    grid-column: span 1;
-  }
-
-  .detail-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .detail-value {
-    text-align: left;
-  }
-
-  .form-actions {
-    flex-direction: column-reverse;
-  }
-
-  .form-actions button {
-    width: 100%;
-  }
-}
-
-/* Scrollbar Styling */
 .modal-content::-webkit-scrollbar {
   width: 6px;
 }
@@ -1762,12 +2175,10 @@ onMounted(() => {
   background: #94a3b8;
 }
 
-/* Loading States */
 .q-field--loading .q-field__control::before {
   background: #f3f4f6;
 }
 
-/* Focus States */
 .modal-close-btn:focus,
 .form-actions button:focus {
   outline: 2px solid #3b82f6;
@@ -1777,5 +2188,388 @@ onMounted(() => {
 .q-field--focused .q-field__control {
   border-color: #3b82f6;
   box-shadow: 0 0 0 1px #3b82f6;
+}
+
+/* ===================================
+   RESPONSIVE BREAKPOINTS
+   =================================== */
+
+/* 1440px - Large Desktop */
+@media (min-width: 1440px) {
+  .dashboard-container {
+    max-width: 1400px;
+    padding: 20px;
+  }
+
+  .stats-section {
+    gap: 16px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 14px 12px;
+  }
+
+  .action-buttons {
+    gap: 5px;
+  }
+
+  .action-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+}
+
+/* 1024px - Desktop / Tablet Landscape */
+@media (max-width: 1024px) {
+  .dashboard-container {
+    padding: 16px;
+  }
+
+  .page-header {
+    padding: 14px;
+  }
+
+  .header-content {
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .header-search {
+    min-width: 200px;
+  }
+
+  .stats-section {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .stats-card {
+    padding: 14px;
+  }
+
+  .stats-icon-wrapper {
+    width: 44px;
+    height: 44px;
+  }
+
+  .stats-icon {
+    font-size: 22px;
+  }
+
+  .stats-amount {
+    font-size: 24px;
+  }
+
+  .stats-label {
+    font-size: 12px;
+  }
+
+  .table-header {
+    padding: 14px;
+  }
+
+  .modern-table-container {
+    margin: 0 14px 14px 14px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 11px 8px;
+    font-size: 12px;
+  }
+
+  .actions-cell {
+    width: 110px;
+    min-width: 110px;
+  }
+
+  .action-buttons {
+    gap: 3px;
+  }
+
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+  }
+
+  .employee-info {
+    gap: 8px;
+  }
+
+  .employee-name {
+    font-size: 12px;
+  }
+
+  .modal-card {
+    max-width: 90vw;
+  }
+
+  .form-grid {
+    gap: 12px;
+  }
+}
+
+/* 768px - Tablet Portrait */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 16px;
+  }
+
+  .page-header {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .add-employee-btn,
+  .header-search {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .stats-section {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .stats-card {
+    padding: 16px;
+  }
+
+  .stats-icon-wrapper {
+    width: 44px;
+    height: 44px;
+  }
+
+  .stats-icon {
+    font-size: 22px;
+  }
+
+  .stats-amount {
+    font-size: 24px;
+  }
+
+  .stats-label {
+    font-size: 13px;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .sort-select {
+    width: 100%;
+  }
+
+  .modern-table-container {
+    margin: 0 12px 12px 12px;
+    overflow-x: auto;
+    border-radius: 8px;
+  }
+
+  .loan-table {
+    min-width: 800px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 12px 8px;
+    font-size: 12px;
+  }
+
+  .table-header-cell {
+    white-space: nowrap;
+  }
+
+  .employee-info {
+    gap: 8px;
+  }
+
+  .employee-name {
+    font-size: 12px;
+  }
+
+  .actions-cell {
+    width: 120px;
+    min-width: 120px;
+    padding: 12px 6px;
+  }
+
+  .action-buttons {
+    gap: 3px;
+    justify-content: center;
+  }
+
+  .action-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+  }
+
+  .status-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  .modal-card {
+    margin: 12px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .modal-header {
+    padding: 16px;
+  }
+
+  .modal-title-section {
+    gap: 12px;
+  }
+
+  .modal-title {
+    font-size: 18px;
+  }
+
+  .modal-subtitle {
+    font-size: 13px;
+  }
+
+  .modal-content {
+    padding: 16px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .col-span-2 {
+    grid-column: span 1;
+  }
+
+  .form-section,
+  .detail-section {
+    padding: 16px;
+  }
+
+  .section-title {
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 10px 0;
+  }
+
+  .detail-value {
+    text-align: left;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .form-actions button {
+    width: 100%;
+  }
+
+  .avatar-upload-section {
+    padding: 16px;
+  }
+
+  .avatar-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .avatar-actions button {
+    width: 100%;
+  }
+}
+
+/* Small Mobile - 480px and below */
+@media (max-width: 480px) {
+  .dashboard-container {
+    padding: 12px;
+  }
+
+  .page-header {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .stats-card {
+    padding: 14px;
+  }
+
+  .stats-icon-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+
+  .stats-icon {
+    font-size: 20px;
+  }
+
+  .stats-amount {
+    font-size: 22px;
+  }
+
+  .stats-label {
+    font-size: 12px;
+  }
+
+  .table-header {
+    padding: 12px;
+  }
+
+  .table-title {
+    font-size: 18px;
+  }
+
+  .modern-table-container {
+    margin: 0 8px 8px 8px;
+  }
+
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+  }
+
+  .modal-header {
+    padding: 12px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
 }
 </style>

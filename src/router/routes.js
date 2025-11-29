@@ -5,6 +5,7 @@ import InvitePage from 'pages/InvitePage.vue'
 import LoginPage from 'pages/LoginPage.vue'
 import RequestPage from 'pages/RequestPage.vue'
 import AuthLayout from 'layouts/AuthLayout.vue'
+import CashAdvanceRequest from 'pages/CashAdvanceRequestPage.vue'
 
 const routes = [
   {
@@ -66,6 +67,12 @@ const routes = [
         alias: '/requests',
       },
       {
+        path: 'swap-requests',
+        name: 'swap-requests',
+        component: () => import('pages/SwapRequestPage.vue'),
+        alias: '/swap-requests',
+      },
+      {
         path: 'payroll',
         name: 'payroll',
         component: () => import('pages/PayrollPage.vue'),
@@ -74,9 +81,16 @@ const routes = [
       {
         path: 'announcements',
         name: 'announcements',
-        component: () => import('pages/AnnouncementPage.vue'), // ✅ added
+        component: () => import('pages/AnnouncementPage.vue'),
         alias: '/announcements',
       },
+      {
+        path: '/cash-advance',
+        name: 'cash-advance',
+        component: CashAdvanceRequest, // ✅ uses the imported component
+        meta: { requiresAuth: true },
+      },
+
       {
         path: 'admin-settings',
         name: 'admin-settings',
@@ -84,7 +98,7 @@ const routes = [
         alias: '/admin-settings',
         meta: {
           requiresAuth: true,
-          requiresAdminRole: true, // Optional: if you want to restrict access
+          requiresAdminRole: true,
         },
       },
     ],

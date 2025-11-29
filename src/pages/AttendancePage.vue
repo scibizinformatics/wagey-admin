@@ -5,7 +5,7 @@
       <div class="page-header">
         <div class="header-content">
           <div class="header-left">
-            <h1 class="page-title">Attendance Management</h1>
+            <h1 class="page-title">Attendance</h1>
           </div>
           <div class="header-actions">
             <q-btn
@@ -249,6 +249,26 @@
                       Time Out: {{ formatTime(props.row.time_out) }}<br />
                       Source: {{ props.row.source?.replace('_', ' ').toUpperCase() }}
                     </div>
+                    <div class="mobile-selfies q-mt-md">
+                      <div v-if="props.row.time_in_selfie" class="mobile-selfie-item">
+                        <span class="mobile-selfie-label">Time In Photo:</span>
+                        <img
+                          :src="props.row.time_in_selfie"
+                          alt="Time In"
+                          class="mobile-selfie-img"
+                          @click="viewSelfie(props.row.time_in_selfie, 'Time In')"
+                        />
+                      </div>
+                      <div v-if="props.row.time_out_selfie" class="mobile-selfie-item">
+                        <span class="mobile-selfie-label">Time Out Photo:</span>
+                        <img
+                          :src="props.row.time_out_selfie"
+                          alt="Time Out"
+                          class="mobile-selfie-img"
+                          @click="viewSelfie(props.row.time_out_selfie, 'Time Out')"
+                        />
+                      </div>
+                    </div>
                   </q-card-section>
                   <q-card-actions align="right">
                     <q-btn flat size="sm" color="primary" @click="editAttendance(props.row)"
@@ -268,7 +288,9 @@
                 <q-th class="table-header-cell">Employee</q-th>
                 <q-th class="table-header-cell">Date</q-th>
                 <q-th class="table-header-cell">Time In</q-th>
+                <q-th class="table-header-cell">Time In Photo</q-th>
                 <q-th class="table-header-cell">Time Out</q-th>
+                <q-th class="table-header-cell">Time Out Photo</q-th>
                 <q-th class="table-header-cell">Source</q-th>
                 <q-th class="table-header-cell">Actions</q-th>
               </q-tr>
@@ -299,8 +321,32 @@
                   </div>
                 </q-td>
                 <q-td class="table-body-cell">
+                  <div class="selfie-container">
+                    <img
+                      v-if="props.row.time_in_selfie"
+                      :src="props.row.time_in_selfie"
+                      alt="Time In Selfie"
+                      class="selfie-thumbnail"
+                      @click="viewSelfie(props.row.time_in_selfie, 'Time In')"
+                    />
+                    <span v-else class="no-photo">-</span>
+                  </div>
+                </q-td>
+                <q-td class="table-body-cell">
                   <div class="time-badge time-out" :class="{ 'has-time': props.row.time_out }">
                     {{ formatTime(props.row.time_out) }}
+                  </div>
+                </q-td>
+                <q-td class="table-body-cell">
+                  <div class="selfie-container">
+                    <img
+                      v-if="props.row.time_out_selfie"
+                      :src="props.row.time_out_selfie"
+                      alt="Time Out Selfie"
+                      class="selfie-thumbnail"
+                      @click="viewSelfie(props.row.time_out_selfie, 'Time Out')"
+                    />
+                    <span v-else class="no-photo">-</span>
                   </div>
                 </q-td>
                 <q-td class="table-body-cell">
@@ -388,16 +434,45 @@
       </q-card>
     </q-dialog>
 
-    <!-- Add Attendance Dialog -->
+    <!-- Selfie Viewer Dialog -->
+    <q-dialog v-model="showSelfieDialog">
+      <q-card class="selfie-dialog-card selfie-portrait">
+        <q-card-section class="selfie-dialog-header">
+          <div class="dialog-title">{{ selfieDialogTitle }}</div>
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showSelfieDialog = false"
+            class="close-btn"
+          />
+        </q-card-section>
+        <q-card-section class="selfie-dialog-body">
+          <img :src="selectedSelfie" alt="Selfie" class="selfie-full-image selfie-portrait-image" />
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- Add Attendance Dialog - TWO STEP PROCESS -->
     <q-dialog v-model="showAddDialog" persistent>
-      <q-card class="edit-dialog-card">
+      <q-card class="edit-dialog-card" style="min-width: 600px">
         <q-card-section>
-          <div class="dialog-title">Add New Attendance</div>
+          <div class="dialog-title">
+            {{ attendanceStep === 'time_in' ? 'Clock In' : 'Clock Out' }}
+          </div>
+          <div class="text-caption text-grey-7">
+            {{
+              attendanceStep === 'time_in' ? 'Step 1: Record Time In' : 'Step 2: Record Time Out'
+            }}
+          </div>
         </q-card-section>
 
         <q-card-section class="q-pt-none">
-          <q-form @submit.prevent="createAttendance" class="edit-form">
+          <q-form @submit.prevent="handleAttendanceSubmit" class="edit-form">
+            <!-- Employee dropdown - Only show in Time In step -->
             <q-select
+              v-if="attendanceStep === 'time_in'"
               filled
               v-model="newRecord.employee"
               :options="employeeOptions"
@@ -409,15 +484,16 @@
               use-input
               input-debounce="300"
               @filter="filterEmployees"
+              @update:model-value="onEmployeeSelected"
               class="form-field"
               :rules="[(val) => !!val || 'Employee is required']"
-              behavior="menu"
-              menu-anchor="bottom left"
-              menu-self="top left"
             >
+              <template v-slot:prepend>
+                <q-icon name="person" />
+              </template>
               <template v-slot:no-option>
                 <q-item>
-                  <q-item-section class="text-grey"> No employees found </q-item-section>
+                  <q-item-section class="text-grey">No employees found</q-item-section>
                 </q-item>
               </template>
               <template v-slot:option="scope">
@@ -429,50 +505,190 @@
                   </q-item-section>
                   <q-item-section>
                     <q-item-label>{{ scope.opt.label }}</q-item-label>
-                    <q-item-label caption>ID: {{ scope.opt.value }}</q-item-label>
                   </q-item-section>
                 </q-item>
               </template>
             </q-select>
 
+            <!-- Show selected employee info in Time Out step -->
+            <div v-if="attendanceStep === 'time_out'" class="q-mb-md">
+              <q-card flat bordered>
+                <q-card-section>
+                  <div class="row items-center">
+                    <q-avatar size="48px" color="primary" text-color="white" class="q-mr-md">
+                      {{ getSelectedEmployeeName().charAt(0) }}
+                    </q-avatar>
+                    <div>
+                      <div class="text-subtitle1 text-weight-medium">
+                        {{ getSelectedEmployeeName() }}
+                      </div>
+                      <div class="text-caption text-grey-7">
+                        Clocked in at: {{ newRecord.time_in }}
+                      </div>
+                    </div>
+                  </div>
+                </q-card-section>
+              </q-card>
+            </div>
+
+            <!-- Date Input - Only show in Time In step -->
             <q-input
+              v-if="attendanceStep === 'time_in'"
               filled
               v-model="newRecord.date"
               label="Date *"
               type="date"
               class="form-field"
               :rules="[(val) => !!val || 'Date is required']"
-            />
+            >
+              <template v-slot:prepend>
+                <q-icon name="event" />
+              </template>
+            </q-input>
 
-            <div class="time-inputs">
-              <q-input
-                filled
-                v-model="newRecord.time_in"
-                label="Time In *"
-                type="time"
-                class="form-field"
-                :rules="[(val) => !!val || 'Time In is required']"
-              />
+            <!-- Schedule Calendar Section - Only show in Time In step -->
+            <div
+              v-if="attendanceStep === 'time_in' && newRecord.employee && newRecord.date"
+              class="schedule-section q-mt-md"
+            >
+              <div class="text-subtitle2 q-mb-sm">
+                <q-icon name="schedule" class="q-mr-xs" />
+                Employee Schedule
+              </div>
 
-              <q-input
-                filled
-                v-model="newRecord.time_out"
-                label="Time Out"
-                type="time"
-                class="form-field"
-              />
+              <q-card flat bordered>
+                <q-card-section>
+                  <!-- Loading State -->
+                  <div v-if="loadingSchedule" class="text-center q-pa-md">
+                    <q-spinner color="primary" size="40px" />
+                    <div class="q-mt-sm text-grey-7">Loading schedule...</div>
+                  </div>
+
+                  <!-- Error State -->
+                  <div v-else-if="scheduleError" class="text-center q-pa-md">
+                    <q-icon name="error_outline" color="negative" size="40px" />
+                    <div class="q-mt-sm text-negative">{{ scheduleError }}</div>
+                  </div>
+
+                  <!-- Schedule Found -->
+                  <div v-else-if="employeeSchedule">
+                    <div class="schedule-info">
+                      <div class="schedule-item">
+                        <q-icon name="person" color="primary" class="q-mr-sm" />
+                        <span class="text-weight-medium">Employee:</span>
+                        <span class="q-ml-sm">{{ employeeSchedule.employee_name }}</span>
+                      </div>
+                      <div class="schedule-item q-mt-sm">
+                        <q-icon name="work" color="primary" class="q-mr-sm" />
+                        <span class="text-weight-medium">Position:</span>
+                        <span class="q-ml-sm">{{ employeeSchedule.position }}</span>
+                      </div>
+                      <div class="schedule-item q-mt-sm">
+                        <q-icon name="location_on" color="primary" class="q-mr-sm" />
+                        <span class="text-weight-medium">Site:</span>
+                        <span class="q-ml-sm">{{ employeeSchedule.site }}</span>
+                      </div>
+                      <div class="schedule-item q-mt-sm">
+                        <q-icon name="event" color="primary" class="q-mr-sm" />
+                        <span class="text-weight-medium">Date:</span>
+                        <span class="q-ml-sm">{{ formatDate(employeeSchedule.date) }}</span>
+                      </div>
+                      <div class="schedule-item q-mt-sm">
+                        <q-icon name="schedule" color="primary" class="q-mr-sm" />
+                        <span class="text-weight-medium">Shift:</span>
+                        <span class="q-ml-sm"
+                          >{{ employeeSchedule.shift_start }} -
+                          {{ employeeSchedule.shift_end }}</span
+                        >
+                      </div>
+                      <div class="schedule-item q-mt-sm">
+                        <q-icon name="info" color="primary" class="q-mr-sm" />
+                        <span class="text-weight-medium">Status:</span>
+                        <q-badge :color="getStatusColor(employeeSchedule.status)" class="q-ml-sm">
+                          {{ employeeSchedule.status }}
+                        </q-badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- No Schedule Found -->
+                  <div v-else class="text-center q-pa-md text-grey-7">
+                    <q-icon name="event_busy" size="40px" />
+                    <div class="q-mt-sm">No schedule found for this date</div>
+                    <div class="text-caption q-mt-xs">You can still create attendance manually</div>
+                  </div>
+                </q-card-section>
+              </q-card>
+            </div>
+
+            <!-- Time In Input - Only show in Time In step -->
+            <q-input
+              v-if="attendanceStep === 'time_in'"
+              filled
+              v-model="newRecord.time_in"
+              label="Time In *"
+              type="time"
+              class="form-field q-mt-md"
+              :rules="[(val) => !!val || 'Time In is required']"
+            >
+              <template v-slot:prepend>
+                <q-icon name="login" />
+              </template>
+            </q-input>
+
+            <!-- Time Out Input - Only show in Time Out step -->
+            <q-input
+              v-if="attendanceStep === 'time_out'"
+              filled
+              v-model="newRecord.time_out"
+              label="Time Out *"
+              type="time"
+              class="form-field"
+              :rules="[(val) => !!val || 'Time Out is required']"
+            >
+              <template v-slot:prepend>
+                <q-icon name="logout" />
+              </template>
+            </q-input>
+
+            <!-- Working Hours Display - Show in Time Out step -->
+            <div
+              v-if="attendanceStep === 'time_out' && newRecord.time_in && newRecord.time_out"
+              class="q-mt-md"
+            >
+              <q-card flat bordered class="bg-blue-1">
+                <q-card-section>
+                  <div class="text-center">
+                    <div class="text-caption text-grey-7">Total Working Hours</div>
+                    <div class="text-h4 text-primary text-weight-bold q-mt-xs">
+                      {{ calculateWorkingHours() }}
+                    </div>
+                  </div>
+                </q-card-section>
+              </q-card>
             </div>
           </q-form>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat label="Cancel" @click="closeAddDialog" class="dialog-btn" />
+          <q-btn flat label="Cancel" @click="closeAddDialog" />
           <q-btn
+            v-if="attendanceStep === 'time_in'"
             color="primary"
-            label="Create"
-            @click="createAttendance"
+            label="Clock In"
+            icon="login"
+            @click="handleAttendanceSubmit"
             :loading="creating"
-            class="dialog-btn primary-btn"
+            :disable="!newRecord.employee || !newRecord.date || !newRecord.time_in"
+          />
+          <q-btn
+            v-if="attendanceStep === 'time_out'"
+            color="positive"
+            label="Clock Out & Complete"
+            icon="check"
+            @click="handleAttendanceSubmit"
+            :loading="creating"
+            :disable="!newRecord.time_out"
           />
         </q-card-actions>
       </q-card>
@@ -549,10 +765,21 @@ const selectAll = ref(false)
 const showDatePicker = ref(false)
 const showEditDialog = ref(false)
 const showAddDialog = ref(false)
+const showSelfieDialog = ref(false)
+const selectedSelfie = ref('')
+const selfieDialogTitle = ref('')
 
 // Loading states
 const updating = ref(false)
 const creating = ref(false)
+
+// State for schedule data
+const employeeSchedule = ref(null)
+const loadingSchedule = ref(false)
+const scheduleError = ref(null)
+
+const attendanceStep = ref('time_in')
+const currentAttendanceId = ref(null)
 
 const pagination = ref({
   page: 1,
@@ -581,6 +808,7 @@ const editingRecord = ref(null)
 // Add form
 const newRecord = ref({
   employee: '',
+  site_id: '',
   date: '',
   time_in: '',
   time_out: '',
@@ -590,6 +818,7 @@ const newRecord = ref({
 // Filter options
 const employeeOptions = ref([])
 const businessOwnerOptions = ref([])
+const siteOptions = ref([])
 const sourceOptions = ref([
   { label: 'QR Scan', value: 'qr_scan' },
   { label: 'Manual Entry', value: 'admin' },
@@ -597,7 +826,22 @@ const sourceOptions = ref([
 ])
 
 // Get company ID
-const companyId = ref(localStorage.getItem('selectedCompany') || null)
+const getCompanyId = () => {
+  const possibleKeys = ['selectCompany', 'selectedCompany', 'company_id', 'companyId']
+
+  for (const key of possibleKeys) {
+    const value = localStorage.getItem(key)
+    if (value) {
+      console.log(`✅ Found company ID in localStorage.${key}:`, value)
+      return value
+    }
+  }
+
+  console.warn('⚠️ No company ID found in localStorage')
+  return null
+}
+
+const companyId = ref(getCompanyId())
 
 // Computed
 const stats = computed(() => {
@@ -617,7 +861,181 @@ const totalPages = computed(() => {
   return Math.ceil(pagination.value.rowsNumber / pagination.value.rowsPerPage) || 1
 })
 
-// ================= API Functions =================
+const isAdmin = ref(false)
+const userData = JSON.parse(localStorage.getItem('user') || '{}')
+if (userData.role === 'admin') {
+  isAdmin.value = true
+}
+
+// ================= TABLE COLUMNS =================
+const columns = [
+  { name: 'id', label: 'ID', align: 'left', field: 'id', sortable: true },
+  { name: 'employee', label: 'Employee', align: 'left', field: 'employee', sortable: true },
+  { name: 'date', label: 'Date', align: 'center', field: 'date', sortable: true },
+  { name: 'time_in', label: 'Time In', align: 'center', field: 'time_in', sortable: true },
+  {
+    name: 'time_in_selfie',
+    label: 'Time In Photo',
+    align: 'center',
+    field: 'time_in_selfie',
+    sortable: false,
+  },
+  { name: 'time_out', label: 'Time Out', align: 'center', field: 'time_out', sortable: true },
+  {
+    name: 'time_out_selfie',
+    label: 'Time Out Photo',
+    align: 'center',
+    field: 'time_out_selfie',
+    sortable: false,
+  },
+  { name: 'source', label: 'Source', align: 'center', field: 'source', sortable: true },
+  { name: 'action', label: 'Actions', align: 'center', field: 'action', sortable: false },
+]
+
+// ================= SELFIE VIEWER FUNCTION =================
+function viewSelfie(imageUrl, title) {
+  selectedSelfie.value = imageUrl
+  selfieDialogTitle.value = `${title} Selfie`
+  showSelfieDialog.value = true
+}
+
+// ================= SCHEDULE MANAGEMENT SECTION =================
+async function fetchEmployeeSchedule(employeeId, date) {
+  if (!companyId.value || !employeeId || !date) {
+    console.warn('⚠️ Missing required params for schedule fetch:', {
+      companyId: companyId.value,
+      employeeId,
+      date,
+    })
+    return
+  }
+
+  loadingSchedule.value = true
+  scheduleError.value = null
+  employeeSchedule.value = null
+
+  try {
+    console.log('🔍 Fetching schedule for:', { companyId: companyId.value, date })
+
+    const response = await api.get(`/organization/scheduled/${companyId.value}/${date}/`)
+
+    console.log('✅ Schedule API Response:', response.data)
+
+    let schedules = []
+    if (Array.isArray(response.data)) {
+      schedules = response.data
+    } else if (response.data.data && Array.isArray(response.data.data)) {
+      schedules = response.data.data
+    } else if (response.data.schedules && Array.isArray(response.data.schedules)) {
+      schedules = response.data.schedules
+    }
+
+    const employeeScheduleData = schedules.find((schedule) => schedule.employee_id === employeeId)
+
+    if (employeeScheduleData) {
+      employeeSchedule.value = {
+        employee_id: employeeScheduleData.employee_id,
+        employee_name: employeeScheduleData.employee_name,
+        position: employeeScheduleData.position_name,
+        site: employeeScheduleData.site_name,
+        date: employeeScheduleData.schedule_date,
+        shift_start: formatScheduleTime(employeeScheduleData.start_time),
+        shift_end: formatScheduleTime(employeeScheduleData.end_time),
+        status: employeeScheduleData.status,
+      }
+      console.log('✅ Employee schedule found:', employeeSchedule.value)
+    } else {
+      console.log('ℹ️ No schedule found for employee:', employeeId)
+      employeeSchedule.value = null
+    }
+  } catch (error) {
+    console.error('❌ Error fetching employee schedule:', error)
+    scheduleError.value =
+      error.response?.data?.message || error.response?.data?.detail || 'Failed to load schedule'
+    employeeSchedule.value = null
+  } finally {
+    loadingSchedule.value = false
+  }
+}
+
+function onEmployeeSelected(employeeId) {
+  console.log('👤 Employee selected:', employeeId)
+  employeeSchedule.value = null
+  scheduleError.value = null
+
+  if (employeeId && newRecord.value.date) {
+    fetchEmployeeSchedule(employeeId, newRecord.value.date)
+  }
+}
+
+function formatScheduleTime(timeString) {
+  if (!timeString) return '-'
+  try {
+    const date = new Date(timeString)
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+  } catch {
+    return timeString
+  }
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '-'
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  } catch {
+    return dateString
+  }
+}
+
+function getStatusColor(status) {
+  const statusColors = {
+    active: 'positive',
+    completed: 'info',
+    cancelled: 'negative',
+    pending: 'warning',
+  }
+  return statusColors[status?.toLowerCase()] || 'grey'
+}
+
+function getSelectedEmployeeName() {
+  const employee = employees.value.find(
+    (emp) => emp.id === newRecord.value.employee || emp.uuid === newRecord.value.employee,
+  )
+  return employee ? getEmployeeName(employee) : 'Unknown Employee'
+}
+
+function calculateWorkingHours() {
+  if (!newRecord.value.time_in || !newRecord.value.time_out) return '0h 0m'
+
+  const [inHours, inMinutes] = newRecord.value.time_in.split(':').map(Number)
+  const [outHours, outMinutes] = newRecord.value.time_out.split(':').map(Number)
+
+  const inDate = new Date(0, 0, 0, inHours, inMinutes)
+  const outDate = new Date(0, 0, 0, outHours, outMinutes)
+
+  let diff = (outDate - inDate) / 1000 / 60 // difference in minutes
+
+  if (diff < 0) {
+    diff += 24 * 60 // handle overnight shift
+  }
+
+  const hours = Math.floor(diff / 60)
+  const minutes = Math.floor(diff % 60)
+
+  return `${hours}h ${minutes}m`
+}
+
+// ================= API FUNCTIONS =================
 async function fetchAttendanceData(params = {}) {
   if (!companyId.value) {
     showErrorNotification('Company ID not found. Please log in again.')
@@ -638,42 +1056,22 @@ async function fetchAttendanceData(params = {}) {
       },
     )
 
-    // Debug: Log the raw response
-    console.log('Raw Attendance Response:', response.data)
-    console.log('Available Employees:', employees.value)
-
     const data = Array.isArray(response.data) ? response.data : response.data.data
 
-    // Debug: Log first record to see structure
-    if (data && data.length > 0) {
-      console.log('First Attendance Record:', data[0])
-    }
-
-    // Enrich attendance data with employee details
     attendanceData.value = (data || []).map((record) => {
-      console.log('Processing record:', record)
-
-      // The employee field is already an object with employee details
       if (record.employee && typeof record.employee === 'object') {
-        console.log('Employee is already an object:', record.employee)
         return record
       }
 
-      // If employee is just an ID, try to find the full employee details
       const employeeId = record.employee || record.employee_id || record.site_id || record.user_id
 
-      console.log('Employee ID found:', employeeId)
-
       if (employeeId) {
-        // Try to find employee in the employees list
         const employeeDetails = employees.value.find(
           (emp) =>
             emp.id === employeeId ||
             emp.id === String(employeeId) ||
             String(emp.id) === String(employeeId),
         )
-
-        console.log('Found employee details:', employeeDetails)
 
         if (employeeDetails) {
           return {
@@ -685,8 +1083,6 @@ async function fetchAttendanceData(params = {}) {
 
       return record
     })
-
-    console.log('Processed Attendance Data:', attendanceData.value)
 
     pagination.value.rowsNumber =
       response.data.total || response.data.meta?.total || attendanceData.value.length
@@ -701,49 +1097,107 @@ async function fetchAttendanceData(params = {}) {
   }
 }
 
-async function fetchEmployeeDetails() {
+async function fetchSites() {
   if (!companyId.value) {
+    console.error('❌ Company ID is missing:', companyId.value)
     showErrorNotification('Company ID not found. Please log in again.')
     return
   }
 
+  console.log('🔍 Fetching sites for company:', companyId.value)
+
+  try {
+    const response = await api.get(`/organization/sites/${companyId.value}/`)
+    console.log('✅ Sites API Response:', response.data)
+
+    let data = []
+    if (Array.isArray(response.data)) {
+      data = response.data
+    } else if (response.data.data) {
+      data = Array.isArray(response.data.data) ? response.data.data : [response.data.data]
+    } else if (response.data.results) {
+      data = Array.isArray(response.data.results) ? response.data.results : [response.data.results]
+    } else if (response.data.sites) {
+      data = Array.isArray(response.data.sites) ? response.data.sites : [response.data.sites]
+    } else if (response.data.id || response.data.name) {
+      data = [response.data]
+    }
+
+    console.log('📊 Processed sites data:', data)
+
+    siteOptions.value = data.map((site) => ({
+      label: site.name || site.site_name || site.title || `Site ${site.id}`,
+      value: site.id || site.site_id,
+      site: site,
+    }))
+
+    console.log('✅ Site options ready:', siteOptions.value)
+
+    if (siteOptions.value.length === 0) {
+      console.warn('⚠️ No sites found for this company')
+      showErrorNotification('No sites found. Please add sites first.')
+    }
+  } catch (error) {
+    console.error('❌ Error fetching sites:', error)
+    console.error('Error details:', error.response?.data)
+    showErrorNotification(
+      error.response?.data?.message || error.response?.data?.detail || 'Failed to load sites',
+    )
+    siteOptions.value = []
+  }
+}
+
+async function fetchEmployeeDetails() {
+  if (!companyId.value) {
+    console.error('❌ Company ID is missing:', companyId.value)
+    showErrorNotification('Company ID not found. Please log in again.')
+    return
+  }
+
+  console.log('🔍 Fetching employees for company:', companyId.value)
   filtersLoading.value = true
+
   try {
     const response = await api.get(`/user/companies/${companyId.value}/employees/`)
+    console.log('✅ Employees API Response:', response.data)
 
-    // Debug: Log employee response
-    console.log('Raw Employee Response:', response.data)
+    let data = []
+    if (Array.isArray(response.data)) {
+      data = response.data
+    } else if (response.data.data) {
+      data = Array.isArray(response.data.data) ? response.data.data : []
+    } else if (response.data.results) {
+      data = Array.isArray(response.data.results) ? response.data.results : []
+    } else if (response.data.employees) {
+      data = Array.isArray(response.data.employees) ? response.data.employees : []
+    }
 
-    const data = Array.isArray(response.data)
-      ? response.data
-      : response.data.data || response.data.results
-    employees.value = data || []
+    console.log('📊 Processed employees data:', data)
+    employees.value = data
 
-    console.log('Processed Employees:', employees.value)
-
-    // Create employee options with better name handling
     employeeOptions.value = employees.value
       .map((emp) => {
         const name = getEmployeeName(emp)
-        console.log(`Employee: ${name}, ID: ${emp.id}`)
         return {
-          label: name,
-          value: emp.id, // This should be the UUID string
-          employee: emp, // Store full employee object for reference
+          label: name || 'Unknown Employee',
+          value: emp.uuid || emp.id,
+          employee: emp,
         }
       })
-      .filter((opt) => opt.label !== 'Unknown Employee') // Filter out unknown employees
+      .filter((opt) => opt.label !== 'Unknown Employee')
 
-    console.log('Employee Options Created:', employeeOptions.value)
+    console.log('✅ Employee options ready:', employeeOptions.value)
 
-    // If no employees found, show a warning
     if (employeeOptions.value.length === 0) {
-      console.warn('No employees loaded! Check API response structure')
-      showErrorNotification('No employees found. Please check if employees exist.')
+      console.warn('⚠️ No employees found for this company')
+      showErrorNotification('No employees found. Please add employees first.')
     }
   } catch (error) {
-    console.error('Error fetching employee details:', error)
-    showErrorNotification('Failed to load employees')
+    console.error('❌ Error fetching employees:', error)
+    console.error('Error details:', error.response?.data)
+    showErrorNotification(
+      error.response?.data?.message || error.response?.data?.detail || 'Failed to load employees',
+    )
     employees.value = []
     employeeOptions.value = []
   } finally {
@@ -751,172 +1205,164 @@ async function fetchEmployeeDetails() {
   }
 }
 
-// ✅ SINGLE WORKING VERSION - Replace your existing createAttendance function with this
+async function handleAttendanceSubmit() {
+  if (attendanceStep.value === 'time_in') {
+    await submitTimeIn()
+  } else if (attendanceStep.value === 'time_out') {
+    await submitTimeOut()
+  }
+}
 
-async function createAttendance() {
-  // 🧩 Validate company ID
+async function submitTimeIn() {
   if (!companyId.value) {
     showErrorNotification('Company ID not found. Please log in again.')
     return
   }
-
-  // 🧩 Try to get UUID from localStorage
-  let userId =
-    localStorage.getItem('userUUID') ||
-    localStorage.getItem('user_uuid') ||
-    localStorage.getItem('uuid') ||
-    localStorage.getItem('userId') ||
-    localStorage.getItem('user_id') ||
-    localStorage.getItem('id')
-
-  console.log('🔍 All localStorage keys:', Object.keys(localStorage))
-  console.log('🔍 Found User ID (raw):', userId)
-
-  // Regex for UUID validation
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-  // 🧩 If not UUID, try to recover from stored user data
-  if (!userId || !uuidRegex.test(userId)) {
-    console.warn('⚠️ User ID is not a valid UUID:', userId)
-
-    const userJSON =
-      localStorage.getItem('user') ||
-      localStorage.getItem('user_data') ||
-      localStorage.getItem('currentUser') ||
-      localStorage.getItem('userData')
-
-    if (userJSON) {
-      try {
-        const user = JSON.parse(userJSON)
-        console.log('🔍 Parsed user:', user)
-
-        userId =
-          user.profile?.user?.id ||
-          user.profile?.id ||
-          user.id ||
-          user.uuid ||
-          user.user_uuid ||
-          user.uid ||
-          null
-
-        if (uuidRegex.test(userId)) {
-          console.log('✅ Recovered valid UUID from user data:', userId)
-          localStorage.setItem('userUUID', userId)
-        } else {
-          console.warn('⚠️ Still no valid UUID after parsing user data')
-        }
-      } catch (e) {
-        console.error('❌ Failed to parse user JSON:', e)
-      }
-    }
-  }
-
-  // 🧩 If still missing, fetch UUID from API
-  if (!userId || !uuidRegex.test(userId)) {
-    try {
-      console.log('🔄 Fetching user UUID from API...')
-      const res =
-        (await api.get('/user/me/')) ||
-        (await api.get('/auth/user/')) ||
-        (await api.get(`/user/${userId}/`))
-
-      if (res?.data) {
-        const data = res.data
-        const fetchedUUID = data.uuid || data.id || data.user_id
-        if (uuidRegex.test(fetchedUUID)) {
-          userId = fetchedUUID
-          localStorage.setItem('userUUID', fetchedUUID)
-          console.log('✅ Successfully fetched UUID:', userId)
-        }
-      }
-    } catch (err) {
-      console.error('❌ Could not fetch user UUID:', err)
-    }
-  }
-
-  // 🧩 Final UUID validation
-  if (!userId || !uuidRegex.test(userId)) {
-    console.error('❌ No valid user UUID found')
-    showErrorNotification('Unable to find your user ID. Please log out and log in again.')
+  if (!newRecord.value.employee) {
+    showErrorNotification('Please select an employee')
     return
   }
 
-  console.log('✅ Using User UUID:', userId)
+  if (newRecord.value.date && !employeeSchedule.value && !loadingSchedule.value) {
+    try {
+      await $q.dialog({
+        title: 'No Schedule Found',
+        message:
+          'This employee does not have a schedule for the selected date. Do you want to proceed anyway?',
+        cancel: true,
+        persistent: true,
+      })
+    } catch {
+      return
+    }
+  }
 
-  // 🧩 Validate required attendance fields
-  if (!newRecord.value.employee || !newRecord.value.date || !newRecord.value.time_in) {
-    showErrorNotification('Please fill in all required fields (Employee, Date, Time In)')
+  creating.value = true
+
+  try {
+    const selectedEmployee = employees.value.find(
+      (emp) => emp.id === newRecord.value.employee || emp.uuid === newRecord.value.employee,
+    )
+
+    if (!selectedEmployee) {
+      showErrorNotification('Employee not found.')
+      creating.value = false
+      return
+    }
+
+    const employeeUUID = selectedEmployee.uuid || selectedEmployee.id
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!employeeUUID || !uuidRegex.test(employeeUUID)) {
+      showErrorNotification('Invalid employee ID format.')
+      creating.value = false
+      return
+    }
+
+    const now = new Date()
+    const timeInTimestamp = now.toISOString()
+
+    newRecord.value.date = now.toISOString().split('T')[0]
+    newRecord.value.time_in = now.toTimeString().slice(0, 8)
+    newRecord.value.timeInTimestamp = timeInTimestamp
+
+    const attendanceData = {
+      source: 'admin',
+      employee_id: employeeUUID,
+      timestamp: timeInTimestamp,
+    }
+
+    console.log('📤 Sending Time In data:', attendanceData)
+
+    const response = await api.post(`/attendance/log/${companyId.value}/`, attendanceData)
+
+    console.log('✅ Time In recorded:', response.data)
+
+    if (response.data?.id) {
+      currentAttendanceId.value = response.data.id
+    }
+
+    showSuccessNotification(`Time In recorded at ${newRecord.value.time_in}`)
+
+    attendanceStep.value = 'time_out'
+
+    fetchAttendanceData()
+  } catch (error) {
+    console.error('❌ Error recording Time In:', error)
+    let errorMessage = 'Failed to record Time In'
+
+    if (error.response?.data) {
+      const data = error.response.data
+      if (typeof data === 'string') {
+        errorMessage = data
+      } else if (data.reason) {
+        errorMessage = data.reason
+      } else if (data.detail) {
+        errorMessage = data.detail
+      } else if (data.message) {
+        errorMessage = data.message
+      }
+    }
+
+    showErrorNotification(errorMessage)
+  } finally {
+    creating.value = false
+  }
+}
+
+async function submitTimeOut() {
+  if (!newRecord.value.time_out) {
+    showErrorNotification('Please select time out')
     return
   }
 
   creating.value = true
 
   try {
-    // Find selected employee object
     const selectedEmployee = employees.value.find(
       (emp) => emp.id === newRecord.value.employee || emp.uuid === newRecord.value.employee,
     )
 
-    console.log('🔍 Selected Employee:', selectedEmployee)
-    console.log('🧠 Employee keys:', Object.keys(selectedEmployee || {}))
-    console.log('🧩 Employee JSON:', JSON.stringify(selectedEmployee, null, 2))
-
     if (!selectedEmployee) {
-      showErrorNotification('Employee not found or missing site assignment.')
+      showErrorNotification('Employee not found.')
       creating.value = false
       return
     }
 
-    // Extract a valid site_id (must be integer, not null)
-    let finalSiteId = Number(
-      selectedEmployee.site_id || selectedEmployee.siteId || selectedEmployee.site || 0,
-    )
+    const employeeUUID = selectedEmployee.uuid || selectedEmployee.id
 
-    if (!finalSiteId || isNaN(finalSiteId)) {
-      console.error('❌ Invalid or missing site_id for employee:', selectedEmployee)
-      showErrorNotification('This employee has no valid Site assigned.')
-      creating.value = false
-      return
-    }
+    const timeOutDate = new Date(`${newRecord.value.date}T${newRecord.value.time_out}:00`)
+    const timeOutTimestamp = timeOutDate.toISOString()
 
-    console.log('✅ Final Site ID:', finalSiteId)
-
-    // 🧩 Combine date + time into ISO timestamp
-    const timestamp = `${newRecord.value.date}T${newRecord.value.time_in}:00.000Z`
-
-    // 🧩 Prepare payload
     const attendanceData = {
-      site_id: finalSiteId,
-      timestamp: timestamp,
       source: 'admin',
-      created_by: userId,
+      employee_id: employeeUUID,
+      timestamp: timeOutTimestamp,
     }
 
-    console.log('📤 Sending Payload:', attendanceData)
-    console.log('📤 Endpoint:', `/attendance/log/${companyId.value}/`)
+    console.log('📤 Sending Time Out data:', attendanceData)
 
-    const response = await api.post(`/attendance/log/${companyId.value}/`, attendanceData)
+    await api.post(`/attendance/log/${companyId.value}/`, attendanceData)
 
-    console.log('✅ Success Response:', response.data)
-    showSuccessNotification('Attendance created successfully')
+    showSuccessNotification(`Attendance completed! Total hours: ${calculateWorkingHours()}`)
+
     closeAddDialog()
     await fetchAttendanceData()
   } catch (error) {
-    console.error('❌ Full Error Object:', error)
-    console.error('❌ Response Data:', error.response?.data)
-    console.error('❌ Status Code:', error.response?.status)
-
-    let errorMessage = 'Failed to create attendance'
+    console.error('❌ Error recording Time Out:', error)
+    let errorMessage = 'Failed to record Time Out'
 
     if (error.response?.data) {
       const data = error.response.data
-      if (typeof data === 'string') errorMessage = data
-      else if (data.detail) errorMessage = data.detail
-      else if (data.site_id) errorMessage = `Site ID error: ${data.site_id}`
-      else if (data.timestamp) errorMessage = `Timestamp error: ${data.timestamp}`
-      else errorMessage = JSON.stringify(data)
-    } else if (error.message) {
-      errorMessage = error.message
+      if (typeof data === 'string') {
+        errorMessage = data
+      } else if (data.reason) {
+        errorMessage = data.reason
+      } else if (data.detail) {
+        errorMessage = data.detail
+      } else if (data.message) {
+        errorMessage = data.message
+      }
     }
 
     showErrorNotification(errorMessage)
@@ -927,29 +1373,91 @@ async function createAttendance() {
 
 async function updateAttendance() {
   if (!editingRecord.value) return
+  if (!companyId.value) {
+    showErrorNotification('Company ID not found. Please log in again.')
+    return
+  }
 
   updating.value = true
+
   try {
-    // Prepare the data for the API
-    const attendanceData = {
-      date: editingRecord.value.date,
-      time_in: editingRecord.value.time_in
-        ? `${editingRecord.value.date}T${editingRecord.value.time_in}:00`
-        : null,
-      time_out: editingRecord.value.time_out
-        ? `${editingRecord.value.date}T${editingRecord.value.time_out}:00`
-        : null,
-      source: editingRecord.value.source || 'admin', // Keep existing source or default to 'admin'
+    const selectedEmployee = employees.value.find(
+      (emp) =>
+        emp.id === editingRecord.value.employee ||
+        emp.uuid === editingRecord.value.employee ||
+        (typeof editingRecord.value.employee === 'object' &&
+          (emp.id === editingRecord.value.employee.id ||
+            emp.uuid === editingRecord.value.employee.uuid)),
+    )
+
+    if (!selectedEmployee) {
+      showErrorNotification('Employee not found.')
+      updating.value = false
+      return
     }
 
-    await api.patch(`/attendance/${editingRecord.value.id}/`, attendanceData)
+    let timeInTimestamp = null
+    let timeOutTimestamp = null
+
+    if (editingRecord.value.time_in) {
+      const timeInDate = new Date(`${editingRecord.value.date}T${editingRecord.value.time_in}:00`)
+      timeInTimestamp = timeInDate.toISOString()
+    }
+
+    if (editingRecord.value.time_out) {
+      const timeOutDate = new Date(`${editingRecord.value.date}T${editingRecord.value.time_out}:00`)
+      timeOutTimestamp = timeOutDate.toISOString()
+    }
+
+    const attendanceData = {
+      time_in: timeInTimestamp,
+      time_out: timeOutTimestamp,
+      source: editingRecord.value.source || 'admin',
+    }
+
+    console.log('📤 Sending Update data:', attendanceData)
+    console.log(
+      '🔗 Update URL:',
+      `/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
+    )
+
+    // Try the exact endpoint from your API docs
+    const response = await api.put(
+      `/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
+      attendanceData,
+    )
+
+    console.log('✅ Attendance updated:', response.data)
 
     showSuccessNotification('Attendance updated successfully')
     showEditDialog.value = false
     await fetchAttendanceData()
   } catch (error) {
-    console.error('Error updating attendance:', error)
-    showErrorNotification(error.response?.data?.message || 'Failed to update attendance')
+    console.error('❌ Error updating attendance:', error)
+    console.error(
+      '📍 Failed endpoint:',
+      `/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
+    )
+    console.error('📊 Error response:', error.response)
+
+    let errorMessage = 'Failed to update attendance'
+
+    // Check if it's a 404 error
+    if (error.response?.status === 404) {
+      errorMessage = 'Update endpoint not found. Please check the API documentation.'
+      console.error('💡 Suggestion: Verify the correct endpoint path with your backend team')
+    } else if (error.response?.data) {
+      const data = error.response.data
+      if (typeof data === 'string') {
+        errorMessage = data
+      } else if (data.detail) {
+        errorMessage = data.detail
+      } else if (data.message) {
+        errorMessage = data.message
+      }
+    }
+
+    showErrorNotification(errorMessage)
   } finally {
     updating.value = false
   }
@@ -969,40 +1477,62 @@ async function batchDelete(records) {
   }
 }
 
-// ================= Dialog handlers =================
+// ================= DIALOG HANDLERS =================
 function openAddDialog() {
-  // Reset the form
+  attendanceStep.value = 'time_in'
+  currentAttendanceId.value = null
+
   newRecord.value = {
     employee: '',
-    date: new Date().toISOString().split('T')[0], // Set today's date as default
-    time_in: '',
+    site_id: '',
+    date: new Date().toISOString().split('T')[0],
+    time_in: new Date().toTimeString().slice(0, 5),
     time_out: '',
     source: 'admin',
   }
+
+  employeeSchedule.value = null
+  scheduleError.value = null
+  loadingSchedule.value = false
+
   showAddDialog.value = true
 }
 
 function closeAddDialog() {
   showAddDialog.value = false
-  // Reset the form
+
+  attendanceStep.value = 'time_in'
+  currentAttendanceId.value = null
+
   newRecord.value = {
     employee: '',
+    site_id: '',
     date: '',
     time_in: '',
     time_out: '',
     source: 'admin',
   }
+
+  employeeSchedule.value = null
+  scheduleError.value = null
+  loadingSchedule.value = false
 }
 
 function editAttendance(record) {
-  editingRecord.value = { ...record }
+  editingRecord.value = {
+    ...record,
+    employee: record.employee?.id || record.employee?.uuid || record.employee,
+  }
 
   if (editingRecord.value.time_in) {
     editingRecord.value.time_in = formatTimeForInput(editingRecord.value.time_in)
   }
+
   if (editingRecord.value.time_out) {
     editingRecord.value.time_out = formatTimeForInput(editingRecord.value.time_out)
   }
+
+  console.log('✏️ Editing record:', editingRecord.value)
 
   showEditDialog.value = true
 }
@@ -1033,7 +1563,7 @@ function viewDetails(record) {
   })
 }
 
-// ================= Filters =================
+// ================= FILTERS =================
 function clearAllFilters() {
   filters.value = {
     date_from: '',
@@ -1067,27 +1597,49 @@ function clearDateRange() {
 function filterEmployees(val, update) {
   if (val === '') {
     update(() => {
-      employeeOptions.value = employees.value.map((emp) => ({
-        label: getEmployeeName(emp),
-        value: emp.id,
-      }))
+      if (!isAdmin.value && newRecord.value.site_id) {
+        employeeOptions.value = employees.value
+          .filter((emp) => {
+            const empSiteId = emp.site_id || emp.siteId || emp.site
+            return empSiteId && Number(empSiteId) === Number(newRecord.value.site_id)
+          })
+          .map((emp) => ({
+            label: getEmployeeName(emp),
+            value: emp.id || emp.uuid,
+            employee: emp,
+          }))
+      } else {
+        employeeOptions.value = employees.value.map((emp) => ({
+          label: getEmployeeName(emp),
+          value: emp.id || emp.uuid,
+          employee: emp,
+        }))
+      }
     })
     return
   }
 
   update(() => {
     const needle = val.toLowerCase()
-    const allEmployees = employees.value.map((emp) => ({
-      label: getEmployeeName(emp),
-      value: emp.id,
-    }))
-    employeeOptions.value = allEmployees.filter(
-      (emp) => emp.label.toLowerCase().indexOf(needle) > -1,
-    )
+    const baseEmployees =
+      !isAdmin.value && newRecord.value.site_id
+        ? employees.value.filter((emp) => {
+            const empSiteId = emp.site_id || emp.siteId || emp.site
+            return empSiteId && Number(empSiteId) === Number(newRecord.value.site_id)
+          })
+        : employees.value
+
+    employeeOptions.value = baseEmployees
+      .map((emp) => ({
+        label: getEmployeeName(emp),
+        value: emp.id || emp.uuid,
+        employee: emp,
+      }))
+      .filter((emp) => emp.label.toLowerCase().indexOf(needle) > -1)
   })
 }
 
-// ================= Table functions =================
+// ================= TABLE FUNCTIONS =================
 function toggleSelectAll(val) {
   if (val) {
     selected.value = [...attendanceData.value]
@@ -1110,7 +1662,7 @@ function nextPage() {
   }
 }
 
-// ================= Export functions =================
+// ================= EXPORT FUNCTIONS =================
 async function exportSelected() {
   if (selected.value.length === 0) return
 
@@ -1150,13 +1702,11 @@ function downloadFile(data, filename) {
   window.URL.revokeObjectURL(url)
 }
 
-// ================= Helpers =================
+// ================= HELPERS =================
 function getEmployeeName(employee) {
   if (!employee) return 'Unknown Employee'
 
-  // Handle if employee is just an ID (number or string)
   if (typeof employee === 'number' || typeof employee === 'string') {
-    // Find the employee from the employees list
     const foundEmployee = employees.value.find(
       (emp) => emp.id === employee || emp.id === parseInt(employee),
     )
@@ -1175,14 +1725,11 @@ function getEmployeeName(employee) {
     return `Employee #${employee}`
   }
 
-  // Handle if employee is an object
   if (typeof employee === 'object') {
-    // Try multiple field name variations
     const firstName = employee.first_name || employee.firstName || employee.firstname || ''
     const lastName = employee.last_name || employee.lastName || employee.lastname || ''
     const fullName = `${firstName} ${lastName}`.trim()
 
-    // Return fullName if available, otherwise try other fields
     return (
       fullName ||
       employee.name ||
@@ -1256,7 +1803,7 @@ function formatDateTime(dateTimeString) {
   }
 }
 
-// ================= Notifications =================
+// ================= NOTIFICATIONS =================
 function showSuccessNotification(message) {
   $q.notify({
     type: 'positive',
@@ -1275,7 +1822,7 @@ function showErrorNotification(message) {
   })
 }
 
-// ================= Watchers & Lifecycle =================
+// ================= WATCHERS =================
 watch(
   filters,
   () => {
@@ -1285,22 +1832,45 @@ watch(
   { deep: true },
 )
 
-onMounted(async () => {
-  // Fetch employees first, then attendance data
-  await fetchEmployeeDetails()
-  await fetchAttendanceData()
-})
+watch(
+  () => newRecord.value.date,
+  (newDate) => {
+    console.log('📅 Date changed:', newDate)
+    employeeSchedule.value = null
+    scheduleError.value = null
 
-// ================= Table columns =================
-const columns = [
-  { name: 'id', label: 'ID', align: 'left', field: 'id', sortable: true },
-  { name: 'employee', label: 'Employee', align: 'left', field: 'employee', sortable: true },
-  { name: 'date', label: 'Date', align: 'center', field: 'date', sortable: true },
-  { name: 'time_in', label: 'Time In', align: 'center', field: 'time_in', sortable: true },
-  { name: 'time_out', label: 'Time Out', align: 'center', field: 'time_out', sortable: true },
-  { name: 'source', label: 'Source', align: 'center', field: 'source', sortable: true },
-  { name: 'action', label: 'Actions', align: 'center', field: 'action', sortable: false },
-]
+    if (newRecord.value.employee && newDate) {
+      fetchEmployeeSchedule(newRecord.value.employee, newDate)
+    }
+  },
+)
+
+// ================= LIFECYCLE =================
+onMounted(async () => {
+  console.log('🚀 Component mounted, initializing...')
+  console.log('📋 Company ID:', companyId.value)
+  console.log('👤 Is Admin:', isAdmin.value)
+  console.log('👤 User Data:', userData)
+
+  try {
+    if (!isAdmin.value) {
+      console.log('🏢 Fetching sites (non-admin user)...')
+      await fetchSites()
+    } else {
+      console.log('👑 Admin user - skipping site fetch')
+    }
+
+    console.log('👥 Fetching employees...')
+    await fetchEmployeeDetails()
+
+    console.log('📊 Fetching attendance data...')
+    await fetchAttendanceData()
+
+    console.log('✅ All data loaded successfully')
+  } catch (error) {
+    console.error('❌ Error during initialization:', error)
+  }
+})
 </script>
 
 <style scoped>
@@ -1313,15 +1883,15 @@ const columns = [
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 16px;
 }
 
 /* Header Section */
 .page-header {
   background: white;
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 24px;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
   border: 1px solid #e2e8f0;
 }
 
@@ -1329,17 +1899,18 @@ const columns = [
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
   color: #1a202c;
   margin: 0 0 4px 0;
 }
 
 .page-subtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: #64748b;
   margin: 0;
 }
@@ -1347,37 +1918,42 @@ const columns = [
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .header-btn {
   color: #64748b;
+  width: 36px;
+  height: 36px;
 }
 
 .export-btn {
   background: #6366f1;
   border-radius: 8px;
   font-weight: 500;
-  padding: 8px 16px;
+  padding: 6px 14px;
+  height: 36px;
+  font-size: 13px;
 }
 
 /* Stats Section */
 .stats-section {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .stats-card {
   background: white;
-  border-radius: 16px;
-  padding: 24px;
+  border-radius: 12px;
+  padding: 16px;
   border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   transition: all 0.2s ease;
+  min-width: 0;
 }
 
 .stats-card:hover {
@@ -1402,27 +1978,29 @@ const columns = [
 }
 
 .stats-icon-wrapper {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 
 .stats-icon {
-  font-size: 28px;
+  font-size: 24px;
   color: #374151;
 }
 
 .stats-content {
   flex: 1;
+  min-width: 0;
 }
 
 .stats-amount {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 700;
   color: #1a202c;
   line-height: 1;
@@ -1430,26 +2008,26 @@ const columns = [
 }
 
 .stats-label {
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
   margin-bottom: 2px;
 }
 
 .stats-sublabel {
-  font-size: 14px;
+  font-size: 12px;
   color: #64748b;
 }
 
 /* Filters Section */
 .filters-section {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .filters-card {
   background: white;
-  border-radius: 16px;
-  padding: 24px;
+  border-radius: 12px;
+  padding: 16px;
   border: 1px solid #e2e8f0;
 }
 
@@ -1457,11 +2035,11 @@ const columns = [
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .filters-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #1a202c;
   margin: 0;
@@ -1470,12 +2048,13 @@ const columns = [
 .clear-btn {
   color: #64748b;
   font-weight: 500;
+  font-size: 13px;
 }
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
 .filter-input {
@@ -1485,27 +2064,28 @@ const columns = [
 
 .filter-input .q-field__control {
   border-radius: 8px;
-  height: 40px;
+  height: 36px;
 }
 
 /* Table Section */
 .table-section {
   background: white;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
   overflow: hidden;
 }
 
 .table-header {
-  padding: 24px;
+  padding: 16px;
   border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .table-title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
   color: #1a202c;
   margin: 0;
@@ -1513,12 +2093,15 @@ const columns = [
 
 .table-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .add-attendance-btn {
   background: #10b981;
   font-weight: 600;
+  height: 36px;
+  font-size: 13px;
 }
 
 .add-attendance-btn:hover {
@@ -1528,14 +2111,14 @@ const columns = [
 /* Modern Table */
 .modern-table-container {
   border: 2px solid #3b82f6;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
-  margin: 0 24px 24px 24px;
+  margin: 0 16px 16px 16px;
 }
 
 .attendance-table {
   background: white;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
@@ -1545,12 +2128,13 @@ const columns = [
 }
 
 .table-header-cell {
-  padding: 16px;
-  font-size: 14px;
+  padding: 12px 10px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
   text-align: left;
   border: none;
+  white-space: nowrap;
 }
 
 .table-body-row {
@@ -1563,8 +2147,8 @@ const columns = [
 }
 
 .table-body-cell {
-  padding: 16px;
-  font-size: 14px;
+  padding: 12px 10px;
+  font-size: 13px;
   color: #374151;
   border: none;
   vertical-align: middle;
@@ -1573,29 +2157,34 @@ const columns = [
 .employee-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .employee-avatar {
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
   color: white;
   font-weight: 600;
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
 }
 
 .employee-name {
   font-weight: 500;
   color: #1a202c;
+  font-size: 13px;
 }
 
 .time-badge {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
   font-weight: 500;
   background: #f1f5f9;
   color: #64748b;
+  white-space: nowrap;
 }
 
 .time-badge.has-time.time-in {
@@ -1608,13 +2197,104 @@ const columns = [
   color: #991b1b;
 }
 
+/* Selfie Styles */
+.selfie-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.selfie-thumbnail {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  cursor: pointer;
+  border: 2px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.selfie-thumbnail:hover {
+  transform: scale(1.1);
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.no-photo {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.selfie-dialog-card {
+  width: 100%;
+  max-width: 600px;
+  border-radius: 12px;
+}
+
+.selfie-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+}
+
+.selfie-dialog-body {
+  padding: 16px;
+}
+
+.selfie-full-image {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.close-btn {
+  color: #64748b;
+}
+
+/* Mobile Selfies */
+.mobile-selfies {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mobile-selfie-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-selfie-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.mobile-selfie-img {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  object-fit: cover;
+  cursor: pointer;
+  border: 2px solid #e2e8f0;
+}
+
+.mobile-selfie-img:hover {
+  border-color: #3b82f6;
+}
+
 .source-badge {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .source-qr {
@@ -1637,16 +2317,24 @@ const columns = [
   color: #64748b;
 }
 
+.actions-cell {
+  width: 100px;
+  min-width: 100px;
+}
+
 .action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   justify-content: center;
+  flex-wrap: nowrap;
 }
 
 .action-btn {
   width: 32px;
   height: 32px;
+  min-width: 32px;
   border-radius: 6px;
+  flex-shrink: 0;
 }
 
 .view-btn {
@@ -1679,33 +2367,36 @@ const columns = [
 /* Table Footer */
 .table-footer {
   background: #f8fafc;
-  padding: 16px 24px;
+  padding: 14px 16px;
   border-top: 2px solid #3b82f6;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .footer-info {
   display: flex;
-  gap: 24px;
+  gap: 16px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .total-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #ef4444;
 }
 
 .total-records {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
 }
 
 .total-selected {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #16a34a;
 }
@@ -1713,12 +2404,14 @@ const columns = [
 .pagination-controls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .pagination-btn {
   color: #64748b;
   padding: 4px;
+  width: 32px;
+  height: 32px;
 }
 
 .pagination-btn:hover:not(:disabled) {
@@ -1726,7 +2419,7 @@ const columns = [
 }
 
 .page-info {
-  font-size: 14px;
+  font-size: 13px;
   color: #374151;
   font-weight: 500;
 }
@@ -1764,7 +2457,7 @@ const columns = [
 /* Dialog Styles */
 .date-picker-card {
   width: 100%;
-  max-width: 800px;
+  max-width: 700px;
   border-radius: 12px;
 }
 
@@ -1775,7 +2468,7 @@ const columns = [
 }
 
 .dialog-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: #1a202c;
 }
@@ -1783,7 +2476,7 @@ const columns = [
 .date-picker-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: 20px;
 }
 
 .date-picker {
@@ -1793,13 +2486,13 @@ const columns = [
 .edit-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .time-inputs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 14px;
 }
 
 .form-field {
@@ -1807,9 +2500,10 @@ const columns = [
 }
 
 .dialog-btn {
-  padding: 8px 16px;
+  padding: 7px 14px;
   border-radius: 6px;
   font-weight: 500;
+  font-size: 13px;
 }
 
 .primary-btn {
@@ -1817,72 +2511,24 @@ const columns = [
   color: white;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  .dashboard-container {
-    padding: 16px;
-  }
+/* Schedule Section */
+.schedule-section {
+  background: #f8fafc;
+  padding: 14px;
+  border-radius: 8px;
+}
 
-  .header-content {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
+.schedule-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
-  .stats-section {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .filters-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .table-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-
-  .table-actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .modern-table-container {
-    margin: 0 16px 16px 16px;
-  }
-
-  .table-body-cell {
-    padding: 12px 8px;
-    font-size: 12px;
-  }
-
-  .employee-info {
-    gap: 8px;
-  }
-
-  .action-buttons {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .footer-info {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-  }
-
-  .date-picker-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .time-inputs {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
+.schedule-item {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: #374151;
 }
 
 /* Loading States */
@@ -1909,5 +2555,372 @@ const columns = [
 .dialog-btn:focus {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
+}
+
+/* ===================================
+   RESPONSIVE BREAKPOINTS
+   =================================== */
+
+/* 1440px - Large Desktop */
+@media (min-width: 1440px) {
+  .dashboard-container {
+    max-width: 1400px;
+    padding: 20px;
+  }
+
+  .stats-section {
+    gap: 16px;
+  }
+
+  .filters-grid {
+    gap: 14px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 14px 12px;
+  }
+
+  .action-buttons {
+    gap: 5px;
+  }
+
+  .action-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+}
+
+/* 1024px - Desktop / Tablet Landscape */
+@media (max-width: 1024px) {
+  .dashboard-container {
+    padding: 16px;
+  }
+
+  .page-header {
+    padding: 14px;
+  }
+
+  .header-content {
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .stats-section {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stats-card {
+    padding: 14px;
+  }
+
+  .stats-icon-wrapper {
+    width: 44px;
+    height: 44px;
+  }
+
+  .stats-icon {
+    font-size: 22px;
+  }
+
+  .stats-amount {
+    font-size: 24px;
+  }
+
+  .stats-label {
+    font-size: 12px;
+  }
+
+  .filters-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .table-header {
+    flex-wrap: wrap;
+    padding: 14px;
+  }
+
+  .table-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .modern-table-container {
+    margin: 0 14px 14px 14px;
+    overflow-x: auto;
+  }
+
+  .attendance-table {
+    min-width: 900px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 11px 8px;
+    font-size: 12px;
+  }
+
+  .actions-cell {
+    width: 90px;
+    min-width: 90px;
+  }
+
+  .action-buttons {
+    gap: 3px;
+  }
+
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+  }
+
+  .employee-info {
+    gap: 8px;
+  }
+
+  .employee-name {
+    font-size: 12px;
+  }
+
+  .selfie-thumbnail {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* 768px - Tablet Portrait */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 12px;
+  }
+
+  .page-header {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .header-actions {
+    justify-content: space-between;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
+  .stats-section {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .stats-card {
+    padding: 12px;
+  }
+
+  .stats-icon-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+
+  .stats-icon {
+    font-size: 20px;
+  }
+
+  .stats-amount {
+    font-size: 22px;
+  }
+
+  .stats-label {
+    font-size: 11px;
+  }
+
+  .filters-section {
+    margin-bottom: 12px;
+  }
+
+  .filters-card {
+    padding: 12px;
+  }
+
+  .filters-title {
+    font-size: 15px;
+  }
+
+  .filters-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .table-title {
+    font-size: 16px;
+  }
+
+  .table-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .table-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modern-table-container {
+    margin: 0 10px 10px 10px;
+  }
+
+  .table-footer {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .footer-info {
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .pagination-controls {
+    justify-content: center;
+  }
+
+  .date-picker-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .time-inputs {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .edit-dialog-card,
+  .date-picker-card {
+    max-width: 95vw;
+    margin: 12px;
+  }
+
+  .selfie-dialog-card {
+    max-width: 95vw;
+    margin: 12px;
+  }
+
+  .schedule-section {
+    padding: 12px;
+  }
+
+  .schedule-item {
+    font-size: 12px;
+  }
+}
+
+/* Small Mobile - 480px and below */
+@media (max-width: 480px) {
+  .dashboard-container {
+    padding: 10px;
+  }
+
+  .page-header {
+    padding: 10px;
+    border-radius: 10px;
+  }
+
+  .page-title {
+    font-size: 16px;
+  }
+
+  .header-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .export-btn {
+    padding: 6px 12px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .stats-card {
+    padding: 10px;
+  }
+
+  .stats-icon-wrapper {
+    width: 36px;
+    height: 36px;
+  }
+
+  .stats-icon {
+    font-size: 18px;
+  }
+
+  .stats-amount {
+    font-size: 20px;
+  }
+
+  .stats-label {
+    font-size: 10px;
+  }
+
+  .filters-card {
+    padding: 10px;
+  }
+
+  .filters-title {
+    font-size: 14px;
+  }
+
+  .table-header {
+    padding: 10px;
+  }
+
+  .table-title {
+    font-size: 15px;
+  }
+
+  .modern-table-container {
+    margin: 0 8px 8px 8px;
+  }
+
+  .action-btn {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+  }
+
+  .selfie-thumbnail {
+    width: 28px;
+    height: 28px;
+  }
+
+  .dialog-title {
+    font-size: 16px;
+  }
+
+  .pagination-btn {
+    width: 28px;
+    height: 28px;
+  }
 }
 </style>

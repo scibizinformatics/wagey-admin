@@ -6,7 +6,6 @@
         <div class="header-content">
           <div class="title-section">
             <h1 class="page-title">Employee Invitations</h1>
-            <p class="page-subtitle">Manage and send invitations to new employees</p>
           </div>
           <div class="header-actions">
             <q-btn
@@ -194,8 +193,20 @@
                 </q-input>
               </div>
 
-              <!-- User Role Field (Hidden in UI, using default value) -->
-              <input type="hidden" v-model="invitationForm.user_role" />
+              <q-select
+                v-model="invitationForm.user_role"
+                label="User Role"
+                :options="userRoleOptions"
+                :loading="loadingRoles"
+                outlined
+                dense
+                emit-value
+                map-options
+                option-label="label"
+                option-value="value"
+                hint="Select a user role"
+                clearable
+              />
 
               <!-- Form Actions -->
               <div class="form-actions">
@@ -261,6 +272,7 @@ const userRoleOptions = ref([])
 
 // Table data
 const invitations = ref([])
+
 const columns = [
   {
     name: 'email',
@@ -271,20 +283,8 @@ const columns = [
     format: (val) => `${val}`,
     sortable: true,
   },
-  {
-    name: 'company',
-    label: 'Company',
-    align: 'left',
-    field: (row) => row.company,
-    sortable: true,
-  },
-  {
-    name: 'role',
-    label: 'Role',
-    align: 'left',
-    field: (row) => row.role,
-    sortable: true,
-  },
+  { name: 'company', label: 'Company', align: 'left', field: (row) => row.company, sortable: true },
+  { name: 'role', label: 'Role', align: 'left', field: (row) => row.role, sortable: true },
   {
     name: 'code',
     label: 'Invitation Code',
@@ -292,20 +292,8 @@ const columns = [
     field: (row) => row.code,
     sortable: true,
   },
-  {
-    name: 'status',
-    label: 'Status',
-    align: 'center',
-    field: (row) => row.status,
-    sortable: true,
-  },
-  {
-    name: 'is_used',
-    label: 'Used',
-    align: 'center',
-    field: (row) => row.is_used,
-    sortable: true,
-  },
+  { name: 'status', label: 'Status', align: 'center', field: (row) => row.status, sortable: true },
+  { name: 'is_used', label: 'Used', align: 'center', field: (row) => row.is_used, sortable: true },
   {
     name: 'created_at',
     label: 'Created',
@@ -327,125 +315,198 @@ const isFormValid = computed(() => {
   return invitationForm.value.email && /.+@.+\..+/.test(invitationForm.value.email)
 })
 
+// Helper: parse selectedCompany to a usable numeric id (returns null if invalid)
+function parseSelectedCompany(raw) {
+  if (!raw && raw !== 0) return null
+  // try JSON parse first
+  try {
+    const parsed = JSON.parse(raw)
+    // parsed could be a number, object, or string
+    if (typeof parsed === 'number' && Number.isFinite(parsed)) return parsed
+    if (typeof parsed === 'string' && parsed.trim() !== '') {
+      const n = Number(parsed)
+      if (!isNaN(n) && n > 0) return n
+    }
+    if (typeof parsed === 'object' && parsed !== null) {
+      return parsed.id || parsed.company_id || parsed.value || null
+    }
+  } catch {
+    // not JSON — try direct numeric conversion
+    const n = Number(raw)
+    if (!isNaN(n) && n > 0) return n
+  }
+  return null
+}
+
+// Table methods
 // Table methods
 const fetchInvitations = async () => {
   try {
     loadingTable.value = true
     const token = localStorage.getItem('access_token')
-    const selectedCompany = localStorage.getItem('selectedCompany')
+    const selectedCompanyRaw = localStorage.getItem('selectedCompany')
+
+    console.log('📋 Fetching invitations...')
+    console.log('🔍 raw selectedCompany:', selectedCompanyRaw)
 
     if (!token) {
       throw new Error('No authentication token found')
     }
 
-    if (!selectedCompany) {
-      console.warn('No company selected')
+    const companyId = parseSelectedCompany(selectedCompanyRaw)
+    if (!companyId) {
+      console.warn('⚠️ No valid company selected — skipping invitations fetch')
       invitations.value = []
       return
     }
 
-    // Parse selectedCompany to get the company ID
-    const companyId = parseInt(selectedCompany)
+    console.log('✓ Using companyId for invitations:', companyId)
 
-    if (!companyId || isNaN(companyId)) {
-      console.warn('Invalid company ID')
-      invitations.value = []
-      return
-    }
-
-    // Fetch invitations with company_id filter
-    const response = await axios.get(`https://staging.wageyapp.com/user/invite-list/`, {
-      params: {
-        company_id: companyId,
-      },
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+    const response = await axios.get('https://staging.wageyapp.com/user/invite-list/', {
+      params: { company: companyId, company_id: companyId },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     })
 
-    console.log('Invitations response:', response.data)
+    console.log('✅ Invitations response status:', response.status)
+    console.log('📌 Invitations payload:', response.data)
 
-    // Handle different API response formats
+    // The API returns an array directly
     let allInvitations = []
     if (Array.isArray(response.data)) {
       allInvitations = response.data
-    } else if (response.data.results && Array.isArray(response.data.results)) {
+    } else if (response.data?.results && Array.isArray(response.data.results)) {
       allInvitations = response.data.results
-    } else if (response.data.data && Array.isArray(response.data.data)) {
+    } else if (response.data?.data && Array.isArray(response.data.data)) {
       allInvitations = response.data.data
     } else {
       allInvitations = []
     }
 
-    // Filter invitations by company_id if company field exists
-    invitations.value = allInvitations.filter((invitation) => {
-      // If invitation has a company field, check if it matches
-      if (invitation.company_id) {
-        return invitation.company_id === companyId
-      }
-      // If no company_id field, show all (API might already filter)
-      return true
-    })
+    console.log(`✅ Loaded ${allInvitations.length} invitations`)
 
-    console.log(`Filtered invitations for company ${companyId}:`, invitations.value.length)
+    // Since the API already filters by company via query params,
+    // we don't need to filter again (the 'company' field is a string name, not ID)
+    invitations.value = allInvitations
+
+    // Optional: Log sample data for debugging
+    if (invitations.value.length > 0) {
+      console.log('📊 Sample invitation:', invitations.value[0])
+    }
   } catch (error) {
-    console.error('Error fetching invitations:', error)
+    console.error('❌ Error fetching invitations:', error)
+    console.error('Error response:', error?.response?.data || error?.message || error)
     invitations.value = []
+
+    // Show user-friendly error
+    $q.notify({
+      type: 'negative',
+      message: error?.response?.data?.detail || 'Failed to load invitations',
+      position: 'top',
+    })
   } finally {
     loadingTable.value = false
   }
 }
 
-// Fetch user roles
+// FETCH USER ROLES - FIXED and robust
 const fetchUserRoles = async () => {
   try {
     loadingRoles.value = true
 
     const token = localStorage.getItem('access_token')
+    const selectedCompanyRaw = localStorage.getItem('selectedCompany')
+
+    console.log('🔍 Fetching roles - token present?', !!token)
+    console.log('🔍 raw selectedCompany:', selectedCompanyRaw)
+
     if (!token) {
-      throw new Error('No authentication token found')
+      throw new Error('Missing authentication token')
     }
 
-    const response = await axios.get('https://staging.wageyapp.com/user/user-roles/', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    const companyId = parseSelectedCompany(selectedCompanyRaw)
+    if (!companyId) {
+      console.warn('⚠️ No valid company selected for roles')
+      userRoleOptions.value = []
+      return
+    }
+
+    console.log('✓ Using companyId for roles:', companyId)
+
+    // use params instead of string interpolation (safer)
+    const response = await axios.get(
+      `https://staging.wageyapp.com/user/user-roles/?company=${companyId}`,
+      {
+        params: { company: companyId },
+        headers: { Authorization: `Bearer ${token}` },
       },
+    )
+
+    console.log('📥 Raw API response status:', response.status)
+    console.log('📌 Response data:', response.data)
+
+    // Normalize different response shapes
+    let rolesArray = []
+    if (Array.isArray(response.data)) {
+      rolesArray = response.data
+    } else if (response.data?.results && Array.isArray(response.data.results)) {
+      rolesArray = response.data.results
+    } else if (response.data?.data && Array.isArray(response.data.data)) {
+      rolesArray = response.data.data
+    } else if (response.data?.roles && Array.isArray(response.data.roles)) {
+      rolesArray = response.data.roles
+    } else {
+      console.warn('⚠️ Unexpected roles response format, keys:', Object.keys(response.data || {}))
+      rolesArray = []
+    }
+
+    console.log('📋 rolesArray length:', rolesArray.length)
+
+    // Filter roles to the company (if role item has company/company_id)
+    const filtered = rolesArray.filter((r) => {
+      if (r.company || r.company_id) {
+        return Number(r.company || r.company_id) === Number(companyId)
+      }
+      return true
     })
 
-    console.log('User roles response:', response.data)
+    // Map to q-select options { label, value }
+    userRoleOptions.value = filtered
+      .map((r) => {
+        const label = r.name || r.role_name || r.title || `Role ${r.id}`
+        const value = Number(r.id) || Number(r.role_id) || null
+        return { label, value }
+      })
+      .filter((o) => o.value !== null)
 
-    // Transform the API response to match the expected format
-    if (Array.isArray(response.data)) {
-      userRoleOptions.value = response.data.map((role) => ({
-        label: role.name || role.role_name || role.title || `Role ${role.id}`,
-        value: role.id,
-      }))
-    } else if (response.data.results && Array.isArray(response.data.results)) {
-      userRoleOptions.value = response.data.results.map((role) => ({
-        label: role.name || role.role_name || role.title || `Role ${role.id}`,
-        value: role.id,
-      }))
-    } else if (response.data.data && Array.isArray(response.data.data)) {
-      userRoleOptions.value = response.data.data.map((role) => ({
-        label: role.name || role.role_name || role.title || `Role ${role.id}`,
-        value: role.id,
-      }))
-    } else {
-      console.warn('Unexpected user roles API response format:', response.data)
-      userRoleOptions.value = []
+    console.log('✓ userRoleOptions:', userRoleOptions.value)
+
+    // Set default user_role in invitationForm if empty
+    if (!invitationForm.value.user_role && userRoleOptions.value.length > 0) {
+      invitationForm.value.user_role = userRoleOptions.value[0].value
+      console.log('✓ Set default invitationForm.user_role:', invitationForm.value.user_role)
     }
 
-    // Set default user_role to first available role
-    if (userRoleOptions.value.length > 0 && !invitationForm.value.user_role) {
-      invitationForm.value.user_role = userRoleOptions.value[0].value
+    // If no roles, notify user (optional)
+    if (userRoleOptions.value.length === 0) {
+      console.warn('⚠️ No roles available for this company')
+      // optional UI notify:
+      // $q.notify({ type: 'warning', message: 'No roles found for this company', position: 'top' })
     }
   } catch (error) {
-    console.error('Error fetching user roles:', error)
+    console.error('❌ ERROR FETCHING ROLES:', error)
+    console.error('Error response data:', error?.response?.data || error?.message || error)
     userRoleOptions.value = []
+    // show friendly notification
+    $q.notify({
+      type: 'negative',
+      message:
+        error?.response?.data?.detail || error?.response?.data?.message || 'Failed to load roles',
+      position: 'top',
+      timeout: 4000,
+    })
   } finally {
     loadingRoles.value = false
+    console.log('🏁 Finished fetching roles')
   }
 }
 
@@ -466,11 +527,7 @@ const getStatusColor = (status) => {
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 // Modal methods
@@ -492,7 +549,7 @@ const sendAnother = () => {
   showInviteModal.value = true
 }
 
-// Form methods
+// Form methods (unchanged)
 const sendInvitation = async () => {
   if (!isFormValid.value) return
 
@@ -501,6 +558,9 @@ const sendInvitation = async () => {
 
     const token = localStorage.getItem('access_token')
     const selectedCompany = localStorage.getItem('selectedCompany')
+
+    console.log('📤 Sending invitation...')
+    console.log('🔍 raw selectedCompany:', selectedCompany)
 
     if (!token) {
       $q.notify({
@@ -511,7 +571,8 @@ const sendInvitation = async () => {
       return
     }
 
-    if (!selectedCompany) {
+    const companyId = parseSelectedCompany(selectedCompany)
+    if (!companyId) {
       $q.notify({
         type: 'negative',
         message: 'No company selected. Please select a company first.',
@@ -520,44 +581,26 @@ const sendInvitation = async () => {
       return
     }
 
-    // selectedCompany is stored as a simple string number (e.g., "2")
-    const companyId = parseInt(selectedCompany)
-
-    if (!companyId || isNaN(companyId)) {
-      $q.notify({
-        type: 'negative',
-        message: 'Invalid company ID. Please select a company again.',
-        position: 'top',
-      })
-      return
-    }
-
-    // Prepare simplified invitation data with company_id
+    // Prepare invitation data
     const invitationData = {
       email: invitationForm.value.email.trim(),
-      user_role: parseInt(invitationForm.value.user_role),
+      user_role: Number(invitationForm.value.user_role),
       company_id: companyId,
     }
 
-    console.log('Sending invitation data:', invitationData)
-    console.log('Authorization token:', token ? 'Present' : 'Missing')
+    console.log('📤 Sending invitation data:', invitationData)
 
-    // Send invitation
-    const response = await axios.post(`https://staging.wageyapp.com/user/invite/`, invitationData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+    const response = await axios.post('https://staging.wageyapp.com/user/invite/', invitationData, {
+      params: { company: companyId },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     })
 
-    console.log('Invitation response:', response.data)
+    console.log('✅ Invitation response:', response.data)
 
-    // Success
     sentToEmail.value = invitationForm.value.email
     showInviteModal.value = false
     showSuccessDialog.value = true
 
-    // Refresh the invitations table
     await fetchInvitations()
 
     $q.notify({
@@ -566,45 +609,12 @@ const sendInvitation = async () => {
       position: 'top',
     })
   } catch (error) {
-    console.error('Error sending invitation:', error)
-    console.error('Error response data:', error.response?.data)
-    console.error('Error response status:', error.response?.status)
-
+    console.error('❌ Error sending invitation:', error)
+    console.error('Error response data:', error?.response?.data)
     let errorMessage = 'Failed to send invitation'
-
-    if (error.response?.data) {
-      // Log the full error response for debugging
-      console.log('Full error response:', JSON.stringify(error.response.data, null, 2))
-
-      if (error.response.data.message) {
-        errorMessage = error.response.data.message
-      } else if (error.response.data.error) {
-        errorMessage = error.response.data.error
-      } else if (error.response.data.detail) {
-        errorMessage = error.response.data.detail
-      } else if (typeof error.response.data === 'string') {
-        errorMessage = error.response.data
-      } else if (error.response.data.errors || typeof error.response.data === 'object') {
-        // Handle validation errors
-        const errors = error.response.data.errors || error.response.data
-        if (typeof errors === 'object') {
-          const errorMessages = Object.entries(errors)
-            .map(([field, messages]) => {
-              const msgArray = Array.isArray(messages) ? messages : [messages]
-              return `${field}: ${msgArray.join(', ')}`
-            })
-            .join('; ')
-          errorMessage = `Validation errors - ${errorMessages}`
-        }
-      }
-    }
-
-    $q.notify({
-      type: 'negative',
-      message: errorMessage,
-      position: 'top',
-      timeout: 10000,
-    })
+    if (error?.response?.data?.message) errorMessage = error.response.data.message
+    else if (error?.response?.data?.detail) errorMessage = error.response.data.detail
+    $q.notify({ type: 'negative', message: errorMessage, position: 'top', timeout: 10000 })
   } finally {
     sending.value = false
   }
@@ -613,11 +623,8 @@ const sendInvitation = async () => {
 // Load initial data
 onMounted(async () => {
   console.log('Loading initial data...')
-
-  // Fetch roles first, then invitations
   await fetchUserRoles()
   await fetchInvitations()
-
   console.log('Loaded data:', {
     userRoles: userRoleOptions.value.length,
     invitations: invitations.value.length,

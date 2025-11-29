@@ -3,9 +3,19 @@
     <!-- Header -->
     <div class="header-bar bg-white shadow-2 q-pa-md">
       <div class="row items-center justify-between q-col-gutter-sm">
-        <div class="col-12 col-sm-6 row items-center"></div>
+        <div class="col-12 col-sm-6 row items-center">
+          <!-- Mobile menu toggle -->
+          <q-btn
+            flat
+            dense
+            round
+            icon="menu"
+            class="mobile-menu-btn lt-md"
+            @click="leftDrawerOpen = !leftDrawerOpen"
+          />
+        </div>
         <div class="col-12 col-sm-6 row items-center justify-end q-gutter-sm">
-          <span class="text-body2">drake.carcellar16@gmail.com</span>
+          <span class="text-body2 email-text">drake.carcellar16@gmail.com</span>
           <q-btn flat round icon="notifications" size="sm">
             <q-badge color="red" floating>4</q-badge>
           </q-btn>
@@ -17,13 +27,21 @@
     </div>
 
     <!-- Sidebar -->
-    <q-drawer show-if-above v-model="leftDrawerOpen" side="left" bordered class="modern-sidebar">
+    <q-drawer
+      show-if-above
+      v-model="leftDrawerOpen"
+      side="left"
+      bordered
+      class="modern-sidebar"
+      :width="drawerWidth"
+      :breakpoint="768"
+    >
       <!-- Sidebar Header -->
       <div class="sidebar-header q-pa-lg">
         <div class="row items-center no-wrap">
-          <q-avatar size="40px" class="sidebar-logo">
+          <div class="sidebar-logo">
             <img :src="logo" alt="Wagey Logo" />
-          </q-avatar>
+          </div>
           <div class="q-ml-md">
             <div class="sidebar-title">Wagey</div>
           </div>
@@ -85,12 +103,6 @@
       <!-- Settings & Logout -->
       <div class="sidebar-nav q-px-md q-mt-md">
         <q-list class="nav-list">
-          <q-item clickable class="nav-item">
-            <q-item-section avatar class="nav-icon">
-              <q-icon name="settings" size="20px" />
-            </q-item-section>
-            <q-item-section class="nav-label">Settings</q-item-section>
-          </q-item>
           <q-item clickable class="nav-item" @click="logout">
             <q-item-section avatar class="nav-icon">
               <q-icon name="logout" size="20px" />
@@ -128,6 +140,8 @@ export default {
         { label: 'Schedule', icon: 'calendar_month', to: '/schedule' },
         { label: 'Payroll', icon: 'paid', to: '/payroll' },
         { label: 'Requests', icon: 'mark_email_unread', to: '/requests' },
+        { label: 'Swap Requests', icon: 'swap_horiz', to: '/swap-requests' },
+        { label: 'Cash Advance', icon: 'account_balance_wallet', to: '/cash-advance' },
         { label: 'Invite', icon: 'email', to: '/invite' },
         { label: 'Announcement', icon: 'announcement', to: '/announcements' },
         { label: 'Admin Settings', icon: 'settings', to: '/admin-settings' },
@@ -135,24 +149,39 @@ export default {
     }
   },
 
+  computed: {
+    drawerWidth() {
+      if (this.$q.screen.width < 768) return 260
+      if (this.$q.screen.width < 1024) return 240
+      if (this.$q.screen.width < 1440) return 260
+      return 280
+    },
+  },
+
   async mounted() {
     await this.fetchCompanies()
-    this.loadSavedCompany() // ✅ ensure company loads AFTER options
+    this.loadSavedCompany()
   },
 
   methods: {
     async fetchCompanies() {
       this.loadingCompanies = true
       try {
-        const token = localStorage.getItem('authToken')
-        const res = await api.get('/user/current-user-companies/', {
+        const token = localStorage.getItem('access_token')
+        const res = await api.get('/organization/companies/', {
           headers: { Authorization: `Bearer ${token}` },
         })
-        console.log(res)
-        this.companyOptions = res.data.map((company) => ({
-          siteId: String(company.company), // ✅ always store as string
-          siteName: company.name || company.company_name || `Company ${company.id}`,
+        console.log('Companies response:', res.data)
+
+        // Handle different response structures
+        const companiesData = res.data.data || res.data || []
+
+        this.companyOptions = companiesData.map((company) => ({
+          siteId: String(company.id),
+          siteName: company.name || `Company ${company.id}`,
         }))
+
+        console.log('Mapped company options:', this.companyOptions)
 
         // Auto-select if only one company
         if (this.companyOptions.length === 1) {
@@ -160,9 +189,10 @@ export default {
         }
       } catch (err) {
         console.error('❌ Error fetching companies:', err.response?.status, err.message)
+        console.error('Error details:', err.response?.data)
         this.$q.notify({
           type: 'negative',
-          message: 'Failed to load companies',
+          message: err.response?.data?.message || 'Failed to load companies',
           position: 'top',
         })
       } finally {
@@ -177,7 +207,7 @@ export default {
     },
 
     setSelectedCompany(siteId) {
-      this.selectedCompany = String(siteId) // ✅ store as string
+      this.selectedCompany = String(siteId)
       localStorage.setItem('selectedCompany', String(siteId))
       console.log('✅ Selected company saved:', siteId)
     },
@@ -187,31 +217,44 @@ export default {
       if (saved) {
         const match = this.companyOptions.find((opt) => String(opt.siteId) === String(saved))
         if (match) {
-          this.selectedCompany = String(match.siteId) // ✅ ensures label shows
+          this.selectedCompany = String(match.siteId)
         }
       }
     },
 
     logout() {
+      localStorage.removeItem('access_token')
       localStorage.removeItem('selectedCompany')
-      localStorage.removeItem('authToken')
       console.log('👋 Logging out...')
-      this.$router.push('/login')
+      this.$router.push({ name: 'login' }).then(() => {
+        window.location.reload()
+      })
     },
   },
 }
 </script>
 
 <style scoped>
+/* Hide Scrollbar Globally */
+:deep(*) {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+:deep(*::-webkit-scrollbar) {
+  display: none; /* Chrome, Safari, Opera */
+}
+
 /* Modern Sidebar Styling */
 .modern-sidebar {
-  width: 280px;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border: none;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Sidebar Header */
@@ -221,6 +264,20 @@ export default {
   margin: 16px;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.sidebar-logo {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .sidebar-title {
@@ -260,6 +317,7 @@ export default {
 .sidebar-nav {
   flex: 1;
   padding-top: 8px;
+  padding-bottom: 20px;
 }
 
 .nav-list {
@@ -304,25 +362,13 @@ export default {
   letter-spacing: -0.01em;
 }
 
-/* Header bar styling remains the same */
+/* Header bar styling */
 .header-bar {
   z-index: 1001;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .modern-sidebar {
-    width: 260px;
-  }
-
-  .sidebar-header {
-    margin: 12px;
-    padding: 16px;
-  }
-
-  .company-selector {
-    margin: 12px 0;
-  }
+.mobile-menu-btn {
+  display: none;
 }
 
 /* Remove default Quasar item styling */
@@ -332,5 +378,146 @@ export default {
 
 .q-item__section--avatar {
   padding-right: 12px;
+}
+
+/* Responsive Breakpoints */
+
+/* Mobile: < 768px */
+@media (max-width: 767px) {
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+
+  .modern-sidebar {
+    width: 260px;
+  }
+
+  .sidebar-header {
+    margin: 12px;
+    padding: 12px 16px;
+  }
+
+  .sidebar-title {
+    font-size: 18px;
+  }
+
+  .company-selector {
+    margin: 12px 0;
+    padding: 0 8px;
+  }
+
+  .sidebar-nav {
+    padding: 0 8px;
+  }
+
+  .nav-item {
+    min-height: 44px;
+    padding: 10px 12px;
+    margin-bottom: 2px;
+  }
+
+  .nav-label {
+    font-size: 13px;
+  }
+
+  .email-text {
+    display: none;
+  }
+
+  .header-bar {
+    padding: 8px 12px;
+  }
+}
+
+/* Tablet: 768px - 1023px */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .modern-sidebar {
+    width: 240px;
+  }
+
+  .sidebar-header {
+    margin: 12px;
+    padding: 14px;
+  }
+
+  .sidebar-title {
+    font-size: 18px;
+  }
+
+  .company-selector {
+    padding: 0 10px;
+  }
+
+  .sidebar-nav {
+    padding: 0 10px;
+  }
+
+  .nav-item {
+    min-height: 46px;
+    padding: 10px 14px;
+  }
+
+  .nav-label {
+    font-size: 13.5px;
+  }
+
+  .nav-icon {
+    min-width: 36px;
+  }
+}
+
+/* Small Desktop: 1024px - 1439px */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .modern-sidebar {
+    width: 260px;
+  }
+
+  .sidebar-header {
+    margin: 14px;
+    padding: 16px;
+  }
+
+  .sidebar-title {
+    font-size: 19px;
+  }
+
+  .nav-item {
+    min-height: 47px;
+    padding: 11px 15px;
+  }
+}
+
+/* Large Desktop: 1440px+ */
+@media (min-width: 1440px) {
+  .modern-sidebar {
+    width: 280px;
+  }
+
+  .sidebar-header {
+    margin: 16px;
+    padding: 20px;
+  }
+
+  .sidebar-title {
+    font-size: 20px;
+  }
+
+  .nav-item {
+    min-height: 48px;
+    padding: 12px 16px;
+  }
+
+  .nav-label {
+    font-size: 14px;
+  }
+}
+
+/* Extra smooth transitions */
+@media (prefers-reduced-motion: no-preference) {
+  .modern-sidebar,
+  .nav-item,
+  .company-dropdown {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
 </style>
