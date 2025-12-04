@@ -1378,86 +1378,296 @@
       </q-card>
     </q-dialog>
     <!-- Contract Dialog -->
+    <!-- Contract Dialog - Updated Structure -->
     <q-dialog v-model="contractDialog" persistent>
-      <q-card class="dialog-card" style="min-width: 600px">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">{{ editingContract ? 'Edit Contract' : 'Create New Contract' }}</div>
+      <q-card style="min-width: 700px; max-width: 900px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            {{ editingContract ? 'Edit Contract' : 'Create Contract' }}
+          </div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form class="q-gutter-md">
-            <q-select
-              v-model="contractForm.employee_id"
-              :options="employees"
-              option-value="id"
-              option-label="full_name"
-              label="Employee *"
-              outlined
+
+        <q-card-section>
+          <div class="row q-col-gutter-md">
+            <!-- Employee -->
+            <div class="col-6">
+              <q-select
+                v-model="contractForm.employee_id"
+                :options="employees"
+                option-value="id"
+                option-label="full_name"
+                emit-value
+                map-options
+                label="Employee *"
+                outlined
+                dense
+              />
+            </div>
+
+            <!-- Contract Type -->
+            <div class="col-6">
+              <q-select
+                v-model="contractForm.contract_type_id"
+                :options="contractTypes"
+                option-value="id"
+                option-label="name"
+                emit-value
+                map-options
+                label="Contract Type *"
+                outlined
+                dense
+              />
+            </div>
+
+            <!-- Site -->
+            <div class="col-12">
+              <q-select
+                v-model="contractForm.site_id"
+                :options="sites"
+                option-value="id"
+                option-label="name"
+                emit-value
+                map-options
+                label="Site *"
+                outlined
+                dense
+              />
+            </div>
+          </div>
+
+          <!-- Pay Structure Section -->
+          <div class="text-subtitle1 q-mt-md q-mb-sm">Pay Structure</div>
+          <div class="row q-col-gutter-md">
+            <div class="col-6">
+              <q-select
+                v-model="contractForm.pay_structure.position_id"
+                :options="positions"
+                option-value="id"
+                option-label="name"
+                emit-value
+                map-options
+                label="Position *"
+                outlined
+                dense
+              />
+            </div>
+
+            <div class="col-6">
+              <q-select
+                v-model="contractForm.pay_structure.pay_type"
+                :options="payTypeOptions"
+                label="Pay Type *"
+                outlined
+                dense
+              />
+            </div>
+
+            <div class="col-4">
+              <q-input
+                v-model.number="contractForm.pay_structure.rate"
+                type="number"
+                label="Rate *"
+                outlined
+                dense
+                prefix="₱"
+              />
+            </div>
+
+            <div class="col-4">
+              <q-input
+                v-model="contractForm.pay_structure.effective_from"
+                type="date"
+                label="Effective From *"
+                outlined
+                dense
+              />
+            </div>
+
+            <div class="col-4">
+              <q-input
+                v-model="contractForm.pay_structure.effective_to"
+                type="date"
+                label="Effective To"
+                outlined
+                dense
+                clearable
+              />
+            </div>
+          </div>
+
+          <!-- Schedules Section -->
+          <div class="text-subtitle1 q-mt-md q-mb-sm">
+            Schedules
+            <q-btn
+              size="sm"
+              color="primary"
+              icon="add"
+              label="Add Schedule"
+              @click="showScheduleForm = !showScheduleForm"
+              flat
               dense
-              emit-value
-              map-options
-              :rules="[(val) => !!val || 'Employee is required']"
             />
-            <q-select
-              v-model="contractForm.contract_type_id"
-              :options="contractTypes"
-              option-value="id"
-              option-label="name"
-              label="Contract Type *"
-              outlined
+          </div>
+
+          <!-- Schedule Form (collapsible) -->
+          <div v-if="showScheduleForm" class="q-pa-md bg-grey-2 rounded-borders q-mb-md">
+            <div class="row q-col-gutter-sm">
+              <div class="col-3">
+                <q-input v-model="scheduleForm.date" type="date" label="Date *" outlined dense />
+              </div>
+              <div class="col-3">
+                <q-select
+                  v-model="scheduleForm.site_id"
+                  :options="sites"
+                  option-value="id"
+                  option-label="name"
+                  emit-value
+                  map-options
+                  label="Site *"
+                  outlined
+                  dense
+                />
+              </div>
+              <div class="col-3">
+                <q-select
+                  v-model="scheduleForm.department_id"
+                  :options="departments"
+                  option-value="id"
+                  option-label="name"
+                  emit-value
+                  map-options
+                  label="Department *"
+                  outlined
+                  dense
+                />
+              </div>
+              <div class="col-2">
+                <q-select
+                  v-model="scheduleForm.shift_type_id"
+                  :options="shiftTypes"
+                  option-value="id"
+                  option-label="name"
+                  emit-value
+                  map-options
+                  label="Shift *"
+                  outlined
+                  dense
+                />
+              </div>
+              <div class="col-1">
+                <q-btn color="primary" icon="add" @click="addSchedule" dense />
+              </div>
+            </div>
+          </div>
+
+          <!-- Schedules List -->
+          <q-list v-if="contractForm.schedules.length > 0" bordered separator>
+            <q-item v-for="(schedule, index) in contractForm.schedules" :key="index">
+              <q-item-section>
+                <q-item-label>{{ formatDate(schedule.date) }}</q-item-label>
+                <q-item-label caption>
+                  Site: {{ getSiteName(schedule.site_id) }} | Dept:
+                  {{ getDepartmentName(schedule.department_id) }} | Shift:
+                  {{ getShiftTypeName(schedule.shift_type_id) }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn icon="delete" flat dense color="negative" @click="removeSchedule(index)" />
+              </q-item-section>
+            </q-item>
+          </q-list>
+
+          <!-- Recurring Section -->
+          <div class="text-subtitle1 q-mt-md q-mb-sm">
+            Recurring Schedules
+            <q-btn
+              size="sm"
+              color="primary"
+              icon="add"
+              label="Add Recurring"
+              @click="showRecurringForm = !showRecurringForm"
+              flat
               dense
-              emit-value
-              map-options
-              :rules="[(val) => !!val || 'Contract type is required']"
             />
-            <q-select
-              v-model="contractForm.position_id"
-              :options="positions"
-              option-value="id"
-              option-label="name"
-              label="Position *"
-              outlined
-              dense
-              emit-value
-              map-options
-              :rules="[(val) => !!val || 'Position is required']"
-            />
-            <div class="row q-col-gutter-md">
-              <div class="col-6">
+          </div>
+
+          <!-- Recurring Form (collapsible) -->
+          <div v-if="showRecurringForm" class="q-pa-md bg-grey-2 rounded-borders q-mb-md">
+            <div class="row q-col-gutter-sm">
+              <div class="col-3">
                 <q-input
-                  v-model="contractForm.start_date"
+                  v-model="recurringForm.start_date"
+                  type="date"
                   label="Start Date *"
                   outlined
                   dense
-                  type="date"
-                  :rules="[(val) => !!val || 'Start date is required']"
                 />
               </div>
-              <div class="col-6">
+              <div class="col-3">
                 <q-input
-                  v-model="contractForm.end_date"
-                  label="End Date"
+                  v-model="recurringForm.end_date"
+                  type="date"
+                  label="End Date *"
                   outlined
                   dense
-                  type="date"
-                  hint="Leave empty for indefinite"
                 />
               </div>
+              <div class="col-2">
+                <q-select
+                  v-model="recurringForm.site_id"
+                  :options="sites"
+                  option-value="id"
+                  option-label="name"
+                  emit-value
+                  map-options
+                  label="Site *"
+                  outlined
+                  dense
+                />
+              </div>
+              <div class="col-3">
+                <q-select
+                  v-model="recurringForm.department_id"
+                  :options="departments"
+                  option-value="id"
+                  option-label="name"
+                  emit-value
+                  map-options
+                  label="Department *"
+                  outlined
+                  dense
+                />
+              </div>
+              <div class="col-1">
+                <q-btn color="primary" icon="add" @click="addRecurring" dense />
+              </div>
             </div>
-          </q-form>
+          </div>
+
+          <!-- Recurring List -->
+          <q-list v-if="contractForm.recurring.length > 0" bordered separator>
+            <q-item v-for="(recurring, index) in contractForm.recurring" :key="index">
+              <q-item-section>
+                <q-item-label>
+                  {{ formatDate(recurring.start_date) }} - {{ formatDate(recurring.end_date) }}
+                </q-item-label>
+                <q-item-label caption>
+                  Site: {{ getSiteName(recurring.site_id) }} | Dept:
+                  {{ getDepartmentName(recurring.department_id) }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn icon="delete" flat dense color="negative" @click="removeRecurring(index)" />
+              </q-item-section>
+            </q-item>
+          </q-list>
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
-          <q-btn
-            label="Save"
-            color="primary"
-            @click="saveContract"
-            :loading="savingContract"
-            unelevated
-            no-caps
-          />
+
+        <q-card-actions align="right">
+          <q-btn label="Cancel" color="grey" flat v-close-popup />
+          <q-btn label="Save" color="primary" @click="saveContract" :loading="savingContract" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -1900,12 +2110,44 @@ export default {
         employee_id: null,
         company_id: null,
         contract_type_id: null,
-        position_id: null,
+        site_id: null,
+
+        // Pay Structure (nested object)
+        pay_structure: {
+          position_id: null,
+          pay_type: 'monthly',
+          rate: '',
+          currency: 'PHP',
+          effective_from: '',
+          effective_to: null,
+        },
+
+        // Schedules array
         schedules: [],
+
+        // Recurring array
+        recurring: [],
+      },
+
+      // Add these to help with schedule/recurring management
+      scheduleForm: {
+        date: '',
+        site_id: null,
+        department_id: null,
+        shift_type_id: null,
+      },
+
+      recurringForm: {
         recurring_id: null,
         start_date: '',
         end_date: '',
+        site_id: null,
+        department_id: null,
       },
+
+      // You'll also need to fetch departments and shift types
+      shiftTypes: [],
+      loadingShiftTypes: false,
       contractColumns: [
         {
           name: 'employee',
@@ -2169,7 +2411,20 @@ export default {
       console.error('❌ Could not extract valid company ID from:', selectedCompanyRaw)
       return null
     },
+    getSiteName(siteId) {
+      const site = this.sites.find((s) => s.id === siteId)
+      return site ? site.name : 'N/A'
+    },
 
+    getDepartmentName(deptId) {
+      const dept = this.departments.find((d) => d.id === deptId)
+      return dept ? dept.name : 'N/A'
+    },
+
+    getShiftTypeName(shiftId) {
+      const shift = this.shiftTypes.find((s) => s.id === shiftId)
+      return shift ? shift.name : 'N/A'
+    },
     validateCompanySelection() {
       const companyId = this.getCompanyId()
 
@@ -2941,7 +3196,9 @@ export default {
           return
         }
 
-        const response = await api.get('/contracts/employee-contracts/', {
+        // Note: You may need to check what the LIST endpoint is
+        // The provided endpoint is for CREATE only
+        const response = await api.get('/user/contracts/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -2956,6 +3213,17 @@ export default {
         })
       } finally {
         this.loadingContracts = false
+      }
+    },
+
+    async fetchShiftTypes() {
+      try {
+        const response = await api.get('/attendance/shift-types/', {
+          headers: this.getAuthHeaders(),
+        })
+        this.shiftTypes = response.data.data || response.data || []
+      } catch (error) {
+        console.error('Error fetching shift types:', error)
       }
     },
 

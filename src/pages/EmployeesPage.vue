@@ -72,13 +72,23 @@
           </div>
           <div class="table-actions">
             <q-select
-              v-model="sortBy"
-              :options="['Newest', 'Oldest', 'A-Z', 'Z-A']"
-              label="Sort by"
-              class="sort-select"
+              v-model="selectedSite"
+              :options="sites"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              label="Filter by Site"
+              class="site-select"
               dense
               outlined
-            />
+              clearable
+              @update:model-value="filterBySite"
+            >
+              <template v-slot:prepend>
+                <q-icon name="location_on" />
+              </template>
+            </q-select>
           </div>
         </div>
 
@@ -767,10 +777,13 @@ const employees = ref([])
 const filteredEmployees = ref([])
 const searchTerm = ref('')
 const loading = ref(false)
-const sortBy = ref('Newest')
 //const avatarFile = ref(null)
 const avatarPreview = ref(null)
 const uploadingAvatar = ref(false)
+
+const sortBy = ref('A-Z')
+const sites = ref([])
+const selectedSite = ref(null)
 
 // Modal states
 const showAddModal = ref(false)
@@ -940,7 +953,6 @@ const formatDateTime = (dateString) => {
     minute: '2-digit',
   })
 }
-
 // --- API Calls ---
 const fetchEmployees = async () => {
   try {
@@ -1007,6 +1019,86 @@ const fetchRoles = async () => {
       { id: 3, name: 'Employee' },
       { id: 4, name: 'HR' },
     ]
+  }
+}
+
+const fetchSites = async () => {
+  try {
+    const token = localStorage.getItem('access_token')
+    let storedCompany = localStorage.getItem('selectedCompany')
+    let companyId = null
+
+    try {
+      const parsed = JSON.parse(storedCompany)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = storedCompany
+    }
+
+    console.log('=== FETCHING SITES DEBUG ===')
+    console.log('Token exists:', !!token)
+    console.log('Company ID:', companyId)
+
+    if (!token || !companyId) {
+      console.warn('Missing token or company ID for fetching sites')
+      sites.value = [{ label: 'All Sites', value: null }]
+      return
+    }
+
+    console.log(
+      'Making request to:',
+      `https://staging.wageyapp.com/organization/sites/?company=${companyId}`,
+    )
+
+    const response = await axios.get(
+      `https://staging.wageyapp.com/organization/sites/?company=${companyId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    console.log('Sites API Response:', response.data)
+
+    // Handle different response structures
+    let sitesData = []
+    if (Array.isArray(response.data)) {
+      sitesData = response.data
+    } else if (response.data?.results) {
+      sitesData = response.data.results
+    } else if (response.data?.data) {
+      sitesData = response.data.data
+    }
+
+    console.log('Processed sites data:', sitesData)
+
+    // Format sites for dropdown
+    sites.value = [
+      { label: 'All Sites', value: null },
+      ...sitesData.map((site) => ({
+        label: site.name || site.site_name || `Site ${site.id}`,
+        value: site.id,
+      })),
+    ]
+
+    console.log('Formatted sites for dropdown:', sites.value)
+
+    if (sites.value.length === 1) {
+      console.warn('⚠️ No sites found - only "All Sites" option available')
+    } else {
+      console.log(`✅ Loaded ${sites.value.length - 1} sites`)
+    }
+  } catch (error) {
+    console.error('=== ERROR FETCHING SITES ===')
+    console.error('Error message:', error.message)
+    console.error('Error response:', error.response?.data)
+    console.error('Error status:', error.response?.status)
+
+    // Fallback
+    sites.value = [{ label: 'All Sites', value: null }]
+
+    $q.notify({
+      type: 'warning',
+      message: error.response?.data?.detail || 'Could not load sites. Showing all employees.',
+      position: 'top',
+    })
   }
 }
 
@@ -1415,22 +1507,51 @@ const restoreEmployee = async () => {
   }
 }
 
-// --- Actions ---
 const filterEmployees = () => {
-  if (!searchTerm.value.trim()) {
-    filteredEmployees.value = employees.value
-    return
+  let filtered = employees.value
+
+  // Filter by search term
+  if (searchTerm.value.trim()) {
+    const term = searchTerm.value.toLowerCase()
+    filtered = filtered.filter((emp) => {
+      return (
+        getFullName(emp).toLowerCase().includes(term) ||
+        getEmail(emp).toLowerCase().includes(term) ||
+        getPhoneNumber(emp).toLowerCase().includes(term) ||
+        getRole(emp).toLowerCase().includes(term) ||
+        getStatus(emp).toLowerCase().includes(term)
+      )
+    })
   }
-  const term = searchTerm.value.toLowerCase()
-  filteredEmployees.value = employees.value.filter((emp) => {
-    return (
-      getFullName(emp).toLowerCase().includes(term) ||
-      getEmail(emp).toLowerCase().includes(term) ||
-      getPhoneNumber(emp).toLowerCase().includes(term) ||
-      getRole(emp).toLowerCase().includes(term) ||
-      getStatus(emp).toLowerCase().includes(term)
-    )
-  })
+
+  // Filter by selected site
+  if (selectedSite.value !== null) {
+    console.log('🔍 Filtering by site:', selectedSite.value)
+
+    filtered = filtered.filter((emp) => {
+      // Check multiple possible locations for site_id in the employee object
+      const empSiteId =
+        emp.site_id ||
+        emp.site?.id ||
+        emp.companies?.[0]?.site_id ||
+        emp.companies?.[0]?.site?.id ||
+        emp.user_site?.id
+
+      console.log(`Employee ${getFullName(emp)} (ID: ${emp.id}) site:`, empSiteId)
+
+      // Type-safe comparison (handles both string and number IDs)
+      const employeeSite = typeof empSiteId === 'number' ? empSiteId : parseInt(empSiteId)
+      const filterSite =
+        typeof selectedSite.value === 'number' ? selectedSite.value : parseInt(selectedSite.value)
+
+      return employeeSite === filterSite
+    })
+
+    console.log('Filtered employees count:', filtered.length)
+  }
+
+  filteredEmployees.value = filtered
+  sortEmployees() // Apply sorting after filtering
 }
 
 const sortEmployees = () => {
@@ -1584,6 +1705,10 @@ const resetAddForm = () => {
   }
   confirmPassword.value = ''
 }
+const filterBySite = () => {
+  console.log('🏢 Site filter changed to:', selectedSite.value)
+  filterEmployees()
+}
 
 watch(sortBy, () => {
   sortEmployees()
@@ -1592,6 +1717,7 @@ watch(sortBy, () => {
 onMounted(() => {
   fetchEmployees()
   fetchRoles()
+  fetchSites() // Add this line
 })
 </script>
 
@@ -1636,7 +1762,9 @@ onMounted(() => {
   align-items: center;
   flex-wrap: wrap;
 }
-
+.site-select {
+  min-width: 200px;
+}
 .add-employee-btn {
   height: 36px;
   border-radius: 8px;

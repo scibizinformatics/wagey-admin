@@ -82,13 +82,17 @@
       <div class="controls-row">
         <div class="filter-group">
           <q-select
-            v-model="filters.position"
-            :options="positionFilterOptions"
-            label="Position"
+            v-model="filters.site"
+            :options="siteFilterOptions"
+            option-value="value"
+            option-label="label"
+            label="Filter by Site"
             outlined
             dense
             class="filter-select"
             clearable
+            emit-value
+            map-options
             @update:model-value="applyFilters"
           />
           <q-select
@@ -706,7 +710,10 @@ const recurringSchedules = ref([])
 const userTimezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
 const viewMode = ref('table')
-const filters = ref({ position: 'All', employee: null })
+const filters = ref({
+  site: null, // Changed from position to site
+  employee: null,
+})
 const searchTerm = ref('')
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -772,8 +779,13 @@ const editConflictWarning = ref(false)
 // Week helpers
 const getWeekRange = (date = new Date()) => {
   const d = new Date(date)
+
+  console.log('getWeekRange input:', d)
+  console.log('getWeekRange input is valid?:', !isNaN(d.getTime()))
+
   const day = d.getDay()
   const diffToMonday = day === 0 ? -6 : 1 - day
+
   const monday = new Date(d)
   monday.setDate(d.getDate() + diffToMonday)
   monday.setHours(0, 0, 0, 0)
@@ -781,6 +793,9 @@ const getWeekRange = (date = new Date()) => {
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
   sunday.setHours(23, 59, 59, 999)
+
+  console.log('getWeekRange output:', { start: monday, end: sunday })
+  console.log('Week start year:', monday.getFullYear())
 
   return { start: monday, end: sunday }
 }
@@ -859,11 +874,18 @@ const getAvatarColor = (name) => {
 const totalShifts = computed(() => shifts.value.length)
 const activeEmployees = computed(() => new Set(shifts.value.map((s) => s.userId)).size)
 const positionsCount = computed(() => new Set(shifts.value.map((s) => s.position)).size)
-const positionFilterOptions = computed(() => {
-  if (!shiftTypes.value || shiftTypes.value.length === 0) {
-    return ['All']
+// Site filter options for dropdown
+const siteFilterOptions = computed(() => {
+  if (!sites.value || sites.value.length === 0) {
+    return [{ label: 'All Sites', value: null }]
   }
-  return ['All', ...shiftTypes.value.map((p) => p.name)]
+  return [
+    { label: 'All Sites', value: null },
+    ...sites.value.map((site) => ({
+      label: site.name,
+      value: site.id,
+    })),
+  ]
 })
 // Options
 // NEW CODE
@@ -905,18 +927,55 @@ const recurringScheduleOptions = computed(() =>
   recurringSchedules.value.map((r) => ({ label: r.name, value: r.id })),
 )
 
-const filteredUsers = computed(() =>
-  users.value.filter((u) => {
+const filteredUsers = computed(() => {
+  // Log current filter state and shift data for debugging
+  if (filters.value.site) {
+    console.log('🔍 FILTERING DEBUG:', {
+      selectedSite: filters.value.site,
+      totalShifts: shifts.value.length,
+      sampleShift: shifts.value[0],
+      shiftsWithSite: shifts.value.filter((s) => s.site).length,
+      uniqueSiteIds: [...new Set(shifts.value.map((s) => s.site))],
+      siteIdTypes: shifts.value.slice(0, 3).map((s) => ({ site: s.site, type: typeof s.site })),
+    })
+  }
+
+  return users.value.filter((u) => {
+    // Filter by employee selection
     const matchEmployee = !filters.value.employee || u.id === filters.value.employee
+
+    // Filter by search term
     const matchSearch = (u.name || '')
       .toLowerCase()
       .includes((searchTerm.value || '').toLowerCase())
-    const matchPosition =
-      filters.value.position === 'All' ||
-      shifts.value.some((s) => s.userId === u.id && s.position === filters.value.position)
-    return matchEmployee && matchSearch && matchPosition
-  }),
-)
+
+    // Filter by site - show employee if they have ANY shift at the selected site
+    const matchSite =
+      !filters.value.site ||
+      shifts.value.some((shift) => {
+        // Type-safe comparison (handles both string and number IDs)
+        const shiftSiteId = typeof shift.site === 'number' ? shift.site : parseInt(shift.site)
+        const filterSiteId =
+          typeof filters.value.site === 'number' ? filters.value.site : parseInt(filters.value.site)
+
+        return shift.userId === u.id && shiftSiteId === filterSiteId
+      })
+
+    // Debug individual user filtering
+    if (filters.value.site && matchEmployee && matchSearch) {
+      const userShifts = shifts.value.filter((s) => s.userId === u.id)
+      if (userShifts.length > 0) {
+        console.log(`👤 ${u.name}:`, {
+          totalShifts: userShifts.length,
+          shiftSites: userShifts.map((s) => s.site),
+          matchSite: matchSite,
+        })
+      }
+    }
+
+    return matchEmployee && matchSearch && matchSite
+  })
+})
 
 // When recurring schedule template is selected, populate times
 // When recurring schedule template is selected, populate times - ENHANCED VERSION
@@ -1154,213 +1213,278 @@ const fetchData = async () => {
     const token = localStorage.getItem('access_token')
     let companyId = localStorage.getItem('selectedCompany')
 
+    console.log('=== FETCH DATA DEBUG ===')
+    console.log('🔑 Token exists:', !!token)
+    console.log('🏢 Raw companyId from localStorage:', companyId)
+
     // Normalize company ID
     try {
       const parsed = JSON.parse(companyId)
       companyId = parsed?.id || parsed
+      console.log('🏢 Parsed companyId:', companyId)
     } catch {
-      // Already a string/number
+      console.log('🏢 CompanyId is plain value (not JSON)')
     }
 
     if (!token) {
       console.error('❌ No token found')
+      $q.notify({
+        type: 'negative',
+        message: 'Please log in to view schedules',
+        timeout: 3000,
+      })
       return
     }
 
     if (!companyId) {
       console.error('❌ No company selected')
+      $q.notify({
+        type: 'negative',
+        message: 'No company selected. Please select a company.',
+        timeout: 3000,
+      })
       return
     }
 
-    console.log('🔄 Fetching schedules...')
-    console.log('📍 Company ID:', companyId)
     console.log('📅 Selected Week:', {
       start: selectedWeek.value.start.toISOString().split('T')[0],
       end: selectedWeek.value.end.toISOString().split('T')[0],
     })
 
-    // ✅ USE DIRECT ENDPOINT INSTEAD
-    const url = `https://staging.wageyapp.com/organization/schedules/?company=${companyId}`
+    const url = `https://staging.wageyapp.com/organization/schedules/company/monthly/?company=${companyId}`
     console.log('🌐 API URL:', url)
+    console.log('🔄 Fetching schedules...')
 
     const res = await axios.get(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
-    console.log('✅ API Response received')
-    console.log('📥 Response type:', typeof res.data)
+    console.log('✅ API Response Status:', res.status)
+    console.log('📥 RAW API RESPONSE:', res.data)
 
-    // Clear existing data
-    users.value = []
-    shifts.value = []
-
-    // ✅ HANDLE: Response might be array or object with results
-    let schedules = []
-
-    if (Array.isArray(res.data)) {
-      schedules = res.data
-      console.log('📦 Direct array response, length:', schedules.length)
-    } else if (res.data?.results && Array.isArray(res.data.results)) {
-      schedules = res.data.results
-      console.log('📦 Paginated response, length:', schedules.length)
-    } else {
-      console.error('❌ Unexpected response structure:', res.data)
-      return
-    }
-
-    if (schedules.length === 0) {
-      console.warn('⚠️ No schedules found')
+    if (!res.data) {
+      console.error('❌ API returned null/undefined')
       $q.notify({
-        type: 'info',
-        message: 'No schedules found. Create your first schedule!',
-        timeout: 3000,
-        actions: [{ label: 'Add Schedule', color: 'white', handler: () => openAddModal() }],
+        type: 'warning',
+        message: 'API returned no data. This may be a server issue.',
+        timeout: 4000,
       })
       return
     }
 
-    console.log('📊 Processing', schedules.length, 'schedules')
-    console.log('🔍 Sample schedule:', JSON.stringify(schedules[0], null, 2))
+    // ✅ FIX 1: Populate users from employees array FIRST
+    users.value = employees.value.map((emp) => ({
+      id: emp.id,
+      name: emp.full_name || emp.name || `Employee ${emp.id}`,
+      email: emp.email || '',
+    }))
 
-    // ✅ BUILD: Map of employee IDs we need to fetch names for
-    const employeeIdsInSchedules = new Set()
+    console.log('👥 Pre-populated users from employees:', users.value.length)
 
-    schedules.forEach((schedule) => {
-      // Extract employee ID from schedule name (format: "Name - ShiftType - Date")
-      const namePart = schedule.name?.split(' - ')[0]
-      if (namePart) {
-        // Find matching employee from employees list
-        const matchingEmployee = employees.value.find(
-          (emp) =>
-            emp.full_name === namePart ||
-            emp.full_name?.includes(namePart) ||
-            namePart.includes(emp.full_name || ''),
-        )
-        if (matchingEmployee) {
-          employeeIdsInSchedules.add(matchingEmployee.id)
-        }
-      }
-    })
+    // Clear existing shifts
+    shifts.value = []
 
-    console.log('👥 Found', employeeIdsInSchedules.size, 'unique employees in schedules')
+    // Handle different response structures
+    let employeesData = []
 
-    // ✅ Add employees to users list
-    employeeIdsInSchedules.forEach((empId) => {
-      const employee = employees.value.find((e) => e.id === empId)
-      if (employee && !users.value.find((u) => u.id === employee.id)) {
-        users.value.push({
-          id: employee.id,
-          name:
-            employee.full_name ||
-            employee.user?.first_name + ' ' + employee.user?.last_name ||
-            'Employee',
-          email: employee.user?.email || '',
-        })
-      }
-    })
+    if (Array.isArray(res.data)) {
+      employeesData = res.data
+      console.log('📦 Response is direct array, length:', employeesData.length)
+    } else if (res.data?.results && Array.isArray(res.data.results)) {
+      employeesData = res.data.results
+      console.log('📦 Response has results property, length:', employeesData.length)
+    } else if (res.data?.data && Array.isArray(res.data.data)) {
+      employeesData = res.data.data
+      console.log('📦 Response has data property, length:', employeesData.length)
+    } else if (res.data && typeof res.data === 'object') {
+      employeesData = [res.data]
+      console.log('📦 Response is single object, wrapping in array')
+    }
 
-    // ✅ PROCESS: Each schedule and match to employee
+    if (employeesData.length === 0) {
+      console.warn('⚠️ No schedule data found in response')
+      $q.notify({
+        type: 'info',
+        message: 'No schedules found for this week.',
+        timeout: 3000,
+      })
+      return
+    }
+
+    console.log('📊 Processing', employeesData.length, 'employees with schedules')
+    console.log('🔍 First employee data:', JSON.stringify(employeesData[0], null, 2))
+
     let totalSchedules = 0
 
-    schedules.forEach((schedule, index) => {
-      try {
-        // Parse schedule date
-        if (!schedule.date) {
-          console.warn(`⚠️ Schedule ${index} has no date`)
-          return
-        }
+    employeesData.forEach((empData, index) => {
+      console.log(`\n👤 Employee ${index + 1}:`, empData)
 
-        const scheduleDate = new Date(schedule.date)
-        const weekStart = new Date(selectedWeek.value.start)
-        const timeDiff = scheduleDate.getTime() - weekStart.getTime()
-        const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24))
+      let employee = null
+      let schedules = []
 
-        // Only include schedules within selected week
-        if (daysDiff < 0 || daysDiff >= 7) {
-          return // Skip schedules outside selected week
-        }
-
-        // ✅ MATCH: Find employee for this schedule
-        const namePart = schedule.name?.split(' - ')[0]
-        const matchingEmployee = employees.value.find(
-          (emp) =>
-            emp.full_name === namePart ||
-            emp.full_name?.includes(namePart) ||
-            namePart?.includes(emp.full_name || ''),
-        )
-
-        if (!matchingEmployee) {
-          console.warn(`⚠️ Could not find employee for schedule: ${schedule.name}`)
-          return
-        }
-
-        // Get shift type name
-        const shiftType = shiftTypes.value.find((st) => st.id === schedule.shift_type)
-        const positionName = shiftType?.name || 'Shift'
-
-        // Add to shifts array
-        const shift = {
-          id: schedule.id,
-          userId: matchingEmployee.id,
-          day: daysDiff,
-          startTime: schedule.start_time ? schedule.start_time.substring(0, 5) : '09:00',
-          endTime: schedule.end_time ? schedule.end_time.substring(0, 5) : '17:00',
-          position: positionName,
-          site: schedule.site || null,
-          department: schedule.department || null,
-          status: schedule.status || 'draft',
-          date: schedule.date,
-        }
-
-        shifts.value.push(shift)
-        totalSchedules++
-      } catch (err) {
-        console.error('❌ Error processing schedule:', err)
+      // Handle different structures
+      if (empData.employee && typeof empData.employee === 'object') {
+        employee = empData.employee
+        schedules = empData.schedules || []
+        console.log('  📋 Structure 1: employee + schedules')
+      } else if (empData.id && empData.schedules) {
+        employee = empData
+        schedules = empData.schedules || []
+        console.log('  📋 Structure 2: flat employee with schedules')
+      } else if (empData.id) {
+        employee = empData
+        schedules = empData.schedule || empData.schedule_list || []
+        console.log('  📋 Structure 3: employee with alternate schedule field')
       }
+
+      if (!employee || !employee.id) {
+        console.warn('  ⚠️ Could not extract employee from data')
+        return
+      }
+
+      console.log('  ✅ Employee ID:', employee.id)
+      console.log('  ✅ Employee name:', employee.full_name || employee.name)
+      console.log('  📅 Schedules:', Array.isArray(schedules) ? schedules.length : typeof schedules)
+
+      // Handle stringified schedules
+      if (typeof schedules === 'string') {
+        try {
+          schedules = JSON.parse(schedules)
+          console.log('  🔄 Parsed stringified schedules')
+        } catch (e) {
+          console.error('  ❌ Failed to parse schedules string:', e)
+          schedules = []
+        }
+      }
+
+      if (!Array.isArray(schedules)) {
+        console.warn('  ⚠️ Schedules is not an array:', typeof schedules)
+        return
+      }
+
+      if (schedules.length === 0) {
+        console.log('  ℹ️ No schedules for this employee')
+        return
+      }
+
+      console.log('  🔍 First schedule:', JSON.stringify(schedules[0], null, 2))
+
+      schedules.forEach((schedule, sIndex) => {
+        try {
+          if (!schedule.date) {
+            console.warn('    ⚠️ Schedule has no date')
+            return
+          }
+
+          const scheduleDate = new Date(schedule.date)
+          const weekStart = new Date(selectedWeek.value.start)
+          const timeDiff = scheduleDate.getTime() - weekStart.getTime()
+          const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24))
+
+          console.log(`    📅 Schedule ${sIndex + 1}:`, {
+            date: schedule.date,
+            daysDiff: daysDiff,
+            inWeek: daysDiff >= 0 && daysDiff < 7,
+            actual_start_time: schedule.actual_start_time,
+            actual_end_time: schedule.actual_end_time,
+          })
+
+          if (daysDiff >= 0 && daysDiff < 7) {
+            // ✅ FIX 2: Use actual_start_time and actual_end_time
+            const shift = {
+              id: schedule.id || `temp-${Date.now()}-${sIndex}`,
+              userId: employee.id,
+              day: daysDiff,
+              startTime: schedule.actual_start_time
+                ? schedule.actual_start_time.substring(0, 5)
+                : schedule.start_time
+                  ? schedule.start_time.substring(0, 5)
+                  : '09:00',
+              endTime: schedule.actual_end_time
+                ? schedule.actual_end_time.substring(0, 5)
+                : schedule.end_time
+                  ? schedule.end_time.substring(0, 5)
+                  : '17:00',
+              position: schedule.shift_type_name || schedule.shift_type || 'Shift',
+              site: schedule.site || null,
+              department: schedule.department || null,
+              status: schedule.status || 'draft',
+              date: schedule.date,
+            }
+
+            // Debug log for site data
+            console.log('    📍 Shift site data:', {
+              raw_site: schedule.site,
+              site_type: typeof schedule.site,
+              final_site: shift.site,
+              final_site_type: typeof shift.site,
+            })
+
+            console.log('    ✅ Created shift with times:', {
+              startTime: shift.startTime,
+              endTime: shift.endTime,
+            })
+
+            shifts.value.push(shift)
+            totalSchedules++
+            console.log('    ✅ Added shift')
+          } else {
+            console.log('    ⏭️ Skipped (outside week range)')
+          }
+        } catch (err) {
+          console.error('    ❌ Error processing schedule:', err)
+        }
+      })
     })
 
     console.log('\n=== FINAL RESULTS ===')
     console.log('👥 Users loaded:', users.value.length)
     console.log('📋 Shifts loaded:', shifts.value.length)
-    console.log('📊 Shifts by day:', {
-      Mon: shifts.value.filter((s) => s.day === 0).length,
-      Tue: shifts.value.filter((s) => s.day === 1).length,
-      Wed: shifts.value.filter((s) => s.day === 2).length,
-      Thu: shifts.value.filter((s) => s.day === 3).length,
-      Fri: shifts.value.filter((s) => s.day === 4).length,
-      Sat: shifts.value.filter((s) => s.day === 5).length,
-      Sun: shifts.value.filter((s) => s.day === 6).length,
-    })
+    console.log('📋 Sample shift:', shifts.value[0])
 
     if (totalSchedules === 0) {
       $q.notify({
         type: 'info',
-        message: 'No schedules found for the selected week. Try changing the week.',
-        timeout: 4000,
+        message: 'No schedules found for the selected week.',
+        timeout: 3000,
       })
     } else {
       $q.notify({
         type: 'positive',
-        message: `Loaded ${totalSchedules} schedules for this week`,
+        message: `Loaded ${totalSchedules} schedules for ${users.value.length} employees`,
         timeout: 2000,
       })
     }
   } catch (e) {
     console.error('❌ FETCH ERROR:', e)
     console.error('❌ Response:', e.response?.data)
+    console.error('❌ Status:', e.response?.status)
+
+    let errorMsg = 'Failed to load schedules'
+
+    if (e.response?.status === 404) {
+      errorMsg = 'Schedule endpoint not found. Please check the API URL.'
+    } else if (e.response?.status === 401) {
+      errorMsg = 'Unauthorized. Please log in again.'
+    } else if (e.response?.status === 403) {
+      errorMsg = 'Access denied. You may not have permission to view schedules.'
+    } else if (e.response?.data?.detail) {
+      errorMsg = e.response.data.detail
+    }
 
     $q.notify({
       type: 'negative',
-      message: `Failed to load schedules: ${e.message}`,
+      message: errorMsg,
       timeout: 5000,
     })
   }
 }
 
-onMounted(() => {
-  fetchSitesAndDepartments()
-  fetchEmployees()
-  fetchData()
+onMounted(async () => {
+  await fetchSitesAndDepartments() // Waits to finish
+  await fetchEmployees() // Waits to finish (employees.value now has data)
+  await fetchData() // Now runs with populated employees.value
+  await debugEmployeeAndCompany() // Waits to finish
 })
 
 // Check if employee has any schedule on a specific date
@@ -1412,58 +1536,8 @@ const getEmployeeName = (id) => {
 
 // LOCAL MODE: Add schedule locally (no API)
 // NEW CODE
-const addScheduleLocally = (scheduleData) => {
-  const id = Math.max(0, ...shifts.value.map((s) => s.id || 0)) + 1
-
-  // Convert selectedDate to day index for local display
-  const date = new Date(scheduleData.selectedDate)
-  const dayIdx = date.getDay() === 0 ? 6 : date.getDay() - 1
-
-  shifts.value.push({
-    id,
-    userId: scheduleData.userId,
-    day: dayIdx,
-    startTime: scheduleData.startTime,
-    endTime: scheduleData.endTime,
-    position: scheduleData.position,
-    site: scheduleData.site,
-    department: scheduleData.department,
-  })
-  $q.notify({ type: 'positive', message: 'Schedule added (local mode)' })
-  return shifts.value[shifts.value.length - 1]
-}
 
 // ENHANCED: Main schedule creation function
-const createSchedule = async (scheduleData) => {
-  try {
-    const token = localStorage.getItem('access_token')
-    const companyId = localStorage.getItem('selectedCompany')
-
-    if (!token || !companyId) {
-      return addScheduleLocally(scheduleData)
-    }
-
-    const dateStr = scheduleData.selectedDate
-
-    // Get default times from shift type if not provided
-    if (!scheduleData.startTime || !scheduleData.endTime) {
-      const shiftType = shiftTypes.value.find((st) => st.id === scheduleData.position)
-      if (shiftType) {
-        scheduleData.startTime =
-          scheduleData.startTime || shiftType.default_start_time?.substring(0, 5) || '09:00'
-        scheduleData.endTime =
-          scheduleData.endTime || shiftType.default_end_time?.substring(0, 5) || '17:00'
-      }
-    }
-
-    const createdSchedule = await createScheduleRecord(scheduleData, dateStr)
-
-    return createdSchedule
-  } catch (error) {
-    handleScheduleError(error)
-    throw error
-  }
-}
 
 // NEW FUNCTION - Add after createSchedule
 // BACKUP METHOD: Keep for fallback if two-step process fails
@@ -1472,7 +1546,11 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
   const token = localStorage.getItem('access_token')
   let companyId = localStorage.getItem('selectedCompany')
 
-  // ✅ FIX: Improved company ID parsing
+  console.log('=== CREATE SCHEDULE DEBUG ===')
+  console.log('📋 Raw scheduleData:', scheduleData)
+  console.log('📅 Date string:', dateStr)
+  console.log('🏢 Raw companyId from localStorage:', companyId)
+
   if (!companyId) {
     throw new Error('No company selected')
   }
@@ -1480,60 +1558,62 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
   // Normalize company ID
   try {
     const parsed = JSON.parse(companyId)
-    companyId = String(parsed?.id || parsed)
+    companyId = parsed?.id || parsed
   } catch {
-    companyId = String(companyId)
+    // Already a plain value
   }
 
-  const selectedEmployee = employees.value.find((emp) => emp.id === scheduleData.userId)
-  const shiftType = shiftTypes.value.find((st) => st.id === scheduleData.position)
-  const employeeName = selectedEmployee?.full_name || selectedEmployee?.name || 'Employee'
-  const shiftTypeName = shiftType?.name || 'Shift'
+  // Convert to integer
+  companyId = parseInt(companyId)
 
-  const scheduleName = `${employeeName} - ${shiftTypeName} - ${dateStr}`
+  console.log('🏢 Normalized companyId:', companyId, typeof companyId)
+  console.log('👤 Employee ID:', scheduleData.userId, typeof scheduleData.userId)
+  console.log('🏢 Site ID:', scheduleData.site, typeof scheduleData.site)
+  console.log('👔 Shift Type ID:', scheduleData.position, typeof scheduleData.position)
 
-  // ✅ FIX: More robust time formatting
-  const formatTime = (time) => {
-    if (!time) return '09:00:00'
-
-    // If already in HH:MM:SS format
-    if (time.match(/^\d{2}:\d{2}:\d{2}$/)) {
-      return time
-    }
-
-    // If in HH:MM format
-    if (time.match(/^\d{2}:\d{2}$/)) {
-      return `${time}:00`
-    }
-
-    // Fallback
-    return '09:00:00'
+  // Validate employee ID format
+  if (!scheduleData.userId) {
+    throw new Error('Employee ID is required')
   }
+
+  // Check if employee ID is UUID or integer
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    scheduleData.userId,
+  )
+
+  console.log('🔑 Employee ID format - Is UUID?:', isUUID)
+
+  // Build payload - keep employee_ids as-is if UUID, convert to int if number
+  const employeeId = isUUID ? scheduleData.userId : parseInt(scheduleData.userId)
 
   const payload = {
-    name: scheduleName,
-    employee: scheduleData.userId,
-    company: parseInt(companyId),
-    date: dateStr,
-    start_time: formatTime(scheduleData.startTime),
-    end_time: formatTime(scheduleData.endTime),
-    shift_type: parseInt(scheduleData.position),
-    site: parseInt(scheduleData.site),
+    company_id: companyId,
+    employee_ids: [employeeId], // Array with single employee
+    schedules: [
+      {
+        date: dateStr, // YYYY-MM-DD format
+        site_id: parseInt(scheduleData.site),
+        shift_type_id: parseInt(scheduleData.position),
+      },
+    ],
   }
 
-  // Add optional fields
+  // Add department if present
   if (scheduleData.department) {
-    payload.department = parseInt(scheduleData.department)
+    payload.schedules[0].department_id = parseInt(scheduleData.department)
   }
 
-  // ✅ ADD: Include status if your API requires it (uncomment if needed)
-  // payload.status = 'draft'
-
-  console.log('📤 Schedule Payload:', JSON.stringify(payload, null, 2))
+  console.log('📤 Final Payload:', JSON.stringify(payload, null, 2))
+  console.log('📤 Payload Types:', {
+    company_id: typeof payload.company_id,
+    employee_ids: typeof payload.employee_ids[0],
+    site_id: typeof payload.schedules[0].site_id,
+    shift_type_id: typeof payload.schedules[0].shift_type_id,
+  })
 
   try {
     const response = await axios.post(
-      'https://staging.wageyapp.com/organization/schedules/',
+      'https://staging.wageyapp.com/organization/assignments/assign/',
       payload,
       {
         headers: {
@@ -1543,10 +1623,47 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
       },
     )
 
-    console.log('✅ Schedule created:', response.data)
+    console.log('✅ SUCCESS - Response:', response.data)
     return response.data
   } catch (error) {
-    console.error('❌ Schedule creation error:', error.response?.data)
+    console.error('❌ FAILED - Full Error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      headers: error.response?.headers,
+    })
+
+    // Check if it's an empty results error
+    if (error.response?.data?.results && error.response.data.results.length === 0) {
+      console.error('⚠️ DIAGNOSIS: Empty results array - Common causes:')
+      console.error('  1. Employee is not linked to this company')
+      console.error('  2. Invalid employee_id format')
+      console.error("  3. Company_id does not match employee's company")
+      console.error('  4. Site or shift_type does not exist for this company')
+
+      // Try to get more info about the employee
+      try {
+        const empResponse = await axios.get(
+          `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+
+        const employeeExists = empResponse.data.some((emp) => emp.id === employeeId)
+
+        console.error('🔍 Employee verification:', {
+          employeeId: employeeId,
+          existsInCompany: employeeExists,
+          totalEmployees: empResponse.data.length,
+        })
+
+        if (!employeeExists) {
+          throw new Error(`Employee ${employeeId} is not linked to company ${companyId}`)
+        }
+      } catch (verifyError) {
+        console.error('❌ Could not verify employee:', verifyError)
+      }
+    }
+
     throw error
   }
 }
@@ -1559,28 +1676,31 @@ const handleScheduleError = (error) => {
   console.error('❌ Error Data:', error.response?.data)
 
   let errorMessage = 'Failed to create schedule'
-  const errorDetails = []
+  let caption = 'Please try again'
 
   if (error.response?.data) {
     const data = error.response.data
 
     console.error('❌ Full Error Data:', JSON.stringify(data, null, 2))
 
-    // Check for errors array (common in this API)
-    if (data.errors && Array.isArray(data.errors)) {
-      errorMessage = data.errors.join('; ')
+    // Check for empty results (most common error)
+    if (data.results && Array.isArray(data.results) && data.results.length === 0) {
+      errorMessage = 'Could not create schedule'
+      caption =
+        'Common causes: Employee not linked to company, invalid site/shift type, or data mismatch. Check console for details.'
     }
-    // Check for results with errors
-    else if (data.results && Array.isArray(data.results) && data.results.length === 0) {
-      errorMessage =
-        'No schedules were created. Please check if the employee is properly linked to the company.'
+    // Check for errors array
+    else if (data.errors && Array.isArray(data.errors)) {
+      errorMessage = data.errors.join('; ')
+      caption = 'Please correct the errors above'
     }
     // Check for field-specific errors
     else if (typeof data === 'object') {
+      const errorDetails = []
+
       Object.keys(data).forEach((key) => {
         const value = data[key]
-        if (key !== 'results') {
-          // Skip empty results array
+        if (key !== 'results' || (Array.isArray(value) && value.length > 0)) {
           const message = Array.isArray(value) ? value.join(', ') : value
           errorDetails.push(`${key}: ${message}`)
           console.error(`❌ ${key}:`, value)
@@ -1599,15 +1719,96 @@ const handleScheduleError = (error) => {
     }
   }
 
+  // Add specific error code handling
+  if (error.response?.status === 400) {
+    caption = 'Bad Request - Check console for detailed validation errors'
+  } else if (error.response?.status === 404) {
+    caption = 'Resource not found - Check company, site, or shift type IDs'
+  } else if (error.response?.status === 403) {
+    caption = 'Permission denied - You may not have access to this resource'
+  }
+
   $q.notify({
     type: 'negative',
     message: errorMessage,
-    caption: 'Please verify employee is linked to this company',
+    caption: caption,
     timeout: 10000,
     position: 'top',
     multiLine: true,
-    actions: [{ label: 'Dismiss', color: 'white' }],
+    actions: [
+      {
+        label: 'View Console',
+        color: 'white',
+        handler: () => console.table({ error: error.response?.data }),
+      },
+      { label: 'Dismiss', color: 'white' },
+    ],
   })
+}
+
+const debugEmployeeAndCompany = async () => {
+  try {
+    const token = localStorage.getItem('access_token')
+    let companyId = localStorage.getItem('selectedCompany')
+
+    try {
+      const parsed = JSON.parse(companyId)
+      companyId = parsed?.id || parsed
+    } catch {
+      //state
+    }
+
+    companyId = parseInt(companyId)
+
+    console.log('=== EMPLOYEE-COMPANY DEBUG ===')
+    console.log('🏢 Company ID:', companyId)
+
+    // Fetch employees for this company
+    const empResponse = await axios.get(
+      `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    console.log('👥 Total Employees:', empResponse.data.length)
+    console.log(
+      '👥 Employee IDs:',
+      empResponse.data.map((e) => ({
+        id: e.id,
+        name: e.full_name || e.name,
+        type: typeof e.id,
+      })),
+    )
+
+    // Fetch sites
+    const sitesResponse = await axios.get(
+      `https://staging.wageyapp.com/organization/sites/?company=${companyId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    console.log(
+      '🏢 Sites:',
+      (sitesResponse.data.results || sitesResponse.data).map((s) => ({
+        id: s.id,
+        name: s.name,
+      })),
+    )
+
+    // Fetch shift types
+    const shiftResponse = await axios.get(
+      `https://staging.wageyapp.com/organization/shift-types/?company=${companyId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+
+    console.log(
+      '👔 Shift Types:',
+      (shiftResponse.data.results || shiftResponse.data).map((st) => ({
+        id: st.id,
+        name: st.name,
+      })),
+    )
+  } catch (error) {
+    console.error('❌ Debug failed:', error)
+  }
 }
 
 const verifyEmployeeCompanyLink = async (employeeId) => {
@@ -1648,7 +1849,7 @@ const verifyEmployeeCompanyLink = async (employeeId) => {
 const addSchedule = async () => {
   const n = newSchedule.value
 
-  // Basic validation
+  // Validation
   if (!n.userId) {
     $q.notify({ type: 'negative', message: 'Please select an employee.' })
     return
@@ -1660,7 +1861,7 @@ const addSchedule = async () => {
   }
 
   if (!n.position) {
-    $q.notify({ type: 'negative', message: 'Please select a shift type/position.' })
+    $q.notify({ type: 'negative', message: 'Please select a shift type.' })
     return
   }
 
@@ -1669,113 +1870,46 @@ const addSchedule = async () => {
     return
   }
 
-  // ✅ FIX: Auto-fill times from shift type if not provided
-  if (!n.startTime || !n.endTime) {
-    const shiftType = shiftTypes.value.find((st) => st.id === n.position)
-    if (shiftType) {
-      if (!n.startTime && shiftType.default_start_time) {
-        n.startTime = shiftType.default_start_time.substring(0, 5)
-        console.log('⏰ Auto-filled start time from shift type:', n.startTime)
-      }
-      if (!n.endTime && shiftType.default_end_time) {
-        n.endTime = shiftType.default_end_time.substring(0, 5)
-        console.log('⏰ Auto-filled end time from shift type:', n.endTime)
-      }
-    }
-  }
-
-  // ✅ FIX: If still empty, use defaults
-  if (!n.startTime) n.startTime = '09:00'
-  if (!n.endTime) n.endTime = '17:00'
-
-  // ✅ NOW validate time format
-  if (!isValidTime(n.startTime) || !isValidTime(n.endTime)) {
-    $q.notify({
-      type: 'negative',
-      message: `Invalid time format. Start: ${n.startTime}, End: ${n.endTime}`,
-    })
-    return
-  }
-
-  const selectedEmployee = employees.value.find((emp) => emp.id === n.userId)
-
-  if (!selectedEmployee) {
-    $q.notify({
-      type: 'negative',
-      message: 'Selected employee not found. Please refresh the page and try again.',
-      timeout: 5000,
-    })
-    return
-  }
-
   isCheckingConflict.value = true
   addConflictWarning.value = false
 
   try {
+    // Verify employee is linked to company
     console.log('🔍 Verifying employee-company link...')
-    let isLinked = false
-
-    try {
-      isLinked = await verifyEmployeeCompanyLink(n.userId)
-    } catch (verifyError) {
-      console.error('Employee verification failed:', verifyError)
-      $q.notify({
-        type: 'negative',
-        message: 'Failed to verify employee. Please try again.',
-        timeout: 5000,
-      })
-      isCheckingConflict.value = false
-      return
-    }
+    const isLinked = await verifyEmployeeCompanyLink(n.userId)
 
     if (!isLinked) {
       isCheckingConflict.value = false
+      const selectedEmployee = employees.value.find((emp) => emp.id === n.userId)
       $q.notify({
         type: 'negative',
-        message: `${selectedEmployee.full_name} is not linked to this company. Please contact your administrator.`,
+        message: `${selectedEmployee?.full_name || 'Employee'} is not linked to this company.`,
         timeout: 8000,
       })
       return
     }
 
-    console.log('✅ Employee verified as linked to company')
+    console.log('✅ Employee verified')
 
-    let hasConflict = false
-    try {
-      hasConflict = await checkEmployeeScheduleOnDate(n.userId, n.selectedDate)
-    } catch (conflictError) {
-      console.error('Conflict check failed:', conflictError)
-    }
+    // Check for scheduling conflicts
+    const hasConflict = await checkEmployeeScheduleOnDate(n.userId, n.selectedDate)
 
     if (hasConflict) {
       isCheckingConflict.value = false
-      const employeeName = selectedEmployee.full_name || selectedEmployee.name
+      const selectedEmployee = employees.value.find((emp) => emp.id === n.userId)
       $q.notify({
         type: 'warning',
-        message: `${employeeName} already has a schedule on ${n.selectedDate}.`,
+        message: `${selectedEmployee?.full_name || 'Employee'} already has a schedule on ${n.selectedDate}.`,
         timeout: 6000,
-        actions: [{ label: 'Dismiss', color: 'white' }],
       })
       return
     }
 
-    addConflictWarning.value = true
-
-    // ✅ Log what we're about to send
-    console.log('📤 Creating schedule with:', {
-      employee: selectedEmployee.full_name,
-      date: n.selectedDate,
-      startTime: n.startTime,
-      endTime: n.endTime,
-      position: n.position,
-      site: n.site,
-    })
-
-    await createSchedule(n)
+    // Create the schedule
+    await createScheduleRecord(n, n.selectedDate)
 
     isCheckingConflict.value = false
     showAddModal.value = false
-    addConflictWarning.value = false
 
     // Reset form
     newSchedule.value = {
@@ -1800,30 +1934,22 @@ const addSchedule = async () => {
       icon: 'check_circle',
     })
 
-    setTimeout(async () => {
-      await fetchData()
-    }, 500)
+    // Refresh the schedule view
+    setTimeout(() => fetchData(), 500)
   } catch (error) {
     isCheckingConflict.value = false
-    addConflictWarning.value = false
-    console.error('Error adding schedule:', error)
-
-    try {
-      handleScheduleError(error)
-    } catch (handlerError) {
-      console.error('Error handler failed:', handlerError)
-      $q.notify({
-        type: 'negative',
-        message: 'An unexpected error occurred. Please try again.',
-        timeout: 5000,
-      })
-    }
+    console.error('❌ Error adding schedule:', error)
+    handleScheduleError(error)
   }
 }
 
 // Quick add schedule
 const quickAddSchedule = async () => {
+  console.log('🚀 Quick Add Started')
+
   const { userId, day, site, shiftType } = quickAdd.value
+
+  console.log('📋 Quick Add Values:', { userId, day, site, shiftType })
 
   // Validation
   if (!userId || day === null || !site || !shiftType) {
@@ -1848,13 +1974,65 @@ const quickAddSchedule = async () => {
       return
     }
 
+    // ✅ ENHANCED DEBUGGING
+    console.log('=== DATE CALCULATION DEBUG ===')
+    console.log('Current real date:', new Date())
+    console.log('selectedWeek.value:', selectedWeek.value)
+    console.log('selectedWeek.value.start:', selectedWeek.value.start)
+    console.log('selectedWeek.value.start type:', typeof selectedWeek.value.start)
+    console.log('selectedWeek.value.start toString:', selectedWeek.value.start?.toString())
+    console.log('day offset:', day)
+
     // Calculate target date
     const { start } = selectedWeek.value
-    const targetDate = new Date(start)
-    targetDate.setDate(start.getDate() + day)
-    const dateStr = targetDate.toISOString().split('T')[0]
 
-    // Build payload for new endpoint
+    // ✅ IMPORTANT: Make sure start is a Date object
+    const weekStart = start instanceof Date ? start : new Date(start)
+
+    console.log('weekStart after conversion:', weekStart)
+    console.log('weekStart is valid?:', !isNaN(weekStart.getTime()))
+
+    const targetDate = new Date(weekStart)
+    targetDate.setDate(targetDate.getDate() + day)
+
+    console.log('targetDate after adding days:', targetDate)
+    console.log('targetDate is valid?:', !isNaN(targetDate.getTime()))
+
+    // Check if date is in the past
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const compareDate = new Date(targetDate)
+    compareDate.setHours(0, 0, 0, 0)
+
+    console.log('today (for comparison):', today)
+    console.log('compareDate:', compareDate)
+    console.log('Is in past?:', compareDate < today)
+
+    if (compareDate < today) {
+      $q.notify({
+        type: 'warning',
+        message: 'Cannot schedule shifts in the past',
+        caption: `Selected date: ${targetDate.toLocaleDateString()}`,
+      })
+      isAddingShift.value = false
+      return
+    }
+
+    // ✅ TIMEZONE-SAFE date string
+    const year = targetDate.getFullYear()
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0')
+    const dayOfMonth = String(targetDate.getDate()).padStart(2, '0')
+    const dateStr = `${year}-${month}-${dayOfMonth}`
+
+    console.log('Final dateStr:', dateStr)
+    console.log('Expected vs Actual:', {
+      expected: `Should be around ${new Date().toISOString().split('T')[0]}`,
+      actual: dateStr,
+      difference: dateStr === '2026-01-02' ? '⚠️ DATE IS IN 2026!' : '✅ Date looks OK',
+    })
+    console.log('=== END DATE CALCULATION ===')
+
+    // Build payload
     const payload = {
       company_id: parseInt(companyId),
       employee_ids: [userId],
@@ -1867,9 +2045,9 @@ const quickAddSchedule = async () => {
       ],
     }
 
-    console.log('📤 Quick Add Payload:', JSON.stringify(payload, null, 2))
+    console.log('📤 Sending payload:', JSON.stringify(payload, null, 2))
 
-    // Call new endpoint
+    // Call API
     const response = await axios.post(
       'https://staging.wageyapp.com/organization/assignments/assign/',
       payload,
@@ -1881,7 +2059,7 @@ const quickAddSchedule = async () => {
       },
     )
 
-    console.log('✅ Quick Add Success:', response.data)
+    console.log('✅ Success:', response.data)
 
     $q.notify({
       type: 'positive',
@@ -1889,34 +2067,27 @@ const quickAddSchedule = async () => {
       icon: 'check_circle',
     })
 
-    // Close modal and reset
     closeQuickAddModal()
-
-    // Refresh schedule data
     setTimeout(() => fetchData(), 500)
   } catch (error) {
-    console.error('❌ Quick Add Error:', error.response?.data || error.message)
+    console.error('❌ Error:', error.response?.data || error.message)
 
     let errorMsg = 'Failed to add shift'
 
     if (error.response?.data) {
       const data = error.response.data
-
       if (data.detail) {
         errorMsg = data.detail
-      } else if (data.schedules) {
-        errorMsg = `Schedule error: ${JSON.stringify(data.schedules)}`
-      } else if (typeof data === 'string') {
-        errorMsg = data
+      } else if (data.results && data.results.length === 0) {
+        errorMsg =
+          'Unable to create schedule. This may be due to: invalid date, site/shift type not found, or a scheduling conflict.'
       }
     }
 
     $q.notify({
       type: 'negative',
       message: errorMsg,
-      caption: 'Please check the form and try again',
       timeout: 5000,
-      multiLine: true,
     })
   } finally {
     isAddingShift.value = false
@@ -1981,9 +2152,13 @@ const updateSchedule = async () => {
       status: 'active',
     }
 
-    await axios.put(`https://staging.wageyapp.com/organization/schedules/${es.id}/`, payload, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    await axios.put(
+      `https://staging.wageyapp.com/organization/assignments/assign${es.id}/`,
+      payload,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
 
     const idx = shifts.value.findIndex((s) => s.id === es.id)
     if (idx !== -1) shifts.value[idx] = { ...es }
@@ -2009,7 +2184,7 @@ const deleteShift = async (id) => {
       return
     }
 
-    await axios.delete(`https://staging.wageyapp.com/organization/schedules/${id}/`, {
+    await axios.delete(`https://staging.wageyapp.com/organization/assignments/assign/${id}/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
@@ -2042,7 +2217,16 @@ const closeQuickAddModal = () => {
     shiftType: null,
   }
 }
-const applyFilters = () => {}
+const applyFilters = () => {
+  console.log('🔍 Filters applied:', {
+    site: filters.value.site,
+    employee: filters.value.employee,
+    searchTerm: searchTerm.value,
+  })
+
+  // Filter is automatically applied through computed property
+  // This function can be used for additional logic if needed
+}
 const filterEmployees = () => {}
 </script>
 
