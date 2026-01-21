@@ -459,6 +459,7 @@ export default {
     const selectedRequest = ref(null)
     const showDebug = ref(false)
     const currentUserCompany = ref(null)
+    const userHasApprovalRights = ref(true)
 
     const sortOptions = ['Newest', 'Oldest', 'Status']
 
@@ -466,6 +467,49 @@ export default {
       page: 1,
       rowsPerPage: 10,
     })
+
+    // ✅ CENTRALIZED COMPANY ID GETTER
+    const getCompanyId = () => {
+      // Try selectedCompany first
+      let companyId = localStorage.getItem('selectedCompany')
+
+      if (companyId && companyId !== 'null' && companyId !== 'undefined') {
+        try {
+          const parsed = JSON.parse(companyId)
+          companyId = parsed?.id || parsed?.companyId || parsed
+        } catch {
+          // If not JSON, use as-is
+        }
+      }
+
+      // Fallback to company_id
+      if (!companyId) {
+        companyId = localStorage.getItem('company_id')
+      }
+
+      // Fallback to user object
+      if (!companyId) {
+        const userStr = localStorage.getItem('user')
+        if (userStr && userStr !== 'undefined' && userStr !== 'null') {
+          try {
+            const user = JSON.parse(userStr)
+            companyId = user?.companyId || user?.company_id
+          } catch (e) {
+            console.warn('Failed to parse user from localStorage:', e)
+          }
+        }
+      }
+
+      // Convert to integer
+      if (companyId) {
+        companyId = parseInt(companyId)
+        if (!isNaN(companyId) && companyId > 0) {
+          return companyId
+        }
+      }
+
+      return null
+    }
 
     const statistics = computed(() => {
       return {
@@ -533,46 +577,37 @@ export default {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
         const value = localStorage.getItem(key)
-        console.log(`  ${key}:`, value?.substring(0, 50))
+        console.log(`  ${key}:`, value?.substring(0, 100))
       }
       console.log('🔍 ===============================')
     }
 
-    const fetchCurrentUserCompany = async () => {
-      try {
-        let companyId = localStorage.getItem('selectedCompany')
-        if (companyId) {
-          currentUserCompany.value = companyId
-          console.log(`✅ Company ID: ${companyId}`)
-          return companyId
-        }
-
-        companyId = localStorage.getItem('company_id')
-        if (companyId) {
-          currentUserCompany.value = companyId
-          return companyId
-        }
-
-        throw new Error('Company ID not found')
-      } catch (error) {
-        console.error('❌ Failed to get company ID:', error.message)
-        throw error
-      }
-    }
-
+    // ✅ FIXED FETCH FUNCTION
     const fetchSwapRequests = async () => {
       loading.value = true
       console.log('🚀 Fetching swap requests...')
 
       try {
         const token = localStorage.getItem('access_token')
-        if (!token) throw new Error('No authentication token')
+        if (!token) {
+          throw new Error('No authentication token found')
+        }
 
-        const companyId = await fetchCurrentUserCompany()
+        const companyId = getCompanyId()
+
         if (!companyId) {
+          console.warn('⚠️ No company ID available')
           swapRequests.value = []
+          $q.notify({
+            type: 'warning',
+            message: 'Please select a company first',
+            position: 'top',
+          })
           return
         }
+
+        currentUserCompany.value = companyId
+        console.log(`📤 Requesting swap requests for company: ${companyId}`)
 
         const response = await api.get('/organization/swap-requests/', {
           headers: { Authorization: `Bearer ${token}` },
@@ -580,6 +615,9 @@ export default {
         })
 
         console.log(`✅ Fetched ${response.data.length} swap requests`)
+        if (response.data[0]) {
+          console.log('📊 First request sample:', response.data[0])
+        }
 
         swapRequests.value = response.data.map((request) => ({
           ...request,
@@ -594,32 +632,105 @@ export default {
           position: 'top',
         })
       } catch (error) {
-        console.error('❌ Error:', error)
+        console.error('❌ Error fetching swap requests:', error)
+        console.error('❌ Error response:', error.response?.data)
         swapRequests.value = []
+
+        const errorMessage =
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to fetch swap requests'
+
         $q.notify({
           type: 'negative',
-          message: 'Failed to fetch swap requests',
+          message: errorMessage,
           position: 'top',
+          timeout: 5000,
         })
       } finally {
         loading.value = false
       }
     }
 
+    // ✅ FIXED UPDATE FUNCTION
     const updateSwapRequest = async (requestId, payload) => {
       const token = localStorage.getItem('access_token')
+      const companyId = getCompanyId()
+
+      if (!companyId) {
+        throw new Error('No company ID found')
+      }
+
       try {
+        console.log(`📤 Updating swap request ${requestId}:`, payload)
+
         const response = await api.patch(`/organization/swap-requests/${requestId}/`, payload, {
           headers: { Authorization: `Bearer ${token}` },
+          params: { company_id: companyId },
         })
+
+        console.log('✅ Update successful:', response.data)
         return response.data
       } catch (error) {
         console.error('❌ Update failed:', error)
+        console.error('❌ Response status:', error.response?.status)
+        console.error('❌ Response data:', error.response?.data)
+        console.error('❌ Payload sent:', payload)
         throw error
       }
     }
 
+    const checkUserPermissions = async () => {
+      try {
+        const companyId = getCompanyId()
+
+        if (!companyId) {
+          userHasApprovalRights.value = false
+          return false
+        }
+
+        const userStr = localStorage.getItem('user')
+        if (userStr && userStr !== 'undefined' && userStr !== 'null') {
+          try {
+            const user = JSON.parse(userStr)
+            const hasRole = user.roles?.some(
+              (role) =>
+                role.company_id === parseInt(companyId) &&
+                ['admin', 'manager', 'supervisor'].includes(role.role_name?.toLowerCase()),
+            )
+
+            if (hasRole !== undefined) {
+              userHasApprovalRights.value = hasRole
+              return hasRole
+            }
+          } catch (e) {
+            console.warn('Failed to parse user:', e)
+          }
+        }
+
+        userHasApprovalRights.value = true
+        return true
+      } catch (error) {
+        console.error('❌ Failed to check permissions:', error)
+        userHasApprovalRights.value = false
+        return false
+      }
+    }
+
+    // ✅ FIXED APPROVE FUNCTION
     const approveRequest = async (request) => {
+      const companyId = getCompanyId()
+
+      if (!companyId) {
+        $q.notify({
+          type: 'negative',
+          message: 'Cannot approve: No company selected',
+          position: 'top',
+        })
+        return
+      }
+
       if (!canAdminApprove(request)) {
         $q.notify({
           type: 'warning',
@@ -645,16 +756,34 @@ export default {
 
           $q.notify({
             type: 'positive',
-            message: 'Swap request approved!',
+            message: 'Swap request approved successfully!',
             position: 'top',
           })
 
           await fetchSwapRequests()
-        } catch {
+        } catch (error) {
+          console.error('❌ Approval error:', error.response?.data)
+
+          let errorMessage = 'Failed to approve request'
+
+          if (Array.isArray(error.response?.data)) {
+            errorMessage = error.response.data.join(', ')
+          } else if (error.response?.data?.detail) {
+            errorMessage = error.response.data.detail
+          } else if (error.response?.data?.message) {
+            errorMessage = error.response.data.message
+          }
+
+          if (errorMessage.includes('do not have an assigned role')) {
+            errorMessage = 'Permission denied: You need admin role in this company to approve swaps'
+          }
+
           $q.notify({
             type: 'negative',
-            message: 'Failed to approve request',
+            message: errorMessage,
+            caption: 'Please contact your administrator',
             position: 'top',
+            timeout: 5000,
           })
         } finally {
           loading.value = false
@@ -662,6 +791,7 @@ export default {
       })
     }
 
+    // ✅ FIXED REJECT FUNCTION
     const rejectRequest = async (request) => {
       $q.dialog({
         title: 'Confirm Rejection',
@@ -673,7 +803,7 @@ export default {
         try {
           await updateSwapRequest(request.id, {
             status: 'rejected',
-            approved_at: new Date().toISOString(),
+            admin_approved_at: new Date().toISOString(),
           })
 
           $q.notify({
@@ -683,10 +813,12 @@ export default {
           })
 
           await fetchSwapRequests()
-        } catch {
+        } catch (error) {
+          console.error('❌ Rejection error:', error.response?.data)
+
           $q.notify({
             type: 'negative',
-            message: 'Failed to reject request',
+            message: error.response?.data?.detail || 'Failed to reject request',
             position: 'top',
           })
         } finally {
@@ -700,7 +832,6 @@ export default {
       viewDialog.value = true
     }
 
-    // Helper functions
     const getInitials = (name) => {
       if (!name) return '?'
       return name
@@ -731,22 +862,13 @@ export default {
       return labels[request.status] || request.status.toUpperCase()
     }
 
-    // NEW: Check if request is pending approval
     const isPendingApproval = (request) => {
       return request.status === 'pending' || request.status === 'to_employee_approved'
     }
 
-    // NEW: Enhanced canAdminApprove
     const canAdminApprove = (request) => {
       const isPending = isPendingApproval(request)
       const employeeApproved = request.to_employee_approved === true
-
-      console.log('🔍 Can approve?', {
-        id: request.id,
-        isPending,
-        employeeApproved,
-        result: isPending && employeeApproved,
-      })
 
       return isPending && employeeApproved
     }
@@ -782,14 +904,27 @@ export default {
       })
     }
 
+    const watchCompanyChanges = () => {
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'selectedCompany' || e.key === 'company_id') {
+          console.log('🔄 Company changed, refetching swap requests...')
+          fetchSwapRequests()
+        }
+      })
+    }
+
     const showDebugInfo = () => {
       showDebug.value = !showDebug.value
     }
 
-    onMounted(() => {
+    // ✅ FIXED onMounted - Only fetch ONCE
+    onMounted(async () => {
       console.log('🚀 Component mounted')
       debugLocalStorage()
-      fetchSwapRequests()
+
+      await fetchSwapRequests()
+      await checkUserPermissions()
+      watchCompanyChanges()
     })
 
     return {
@@ -819,12 +954,11 @@ export default {
       getApprovalProgressText,
       formatDate,
       formatDateTime,
-      localStorage,
+      fetchSwapRequests,
     }
   },
 }
 </script>
-
 <style scoped>
 .page-header {
   background: white;
