@@ -173,8 +173,34 @@ export default {
         })
         console.log('Companies response:', res.data)
 
-        // Handle different response structures
-        const companiesData = res.data.data || res.data || []
+        // Handle different response structures more safely
+        let companiesData = []
+
+        if (Array.isArray(res.data)) {
+          // Response is directly an array
+          companiesData = res.data
+        } else if (res.data && Array.isArray(res.data.data)) {
+          // Response has a 'data' property containing the array
+          companiesData = res.data.data
+        } else if (res.data && Array.isArray(res.data.results)) {
+          // Response has a 'results' property (common in paginated APIs)
+          companiesData = res.data.results
+        } else if (res.data && typeof res.data === 'object') {
+          // Response is a single object, wrap it in an array
+          companiesData = [res.data]
+        }
+
+        console.log('Extracted companies data:', companiesData)
+
+        if (!Array.isArray(companiesData) || companiesData.length === 0) {
+          console.warn('No companies found in response')
+          this.$q.notify({
+            type: 'warning',
+            message: 'No companies found for your account',
+            position: 'top',
+          })
+          return
+        }
 
         this.companyOptions = companiesData.map((company) => ({
           siteId: String(company.id),
@@ -190,6 +216,7 @@ export default {
       } catch (err) {
         console.error('❌ Error fetching companies:', err.response?.status, err.message)
         console.error('Error details:', err.response?.data)
+        console.error('Full error:', err)
         this.$q.notify({
           type: 'negative',
           message: err.response?.data?.message || 'Failed to load companies',
