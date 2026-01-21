@@ -1,11 +1,15 @@
 // src/boot/axios.js
 import { boot } from 'quasar/wrappers'
 import axios from 'axios'
-import { useAuthStore } from 'src/boot/auth' // <-- import your Pinia store
+import { useAuthStore } from 'boot/auth'
 
-const api = axios.create({ baseURL: 'https://staging.wageyapp.com' })
+// In dev: empty string (proxy handles routing to staging.wageyapp.com)
+// In production: /api prefix for same-origin requests
+const baseURL = process.env.NODE_ENV === 'production' ? '/api' : '' // Empty in dev - requests like /api/employee/login/ go through proxy
 
-// Add interceptor to include token automatically
+const api = axios.create({ baseURL })
+
+// Add interceptor to automatically include token
 api.interceptors.request.use((config) => {
   const authStore = useAuthStore()
   if (authStore.token) {

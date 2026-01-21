@@ -541,8 +541,15 @@ function normalizeResponseToArray(payload) {
 const fetchPayrollData = async () => {
   loading.value = true
   error.value = null
+
   try {
     const token = localStorage.getItem('access_token')
+
+    // Check for auth token
+    if (!token) {
+      throw new Error('Authentication token not found. Please log in again.')
+    }
+
     const selectedCompany = localStorage.getItem('selectedCompany') || ''
     const url = selectedCompany
       ? `https://staging.wageyapp.com/payroll/admin/${selectedCompany}/payslips/`
@@ -550,19 +557,30 @@ const fetchPayrollData = async () => {
 
     const response = await axios.get(url, {
       headers: { Authorization: `Bearer ${token}` },
+      timeout: 30000, // 30 second timeout
     })
 
-    // Normalize response
     let records = normalizeResponseToArray(response.data)
 
-    // Fetch breakdown for each record
+    // Handle empty response
+    if (records.length === 0) {
+      payrollData.value = []
+      $q.notify({
+        type: 'info',
+        message: 'No payroll records found',
+        position: 'top',
+      })
+      return
+    }
+
+    // Enrich records with hours breakdown
     const enrichedRecords = await Promise.all(
       records.map(async (r, i) => {
         const employeeId = r.employee_id ?? r.emp_id
         const period = r.period ?? r.pay_period
         const hours = await fetchHoursBreakdown(employeeId, period)
 
-        return {
+        const baseRecord = {
           id: r.id ?? `payroll-${i}`,
           employee: r.employee ?? r.employee_name ?? 'Unknown',
           employee_id: employeeId ?? null,
@@ -571,44 +589,98 @@ const fetchPayrollData = async () => {
           gross_pay: Number(r.gross_pay ?? 0),
           net_pay: Number(r.net_pay ?? 0),
           breakdown: {
-            attendance: {
-              regular_hours: hours.regular_hours ?? 0,
-              overtime_hours: hours.overtime_hours ?? 0,
-              holiday_hours: hours.holiday_hours ?? 0,
-              total_hours_worked: hours.total_hours_worked ?? 0,
-            },
+            attendance: hours,
           },
         }
+
+        return validatePayrollRecord(baseRecord)
       }),
     )
 
     payrollData.value = enrichedRecords
-    $q.notify({ type: 'positive', message: 'Payroll and hours breakdown loaded!' })
+
+    // Count and notify about errors
+    const errorCount = enrichedRecords.filter((r) => r.breakdown?.attendance?._error).length
+
+    if (errorCount > 0) {
+      $q.notify({
+        type: 'warning',
+        message: `Payroll loaded! ${errorCount} records have incomplete hours data.`,
+        position: 'top',
+        timeout: 4000,
+      })
+    } else {
+      $q.notify({
+        type: 'positive',
+        message: 'Payroll data loaded successfully!',
+        position: 'top',
+      })
+    }
   } catch (err) {
     console.error('fetchPayrollData error:', err)
-    error.value = err?.message ?? 'Unknown error'
-    $q.notify({ type: 'negative', message: 'Failed to fetch payroll data' })
+    error.value = err?.response?.data?.message ?? err?.message ?? 'Failed to fetch payroll data'
+
+    $q.notify({
+      type: 'negative',
+      message: error.value,
+      position: 'top',
+      timeout: 5000,
+    })
   } finally {
     loading.value = false
   }
 }
 
+function validatePayrollRecord(record) {
+  const grossPay = Math.max(0, Number(record.gross_pay || 0))
+  const netPay = Math.max(0, Math.min(Number(record.net_pay || 0), grossPay))
+
+  return {
+    ...record,
+    gross_pay: grossPay,
+    net_pay: netPay,
+  }
+}
+
 // Fetch hours breakdown for each employee
 const fetchHoursBreakdown = async (employeeId, period) => {
-  try {
-    const token = localStorage.getItem('access_token')
-    const url = `https://staging.wageyapp.com/attendance/${employeeId}/hours-breakdown/?period=${period}`
-    const response = await axios.get(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    return response.data
-  } catch (error) {
-    console.warn('Failed to fetch hours breakdown for', employeeId, error)
+  // Handle missing parameters
+  if (!employeeId || !period) {
     return {
       regular_hours: 0,
       overtime_hours: 0,
       holiday_hours: 0,
       total_hours_worked: 0,
+      _error: true, // Flag for UI to show warning
+    }
+  }
+
+  try {
+    const token = localStorage.getItem('access_token')
+    const url = `https://staging.wageyapp.com/attendance/${employeeId}/hours-breakdown/?period=${period}`
+
+    const response = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 5000, // 5 second timeout per request
+    })
+
+    return {
+      regular_hours: response.data.regular_hours ?? 0,
+      overtime_hours: response.data.overtime_hours ?? 0,
+      holiday_hours: response.data.holiday_hours ?? 0,
+      total_hours_worked: response.data.total_hours_worked ?? 0,
+      _error: false,
+    }
+  } catch (err) {
+    console.warn(`Failed to fetch hours for employee ${employeeId}:`, err.message)
+
+    // Return default values with error flag
+    return {
+      regular_hours: 0,
+      overtime_hours: 0,
+      holiday_hours: 0,
+      total_hours_worked: 0,
+      _error: true,
     }
   }
 }
@@ -655,9 +727,14 @@ const filteredPayrollData = computed(() => {
   return arr.filter((r) => {
     const matchesSearch =
       !searchQuery.value ||
-      (r.employee && r.employee.toString().toLowerCase().includes(searchQuery.value.toLowerCase()))
+      (r.employee &&
+        r.employee.toString().toLowerCase().includes(searchQuery.value.toLowerCase())) ||
+      (r.employee_id &&
+        r.employee_id.toString().toLowerCase().includes(searchQuery.value.toLowerCase()))
+
     const matchesPeriod = !selectedPeriod.value || r.period === selectedPeriod.value
     const matchesRun = !selectedRun.value || String(r.run) === String(selectedRun.value)
+
     return matchesSearch && matchesPeriod && matchesRun
   })
 })
@@ -680,14 +757,20 @@ const getSortIcon = (field) => {
 const sortedPayrollData = computed(() => {
   const arr = [...safeArray(filteredPayrollData.value)]
   if (!sortField.value) return arr
+
   const field = sortField.value
   return arr.sort((a, b) => {
     const aVal = a[field] ?? ''
     const bVal = b[field] ?? ''
+
     if (typeof aVal === 'string' && typeof bVal === 'string') {
       return sortDirection.value === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
     }
-    return sortDirection.value === 'asc' ? aVal - bVal : bVal - aVal
+
+    // Numeric sorting
+    const aNum = Number(aVal)
+    const bNum = Number(bVal)
+    return sortDirection.value === 'asc' ? aNum - bNum : bNum - aNum
   })
 })
 
@@ -703,12 +786,13 @@ const paginatedData = computed(() => {
 // Helpers
 const formatCurrency = (val) => {
   const n = Number(val ?? 0)
-  return n.toLocaleString('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-    currencyDisplay: 'symbol', // ensures ₱ symbol instead of PHP
-    minimumFractionDigits: 2,
-  })
+  return (
+    '₱' +
+    n.toLocaleString('en-PH', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  )
 }
 const getInitials = (name) => {
   if (!name) return '?'

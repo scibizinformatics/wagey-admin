@@ -339,7 +339,6 @@ function parseSelectedCompany(raw) {
 }
 
 // Table methods
-// Table methods
 const fetchInvitations = async () => {
   try {
     loadingTable.value = true
@@ -590,9 +589,12 @@ const sendInvitation = async () => {
 
     console.log('📤 Sending invitation data:', invitationData)
 
+    // REMOVE params from here - company_id is already in the body
     const response = await axios.post('https://staging.wageyapp.com/user/invite/', invitationData, {
-      params: { company: companyId },
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
     })
 
     console.log('✅ Invitation response:', response.data)

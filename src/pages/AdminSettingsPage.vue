@@ -33,6 +33,7 @@
         <q-tab name="companies" label="Companies" class="custom-tab" />
         <q-tab name="sites" label="Sites" class="custom-tab" />
         <q-tab name="roles" label="Roles" class="custom-tab" />
+        <q-tab name="shifts" label="Shifts" class="custom-tab" />
         <q-tab name="departments" label="Departments" class="custom-tab" />
         <q-tab name="positions" label="Positions" class="custom-tab" />
         <q-tab name="contracts" label="Contracts" class="custom-tab" />
@@ -182,6 +183,90 @@
                       color="negative"
                       size="sm"
                       @click="deleteSite(props.row)"
+                      class="q-ml-xs"
+                    >
+                      <q-tooltip>Delete</q-tooltip>
+                    </q-btn>
+                  </q-td>
+                </template>
+              </q-table>
+            </q-card>
+          </div>
+        </q-tab-panel>
+
+        <!-- Shifts Tab -->
+        <q-tab-panel name="shifts" class="q-pa-none">
+          <div class="settings-section">
+            <div class="section-header">
+              <div>
+                <h5 class="section-title">Shifts</h5>
+                <p class="section-description">Manage shift types and schedules</p>
+              </div>
+              <q-btn
+                color="primary"
+                label="Add Shift"
+                icon="add"
+                @click="openShiftDialog"
+                unelevated
+                no-caps
+                class="action-btn"
+              />
+            </div>
+
+            <q-card flat bordered class="settings-card">
+              <q-table
+                :rows="shifts"
+                :columns="shiftColumns"
+                row-key="id"
+                :loading="loadingShifts"
+                flat
+                :pagination="{ rowsPerPage: 10 }"
+                class="custom-table"
+              >
+                <template v-slot:body-cell-times="props">
+                  <q-td :props="props">
+                    {{ formatTime(props.row.default_start_time) }} -
+                    {{ formatTime(props.row.default_end_time) }}
+                  </q-td>
+                </template>
+                <template v-slot:body-cell-is_graveyard="props">
+                  <q-td :props="props">
+                    <q-badge
+                      :color="props.row.is_graveyard ? 'deep-purple' : 'grey'"
+                      :label="props.row.is_graveyard ? 'Graveyard' : 'Regular'"
+                    />
+                  </q-td>
+                </template>
+                <template v-slot:body-cell-apply_night_differential="props">
+                  <q-td :props="props">
+                    <q-icon
+                      :name="props.row.apply_night_differential ? 'check_circle' : 'cancel'"
+                      :color="props.row.apply_night_differential ? 'positive' : 'grey'"
+                      size="20px"
+                    />
+                  </q-td>
+                </template>
+                <template v-slot:body-cell-actions="props">
+                  <q-td :props="props">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      icon="edit"
+                      color="primary"
+                      size="sm"
+                      @click="editShift(props.row)"
+                    >
+                      <q-tooltip>Edit</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      icon="delete"
+                      color="negative"
+                      size="sm"
+                      @click="deleteShift(props.row)"
                       class="q-ml-xs"
                     >
                       <q-tooltip>Delete</q-tooltip>
@@ -1147,6 +1232,80 @@
       </q-card>
     </q-dialog>
 
+    <!-- Shift Dialog -->
+    <q-dialog v-model="shiftDialog" persistent>
+      <q-card class="dialog-card">
+        <q-card-section class="dialog-header">
+          <div class="text-h6">{{ editingShift ? 'Edit Shift' : 'Add New Shift' }}</div>
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="q-pt-lg">
+          <q-form @submit="saveShift" class="q-gutter-md">
+            <q-input
+              v-model="shiftForm.name"
+              label="Shift Name *"
+              outlined
+              dense
+              :rules="[(val) => !!val || 'Shift name is required']"
+            />
+            <q-input
+              v-model="shiftForm.description"
+              label="Description"
+              outlined
+              dense
+              type="textarea"
+              rows="2"
+            />
+            <div class="row q-col-gutter-md">
+              <div class="col-6">
+                <q-input
+                  v-model="shiftForm.default_start_time"
+                  label="Start Time *"
+                  outlined
+                  dense
+                  type="time"
+                  :rules="[(val) => !!val || 'Start time is required']"
+                />
+              </div>
+              <div class="col-6">
+                <q-input
+                  v-model="shiftForm.default_end_time"
+                  label="End Time *"
+                  outlined
+                  dense
+                  type="time"
+                  :rules="[(val) => !!val || 'End time is required']"
+                />
+              </div>
+            </div>
+            <q-toggle
+              v-model="shiftForm.is_graveyard"
+              label="Graveyard Shift"
+              color="deep-purple"
+            />
+            <q-toggle
+              v-model="shiftForm.apply_night_differential"
+              label="Apply Night Differential"
+              color="primary"
+            />
+          </q-form>
+        </q-card-section>
+        <q-separator />
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+          <q-btn
+            label="Save"
+            color="primary"
+            @click="saveShift"
+            :loading="savingShift"
+            unelevated
+            no-caps
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Role Dialog -->
     <q-dialog v-model="roleDialog" persistent>
       <q-card class="dialog-card">
@@ -2077,7 +2236,35 @@ export default {
         'Web Admin',
         'View Salary',
       ],
-
+      // Shifts
+      shifts: [],
+      loadingShifts: false,
+      shiftDialog: false,
+      editingShift: false,
+      savingShift: false,
+      shiftForm: {
+        id: null,
+        name: '',
+        company: null,
+        description: '',
+        default_start_time: '',
+        default_end_time: '',
+        is_graveyard: false,
+        apply_night_differential: false,
+      },
+      shiftColumns: [
+        { name: 'name', label: 'Shift Name', field: 'name', align: 'left', sortable: true },
+        { name: 'description', label: 'Description', field: 'description', align: 'left' },
+        { name: 'times', label: 'Time', align: 'left' },
+        { name: 'is_graveyard', label: 'Type', field: 'is_graveyard', align: 'center' },
+        {
+          name: 'apply_night_differential',
+          label: 'Night Diff',
+          field: 'apply_night_differential',
+          align: 'center',
+        },
+        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+      ],
       // Positions
       positions: [],
       loadingPositions: false,
@@ -2326,21 +2513,44 @@ export default {
       console.log('✅ [MOUNTED] Valid company ID found, fetching all data...')
 
       try {
-        // FIRST: Fetch positions (required for pay structures)
+        // ✅ STEP 1: Fetch positions FIRST (required for pay structures)
+        console.log('📍 [MOUNTED] Fetching positions...')
         await this.fetchPositions()
+        console.log('✅ [MOUNTED] Positions fetched:', this.positions.length)
 
-        // THEN: Fetch everything else in parallel
+        // ✅ STEP 2: Fetch departments (might be needed by other features)
+        console.log('🏢 [MOUNTED] Fetching departments...')
+        await this.fetchDepartments()
+        console.log('✅ [MOUNTED] Departments fetched:', this.departments.length)
+
+        // ✅ STEP 3: Fetch contract types (needed for contracts)
+        console.log('📄 [MOUNTED] Fetching contract types...')
+        await this.fetchContractTypes()
+        console.log('✅ [MOUNTED] Contract types fetched:', this.contractTypes.length)
+
+        // ✅ STEP 4: Fetch employees (needed for contracts)
+        console.log('👥 [MOUNTED] Fetching employees...')
+        await this.fetchEmployees()
+        console.log('✅ [MOUNTED] Employees fetched:', this.employees.length)
+
+        // ✅ STEP 5: Fetch shift types (needed for schedules)
+        console.log('⏰ [MOUNTED] Fetching shift types...')
+        await this.fetchShiftTypes()
+        console.log('✅ [MOUNTED] Shift types fetched:', this.shiftTypes.length)
+
+        // ✅ STEP 6: Now fetch everything else in parallel
+        console.log('🔄 [MOUNTED] Fetching remaining data in parallel...')
         await Promise.all([
           this.fetchSites(),
           this.fetchRoles(),
-          this.fetchContracts(),
+          this.fetchShifts(),
           this.fetchAllowanceTypes(),
           this.fetchTaxBrackets(),
           this.fetchCutoffPeriods(),
           this.fetchPayrollGroups(),
           this.fetchLaborRules(),
-          this.fetchPayStructures(),
-          this.fetchContractTypes(),
+          this.fetchPayStructures(), // Now positions are already loaded
+          this.fetchContracts(),
         ])
 
         console.log('✅ [MOUNTED] All data fetched successfully')
@@ -2349,17 +2559,27 @@ export default {
           sites: this.sites.length,
           roles: this.roles.length,
           positions: this.positions.length,
+          departments: this.departments.length,
+          shifts: this.shifts.length,
           contracts: this.contracts.length,
+          contractTypes: this.contractTypes.length,
+          employees: this.employees.length,
+          shiftTypes: this.shiftTypes.length,
           allowanceTypes: this.allowanceTypes.length,
           taxBrackets: this.taxBrackets.length,
           cutoffPeriods: this.cutoffPeriods.length,
           payrollGroups: this.payrollGroups.length,
           laborRules: this.laborRules.length,
           payStructures: this.payStructures.length,
-          contractTypes: this.contractTypes.length,
         })
       } catch (error) {
         console.error('❌ [MOUNTED] Error fetching data:', error)
+        this.$q.notify({
+          type: 'negative',
+          message: 'Failed to load some data. Please refresh the page.',
+          position: 'top',
+          timeout: 5000,
+        })
       }
     } else {
       console.warn('⚠️ [MOUNTED] No company selected')
@@ -3084,7 +3304,215 @@ export default {
           }
         })
     },
+    // ==================== SHIFTS ====================
+    // ==================== SHIFTS ====================
+    async fetchShifts() {
+      this.loadingShifts = true
+      try {
+        const companyId = this.getCompanyId()
+        if (!companyId) {
+          this.shifts = []
+          return
+        }
 
+        const response = await api.get('/organization/shift-types/', {
+          params: { company: companyId },
+          headers: this.getAuthHeaders(),
+        })
+
+        this.shifts = response.data.data || response.data || []
+      } catch (error) {
+        console.error('Error fetching shifts:', error)
+        this.$q.notify({
+          type: 'negative',
+          message: error.response?.data?.message || 'Failed to load shifts',
+          position: 'top',
+        })
+      } finally {
+        this.loadingShifts = false
+      }
+    },
+
+    openShiftDialog() {
+      const companyId = this.validateCompanySelection()
+      if (!companyId) return
+
+      this.editingShift = false
+      this.shiftForm = {
+        id: null,
+        name: '',
+        company: companyId,
+        description: '',
+        default_start_time: '',
+        default_end_time: '',
+        is_graveyard: false,
+        apply_night_differential: false,
+      }
+      this.shiftDialog = true
+    },
+
+    editShift(shift) {
+      this.editingShift = true
+      this.shiftForm = {
+        id: shift.id,
+        name: shift.name,
+        company: shift.company || this.getCompanyId(),
+        description: shift.description || '',
+        default_start_time: this.extractTime(shift.default_start_time),
+        default_end_time: this.extractTime(shift.default_end_time),
+        is_graveyard: shift.is_graveyard || false,
+        apply_night_differential: shift.apply_night_differential || false,
+      }
+      this.shiftDialog = true
+    },
+
+    async saveShift() {
+      if (
+        !this.shiftForm.name.trim() ||
+        !this.shiftForm.default_start_time ||
+        !this.shiftForm.default_end_time
+      ) {
+        this.$q.notify({
+          type: 'negative',
+          message: 'Please fill all required fields',
+          position: 'top',
+        })
+        return
+      }
+
+      const companyId = this.shiftForm.company || this.getCompanyId()
+      if (!companyId) {
+        this.$q.notify({
+          type: 'negative',
+          message: 'Company ID is required',
+          position: 'top',
+        })
+        return
+      }
+
+      this.savingShift = true
+      try {
+        // Format times to HH:MM:SS format
+        const formatTimeToAPI = (timeString) => {
+          const [hours, minutes] = timeString.split(':')
+          return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:00`
+        }
+
+        const payload = {
+          name: this.shiftForm.name.trim(),
+          company: parseInt(companyId),
+          description: this.shiftForm.description || '',
+          default_start_time: formatTimeToAPI(this.shiftForm.default_start_time),
+          default_end_time: formatTimeToAPI(this.shiftForm.default_end_time),
+          is_graveyard: Boolean(this.shiftForm.is_graveyard),
+          apply_night_differential: Boolean(this.shiftForm.apply_night_differential),
+        }
+
+        console.log('Payload being sent:', payload)
+
+        if (this.editingShift) {
+          await api.put(`/organization/shift-types/${this.shiftForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
+          this.$q.notify({ type: 'positive', message: 'Shift updated successfully' })
+        } else {
+          await api.post('/organization/shift-types/', payload, {
+            headers: this.getAuthHeaders(),
+          })
+          this.$q.notify({ type: 'positive', message: 'Shift created successfully' })
+        }
+
+        this.shiftDialog = false
+        await this.fetchShifts()
+      } catch (error) {
+        console.error('Error saving shift:', error)
+        console.error('Error response:', error.response?.data)
+
+        let errorMessage = 'Failed to save shift'
+        if (error.response?.data) {
+          if (typeof error.response.data === 'object') {
+            const errors = []
+            for (const [field, messages] of Object.entries(error.response.data)) {
+              if (Array.isArray(messages)) {
+                errors.push(`${field}: ${messages.join(', ')}`)
+              } else {
+                errors.push(`${field}: ${messages}`)
+              }
+            }
+            if (errors.length > 0) {
+              errorMessage = errors.join(' | ')
+            }
+          } else if (Array.isArray(error.response.data)) {
+            errorMessage = error.response.data[0]
+          } else if (error.response.data.message) {
+            errorMessage = error.response.data.message
+          } else if (error.response.data.error) {
+            errorMessage = error.response.data.error
+          }
+        }
+
+        this.$q.notify({
+          type: 'negative',
+          message: errorMessage,
+          position: 'top',
+          timeout: 5000,
+        })
+      } finally {
+        this.savingShift = false
+      }
+    },
+
+    async deleteShift(shift) {
+      this.$q
+        .dialog({
+          title: 'Confirm Delete',
+          message: `Are you sure you want to delete "${shift.name}"?`,
+          cancel: true,
+          persistent: true,
+        })
+        .onOk(async () => {
+          try {
+            await api.delete(`/organization/shift-types/${shift.id}/`, {
+              headers: this.getAuthHeaders(),
+            })
+            this.$q.notify({ type: 'positive', message: 'Shift deleted successfully' })
+            await this.fetchShifts()
+          } catch (error) {
+            console.error('Error deleting shift:', error)
+            this.$q.notify({
+              type: 'negative',
+              message: error.response?.data?.message || 'Failed to delete shift',
+              position: 'top',
+            })
+          }
+        })
+    },
+
+    formatTime(timeString) {
+      if (!timeString) return 'N/A'
+      try {
+        // Handle HH:MM:SS format
+        const [hours, minutes] = timeString.split(':')
+        const hour = parseInt(hours)
+        const min = parseInt(minutes)
+        const period = hour >= 12 ? 'PM' : 'AM'
+        const displayHour = hour % 12 || 12
+        return `${String(displayHour).padStart(2, '0')}:${String(min).padStart(2, '0')} ${period}`
+      } catch {
+        return timeString
+      }
+    },
+
+    extractTime(timeString) {
+      if (!timeString) return ''
+      try {
+        // Handle HH:MM:SS format - just take first two parts
+        const parts = timeString.split(':')
+        return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`
+      } catch {
+        return ''
+      }
+    },
     // ==================== POSITIONS ====================
     async fetchPositions() {
       this.loadingPositions = true

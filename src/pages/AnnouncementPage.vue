@@ -353,7 +353,7 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
+import { api } from 'boot/axios'
 import { useQuasar } from 'quasar'
 import 'src/css/app.scss'
 
@@ -484,7 +484,7 @@ export default {
         const token = localStorage.getItem('access_token')
         const selectedCompany = localStorage.getItem('selectedCompany')
 
-        const res = await axios.get('https://staging.wageyapp.com/user/positions/', {
+        const res = await api.get('https://staging.wageyapp.com/user/positions/', {
           headers: { Authorization: `Bearer ${token}` },
           params: { company: selectedCompany },
         })
@@ -532,7 +532,7 @@ export default {
 
         loadingUsers.value = true
 
-        const response = await axios.get(
+        const response = await api.get(
           `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
           { headers: { Authorization: `Bearer ${token}` } },
         )
@@ -570,7 +570,7 @@ export default {
         const token = localStorage.getItem('access_token')
         const selectedCompany = localStorage.getItem('selectedCompany')
 
-        const res = await axios.get('https://staging.wageyapp.com/user/user-roles/', {
+        const res = await api.get('https://staging.wageyapp.com/user/user-roles/', {
           headers: { Authorization: `Bearer ${token}` },
           params: { company: selectedCompany },
         })
@@ -607,7 +607,7 @@ export default {
           return
         }
 
-        const res = await axios.get('https://staging.wageyapp.com/communication/announcements/', {
+        const res = await api.get('https://staging.wageyapp.com/communication/announcements/', {
           headers: { Authorization: `Bearer ${token}` },
         })
 
@@ -678,7 +678,7 @@ export default {
 
         const method = editingAnnouncement.value ? 'put' : 'post'
 
-        await axios[method](url, payload, {
+        await api[method](url, payload, {
           headers: { Authorization: `Bearer ${token}` },
         })
 

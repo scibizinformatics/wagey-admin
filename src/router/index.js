@@ -1,34 +1,34 @@
-import { defineRouter } from '#q-app/wrappers'
+// src/router/index.js
 import {
   createRouter,
-  createMemoryHistory,
   createWebHistory,
   createWebHashHistory,
+  createMemoryHistory,
 } from 'vue-router'
 import routes from './routes.js'
 import { useAuthStore } from 'src/boot/auth'
 
-export default defineRouter(function () {
-  const createHistory = process.env.SERVER
-    ? createMemoryHistory
-    : process.env.VUE_ROUTER_MODE === 'history'
-      ? createWebHistory
-      : createWebHashHistory
+const createHistory = process.env.SERVER
+  ? createMemoryHistory
+  : process.env.VUE_ROUTER_MODE === 'history'
+    ? createWebHistory
+    : createWebHashHistory
 
-  const Router = createRouter({
-    scrollBehavior: () => ({ left: 0, top: 0 }),
-    routes,
-    history: createHistory(process.env.VUE_ROUTER_BASE),
-  })
-
-  // 🔐 Add global guard
-  Router.beforeEach((to) => {
-    const authStore = useAuthStore()
-
-    if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-      return { name: 'login', query: { redirect: to.fullPath } }
-    }
-  })
-
-  return Router
+const router = createRouter({
+  history: createHistory(process.env.VUE_ROUTER_BASE),
+  routes,
+  scrollBehavior: () => ({ left: 0, top: 0 }),
 })
+
+// 🔐 Global guard for authentication
+router.beforeEach((to, from, next) => {
+  const authStore = useAuthStore()
+
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+  } else {
+    next()
+  }
+})
+
+export default router

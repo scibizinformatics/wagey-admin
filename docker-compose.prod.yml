@@ -1,0 +1,11 @@
+services:
+  quasar-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wagey-app
+    restart: unless-stopped
+    expose:
+      - '90'
+    environment:
+      - NODE_ENV=production

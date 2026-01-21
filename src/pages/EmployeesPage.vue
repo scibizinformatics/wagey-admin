@@ -777,9 +777,6 @@ const employees = ref([])
 const filteredEmployees = ref([])
 const searchTerm = ref('')
 const loading = ref(false)
-//const avatarFile = ref(null)
-const avatarPreview = ref(null)
-const uploadingAvatar = ref(false)
 
 const sortBy = ref('A-Z')
 const sites = ref([])
@@ -797,6 +794,13 @@ const employeeToRestore = ref({})
 const savingEmployee = ref(false)
 const terminating = ref(false)
 const restoring = ref(false)
+
+//avatar
+const avatarFile = ref(null)
+const avatarPreview = ref(null)
+const editAvatarFile = ref(null)
+const editAvatarPreview = ref(null)
+const uploadingAvatar = ref(false)
 
 // Form states
 const confirmPassword = ref('')
@@ -980,6 +984,7 @@ const fetchEmployees = async () => {
 
     const response = await axios.get(
       `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
+
       { headers: { Authorization: `Bearer ${token}` } },
     )
 
@@ -1162,21 +1167,56 @@ function formatPhilippinePhone(number) {
 // Add Employee
 // -----------------------------
 async function addEmployee() {
+  // ✅ DECLARE VARIABLES AT FUNCTION SCOPE
+  let token = null
+  let user = null
+  let userId = null
+  let companyId = null
+
   try {
-    const token = authStore.token || localStorage.getItem('access_token')
-    const user = authStore.user || JSON.parse(localStorage.getItem('user'))
-    const userId = user?.id || JSON.parse(localStorage.getItem('user_id')) || null
+    // ✅ SAFE TOKEN RETRIEVAL
+    token = authStore.token || localStorage.getItem('access_token')
 
-    let storedCompany = localStorage.getItem('selectedCompany')
-    let companyId = null
-
-    try {
-      const parsed = JSON.parse(storedCompany)
-      companyId = parsed?.id || parsed
-    } catch {
-      companyId = storedCompany
+    // ✅ SAFE USER RETRIEVAL
+    user = authStore.user
+    if (!user) {
+      const storedUser = localStorage.getItem('user')
+      if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
+        try {
+          user = JSON.parse(storedUser)
+        } catch (e) {
+          console.warn('Failed to parse user from localStorage:', e)
+          user = null
+        }
+      }
     }
 
+    // ✅ SAFE USER ID RETRIEVAL - Check both 'id' and 'uuid' fields
+    userId = user?.id || user?.uuid
+
+    if (!userId) {
+      const storedUserId = localStorage.getItem('user_id')
+      if (storedUserId && storedUserId !== 'undefined' && storedUserId !== 'null') {
+        try {
+          userId = JSON.parse(storedUserId)
+        } catch (e) {
+          userId = parseInt(storedUserId) || null
+        }
+      }
+    }
+
+    // ✅ SAFE COMPANY ID RETRIEVAL
+    let storedCompany = localStorage.getItem('selectedCompany')
+    if (storedCompany && storedCompany !== 'undefined' && storedCompany !== 'null') {
+      try {
+        const parsed = JSON.parse(storedCompany)
+        companyId = parsed?.id || parsed?.companyId || parsed
+      } catch (e) {
+        companyId = parseInt(storedCompany) || null
+      }
+    }
+
+    // ✅ VALIDATION CHECKS
     if (!token) {
       return $q.notify({
         type: 'negative',
@@ -1193,15 +1233,6 @@ async function addEmployee() {
       })
     }
 
-    if (!userId) {
-      return $q.notify({
-        type: 'negative',
-        message: 'Unable to identify logged-in user. Please re-login.',
-        position: 'top',
-      })
-    }
-
-    // ✅ Format phone numbers properly
     const formattedPhone = formatPhilippinePhone(addForm.value.phone_number)
     const formattedEmergency = formatPhilippinePhone(addForm.value.emergency_contact)
 
@@ -1213,6 +1244,7 @@ async function addEmployee() {
       })
     }
 
+    // ✅ BUILD PAYLOAD - REMOVED updated_by field
     const payload = {
       username: addForm.value.user.username,
       email: addForm.value.user.email,
@@ -1229,18 +1261,44 @@ async function addEmployee() {
       bank_acct: addForm.value.bank_acct || '',
       timezone: addForm.value.timezone || '',
       last_date_updated: new Date().toISOString(),
-      user_role: addForm.value.user_role?.id || 0,
-      updated_by: userId,
+      user_role: addForm.value.user_role?.id ? parseInt(addForm.value.user_role.id) : null,
       status: 'active',
-      companies: [{ company_id: companyId }],
+      companies: [{ company_id: parseInt(companyId) }],
     }
 
-    await axios.post(`https://staging.wageyapp.com/user/employees/`, payload, {
+    // ✅ Clean up empty values
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === '' || payload[key] === undefined) {
+        delete payload[key]
+      }
+    })
+
+    console.log('📤 Final payload being sent:', JSON.stringify(payload, null, 2))
+
+    // ✅ CREATE THE EMPLOYEE
+    const response = await axios.post(`https://staging.wageyapp.com/user/employees/`, payload, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     })
+
+    const newEmployee = response.data
+
+    console.log('✅ Employee created:', newEmployee)
+    console.log('User ID for avatar upload:', newEmployee.user?.id)
+
+    // ⭐ UPLOAD AVATAR IF ONE WAS SELECTED ⭐
+    if (avatarFile.value && newEmployee.user?.id) {
+      console.log('🖼️ Starting avatar upload...')
+      const avatarUrl = await uploadAvatar(newEmployee.user.id)
+      console.log('Avatar URL returned:', avatarUrl)
+    } else {
+      console.log('⚠️ No avatar to upload:', {
+        hasFile: !!avatarFile.value,
+        userId: newEmployee.user?.id,
+      })
+    }
 
     $q.notify({
       type: 'positive',
@@ -1253,14 +1311,21 @@ async function addEmployee() {
     showAddModal.value = false
   } catch (error) {
     console.error('❌ Error adding employee:', error)
+    console.error('📋 Error response data:', error.response?.data)
+    console.error('📋 Error response status:', error.response?.status)
+
     $q.notify({
       type: 'negative',
       message:
         error.response?.data?.message ||
         error.response?.data?.detail ||
-        JSON.stringify(error.response?.data) ||
+        error.response?.data?.error ||
+        Object.entries(error.response?.data || {})
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+          .join(' | ') ||
         'Failed to add employee',
       position: 'top',
+      timeout: 5000,
     })
   }
 }
@@ -1291,7 +1356,6 @@ const saveEmployee = async () => {
       })
     }
 
-    // ✅ Format and validate phone numbers before saving
     const formattedPhone = formatPhilippinePhone(editForm.value.phone_number)
     const formattedEmergency = formatPhilippinePhone(editForm.value.emergency_contact)
 
@@ -1328,6 +1392,19 @@ const saveEmployee = async () => {
     )
 
     const updatedEmployee = response.data
+
+    console.log('✅ Employee updated:', updatedEmployee)
+    console.log('User ID for avatar upload:', updatedEmployee.user?.id)
+
+    // ⭐ UPLOAD AVATAR IF A NEW ONE WAS SELECTED ⭐
+    if (editAvatarFile.value && updatedEmployee.user?.id) {
+      console.log('🖼️ Starting avatar upload...')
+      const avatarUrl = await uploadEditAvatar(updatedEmployee.user.id)
+      console.log('Avatar URL returned:', avatarUrl)
+    } else {
+      console.log('⚠️ No new avatar to upload')
+    }
+
     const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
     if (index !== -1) employees.value[index] = updatedEmployee
     filteredEmployees.value = employees.value
@@ -1349,6 +1426,61 @@ const saveEmployee = async () => {
     })
   } finally {
     savingEmployee.value = false
+  }
+}
+
+// ============================================
+// 5. UPDATE resetAddForm() FUNCTION
+// ============================================
+const resetAddForm = () => {
+  addForm.value = {
+    user: {
+      username: '',
+      email: '',
+      first_name: '',
+      last_name: '',
+    },
+    password: '',
+    user_role: null,
+    civil_status: '',
+    address: '',
+    phone_number: '',
+    emergency_contact: '',
+    birthday: '',
+    bank_acct: '',
+    timezone: '',
+  }
+  confirmPassword.value = ''
+  // ⭐ CLEAR AVATAR STATE ⭐
+  avatarFile.value = null
+  avatarPreview.value = null
+}
+
+// ============================================
+// 6. UPDATE YOUR EXISTING cancelEdit() FUNCTION
+// ============================================
+// Find your existing cancelEdit function and REPLACE it with this:
+const cancelEdit = () => {
+  showEditModal.value = false
+  // ⭐ CLEAR AVATAR STATE ⭐
+  editAvatarFile.value = null
+  editAvatarPreview.value = null
+  editForm.value = {
+    user: {
+      id: 0,
+      username: '',
+      email: '',
+      first_name: '',
+      last_name: '',
+    },
+    user_role: null,
+    civil_status: '',
+    address: '',
+    phone_number: '',
+    emergency_contact: '',
+    birthday: '',
+    bank_acct: '',
+    timezone: '',
   }
 }
 
@@ -1504,6 +1636,211 @@ const restoreEmployee = async () => {
     })
   } finally {
     restoring.value = false
+  }
+}
+const handleAvatarSelect = (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    $q.notify({
+      type: 'negative',
+      message: 'Please select a valid image file (JPG, PNG, GIF)',
+      position: 'top',
+    })
+    return
+  }
+
+  // Validate file size (5MB max)
+  const maxSize = 5 * 1024 * 1024 // 5MB in bytes
+  if (file.size > maxSize) {
+    $q.notify({
+      type: 'negative',
+      message: 'Image size must be less than 5MB',
+      position: 'top',
+    })
+    return
+  }
+
+  avatarFile.value = file
+
+  // Create preview
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    avatarPreview.value = e.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
+const handleEditAvatarSelect = (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    $q.notify({
+      type: 'negative',
+      message: 'Please select a valid image file (JPG, PNG, GIF)',
+      position: 'top',
+    })
+    return
+  }
+
+  // Validate file size (5MB max)
+  const maxSize = 5 * 1024 * 1024 // 5MB in bytes
+  if (file.size > maxSize) {
+    $q.notify({
+      type: 'negative',
+      message: 'Image size must be less than 5MB',
+      position: 'top',
+    })
+    return
+  }
+
+  editAvatarFile.value = file
+
+  // Create preview
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    editAvatarPreview.value = e.target.result
+  }
+  reader.readAsDataURL(file)
+}
+const removeAvatar = () => {
+  avatarFile.value = null
+  avatarPreview.value = null
+  // Clear the file input
+  const input = document.querySelector('input[type="file"]')
+  if (input) input.value = ''
+}
+
+const removeEditAvatar = () => {
+  editAvatarFile.value = null
+  editAvatarPreview.value = null
+  // Clear the file input
+  const inputs = document.querySelectorAll('input[type="file"]')
+  if (inputs[1]) inputs[1].value = ''
+}
+
+const handleImageError = (event) => {
+  event.target.src = '' // Clear broken image
+  event.target.style.display = 'none'
+}
+
+const uploadAvatar = async (userId) => {
+  if (!avatarFile.value) {
+    console.log('No avatar file selected')
+    return null
+  }
+
+  try {
+    uploadingAvatar.value = true
+    const token = localStorage.getItem('access_token')
+
+    console.log('📤 Uploading avatar for user ID:', userId)
+    console.log('File details:', {
+      name: avatarFile.value.name,
+      size: avatarFile.value.size,
+      type: avatarFile.value.type,
+    })
+
+    const formData = new FormData()
+    formData.append('picture', avatarFile.value)
+
+    // Log FormData contents
+    for (let pair of formData.entries()) {
+      console.log('FormData:', pair[0], pair[1])
+    }
+
+    const response = await axios.patch(
+      `https://staging.wageyapp.com/user/users/${userId}/`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    )
+
+    console.log('✅ Avatar upload response:', response.data)
+
+    $q.notify({
+      type: 'positive',
+      message: 'Avatar uploaded successfully!',
+      position: 'top',
+    })
+
+    return response.data.picture_url
+  } catch (error) {
+    console.error('❌ Error uploading avatar:', error)
+    console.error('Error response:', error.response?.data)
+    console.error('Error status:', error.response?.status)
+
+    $q.notify({
+      type: 'warning',
+      message: error.response?.data?.detail || 'Avatar upload failed, but employee was created',
+      position: 'top',
+    })
+    return null
+  } finally {
+    uploadingAvatar.value = false
+  }
+}
+
+const uploadEditAvatar = async (userId) => {
+  if (!editAvatarFile.value) {
+    console.log('No avatar file selected for edit')
+    return null
+  }
+
+  try {
+    uploadingAvatar.value = true
+    const token = localStorage.getItem('access_token')
+
+    console.log('📤 Uploading avatar for user ID:', userId)
+    console.log('File details:', {
+      name: editAvatarFile.value.name,
+      size: editAvatarFile.value.size,
+      type: editAvatarFile.value.type,
+    })
+
+    const formData = new FormData()
+    formData.append('picture', editAvatarFile.value)
+
+    const response = await axios.patch(
+      `https://staging.wageyapp.com/user/users/${userId}/`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    )
+
+    console.log('✅ Avatar upload response:', response.data)
+
+    $q.notify({
+      type: 'positive',
+      message: 'Avatar updated successfully!',
+      position: 'top',
+    })
+
+    return response.data.picture_url
+  } catch (error) {
+    console.error('❌ Error uploading avatar:', error)
+    console.error('Error response:', error.response?.data)
+
+    $q.notify({
+      type: 'warning',
+      message: error.response?.data?.detail || 'Avatar upload failed, but employee was updated',
+      position: 'top',
+    })
+    return null
+  } finally {
+    uploadingAvatar.value = false
   }
 }
 
@@ -1664,47 +2001,6 @@ const cancelAdd = () => {
   resetAddForm()
 }
 
-const cancelEdit = () => {
-  showEditModal.value = false
-  editForm.value = {
-    user: {
-      id: 0,
-      username: '',
-      email: '',
-      first_name: '',
-      last_name: '',
-    },
-    user_role: null,
-    civil_status: '',
-    address: '',
-    phone_number: '',
-    emergency_contact: '',
-    birthday: '',
-    bank_acct: '',
-    timezone: '',
-  }
-}
-
-const resetAddForm = () => {
-  addForm.value = {
-    user: {
-      username: '',
-      email: '',
-      first_name: '',
-      last_name: '',
-    },
-    password: '',
-    user_role: null,
-    civil_status: '',
-    address: '',
-    phone_number: '',
-    emergency_contact: '',
-    birthday: '',
-    bank_acct: '',
-    timezone: '',
-  }
-  confirmPassword.value = ''
-}
 const filterBySite = () => {
   console.log('🏢 Site filter changed to:', selectedSite.value)
   filterEmployees()

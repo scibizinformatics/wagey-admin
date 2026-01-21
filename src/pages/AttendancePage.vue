@@ -152,12 +152,17 @@
                 <q-item v-bind="scope.itemProps">
                   <q-item-section avatar>
                     <q-avatar size="32px" color="primary" text-color="white">
-                      {{ scope.opt.label.charAt(0) }}
+                      <img
+                        v-if="scope.opt.employee?.photo || scope.opt.employee?.image"
+                        :src="scope.opt.employee?.photo || scope.opt.employee?.image"
+                        alt="Employee"
+                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%"
+                      />
+                      <span v-else>{{ scope.opt.label.charAt(0) }}</span>
                     </q-avatar>
                   </q-item-section>
                   <q-item-section>
                     <q-item-label>{{ scope.opt.label }}</q-item-label>
-                    <q-item-label caption>ID: {{ scope.opt.value }}</q-item-label>
                   </q-item-section>
                 </q-item>
               </template>
@@ -306,8 +311,20 @@
                 </q-td>
                 <q-td class="table-body-cell employee-cell">
                   <div class="employee-info">
-                    <q-avatar size="32px" class="employee-avatar">
-                      {{ getEmployeeName(props.row.employee).charAt(0) }}
+                    <q-avatar
+                      size="32px"
+                      class="employee-avatar clickable-avatar"
+                      @click="viewEmployeePhoto(props.row.employee)"
+                    >
+                      <img
+                        v-if="getEmployeePhoto(props.row.employee)"
+                        :src="getEmployeePhoto(props.row.employee)"
+                        alt="Employee Photo"
+                        class="avatar-image"
+                      />
+                      <span v-else class="avatar-initials">
+                        {{ getEmployeeName(props.row.employee).charAt(0) }}
+                      </span>
                     </q-avatar>
                     <span class="employee-name">{{ getEmployeeName(props.row.employee) }}</span>
                   </div>
@@ -693,7 +710,48 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-
+    <!-- Employee Photo Viewer Dialog -->
+    <q-dialog v-model="showEmployeePhotoDialog">
+      <q-card class="employee-photo-dialog-card">
+        <q-card-section class="employee-photo-header">
+          <div class="employee-photo-title">
+            <q-avatar size="48px" color="primary" text-color="white" class="q-mr-md">
+              <img
+                v-if="selectedEmployeePhoto"
+                :src="selectedEmployeePhoto"
+                alt="Employee"
+                style="width: 100%; height: 100%; object-fit: cover"
+              />
+              <span v-else>{{ selectedEmployeeName.charAt(0) }}</span>
+            </q-avatar>
+            <div>
+              <div class="dialog-title">{{ selectedEmployeeName }}</div>
+              <div class="text-caption text-grey-7">Employee Profile Photo</div>
+            </div>
+          </div>
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showEmployeePhotoDialog = false"
+            class="close-btn"
+          />
+        </q-card-section>
+        <q-card-section class="employee-photo-body">
+          <img
+            v-if="selectedEmployeePhoto"
+            :src="selectedEmployeePhoto"
+            alt="Employee Photo"
+            class="employee-full-image"
+          />
+          <div v-else class="no-photo-placeholder">
+            <q-icon name="person" size="120px" color="grey-5" />
+            <div class="text-grey-7 q-mt-md">No photo available</div>
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
     <!-- Edit Attendance Dialog -->
     <q-dialog v-model="showEditDialog" persistent>
       <q-card class="edit-dialog-card">
@@ -780,6 +838,10 @@ const scheduleError = ref(null)
 
 const attendanceStep = ref('time_in')
 const currentAttendanceId = ref(null)
+
+const showEmployeePhotoDialog = ref(false)
+const selectedEmployeePhoto = ref('')
+const selectedEmployeeName = ref('')
 
 const pagination = ref({
   page: 1,
@@ -1033,6 +1095,44 @@ function calculateWorkingHours() {
   const minutes = Math.floor(diff % 60)
 
   return `${hours}h ${minutes}m`
+}
+
+function getEmployeePhoto(employee) {
+  if (!employee) return null
+
+  // If employee is an object, check for photo/image fields
+  if (typeof employee === 'object') {
+    return (
+      employee.photo ||
+      employee.image ||
+      employee.profile_picture ||
+      employee.profile_photo ||
+      employee.avatar ||
+      employee.picture ||
+      null
+    )
+  }
+
+  // If employee is ID, find in employees array
+  const foundEmployee = employees.value.find((emp) => emp.id === employee || emp.uuid === employee)
+
+  return foundEmployee
+    ? foundEmployee.photo ||
+        foundEmployee.image ||
+        foundEmployee.profile_picture ||
+        foundEmployee.profile_photo ||
+        foundEmployee.avatar ||
+        foundEmployee.picture ||
+        null
+    : null
+}
+
+function viewEmployeePhoto(employee) {
+  if (!employee) return
+
+  selectedEmployeeName.value = getEmployeeName(employee)
+  selectedEmployeePhoto.value = getEmployeePhoto(employee)
+  showEmployeePhotoDialog.value = true
 }
 
 // ================= API FUNCTIONS =================
@@ -2530,6 +2630,100 @@ onMounted(async () => {
   font-size: 13px;
   color: #374151;
 }
+.clickable-avatar {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.clickable-avatar:hover {
+  transform: scale(1.1);
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-initials {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.employee-photo-dialog-card {
+  width: 100%;
+  max-width: 700px;
+  border-radius: 12px;
+}
+
+.employee-photo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.employee-photo-title {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.employee-photo-body {
+  padding: 32px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  background: #f8fafc;
+}
+
+.employee-full-image {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+.no-photo-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .employee-photo-dialog-card {
+    max-width: 95vw;
+    margin: 12px;
+  }
+
+  .employee-photo-header {
+    padding: 16px;
+  }
+
+  .employee-photo-body {
+    padding: 20px;
+    min-height: 300px;
+  }
+
+  .employee-full-image {
+    max-height: 60vh;
+  }
+
+  .no-photo-placeholder {
+    padding: 40px;
+  }
+}
 
 /* Loading States */
 .q-skeleton {
@@ -2589,6 +2783,39 @@ onMounted(async () => {
     width: 34px;
     height: 34px;
     min-width: 34px;
+  }
+  .employee-photo-dialog-card {
+    max-width: 800px;
+  }
+
+  .employee-photo-header {
+    padding: 24px;
+  }
+
+  .employee-photo-title .q-avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .dialog-title {
+    font-size: 20px;
+  }
+
+  .employee-photo-body {
+    padding: 40px;
+    min-height: 500px;
+  }
+
+  .employee-full-image {
+    max-height: 75vh;
+  }
+
+  .no-photo-placeholder {
+    padding: 80px;
+  }
+
+  .no-photo-placeholder .q-icon {
+    font-size: 140px;
   }
 }
 
@@ -2694,8 +2921,40 @@ onMounted(async () => {
     width: 32px;
     height: 32px;
   }
-}
+  .employee-photo-dialog-card {
+    max-width: 650px;
+  }
 
+  .employee-photo-header {
+    padding: 18px;
+  }
+
+  .employee-photo-title .q-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .dialog-title {
+    font-size: 17px;
+  }
+
+  .employee-photo-body {
+    padding: 28px;
+    min-height: 380px;
+  }
+
+  .employee-full-image {
+    max-height: 65vh;
+  }
+
+  .no-photo-placeholder {
+    padding: 50px;
+  }
+
+  .no-photo-placeholder .q-icon {
+    font-size: 110px;
+  }
+}
 /* 768px - Tablet Portrait */
 @media (max-width: 768px) {
   .dashboard-container {
@@ -2833,6 +3092,56 @@ onMounted(async () => {
 
   .schedule-item {
     font-size: 12px;
+  }
+  .employee-photo-dialog-card {
+    max-width: 90vw;
+    margin: 16px;
+  }
+
+  .employee-photo-header {
+    padding: 16px;
+  }
+
+  .employee-photo-title {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .employee-photo-title .q-avatar {
+    width: 40px;
+    height: 40px;
+    margin-right: 12px;
+  }
+
+  .dialog-title {
+    font-size: 16px;
+  }
+
+  .text-caption {
+    font-size: 12px;
+  }
+
+  .employee-photo-body {
+    padding: 24px;
+    min-height: 350px;
+  }
+
+  .employee-full-image {
+    max-height: 60vh;
+    border-radius: 10px;
+  }
+
+  .no-photo-placeholder {
+    padding: 40px;
+  }
+
+  .no-photo-placeholder .q-icon {
+    font-size: 100px;
+  }
+
+  .close-btn {
+    width: 36px;
+    height: 36px;
   }
 }
 
