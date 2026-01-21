@@ -36,7 +36,7 @@ npm run format
 quasar build
 ```
 
-### Serve the production build on port 8000 (no nginx)
+### Serve the production build on port 8000
 
 ```bash
 npm run build

@@ -16,7 +16,7 @@ RUN npm ci
 # Build the Quasar app for production (SPA mode)
 RUN npx quasar build
 
-# Runtime stage (no nginx) - serve the built SPA on port 8000
+# Runtime stage - serve the built SPA on port 8000
 FROM node:18-alpine as production-stage
 
 WORKDIR /app
