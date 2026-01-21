@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: wagey-app
     restart: unless-stopped
-    expose:
-      - '90'
+    ports:
+      - '8000:8000'
     environment:
       - NODE_ENV=production
+      - PORT=8000

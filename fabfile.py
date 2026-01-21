@@ -5,7 +5,7 @@ import subprocess
 # Configuration
 REMOTE_HOST = '5.223.67.18'
 REMOTE_USER = 'root'
-REMOTE_PATH = '/root/web-wagey'
+REMOTE_PATH = '/root/wagey-admin'
 
 def get_connection():
     """Helper function to create connection"""
@@ -32,7 +32,7 @@ def sync(c):
     rsync(
         conn,
         '.',
-        '/root/web-wagey',
+        '/root/wagey-admin',
         exclude = [
             '--exclude=.git',
             '--exclude=.venv',
@@ -64,7 +64,7 @@ def build(c):
     # with conn.cd(REMOTE_PATH):
     #     conn.run('docker-compose -p wagey_admin -f docker-compose.prod.yml build --no-cache')
     conn = c.config.run.env['conn']
-    with conn.cd('/root/web-wagey'):
+    with conn.cd('/root/wagey-admin'):
         conn.run('sudo docker-compose -p wagey_admin -f docker-compose.prod.yml build')
 
 @task
@@ -73,7 +73,7 @@ def up(c):
     # conn = get_connection()
     conn = c.config.run.env['conn']
     with conn.cd(REMOTE_PATH):
-        conn.run('docker-compose -p wagey_admin -f docker-compose.prod.yml up -d')
+        conn.run('sudo docker-compose -p wagey_admin -f docker-compose.prod.yml up -d --build --force-recreate')
 
 @task
 def down(c):

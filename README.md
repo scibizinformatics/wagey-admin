@@ -1,6 +1,6 @@
-# Admin_app (wagey-admin)
+# Wagey Web Admin (wagey-admin)
 
-A Quasar Project
+Web admin for Wagey
 
 ## Install the dependencies
 ```bash
@@ -34,6 +34,19 @@ npm run format
 ### Build the app for production
 ```bash
 quasar build
+```
+
+### Serve the production build on port 8000 (no nginx)
+
+```bash
+npm run build
+PORT=8000 npm start
+```
+
+### Docker (serves on port 8000)
+
+```bash
+docker compose -f docker-compose.prod.yml up --build -d
 ```
 
 ### Customize the configuration

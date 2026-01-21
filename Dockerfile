@@ -16,22 +16,21 @@ RUN npm ci
 # Build the Quasar app for production (SPA mode)
 RUN npx quasar build
 
-# Production stage
-FROM nginx:alpine as production-stage
+# Runtime stage (no nginx) - serve the built SPA on port 8000
+FROM node:18-alpine as production-stage
 
-# Copy built files from build stage
-COPY --from=build-stage /app/dist/spa /usr/share/nginx/html
+WORKDIR /app
 
-# Copy custom nginx configuration
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY nginx.conf /etc/nginx/default.conf
+# Copy built files and the minimal server
+COPY --from=build-stage /app/dist/spa /app/dist/spa
+COPY server.js /app/server.js
 
-# Expose port 80
-EXPOSE 90
+ENV NODE_ENV=production
+ENV PORT=8000
 
-# Health check - use correct localhost reference
+EXPOSE 8000
+
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://127.0.0.1:80/ || exit 1
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1:8000/ || exit 1
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "server.js"]
