@@ -141,9 +141,7 @@
       </div>
     </div>
 
-    <!-- Schedule Content -->
     <div class="content-section">
-      <!-- Desktop Table View -->
       <div v-if="viewMode === 'table' && !$q.screen.lt.lg" class="table-view">
         <div class="table-wrapper">
           <table class="schedule-table">
@@ -171,6 +169,7 @@
                 </td>
                 <td v-for="(day, dayIdx) in days" :key="dayIdx" class="schedule-cell">
                   <div class="shifts-wrapper">
+                    <!-- Existing Shifts -->
                     <div
                       v-for="element in getShifts(user.id, dayIdx)"
                       :key="element.id"
@@ -210,12 +209,13 @@
                         />
                       </div>
                     </div>
+
+                    <!-- Always Show Add Button -->
                     <q-btn
-                      v-if="getShifts(user.id, dayIdx).length === 0"
                       flat
                       dense
                       size="sm"
-                      label="+ Add"
+                      :label="getShifts(user.id, dayIdx).length === 0 ? '+ Add' : '+ Add More'"
                       @click="openQuickAddModal(user.id, dayIdx)"
                       class="add-shift-btn"
                     />
@@ -253,17 +253,8 @@
               <div v-for="(day, dayIdx) in days" :key="dayIdx" class="day-column">
                 <div class="day-header">{{ day }}</div>
                 <div class="day-content">
-                  <div v-if="getShifts(user.id, dayIdx).length === 0" class="empty-slot">
-                    <q-btn
-                      flat
-                      dense
-                      size="sm"
-                      label="Add"
-                      @click="openQuickAddModal(user.id, dayIdx)"
-                      class="add-shift-btn"
-                    />
-                  </div>
-                  <div v-else class="shift-items">
+                  <!-- Show shifts if they exist -->
+                  <div v-if="getShifts(user.id, dayIdx).length > 0" class="shift-items">
                     <div
                       v-for="shift in getShifts(user.id, dayIdx)"
                       :key="shift.id"
@@ -273,6 +264,16 @@
                       <div class="shift-position">{{ getPositionName(shift.position) }}</div>
                     </div>
                   </div>
+
+                  <!-- Always show add button -->
+                  <q-btn
+                    flat
+                    dense
+                    size="sm"
+                    :label="getShifts(user.id, dayIdx).length === 0 ? 'Add' : '+ Add More'"
+                    @click="openQuickAddModal(user.id, dayIdx)"
+                    class="add-shift-btn mobile-add-btn"
+                  />
                 </div>
               </div>
             </div>
@@ -623,15 +624,16 @@
       </q-card>
     </q-dialog>
 
-    <!-- Quick Add Modal -->
+    <!-- Quick Add Modal - Multiple Shifts Same Day -->
     <q-dialog v-model="showQuickAddModal" persistent>
-      <q-card class="modal-card">
+      <q-card class="modal-card" style="max-width: 500px">
         <q-card-section class="modal-header">
-          <div class="modal-title">Quick Add Shift</div>
+          <div class="modal-title">Quick Add Shifts</div>
           <q-btn flat round dense icon="close" @click="closeQuickAddModal" />
         </q-card-section>
 
         <q-card-section class="modal-body">
+          <!-- Employee and Day Info -->
           <div class="quick-info">
             <div class="info-item">
               <q-icon name="person" size="20px" />
@@ -644,40 +646,92 @@
           </div>
 
           <q-form @submit="quickAddSchedule" class="schedule-form">
-            <q-select
-              v-model="quickAdd.site"
-              :options="siteOptions"
-              option-value="value"
-              option-label="label"
-              label="Select Site"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-              :rules="[(val) => !!val || 'Site is required']"
+            <!-- Multiple Shift Rows -->
+            <div v-for="(shift, index) in quickAdd.shifts" :key="index" class="shift-row">
+              <div class="shift-row-header">
+                <span class="row-label">
+                  <q-icon name="schedule" size="16px" />
+                  Shift {{ index + 1 }}
+                </span>
+                <q-btn
+                  v-if="quickAdd.shifts.length > 1"
+                  flat
+                  dense
+                  round
+                  icon="close"
+                  size="sm"
+                  @click="removeShiftRow(index)"
+                  class="remove-btn"
+                />
+              </div>
+
+              <div class="shift-fields">
+                <q-select
+                  v-model="shift.site"
+                  :options="siteOptions"
+                  option-value="value"
+                  option-label="label"
+                  label="Select Site"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  class="form-field"
+                  :rules="[(val) => !!val || 'Site is required']"
+                />
+
+                <q-select
+                  v-model="shift.shiftType"
+                  :options="shiftTypeOptions"
+                  option-value="value"
+                  option-label="label"
+                  label="Shift Type"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  class="form-field"
+                  :rules="[(val) => !!val || 'Shift type is required']"
+                >
+                  <template #hint>
+                    {{
+                      shift.shiftType ? getShiftTypeDetails(shift.shiftType) : 'Select a shift type'
+                    }}
+                  </template>
+                </q-select>
+              </div>
+            </div>
+
+            <!-- Add Another Shift Button -->
+            <q-btn
+              flat
+              icon="add"
+              label="Add Another Shift"
+              @click="addShiftRow"
+              class="add-row-btn"
+              color="primary"
+              size="sm"
             />
 
-            <q-select
-              v-model="quickAdd.shiftType"
-              :options="shiftTypeOptions"
-              option-value="value"
-              option-label="label"
-              label="Shift Type"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-              :rules="[(val) => !!val || 'Shift type is required']"
-            >
-              <template #hint> Select the type of shift for this schedule </template>
-            </q-select>
+            <!-- Info Banner -->
+            <q-banner class="info-banner" dense>
+              <template #avatar>
+                <q-icon name="info" color="primary" />
+              </template>
+              <span style="font-size: 12px">
+                Adding {{ quickAdd.shifts.length }} shift{{
+                  quickAdd.shifts.length > 1 ? 's' : ''
+                }}
+                for <strong>{{ days[quickAdd.day] }}</strong>
+              </span>
+            </q-banner>
 
             <div class="modal-actions">
               <q-btn flat label="Cancel" @click="closeQuickAddModal" class="cancel-btn" />
               <q-btn
                 type="submit"
                 color="primary"
-                label="Add Shift"
+                :label="`Add ${quickAdd.shifts.length} Shift${quickAdd.shifts.length > 1 ? 's' : ''}`"
                 unelevated
                 class="submit-btn"
                 :loading="isAddingShift"
@@ -768,9 +822,8 @@ const editingSchedule = ref({
 
 const quickAdd = ref({
   userId: null,
-  day: null,
-  site: null,
-  shiftType: null,
+  day: null, // Single day
+  shifts: [], // Multiple shifts for that day
 })
 
 const addConflictWarning = ref(false)
@@ -1533,14 +1586,15 @@ const getEmployeeName = (id) => {
   const user = users.value.find((u) => u.id === id)
   return user?.name || 'Unknown Employee'
 }
+const getShiftTypeDetails = (shiftTypeId) => {
+  const shiftType = shiftTypes.value.find((st) => st.id === shiftTypeId)
+  if (!shiftType) return ''
 
-// LOCAL MODE: Add schedule locally (no API)
-// NEW CODE
+  const start = shiftType.default_start_time?.substring(0, 5) || ''
+  const end = shiftType.default_end_time?.substring(0, 5) || ''
 
-// ENHANCED: Main schedule creation function
-
-// NEW FUNCTION - Add after createSchedule
-// BACKUP METHOD: Keep for fallback if two-step process fails
+  return start && end ? `${start} - ${end}` : ''
+}
 
 const createScheduleRecord = async (scheduleData, dateStr) => {
   const token = localStorage.getItem('access_token')
@@ -1947,17 +2001,29 @@ const addSchedule = async () => {
 const quickAddSchedule = async () => {
   console.log('🚀 Quick Add Started')
 
-  const { userId, day, site, shiftType } = quickAdd.value
+  const { userId, day, shifts } = quickAdd.value
 
-  console.log('📋 Quick Add Values:', { userId, day, site, shiftType })
+  console.log('📋 Quick Add Values:', { userId, day, shifts })
 
   // Validation
-  if (!userId || day === null || !site || !shiftType) {
+  if (!userId || day === null) {
     $q.notify({
       type: 'negative',
-      message: 'Please fill all required fields.',
+      message: 'Employee and day are required.',
     })
     return
+  }
+
+  // Validate all shift rows
+  for (let i = 0; i < shifts.length; i++) {
+    const shift = shifts[i]
+    if (!shift.site || !shift.shiftType) {
+      $q.notify({
+        type: 'negative',
+        message: `Please fill all fields for shift ${i + 1}`,
+      })
+      return
+    }
   }
 
   isAddingShift.value = true
@@ -1971,42 +2037,24 @@ const quickAddSchedule = async () => {
         type: 'negative',
         message: 'Authentication required. Please log in.',
       })
+      isAddingShift.value = false
       return
     }
 
-    // ✅ ENHANCED DEBUGGING
     console.log('=== DATE CALCULATION DEBUG ===')
-    console.log('Current real date:', new Date())
-    console.log('selectedWeek.value:', selectedWeek.value)
-    console.log('selectedWeek.value.start:', selectedWeek.value.start)
-    console.log('selectedWeek.value.start type:', typeof selectedWeek.value.start)
-    console.log('selectedWeek.value.start toString:', selectedWeek.value.start?.toString())
-    console.log('day offset:', day)
-
-    // Calculate target date
     const { start } = selectedWeek.value
-
-    // ✅ IMPORTANT: Make sure start is a Date object
     const weekStart = start instanceof Date ? start : new Date(start)
-
-    console.log('weekStart after conversion:', weekStart)
-    console.log('weekStart is valid?:', !isNaN(weekStart.getTime()))
 
     const targetDate = new Date(weekStart)
     targetDate.setDate(targetDate.getDate() + day)
 
-    console.log('targetDate after adding days:', targetDate)
-    console.log('targetDate is valid?:', !isNaN(targetDate.getTime()))
+    console.log('Target date:', targetDate)
 
     // Check if date is in the past
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const compareDate = new Date(targetDate)
     compareDate.setHours(0, 0, 0, 0)
-
-    console.log('today (for comparison):', today)
-    console.log('compareDate:', compareDate)
-    console.log('Is in past?:', compareDate < today)
 
     if (compareDate < today) {
       $q.notify({
@@ -2018,34 +2066,29 @@ const quickAddSchedule = async () => {
       return
     }
 
-    // ✅ TIMEZONE-SAFE date string
+    // Timezone-safe date string
     const year = targetDate.getFullYear()
     const month = String(targetDate.getMonth() + 1).padStart(2, '0')
     const dayOfMonth = String(targetDate.getDate()).padStart(2, '0')
     const dateStr = `${year}-${month}-${dayOfMonth}`
 
     console.log('Final dateStr:', dateStr)
-    console.log('Expected vs Actual:', {
-      expected: `Should be around ${new Date().toISOString().split('T')[0]}`,
-      actual: dateStr,
-      difference: dateStr === '2026-01-02' ? '⚠️ DATE IS IN 2026!' : '✅ Date looks OK',
-    })
-    console.log('=== END DATE CALCULATION ===')
 
-    // Build payload
+    // Build schedules array - all shifts on SAME date
+    const schedulePayloads = shifts.map((shift) => ({
+      date: dateStr, // Same date for all shifts
+      site_id: shift.site,
+      shift_type_id: shift.shiftType,
+    }))
+
+    // Build payload with multiple shifts on same day
     const payload = {
       company_id: parseInt(companyId),
       employee_ids: [userId],
-      schedules: [
-        {
-          date: dateStr,
-          site_id: site,
-          shift_type_id: shiftType,
-        },
-      ],
+      schedules: schedulePayloads, // Multiple shifts, same date
     }
 
-    console.log('📤 Sending payload:', JSON.stringify(payload, null, 2))
+    console.log('📤 Sending payload with multiple shifts:', JSON.stringify(payload, null, 2))
 
     // Call API
     const response = await axios.post(
@@ -2063,7 +2106,7 @@ const quickAddSchedule = async () => {
 
     $q.notify({
       type: 'positive',
-      message: 'Shift added successfully!',
+      message: `${shifts.length} shift${shifts.length > 1 ? 's' : ''} added successfully for ${days[day]}!`,
       icon: 'check_circle',
     })
 
@@ -2072,15 +2115,19 @@ const quickAddSchedule = async () => {
   } catch (error) {
     console.error('❌ Error:', error.response?.data || error.message)
 
-    let errorMsg = 'Failed to add shift'
+    let errorMsg = 'Failed to add shifts'
 
     if (error.response?.data) {
       const data = error.response.data
       if (data.detail) {
         errorMsg = data.detail
       } else if (data.results && data.results.length === 0) {
-        errorMsg =
-          'Unable to create schedule. This may be due to: invalid date, site/shift type not found, or a scheduling conflict.'
+        errorMsg = 'Unable to create schedules. Check for conflicts or invalid data.'
+      } else if (typeof data === 'object') {
+        const errors = Object.entries(data)
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+          .join('; ')
+        if (errors) errorMsg = errors
       }
     }
 
@@ -2203,11 +2250,23 @@ const openQuickAddModal = (userId, dayIdx) => {
   quickAdd.value = {
     userId,
     day: dayIdx,
-    site: null,
-    shiftType: null,
+    shifts: [
+      {
+        site: null,
+        shiftType: null,
+      },
+    ],
   }
   showQuickAddModal.value = true
 }
+
+const addShiftRow = () => {
+  quickAdd.value.shifts.push({
+    site: null,
+    shiftType: null,
+  })
+}
+
 const closeQuickAddModal = () => {
   showQuickAddModal.value = false
   quickAdd.value = {
