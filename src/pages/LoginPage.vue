@@ -100,8 +100,8 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
-import axios from 'axios'
-import { useAuthStore } from 'src/boot/auth'
+import { api } from 'boot/axios' // Changed from 'import axios from axios'
+import { useAuthStore } from 'boot/auth' // Fixed path
 
 const router = useRouter()
 const route = useRoute()
@@ -149,10 +149,9 @@ const handleLogin = async () => {
       password: formData.value.password,
     }
 
-    const loginResponse = await axios.post(
-      'https://staging.wageyapp.com/api/employee/login/',
-      loginPayload,
-    )
+    const loginResponse = await api.post('/api/employee/login/', loginPayload)
+
+    console.log('Login response:', loginResponse.data) // DEBUG
 
     const { access, refresh } = loginResponse.data
     if (!access) {
@@ -164,12 +163,11 @@ const handleLogin = async () => {
     localStorage.setItem('access_token', access)
     localStorage.setItem('refresh_token', refresh)
 
-    const companiesResponse = await axios.get(
-      'https://staging.wageyapp.com/user/current-user-companies/',
-      {
-        headers: { Authorization: `Bearer ${access}` },
-      },
-    )
+    const companiesResponse = await api.get('/user/current-user-companies/', {
+      headers: { Authorization: `Bearer ${access}` },
+    })
+
+    console.log('Companies response:', companiesResponse.data) // DEBUG
 
     const companiesData = companiesResponse.data
 
@@ -179,12 +177,17 @@ const handleLogin = async () => {
     }
 
     const firstCompany = companiesData[0]
+    console.log('First company:', firstCompany) // DEBUG
+
     const companyId = firstCompany.company?.id || firstCompany.id
     const accountUuid = firstCompany.id
     const userId = firstCompany.user?.id
 
+    console.log('Extracted values:', { companyId, accountUuid, userId }) // DEBUG
+
     if (!accountUuid) {
       showErrorNotification('Failed to get account UUID after login.')
+      console.error('Missing accountUuid. firstCompany data:', firstCompany) // DEBUG
       return
     }
 
@@ -205,6 +208,7 @@ const handleLogin = async () => {
   } catch (error) {
     console.error('Login error:', error)
     if (error.response) {
+      console.error('Error response data:', error.response.data) // DEBUG
       const errorMessage =
         error.response.data?.detail || error.response.data?.message || 'Invalid login credentials.'
       showErrorNotification(errorMessage)
