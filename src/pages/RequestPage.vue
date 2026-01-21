@@ -159,7 +159,11 @@
                 {{ props.row.status }}
               </div>
             </q-td>
-
+            <q-td key="reason" :props="props" class="reason-cell">
+              <div class="reason-text">
+                {{ props.row.reason || 'No reason provided' }}
+              </div>
+            </q-td>
             <q-td key="actions" :props="props" class="actions-cell">
               <div class="action-buttons">
                 <q-btn
@@ -354,6 +358,7 @@ const tableColumns = [
   { name: 'employeeName', label: 'Employee', align: 'left', field: 'employeeName' },
   { name: 'type', label: 'Type', align: 'left', field: 'type' },
   { name: 'dates', label: 'Period', align: 'left', field: 'startDate' },
+  { name: 'reason', label: 'Reason', align: 'left', field: 'reason' },
   { name: 'status', label: 'Status', align: 'left', field: 'status' },
   { name: 'actions', label: '', align: 'right' },
 ]
@@ -485,23 +490,50 @@ function openDetails(request) {
 }
 
 // ✅ approve request
+// ✅ approve request
 const approveRequest = async (request) => {
   try {
     actionLoading.value = `approve-${request.id}`
 
     const token = localStorage.getItem('access_token')
-    const approverUUID = localStorage.getItem('userUUID')
 
-    if (!token) throw new Error('No access token found')
-    if (!approverUUID) throw new Error('User UUID missing in localStorage')
+    // ✅ FIX: Get UUID from the correct localStorage key
+    let approverUUID = localStorage.getItem('account_uuid')
+
+    // ✅ Fallback: Try to get from 'user' object if account_uuid doesn't exist
+    if (!approverUUID) {
+      const storedUser = localStorage.getItem('user')
+      if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
+        try {
+          const user = JSON.parse(storedUser)
+          approverUUID = user?.uuid
+        } catch (e) {
+          console.warn('Failed to parse user from localStorage:', e)
+        }
+      }
+    }
+
+    if (!token) {
+      throw new Error('No access token found')
+    }
+
+    if (!approverUUID) {
+      throw new Error('User UUID not found. Please log in again.')
+    }
+
+    console.log('🔑 Using approver UUID:', approverUUID)
 
     const payload = {
-      type: request.type, // Include the request type
+      type: request.type,
       status: 'approved',
       action: 'approve',
     }
 
-    // Use the attendance endpoint, not organization/swap-requests
+    console.log('📤 Approving request:', {
+      url: `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
+      payload,
+    })
+
     await axios.patch(
       `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
       payload,
@@ -510,6 +542,7 @@ const approveRequest = async (request) => {
       },
     )
 
+    // Update local state
     const index = requests.value.findIndex((r) => r.id === request.id)
     if (index !== -1) {
       requests.value[index].status = 'approved'
@@ -523,12 +556,20 @@ const approveRequest = async (request) => {
       message: 'Request approved successfully',
       icon: 'check_circle',
     })
+
+    // Close details dialog if open
+    if (showDetails.value) {
+      showDetails.value = false
+    }
   } catch (e) {
-    console.error('Error approving request:', e.response?.data || e.message)
+    console.error('❌ Error approving request:', e.response?.data || e.message)
 
     const errorMessage = Array.isArray(e.response?.data)
       ? e.response.data[0]
-      : e.response?.data?.message || 'Failed to approve request. Please try again.'
+      : e.response?.data?.message ||
+        e.response?.data?.detail ||
+        e.message ||
+        'Failed to approve request. Please try again.'
 
     $q.notify({
       type: 'negative',
@@ -546,13 +587,42 @@ const rejectRequest = async (request) => {
 
     const token = localStorage.getItem('access_token')
 
-    if (!token) throw new Error('No access token found')
+    // ✅ FIX: Get UUID from the correct localStorage key
+    let approverUUID = localStorage.getItem('account_uuid')
+
+    // ✅ Fallback: Try to get from 'user' object if account_uuid doesn't exist
+    if (!approverUUID) {
+      const storedUser = localStorage.getItem('user')
+      if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
+        try {
+          const user = JSON.parse(storedUser)
+          approverUUID = user?.uuid
+        } catch (e) {
+          console.warn('Failed to parse user from localStorage:', e)
+        }
+      }
+    }
+
+    if (!token) {
+      throw new Error('No access token found')
+    }
+
+    if (!approverUUID) {
+      throw new Error('User UUID not found. Please log in again.')
+    }
+
+    console.log('🔑 Using approver UUID:', approverUUID)
 
     const payload = {
       type: request.type,
       status: 'rejected',
       action: 'reject',
     }
+
+    console.log('📤 Rejecting request:', {
+      url: `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
+      payload,
+    })
 
     await axios.patch(
       `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
@@ -562,6 +632,7 @@ const rejectRequest = async (request) => {
       },
     )
 
+    // Update local state
     const index = requests.value.findIndex((r) => r.id === request.id)
     if (index !== -1) {
       requests.value[index].status = 'rejected'
@@ -575,12 +646,20 @@ const rejectRequest = async (request) => {
       message: 'Request rejected successfully',
       icon: 'cancel',
     })
+
+    // Close details dialog if open
+    if (showDetails.value) {
+      showDetails.value = false
+    }
   } catch (e) {
-    console.error('Error rejecting request:', e.response?.data || e.message)
+    console.error('❌ Error rejecting request:', e.response?.data || e.message)
 
     const errorMessage = Array.isArray(e.response?.data)
       ? e.response.data[0]
-      : e.response?.data?.message || 'Failed to reject request. Please try again.'
+      : e.response?.data?.message ||
+        e.response?.data?.detail ||
+        e.message ||
+        'Failed to reject request. Please try again.'
 
     $q.notify({
       type: 'negative',
