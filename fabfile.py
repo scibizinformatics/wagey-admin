@@ -34,16 +34,17 @@ def sync(c):
         '.',
         '/root/wagey-admin',
         exclude = [
-            '--exclude=.git',
-            '--exclude=.venv',
-            '--exclude=.DS_Store',
-            '--exclude=.env',
-            '--exclude=__pycache__',
-            '/node_modules',
-            '--exclude=dist',
-            '--exclude=.quasar',
-            '--exclude=.vscode',
-            '--exclude=.idea',
+            # patchwork.transfers.rsync expects exclude *patterns* (it adds --exclude=...)
+            '.git/',
+            '.venv/',
+            '.DS_Store',
+            '.env',
+            '__pycache__/',
+            'node_modules/',
+            'dist/',
+            '.quasar/',
+            '.vscode/',
+            '.idea/',
     ]
     )
     
