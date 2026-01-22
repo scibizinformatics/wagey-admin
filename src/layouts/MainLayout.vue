@@ -37,7 +37,7 @@
       :breakpoint="768"
     >
       <!-- Sidebar Header -->
-      <div class="sidebar-header q-pa-lg">
+      <div class="sidebar-header q-pa-md">
         <div class="row items-center no-wrap">
           <div class="sidebar-logo">
             <img :src="logo" alt="Wagey Logo" />
@@ -68,7 +68,7 @@
           @update:model-value="onCompanyChange"
         >
           <template v-slot:prepend>
-            <q-icon name="business" />
+            <q-icon name="business" size="19px" />
           </template>
           <template v-slot:no-option>
             <q-item>
@@ -91,7 +91,7 @@
             :class="{ 'nav-item-active': $route.path === link.to }"
           >
             <q-item-section avatar class="nav-icon">
-              <q-icon :name="link.icon" size="20px" />
+              <q-icon :name="link.icon" size="19px" />
             </q-item-section>
             <q-item-section class="nav-label">
               {{ link.label }}
@@ -105,7 +105,7 @@
         <q-list class="nav-list">
           <q-item clickable class="nav-item" @click="logout">
             <q-item-section avatar class="nav-icon">
-              <q-icon name="logout" size="20px" />
+              <q-icon name="logout" size="19px" />
             </q-item-section>
             <q-item-section class="nav-label">Sign Out</q-item-section>
           </q-item>
@@ -151,10 +151,10 @@ export default {
 
   computed: {
     drawerWidth() {
-      if (this.$q.screen.width < 768) return 260
-      if (this.$q.screen.width < 1024) return 240
-      if (this.$q.screen.width < 1440) return 260
-      return 280
+      if (this.$q.screen.width < 768) return 243
+      if (this.$q.screen.width < 1024) return 223
+      if (this.$q.screen.width < 1440) return 243
+      return 253
     },
   },
 
@@ -288,14 +288,14 @@ export default {
 .sidebar-header {
   border-bottom: 1px solid #e2e8f0;
   background: white;
-  margin: 16px;
+  margin: 14px;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .sidebar-logo {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -308,7 +308,7 @@ export default {
 }
 
 .sidebar-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #1e293b;
   letter-spacing: -0.025em;
@@ -316,7 +316,7 @@ export default {
 
 /* Company Selector Styling */
 .company-selector {
-  margin: 16px 0;
+  margin: 14px 0;
   padding-top: 8px;
   border-bottom: 1px solid #e2e8f0;
 }
@@ -329,11 +329,16 @@ export default {
 .company-dropdown {
   background: white;
   border-radius: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
-.company-dropdown .q-field__control {
+.company-dropdown :deep(.q-field__control) {
   border-radius: 8px;
+  min-height: 40px;
+}
+
+.company-dropdown :deep(.q-field__native) {
+  font-size: 13px;
 }
 
 .company-dropdown .q-field__control:hover {
@@ -344,7 +349,7 @@ export default {
 .sidebar-nav {
   flex: 1;
   padding-top: 8px;
-  padding-bottom: 20px;
+  padding-bottom: 16px;
 }
 
 .nav-list {
@@ -353,9 +358,9 @@ export default {
 
 .nav-item {
   margin-bottom: 4px;
-  border-radius: 12px;
-  min-height: 48px;
-  padding: 12px 16px;
+  border-radius: 11px;
+  min-height: 44px;
+  padding: 10px 14px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   color: #64748b;
@@ -380,12 +385,12 @@ export default {
 }
 
 .nav-icon {
-  min-width: 40px;
+  min-width: 36px;
 }
 
 .nav-label {
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: -0.01em;
 }
 
@@ -416,35 +421,45 @@ export default {
   }
 
   .modern-sidebar {
-    width: 260px;
+    width: 243px;
   }
 
   .sidebar-header {
     margin: 12px;
-    padding: 12px 16px;
+    padding: 12px 14px;
+  }
+
+  .sidebar-logo {
+    width: 32px;
+    height: 32px;
   }
 
   .sidebar-title {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .company-selector {
     margin: 12px 0;
-    padding: 0 8px;
+    padding: 0 10px;
   }
 
   .sidebar-nav {
-    padding: 0 8px;
+    padding: 0 10px;
   }
 
   .nav-item {
-    min-height: 44px;
-    padding: 10px 12px;
-    margin-bottom: 2px;
+    min-height: 42px;
+    padding: 9px 12px;
+    margin-bottom: 3px;
+    border-radius: 10px;
   }
 
   .nav-label {
-    font-size: 13px;
+    font-size: 12.5px;
+  }
+
+  .nav-icon {
+    min-width: 34px;
   }
 
   .email-text {
@@ -452,27 +467,33 @@ export default {
   }
 
   .header-bar {
-    padding: 8px 12px;
+    padding: 10px 14px;
   }
 }
 
 /* Tablet: 768px - 1023px */
 @media (min-width: 768px) and (max-width: 1023px) {
   .modern-sidebar {
-    width: 240px;
+    width: 223px;
   }
 
   .sidebar-header {
     margin: 12px;
-    padding: 14px;
+    padding: 12px;
+  }
+
+  .sidebar-logo {
+    width: 34px;
+    height: 34px;
   }
 
   .sidebar-title {
-    font-size: 18px;
+    font-size: 17px;
   }
 
   .company-selector {
     padding: 0 10px;
+    margin: 12px 0;
   }
 
   .sidebar-nav {
@@ -480,23 +501,54 @@ export default {
   }
 
   .nav-item {
-    min-height: 46px;
-    padding: 10px 14px;
+    min-height: 42px;
+    padding: 9px 12px;
+    border-radius: 10px;
   }
 
   .nav-label {
-    font-size: 13.5px;
+    font-size: 12.5px;
   }
 
   .nav-icon {
-    min-width: 36px;
+    min-width: 34px;
   }
 }
 
 /* Small Desktop: 1024px - 1439px */
 @media (min-width: 1024px) and (max-width: 1439px) {
   .modern-sidebar {
-    width: 260px;
+    width: 243px;
+  }
+
+  .sidebar-header {
+    margin: 14px;
+    padding: 14px;
+  }
+
+  .sidebar-logo {
+    width: 36px;
+    height: 36px;
+  }
+
+  .sidebar-title {
+    font-size: 18px;
+  }
+
+  .nav-item {
+    min-height: 43px;
+    padding: 10px 13px;
+  }
+
+  .nav-label {
+    font-size: 13px;
+  }
+}
+
+/* Large Desktop: 1440px+ */
+@media (min-width: 1440px) {
+  .modern-sidebar {
+    width: 253px;
   }
 
   .sidebar-header {
@@ -504,38 +556,22 @@ export default {
     padding: 16px;
   }
 
-  .sidebar-title {
-    font-size: 19px;
-  }
-
-  .nav-item {
-    min-height: 47px;
-    padding: 11px 15px;
-  }
-}
-
-/* Large Desktop: 1440px+ */
-@media (min-width: 1440px) {
-  .modern-sidebar {
-    width: 280px;
-  }
-
-  .sidebar-header {
-    margin: 16px;
-    padding: 20px;
+  .sidebar-logo {
+    width: 36px;
+    height: 36px;
   }
 
   .sidebar-title {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .nav-item {
-    min-height: 48px;
-    padding: 12px 16px;
+    min-height: 44px;
+    padding: 10px 14px;
   }
 
   .nav-label {
-    font-size: 14px;
+    font-size: 13px;
   }
 }
 
