@@ -25,7 +25,7 @@
                 hide-bottom-space
               >
                 <template v-slot:prepend>
-                  <q-icon name="email" size="20px" class="input-icon" />
+                  <q-icon name="email" size="18px" class="input-icon" />
                 </template>
               </q-input>
             </div>
@@ -44,7 +44,7 @@
                 hide-bottom-space
               >
                 <template v-slot:prepend>
-                  <q-icon name="lock" size="20px" class="input-icon" />
+                  <q-icon name="lock" size="18px" class="input-icon" />
                 </template>
                 <template v-slot:append>
                   <q-icon
@@ -100,8 +100,8 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { api } from 'boot/axios' // Changed from 'import axios from axios'
-import { useAuthStore } from 'boot/auth' // Fixed path
+import { api } from 'boot/axios'
+import { useAuthStore } from 'boot/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -151,7 +151,7 @@ const handleLogin = async () => {
 
     const loginResponse = await api.post('/api/employee/login/', loginPayload)
 
-    console.log('Login response:', loginResponse.data) // DEBUG
+    console.log('Login response:', loginResponse.data)
 
     const { access, refresh } = loginResponse.data
     if (!access) {
@@ -167,7 +167,7 @@ const handleLogin = async () => {
       headers: { Authorization: `Bearer ${access}` },
     })
 
-    console.log('Companies response:', companiesResponse.data) // DEBUG
+    console.log('Companies response:', companiesResponse.data)
 
     const companiesData = companiesResponse.data
 
@@ -177,17 +177,17 @@ const handleLogin = async () => {
     }
 
     const firstCompany = companiesData[0]
-    console.log('First company:', firstCompany) // DEBUG
+    console.log('First company:', firstCompany)
 
     const companyId = firstCompany.company?.id || firstCompany.id
     const accountUuid = firstCompany.id
     const userId = firstCompany.user?.id
 
-    console.log('Extracted values:', { companyId, accountUuid, userId }) // DEBUG
+    console.log('Extracted values:', { companyId, accountUuid, userId })
 
     if (!accountUuid) {
       showErrorNotification('Failed to get account UUID after login.')
-      console.error('Missing accountUuid. firstCompany data:', firstCompany) // DEBUG
+      console.error('Missing accountUuid. firstCompany data:', firstCompany)
       return
     }
 
@@ -208,7 +208,7 @@ const handleLogin = async () => {
   } catch (error) {
     console.error('Login error:', error)
     if (error.response) {
-      console.error('Error response data:', error.response.data) // DEBUG
+      console.error('Error response data:', error.response.data)
       const errorMessage =
         error.response.data?.detail || error.response.data?.message || 'Invalid login credentials.'
       showErrorNotification(errorMessage)
@@ -230,59 +230,50 @@ const goToForgotPassword = () => router.push('/forgot-password')
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-  padding: 1rem;
+  padding: 0.75rem;
 }
 
 .brand-logo {
-  height: 45px;
-  width: 45px;
+  height: 36px;
+  width: 36px;
 
   @media (min-width: 768px) {
-    height: 50px;
-    width: 50px;
+    height: 40px;
+    width: 40px;
   }
 
   @media (min-width: 1024px) {
-    height: 55px;
-    width: 55px;
-  }
-
-  @media (min-width: 1440px) {
-    height: 60px;
-    width: 60px;
+    height: 42px;
+    width: 42px;
   }
 }
 
 .auth-container {
   display: flex;
   width: 100%;
-  max-width: 400px;
-  min-height: 500px;
+  max-width: 360px;
+  min-height: 440px;
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   flex-direction: column;
 
   @media (min-width: 768px) {
     flex-direction: row;
-    max-width: 750px;
-    min-height: 520px;
-    border-radius: 20px;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.12);
+    max-width: 680px;
+    min-height: 460px;
+    border-radius: 16px;
   }
 
   @media (min-width: 1024px) {
-    max-width: 900px;
-    min-height: 560px;
-    border-radius: 22px;
+    max-width: 780px;
+    min-height: 480px;
   }
 
   @media (min-width: 1440px) {
-    max-width: 1100px;
-    min-height: 600px;
-    border-radius: 24px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    max-width: 880px;
+    min-height: 500px;
   }
 }
 
@@ -292,19 +283,19 @@ const goToForgotPassword = () => router.push('/forgot-password')
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem 1.5rem;
+  padding: 1.5rem 1.25rem;
   background: white;
 
   @media (min-width: 768px) {
-    padding: 2.5rem 2rem;
+    padding: 2rem 1.5rem;
   }
 
   @media (min-width: 1024px) {
-    padding: 3rem 2.5rem;
+    padding: 2.25rem 2rem;
   }
 
   @media (min-width: 1440px) {
-    padding: 3.5rem 3rem;
+    padding: 2.5rem 2.25rem;
   }
 }
 
@@ -313,71 +304,63 @@ const goToForgotPassword = () => router.push('/forgot-password')
   max-width: 100%;
 
   @media (min-width: 768px) {
-    max-width: 340px;
+    max-width: 300px;
   }
 
   @media (min-width: 1024px) {
-    max-width: 380px;
+    max-width: 320px;
   }
 
   @media (min-width: 1440px) {
-    max-width: 420px;
+    max-width: 340px;
   }
 }
 
 .form-header {
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 
   @media (min-width: 768px) {
-    margin-bottom: 1.75rem;
+    margin-bottom: 1.5rem;
   }
 
   @media (min-width: 1024px) {
-    margin-bottom: 2rem;
-  }
-
-  @media (min-width: 1440px) {
-    margin-bottom: 2.25rem;
+    margin-bottom: 1.75rem;
   }
 
   .form-title {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     font-weight: 700;
     color: #1a1a1a;
-    margin: 0.75rem 0 0.5rem 0;
-    letter-spacing: -0.5px;
+    margin: 0.5rem 0 0.35rem 0;
+    letter-spacing: -0.3px;
 
     @media (min-width: 768px) {
-      font-size: 1.75rem;
-      margin: 1rem 0 0.5rem 0;
+      font-size: 1.5rem;
+      margin: 0.65rem 0 0.4rem 0;
     }
 
     @media (min-width: 1024px) {
-      font-size: 2rem;
+      font-size: 1.65rem;
     }
 
     @media (min-width: 1440px) {
-      font-size: 2.25rem;
+      font-size: 1.75rem;
     }
   }
 
   .form-subtitle {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #757575;
     margin: 0;
     font-weight: 400;
 
     @media (min-width: 768px) {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
     }
 
     @media (min-width: 1024px) {
-      font-size: 0.95rem;
-    }
-
-    @media (min-width: 1440px) {
-      font-size: 1rem;
+      font-size: 0.875rem;
     }
   }
 }
@@ -385,48 +368,48 @@ const goToForgotPassword = () => router.push('/forgot-password')
 // Form Inputs
 .login-form {
   .input-group {
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
 
     @media (min-width: 768px) {
-      margin-bottom: 1.25rem;
+      margin-bottom: 1rem;
     }
 
     @media (min-width: 1440px) {
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.15rem;
     }
 
     .input-label {
       display: block;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 600;
       color: #424242;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
 
       @media (min-width: 768px) {
-        font-size: 0.9rem;
+        font-size: 0.825rem;
       }
 
       @media (min-width: 1440px) {
-        font-size: 0.95rem;
+        font-size: 0.85rem;
       }
     }
   }
 
   .custom-input {
     :deep(.q-field__control) {
-      border-radius: 10px;
-      height: 46px;
+      border-radius: 8px;
+      height: 42px;
       background: #f8f9fa;
       border: 2px solid transparent;
 
       @media (min-width: 768px) {
-        height: 50px;
-        border-radius: 12px;
+        height: 44px;
+        border-radius: 9px;
       }
 
       @media (min-width: 1440px) {
-        height: 54px;
-        border-radius: 14px;
+        height: 46px;
+        border-radius: 10px;
       }
 
       &:before {
@@ -442,26 +425,26 @@ const goToForgotPassword = () => router.push('/forgot-password')
       .q-field__control {
         background: white;
         border-color: #667eea;
-        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.08);
       }
     }
 
     :deep(.q-field__native) {
-      padding-left: 1rem;
-      font-size: 0.9rem;
+      padding-left: 0.85rem;
+      font-size: 0.85rem;
       color: #1a1a1a;
 
       @media (min-width: 768px) {
-        font-size: 0.95rem;
+        font-size: 0.875rem;
       }
 
       @media (min-width: 1440px) {
-        font-size: 1rem;
+        font-size: 0.9rem;
       }
     }
 
     :deep(.q-field__prepend) {
-      padding-left: 1rem;
+      padding-left: 0.85rem;
 
       .input-icon {
         color: #9e9e9e;
@@ -469,7 +452,7 @@ const goToForgotPassword = () => router.push('/forgot-password')
     }
 
     :deep(.q-field__append) {
-      padding-right: 1rem;
+      padding-right: 0.85rem;
 
       .toggle-password {
         color: #9e9e9e;
@@ -482,49 +465,49 @@ const goToForgotPassword = () => router.push('/forgot-password')
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
 
   @media (min-width: 768px) {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.15rem;
     flex-wrap: nowrap;
   }
 
   @media (min-width: 1440px) {
-    margin-bottom: 2rem;
+    margin-bottom: 1.35rem;
   }
 
   .remember-checkbox {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #616161;
 
     @media (min-width: 768px) {
-      font-size: 0.9rem;
+      font-size: 0.825rem;
     }
 
     @media (min-width: 1440px) {
-      font-size: 0.95rem;
+      font-size: 0.85rem;
     }
 
     :deep(.q-checkbox__bg) {
-      border-radius: 6px;
+      border-radius: 5px;
     }
   }
 
   .forgot-link {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #757575;
     text-decoration: none;
     font-weight: 500;
     transition: color 0.2s ease;
 
     @media (min-width: 768px) {
-      font-size: 0.9rem;
+      font-size: 0.825rem;
     }
 
     @media (min-width: 1440px) {
-      font-size: 0.95rem;
+      font-size: 0.85rem;
     }
 
     &:hover {
@@ -535,30 +518,30 @@ const goToForgotPassword = () => router.push('/forgot-password')
 
 .submit-btn {
   width: 100%;
-  height: 46px;
+  height: 42px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  border-radius: 10px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
   transition: all 0.3s ease;
 
   @media (min-width: 768px) {
-    height: 50px;
-    border-radius: 12px;
-    font-size: 0.95rem;
+    height: 44px;
+    border-radius: 9px;
+    font-size: 0.875rem;
   }
 
   @media (min-width: 1440px) {
-    height: 54px;
-    font-size: 1rem;
-    border-radius: 14px;
+    height: 46px;
+    font-size: 0.9rem;
+    border-radius: 10px;
   }
 
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 24px rgba(102, 126, 234, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.35);
   }
 
   &:active {
@@ -577,17 +560,17 @@ const goToForgotPassword = () => router.push('/forgot-password')
     flex: 1;
     align-items: center;
     justify-content: center;
-    padding: 2.5rem 2rem;
+    padding: 2rem 1.5rem;
   }
 
   @media (min-width: 1024px) {
     flex: 1.1;
-    padding: 3rem 2.5rem;
+    padding: 2.25rem 2rem;
   }
 
   @media (min-width: 1440px) {
     flex: 1.2;
-    padding: 4rem 3rem;
+    padding: 2.5rem 2.25rem;
   }
 }
 
@@ -651,45 +634,45 @@ const goToForgotPassword = () => router.push('/forgot-password')
   max-width: 100%;
 
   @media (min-width: 1024px) {
-    max-width: 400px;
+    max-width: 340px;
   }
 
   @media (min-width: 1440px) {
-    max-width: 450px;
+    max-width: 380px;
   }
 
   .welcome-title {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: white;
-    margin: 0 0 1rem 0;
+    margin: 0 0 0.75rem 0;
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     line-height: 1.3;
 
     @media (min-width: 1024px) {
-      font-size: 2.25rem;
-      margin: 0 0 1.25rem 0;
+      font-size: 1.85rem;
+      margin: 0 0 0.85rem 0;
     }
 
     @media (min-width: 1440px) {
-      font-size: 2.75rem;
-      margin: 0 0 1.5rem 0;
+      font-size: 2.15rem;
+      margin: 0 0 1rem 0;
     }
   }
 
   .welcome-text {
-    font-size: 0.95rem;
+    font-size: 0.875rem;
     color: rgba(255, 255, 255, 0.9);
     margin: 0;
     font-weight: 400;
     line-height: 1.6;
 
     @media (min-width: 1024px) {
-      font-size: 1.05rem;
+      font-size: 0.925rem;
     }
 
     @media (min-width: 1440px) {
-      font-size: 1.15rem;
+      font-size: 1rem;
     }
   }
 }
