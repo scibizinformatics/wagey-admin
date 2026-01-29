@@ -151,10 +151,12 @@ export default {
 
   computed: {
     drawerWidth() {
-      if (this.$q.screen.width < 768) return 260
-      if (this.$q.screen.width < 1024) return 240
-      if (this.$q.screen.width < 1440) return 260
-      return 280
+      if (this.$q.screen.width < 640) return 240
+      if (this.$q.screen.width < 768) return 248
+      if (this.$q.screen.width < 1024) return 224
+      if (this.$q.screen.width < 1280) return 240
+      if (this.$q.screen.width < 1440) return 248
+      return 256
     },
   },
 
@@ -168,7 +170,7 @@ export default {
       this.loadingCompanies = true
       try {
         const token = localStorage.getItem('access_token')
-        const res = await api.get('/organization/companies/', {
+        const res = await api.get('https://staging.wageyapp.com/organization/companies/', {
           headers: { Authorization: `Bearer ${token}` },
         })
         console.log('Companies response:', res.data)
@@ -264,19 +266,19 @@ export default {
 <style scoped>
 /* Hide Scrollbar Globally */
 :deep(*) {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 :deep(*::-webkit-scrollbar) {
-  display: none; /* Chrome, Safari, Opera */
+  display: none;
 }
 
 /* Modern Sidebar Styling */
 .modern-sidebar {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border: none;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -288,17 +290,19 @@ export default {
 .sidebar-header {
   border-bottom: 1px solid #e2e8f0;
   background: white;
-  margin: 16px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin: 10px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  padding: 12px 14px !important;
 }
 
 .sidebar-logo {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .sidebar-logo img {
@@ -308,43 +312,54 @@ export default {
 }
 
 .sidebar-title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   color: #1e293b;
   letter-spacing: -0.025em;
+  white-space: nowrap;
 }
 
 /* Company Selector Styling */
 .company-selector {
-  margin: 16px 0;
-  padding-top: 8px;
+  margin: 10px 0;
+  padding: 0 10px 10px 10px;
   border-bottom: 1px solid #e2e8f0;
 }
 
 .selector-label {
   font-weight: 500;
-  padding-left: 4px;
+  padding-left: 2px;
+}
+
+.selector-label .text-caption {
+  font-size: 11px;
 }
 
 .company-dropdown {
   background: white;
-  border-radius: 8px;
-  margin-bottom: 16px;
+  border-radius: 7px;
+  margin-bottom: 10px;
 }
 
-.company-dropdown .q-field__control {
-  border-radius: 8px;
+.company-dropdown :deep(.q-field__control) {
+  border-radius: 7px;
+  min-height: 38px;
+  padding: 0 10px;
 }
 
-.company-dropdown .q-field__control:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.company-dropdown :deep(.q-field__native) {
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+.company-dropdown :deep(.q-field__control:hover) {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 /* Navigation Styling */
 .sidebar-nav {
   flex: 1;
-  padding-top: 8px;
-  padding-bottom: 20px;
+  padding: 6px 10px 16px 10px;
 }
 
 .nav-list {
@@ -352,10 +367,10 @@ export default {
 }
 
 .nav-item {
-  margin-bottom: 4px;
-  border-radius: 12px;
-  min-height: 48px;
-  padding: 12px 16px;
+  margin-bottom: 3px;
+  border-radius: 9px;
+  min-height: 42px;
+  padding: 9px 12px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   color: #64748b;
@@ -370,7 +385,7 @@ export default {
 .nav-item-active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.35);
 }
 
 .nav-item-active:hover {
@@ -380,13 +395,18 @@ export default {
 }
 
 .nav-icon {
-  min-width: 40px;
+  min-width: 34px;
+}
+
+.nav-icon :deep(.q-icon) {
+  font-size: 18px;
 }
 
 .nav-label {
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
 /* Header bar styling */
@@ -404,47 +424,69 @@ export default {
 }
 
 .q-item__section--avatar {
-  padding-right: 12px;
+  padding-right: 10px;
 }
 
 /* Responsive Breakpoints */
 
-/* Mobile: < 768px */
-@media (max-width: 767px) {
+/* Extra Small Mobile: < 640px */
+@media (max-width: 639px) {
   .mobile-menu-btn {
     display: inline-flex;
   }
 
-  .modern-sidebar {
-    width: 260px;
+  .sidebar-header {
+    margin: 8px;
+    padding: 10px 12px !important;
   }
 
-  .sidebar-header {
-    margin: 12px;
-    padding: 12px 16px;
+  .sidebar-logo {
+    width: 30px;
+    height: 30px;
   }
 
   .sidebar-title {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .company-selector {
-    margin: 12px 0;
-    padding: 0 8px;
+    margin: 8px 0;
+    padding: 0 8px 8px 8px;
+  }
+
+  .company-dropdown :deep(.q-field__control) {
+    min-height: 36px;
+  }
+
+  .company-dropdown :deep(.q-field__native) {
+    font-size: 12px;
+  }
+
+  .selector-label .text-caption {
+    font-size: 10.5px;
   }
 
   .sidebar-nav {
-    padding: 0 8px;
+    padding: 4px 8px 14px 8px;
   }
 
   .nav-item {
-    min-height: 44px;
-    padding: 10px 12px;
+    min-height: 40px;
+    padding: 8px 10px;
     margin-bottom: 2px;
+    border-radius: 8px;
   }
 
   .nav-label {
-    font-size: 13px;
+    font-size: 12.5px;
+  }
+
+  .nav-icon {
+    min-width: 32px;
+  }
+
+  .nav-icon :deep(.q-icon) {
+    font-size: 17px;
   }
 
   .email-text {
@@ -456,86 +498,200 @@ export default {
   }
 }
 
-/* Tablet: 768px - 1023px */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .modern-sidebar {
-    width: 240px;
+/* Small Mobile: 640px - 767px */
+@media (min-width: 640px) and (max-width: 767px) {
+  .mobile-menu-btn {
+    display: inline-flex;
   }
 
   .sidebar-header {
-    margin: 12px;
-    padding: 14px;
+    margin: 9px;
+    padding: 11px 13px !important;
+  }
+
+  .sidebar-logo {
+    width: 32px;
+    height: 32px;
   }
 
   .sidebar-title {
-    font-size: 18px;
+    font-size: 16.5px;
   }
 
   .company-selector {
-    padding: 0 10px;
+    padding: 0 9px 9px 9px;
   }
 
-  .sidebar-nav {
-    padding: 0 10px;
+  .company-dropdown :deep(.q-field__control) {
+    min-height: 37px;
   }
 
   .nav-item {
-    min-height: 46px;
-    padding: 10px 14px;
+    min-height: 41px;
+    padding: 8px 11px;
+    border-radius: 8px;
   }
 
   .nav-label {
-    font-size: 13.5px;
+    font-size: 12.75px;
   }
 
   .nav-icon {
-    min-width: 36px;
+    min-width: 33px;
+  }
+
+  .email-text {
+    display: none;
   }
 }
 
-/* Small Desktop: 1024px - 1439px */
-@media (min-width: 1024px) and (max-width: 1439px) {
-  .modern-sidebar {
-    width: 260px;
+/* Tablet: 768px - 1023px */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .sidebar-header {
+    margin: 9px;
+    padding: 10px 12px !important;
   }
 
-  .sidebar-header {
-    margin: 14px;
-    padding: 16px;
+  .sidebar-logo {
+    width: 32px;
+    height: 32px;
   }
 
   .sidebar-title {
-    font-size: 19px;
+    font-size: 16px;
+  }
+
+  .company-selector {
+    padding: 0 8px 9px 8px;
+  }
+
+  .selector-label .text-caption {
+    font-size: 10.5px;
+  }
+
+  .company-dropdown :deep(.q-field__control) {
+    min-height: 36px;
+  }
+
+  .company-dropdown :deep(.q-field__native) {
+    font-size: 12.5px;
+  }
+
+  .sidebar-nav {
+    padding: 5px 8px 15px 8px;
   }
 
   .nav-item {
-    min-height: 47px;
-    padding: 11px 15px;
+    min-height: 40px;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    border-radius: 8px;
+  }
+
+  .nav-label {
+    font-size: 12.5px;
+  }
+
+  .nav-icon {
+    min-width: 32px;
+  }
+
+  .nav-icon :deep(.q-icon) {
+    font-size: 17px;
+  }
+}
+
+/* Small Desktop: 1024px - 1279px */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .sidebar-header {
+    margin: 10px;
+    padding: 11px 13px !important;
+  }
+
+  .sidebar-logo {
+    width: 33px;
+    height: 33px;
+  }
+
+  .sidebar-title {
+    font-size: 16.5px;
+  }
+
+  .company-selector {
+    padding: 0 9px 10px 9px;
+  }
+
+  .company-dropdown :deep(.q-field__control) {
+    min-height: 37px;
+  }
+
+  .sidebar-nav {
+    padding: 5px 9px 16px 9px;
+  }
+
+  .nav-item {
+    min-height: 41px;
+    padding: 8.5px 11px;
+  }
+
+  .nav-label {
+    font-size: 12.75px;
+  }
+
+  .nav-icon {
+    min-width: 33px;
+  }
+}
+
+/* Medium Desktop: 1280px - 1439px */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .sidebar-header {
+    margin: 10px;
+    padding: 11px 13px !important;
+  }
+
+  .sidebar-logo {
+    width: 33px;
+    height: 33px;
+  }
+
+  .sidebar-title {
+    font-size: 16.75px;
+  }
+
+  .nav-item {
+    min-height: 41px;
+    padding: 9px 11px;
+  }
+
+  .nav-label {
+    font-size: 12.85px;
   }
 }
 
 /* Large Desktop: 1440px+ */
 @media (min-width: 1440px) {
-  .modern-sidebar {
-    width: 280px;
+  .sidebar-header {
+    margin: 10px;
+    padding: 12px 14px !important;
   }
 
-  .sidebar-header {
-    margin: 16px;
-    padding: 20px;
+  .sidebar-logo {
+    width: 34px;
+    height: 34px;
   }
 
   .sidebar-title {
-    font-size: 20px;
+    font-size: 17px;
   }
 
   .nav-item {
-    min-height: 48px;
-    padding: 12px 16px;
+    min-height: 42px;
+    padding: 9px 12px;
   }
 
   .nav-label {
-    font-size: 14px;
+    font-size: 13px;
   }
 }
 
