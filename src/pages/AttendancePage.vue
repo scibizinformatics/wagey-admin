@@ -194,6 +194,36 @@
             <h2 class="table-title">Attendance Overview</h2>
           </div>
           <div class="table-actions">
+            <q-select
+              dense
+              outlined
+              label="Filter by Site"
+              v-model="filters.site"
+              :options="siteOptions"
+              :loading="filtersLoading"
+              class="site-filter-dropdown"
+              clearable
+              map-options
+              emit-value
+              behavior="menu"
+              menu-anchor="bottom left"
+              menu-self="top left"
+              style="min-width: 180px"
+            >
+              <template v-slot:prepend>
+                <q-icon name="location_on" />
+              </template>
+            </q-select>
+
+            <q-btn
+              v-if="selected.length > 0"
+              color="negative"
+              icon="delete"
+              :label="`Delete ${selected.length} items`"
+              @click="confirmBatchDelete"
+              size="sm"
+              no-caps
+            />
             <q-btn
               v-if="selected.length > 0"
               color="negative"
@@ -855,6 +885,7 @@ const filters = ref({
   source: '',
   employee: '',
   business_owner: '',
+  site: '',
 })
 
 // Date range handling
@@ -979,7 +1010,9 @@ async function fetchEmployeeSchedule(employeeId, date) {
   try {
     console.log('🔍 Fetching schedule for:', { companyId: companyId.value, date })
 
-    const response = await api.get(`/organization/scheduled/${companyId.value}/${date}/`)
+    const response = await api.get(
+      `https://staging.wageyapp.com/organization/scheduled/${companyId.value}/${date}/`,
+    )
 
     console.log('✅ Schedule API Response:', response.data)
 
@@ -1144,17 +1177,29 @@ async function fetchAttendanceData(params = {}) {
 
   loading.value = true
   try {
-    const response = await api.get(
-      `https://staging.wageyapp.com/attendance/company/${companyId.value}/`,
-      {
-        params: {
-          page: pagination.value.page,
-          limit: pagination.value.rowsPerPage,
-          ...filters.value,
-          ...params,
-        },
+    // Build the URL with companyId
+    let url = `https://staging.wageyapp.com/attendance/company/${companyId.value}/`
+
+    // Add site filter to URL if selected
+    if (filters.value.site) {
+      url += `?site=${filters.value.site}`
+    }
+
+    console.log('🔍 Fetching attendance with URL:', url)
+
+    const response = await api.get(url, {
+      params: {
+        page: pagination.value.page,
+        limit: pagination.value.rowsPerPage,
+        // Spread other filters but exclude site since it's in the URL
+        date_from: filters.value.date_from,
+        date_to: filters.value.date_to,
+        source: filters.value.source,
+        employee: filters.value.employee,
+        business_owner: filters.value.business_owner,
+        ...params,
       },
-    )
+    })
 
     const data = Array.isArray(response.data) ? response.data : response.data.data
 
@@ -1187,6 +1232,8 @@ async function fetchAttendanceData(params = {}) {
     pagination.value.rowsNumber =
       response.data.total || response.data.meta?.total || attendanceData.value.length
 
+    console.log('✅ Attendance data loaded:', attendanceData.value.length, 'records')
+
     return response.data
   } catch (error) {
     console.error('Error fetching attendance data:', error)
@@ -1205,45 +1252,49 @@ async function fetchSites() {
   }
 
   console.log('🔍 Fetching sites for company:', companyId.value)
+  filtersLoading.value = true
 
   try {
-    const response = await api.get(`/organization/sites/${companyId.value}/`)
+    const response = await api.get('https://staging.wageyapp.com/organization/sites/', {
+      params: { company: companyId.value },
+    })
+
     console.log('✅ Sites API Response:', response.data)
 
-    let data = []
-    if (Array.isArray(response.data)) {
-      data = response.data
-    } else if (response.data.data) {
-      data = Array.isArray(response.data.data) ? response.data.data : [response.data.data]
-    } else if (response.data.results) {
-      data = Array.isArray(response.data.results) ? response.data.results : [response.data.results]
-    } else if (response.data.sites) {
-      data = Array.isArray(response.data.sites) ? response.data.sites : [response.data.sites]
-    } else if (response.data.id || response.data.name) {
-      data = [response.data]
-    }
+    // Handle response structure
+    const data = response.data.data || response.data || []
 
     console.log('📊 Processed sites data:', data)
 
-    siteOptions.value = data.map((site) => ({
-      label: site.name || site.site_name || site.title || `Site ${site.id}`,
-      value: site.id || site.site_id,
-      site: site,
-    }))
+    // Map sites to options format
+    siteOptions.value = Array.isArray(data)
+      ? data.map((site) => ({
+          label: site.name || site.site_name || site.title || `Site ${site.id}`,
+          value: site.id || site.site_id || site.uuid,
+          site: site,
+        }))
+      : []
 
     console.log('✅ Site options ready:', siteOptions.value)
 
     if (siteOptions.value.length === 0) {
-      console.warn('⚠️ No sites found for this company')
-      showErrorNotification('No sites found. Please add sites first.')
+      console.warn('⚠️ No sites found for company:', companyId.value)
     }
   } catch (error) {
     console.error('❌ Error fetching sites:', error)
-    console.error('Error details:', error.response?.data)
-    showErrorNotification(
-      error.response?.data?.message || error.response?.data?.detail || 'Failed to load sites',
-    )
+    console.error('Error response:', error.response)
+
+    let errorMessage = 'Failed to load sites'
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message
+    } else if (error.response?.data?.detail) {
+      errorMessage = error.response.data.detail
+    }
+
+    showErrorNotification(errorMessage)
     siteOptions.value = []
+  } finally {
+    filtersLoading.value = false
   }
 }
 
@@ -1258,7 +1309,9 @@ async function fetchEmployeeDetails() {
   filtersLoading.value = true
 
   try {
-    const response = await api.get(`/user/companies/${companyId.value}/employees/`)
+    const response = await api.get(
+      `https://staging.wageyapp.com/user/companies/${companyId.value}/employees/`,
+    )
     console.log('✅ Employees API Response:', response.data)
 
     let data = []
@@ -1374,7 +1427,10 @@ async function submitTimeIn() {
 
     console.log('📤 Sending Time In data:', attendanceData)
 
-    const response = await api.post(`/attendance/log/${companyId.value}/`, attendanceData)
+    const response = await api.post(
+      `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
+      attendanceData,
+    )
 
     console.log('✅ Time In recorded:', response.data)
 
@@ -1442,7 +1498,10 @@ async function submitTimeOut() {
 
     console.log('📤 Sending Time Out data:', attendanceData)
 
-    await api.post(`/attendance/log/${companyId.value}/`, attendanceData)
+    await api.post(
+      `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
+      attendanceData,
+    )
 
     showSuccessNotification(`Attendance completed! Total hours: ${calculateWorkingHours()}`)
 
@@ -1518,12 +1577,12 @@ async function updateAttendance() {
     console.log('📤 Sending Update data:', attendanceData)
     console.log(
       '🔗 Update URL:',
-      `/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
+      `https://staging.wageyapp.com/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
     )
 
     // Try the exact endpoint from your API docs
     const response = await api.put(
-      `/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
+      `https://staging.wageyapp.com/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
       attendanceData,
     )
 
@@ -1566,7 +1625,7 @@ async function updateAttendance() {
 async function batchDelete(records) {
   try {
     const ids = records.map((r) => r.id)
-    await api.post(`/attendance/batch-delete/`, { ids })
+    await api.post(`https://staging.wageyapp.com/attendance/batch-delete/`, { ids })
 
     showSuccessNotification(`${records.length} records deleted successfully`)
     selected.value = []
@@ -1671,6 +1730,7 @@ function clearAllFilters() {
     source: '',
     employee: '',
     business_owner: '',
+    site: '',
   }
   dateRange.value = ''
   pagination.value.page = 1
@@ -1953,12 +2013,9 @@ onMounted(async () => {
   console.log('👤 User Data:', userData)
 
   try {
-    if (!isAdmin.value) {
-      console.log('🏢 Fetching sites (non-admin user)...')
-      await fetchSites()
-    } else {
-      console.log('👑 Admin user - skipping site fetch')
-    }
+    // Always fetch sites for the company
+    console.log('🏢 Fetching sites for company:', companyId.value)
+    await fetchSites()
 
     console.log('👥 Fetching employees...')
     await fetchEmployeeDetails()
