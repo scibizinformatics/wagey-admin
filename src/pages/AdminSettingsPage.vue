@@ -2710,7 +2710,7 @@ export default {
     async fetchCompanies() {
       this.loadingCompanies = true
       try {
-        const response = await api.get('/organization/companies/', {
+        const response = await api.get('https://staging.wageyapp.com/organization/companies/', {
           headers: this.getAuthHeaders(),
         })
         this.companies = response.data.data || response.data || []
@@ -2812,7 +2812,11 @@ export default {
         }
 
         if (this.editingCompany) {
-          await api.put(`/organization/companies/${this.companyForm.id}/`, formData, { headers })
+          await api.put(
+            `https://staging.wageyapp.com/organization/companies/${this.companyForm.id}/`,
+            formData,
+            { headers },
+          )
           this.$q.notify({ type: 'positive', message: 'Company updated successfully' })
         } else {
           await api.post('/organization/companies/create/', formData, { headers })
@@ -2856,7 +2860,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/organization/companies/${company.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/organization/companies/${company.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Company deleted successfully' })
@@ -2878,7 +2882,7 @@ export default {
           return
         }
 
-        const response = await api.get('/organization/sites/', {
+        const response = await api.get('https://staging.wageyapp.com/organization/sites/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -2947,12 +2951,16 @@ export default {
         }
 
         if (this.editingSite) {
-          await api.put(`/organization/sites/${this.siteForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/organization/sites/${this.siteForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Site updated successfully' })
         } else {
-          await api.post('/organization/sites/', payload, {
+          await api.post('https://staging.wageyapp.com/organization/sites/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Site created successfully' })
@@ -2982,7 +2990,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/organization/sites/${site.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/organization/sites/${site.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Site deleted successfully' })
@@ -3004,7 +3012,7 @@ export default {
           return
         }
 
-        const response = await api.get('/organization/departments/', {
+        const response = await api.get('https://staging.wageyapp.com/organization/departments/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3073,12 +3081,16 @@ export default {
         }
 
         if (this.editingDepartment) {
-          await api.put(`/organization/departments/${this.departmentForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/organization/departments/${this.departmentForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Department updated successfully' })
         } else {
-          await api.post('/organization/departments/', payload, {
+          await api.post('https://staging.wageyapp.com/organization/departments/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Department created successfully' })
@@ -3122,9 +3134,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/organization/departments/${department.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/organization/departments/${department.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Department deleted successfully' })
             await this.fetchDepartments()
           } catch (error) {
@@ -3150,7 +3165,7 @@ export default {
           return
         }
 
-        const response = await api.get('/user/user-roles/', {
+        const response = await api.get('https://staging.wageyapp.com/user/user-roles/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3245,12 +3260,16 @@ export default {
         }
 
         if (this.editingRole) {
-          await api.put(`/user/user-roles/${this.roleForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/user/user-roles/${this.roleForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Role updated successfully' })
         } else {
-          await api.post('/user/user-roles/', payload, {
+          await api.post('https://staging.wageyapp.com/user/user-roles/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Role created successfully' })
@@ -3282,7 +3301,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            const url = `/user/user-roles/${role.id}/`
+            const url = `https://staging.wageyapp.com/user/user-roles/${role.id}/`
             console.log('DELETE URL:', url) // Add this
 
             await api.delete(url, {
@@ -3305,7 +3324,6 @@ export default {
         })
     },
     // ==================== SHIFTS ====================
-    // ==================== SHIFTS ====================
     async fetchShifts() {
       this.loadingShifts = true
       try {
@@ -3315,7 +3333,7 @@ export default {
           return
         }
 
-        const response = await api.get('/organization/shift-types/', {
+        const response = await api.get('https://staging.wageyapp.com/organization/shift-types/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3411,12 +3429,16 @@ export default {
         console.log('Payload being sent:', payload)
 
         if (this.editingShift) {
-          await api.put(`/organization/shift-types/${this.shiftForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/organization/shift-types/${this.shiftForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Shift updated successfully' })
         } else {
-          await api.post('/organization/shift-types/', payload, {
+          await api.post('https://staging.wageyapp.com/organization/shift-types/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Shift created successfully' })
@@ -3472,7 +3494,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/organization/shift-types/${shift.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/organization/shift-types/${shift.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Shift deleted successfully' })
@@ -3523,7 +3545,7 @@ export default {
           return
         }
 
-        const response = await api.get('/user/positions/', {
+        const response = await api.get('https://staging.wageyapp.com/user/positions/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3571,12 +3593,16 @@ export default {
         }
 
         if (this.editingPosition) {
-          await api.put(`/user/positions/${this.positionForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/user/positions/${this.positionForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Position updated successfully' })
         } else {
-          await api.post('/user/positions/', payload, {
+          await api.post('https://staging.wageyapp.com/user/positions/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Position created successfully' })
@@ -3602,7 +3628,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/user/positions/${position.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/user/positions/${position.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Position deleted successfully' })
@@ -3809,10 +3835,13 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/allowance-types/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
+        const response = await api.get(
+          'https://staging.wageyapp.com/payroll/admin/allowance-types/',
+          {
+            params: { company: companyId },
+            headers: this.getAuthHeaders(),
+          },
+        )
         this.allowanceTypes = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching allowance types:', error)
@@ -3851,12 +3880,16 @@ export default {
         }
 
         if (this.editingAllowanceType) {
-          await api.put(`/payroll/admin/allowance-types/${this.allowanceTypeForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/allowance-types/${this.allowanceTypeForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Allowance type updated successfully' })
         } else {
-          await api.post('/payroll/admin/allowance-types/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/allowance-types/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Allowance type created successfully' })
@@ -3882,9 +3915,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/allowance-types/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/payroll/admin/allowance-types/${item.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Allowance type deleted successfully' })
             await this.fetchAllowanceTypes()
           } catch (error) {
@@ -3904,7 +3940,7 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/tax-brackets/', {
+        const response = await api.get('https://staging.wageyapp.com/payroll/admin/tax-brackets/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3952,12 +3988,16 @@ export default {
         }
 
         if (this.editingTaxBracket) {
-          await api.put(`/payroll/admin/tax-brackets/${this.taxBracketForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/tax-brackets/${this.taxBracketForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Tax bracket updated successfully' })
         } else {
-          await api.post('/payroll/admin/tax-brackets/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/tax-brackets/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Tax bracket created successfully' })
@@ -3983,9 +4023,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/tax-brackets/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/payroll/admin/tax-brackets/${item.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Tax bracket deleted successfully' })
             await this.fetchTaxBrackets()
           } catch (error) {
@@ -4005,10 +4048,13 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/cutoff-periods/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
+        const response = await api.get(
+          'https://staging.wageyapp.com/payroll/admin/cutoff-periods/',
+          {
+            params: { company: companyId },
+            headers: this.getAuthHeaders(),
+          },
+        )
         this.cutoffPeriods = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching cutoff periods:', error)
@@ -4057,12 +4103,16 @@ export default {
         }
 
         if (this.editingCutoffPeriod) {
-          await api.put(`/payroll/admin/cutoff-periods/${this.cutoffPeriodForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/cutoff-periods/${this.cutoffPeriodForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Cutoff period updated successfully' })
         } else {
-          await api.post('/payroll/admin/cutoff-periods/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/cutoff-periods/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Cutoff period created successfully' })
@@ -4088,9 +4138,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/cutoff-periods/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/payroll/admin/cutoff-periods/${item.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Cutoff period deleted successfully' })
             await this.fetchCutoffPeriods()
           } catch (error) {
@@ -4110,10 +4163,13 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/payroll-groups/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
+        const response = await api.get(
+          'https://staging.wageyapp.com/payroll/admin/payroll-groups/',
+          {
+            params: { company: companyId },
+            headers: this.getAuthHeaders(),
+          },
+        )
         this.payrollGroups = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching payroll groups:', error)
@@ -4154,12 +4210,16 @@ export default {
         }
 
         if (this.editingPayrollGroup) {
-          await api.put(`/payroll/admin/payroll-groups/${this.payrollGroupForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/payroll-groups/${this.payrollGroupForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Payroll group updated successfully' })
         } else {
-          await api.post('/payroll/admin/payroll-groups/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/payroll-groups/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Payroll group created successfully' })
@@ -4185,9 +4245,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/payroll-groups/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/payroll/admin/payroll-groups/${item.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Payroll group deleted successfully' })
             await this.fetchPayrollGroups()
           } catch (error) {
@@ -4207,7 +4270,7 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/labor-rules/', {
+        const response = await api.get('https://staging.wageyapp.com/payroll/admin/labor-rules/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -4255,12 +4318,16 @@ export default {
         }
 
         if (this.editingLaborRule) {
-          await api.put(`/payroll/admin/labor-rules/${this.laborRuleForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/labor-rules/${this.laborRuleForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Labor rule updated successfully' })
         } else {
-          await api.post('/payroll/admin/labor-rules/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/labor-rules/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Labor rule created successfully' })
@@ -4286,7 +4353,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/labor-rules/${item.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/payroll/admin/labor-rules/${item.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Labor rule deleted successfully' })
@@ -4308,7 +4375,7 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/pay-structures/', {
+        const response = await api.get('https://staging.wageyapp.com/payroll/pay-structures/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -4391,12 +4458,16 @@ export default {
         console.log('💾 Saving pay structure with payload:', payload)
 
         if (this.editingPayStructure) {
-          await api.put(`/payroll/pay-structures/${this.payStructureForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/pay-structures/${this.payStructureForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Pay structure updated successfully' })
         } else {
-          await api.post('/payroll/pay-structures/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/pay-structures/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Pay structure created successfully' })
@@ -4455,7 +4526,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/pay-structures/${item.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/payroll/pay-structures/${item.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Pay structure deleted successfully' })

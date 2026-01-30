@@ -1,381 +1,449 @@
 <template>
-  <q-page padding>
-    <!-- Header Section -->
-    <div class="page-header">
-      <div class="header-content">
-        <div class="title-section">
-          <h1 class="page-title">Swap Requests</h1>
-        </div>
-
-        <div class="header-actions row items-center q-gutter-md">
-          <q-input
-            v-model="search"
-            outlined
-            dense
-            placeholder="Search swap requests..."
-            style="min-width: 300px"
-          >
-            <template v-slot:prepend>
-              <q-icon name="search" />
-            </template>
-          </q-input>
-
-          <q-btn
-            icon="refresh"
-            flat
-            round
-            color="grey-7"
-            @click="fetchSwapRequests"
-            :loading="loading"
-            class="refresh-btn"
-          />
-
-          <q-btn
-            icon="bug_report"
-            flat
-            round
-            color="orange"
-            @click="showDebugInfo"
-            class="debug-btn"
-          >
-            <q-tooltip>Show Debug Info</q-tooltip>
-          </q-btn>
-        </div>
-      </div>
-    </div>
-
-    <!-- Debug Info Card -->
-    <q-card v-if="showDebug" class="q-mb-md" style="background: #fff3cd; border: 2px solid #ffc107">
-      <q-card-section>
-        <div class="row items-center justify-between q-mb-sm">
-          <div class="text-h6 text-orange-9">🐛 Debug Information</div>
-          <q-btn flat dense round icon="close" @click="showDebug = false" />
-        </div>
-        <div class="text-caption text-grey-8">
-          <div><strong>Loading:</strong> {{ loading }}</div>
-          <div><strong>Swap Requests Count:</strong> {{ swapRequests.length }}</div>
-          <div><strong>Filtered Requests Count:</strong> {{ filteredRequests.length }}</div>
-          <div><strong>Current Page:</strong> {{ pagination.page }}</div>
-          <div><strong>Company ID:</strong> {{ currentUserCompany }}</div>
-          <div class="q-mt-sm">
-            <strong>First Request:</strong>
-            <pre class="q-mt-xs" style="font-size: 10px; max-height: 200px; overflow: auto">{{
-              swapRequests[0] ? JSON.stringify(swapRequests[0], null, 2) : 'No data'
-            }}</pre>
+  <q-page class="swap-dashboard">
+    <div class="dashboard-container">
+      <!-- Header Section -->
+      <div class="page-header">
+        <div class="header-content">
+          <div class="header-left">
+            <h1 class="page-title">Swap Requests</h1>
+          </div>
+          <div class="header-actions">
+            <q-btn
+              color="primary"
+              icon="refresh"
+              label="Refresh"
+              class="refresh-btn"
+              @click="fetchSwapRequests"
+              :loading="loading"
+            />
+            <q-btn
+              icon="bug_report"
+              flat
+              round
+              color="orange"
+              class="debug-btn"
+              @click="showDebugInfo"
+            >
+              <q-tooltip>Show Debug Info</q-tooltip>
+            </q-btn>
+            <q-input
+              v-model="search"
+              placeholder="Search swap requests..."
+              class="header-search"
+              dense
+              outlined
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" class="search-icon" />
+              </template>
+            </q-input>
           </div>
         </div>
-      </q-card-section>
-    </q-card>
-
-    <!-- Statistics Cards -->
-    <div class="row q-col-gutter-md q-mb-lg">
-      <div class="col-12 col-md-3">
-        <q-card class="stats-card" style="background: #e8d7f1">
-          <q-card-section>
-            <div class="row items-center">
-              <q-icon name="swap_horiz" size="40px" class="q-mr-md" />
-              <div>
-                <div class="text-h4 text-weight-bold">{{ statistics.total }}</div>
-                <div class="text-subtitle2 text-weight-medium">Total Requests</div>
-              </div>
-            </div>
-          </q-card-section>
-        </q-card>
       </div>
 
-      <div class="col-12 col-md-3">
-        <q-card class="stats-card" style="background: #fff9c4">
-          <q-card-section>
-            <div class="row items-center">
-              <q-icon name="pending" size="40px" class="q-mr-md" />
-              <div>
-                <div class="text-h4 text-weight-bold">{{ statistics.pending }}</div>
-                <div class="text-subtitle2 text-weight-medium">Pending</div>
-              </div>
+      <!-- Debug Info Card -->
+      <q-card
+        v-if="showDebug"
+        class="debug-card"
+        style="background: #fff3cd; border: 2px solid #ffc107; margin-bottom: 16px"
+      >
+        <q-card-section>
+          <div class="debug-header">
+            <div class="debug-title">🐛 Debug Information</div>
+            <q-btn flat dense round icon="close" @click="showDebug = false" />
+          </div>
+          <div class="debug-content">
+            <div><strong>Loading:</strong> {{ loading }}</div>
+            <div><strong>Swap Requests Count:</strong> {{ swapRequests.length }}</div>
+            <div><strong>Filtered Requests Count:</strong> {{ filteredRequests.length }}</div>
+            <div><strong>Current Page:</strong> {{ pagination.page }}</div>
+            <div><strong>Company ID:</strong> {{ currentUserCompany }}</div>
+            <div class="debug-data">
+              <strong>First Request:</strong>
+              <pre>{{
+                swapRequests[0] ? JSON.stringify(swapRequests[0], null, 2) : 'No data'
+              }}</pre>
             </div>
-          </q-card-section>
-        </q-card>
-      </div>
+          </div>
+        </q-card-section>
+      </q-card>
 
-      <div class="col-12 col-md-3">
-        <q-card class="stats-card" style="background: #c8e6c9">
-          <q-card-section>
-            <div class="row items-center">
-              <q-icon name="check_circle" size="40px" class="q-mr-md" />
-              <div>
-                <div class="text-h4 text-weight-bold">{{ statistics.approved }}</div>
-                <div class="text-subtitle2 text-weight-medium">Approved</div>
-              </div>
-            </div>
-          </q-card-section>
-        </q-card>
-      </div>
-
-      <div class="col-12 col-md-3">
-        <q-card class="stats-card" style="background: #ffccbc">
-          <q-card-section>
-            <div class="row items-center">
-              <q-icon name="cancel" size="40px" class="q-mr-md" />
-              <div>
-                <div class="text-h4 text-weight-bold">{{ statistics.rejected }}</div>
-                <div class="text-subtitle2 text-weight-medium">Rejected</div>
-              </div>
-            </div>
-          </q-card-section>
-        </q-card>
-      </div>
-    </div>
-
-    <!-- Swap Requests Table -->
-    <q-card class="shadow-1" style="border: 2px solid #2196f3; border-radius: 8px">
-      <q-card-section>
-        <div class="row items-center justify-between q-mb-md">
-          <div class="text-h6 text-weight-bold">Swap Request Overview</div>
-          <q-select
-            v-model="sortBy"
-            :options="sortOptions"
-            outlined
-            dense
-            label="Sort by"
-            style="min-width: 150px"
-          />
+      <!-- Stats Cards -->
+      <div class="stats-section">
+        <div class="stats-card total-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="swap_horiz" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ statistics.total }}</div>
+            <div class="stats-label">Total Requests</div>
+          </div>
         </div>
 
-        <div style="border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden">
-          <q-markup-table flat separator="horizontal">
-            <thead style="background: #f5f5f5">
-              <tr>
-                <th class="text-left" style="width: 60px">No</th>
-                <th class="text-left" style="width: 180px">Requested By</th>
-                <th class="text-left" style="width: 180px">Employees</th>
-                <th class="text-left" style="width: 150px">Original Date</th>
-                <th class="text-left" style="width: 150px">New Date</th>
-                <th class="text-center" style="width: 200px">Status</th>
-                <th class="text-left" style="width: 150px">Requested Date</th>
-                <th class="text-center" style="width: 120px">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="loading">
-                <td colspan="8" class="text-center q-py-lg">
-                  <q-spinner color="primary" size="40px" />
-                  <div class="q-mt-sm text-grey-7">Loading swap requests...</div>
-                </td>
-              </tr>
-              <tr v-else-if="paginatedRequests.length === 0">
-                <td colspan="8" class="text-center q-py-lg text-grey-7">No swap requests found</td>
-              </tr>
-              <tr v-else v-for="(request, index) in paginatedRequests" :key="request.id">
-                <td class="text-left">
-                  {{ (pagination.page - 1) * pagination.rowsPerPage + index + 1 }}.
-                </td>
-                <td class="text-left">
-                  <div class="row items-center">
-                    <q-avatar size="32px" color="primary" text-color="white" class="q-mr-sm">
-                      {{ getInitials(request.requested_by_name) }}
+        <div class="stats-card pending-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="pending" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ statistics.pending }}</div>
+            <div class="stats-label">Pending</div>
+          </div>
+        </div>
+
+        <div class="stats-card approved-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="check_circle" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ statistics.approved }}</div>
+            <div class="stats-label">Approved</div>
+          </div>
+        </div>
+
+        <div class="stats-card rejected-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="cancel" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ statistics.rejected }}</div>
+            <div class="stats-label">Rejected</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Table Section -->
+      <div class="table-section">
+        <div class="table-header">
+          <div class="table-title-section">
+            <h2 class="table-title">Swap Request Overview</h2>
+          </div>
+          <div class="table-actions">
+            <q-select
+              v-model="sortBy"
+              :options="sortOptions"
+              label="Sort by"
+              class="sort-select"
+              dense
+              outlined
+            >
+              <template v-slot:prepend>
+                <q-icon name="sort" />
+              </template>
+            </q-select>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="loading" class="loading-state">
+          <q-spinner size="48px" color="primary" thickness="4" />
+          <div class="loading-text">Loading swap requests...</div>
+        </div>
+
+        <!-- Swap Requests Table -->
+        <div v-else-if="paginatedRequests.length > 0" class="modern-table-container">
+          <q-table
+            :rows="paginatedRequests"
+            :columns="columns"
+            row-key="id"
+            flat
+            :loading="loading"
+            no-data-label="No swap requests found"
+            class="swap-table"
+            hide-pagination
+            :rows-per-page-options="[0]"
+          >
+            <template v-slot:header>
+              <q-tr class="table-header-row">
+                <q-th class="table-header-cell">SL No</q-th>
+                <q-th class="table-header-cell">Requested By</q-th>
+                <q-th class="table-header-cell">Employees</q-th>
+                <q-th class="table-header-cell">Original Date</q-th>
+                <q-th class="table-header-cell">New Date</q-th>
+                <q-th class="table-header-cell">Status</q-th>
+                <q-th class="table-header-cell">Requested Date</q-th>
+                <q-th class="table-header-cell">Actions</q-th>
+              </q-tr>
+            </template>
+
+            <template v-slot:body="props">
+              <q-tr
+                class="table-body-row"
+                :class="{ 'rejected-row': props.row.status === 'rejected' }"
+              >
+                <q-td class="table-body-cell">
+                  {{
+                    String(
+                      (pagination.page - 1) * pagination.rowsPerPage + props.rowIndex + 1,
+                    ).padStart(2, '0')
+                  }}.
+                </q-td>
+
+                <q-td class="table-body-cell employee-name-cell">
+                  <div class="employee-info">
+                    <q-avatar size="32px" color="primary" text-color="white">
+                      {{ getInitials(props.row.requested_by_name) }}
                     </q-avatar>
-                    <span>{{ request.requested_by_name || 'N/A' }}</span>
+                    <span class="employee-name">{{ props.row.requested_by_name || 'N/A' }}</span>
                   </div>
-                </td>
-                <td class="text-left">
-                  <div class="text-weight-medium">{{ request.from_employee_name }}</div>
-                  <div class="row items-center q-mt-xs">
-                    <q-icon name="swap_vert" size="16px" color="grey-7" />
-                    <span class="q-ml-xs">{{ request.to_employee_name }}</span>
+                </q-td>
+
+                <q-td class="table-body-cell employees-cell">
+                  <div class="swap-employees">
+                    <div class="employee-from">{{ props.row.from_employee_name }}</div>
+                    <div class="swap-icon">
+                      <q-icon name="swap_vert" size="16px" color="grey-7" />
+                    </div>
+                    <div class="employee-to">{{ props.row.to_employee_name }}</div>
                   </div>
-                </td>
-                <td class="text-left">
-                  <div class="text-weight-medium">{{ formatDate(request.original_date) }}</div>
-                  <div class="text-caption text-grey-7">
-                    {{ request.original_assignment?.shift_type?.name || 'N/A' }}
+                </q-td>
+
+                <q-td class="table-body-cell date-cell">
+                  <div class="date-info">
+                    <div class="date-main">{{ formatDate(props.row.original_date) }}</div>
+                    <div class="date-sub">
+                      {{ props.row.original_assignment?.shift_type?.name || 'N/A' }}
+                    </div>
                   </div>
-                </td>
-                <td class="text-left">
-                  <div class="text-weight-medium">{{ formatDate(request.new_date) }}</div>
-                  <div class="text-caption text-grey-7">
-                    {{ request.new_assignment?.shift_type?.name || 'N/A' }}
+                </q-td>
+
+                <q-td class="table-body-cell date-cell">
+                  <div class="date-info">
+                    <div class="date-main">{{ formatDate(props.row.new_date) }}</div>
+                    <div class="date-sub">
+                      {{ props.row.new_assignment?.shift_type?.name || 'N/A' }}
+                    </div>
                   </div>
-                </td>
-                <td class="text-center">
-                  <q-badge
-                    :color="getStatusColor(request.status)"
-                    :label="getStatusLabel(request)"
-                    style="padding: 4px 12px; font-size: 11px"
-                  />
+                </q-td>
+
+                <q-td class="table-body-cell status-cell">
+                  <div :class="['status-badge', getStatusClass(props.row)]">
+                    {{ getStatusLabel(props.row) }}
+                  </div>
 
                   <!-- Progress bar for pending/to_employee_approved -->
-                  <div v-if="isPendingApproval(request)" class="q-mt-xs">
+                  <div v-if="isPendingApproval(props.row)" class="approval-progress">
                     <q-linear-progress
-                      :value="getApprovalProgress(request)"
-                      :color="canAdminApprove(request) ? 'positive' : 'warning'"
+                      :value="getApprovalProgress(props.row)"
+                      :color="canAdminApprove(props.row) ? 'positive' : 'warning'"
                       size="4px"
+                      rounded
                     />
                     <div
-                      class="text-caption q-mt-xs"
-                      :class="canAdminApprove(request) ? 'text-positive' : 'text-warning'"
+                      class="progress-text"
+                      :class="canAdminApprove(props.row) ? 'text-positive' : 'text-warning'"
                     >
-                      {{ getApprovalProgressText(request) }}
+                      {{ getApprovalProgressText(props.row) }}
                     </div>
                   </div>
 
                   <!-- Show completion info for approved/rejected -->
-                  <div v-if="request.status === 'approved'" class="q-mt-xs">
-                    <div class="text-caption text-positive">
-                      <q-icon name="check_circle" size="14px" /> Approved
-                    </div>
+                  <div v-if="props.row.status === 'approved'" class="status-extra">
+                    <q-icon name="check_circle" size="14px" color="positive" />
+                    <span class="status-extra-text">Approved</span>
                   </div>
 
-                  <div v-if="request.status === 'rejected'" class="q-mt-xs">
-                    <div class="text-caption text-negative">
-                      <q-icon name="cancel" size="14px" /> Rejected
-                    </div>
+                  <div v-if="props.row.status === 'rejected'" class="status-extra">
+                    <q-icon name="cancel" size="14px" color="negative" />
+                    <span class="status-extra-text">Rejected</span>
                   </div>
-                </td>
-                <td class="text-left">{{ formatDateTime(request.requested_at) }}</td>
-                <td class="text-center">
-                  <div class="row justify-center q-gutter-xs">
-                    <!-- View Button - Always show -->
+                </q-td>
+
+                <q-td class="table-body-cell">
+                  {{ formatDateTime(props.row.requested_at) }}
+                </q-td>
+
+                <q-td class="table-body-cell actions-cell">
+                  <div class="action-buttons">
                     <q-btn
                       flat
                       round
-                      dense
                       icon="visibility"
                       size="sm"
-                      color="primary"
-                      @click="viewRequest(request)"
+                      class="action-btn view-btn"
+                      @click="viewRequest(props.row)"
                     >
                       <q-tooltip>View Details</q-tooltip>
                     </q-btn>
-
-                    <!-- Approve Button - Show for pending approval requests -->
                     <q-btn
-                      v-if="isPendingApproval(request)"
+                      v-if="isPendingApproval(props.row)"
                       flat
                       round
-                      dense
                       icon="check"
                       size="sm"
-                      :color="canAdminApprove(request) ? 'positive' : 'grey'"
-                      :disable="!canAdminApprove(request)"
-                      @click="approveRequest(request)"
+                      class="action-btn approve-btn"
+                      :disable="!canAdminApprove(props.row)"
+                      @click="approveRequest(props.row)"
                     >
                       <q-tooltip>
                         {{
-                          canAdminApprove(request)
+                          canAdminApprove(props.row)
                             ? 'Approve Swap Request'
-                            : `Waiting for ${request.to_employee_name} to approve`
+                            : `Waiting for ${props.row.to_employee_name} to approve`
                         }}
                       </q-tooltip>
                     </q-btn>
-
-                    <!-- Reject Button - Show for pending approval requests -->
                     <q-btn
-                      v-if="isPendingApproval(request)"
+                      v-if="isPendingApproval(props.row)"
                       flat
                       round
-                      dense
                       icon="close"
                       size="sm"
-                      color="negative"
-                      @click="rejectRequest(request)"
+                      class="action-btn reject-btn"
+                      @click="rejectRequest(props.row)"
                     >
                       <q-tooltip>Reject Request</q-tooltip>
                     </q-btn>
                   </div>
-                </td>
-              </tr>
-            </tbody>
-          </q-markup-table>
-        </div>
+                </q-td>
+              </q-tr>
+            </template>
+          </q-table>
 
-        <!-- Footer -->
-        <div class="row items-center justify-between q-mt-md">
-          <div class="text-subtitle2" style="color: #f44336">
-            Total <span class="text-weight-bold">{{ filteredRequests.length }} Records</span>
+          <!-- Pagination Footer -->
+          <div class="table-footer">
+            <div class="footer-info">
+              Total <span class="footer-count">{{ filteredRequests.length }} Records</span>
+            </div>
+            <q-pagination
+              v-model="pagination.page"
+              :max="Math.ceil(filteredRequests.length / pagination.rowsPerPage) || 1"
+              :max-pages="6"
+              direction-links
+              boundary-links
+              color="primary"
+              active-color="primary"
+            />
           </div>
-          <q-pagination
-            v-model="pagination.page"
-            :max="Math.ceil(filteredRequests.length / pagination.rowsPerPage) || 1"
-            :max-pages="6"
-            direction-links
-            boundary-links
-            color="primary"
-            active-color="primary"
-          />
         </div>
-      </q-card-section>
-    </q-card>
 
-    <!-- View Details Dialog -->
+        <!-- Empty State -->
+        <div v-else class="empty-state">
+          <div class="empty-icon">
+            <q-icon name="search_off" size="64px" color="grey-4" />
+          </div>
+          <div class="empty-title">No swap requests found</div>
+          <div class="empty-subtitle">Try adjusting your search or filters</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View Details Modal -->
     <q-dialog v-model="viewDialog" persistent>
-      <q-card style="min-width: 600px">
-        <q-card-section class="row items-center q-pb-none">
-          <div class="text-h6">Swap Request Details</div>
-          <q-space />
-          <q-btn icon="close" flat round dense v-close-popup />
+      <q-card class="modal-card details-modal">
+        <q-card-section class="modal-header">
+          <div class="modal-title-section">
+            <q-avatar size="64px" color="primary" text-color="white" class="modal-avatar">
+              {{ selectedRequest ? getInitials(selectedRequest.requested_by_name) : '?' }}
+            </q-avatar>
+            <div>
+              <div class="modal-title">
+                {{ selectedRequest?.requested_by_name || 'Swap Request Details' }}
+              </div>
+              <div class="modal-subtitle">Swap Request Information</div>
+            </div>
+          </div>
+          <q-btn icon="close" flat round class="modal-close-btn" @click="viewDialog = false" />
         </q-card-section>
-
-        <q-card-section v-if="selectedRequest">
-          <div class="q-gutter-md">
-            <div>
-              <div class="text-weight-bold q-mb-xs">Requested By:</div>
-              <div>{{ selectedRequest.requested_by_name }}</div>
-            </div>
-
-            <q-separator />
-
-            <div>
-              <div class="text-weight-bold q-mb-xs">Swap Details:</div>
-              <div>
-                {{ selectedRequest.from_employee_name }} ↔ {{ selectedRequest.to_employee_name }}
-              </div>
-            </div>
-
-            <q-separator />
-
-            <div class="row q-col-gutter-md">
-              <div class="col-6">
-                <div class="text-weight-bold q-mb-xs">Original Assignment:</div>
-                <div>{{ formatDate(selectedRequest.original_date) }}</div>
-                <div class="text-caption text-grey-7">
-                  Site: {{ selectedRequest.original_assignment?.site?.name || 'N/A' }}
+        <q-separator />
+        <q-card-section class="modal-content" v-if="selectedRequest">
+          <div class="detail-sections">
+            <!-- Swap Details -->
+            <div class="detail-section">
+              <div class="section-title">Swap Details</div>
+              <div class="detail-grid">
+                <div class="detail-row">
+                  <span class="detail-label">From Employee:</span>
+                  <span class="detail-value">{{ selectedRequest.from_employee_name }}</span>
                 </div>
-                <div class="text-caption text-grey-7">
-                  Shift: {{ selectedRequest.original_assignment?.shift_type?.name || 'N/A' }}
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="text-weight-bold q-mb-xs">New Assignment:</div>
-                <div>{{ formatDate(selectedRequest.new_date) }}</div>
-                <div class="text-caption text-grey-7">
-                  Site: {{ selectedRequest.new_assignment?.site?.name || 'N/A' }}
-                </div>
-                <div class="text-caption text-grey-7">
-                  Shift: {{ selectedRequest.new_assignment?.shift_type?.name || 'N/A' }}
+                <div class="detail-row">
+                  <span class="detail-label">To Employee:</span>
+                  <span class="detail-value">{{ selectedRequest.to_employee_name }}</span>
                 </div>
               </div>
             </div>
 
-            <q-separator />
+            <!-- Original Assignment -->
+            <div class="detail-section">
+              <div class="section-title">Original Assignment</div>
+              <div class="detail-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Date:</span>
+                  <span class="detail-value">{{ formatDate(selectedRequest.original_date) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Site:</span>
+                  <span class="detail-value">{{
+                    selectedRequest.original_assignment?.site?.name || 'N/A'
+                  }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Shift:</span>
+                  <span class="detail-value">{{
+                    selectedRequest.original_assignment?.shift_type?.name || 'N/A'
+                  }}</span>
+                </div>
+              </div>
+            </div>
 
-            <div>
-              <div class="text-weight-bold q-mb-xs">Status:</div>
-              <q-badge
-                :color="getStatusColor(selectedRequest.status)"
-                :label="getStatusLabel(selectedRequest)"
-              />
+            <!-- New Assignment -->
+            <div class="detail-section">
+              <div class="section-title">New Assignment</div>
+              <div class="detail-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Date:</span>
+                  <span class="detail-value">{{ formatDate(selectedRequest.new_date) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Site:</span>
+                  <span class="detail-value">{{
+                    selectedRequest.new_assignment?.site?.name || 'N/A'
+                  }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Shift:</span>
+                  <span class="detail-value">{{
+                    selectedRequest.new_assignment?.shift_type?.name || 'N/A'
+                  }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Status Information -->
+            <div class="detail-section">
+              <div class="section-title">Status Information</div>
+              <div class="detail-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Status:</span>
+                  <span class="detail-value">
+                    <div :class="['status-badge', getStatusClass(selectedRequest)]">
+                      {{ getStatusLabel(selectedRequest) }}
+                    </div>
+                  </span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Requested At:</span>
+                  <span class="detail-value">{{
+                    formatDateTime(selectedRequest.requested_at)
+                  }}</span>
+                </div>
+                <div v-if="selectedRequest.admin_approved_at" class="detail-row">
+                  <span class="detail-label">Admin Approved At:</span>
+                  <span class="detail-value">{{
+                    formatDateTime(selectedRequest.admin_approved_at)
+                  }}</span>
+                </div>
+              </div>
             </div>
 
             <!-- Employee Approval Status -->
-            <div v-if="isPendingApproval(selectedRequest)">
-              <div class="text-weight-bold q-mb-xs">Employee Approvals:</div>
-              <div class="q-gutter-sm">
-                <div class="row items-center">
+            <div v-if="isPendingApproval(selectedRequest)" class="detail-section">
+              <div class="section-title">Employee Approvals</div>
+              <div class="approval-info">
+                <div class="approval-item">
                   <q-icon
                     :name="selectedRequest.to_employee_approved ? 'check_circle' : 'schedule'"
                     :color="selectedRequest.to_employee_approved ? 'positive' : 'warning'"
                     size="20px"
-                    class="q-mr-xs"
                   />
                   <span>
                     {{ selectedRequest.to_employee_name }}:
@@ -389,54 +457,52 @@
                   </span>
                 </div>
 
-                <div v-if="canAdminApprove(selectedRequest)" class="row items-center q-mt-sm">
-                  <q-icon
-                    name="admin_panel_settings"
-                    color="positive"
-                    size="20px"
-                    class="q-mr-xs"
-                  />
-                  <span class="text-positive text-weight-medium">Ready for admin approval</span>
+                <div v-if="canAdminApprove(selectedRequest)" class="approval-item ready">
+                  <q-icon name="admin_panel_settings" color="positive" size="20px" />
+                  <span class="text-positive">Ready for admin approval</span>
                 </div>
-                <div v-else class="row items-center q-mt-sm">
-                  <q-icon name="info" color="orange" size="20px" class="q-mr-xs" />
-                  <span class="text-orange text-weight-medium">Waiting for employee approval</span>
+                <div v-else class="approval-item waiting">
+                  <q-icon name="info" color="orange" size="20px" />
+                  <span class="text-orange">Waiting for employee approval</span>
                 </div>
               </div>
             </div>
-
-            <div>
-              <div class="text-weight-bold q-mb-xs">Requested At:</div>
-              <div>{{ formatDateTime(selectedRequest.requested_at) }}</div>
-            </div>
-
-            <div v-if="selectedRequest.admin_approved_at">
-              <div class="text-weight-bold q-mb-xs">Admin Approved At:</div>
-              <div>{{ formatDateTime(selectedRequest.admin_approved_at) }}</div>
-            </div>
           </div>
         </q-card-section>
-
-        <q-card-actions align="right" v-if="isPendingApproval(selectedRequest)">
-          <q-btn
-            label="Reject"
-            color="negative"
-            outline
-            @click="rejectRequest(selectedRequest)"
-            v-close-popup
-          />
-          <q-btn
-            label="Approve"
-            color="positive"
-            :disable="!canAdminApprove(selectedRequest)"
-            @click="approveRequest(selectedRequest)"
-            v-close-popup
-          >
-            <q-tooltip v-if="!canAdminApprove(selectedRequest)">
-              Waiting for employee approval
-            </q-tooltip>
-          </q-btn>
-        </q-card-actions>
+        <q-separator />
+        <q-card-section class="modal-footer">
+          <div class="form-actions">
+            <q-btn
+              v-if="isPendingApproval(selectedRequest)"
+              label="Reject"
+              flat
+              color="negative"
+              @click="
+                () => {
+                  rejectRequest(selectedRequest)
+                  viewDialog = false
+                }
+              "
+            />
+            <q-btn
+              v-if="isPendingApproval(selectedRequest)"
+              label="Approve"
+              color="positive"
+              :disable="!canAdminApprove(selectedRequest)"
+              @click="
+                () => {
+                  approveRequest(selectedRequest)
+                  viewDialog = false
+                }
+              "
+            >
+              <q-tooltip v-if="!canAdminApprove(selectedRequest)">
+                Waiting for employee approval
+              </q-tooltip>
+            </q-btn>
+            <q-btn label="Close" flat color="grey-7" @click="viewDialog = false" />
+          </div>
+        </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>
@@ -468,9 +534,19 @@ export default {
       rowsPerPage: 10,
     })
 
-    // ✅ CENTRALIZED COMPANY ID GETTER
+    const columns = [
+      { name: 'sl_no', label: 'SL No', field: 'id', align: 'left' },
+      { name: 'requested_by', label: 'Requested By', field: 'requested_by_name', align: 'left' },
+      { name: 'employees', label: 'Employees', field: 'from_employee_name', align: 'left' },
+      { name: 'original_date', label: 'Original Date', field: 'original_date', align: 'left' },
+      { name: 'new_date', label: 'New Date', field: 'new_date', align: 'left' },
+      { name: 'status', label: 'Status', field: 'status', align: 'left' },
+      { name: 'requested_at', label: 'Requested Date', field: 'requested_at', align: 'left' },
+      { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+    ]
+
+    // Centralized company ID getter
     const getCompanyId = () => {
-      // Try selectedCompany first
       let companyId = localStorage.getItem('selectedCompany')
 
       if (companyId && companyId !== 'null' && companyId !== 'undefined') {
@@ -478,16 +554,14 @@ export default {
           const parsed = JSON.parse(companyId)
           companyId = parsed?.id || parsed?.companyId || parsed
         } catch {
-          // If not JSON, use as-is
+          // Not JSON, use as-is
         }
       }
 
-      // Fallback to company_id
       if (!companyId) {
         companyId = localStorage.getItem('company_id')
       }
 
-      // Fallback to user object
       if (!companyId) {
         const userStr = localStorage.getItem('user')
         if (userStr && userStr !== 'undefined' && userStr !== 'null') {
@@ -500,14 +574,15 @@ export default {
         }
       }
 
-      // Convert to integer
       if (companyId) {
         companyId = parseInt(companyId)
         if (!isNaN(companyId) && companyId > 0) {
+          console.log('✅ Using company ID:', companyId)
           return companyId
         }
       }
 
+      console.warn('⚠️ No valid company ID found')
       return null
     }
 
@@ -572,17 +647,6 @@ export default {
       return 'Unknown Employee'
     }
 
-    const debugLocalStorage = () => {
-      console.log('🔍 ===== LOCALSTORAGE DEBUG =====')
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        const value = localStorage.getItem(key)
-        console.log(`  ${key}:`, value?.substring(0, 100))
-      }
-      console.log('🔍 ===============================')
-    }
-
-    // ✅ FIXED FETCH FUNCTION
     const fetchSwapRequests = async () => {
       loading.value = true
       console.log('🚀 Fetching swap requests...')
@@ -609,15 +673,12 @@ export default {
         currentUserCompany.value = companyId
         console.log(`📤 Requesting swap requests for company: ${companyId}`)
 
-        const response = await api.get('/organization/swap-requests/', {
+        const response = await api.get('https://staging.wageyapp.com/organization/swap-requests/', {
           headers: { Authorization: `Bearer ${token}` },
           params: { company_id: companyId },
         })
 
         console.log(`✅ Fetched ${response.data.length} swap requests`)
-        if (response.data[0]) {
-          console.log('📊 First request sample:', response.data[0])
-        }
 
         swapRequests.value = response.data.map((request) => ({
           ...request,
@@ -633,7 +694,6 @@ export default {
         })
       } catch (error) {
         console.error('❌ Error fetching swap requests:', error)
-        console.error('❌ Error response:', error.response?.data)
         swapRequests.value = []
 
         const errorMessage =
@@ -653,7 +713,6 @@ export default {
       }
     }
 
-    // ✅ FIXED UPDATE FUNCTION
     const updateSwapRequest = async (requestId, payload) => {
       const token = localStorage.getItem('access_token')
       const companyId = getCompanyId()
@@ -665,60 +724,23 @@ export default {
       try {
         console.log(`📤 Updating swap request ${requestId}:`, payload)
 
-        const response = await api.patch(`/organization/swap-requests/${requestId}/`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { company_id: companyId },
-        })
+        const response = await api.patch(
+          `https://staging.wageyapp.com/organization/swap-requests/${requestId}/`,
+          payload,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { company_id: companyId },
+          },
+        )
 
         console.log('✅ Update successful:', response.data)
         return response.data
       } catch (error) {
         console.error('❌ Update failed:', error)
-        console.error('❌ Response status:', error.response?.status)
-        console.error('❌ Response data:', error.response?.data)
-        console.error('❌ Payload sent:', payload)
         throw error
       }
     }
 
-    const checkUserPermissions = async () => {
-      try {
-        const companyId = getCompanyId()
-
-        if (!companyId) {
-          userHasApprovalRights.value = false
-          return false
-        }
-
-        const userStr = localStorage.getItem('user')
-        if (userStr && userStr !== 'undefined' && userStr !== 'null') {
-          try {
-            const user = JSON.parse(userStr)
-            const hasRole = user.roles?.some(
-              (role) =>
-                role.company_id === parseInt(companyId) &&
-                ['admin', 'manager', 'supervisor'].includes(role.role_name?.toLowerCase()),
-            )
-
-            if (hasRole !== undefined) {
-              userHasApprovalRights.value = hasRole
-              return hasRole
-            }
-          } catch (e) {
-            console.warn('Failed to parse user:', e)
-          }
-        }
-
-        userHasApprovalRights.value = true
-        return true
-      } catch (error) {
-        console.error('❌ Failed to check permissions:', error)
-        userHasApprovalRights.value = false
-        return false
-      }
-    }
-
-    // ✅ FIXED APPROVE FUNCTION
     const approveRequest = async (request) => {
       const companyId = getCompanyId()
 
@@ -791,7 +813,6 @@ export default {
       })
     }
 
-    // ✅ FIXED REJECT FUNCTION
     const rejectRequest = async (request) => {
       $q.dialog({
         title: 'Confirm Rejection',
@@ -842,24 +863,23 @@ export default {
         .substring(0, 2)
     }
 
-    const getStatusColor = (status) => {
-      const colors = {
-        pending: 'orange',
-        to_employee_approved: 'blue',
-        approved: 'green',
-        rejected: 'red',
-      }
-      return colors[status] || 'grey'
+    const getStatusClass = (request) => {
+      const status = request.status
+      if (status === 'pending') return 'status-pending'
+      if (status === 'to_employee_approved') return 'status-employee-approved'
+      if (status === 'approved') return 'status-approved'
+      if (status === 'rejected') return 'status-rejected'
+      return 'status-default'
     }
 
     const getStatusLabel = (request) => {
       const labels = {
-        pending: 'PENDING',
-        to_employee_approved: 'EMPLOYEE APPROVED',
-        approved: 'APPROVED',
-        rejected: 'REJECTED',
+        pending: 'Pending',
+        to_employee_approved: 'Employee Approved',
+        approved: 'Approved',
+        rejected: 'Rejected',
       }
-      return labels[request.status] || request.status.toUpperCase()
+      return labels[request.status] || request.status
     }
 
     const isPendingApproval = (request) => {
@@ -869,7 +889,6 @@ export default {
     const canAdminApprove = (request) => {
       const isPending = isPendingApproval(request)
       const employeeApproved = request.to_employee_approved === true
-
       return isPending && employeeApproved
     }
 
@@ -904,27 +923,13 @@ export default {
       })
     }
 
-    const watchCompanyChanges = () => {
-      window.addEventListener('storage', (e) => {
-        if (e.key === 'selectedCompany' || e.key === 'company_id') {
-          console.log('🔄 Company changed, refetching swap requests...')
-          fetchSwapRequests()
-        }
-      })
-    }
-
     const showDebugInfo = () => {
       showDebug.value = !showDebug.value
     }
 
-    // ✅ FIXED onMounted - Only fetch ONCE
     onMounted(async () => {
       console.log('🚀 Component mounted')
-      debugLocalStorage()
-
       await fetchSwapRequests()
-      await checkUserPermissions()
-      watchCompanyChanges()
     })
 
     return {
@@ -934,6 +939,7 @@ export default {
       sortOptions,
       swapRequests,
       pagination,
+      columns,
       statistics,
       filteredRequests,
       paginatedRequests,
@@ -946,7 +952,7 @@ export default {
       rejectRequest,
       viewRequest,
       getInitials,
-      getStatusColor,
+      getStatusClass,
       getStatusLabel,
       isPendingApproval,
       canAdminApprove,
@@ -959,60 +965,1094 @@ export default {
   },
 }
 </script>
+
 <style scoped>
+.swap-dashboard {
+  background: #f8fafc;
+  min-height: 100vh;
+  padding: 0;
+}
+
+.dashboard-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* ===================================
+   HEADER SECTION
+   =================================== */
 .page-header {
   background: white;
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 24px;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
   border: 1px solid #e2e8f0;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  font-size: 28px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 8px 0;
+  align-items: center;
+  gap: 12px;
 }
 
-.title-section h1 {
-  font-size: 28px;
+.page-title {
+  font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 8px 0;
+  color: #1a202c;
+  margin: 0 0 4px 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.refresh-btn {
+  height: 36px;
+  border-radius: 8px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.debug-btn {
+  width: 36px;
+  height: 36px;
+}
+
+.header-search {
+  min-width: 180px;
+  max-width: 250px;
+  flex: 1;
+}
+
+.header-search .q-field__control {
+  border-radius: 8px;
+  height: 36px;
+}
+
+.search-icon {
+  color: #9ca3af;
+}
+
+/* Debug Card */
+.debug-card {
+  border-radius: 12px;
+}
+
+.debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.debug-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+.debug-content {
+  font-size: 12px;
+  color: #78716c;
+}
+
+.debug-data {
+  margin-top: 12px;
+}
+
+.debug-data pre {
+  font-size: 10px;
+  max-height: 200px;
+  overflow: auto;
+  background: #ffffff;
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+/* ===================================
+   STATS SECTION
+   =================================== */
+.stats-section {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .stats-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+  min-width: 0;
+}
+
+.stats-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.total-card {
+  background: linear-gradient(135deg, #e9d5ff 0%, #ddd6fe 100%);
+}
+
+.pending-card {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+}
+
+.approved-card {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+}
+
+.rejected-card {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+}
+
+.stats-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  flex-shrink: 0;
+}
+
+.stats-icon {
+  font-size: 24px;
+  color: #374151;
+}
+
+.stats-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.stats-amount {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a202c;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.stats-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 2px;
+}
+
+/* ===================================
+   TABLE SECTION
+   =================================== */
+.table-section {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.table-header {
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.table-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1a202c;
+  margin: 0;
+}
+
+.table-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.sort-select {
+  min-width: 160px;
+}
+
+.sort-select .q-field__control {
   border-radius: 8px;
+  height: 36px;
 }
 
-.rounded-borders {
-  border-radius: 8px;
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 16px;
 }
 
-.shadow-1 {
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
+.loading-text {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
 }
 
-.q-markup-table {
+/* Modern Table */
+.modern-table-container {
+  border: 2px solid #3b82f6;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 0 16px 0 16px;
+}
+
+.swap-table {
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.table-header-row {
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.table-header-cell {
+  padding: 12px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  text-align: left;
   border: none;
+  white-space: nowrap;
 }
 
-.q-markup-table thead tr,
-.q-markup-table tbody td {
-  height: 60px;
+.table-body-row {
+  border-bottom: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
 }
 
-.q-markup-table tbody tr:hover {
-  background-color: #f5f5f5;
+.table-body-row:hover {
+  background: #f8fafc;
 }
 
-.swap-details {
+.rejected-row {
+  opacity: 0.6;
+  background: #fef2f2;
+}
+
+.rejected-row:hover {
+  background: #fee2e2;
+}
+
+.table-body-cell {
+  padding: 12px 10px;
+  font-size: 13px;
+  color: #374151;
+  border: none;
+  vertical-align: middle;
+}
+
+/* Employee Cell */
+.employee-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.employee-name {
+  font-weight: 500;
+  color: #1a202c;
+  font-size: 13px;
+}
+
+/* Employees Swap Cell */
+.employees-cell {
+  min-width: 140px;
+}
+
+.swap-employees {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.employee-from {
+  font-weight: 500;
+  color: #1a202c;
+  font-size: 13px;
+}
+
+.swap-icon {
+  display: flex;
+  align-items: center;
+  margin: 2px 0;
+}
+
+.employee-to {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Date Cell */
+.date-cell {
+  min-width: 120px;
+}
+
+.date-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.date-main {
+  font-weight: 500;
+  color: #1a202c;
+  font-size: 13px;
+}
+
+.date-sub {
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* Status Cell */
+.status-cell {
+  min-width: 140px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  margin-bottom: 6px;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-employee-approved {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.status-approved {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-rejected {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.status-default {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.approval-progress {
+  margin-top: 6px;
+}
+
+.progress-text {
+  font-size: 10px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.status-extra {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.status-extra-text {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Action Buttons */
+.actions-cell {
+  width: 130px;
+  min-width: 130px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.view-btn {
+  background: #dbeafe;
+  color: #3b82f6;
+}
+
+.view-btn:hover {
+  background: #bfdbfe;
+}
+
+.approve-btn {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.approve-btn:hover {
+  background: #bbf7d0;
+}
+
+.approve-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.reject-btn {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.reject-btn:hover {
+  background: #fee2e2;
+}
+
+/* Table Footer */
+.table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 16px;
+}
+
+.footer-info {
+  font-size: 13px;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.footer-count {
+  font-weight: 700;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  margin-bottom: 16px;
+}
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.empty-subtitle {
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* ===================================
+   MODAL STYLES
+   =================================== */
+.modal-card {
+  width: 100%;
+  max-width: 800px;
+  max-height: 85vh;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.details-modal {
+  max-width: 700px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+
+.modal-title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-avatar {
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.modal-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.modal-close-btn {
+  color: #6b7280;
+}
+
+.modal-close-btn:hover {
+  background: #f3f4f6;
+}
+
+.modal-content {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.detail-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-section {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  flex-shrink: 0;
+  margin-right: 16px;
+}
+
+.detail-value {
+  font-size: 13px;
+  color: #111827;
+  text-align: right;
+  word-break: break-word;
+}
+
+.approval-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approval-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #ffffff;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.approval-item.ready {
+  background: #f0fdf4;
+  font-weight: 500;
+}
+
+.approval-item.waiting {
+  background: #fff7ed;
+  font-weight: 500;
+}
+
+.modal-footer {
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Scrollbar */
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ===================================
+   RESPONSIVE BREAKPOINTS
+   =================================== */
+
+/* 1440px - Large Desktop */
+@media (min-width: 1440px) {
+  .dashboard-container {
+    max-width: 1400px;
+    padding: 20px;
+  }
+
+  .stats-section {
+    gap: 16px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 14px 12px;
+  }
+
+  .action-buttons {
+    gap: 5px;
+  }
+
+  .action-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+}
+
+/* 1024px - Desktop / Tablet Landscape */
+@media (max-width: 1024px) {
+  .dashboard-container {
+    padding: 16px;
+  }
+
+  .page-header {
+    padding: 14px;
+  }
+
+  .header-content {
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .header-search {
+    min-width: 200px;
+  }
+
+  .stats-section {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stats-card {
+    padding: 14px;
+  }
+
+  .stats-icon-wrapper {
+    width: 44px;
+    height: 44px;
+  }
+
+  .stats-icon {
+    font-size: 22px;
+  }
+
+  .stats-amount {
+    font-size: 24px;
+  }
+
+  .stats-label {
+    font-size: 12px;
+  }
+
+  .table-header {
+    padding: 14px;
+  }
+
+  .modern-table-container {
+    margin: 0 14px 0 14px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 11px 8px;
+    font-size: 12px;
+  }
+
+  .actions-cell {
+    width: 120px;
+    min-width: 120px;
+  }
+
+  .action-buttons {
+    gap: 3px;
+  }
+
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+  }
+
+  .employee-info {
+    gap: 8px;
+  }
+
+  .employee-name {
+    font-size: 12px;
+  }
+
+  .modal-card {
+    max-width: 90vw;
+  }
+}
+
+/* 768px - Tablet Portrait */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 16px;
+  }
+
+  .page-header {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .refresh-btn {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .debug-btn {
+    flex-shrink: 0;
+  }
+
+  .header-search {
+    width: 100%;
+    max-width: 100%;
+    order: 3;
+  }
+
+  .stats-section {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .stats-card {
+    padding: 16px;
+  }
+
+  .stats-icon-wrapper {
+    width: 44px;
+    height: 44px;
+  }
+
+  .stats-icon {
+    font-size: 22px;
+  }
+
+  .stats-amount {
+    font-size: 24px;
+  }
+
+  .stats-label {
+    font-size: 13px;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .table-actions {
+    width: 100%;
+  }
+
+  .sort-select {
+    width: 100%;
+  }
+
+  .modern-table-container {
+    margin: 0 12px 0 12px;
+    overflow-x: auto;
+    border-radius: 8px;
+  }
+
+  .swap-table {
+    min-width: 1000px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 12px 8px;
+    font-size: 12px;
+  }
+
+  .table-header-cell {
+    white-space: nowrap;
+  }
+
+  .employee-info {
+    gap: 8px;
+  }
+
+  .employee-name {
+    font-size: 12px;
+  }
+
+  .actions-cell {
+    width: 130px;
+    min-width: 130px;
+    padding: 12px 6px;
+  }
+
+  .action-buttons {
+    gap: 3px;
+    justify-content: center;
+  }
+
+  .action-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+  }
+
+  .status-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  .table-footer {
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .modal-card {
+    margin: 12px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .modal-header {
+    padding: 16px;
+  }
+
+  .modal-title-section {
+    gap: 12px;
+  }
+
+  .modal-title {
+    font-size: 18px;
+  }
+
+  .modal-subtitle {
+    font-size: 13px;
+  }
+
+  .modal-content {
+    padding: 16px;
+  }
+
+  .detail-section {
+    padding: 16px;
+  }
+
+  .section-title {
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 10px 0;
+  }
+
+  .detail-value {
+    text-align: left;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+    padding: 16px;
+  }
+
+  .form-actions button {
+    width: 100%;
+  }
+}
+
+/* Small Mobile - 480px and below */
+@media (max-width: 480px) {
+  .dashboard-container {
+    padding: 12px;
+  }
+
+  .page-header {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .stats-card {
+    padding: 14px;
+  }
+
+  .stats-icon-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+
+  .stats-icon {
+    font-size: 20px;
+  }
+
+  .stats-amount {
+    font-size: 22px;
+  }
+
+  .stats-label {
+    font-size: 12px;
+  }
+
+  .table-header {
+    padding: 12px;
+  }
+
+  .table-title {
+    font-size: 18px;
+  }
+
+  .modern-table-container {
+    margin: 0 8px 0 8px;
+  }
+
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+  }
+
+  .modal-header {
+    padding: 12px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+
+  .empty-state {
+    padding: 40px 16px;
+  }
+
+  .empty-title {
+    font-size: 15px;
+  }
+
+  .empty-subtitle {
+    font-size: 12px;
+  }
 }
 </style>

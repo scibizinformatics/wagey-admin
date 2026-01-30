@@ -1,324 +1,359 @@
 <template>
-  <q-page class="modern-page">
-    <!-- Header Section -->
-    <div class="page-header">
-      <div class="header-content">
-        <!-- Title and Subtitle -->
-        <div class="title-section">
-          <h1 class="page-title">Leave Requests</h1>
-        </div>
-
-        <!-- Header Actions -->
-        <div class="header-actions">
-          <q-btn
-            icon="refresh"
-            flat
-            round
-            color="grey-7"
-            @click="fetchRequests"
-            :loading="loading"
-            class="refresh-btn"
-          />
-        </div>
-      </div>
-    </div>
-
-    <!-- Elegant Stats Cards -->
-    <div class="stats-section">
-      <div class="stat-card pending">
-        <div class="stat-content">
-          <div class="stat-icon">
-            <q-icon name="schedule" />
+  <q-page class="request-dashboard">
+    <div class="dashboard-container">
+      <!-- Header Section -->
+      <div class="page-header">
+        <div class="header-content">
+          <div class="header-left">
+            <h1 class="page-title">Leave Requests</h1>
           </div>
-          <div class="stat-info">
-            <div class="stat-number">{{ pendingCount }}</div>
-            <div class="stat-label">Pending</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="stat-card approved">
-        <div class="stat-content">
-          <div class="stat-icon">
-            <q-icon name="check_circle" />
-          </div>
-          <div class="stat-info">
-            <div class="stat-number">{{ approvedCount }}</div>
-            <div class="stat-label">Approved</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="stat-card rejected">
-        <div class="stat-content">
-          <div class="stat-icon">
-            <q-icon name="cancel" />
-          </div>
-          <div class="stat-info">
-            <div class="stat-number">{{ rejectedCount }}</div>
-            <div class="stat-label">Rejected</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Minimal Filter Bar -->
-    <div class="filter-bar">
-      <div class="search-container">
-        <q-input
-          v-model="searchTerm"
-          placeholder="Search requests..."
-          outlined
-          dense
-          borderless
-          class="search-input"
-        >
-          <template v-slot:prepend>
-            <q-icon name="search" color="grey-5" size="20px" />
-          </template>
-        </q-input>
-      </div>
-
-      <div class="filter-group">
-        <q-select
-          v-model="selectedFilter"
-          :options="filterOptions"
-          outlined
-          dense
-          borderless
-          label="Type"
-          class="filter-select"
-          map-options
-          emit-value
-        />
-
-        <q-select
-          v-model="statusFilter"
-          :options="statusOptions"
-          outlined
-          dense
-          borderless
-          label="Status"
-          class="filter-select"
-          map-options
-          emit-value
-        />
-      </div>
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="loading" class="loading-state">
-      <div class="loading-spinner">
-        <q-spinner size="32px" color="primary" thickness="3" />
-      </div>
-      <div class="loading-text">Loading requests...</div>
-    </div>
-
-    <!-- Modern Table -->
-    <div v-else-if="filteredRequests.length > 0" class="table-container">
-      <q-table
-        :rows="filteredRequests"
-        :columns="tableColumns"
-        row-key="id"
-        flat
-        class="elegant-table"
-        :pagination="{ rowsPerPage: 15 }"
-        separator="none"
-      >
-        <template v-slot:body="props">
-          <q-tr :props="props" class="table-row" @click="openDetails(props.row)">
-            <q-td key="employeeName" :props="props" class="employee-cell">
-              <div class="employee-info">
-                <div class="employee-avatar">
-                  {{ props.row.employeeName.charAt(0).toUpperCase() }}
-                </div>
-                <div class="employee-details">
-                  <div class="employee-name">{{ props.row.employeeName }}</div>
-                  <div class="employee-dept">{{ props.row.department || 'General' }}</div>
-                </div>
-              </div>
-            </q-td>
-
-            <q-td key="type" :props="props" class="type-cell">
-              <div class="type-chip" :class="props.row.type">
-                {{ getTypeLabel(props.row.type) }}
-              </div>
-            </q-td>
-
-            <q-td key="dates" :props="props" class="dates-cell">
-              <div class="date-range">
-                <div class="start-date">{{ formatDate(props.row.startDate) }}</div>
-                <div class="date-separator">→</div>
-                <div class="end-date">{{ formatDate(props.row.endDate) }}</div>
-              </div>
-              <div class="duration">{{ props.row.duration }}</div>
-            </q-td>
-
-            <q-td key="status" :props="props" class="status-cell">
-              <div class="status-badge" :class="props.row.status">
-                {{ props.row.status }}
-              </div>
-            </q-td>
-            <q-td key="reason" :props="props" class="reason-cell">
-              <div class="reason-text">
-                {{ props.row.reason || 'No reason provided' }}
-              </div>
-            </q-td>
-            <q-td key="actions" :props="props" class="actions-cell">
-              <div class="action-buttons">
-                <q-btn
-                  icon="visibility"
-                  flat
-                  round
-                  size="sm"
-                  class="action-btn view-btn"
-                  @click.stop="openDetails(props.row)"
-                >
-                  <q-tooltip>View Details</q-tooltip>
-                </q-btn>
-                <q-btn
-                  v-if="props.row.status === 'pending'"
-                  icon="edit"
-                  flat
-                  round
-                  size="sm"
-                  class="action-btn edit-btn"
-                  @click.stop="openDetails(props.row)"
-                >
-                  <q-tooltip>Edit</q-tooltip>
-                </q-btn>
-                <q-btn
-                  v-if="props.row.status === 'pending'"
-                  icon="check"
-                  flat
-                  round
-                  size="sm"
-                  class="action-btn approve-btn"
-                  @click.stop="approveRequest(props.row)"
-                  :loading="actionLoading === `approve-${props.row.id}`"
-                >
-                  <q-tooltip>Approve</q-tooltip>
-                </q-btn>
-                <q-btn
-                  v-if="props.row.status === 'pending'"
-                  icon="close"
-                  flat
-                  round
-                  size="sm"
-                  class="action-btn reject-btn"
-                  @click.stop="rejectRequest(props.row)"
-                  :loading="actionLoading === `reject-${props.row.id}`"
-                >
-                  <q-tooltip>Reject</q-tooltip>
-                </q-btn>
-              </div>
-            </q-td>
-          </q-tr>
-        </template>
-      </q-table>
-    </div>
-
-    <!-- Empty State -->
-    <div v-else class="empty-state">
-      <div class="empty-icon">
-        <q-icon name="search_off" size="48px" color="grey-3" />
-      </div>
-      <div class="empty-title">No requests found</div>
-      <div class="empty-subtitle">Try adjusting your search or filters</div>
-    </div>
-
-    <!-- Elegant Details Dialog -->
-    <q-dialog v-model="showDetails" class="details-dialog">
-      <q-card class="dialog-card">
-        <div class="dialog-header">
-          <div class="dialog-title">Request Details</div>
-          <q-btn icon="close" flat round size="sm" v-close-popup class="close-btn" />
-        </div>
-
-        <div class="dialog-body" v-if="selectedRequest">
-          <!-- Employee Section -->
-          <div class="detail-section">
-            <div class="section-header">
-              <div class="employee-avatar large">
-                {{ selectedRequest.employeeName.charAt(0).toUpperCase() }}
-              </div>
-              <div class="employee-info-detail">
-                <div class="employee-name-detail">{{ selectedRequest.employeeName }}</div>
-                <div class="employee-meta">{{ selectedRequest.department || 'General' }}</div>
-              </div>
-              <div class="status-badge large" :class="selectedRequest.status">
-                {{ selectedRequest.status }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Request Info Grid -->
-          <div class="info-grid">
-            <div class="info-item">
-              <div class="info-label">Type</div>
-              <div class="type-chip" :class="selectedRequest.type">
-                {{ getTypeLabel(selectedRequest.type) }}
-              </div>
-            </div>
-
-            <div class="info-item">
-              <div class="info-label">Duration</div>
-              <div class="info-value">{{ selectedRequest.duration }}</div>
-            </div>
-
-            <div class="info-item">
-              <div class="info-label">Start Date</div>
-              <div class="info-value">{{ formatDate(selectedRequest.startDate) }}</div>
-            </div>
-
-            <div class="info-item">
-              <div class="info-label">End Date</div>
-              <div class="info-value">{{ formatDate(selectedRequest.endDate) }}</div>
-            </div>
-          </div>
-
-          <!-- Reason Section -->
-          <div v-if="selectedRequest.reason" class="detail-section">
-            <div class="section-title">Reason</div>
-            <div class="reason-content">{{ selectedRequest.reason }}</div>
-          </div>
-
-          <!-- Message Section -->
-          <div v-if="selectedRequest.message" class="detail-section">
-            <div class="section-title">Additional Message</div>
-            <div class="message-content">{{ selectedRequest.message }}</div>
-          </div>
-
-          <!-- Admin Response -->
-          <div v-if="selectedRequest.adminResponse" class="detail-section">
-            <div class="section-title">Admin Response</div>
-            <div class="admin-response">{{ selectedRequest.adminResponse }}</div>
-            <div v-if="selectedRequest.respondedBy" class="response-meta">
-              By {{ selectedRequest.respondedBy }} • {{ formatDate(selectedRequest.respondedDate) }}
-            </div>
-          </div>
-        </div>
-
-        <div class="dialog-actions">
-          <div class="action-group" v-if="selectedRequest && selectedRequest.status === 'pending'">
+          <div class="header-actions">
             <q-btn
+              color="primary"
+              icon="refresh"
+              label="Refresh"
+              class="refresh-btn"
+              @click="fetchRequests"
+              :loading="loading"
+            />
+            <q-input
+              v-model="searchTerm"
+              placeholder="Search requests..."
+              class="header-search"
+              dense
+              outlined
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" class="search-icon" />
+              </template>
+            </q-input>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="stats-section">
+        <div class="stats-card pending-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="schedule" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ pendingCount }}</div>
+            <div class="stats-label">Pending Requests</div>
+          </div>
+        </div>
+
+        <div class="stats-card approved-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="check_circle" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ approvedCount }}</div>
+            <div class="stats-label">Approved</div>
+          </div>
+        </div>
+
+        <div class="stats-card rejected-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="cancel" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ rejectedCount }}</div>
+            <div class="stats-label">Rejected</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Table Section -->
+      <div class="table-section">
+        <div class="table-header">
+          <div class="table-title-section">
+            <h2 class="table-title">Request Overview</h2>
+          </div>
+          <div class="table-actions">
+            <q-select
+              v-model="selectedFilter"
+              :options="filterOptions"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              label="Filter by Type"
+              class="filter-select"
+              dense
+              outlined
+              clearable
+            >
+              <template v-slot:prepend>
+                <q-icon name="filter_list" />
+              </template>
+            </q-select>
+
+            <q-select
+              v-model="statusFilter"
+              :options="statusOptions"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              label="Filter by Status"
+              class="filter-select"
+              dense
+              outlined
+              clearable
+            >
+              <template v-slot:prepend>
+                <q-icon name="check_circle" />
+              </template>
+            </q-select>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="loading" class="loading-state">
+          <q-spinner size="48px" color="primary" thickness="4" />
+          <div class="loading-text">Loading requests...</div>
+        </div>
+
+        <!-- Request Table -->
+        <div v-else-if="filteredRequests.length > 0" class="modern-table-container">
+          <q-table
+            :rows="filteredRequests"
+            :columns="columns"
+            row-key="id"
+            flat
+            :loading="loading"
+            no-data-label="No requests found"
+            class="request-table"
+            hide-pagination
+            :rows-per-page-options="[0]"
+          >
+            <template v-slot:header>
+              <q-tr class="table-header-row">
+                <q-th class="table-header-cell">SL No</q-th>
+                <q-th class="table-header-cell">Employee</q-th>
+                <q-th class="table-header-cell">Type</q-th>
+                <q-th class="table-header-cell">Period</q-th>
+                <q-th class="table-header-cell">Reason</q-th>
+                <q-th class="table-header-cell">Status</q-th>
+                <q-th class="table-header-cell">Actions</q-th>
+              </q-tr>
+            </template>
+
+            <template v-slot:body="props">
+              <q-tr
+                class="table-body-row"
+                :class="{ 'rejected-row': props.row.status === 'rejected' }"
+              >
+                <q-td class="table-body-cell">
+                  {{ String(props.rowIndex + 1).padStart(2, '0') }}.
+                </q-td>
+
+                <q-td class="table-body-cell employee-name-cell">
+                  <div class="employee-info">
+                    <q-avatar size="32px" color="primary" text-color="white">
+                      {{ getInitials(props.row.employeeName) }}
+                    </q-avatar>
+                    <div class="employee-details">
+                      <span class="employee-name">{{ props.row.employeeName }}</span>
+                      <span class="employee-dept">{{ props.row.department || 'General' }}</span>
+                    </div>
+                  </div>
+                </q-td>
+
+                <q-td class="table-body-cell">
+                  <div :class="['type-badge', props.row.type]">
+                    {{ getTypeLabel(props.row.type) }}
+                  </div>
+                </q-td>
+
+                <q-td class="table-body-cell dates-cell">
+                  <div class="date-range">
+                    <div class="start-date">{{ formatDate(props.row.startDate) }}</div>
+                    <div class="date-separator">→</div>
+                    <div class="end-date">{{ formatDate(props.row.endDate) }}</div>
+                  </div>
+                  <div class="duration">{{ props.row.duration }}</div>
+                </q-td>
+
+                <q-td class="table-body-cell reason-cell">
+                  <div class="reason-text">
+                    {{ props.row.reason || 'No reason provided' }}
+                  </div>
+                </q-td>
+
+                <q-td class="table-body-cell">
+                  <div :class="['status-badge', getStatusClass(props.row)]">
+                    {{ capitalizeStatus(props.row.status) }}
+                  </div>
+                </q-td>
+
+                <q-td class="table-body-cell actions-cell">
+                  <div class="action-buttons">
+                    <q-btn
+                      flat
+                      round
+                      icon="visibility"
+                      size="sm"
+                      class="action-btn view-btn"
+                      @click="openDetails(props.row)"
+                    >
+                      <q-tooltip>View Details</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="props.row.status === 'pending'"
+                      flat
+                      round
+                      icon="check"
+                      size="sm"
+                      class="action-btn approve-btn"
+                      @click="approveRequest(props.row)"
+                      :loading="actionLoading === `approve-${props.row.id}`"
+                    >
+                      <q-tooltip>Approve Request</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="props.row.status === 'pending'"
+                      flat
+                      round
+                      icon="close"
+                      size="sm"
+                      class="action-btn reject-btn"
+                      @click="rejectRequest(props.row)"
+                      :loading="actionLoading === `reject-${props.row.id}`"
+                    >
+                      <q-tooltip>Reject Request</q-tooltip>
+                    </q-btn>
+                  </div>
+                </q-td>
+              </q-tr>
+            </template>
+          </q-table>
+        </div>
+
+        <!-- Empty State -->
+        <div v-else class="empty-state">
+          <div class="empty-icon">
+            <q-icon name="search_off" size="64px" color="grey-4" />
+          </div>
+          <div class="empty-title">No requests found</div>
+          <div class="empty-subtitle">Try adjusting your search or filters</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Request Details Modal -->
+    <q-dialog v-model="showDetails" persistent>
+      <q-card class="modal-card details-modal">
+        <q-card-section class="modal-header">
+          <div class="modal-title-section">
+            <q-avatar size="64px" color="primary" text-color="white" class="modal-avatar">
+              {{ selectedRequest ? getInitials(selectedRequest.employeeName) : '?' }}
+            </q-avatar>
+            <div>
+              <div class="modal-title">
+                {{ selectedRequest?.employeeName || 'Request Details' }}
+              </div>
+              <div class="modal-subtitle">{{ selectedRequest?.department || 'General' }}</div>
+            </div>
+          </div>
+          <q-btn icon="close" flat round class="modal-close-btn" @click="showDetails = false" />
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="modal-content" v-if="selectedRequest">
+          <div class="detail-sections">
+            <!-- Request Status -->
+            <div class="detail-section">
+              <div class="section-title">Request Status</div>
+              <div class="detail-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Status:</span>
+                  <span class="detail-value">
+                    <div :class="['status-badge', getStatusClass(selectedRequest)]">
+                      {{ capitalizeStatus(selectedRequest.status) }}
+                    </div>
+                  </span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Type:</span>
+                  <span class="detail-value">
+                    <div :class="['type-badge', selectedRequest.type]">
+                      {{ getTypeLabel(selectedRequest.type) }}
+                    </div>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Request Details -->
+            <div class="detail-section">
+              <div class="section-title">Request Information</div>
+              <div class="detail-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Start Date:</span>
+                  <span class="detail-value">{{ formatDate(selectedRequest.startDate) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">End Date:</span>
+                  <span class="detail-value">{{ formatDate(selectedRequest.endDate) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Duration:</span>
+                  <span class="detail-value">{{ selectedRequest.duration }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Submitted:</span>
+                  <span class="detail-value">{{
+                    formatDateTime(selectedRequest.submittedDate)
+                  }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Reason Section -->
+            <div v-if="selectedRequest.reason" class="detail-section">
+              <div class="section-title">Reason</div>
+              <div class="reason-content">{{ selectedRequest.reason }}</div>
+            </div>
+
+            <!-- Message Section -->
+            <div v-if="selectedRequest.message" class="detail-section">
+              <div class="section-title">Additional Message</div>
+              <div class="message-content">{{ selectedRequest.message }}</div>
+            </div>
+
+            <!-- Admin Response -->
+            <div v-if="selectedRequest.adminResponse" class="detail-section">
+              <div class="section-title">Admin Response</div>
+              <div class="admin-response">{{ selectedRequest.adminResponse }}</div>
+              <div v-if="selectedRequest.respondedBy" class="response-meta">
+                By {{ selectedRequest.respondedBy }} •
+                {{ formatDateTime(selectedRequest.respondedDate) }}
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="modal-footer">
+          <div class="form-actions">
+            <q-btn
+              v-if="selectedRequest && selectedRequest.status === 'pending'"
               label="Reject"
-              color="negative"
               flat
+              color="negative"
               @click="rejectRequest(selectedRequest)"
               :loading="actionLoading === `reject-${selectedRequest.id}`"
-              class="action-btn-dialog reject"
             />
             <q-btn
+              v-if="selectedRequest && selectedRequest.status === 'pending'"
               label="Approve"
               color="positive"
               @click="approveRequest(selectedRequest)"
               :loading="actionLoading === `approve-${selectedRequest.id}`"
-              class="action-btn-dialog approve"
             />
+            <q-btn label="Close" flat color="grey-7" @click="showDetails = false" />
           </div>
-          <q-btn flat label="Close" color="grey-7" v-close-popup class="close-action" />
-        </div>
+        </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>
@@ -354,13 +389,14 @@ const statusOptions = [
   { label: 'Rejected', value: 'rejected' },
 ]
 
-const tableColumns = [
-  { name: 'employeeName', label: 'Employee', align: 'left', field: 'employeeName' },
-  { name: 'type', label: 'Type', align: 'left', field: 'type' },
-  { name: 'dates', label: 'Period', align: 'left', field: 'startDate' },
-  { name: 'reason', label: 'Reason', align: 'left', field: 'reason' },
-  { name: 'status', label: 'Status', align: 'left', field: 'status' },
-  { name: 'actions', label: '', align: 'right' },
+const columns = [
+  { name: 'sl_no', label: 'SL No', field: 'id', align: 'left' },
+  { name: 'employeeName', label: 'Employee', field: 'employeeName', align: 'left' },
+  { name: 'type', label: 'Type', field: 'type', align: 'left' },
+  { name: 'dates', label: 'Period', field: 'startDate', align: 'left' },
+  { name: 'reason', label: 'Reason', field: 'reason', align: 'left' },
+  { name: 'status', label: 'Status', field: 'status', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
 
 // Computed properties for stats
@@ -368,7 +404,96 @@ const pendingCount = computed(() => requests.value.filter((r) => r.status === 'p
 const approvedCount = computed(() => requests.value.filter((r) => r.status === 'approved').length)
 const rejectedCount = computed(() => requests.value.filter((r) => r.status === 'rejected').length)
 
-// ✅ fetch data from API
+const filteredRequests = computed(() => {
+  let filtered = requests.value
+
+  if (selectedFilter.value && selectedFilter.value !== 'all') {
+    filtered = filtered.filter((r) => r.type === selectedFilter.value)
+  }
+
+  if (statusFilter.value && statusFilter.value !== 'all') {
+    filtered = filtered.filter((r) => r.status === statusFilter.value)
+  }
+
+  if (searchTerm.value.trim()) {
+    const search = searchTerm.value.toLowerCase()
+    filtered = filtered.filter(
+      (r) =>
+        r.employeeName.toLowerCase().includes(search) ||
+        (r.reason && r.reason.toLowerCase().includes(search)) ||
+        (r.department && r.department.toLowerCase().includes(search)),
+    )
+  }
+
+  return filtered
+})
+
+// Helper functions
+const getInitials = (name) =>
+  name && name !== 'N/A'
+    ? name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : '?'
+
+const getTypeLabel = (type) => {
+  const labels = {
+    leave: 'Leave',
+    timeoff: 'Time Off',
+    schedule: 'Schedule',
+    overtime: 'Overtime',
+  }
+  return labels[type] || 'Request'
+}
+
+const getStatusClass = (request) => {
+  const status = request.status
+  if (status === 'pending') return 'status-pending'
+  if (status === 'approved') return 'status-approved'
+  if (status === 'rejected') return 'status-rejected'
+  return 'status-default'
+}
+
+const capitalizeStatus = (status) => {
+  if (!status) return 'N/A'
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return 'N/A'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+const calculateDuration = (start, end) => {
+  if (!start || !end) return 'N/A'
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+  const diffTime = endDate - startDate
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+  return diffDays > 1 ? `${diffDays} days` : '1 day'
+}
+
+// API functions
 const fetchRequests = async () => {
   loading.value = true
   try {
@@ -390,14 +515,14 @@ const fetchRequests = async () => {
     $q.notify({
       type: 'negative',
       message: 'Failed to fetch requests. Please try again.',
+      position: 'top',
     })
   } finally {
     loading.value = false
   }
 }
 
-// ✅ map API response to request objects for UI
-function mapApiResponseToRequests(apiData) {
+const mapApiResponseToRequests = (apiData) => {
   if (Array.isArray(apiData)) {
     return apiData.map((item) => formatRequest(item))
   }
@@ -410,7 +535,7 @@ function mapApiResponseToRequests(apiData) {
   return []
 }
 
-function formatRequest(item) {
+const formatRequest = (item) => {
   return {
     id: item.id,
     employeeId: item.employee_id,
@@ -431,76 +556,18 @@ function formatRequest(item) {
   }
 }
 
-function calculateDuration(start, end) {
-  if (!start || !end) return 'N/A'
-  const startDate = new Date(start)
-  const endDate = new Date(end)
-  const diffTime = endDate - startDate
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-  return diffDays > 1 ? `${diffDays} days` : '1 day'
-}
-
-function formatDate(dateString) {
-  if (!dateString) return 'N/A'
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-const filteredRequests = computed(() => {
-  let filtered = requests.value
-
-  if (selectedFilter.value !== 'all') {
-    filtered = filtered.filter((r) => r.type === selectedFilter.value)
-  }
-
-  if (statusFilter.value !== 'all') {
-    filtered = filtered.filter((r) => r.status === statusFilter.value)
-  }
-
-  if (searchTerm.value.trim()) {
-    const search = searchTerm.value.toLowerCase()
-    filtered = filtered.filter(
-      (r) =>
-        r.employeeName.toLowerCase().includes(search) ||
-        r.reason.toLowerCase().includes(search) ||
-        r.department.toLowerCase().includes(search),
-    )
-  }
-
-  return filtered
-})
-
-function getTypeLabel(type) {
-  const labels = {
-    leave: 'Leave',
-    timeoff: 'Time Off',
-    schedule: 'Schedule',
-    overtime: 'Overtime',
-  }
-  return labels[type] || 'Request'
-}
-
-function openDetails(request) {
+const openDetails = (request) => {
   selectedRequest.value = request
   showDetails.value = true
 }
 
-// ✅ approve request
-// ✅ approve request
 const approveRequest = async (request) => {
   try {
     actionLoading.value = `approve-${request.id}`
 
     const token = localStorage.getItem('access_token')
-
-    // ✅ FIX: Get UUID from the correct localStorage key
     let approverUUID = localStorage.getItem('account_uuid')
 
-    // ✅ Fallback: Try to get from 'user' object if account_uuid doesn't exist
     if (!approverUUID) {
       const storedUser = localStorage.getItem('user')
       if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
@@ -521,18 +588,11 @@ const approveRequest = async (request) => {
       throw new Error('User UUID not found. Please log in again.')
     }
 
-    console.log('🔑 Using approver UUID:', approverUUID)
-
     const payload = {
       type: request.type,
       status: 'approved',
       action: 'approve',
     }
-
-    console.log('📤 Approving request:', {
-      url: `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
-      payload,
-    })
 
     await axios.patch(
       `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
@@ -542,7 +602,6 @@ const approveRequest = async (request) => {
       },
     )
 
-    // Update local state
     const index = requests.value.findIndex((r) => r.id === request.id)
     if (index !== -1) {
       requests.value[index].status = 'approved'
@@ -555,9 +614,9 @@ const approveRequest = async (request) => {
       type: 'positive',
       message: 'Request approved successfully',
       icon: 'check_circle',
+      position: 'top',
     })
 
-    // Close details dialog if open
     if (showDetails.value) {
       showDetails.value = false
     }
@@ -575,6 +634,7 @@ const approveRequest = async (request) => {
       type: 'negative',
       message: errorMessage,
       icon: 'error',
+      position: 'top',
     })
   } finally {
     actionLoading.value = null
@@ -586,11 +646,8 @@ const rejectRequest = async (request) => {
     actionLoading.value = `reject-${request.id}`
 
     const token = localStorage.getItem('access_token')
-
-    // ✅ FIX: Get UUID from the correct localStorage key
     let approverUUID = localStorage.getItem('account_uuid')
 
-    // ✅ Fallback: Try to get from 'user' object if account_uuid doesn't exist
     if (!approverUUID) {
       const storedUser = localStorage.getItem('user')
       if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
@@ -611,18 +668,11 @@ const rejectRequest = async (request) => {
       throw new Error('User UUID not found. Please log in again.')
     }
 
-    console.log('🔑 Using approver UUID:', approverUUID)
-
     const payload = {
       type: request.type,
       status: 'rejected',
       action: 'reject',
     }
-
-    console.log('📤 Rejecting request:', {
-      url: `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
-      payload,
-    })
 
     await axios.patch(
       `https://staging.wageyapp.com/attendance/approve-requests/${request.type}/${request.id}/`,
@@ -632,7 +682,6 @@ const rejectRequest = async (request) => {
       },
     )
 
-    // Update local state
     const index = requests.value.findIndex((r) => r.id === request.id)
     if (index !== -1) {
       requests.value[index].status = 'rejected'
@@ -645,9 +694,9 @@ const rejectRequest = async (request) => {
       type: 'negative',
       message: 'Request rejected successfully',
       icon: 'cancel',
+      position: 'top',
     })
 
-    // Close details dialog if open
     if (showDetails.value) {
       showDetails.value = false
     }
@@ -665,6 +714,7 @@ const rejectRequest = async (request) => {
       type: 'negative',
       message: errorMessage,
       icon: 'error',
+      position: 'top',
     })
   } finally {
     actionLoading.value = null
@@ -675,214 +725,189 @@ onMounted(fetchRequests)
 </script>
 
 <style scoped>
-.modern-page {
-  background: #fafbfc;
+.request-dashboard {
+  background: #f8fafc;
   min-height: 100vh;
+  padding: 0;
+}
+
+.dashboard-container {
+  max-width: 1400px;
+  margin: 0 auto;
   padding: 16px;
 }
 
-/* Clean Header */
+/* ===================================
+   HEADER SECTION
+   =================================== */
 .page-header {
   background: white;
-  border-radius: 16px;
-  padding: 20px 24px;
-  margin-bottom: 20px;
-  border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #e2e8f0;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0;
-  letter-spacing: -0.03em;
-}
-
-.page-subtitle {
-  color: #6b7280;
-  margin: 4px 0 0 0;
-  font-size: 0.8125rem;
-  font-weight: 400;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a202c;
+  margin: 0 0 4px 0;
 }
 
 .header-actions {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .refresh-btn {
-  background: #f3f4f6;
-  color: #6b7280;
-  transition: all 0.2s ease;
+  height: 36px;
+  border-radius: 8px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
 }
 
-.refresh-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
-  transform: rotate(180deg);
+.header-search {
+  min-width: 180px;
+  max-width: 250px;
+  flex: 1;
 }
 
-/* Modern Stats Cards */
+.header-search .q-field__control {
+  border-radius: 8px;
+  height: 36px;
+}
+
+.search-icon {
+  color: #9ca3af;
+}
+
+/* ===================================
+   STATS SECTION
+   =================================== */
 .stats-section {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.stat-card {
+.stats-card {
   background: white;
   border-radius: 12px;
-  padding: 16px 20px;
-  position: relative;
-  border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  opacity: 0.08;
-  transition: opacity 0.3s ease;
-}
-
-.stat-card.pending::before {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-}
-
-.stat-card.approved::before {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-}
-
-.stat-card.rejected::before {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
-}
-
-.stat-card:hover::before {
-  opacity: 0.12;
-}
-
-.stat-content {
-  position: relative;
-  z-index: 1;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   gap: 12px;
+  transition: all 0.2s ease;
+  min-width: 0;
 }
 
-.stat-icon {
-  width: 40px;
-  height: 40px;
+.stats-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.pending-card {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+}
+
+.approved-card {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+}
+
+.rejected-card {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+}
+
+.stats-icon-wrapper {
+  width: 48px;
+  height: 48px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
   flex-shrink: 0;
-  font-size: 20px;
 }
 
-.stat-card.pending .stat-icon {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  color: #d97706;
+.stats-icon {
+  font-size: 24px;
+  color: #374151;
 }
 
-.stat-card.approved .stat-icon {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  color: #059669;
-}
-
-.stat-card.rejected .stat-icon {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  color: #dc2626;
-}
-
-.stat-info {
+.stats-content {
   flex: 1;
   min-width: 0;
 }
 
-.stat-number {
-  font-size: 1.75rem;
+.stats-amount {
+  font-size: 26px;
   font-weight: 700;
-  color: #1f2937;
+  color: #1a202c;
   line-height: 1;
-  margin-bottom: 2px;
-  letter-spacing: -0.02em;
+  margin-bottom: 4px;
 }
 
-.stat-label {
-  color: #6b7280;
-  font-size: 0.8125rem;
+.stats-label {
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  color: #374151;
+  margin-bottom: 2px;
 }
 
-.stat-indicator {
-  display: none;
-}
-
-/* Minimal Filter Bar */
-.filter-bar {
+/* ===================================
+   TABLE SECTION
+   =================================== */
+.table-section {
   background: white;
-  border-radius: 10px;
-  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.table-header {
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
   display: flex;
-  gap: 12px;
+  justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  border: 1px solid #f1f5f9;
+  gap: 12px;
 }
 
-.search-container {
-  flex: 1;
-  min-width: 180px;
+.table-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1a202c;
+  margin: 0;
 }
 
-.search-input {
-  width: 100%;
-  max-width: 350px;
-}
-
-.search-input :deep(.q-field__control) {
-  background: #f8fafc;
-  border-radius: 8px;
-  border: none;
-  height: 36px;
-}
-
-.filter-group {
+.table-actions {
   display: flex;
   gap: 10px;
   flex-shrink: 0;
 }
 
 .filter-select {
-  min-width: 120px;
+  min-width: 160px;
 }
 
-.filter-select :deep(.q-field__control) {
-  background: #f8fafc;
+.filter-select .q-field__control {
   border-radius: 8px;
-  border: none;
   height: 36px;
 }
 
@@ -892,73 +917,68 @@ onMounted(fetchRequests)
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 160px;
-  gap: 12px;
-  background: white;
-  border-radius: 10px;
-  border: 1px solid #f1f5f9;
+  padding: 60px 20px;
+  gap: 16px;
 }
 
 .loading-text {
   color: #64748b;
-  font-size: 0.8125rem;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 /* Modern Table */
-.table-container {
+.modern-table-container {
+  border: 2px solid #3b82f6;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 0 16px 16px 16px;
+}
+
+.request-table {
   background: white;
   border-radius: 10px;
   overflow: hidden;
-  border: 1px solid #f1f5f9;
-  overflow-x: auto;
 }
 
-.elegant-table {
-  background: transparent;
-  width: 100%;
-}
-
-.elegant-table :deep(.q-table__top) {
-  display: none;
-}
-
-.elegant-table :deep(.q-table__bottom) {
-  border-top: 1px solid #f1f5f9;
-  padding: 12px 16px;
-}
-
-.elegant-table :deep(.q-table__container) {
-  overflow-x: auto;
-}
-
-.elegant-table :deep(thead tr) {
+.table-header-row {
   background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
 }
 
-.elegant-table :deep(thead th) {
+.table-header-cell {
+  padding: 12px 10px;
+  font-size: 13px;
   font-weight: 600;
-  color: #475569;
-  font-size: 0.8125rem;
-  text-transform: none;
-  letter-spacing: 0;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f1f5f9;
+  color: #374151;
+  text-align: left;
+  border: none;
   white-space: nowrap;
-  vertical-align: middle;
 }
 
-.table-row {
-  cursor: pointer;
-  transition: all 0.15s ease;
+.table-body-row {
+  border-bottom: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
 }
 
-.table-row:hover {
+.table-body-row:hover {
   background: #f8fafc;
 }
 
-.table-row :deep(td) {
-  padding: 14px 16px;
-  border-bottom: 1px solid #f8fafc;
+.rejected-row {
+  opacity: 0.6;
+  background: #fef2f2;
+}
+
+.rejected-row:hover {
+  background: #fee2e2;
+}
+
+.table-body-cell {
+  padding: 12px 10px;
+  font-size: 13px;
+  color: #374151;
+  border: none;
   vertical-align: middle;
 }
 
@@ -967,321 +987,329 @@ onMounted(fetchRequests)
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 160px;
-}
-
-.employee-avatar {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 0.8125rem;
 }
 
 .employee-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
-  flex: 1;
 }
 
 .employee-name {
-  font-weight: 600;
-  color: #1a1a1a;
-  font-size: 0.8125rem;
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 500;
+  color: #1a202c;
+  font-size: 13px;
 }
 
 .employee-dept {
+  font-size: 11px;
   color: #64748b;
-  font-size: 0.6875rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-/* Type Chip */
-.type-chip {
+/* Type Badge */
+.type-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 0.6875rem;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
   font-weight: 500;
-  text-transform: capitalize;
   white-space: nowrap;
 }
 
-.type-chip.leave {
+.type-badge.leave {
   background: #eff6ff;
   color: #1d4ed8;
 }
 
-.type-chip.timeoff {
+.type-badge.timeoff {
   background: #f3e8ff;
   color: #7c3aed;
 }
 
-.type-chip.schedule {
+.type-badge.schedule {
   background: #fef3c7;
   color: #d97706;
 }
 
-.type-chip.overtime {
+.type-badge.overtime {
   background: #d1fae5;
   color: #059669;
 }
 
 /* Date Cell */
 .dates-cell {
-  min-width: 180px;
+  min-width: 160px;
 }
 
 .date-range {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 2px;
-  flex-wrap: nowrap;
+  margin-bottom: 3px;
 }
 
 .start-date,
 .end-date {
-  font-size: 0.8125rem;
-  color: #1a1a1a;
+  font-size: 13px;
+  color: #1a202c;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .date-separator {
   color: #94a3b8;
-  font-size: 0.6875rem;
-  flex-shrink: 0;
+  font-size: 11px;
 }
 
 .duration {
   color: #64748b;
-  font-size: 0.6875rem;
-  white-space: nowrap;
+  font-size: 11px;
+}
+
+/* Reason Cell */
+.reason-cell {
+  max-width: 250px;
+}
+
+.reason-text {
+  font-size: 13px;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
 }
 
 /* Status Badge */
 .status-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 0.6875rem;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
   font-weight: 500;
-  text-transform: capitalize;
   white-space: nowrap;
 }
 
-.status-badge.pending {
+.status-pending {
   background: #fef3c7;
   color: #d97706;
 }
 
-.status-badge.approved {
-  background: #d1fae5;
-  color: #059669;
+.status-approved {
+  background: #dcfce7;
+  color: #16a34a;
 }
 
-.status-badge.rejected {
+.status-rejected {
   background: #fee2e2;
   color: #dc2626;
 }
 
-.status-badge.large {
-  padding: 5px 10px;
-  font-size: 0.8125rem;
+.status-default {
+  background: #f3f4f6;
+  color: #374151;
 }
 
 /* Action Buttons */
+.actions-cell {
+  width: 120px;
+  min-width: 120px;
+}
+
 .action-buttons {
   display: flex;
   gap: 4px;
+  justify-content: center;
   align-items: center;
-  justify-content: flex-end;
-  min-width: 100px;
+  flex-wrap: nowrap;
 }
 
 .action-btn {
-  opacity: 0.6;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 6px;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
-.table-row:hover .action-btn {
-  opacity: 1;
-}
-
-.approve-btn:hover {
-  background: rgba(76, 175, 80, 0.1);
-}
-
-.reject-btn:hover {
-  background: rgba(244, 67, 54, 0.1);
+.view-btn {
+  background: #dbeafe;
+  color: #3b82f6;
 }
 
 .view-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: #bfdbfe;
+}
+
+.approve-btn {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.approve-btn:hover {
+  background: #bbf7d0;
+}
+
+.reject-btn {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.reject-btn:hover {
+  background: #fee2e2;
 }
 
 /* Empty State */
 .empty-state {
   text-align: center;
-  padding: 48px 20px;
-  background: white;
-  border-radius: 10px;
-  border: 1px solid #f1f5f9;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  margin-bottom: 16px;
 }
 
 .empty-title {
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 600;
   color: #475569;
-  margin: 12px 0 4px 0;
+  margin-bottom: 8px;
 }
 
 .empty-subtitle {
   color: #64748b;
-  font-size: 0.8125rem;
+  font-size: 13px;
 }
 
-/* Elegant Dialog */
-.details-dialog :deep(.q-dialog__inner) {
-  padding: 16px;
-}
-
-.dialog-card {
-  border-radius: 14px;
-  max-width: 540px;
+/* ===================================
+   MODAL STYLES
+   =================================== */
+.modal-card {
   width: 100%;
-  overflow: hidden;
-  border: 1px solid #f1f5f9;
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 800px;
+  max-height: 85vh;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
 }
 
-.dialog-header {
+.details-modal {
+  max-width: 700px;
+}
+
+.modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 20px 0 20px;
-}
-
-.dialog-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.close-btn {
-  color: #6b7280;
-}
-
-.dialog-body {
-  padding: 20px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-/* Detail Sections */
-.detail-section {
-  margin-bottom: 24px;
-}
-
-.detail-section:last-child {
-  margin-bottom: 0;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.employee-avatar.large {
-  width: 40px;
-  height: 40px;
-  font-size: 1rem;
+  padding: 16px 20px;
+  background: #f9fafb;
   flex-shrink: 0;
 }
 
-.employee-info-detail {
-  flex: 1;
-  min-width: 130px;
+.modal-title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.employee-name-detail {
-  font-size: 1rem;
+.modal-avatar {
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 2px;
+  color: #111827;
+  margin: 0;
 }
 
-.employee-meta {
-  color: #64748b;
-  font-size: 0.8125rem;
+.modal-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.modal-close-btn {
+  color: #6b7280;
+}
+
+.modal-close-btn:hover {
+  background: #f3f4f6;
+}
+
+.modal-content {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.detail-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-section {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
 }
 
 .section-title {
-  font-size: 0.8125rem;
+  font-size: 15px;
   font-weight: 600;
-  color: #475569;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 10px;
+  color: #111827;
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-/* Info Grid */
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  margin-bottom: 24px;
-}
-
-.info-item {
+.detail-grid {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
-.info-label {
-  font-size: 0.6875rem;
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-size: 13px;
   font-weight: 500;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: #6b7280;
+  flex-shrink: 0;
+  margin-right: 16px;
 }
 
-.info-value {
-  font-size: 0.8125rem;
-  color: #1a1a1a;
-  font-weight: 500;
+.detail-value {
+  font-size: 13px;
+  color: #111827;
+  text-align: right;
+  word-break: break-word;
 }
 
-/* Content Sections */
 .reason-content,
 .message-content {
-  background: #f8fafc;
+  background: #ffffff;
   padding: 12px;
-  border-radius: 8px;
-  color: #475569;
-  line-height: 1.5;
-  font-size: 0.8125rem;
+  border-radius: 6px;
+  color: #374151;
+  line-height: 1.6;
+  font-size: 13px;
   border-left: 3px solid #e2e8f0;
   word-wrap: break-word;
 }
@@ -1289,483 +1317,432 @@ onMounted(fetchRequests)
 .admin-response {
   background: #f0fdf4;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #16a34a;
-  line-height: 1.5;
-  font-size: 0.8125rem;
+  line-height: 1.6;
+  font-size: 13px;
   border-left: 3px solid #22c55e;
   word-wrap: break-word;
 }
 
 .response-meta {
-  margin-top: 6px;
-  font-size: 0.6875rem;
+  margin-top: 8px;
+  font-size: 11px;
   color: #64748b;
 }
 
-/* Dialog Actions */
-.dialog-actions {
+.modal-footer {
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.form-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 20px 20px 20px;
-  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
 }
 
-.action-group {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+/* Scrollbar */
+.modal-content::-webkit-scrollbar {
+  width: 6px;
 }
 
-.action-btn-dialog {
-  min-width: 76px;
-  font-weight: 500;
-  padding: 6px 16px;
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
 }
 
-.action-btn-dialog.approve {
-  background: #10b981;
-  color: white;
+.modal-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
 }
 
-.action-btn-dialog.approve:hover {
-  background: #059669;
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-.action-btn-dialog.reject {
-  color: #dc2626;
-}
+/* ===================================
+   RESPONSIVE BREAKPOINTS
+   =================================== */
 
-.action-btn-dialog.reject:hover {
-  background: rgba(220, 38, 38, 0.1);
-}
-
-.close-action {
-  font-weight: 500;
-}
-
-/* ============================================ */
-/* RESPONSIVE BREAKPOINTS */
-/* ============================================ */
-
-/* Large Desktop (1440px and up) */
+/* 1440px - Large Desktop */
 @media (min-width: 1440px) {
-  .modern-page {
-    padding: 24px;
-    max-width: 1600px;
-    margin: 0 auto;
-  }
-
-  .page-header {
-    padding: 24px 28px;
-  }
-
-  .page-title {
-    font-size: 1.75rem;
-  }
-
-  .stats-section {
-    gap: 20px;
-    margin-bottom: 24px;
-  }
-
-  .stat-card {
-    padding: 20px 24px;
-  }
-
-  .filter-bar {
-    padding: 14px 20px;
-  }
-
-  .search-input {
-    max-width: 450px;
-  }
-
-  .filter-select {
-    min-width: 140px;
-  }
-
-  .elegant-table :deep(thead th),
-  .table-row :deep(td) {
-    padding: 16px 20px;
-  }
-
-  .employee-info {
-    min-width: 180px;
-  }
-
-  .dialog-card {
-    max-width: 600px;
-  }
-}
-
-/* Desktop (1024px to 1439px) */
-@media (min-width: 1024px) and (max-width: 1439px) {
-  .modern-page {
+  .dashboard-container {
+    max-width: 1400px;
     padding: 20px;
-  }
-
-  .page-header {
-    padding: 20px 24px;
-  }
-
-  .page-title {
-    font-size: 1.5rem;
   }
 
   .stats-section {
     gap: 16px;
-    margin-bottom: 20px;
   }
 
-  .filter-bar {
-    padding: 12px 16px;
+  .table-header-cell,
+  .table-body-cell {
+    padding: 14px 12px;
   }
 
-  .search-input {
-    max-width: 320px;
+  .action-buttons {
+    gap: 5px;
   }
 
-  .filter-select {
-    min-width: 120px;
-  }
-
-  .employee-info {
-    min-width: 160px;
-  }
-
-  .elegant-table :deep(thead th),
-  .table-row :deep(td) {
-    padding: 14px 16px;
+  .action-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
   }
 }
 
-/* Tablet (768px to 1023px) */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .modern-page {
+/* 1024px - Desktop / Tablet Landscape */
+@media (max-width: 1024px) {
+  .dashboard-container {
     padding: 16px;
   }
 
   .page-header {
-    padding: 16px 20px;
-  }
-
-  .page-title {
-    font-size: 1.375rem;
+    padding: 14px;
   }
 
   .header-content {
-    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .header-search {
+    min-width: 200px;
   }
 
   .stats-section {
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
-    margin-bottom: 16px;
   }
 
-  .stat-card {
-    padding: 14px 16px;
+  .stats-card {
+    padding: 14px;
   }
 
-  .stat-number {
-    font-size: 1.5rem;
+  .stats-icon-wrapper {
+    width: 44px;
+    height: 44px;
   }
 
-  .filter-bar {
-    padding: 12px;
-    flex-wrap: wrap;
+  .stats-icon {
+    font-size: 22px;
   }
 
-  .search-container {
-    width: 100%;
-    min-width: unset;
+  .stats-amount {
+    font-size: 24px;
   }
 
-  .search-input {
-    max-width: 100%;
+  .stats-label {
+    font-size: 12px;
   }
 
-  .filter-group {
-    width: 100%;
-    justify-content: space-between;
+  .table-header {
+    padding: 14px;
   }
 
-  .filter-select {
-    flex: 1;
+  .modern-table-container {
+    margin: 0 14px 14px 14px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 11px 8px;
+    font-size: 12px;
+  }
+
+  .actions-cell {
+    width: 110px;
     min-width: 110px;
   }
 
-  .table-container {
-    overflow-x: auto;
+  .action-buttons {
+    gap: 3px;
   }
 
-  .elegant-table {
-    min-width: 800px;
-  }
-
-  .elegant-table :deep(thead th),
-  .table-row :deep(td) {
-    padding: 12px 14px;
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
   }
 
   .employee-info {
-    min-width: 140px;
+    gap: 8px;
+  }
+
+  .employee-name {
+    font-size: 12px;
+  }
+
+  .modal-card {
+    max-width: 90vw;
+  }
+}
+
+/* 768px - Tablet Portrait */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 16px;
+  }
+
+  .page-header {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .refresh-btn,
+  .header-search {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .stats-section {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .stats-card {
+    padding: 16px;
+  }
+
+  .stats-icon-wrapper {
+    width: 44px;
+    height: 44px;
+  }
+
+  .stats-icon {
+    font-size: 22px;
+  }
+
+  .stats-amount {
+    font-size: 24px;
+  }
+
+  .stats-label {
+    font-size: 13px;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .table-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .filter-select {
+    width: 100%;
+  }
+
+  .modern-table-container {
+    margin: 0 12px 12px 12px;
+    overflow-x: auto;
+    border-radius: 8px;
+  }
+
+  .request-table {
+    min-width: 900px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 12px 8px;
+    font-size: 12px;
+  }
+
+  .table-header-cell {
+    white-space: nowrap;
+  }
+
+  .employee-info {
+    gap: 8px;
+  }
+
+  .employee-name {
+    font-size: 12px;
   }
 
   .dates-cell {
     min-width: 160px;
   }
 
+  .reason-cell {
+    max-width: 200px;
+  }
+
+  .actions-cell {
+    width: 120px;
+    min-width: 120px;
+    padding: 12px 6px;
+  }
+
   .action-buttons {
-    min-width: 90px;
+    gap: 3px;
+    justify-content: center;
   }
 
-  .dialog-card {
-    max-width: 90vw;
-    margin: 0 12px;
+  .action-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
   }
 
-  .dialog-header {
-    padding: 16px 16px 0 16px;
+  .status-badge {
+    font-size: 11px;
+    padding: 4px 10px;
   }
 
-  .dialog-body {
+  .modal-card {
+    margin: 12px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .modal-header {
     padding: 16px;
   }
 
-  .info-grid {
-    gap: 16px;
+  .modal-title-section {
+    gap: 12px;
   }
 
-  .dialog-actions {
-    padding: 0 16px 16px 16px;
+  .modal-title {
+    font-size: 18px;
+  }
+
+  .modal-subtitle {
+    font-size: 13px;
+  }
+
+  .modal-content {
+    padding: 16px;
+  }
+
+  .detail-section {
+    padding: 16px;
+  }
+
+  .section-title {
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 10px 0;
+  }
+
+  .detail-value {
+    text-align: left;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+    padding: 16px;
+  }
+
+  .form-actions button {
+    width: 100%;
   }
 }
 
-/* Mobile (below 768px) */
-@media (max-width: 767px) {
-  .modern-page {
+/* Small Mobile - 480px and below */
+@media (max-width: 480px) {
+  .dashboard-container {
     padding: 12px;
   }
 
   .page-header {
-    padding: 14px 16px;
-    border-radius: 10px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    padding: 12px;
+    border-radius: 12px;
   }
 
   .page-title {
-    font-size: 1.25rem;
+    font-size: 20px;
   }
 
-  .refresh-btn {
-    align-self: flex-end;
+  .stats-card {
+    padding: 14px;
   }
 
-  .stats-section {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 16px;
+  .stats-icon-wrapper {
+    width: 40px;
+    height: 40px;
   }
 
-  .stat-card {
-    padding: 12px 16px;
+  .stats-icon {
+    font-size: 20px;
   }
 
-  .stat-number {
-    font-size: 1.5rem;
+  .stats-amount {
+    font-size: 22px;
   }
 
-  .stat-label {
-    font-size: 0.75rem;
+  .stats-label {
+    font-size: 12px;
   }
 
-  .filter-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+  .table-header {
     padding: 12px;
   }
 
-  .search-container {
-    width: 100%;
-    min-width: unset;
+  .table-title {
+    font-size: 18px;
   }
 
-  .search-input {
-    max-width: 100%;
+  .modern-table-container {
+    margin: 0 8px 8px 8px;
   }
 
-  .filter-group {
-    flex-direction: column;
-    gap: 8px;
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
   }
 
-  .filter-select {
-    width: 100%;
-    min-width: unset;
+  .modal-header {
+    padding: 12px;
   }
 
-  .table-container {
-    background: transparent;
-    border: none;
-  }
-
-  .elegant-table {
-    display: none;
-  }
-
-  .loading-state {
-    height: 140px;
-    padding: 16px;
-  }
-
-  .details-dialog :deep(.q-dialog__inner) {
-    padding: 0;
-  }
-
-  .dialog-card {
-    max-width: 100%;
-    width: 100%;
-    height: 100vh;
-    max-height: 100vh;
-    border-radius: 0;
-    margin: 0;
-  }
-
-  .dialog-header {
-    padding: 14px;
-    border-bottom: 1px solid #f1f5f9;
-  }
-
-  .dialog-title {
-    font-size: 1rem;
-  }
-
-  .dialog-body {
-    padding: 14px;
-    max-height: calc(100vh - 140px);
-  }
-
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .employee-avatar.large {
-    width: 36px;
-    height: 36px;
-    font-size: 0.9375rem;
-  }
-
-  .employee-name-detail {
-    font-size: 0.9375rem;
-  }
-
-  .info-grid {
-    grid-template-columns: 1fr;
-    gap: 14px;
-    margin-bottom: 20px;
-  }
-
-  .detail-section {
-    margin-bottom: 20px;
-  }
-
-  .reason-content,
-  .message-content,
-  .admin-response {
-    padding: 10px;
-    font-size: 0.8125rem;
-  }
-
-  .dialog-actions {
-    padding: 14px;
-    flex-direction: column-reverse;
-    align-items: stretch;
-    border-top: 1px solid #f1f5f9;
-  }
-
-  .action-group {
-    width: 100%;
-    flex-direction: row;
-    justify-content: space-between;
-  }
-
-  .action-btn-dialog {
-    flex: 1;
-  }
-
-  .close-action {
-    width: 100%;
-    margin-bottom: 8px;
+  .modal-title {
+    font-size: 16px;
   }
 
   .empty-state {
-    padding: 32px 16px;
+    padding: 40px 16px;
   }
 
   .empty-title {
-    font-size: 0.9375rem;
+    font-size: 15px;
   }
 
   .empty-subtitle {
-    font-size: 0.75rem;
-  }
-}
-
-/* Extra small mobile (below 375px) */
-@media (max-width: 374px) {
-  .modern-page {
-    padding: 10px;
-  }
-
-  .page-title {
-    font-size: 1.125rem;
-  }
-
-  .stat-number {
-    font-size: 1.375rem;
-  }
-
-  .filter-bar {
-    padding: 10px;
-  }
-
-  .dialog-body {
-    padding: 12px;
-  }
-}
-
-/* Print styles */
-@media print {
-  .modern-page {
-    padding: 0;
-    background: white;
-  }
-
-  .page-header,
-  .stats-section,
-  .filter-bar {
-    display: none;
-  }
-
-  .table-container {
-    border: 1px solid #000;
-  }
-
-  .action-buttons,
-  .refresh-btn {
-    display: none;
+    font-size: 12px;
   }
 }
 </style>
