@@ -154,14 +154,14 @@
           >
             <template v-slot:header>
               <q-tr class="table-header-row">
-                <q-th class="table-header-cell">SL No</q-th>
-                <q-th class="table-header-cell">Requested By</q-th>
-                <q-th class="table-header-cell">Employees</q-th>
-                <q-th class="table-header-cell">Original Date</q-th>
-                <q-th class="table-header-cell">New Date</q-th>
-                <q-th class="table-header-cell">Status</q-th>
-                <q-th class="table-header-cell">Requested Date</q-th>
-                <q-th class="table-header-cell">Actions</q-th>
+                <q-th class="table-header-cell th-sl-no">SL No</q-th>
+                <q-th class="table-header-cell th-requested-by">Requested By</q-th>
+                <q-th class="table-header-cell th-employees">Employees</q-th>
+                <q-th class="table-header-cell th-date">Original Date</q-th>
+                <q-th class="table-header-cell th-date">New Date</q-th>
+                <q-th class="table-header-cell th-status">Status</q-th>
+                <q-th class="table-header-cell th-requested-date">Requested Date</q-th>
+                <q-th class="table-header-cell th-actions">Actions</q-th>
               </q-tr>
             </template>
 
@@ -170,7 +170,7 @@
                 class="table-body-row"
                 :class="{ 'rejected-row': props.row.status === 'rejected' }"
               >
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell td-sl-no">
                   {{
                     String(
                       (pagination.page - 1) * pagination.rowsPerPage + props.rowIndex + 1,
@@ -178,26 +178,26 @@
                   }}.
                 </q-td>
 
-                <q-td class="table-body-cell employee-name-cell">
+                <q-td class="table-body-cell td-requested-by">
                   <div class="employee-info">
-                    <q-avatar size="32px" color="primary" text-color="white">
+                    <q-avatar size="28px" color="primary" text-color="white">
                       {{ getInitials(props.row.requested_by_name) }}
                     </q-avatar>
                     <span class="employee-name">{{ props.row.requested_by_name || 'N/A' }}</span>
                   </div>
                 </q-td>
 
-                <q-td class="table-body-cell employees-cell">
+                <q-td class="table-body-cell td-employees">
                   <div class="swap-employees">
                     <div class="employee-from">{{ props.row.from_employee_name }}</div>
                     <div class="swap-icon">
-                      <q-icon name="swap_vert" size="16px" color="grey-7" />
+                      <q-icon name="swap_vert" size="14px" color="grey-7" />
                     </div>
                     <div class="employee-to">{{ props.row.to_employee_name }}</div>
                   </div>
                 </q-td>
 
-                <q-td class="table-body-cell date-cell">
+                <q-td class="table-body-cell td-date">
                   <div class="date-info">
                     <div class="date-main">{{ formatDate(props.row.original_date) }}</div>
                     <div class="date-sub">
@@ -206,7 +206,7 @@
                   </div>
                 </q-td>
 
-                <q-td class="table-body-cell date-cell">
+                <q-td class="table-body-cell td-date">
                   <div class="date-info">
                     <div class="date-main">{{ formatDate(props.row.new_date) }}</div>
                     <div class="date-sub">
@@ -215,7 +215,7 @@
                   </div>
                 </q-td>
 
-                <q-td class="table-body-cell status-cell">
+                <q-td class="table-body-cell td-status">
                   <div :class="['status-badge', getStatusClass(props.row)]">
                     {{ getStatusLabel(props.row) }}
                   </div>
@@ -225,7 +225,7 @@
                     <q-linear-progress
                       :value="getApprovalProgress(props.row)"
                       :color="canAdminApprove(props.row) ? 'positive' : 'warning'"
-                      size="4px"
+                      size="3px"
                       rounded
                     />
                     <div
@@ -238,38 +238,41 @@
 
                   <!-- Show completion info for approved/rejected -->
                   <div v-if="props.row.status === 'approved'" class="status-extra">
-                    <q-icon name="check_circle" size="14px" color="positive" />
+                    <q-icon name="check_circle" size="12px" color="positive" />
                     <span class="status-extra-text">Approved</span>
                   </div>
 
                   <div v-if="props.row.status === 'rejected'" class="status-extra">
-                    <q-icon name="cancel" size="14px" color="negative" />
+                    <q-icon name="cancel" size="12px" color="negative" />
                     <span class="status-extra-text">Rejected</span>
                   </div>
                 </q-td>
 
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell td-requested-date">
                   {{ formatDateTime(props.row.requested_at) }}
                 </q-td>
 
-                <q-td class="table-body-cell actions-cell">
-                  <div class="action-buttons">
+                <q-td class="table-body-cell td-actions">
+                  <div class="action-buttons-wrapper">
+                    <!-- View Button - Always visible -->
                     <q-btn
                       flat
                       round
                       icon="visibility"
-                      size="sm"
+                      size="xs"
                       class="action-btn view-btn"
                       @click="viewRequest(props.row)"
                     >
                       <q-tooltip>View Details</q-tooltip>
                     </q-btn>
+
+                    <!-- Approve Button - Only for pending -->
                     <q-btn
                       v-if="isPendingApproval(props.row)"
                       flat
                       round
                       icon="check"
-                      size="sm"
+                      size="xs"
                       class="action-btn approve-btn"
                       :disable="!canAdminApprove(props.row)"
                       @click="approveRequest(props.row)"
@@ -282,17 +285,22 @@
                         }}
                       </q-tooltip>
                     </q-btn>
+
+                    <!-- Reject Button - Only for pending -->
                     <q-btn
                       v-if="isPendingApproval(props.row)"
                       flat
                       round
                       icon="close"
-                      size="sm"
+                      size="xs"
                       class="action-btn reject-btn"
                       @click="rejectRequest(props.row)"
                     >
                       <q-tooltip>Reject Request</q-tooltip>
                     </q-btn>
+
+                    <!-- Placeholder to maintain consistent spacing when buttons are hidden -->
+                    <div v-if="!isPendingApproval(props.row)" class="action-placeholder"></div>
                   </div>
                 </q-td>
               </q-tr>
@@ -673,10 +681,13 @@ export default {
         currentUserCompany.value = companyId
         console.log(`📤 Requesting swap requests for company: ${companyId}`)
 
-        const response = await api.get('https://staging.wageyapp.com/organization/swap-requests/', {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { company_id: companyId },
-        })
+        const response = await api.get(
+          'https://staging.wageyapp.com/organization/company-swap-requests/',
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { company_id: companyId },
+          },
+        )
 
         console.log(`✅ Fetched ${response.data.length} swap requests`)
 
@@ -1159,7 +1170,7 @@ export default {
 }
 
 /* ===================================
-   TABLE SECTION
+   TABLE SECTION - OPTIMIZED & COMPACT
    =================================== */
 .table-section {
   background: white;
@@ -1215,7 +1226,7 @@ export default {
   font-weight: 500;
 }
 
-/* Modern Table */
+/* Modern Table Container - Compact Version */
 .modern-table-container {
   border: 2px solid #3b82f6;
   border-radius: 10px;
@@ -1227,6 +1238,58 @@ export default {
   background: white;
   border-radius: 10px;
   overflow: hidden;
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* OPTIMIZED COMPACT COLUMN WIDTHS */
+.th-sl-no,
+.td-sl-no {
+  width: 50px;
+  min-width: 50px;
+  max-width: 50px;
+}
+
+.th-requested-by,
+.td-requested-by {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+}
+
+.th-employees,
+.td-employees {
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+}
+
+.th-date,
+.td-date {
+  width: 115px;
+  min-width: 115px;
+  max-width: 115px;
+}
+
+.th-status,
+.td-status {
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+}
+
+.th-requested-date,
+.td-requested-date {
+  width: 130px;
+  min-width: 130px;
+  max-width: 130px;
+}
+
+.th-actions,
+.td-actions {
+  width: 130px;
+  min-width: 130px;
+  max-width: 130px;
 }
 
 .table-header-row {
@@ -1235,13 +1298,15 @@ export default {
 }
 
 .table-header-cell {
-  padding: 12px 10px;
-  font-size: 13px;
+  padding: 10px 8px;
+  font-size: 11px;
   font-weight: 600;
   color: #374151;
   text-align: left;
   border: none;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table-body-row {
@@ -1263,90 +1328,99 @@ export default {
 }
 
 .table-body-cell {
-  padding: 12px 10px;
-  font-size: 13px;
+  padding: 8px 6px;
+  font-size: 11px;
   color: #374151;
   border: none;
   vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Employee Cell */
+/* Employee Cell - Compact */
 .employee-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
+  overflow: hidden;
 }
 
 .employee-name {
   font-weight: 500;
   color: #1a202c;
-  font-size: 13px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Employees Swap Cell */
-.employees-cell {
-  min-width: 140px;
-}
-
+/* Employees Swap Cell - Compact */
 .swap-employees {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  overflow: hidden;
 }
 
 .employee-from {
   font-weight: 500;
   color: #1a202c;
-  font-size: 13px;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .swap-icon {
   display: flex;
   align-items: center;
-  margin: 2px 0;
+  justify-content: center;
+  margin: 1px 0;
 }
 
 .employee-to {
-  font-size: 12px;
+  font-size: 9px;
   color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Date Cell */
-.date-cell {
-  min-width: 120px;
-}
-
+/* Date Cell - Compact */
 .date-info {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
+  overflow: hidden;
 }
 
 .date-main {
   font-weight: 500;
   color: #1a202c;
-  font-size: 13px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .date-sub {
-  font-size: 11px;
+  font-size: 9px;
   color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Status Cell */
-.status-cell {
-  min-width: 140px;
-}
-
+/* Status Cell - Compact */
 .status-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 11px;
-  font-weight: 500;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 600;
   white-space: nowrap;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+  width: fit-content;
 }
 
 .status-pending {
@@ -1375,80 +1449,105 @@ export default {
 }
 
 .approval-progress {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .progress-text {
-  font-size: 10px;
-  margin-top: 4px;
+  font-size: 8px;
+  margin-top: 2px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-extra {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 3px;
+  margin-top: 4px;
 }
 
 .status-extra-text {
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 500;
 }
 
-/* Action Buttons */
-.actions-cell {
-  width: 130px;
-  min-width: 130px;
-}
-
-.action-buttons {
+/* ===================================
+   OPTIMIZED COMPACT ACTION BUTTONS
+   =================================== */
+.action-buttons-wrapper {
   display: flex;
   gap: 4px;
   justify-content: center;
   align-items: center;
   flex-wrap: nowrap;
+  min-height: 32px;
+  padding: 2px 0;
 }
 
 .action-btn {
   width: 32px;
   height: 32px;
   min-width: 32px;
+  max-width: 32px;
   border-radius: 6px;
   transition: all 0.2s ease;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Placeholder to maintain spacing for approved/rejected rows */
+.action-placeholder {
+  width: 68px; /* 32px + 4px gap + 32px for two buttons */
+  height: 32px;
 }
 
 .view-btn {
-  background: #dbeafe;
-  color: #3b82f6;
+  background: #3b82f6;
+  color: white;
 }
 
 .view-btn:hover {
-  background: #bfdbfe;
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(59, 130, 246, 0.3);
 }
 
 .approve-btn {
-  background: #dcfce7;
-  color: #16a34a;
+  background: #10b981;
+  color: white;
 }
 
-.approve-btn:hover {
-  background: #bbf7d0;
+.approve-btn:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(16, 185, 129, 0.3);
 }
 
 .approve-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
+  background: #6ee7b7;
 }
 
 .reject-btn {
-  background: #fef2f2;
-  color: #ef4444;
+  background: #ef4444;
+  color: white;
 }
 
 .reject-btn:hover {
-  background: #fee2e2;
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(239, 68, 68, 0.3);
+}
+
+/* Icon styling inside compact buttons */
+.action-btn :deep(.q-icon) {
+  font-size: 16px;
 }
 
 /* Table Footer */
@@ -1682,19 +1781,15 @@ export default {
     gap: 16px;
   }
 
-  .table-header-cell,
-  .table-body-cell {
-    padding: 14px 12px;
-  }
-
-  .action-buttons {
-    gap: 5px;
-  }
-
   .action-btn {
     width: 34px;
     height: 34px;
     min-width: 34px;
+    max-width: 34px;
+  }
+
+  .action-placeholder {
+    width: 72px;
   }
 }
 
@@ -1753,35 +1848,6 @@ export default {
 
   .modern-table-container {
     margin: 0 14px 0 14px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 11px 8px;
-    font-size: 12px;
-  }
-
-  .actions-cell {
-    width: 120px;
-    min-width: 120px;
-  }
-
-  .action-buttons {
-    gap: 3px;
-  }
-
-  .action-btn {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-  }
-
-  .employee-info {
-    gap: 8px;
-  }
-
-  .employee-name {
-    font-size: 12px;
   }
 
   .modal-card {
@@ -1876,46 +1942,6 @@ export default {
 
   .swap-table {
     min-width: 1000px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 12px 8px;
-    font-size: 12px;
-  }
-
-  .table-header-cell {
-    white-space: nowrap;
-  }
-
-  .employee-info {
-    gap: 8px;
-  }
-
-  .employee-name {
-    font-size: 12px;
-  }
-
-  .actions-cell {
-    width: 130px;
-    min-width: 130px;
-    padding: 12px 6px;
-  }
-
-  .action-buttons {
-    gap: 3px;
-    justify-content: center;
-  }
-
-  .action-btn {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-  }
-
-  .status-badge {
-    font-size: 11px;
-    padding: 4px 10px;
   }
 
   .table-footer {
@@ -2033,6 +2059,11 @@ export default {
     width: 30px;
     height: 30px;
     min-width: 30px;
+    max-width: 30px;
+  }
+
+  .action-placeholder {
+    width: 64px;
   }
 
   .modal-header {
