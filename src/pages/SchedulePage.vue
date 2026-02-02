@@ -193,6 +193,17 @@
                           flat
                           dense
                           round
+                          icon="swap_horiz"
+                          size="xs"
+                          class="action-btn reassign-btn"
+                          @click="openReassignModal(element)"
+                        >
+                          <q-tooltip>Reassign Shift</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          dense
+                          round
                           icon="edit"
                           size="xs"
                           class="action-btn edit-btn"
