@@ -877,7 +877,8 @@ const employeeStats = computed(() => {
   return { total, active, terminated }
 })
 
-// --- Helpers ---
+// --- Helper Functions ---
+
 const getFullName = (employee) => {
   if (!employee) return 'N/A'
   return (
@@ -957,6 +958,31 @@ const formatDateTime = (dateString) => {
     minute: '2-digit',
   })
 }
+
+// Utility function for PH phone number formatting
+function formatPhilippinePhone(number) {
+  if (!number) return ''
+
+  let cleaned = number.replace(/\D/g, '') // remove non-digits
+
+  // If number starts with '0' (ex: 09123456789) → convert to +63 format
+  if (cleaned.startsWith('0')) {
+    cleaned = '+63' + cleaned.slice(1)
+  }
+  // If number starts with '9' (ex: 9123456789) → add +63
+  else if (cleaned.startsWith('9')) {
+    cleaned = '+63' + cleaned
+  }
+  // If already starts with '63' (ex: 639123456789) → add '+'
+  else if (cleaned.startsWith('63')) {
+    cleaned = '+' + cleaned
+  }
+
+  // Validate correct PH mobile number format
+  const valid = /^\+639\d{9}$/.test(cleaned)
+  return valid ? cleaned : ''
+}
+
 // --- API Calls ---
 const fetchEmployees = async () => {
   try {
@@ -990,6 +1016,7 @@ const fetchEmployees = async () => {
 
     console.log('=== EMPLOYEES FETCHED ===')
     console.log('Sample employee data:', response.data[0])
+    console.log('Sample employee picture_url:', response.data[0]?.user?.picture_url)
     console.log('Total employees:', response.data.length)
 
     employees.value = response.data || []
@@ -1139,35 +1166,10 @@ const fetchEmployeeDetails = async (employeeId) => {
   }
 }
 
-// Utility function for PH phone number formatting
-function formatPhilippinePhone(number) {
-  if (!number) return ''
-
-  let cleaned = number.replace(/\D/g, '') // remove non-digits
-
-  // If number starts with '0' (ex: 09123456789) → convert to +63 format
-  if (cleaned.startsWith('0')) {
-    cleaned = '+63' + cleaned.slice(1)
-  }
-  // If number starts with '9' (ex: 9123456789) → add +63
-  else if (cleaned.startsWith('9')) {
-    cleaned = '+63' + cleaned
-  }
-  // If already starts with '63' (ex: 639123456789) → add '+'
-  else if (cleaned.startsWith('63')) {
-    cleaned = '+' + cleaned
-  }
-
-  // Validate correct PH mobile number format
-  const valid = /^\+639\d{9}$/.test(cleaned)
-  return valid ? cleaned : ''
-}
-
 // -----------------------------
-// Add Employee
+// Add Employee - UPDATED VERSION WITH SEPARATE AVATAR UPLOAD
 // -----------------------------
 async function addEmployee() {
-  // ✅ DECLARE VARIABLES AT FUNCTION SCOPE
   let token = null
   let user = null
   let userId = null
@@ -1191,7 +1193,7 @@ async function addEmployee() {
       }
     }
 
-    // ✅ SAFE USER ID RETRIEVAL - Check both 'id' and 'uuid' fields
+    // ✅ SAFE USER ID RETRIEVAL
     userId = user?.id || user?.uuid
 
     if (!userId) {
@@ -1244,7 +1246,9 @@ async function addEmployee() {
       })
     }
 
-    // ✅ BUILD PAYLOAD - REMOVED updated_by field
+    savingEmployee.value = true
+
+    // ✅ BUILD PAYLOAD WITHOUT PICTURE
     const payload = {
       username: addForm.value.user.username,
       email: addForm.value.user.email,
@@ -1268,14 +1272,14 @@ async function addEmployee() {
 
     // ✅ Clean up empty values
     Object.keys(payload).forEach((key) => {
-      if (payload[key] === '' || payload[key] === undefined) {
+      if (payload[key] === '' || payload[key] === undefined || payload[key] === null) {
         delete payload[key]
       }
     })
 
     console.log('📤 Final payload being sent:', JSON.stringify(payload, null, 2))
 
-    // ✅ CREATE THE EMPLOYEE
+    // ✅ CREATE THE EMPLOYEE FIRST
     const response = await axios.post(`https://staging.wageyapp.com/user/employees/`, payload, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -1284,29 +1288,66 @@ async function addEmployee() {
     })
 
     const newEmployee = response.data
-
     console.log('✅ Employee created:', newEmployee)
-    console.log('User ID for avatar upload:', newEmployee.user?.id)
 
-    // ⭐ UPLOAD AVATAR IF ONE WAS SELECTED ⭐
+    // ⭐ NOW UPLOAD AVATAR IF ONE WAS SELECTED ⭐
     if (avatarFile.value && newEmployee.user?.id) {
-      console.log('🖼️ Starting avatar upload...')
-      const avatarUrl = await uploadAvatar(newEmployee.user.id)
-      console.log('Avatar URL returned:', avatarUrl)
+      try {
+        uploadingAvatar.value = true
+        console.log('🖼️ Starting avatar upload for user ID:', newEmployee.user.id)
+
+        const formData = new FormData()
+        formData.append('picture', avatarFile.value)
+
+        const avatarResponse = await axios.patch(
+          `https://staging.wageyapp.com/user/users/${newEmployee.user.id}/`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          },
+        )
+
+        console.log('✅ Avatar uploaded successfully:', avatarResponse.data)
+        console.log(
+          '📸 Picture URL:',
+          avatarResponse.data.picture_url || avatarResponse.data.picture,
+        )
+
+        // ⭐ Refresh employees to show the new picture ⭐
+        await fetchEmployees()
+
+        $q.notify({
+          type: 'positive',
+          message: 'Employee and profile picture added successfully!',
+          position: 'top',
+        })
+      } catch (avatarError) {
+        console.error('⚠️ Error uploading avatar:', avatarError)
+
+        // Still refresh to show the employee without picture
+        await fetchEmployees()
+
+        $q.notify({
+          type: 'warning',
+          message: 'Employee created but profile picture upload failed',
+          position: 'top',
+        })
+      } finally {
+        uploadingAvatar.value = false
+      }
     } else {
-      console.log('⚠️ No avatar to upload:', {
-        hasFile: !!avatarFile.value,
-        userId: newEmployee.user?.id,
+      await fetchEmployees()
+
+      $q.notify({
+        type: 'positive',
+        message: 'Employee added successfully!',
+        position: 'top',
       })
     }
 
-    $q.notify({
-      type: 'positive',
-      message: 'Employee added successfully!',
-      position: 'top',
-    })
-
-    await fetchEmployees()
     resetAddForm()
     showAddModal.value = false
   } catch (error) {
@@ -1327,11 +1368,14 @@ async function addEmployee() {
       position: 'top',
       timeout: 5000,
     })
+  } finally {
+    savingEmployee.value = false
+    uploadingAvatar.value = false
   }
 }
 
 // -----------------------------
-// Save Employee (Edit)
+// Save Employee (Edit) - UPDATED VERSION WITH SEPARATE AVATAR UPLOAD
 // -----------------------------
 const saveEmployee = async () => {
   try {
@@ -1392,23 +1436,59 @@ const saveEmployee = async () => {
     )
 
     const updatedEmployee = response.data
-
     console.log('✅ Employee updated:', updatedEmployee)
-    console.log('User ID for avatar upload:', updatedEmployee.user?.id)
 
-    // ⭐ UPLOAD AVATAR IF A NEW ONE WAS SELECTED ⭐
+    // ⭐ NOW UPLOAD AVATAR IF A NEW ONE WAS SELECTED ⭐
     if (editAvatarFile.value && updatedEmployee.user?.id) {
-      console.log('🖼️ Starting avatar upload...')
-      const avatarUrl = await uploadEditAvatar(updatedEmployee.user.id)
-      console.log('Avatar URL returned:', avatarUrl)
-    } else {
-      console.log('⚠️ No new avatar to upload')
-    }
+      try {
+        uploadingAvatar.value = true
+        console.log('🖼️ Starting avatar upload for user ID:', updatedEmployee.user.id)
 
-    const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
-    if (index !== -1) employees.value[index] = updatedEmployee
-    filteredEmployees.value = employees.value
-    sortEmployees()
+        const formData = new FormData()
+        formData.append('picture', editAvatarFile.value)
+
+        const avatarResponse = await axios.patch(
+          `https://staging.wageyapp.com/user/users/${updatedEmployee.user.id}/`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          },
+        )
+
+        console.log('✅ Avatar uploaded successfully:', avatarResponse.data)
+        console.log(
+          '📸 Picture URL:',
+          avatarResponse.data.picture_url || avatarResponse.data.picture,
+        )
+
+        // ⭐ Refresh employees to show the updated picture ⭐
+        await fetchEmployees()
+      } catch (avatarError) {
+        console.error('⚠️ Error uploading avatar:', avatarError)
+        $q.notify({
+          type: 'warning',
+          message: 'Employee updated but profile picture upload failed',
+          position: 'top',
+        })
+
+        // Still update local state even if avatar failed
+        const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
+        if (index !== -1) employees.value[index] = updatedEmployee
+        filteredEmployees.value = employees.value
+        sortEmployees()
+      } finally {
+        uploadingAvatar.value = false
+      }
+    } else {
+      // If no new avatar, just update local employee data
+      const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
+      if (index !== -1) employees.value[index] = updatedEmployee
+      filteredEmployees.value = employees.value
+      sortEmployees()
+    }
 
     $q.notify({
       type: 'positive',
@@ -1426,12 +1506,11 @@ const saveEmployee = async () => {
     })
   } finally {
     savingEmployee.value = false
+    uploadingAvatar.value = false
   }
 }
 
-// ============================================
-// 5. UPDATE resetAddForm() FUNCTION
-// ============================================
+// ⭐ UPDATED resetAddForm() FUNCTION ⭐
 const resetAddForm = () => {
   addForm.value = {
     user: {
@@ -1456,10 +1535,7 @@ const resetAddForm = () => {
   avatarPreview.value = null
 }
 
-// ============================================
-// 6. UPDATE YOUR EXISTING cancelEdit() FUNCTION
-// ============================================
-// Find your existing cancelEdit function and REPLACE it with this:
+// ⭐ UPDATED cancelEdit() FUNCTION ⭐
 const cancelEdit = () => {
   showEditModal.value = false
   // ⭐ CLEAR AVATAR STATE ⭐
@@ -1638,6 +1714,7 @@ const restoreEmployee = async () => {
     restoring.value = false
   }
 }
+
 const handleAvatarSelect = (event) => {
   const file = event.target.files?.[0]
   if (!file) return
@@ -1707,6 +1784,7 @@ const handleEditAvatarSelect = (event) => {
   }
   reader.readAsDataURL(file)
 }
+
 const removeAvatar = () => {
   avatarFile.value = null
   avatarPreview.value = null
@@ -1726,122 +1804,6 @@ const removeEditAvatar = () => {
 const handleImageError = (event) => {
   event.target.src = '' // Clear broken image
   event.target.style.display = 'none'
-}
-
-const uploadAvatar = async (userId) => {
-  if (!avatarFile.value) {
-    console.log('No avatar file selected')
-    return null
-  }
-
-  try {
-    uploadingAvatar.value = true
-    const token = localStorage.getItem('access_token')
-
-    console.log('📤 Uploading avatar for user ID:', userId)
-    console.log('File details:', {
-      name: avatarFile.value.name,
-      size: avatarFile.value.size,
-      type: avatarFile.value.type,
-    })
-
-    const formData = new FormData()
-    formData.append('picture', avatarFile.value)
-
-    // Log FormData contents
-    for (let pair of formData.entries()) {
-      console.log('FormData:', pair[0], pair[1])
-    }
-
-    const response = await axios.patch(
-      `https://staging.wageyapp.com/user/users/${userId}/`,
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      },
-    )
-
-    console.log('✅ Avatar upload response:', response.data)
-
-    $q.notify({
-      type: 'positive',
-      message: 'Avatar uploaded successfully!',
-      position: 'top',
-    })
-
-    return response.data.picture_url
-  } catch (error) {
-    console.error('❌ Error uploading avatar:', error)
-    console.error('Error response:', error.response?.data)
-    console.error('Error status:', error.response?.status)
-
-    $q.notify({
-      type: 'warning',
-      message: error.response?.data?.detail || 'Avatar upload failed, but employee was created',
-      position: 'top',
-    })
-    return null
-  } finally {
-    uploadingAvatar.value = false
-  }
-}
-
-const uploadEditAvatar = async (userId) => {
-  if (!editAvatarFile.value) {
-    console.log('No avatar file selected for edit')
-    return null
-  }
-
-  try {
-    uploadingAvatar.value = true
-    const token = localStorage.getItem('access_token')
-
-    console.log('📤 Uploading avatar for user ID:', userId)
-    console.log('File details:', {
-      name: editAvatarFile.value.name,
-      size: editAvatarFile.value.size,
-      type: editAvatarFile.value.type,
-    })
-
-    const formData = new FormData()
-    formData.append('picture', editAvatarFile.value)
-
-    const response = await axios.patch(
-      `https://staging.wageyapp.com/user/users/${userId}/`,
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      },
-    )
-
-    console.log('✅ Avatar upload response:', response.data)
-
-    $q.notify({
-      type: 'positive',
-      message: 'Avatar updated successfully!',
-      position: 'top',
-    })
-
-    return response.data.picture_url
-  } catch (error) {
-    console.error('❌ Error uploading avatar:', error)
-    console.error('Error response:', error.response?.data)
-
-    $q.notify({
-      type: 'warning',
-      message: error.response?.data?.detail || 'Avatar upload failed, but employee was updated',
-      position: 'top',
-    })
-    return null
-  } finally {
-    uploadingAvatar.value = false
-  }
 }
 
 const filterEmployees = () => {
@@ -1958,7 +1920,7 @@ const editEmployee = async (emp) => {
         (detailed.user_role_name || detailed.user_role?.name || '').toLowerCase(),
     ) || null
 
-  // Fill the form with the employee’s existing data
+  // Fill the form with the employee's existing data
   editForm.value = {
     user: {
       id: detailed.user?.id || 0,
@@ -2013,7 +1975,7 @@ watch(sortBy, () => {
 onMounted(() => {
   fetchEmployees()
   fetchRoles()
-  fetchSites() // Add this line
+  fetchSites()
 })
 </script>
 
