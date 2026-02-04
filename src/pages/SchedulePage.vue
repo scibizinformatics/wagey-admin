@@ -325,7 +325,6 @@
 
             <!-- Employee & Day Selection -->
             <div class="form-row">
-              <!-- NEW CODE -->
               <q-select
                 v-model="newSchedule.userId"
                 :options="employeeOptions"
@@ -752,6 +751,146 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+
+    <!-- Reassign Shift Modal -->
+    <q-dialog v-model="showReassignModal">
+      <q-card style="min-width: 400px">
+        <q-card-section>
+          <div class="text-h6">Reassign Shift</div>
+          <!-- 🆕 SHOW Assignment ID -->
+          <div
+            v-if="reassignData.assignmentId"
+            class="text-caption text-primary"
+            style="margin-top: 4px; font-weight: 600"
+          >
+            Assignment ID: {{ reassignData.assignmentId }}
+          </div>
+          <div v-else class="text-caption text-negative" style="margin-top: 4px">
+            ⚠️ No Assignment ID (this will fail)
+          </div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <!-- 🆕 ADD: Debug info panel (remove this after debugging) -->
+          <q-banner dense class="bg-grey-2 q-mb-md" style="font-size: 11px">
+            <div><strong>Debug Info:</strong></div>
+            <div>Site ID: {{ reassignData.siteId || '(missing)' }}</div>
+            <div>Dept ID: {{ reassignData.departmentId || '(optional)' }}</div>
+            <div>Shift Type: {{ reassignData.shiftTypeId || '(missing)' }}</div>
+            <div>Current Emp: {{ reassignData.currentEmployee || '(missing)' }}</div>
+            <div>Date: {{ reassignData.date || '(missing)' }}</div>
+          </q-banner>
+
+          <!-- Department Select -->
+          <q-select
+            v-model="reassignData.departmentId"
+            :options="departmentOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            label="Department (Optional)"
+            outlined
+            dense
+            clearable
+            class="q-mb-md"
+          />
+
+          <!-- Current Employee (read-only) -->
+          <q-input
+            :model-value="getEmployeeName(reassignData.currentEmployee)"
+            label="Current Employee"
+            outlined
+            dense
+            readonly
+            class="q-mb-md"
+          >
+            <template v-slot:hint>
+              {{ reassignData.currentEmployee }}
+            </template>
+          </q-input>
+
+          <!-- Date (read-only) -->
+          <q-input
+            v-model="reassignData.date"
+            label="Date"
+            outlined
+            dense
+            readonly
+            class="q-mb-md"
+          />
+
+          <!-- Site (read-only) - SHOW WHAT WE HAVE -->
+          <q-input
+            :model-value="reassignData.siteId ? `Site ID: ${reassignData.siteId}` : 'No site'"
+            label="Site"
+            outlined
+            dense
+            readonly
+            class="q-mb-md"
+            :class="{ 'text-negative': !reassignData.siteId }"
+          />
+
+          <!-- Shift Type (read-only) - SHOW WHAT WE HAVE -->
+          <q-input
+            :model-value="
+              reassignData.shiftTypeId ? getPositionName(reassignData.shiftTypeId) : 'No shift type'
+            "
+            label="Position"
+            outlined
+            dense
+            readonly
+            class="q-mb-md"
+            :class="{ 'text-negative': !reassignData.shiftTypeId }"
+          />
+
+          <!-- Reassign to Employee -->
+          <q-select
+            v-model="reassignData.newEmployee"
+            :options="employeeOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            label="Reassign to Employee"
+            outlined
+            dense
+            class="q-mb-md"
+            :rules="[(val) => !!val || 'Please select an employee']"
+          >
+            <template v-slot:prepend>
+              <q-icon name="person" />
+            </template>
+          </q-select>
+
+          <div class="text-caption text-grey-7">
+            Select the employee who will take over this shift
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            label="Cancel"
+            color="grey-7"
+            @click="closeReassignModal"
+            :disable="isReassigning"
+          />
+          <q-btn
+            unelevated
+            label="Reassign Shift"
+            color="primary"
+            @click="reassignShift"
+            :loading="isReassigning"
+            :disable="!reassignData.newEmployee || !reassignData.assignmentId"
+          >
+            <template v-slot:loading>
+              <q-spinner color="white" size="20px" />
+            </template>
+          </q-btn>
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -770,13 +909,13 @@ const sites = ref([])
 const departments = ref([])
 const employees = ref([])
 const loadingEmployees = ref(false)
-
+const isReassigning = ref(false)
 const recurringSchedules = ref([])
 const userTimezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
 const viewMode = ref('table')
 const filters = ref({
-  site: null, // Changed from position to site
+  site: null,
   employee: null,
 })
 const searchTerm = ref('')
@@ -787,13 +926,13 @@ const dayOptions = days.map((d, i) => ({ label: d, value: i }))
 const showAddModal = ref(false)
 const showEditModal = ref(false)
 const showQuickAddModal = ref(false)
+const showReassignModal = ref(false) // NEW: Reassign modal state
 const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
 
-// NEW CODE
 const newSchedule = ref({
   userId: null,
-  selectedDate: null, // Changed from 'day' to 'selectedDate'
+  selectedDate: null,
   startTime: '',
   endTime: '',
   position: null,
@@ -833,8 +972,20 @@ const editingSchedule = ref({
 
 const quickAdd = ref({
   userId: null,
-  day: null, // Single day
-  shifts: [], // Multiple shifts for that day
+  day: null,
+  shifts: [],
+})
+
+// NEW: Reassign data state
+const reassignData = ref({
+  assignmentId: null,
+  shiftTypeId: null,
+  siteId: null,
+  departmentId: null,
+  currentEmployee: null,
+  newEmployee: null,
+  date: null,
+  day: null,
 })
 
 const addConflictWarning = ref(false)
@@ -909,11 +1060,6 @@ const validateEndTime = (val, start = null) => {
   return true
 }
 
-//*const mapDateToDayIdx = (dateStr) => {
-//const jsDay = new Date(dateStr).getDay()
-//return jsDay === 0 ? 6 : jsDay - 1
-//}
-
 const getPositionName = (positionId) => {
   const position = shiftTypes.value.find((p) => p.id === positionId)
   return position?.name || positionId
@@ -934,11 +1080,19 @@ const getAvatarColor = (name) => {
   return colors[index % colors.length]
 }
 
+const requireId = (value, name) => {
+  const id = parseInt(value)
+  if (!id || Number.isNaN(id)) {
+    throw new Error(`${name} is required and must be a valid ID`)
+  }
+  return id
+}
+
 // Summaries
 const totalShifts = computed(() => shifts.value.length)
 const activeEmployees = computed(() => new Set(shifts.value.map((s) => s.userId)).size)
 const positionsCount = computed(() => new Set(shifts.value.map((s) => s.position)).size)
-// Site filter options for dropdown
+
 const siteFilterOptions = computed(() => {
   if (!sites.value || sites.value.length === 0) {
     return [{ label: 'All Sites', value: null }]
@@ -951,8 +1105,8 @@ const siteFilterOptions = computed(() => {
     })),
   ]
 })
+
 // Options
-// NEW CODE
 const userOptions = computed(() => users.value.map((u) => ({ label: u.name, value: u.id })))
 
 const employeeOptions = computed(() =>
@@ -992,7 +1146,6 @@ const recurringScheduleOptions = computed(() =>
 )
 
 const filteredUsers = computed(() => {
-  // Log current filter state and shift data for debugging
   if (filters.value.site) {
     console.log('🔍 FILTERING DEBUG:', {
       selectedSite: filters.value.site,
@@ -1005,19 +1158,15 @@ const filteredUsers = computed(() => {
   }
 
   return users.value.filter((u) => {
-    // Filter by employee selection
     const matchEmployee = !filters.value.employee || u.id === filters.value.employee
 
-    // Filter by search term
     const matchSearch = (u.name || '')
       .toLowerCase()
       .includes((searchTerm.value || '').toLowerCase())
 
-    // Filter by site - show employee if they have ANY shift at the selected site
     const matchSite =
       !filters.value.site ||
       shifts.value.some((shift) => {
-        // Type-safe comparison (handles both string and number IDs)
         const shiftSiteId = typeof shift.site === 'number' ? shift.site : parseInt(shift.site)
         const filterSiteId =
           typeof filters.value.site === 'number' ? filters.value.site : parseInt(filters.value.site)
@@ -1025,7 +1174,6 @@ const filteredUsers = computed(() => {
         return shift.userId === u.id && shiftSiteId === filterSiteId
       })
 
-    // Debug individual user filtering
     if (filters.value.site && matchEmployee && matchSearch) {
       const userShifts = shifts.value.filter((s) => s.userId === u.id)
       if (userShifts.length > 0) {
@@ -1041,11 +1189,8 @@ const filteredUsers = computed(() => {
   })
 })
 
-// When recurring schedule template is selected, populate times
-// When recurring schedule template is selected, populate times - ENHANCED VERSION
 const onRecurringTemplateChange = (templateId) => {
   if (!templateId) {
-    // Reset fields when template is cleared
     newSchedule.value.startTime = ''
     newSchedule.value.endTime = ''
     quickAdd.value.startTime = ''
@@ -1061,7 +1206,6 @@ const onRecurringTemplateChange = (templateId) => {
 
   console.log('Selected recurring template:', template)
 
-  // Auto-fill start time
   if (template.start_time) {
     try {
       const startTime =
@@ -1075,7 +1219,6 @@ const onRecurringTemplateChange = (templateId) => {
     }
   }
 
-  // Auto-fill end time
   if (template.end_time) {
     try {
       const endTime =
@@ -1089,13 +1232,11 @@ const onRecurringTemplateChange = (templateId) => {
     }
   }
 
-  // Auto-fill shift type/position
   if (template.shift_type) {
     newSchedule.value.position = template.shift_type
     quickAdd.value.position = template.shift_type
   }
 
-  // Auto-fill weekdays
   if (template.weekdays) {
     try {
       newSchedule.value.weekdays = parseWeekdays(template.weekdays)
@@ -1105,18 +1246,15 @@ const onRecurringTemplateChange = (templateId) => {
     }
   }
 
-  // Set rotating flag
   if (template.is_rotating !== undefined) {
     newSchedule.value.isRotating = template.is_rotating
   }
 
-  // Auto-fill site if available
   if (template.site) {
     newSchedule.value.site = template.site
     quickAdd.value.site = template.site
   }
 
-  // Auto-fill department if available
   if (template.department) {
     newSchedule.value.department = template.department
     quickAdd.value.department = template.department
@@ -1129,22 +1267,17 @@ const onRecurringTemplateChange = (templateId) => {
   })
 }
 
-// Parse weekdays from API format
-// Parse weekdays from API format - FIXED VERSION
 const parseWeekdays = (weekdaysStr) => {
   if (!weekdaysStr) return []
 
-  // If it's already an array, return it
   if (Array.isArray(weekdaysStr)) {
     return weekdaysStr.map((d) => d.toString().trim().toLowerCase())
   }
 
-  // If it's a string, split it
   if (typeof weekdaysStr === 'string') {
     return weekdaysStr.split(',').map((d) => d.trim().toLowerCase())
   }
 
-  // If it's a number or other type, convert to string first
   return weekdaysStr
     .toString()
     .split(',')
@@ -1158,7 +1291,6 @@ const fetchSitesAndDepartments = async () => {
     const companyId = localStorage.getItem('selectedCompany')
 
     if (!token || !companyId) {
-      // Fallback mock data
       sites.value = [
         { id: 1, name: 'Main Office' },
         { id: 2, name: 'Branch 1' },
@@ -1205,10 +1337,19 @@ const fetchSitesAndDepartments = async () => {
       departments: departments.value.length,
       shiftTypes: shiftTypes.value.length,
     })
+
+    // 🆕 ADD: Log the actual shift types for debugging
+    console.log(
+      '📋 Available Shift Types:',
+      shiftTypes.value.map((st) => ({
+        id: st.id,
+        name: st.name,
+        times: `${st.default_start_time?.substring(0, 5)} - ${st.default_end_time?.substring(0, 5)}`,
+      })),
+    )
   } catch (error) {
     console.error('❌ Failed to fetch data:', error.response?.data || error.message)
 
-    // Fallback data
     sites.value = [{ id: 1, name: 'Main Office' }]
     departments.value = [{ id: 1, name: 'Sales' }]
     shiftTypes.value = [{ id: 1, name: 'Morning Shift' }]
@@ -1254,9 +1395,6 @@ const fetchEmployees = async () => {
     console.log('Sample employee structure:', JSON.stringify(response.data[0], null, 2))
     console.log('Company ID we are filtering for:', companyId)
 
-    // ✅ FIXED: Since the API endpoint is /companies/{companyId}/employees/
-    // All returned employees are already linked to this company
-    // No need to filter - trust the API endpoint
     employees.value = response.data || []
 
     console.log('✅ All employees loaded (already filtered by API):', employees.value.length)
@@ -1274,6 +1412,7 @@ const fetchEmployees = async () => {
 
 const fetchData = async () => {
   try {
+    console.log('🔄 fetchData called at:', new Date().toISOString())
     const token = localStorage.getItem('access_token')
     let companyId = localStorage.getItem('selectedCompany')
 
@@ -1281,7 +1420,6 @@ const fetchData = async () => {
     console.log('🔑 Token exists:', !!token)
     console.log('🏢 Raw companyId from localStorage:', companyId)
 
-    // Normalize company ID
     try {
       const parsed = JSON.parse(companyId)
       companyId = parsed?.id || parsed
@@ -1310,133 +1448,88 @@ const fetchData = async () => {
       return
     }
 
-    console.log('📅 Selected Week:', {
-      start: selectedWeek.value.start.toISOString().split('T')[0],
-      end: selectedWeek.value.end.toISOString().split('T')[0],
-    })
-
     const url = `https://staging.wageyapp.com/organization/schedules/company/monthly/?company=${companyId}`
     console.log('🌐 API URL:', url)
-    console.log('🔄 Fetching schedules...')
 
     const res = await axios.get(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
     console.log('✅ API Response Status:', res.status)
-    console.log('📥 RAW API RESPONSE:', res.data)
+    console.log('📥 RAW API RESPONSE:', JSON.stringify(res.data, null, 2))
 
     if (!res.data) {
       console.error('❌ API returned null/undefined')
-      $q.notify({
-        type: 'warning',
-        message: 'API returned no data. This may be a server issue.',
-        timeout: 4000,
-      })
       return
     }
 
-    // ✅ FIX 1: Populate users from employees array FIRST
     users.value = employees.value.map((emp) => ({
       id: emp.id,
       name: emp.full_name || emp.name || `Employee ${emp.id}`,
       email: emp.email || '',
     }))
 
-    console.log('👥 Pre-populated users from employees:', users.value.length)
-
-    // Clear existing shifts
     shifts.value = []
 
-    // Handle different response structures
     let employeesData = []
 
     if (Array.isArray(res.data)) {
       employeesData = res.data
-      console.log('📦 Response is direct array, length:', employeesData.length)
     } else if (res.data?.results && Array.isArray(res.data.results)) {
       employeesData = res.data.results
-      console.log('📦 Response has results property, length:', employeesData.length)
     } else if (res.data?.data && Array.isArray(res.data.data)) {
       employeesData = res.data.data
-      console.log('📦 Response has data property, length:', employeesData.length)
     } else if (res.data && typeof res.data === 'object') {
       employeesData = [res.data]
-      console.log('📦 Response is single object, wrapping in array')
-    }
-
-    if (employeesData.length === 0) {
-      console.warn('⚠️ No schedule data found in response')
-      $q.notify({
-        type: 'info',
-        message: 'No schedules found for this week.',
-        timeout: 3000,
-      })
-      return
     }
 
     console.log('📊 Processing', employeesData.length, 'employees with schedules')
-    console.log('🔍 First employee data:', JSON.stringify(employeesData[0], null, 2))
 
-    let totalSchedules = 0
+    let loggedFirstSchedule = false
 
     employeesData.forEach((empData, index) => {
-      console.log(`\n👤 Employee ${index + 1}:`, empData)
-
       let employee = null
       let schedules = []
 
-      // Handle different structures
       if (empData.employee && typeof empData.employee === 'object') {
         employee = empData.employee
         schedules = empData.schedules || []
-        console.log('  📋 Structure 1: employee + schedules')
       } else if (empData.id && empData.schedules) {
         employee = empData
         schedules = empData.schedules || []
-        console.log('  📋 Structure 2: flat employee with schedules')
       } else if (empData.id) {
         employee = empData
         schedules = empData.schedule || empData.schedule_list || []
-        console.log('  📋 Structure 3: employee with alternate schedule field')
       }
 
       if (!employee || !employee.id) {
-        console.warn('  ⚠️ Could not extract employee from data')
         return
       }
 
-      console.log('  ✅ Employee ID:', employee.id)
-      console.log('  ✅ Employee name:', employee.full_name || employee.name)
-      console.log('  📅 Schedules:', Array.isArray(schedules) ? schedules.length : typeof schedules)
-
-      // Handle stringified schedules
       if (typeof schedules === 'string') {
         try {
           schedules = JSON.parse(schedules)
-          console.log('  🔄 Parsed stringified schedules')
         } catch (e) {
-          console.error('  ❌ Failed to parse schedules string:', e)
+          console.error('Failed to parse schedules string:', e)
           schedules = []
         }
       }
 
-      if (!Array.isArray(schedules)) {
-        console.warn('  ⚠️ Schedules is not an array:', typeof schedules)
+      if (!Array.isArray(schedules) || schedules.length === 0) {
         return
       }
-
-      if (schedules.length === 0) {
-        console.log('  ℹ️ No schedules for this employee')
-        return
-      }
-
-      console.log('  🔍 First schedule:', JSON.stringify(schedules[0], null, 2))
 
       schedules.forEach((schedule, sIndex) => {
         try {
+          if (!loggedFirstSchedule) {
+            console.log('=== 🔍 FIRST SCHEDULE DETAILED ANALYSIS ===')
+            console.log('📋 Full schedule object:', schedule)
+            console.log('📋 All keys in schedule:', Object.keys(schedule))
+            console.log('📋 Complete JSON:', JSON.stringify(schedule, null, 2))
+            loggedFirstSchedule = true
+          }
+
           if (!schedule.date) {
-            console.warn('    ⚠️ Schedule has no date')
             return
           }
 
@@ -1445,58 +1538,104 @@ const fetchData = async () => {
           const timeDiff = scheduleDate.getTime() - weekStart.getTime()
           const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24))
 
-          console.log(`    📅 Schedule ${sIndex + 1}:`, {
-            date: schedule.date,
-            daysDiff: daysDiff,
-            inWeek: daysDiff >= 0 && daysDiff < 7,
-            actual_start_time: schedule.actual_start_time,
-            actual_end_time: schedule.actual_end_time,
-          })
-
           if (daysDiff >= 0 && daysDiff < 7) {
-            // ✅ FIX 2: Use actual_start_time and actual_end_time
+            // ✅ IMPROVED: Extract times first
+            const startTime =
+              schedule.actual_start_time?.substring(0, 5) ||
+              schedule.start_time?.substring(0, 5) ||
+              '09:00'
+            const endTime =
+              schedule.actual_end_time?.substring(0, 5) ||
+              schedule.end_time?.substring(0, 5) ||
+              '17:00'
+
+            // ✅ IMPROVED: Better shift type detection
+            let shiftTypeId =
+              schedule.shift_type_id ||
+              schedule.shift_type ||
+              schedule.shiftType ||
+              schedule.shiftTypeId ||
+              null
+
+            let shiftTypeName =
+              schedule.shift_type_name || schedule.shiftTypeName || schedule.shift_name || 'Shift'
+
+            // ✅ If no shift type ID, match by times
+            if (!shiftTypeId && startTime && endTime && shiftTypes.value.length > 0) {
+              const matchingShiftType = shiftTypes.value.find((st) => {
+                const stStart = st.default_start_time?.substring(0, 5)
+                const stEnd = st.default_end_time?.substring(0, 5)
+                return stStart === startTime && stEnd === endTime
+              })
+
+              if (matchingShiftType) {
+                shiftTypeId = matchingShiftType.id
+                shiftTypeName = matchingShiftType.name
+                console.log(`✅ Matched shift type by time: ${shiftTypeName} (ID: ${shiftTypeId})`)
+              } else {
+                // ✅ No match found - use first shift type as fallback
+                console.warn(`⚠️ No shift type match for ${startTime}-${endTime}, using fallback`)
+                shiftTypeId = shiftTypes.value[0].id
+                shiftTypeName = shiftTypes.value[0].name
+              }
+            }
+
+            // ✅ If we have name but no ID, find ID by name
+            if (
+              !shiftTypeId &&
+              shiftTypeName &&
+              shiftTypeName !== 'Shift' &&
+              shiftTypes.value.length > 0
+            ) {
+              const foundShiftType = shiftTypes.value.find(
+                (st) => st.name.toLowerCase() === shiftTypeName.toLowerCase(),
+              )
+              if (foundShiftType) {
+                shiftTypeId = foundShiftType.id
+              } else {
+                // ✅ Fallback to first shift type
+                shiftTypeId = shiftTypes.value[0].id
+              }
+            }
+
+            // ✅ Final fallback if still no shift type
+            if (!shiftTypeId && shiftTypes.value.length > 0) {
+              console.warn('⚠️ Using fallback shift type for schedule:', schedule.id)
+              shiftTypeId = shiftTypes.value[0].id
+              shiftTypeName = shiftTypes.value[0].name
+            }
+
             const shift = {
               id: schedule.id || `temp-${Date.now()}-${sIndex}`,
+              assignmentId:
+                schedule.employee_assignment_id || schedule.assignment_id || schedule.id,
               userId: employee.id,
               day: daysDiff,
-              startTime: schedule.actual_start_time
-                ? schedule.actual_start_time.substring(0, 5)
-                : schedule.start_time
-                  ? schedule.start_time.substring(0, 5)
-                  : '09:00',
-              endTime: schedule.actual_end_time
-                ? schedule.actual_end_time.substring(0, 5)
-                : schedule.end_time
-                  ? schedule.end_time.substring(0, 5)
-                  : '17:00',
-              position: schedule.shift_type_name || schedule.shift_type || 'Shift',
+              startTime: startTime,
+              endTime: endTime,
+              position: shiftTypeName,
+              shiftTypeId: shiftTypeId, // ✅ Should now always have a value
               site: schedule.site || null,
               department: schedule.department || null,
               status: schedule.status || 'draft',
               date: schedule.date,
             }
 
-            // Debug log for site data
-            console.log('    📍 Shift site data:', {
-              raw_site: schedule.site,
-              site_type: typeof schedule.site,
-              final_site: shift.site,
-              final_site_type: typeof shift.site,
-            })
-
-            console.log('    ✅ Created shift with times:', {
-              startTime: shift.startTime,
-              endTime: shift.endTime,
-            })
+            // ✅ WARN about missing critical fields
+            if (!shift.assignmentId) {
+              console.error('❌ CRITICAL: No assignment ID for shift:', schedule.id)
+            }
+            if (!shift.shiftTypeId) {
+              console.error('❌ CRITICAL: No shift type ID for shift:', schedule.id)
+            }
+            if (!shift.site) {
+              console.warn('⚠️ No site ID for shift:', schedule.id)
+            }
 
             shifts.value.push(shift)
-            totalSchedules++
-            console.log('    ✅ Added shift')
-          } else {
-            console.log('    ⏭️ Skipped (outside week range)')
           }
         } catch (err) {
-          console.error('    ❌ Error processing schedule:', err)
+          console.error('❌ Error processing schedule:', err)
         }
       })
     })
@@ -1504,54 +1643,83 @@ const fetchData = async () => {
     console.log('\n=== FINAL RESULTS ===')
     console.log('👥 Users loaded:', users.value.length)
     console.log('📋 Shifts loaded:', shifts.value.length)
-    console.log('📋 Sample shift:', shifts.value[0])
+    console.log('📋 First shift:', shifts.value[0])
+    console.log('📋 Shifts with assignmentId:', shifts.value.filter((s) => s.assignmentId).length)
+    console.log(
+      '📋 Shifts WITHOUT assignmentId:',
+      shifts.value.filter((s) => !s.assignmentId).length,
+    )
 
-    if (totalSchedules === 0) {
+    // ✅ LOG SHIFTS WITH MISSING SHIFT TYPES
+    const shiftsWithoutShiftType = shifts.value.filter((s) => !s.shiftTypeId)
+    if (shiftsWithoutShiftType.length > 0) {
+      console.error(
+        '❌ CRITICAL: Some shifts are missing shift type IDs:',
+        shiftsWithoutShiftType.length,
+      )
+      console.error(
+        'Affected shifts:',
+        shiftsWithoutShiftType.map((s) => ({
+          id: s.id,
+          date: s.date,
+          times: `${s.startTime}-${s.endTime}`,
+        })),
+      )
+    }
+
+    console.log('🔍 SAMPLE SHIFTS WITH FULL DATA:')
+    shifts.value.slice(0, 3).forEach((shift, idx) => {
+      console.log(`Shift ${idx + 1}:`, {
+        id: shift.id,
+        assignmentId: shift.assignmentId,
+        assignmentIdType: typeof shift.assignmentId,
+        userId: shift.userId,
+        date: shift.date,
+        site: shift.site,
+        siteType: typeof shift.site,
+        department: shift.department,
+        position: shift.position,
+        shiftTypeId: shift.shiftTypeId, // ✅ Check this!
+        shiftTypeIdType: typeof shift.shiftTypeId,
+      })
+    })
+
+    console.log(
+      '🔍 ALL ASSIGNMENT IDS:',
+      shifts.value.map((s) => s.assignmentId),
+    )
+
+    if (shifts.value.length > 0) {
+      $q.notify({
+        type: 'positive',
+        message: `Loaded ${shifts.value.length} schedules`,
+        timeout: 2000,
+      })
+    } else {
       $q.notify({
         type: 'info',
         message: 'No schedules found for the selected week.',
         timeout: 3000,
       })
-    } else {
-      $q.notify({
-        type: 'positive',
-        message: `Loaded ${totalSchedules} schedules for ${users.value.length} employees`,
-        timeout: 2000,
-      })
     }
   } catch (e) {
     console.error('❌ FETCH ERROR:', e)
     console.error('❌ Response:', e.response?.data)
-    console.error('❌ Status:', e.response?.status)
-
-    let errorMsg = 'Failed to load schedules'
-
-    if (e.response?.status === 404) {
-      errorMsg = 'Schedule endpoint not found. Please check the API URL.'
-    } else if (e.response?.status === 401) {
-      errorMsg = 'Unauthorized. Please log in again.'
-    } else if (e.response?.status === 403) {
-      errorMsg = 'Access denied. You may not have permission to view schedules.'
-    } else if (e.response?.data?.detail) {
-      errorMsg = e.response.data.detail
-    }
 
     $q.notify({
       type: 'negative',
-      message: errorMsg,
+      message: 'Failed to load schedules',
       timeout: 5000,
     })
   }
 }
-
 onMounted(async () => {
-  await fetchSitesAndDepartments() // Waits to finish
-  await fetchEmployees() // Waits to finish (employees.value now has data)
-  await fetchData() // Now runs with populated employees.value
-  await debugEmployeeAndCompany() // Waits to finish
+  await fetchSitesAndDepartments()
+  await fetchEmployees()
+  await fetchData()
+  await debugEmployeeAndCompany()
 })
 
-// Check if employee has any schedule on a specific date
 const checkEmployeeScheduleOnDate = async (employeeId, dateStr) => {
   try {
     const token = localStorage.getItem('access_token')
@@ -1593,10 +1761,12 @@ const getShifts = (employeeId, dayIdx) =>
   shifts.value.filter((shift) => shift.userId === employeeId && shift.day === dayIdx)
 
 const getUserShiftCount = (userId) => shifts.value.filter((s) => s.userId === userId).length
+
 const getEmployeeName = (id) => {
   const user = users.value.find((u) => u.id === id)
   return user?.name || 'Unknown Employee'
 }
+
 const getShiftTypeDetails = (shiftTypeId) => {
   const shiftType = shiftTypes.value.find((st) => st.id === shiftTypeId)
   if (!shiftType) return ''
@@ -1620,7 +1790,6 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
     throw new Error('No company selected')
   }
 
-  // Normalize company ID
   try {
     const parsed = JSON.parse(companyId)
     companyId = parsed?.id || parsed
@@ -1628,7 +1797,6 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
     // Already a plain value
   }
 
-  // Convert to integer
   companyId = parseInt(companyId)
 
   console.log('🏢 Normalized companyId:', companyId, typeof companyId)
@@ -1636,34 +1804,31 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
   console.log('🏢 Site ID:', scheduleData.site, typeof scheduleData.site)
   console.log('👔 Shift Type ID:', scheduleData.position, typeof scheduleData.position)
 
-  // Validate employee ID format
   if (!scheduleData.userId) {
     throw new Error('Employee ID is required')
   }
 
-  // Check if employee ID is UUID or integer
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     scheduleData.userId,
   )
 
   console.log('🔑 Employee ID format - Is UUID?:', isUUID)
 
-  // Build payload - keep employee_ids as-is if UUID, convert to int if number
   const employeeId = isUUID ? scheduleData.userId : parseInt(scheduleData.userId)
 
   const payload = {
     company_id: companyId,
-    employee_ids: [employeeId], // Array with single employee
+    employee_ids: [employeeId],
     schedules: [
       {
-        date: dateStr, // YYYY-MM-DD format
+        date: dateStr,
         site_id: parseInt(scheduleData.site),
         shift_type_id: parseInt(scheduleData.position),
+        department_id: parseInt(scheduleData.department || departments.value[0]?.id), // fallback to first department
       },
     ],
   }
 
-  // Add department if present
   if (scheduleData.department) {
     payload.schedules[0].department_id = parseInt(scheduleData.department)
   }
@@ -1698,7 +1863,6 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
       headers: error.response?.headers,
     })
 
-    // Check if it's an empty results error
     if (error.response?.data?.results && error.response.data.results.length === 0) {
       console.error('⚠️ DIAGNOSIS: Empty results array - Common causes:')
       console.error('  1. Employee is not linked to this company')
@@ -1706,7 +1870,6 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
       console.error("  3. Company_id does not match employee's company")
       console.error('  4. Site or shift_type does not exist for this company')
 
-      // Try to get more info about the employee
       try {
         const empResponse = await axios.get(
           `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
@@ -1732,9 +1895,7 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
     throw error
   }
 }
-// STEP 2: Assign the schedule
 
-// Error handler with detailed feedback
 const handleScheduleError = (error) => {
   console.error('❌ Full Error Object:', error)
   console.error('❌ Error Response:', error.response)
@@ -1748,19 +1909,14 @@ const handleScheduleError = (error) => {
 
     console.error('❌ Full Error Data:', JSON.stringify(data, null, 2))
 
-    // Check for empty results (most common error)
     if (data.results && Array.isArray(data.results) && data.results.length === 0) {
       errorMessage = 'Could not create schedule'
       caption =
         'Common causes: Employee not linked to company, invalid site/shift type, or data mismatch. Check console for details.'
-    }
-    // Check for errors array
-    else if (data.errors && Array.isArray(data.errors)) {
+    } else if (data.errors && Array.isArray(data.errors)) {
       errorMessage = data.errors.join('; ')
       caption = 'Please correct the errors above'
-    }
-    // Check for field-specific errors
-    else if (typeof data === 'object') {
+    } else if (typeof data === 'object') {
       const errorDetails = []
 
       Object.keys(data).forEach((key) => {
@@ -1777,14 +1933,11 @@ const handleScheduleError = (error) => {
       } else if (data.detail) {
         errorMessage = data.detail
       }
-    }
-    // String error
-    else if (typeof data === 'string') {
+    } else if (typeof data === 'string') {
       errorMessage = data
     }
   }
 
-  // Add specific error code handling
   if (error.response?.status === 400) {
     caption = 'Bad Request - Check console for detailed validation errors'
   } else if (error.response?.status === 404) {
@@ -1820,7 +1973,7 @@ const debugEmployeeAndCompany = async () => {
       const parsed = JSON.parse(companyId)
       companyId = parsed?.id || parsed
     } catch {
-      //state
+      // Already plain value
     }
 
     companyId = parseInt(companyId)
@@ -1828,7 +1981,6 @@ const debugEmployeeAndCompany = async () => {
     console.log('=== EMPLOYEE-COMPANY DEBUG ===')
     console.log('🏢 Company ID:', companyId)
 
-    // Fetch employees for this company
     const empResponse = await axios.get(
       `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
       { headers: { Authorization: `Bearer ${token}` } },
@@ -1844,7 +1996,6 @@ const debugEmployeeAndCompany = async () => {
       })),
     )
 
-    // Fetch sites
     const sitesResponse = await axios.get(
       `https://staging.wageyapp.com/organization/sites/?company=${companyId}`,
       { headers: { Authorization: `Bearer ${token}` } },
@@ -1858,7 +2009,6 @@ const debugEmployeeAndCompany = async () => {
       })),
     )
 
-    // Fetch shift types
     const shiftResponse = await axios.get(
       `https://staging.wageyapp.com/organization/shift-types/?company=${companyId}`,
       { headers: { Authorization: `Bearer ${token}` } },
@@ -1888,7 +2038,6 @@ const verifyEmployeeCompanyLink = async (employeeId) => {
       // Already a plain string/number
     }
 
-    // Check if employee exists in company employees list
     const response = await axios.get(
       `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
       { headers: { Authorization: `Bearer ${token}` } },
@@ -1909,12 +2058,9 @@ const verifyEmployeeCompanyLink = async (employeeId) => {
   }
 }
 
-// NEW CODE - Simplified validation
-// ✅ FIXED: Better validation that auto-fills times from shift type
 const addSchedule = async () => {
   const n = newSchedule.value
 
-  // Validation
   if (!n.userId) {
     $q.notify({ type: 'negative', message: 'Please select an employee.' })
     return
@@ -1939,7 +2085,6 @@ const addSchedule = async () => {
   addConflictWarning.value = false
 
   try {
-    // Verify employee is linked to company
     console.log('🔍 Verifying employee-company link...')
     const isLinked = await verifyEmployeeCompanyLink(n.userId)
 
@@ -1956,7 +2101,6 @@ const addSchedule = async () => {
 
     console.log('✅ Employee verified')
 
-    // Check for scheduling conflicts
     const hasConflict = await checkEmployeeScheduleOnDate(n.userId, n.selectedDate)
 
     if (hasConflict) {
@@ -1970,13 +2114,11 @@ const addSchedule = async () => {
       return
     }
 
-    // Create the schedule
     await createScheduleRecord(n, n.selectedDate)
 
     isCheckingConflict.value = false
     showAddModal.value = false
 
-    // Reset form
     newSchedule.value = {
       userId: null,
       selectedDate: null,
@@ -1999,7 +2141,6 @@ const addSchedule = async () => {
       icon: 'check_circle',
     })
 
-    // Refresh the schedule view
     setTimeout(() => fetchData(), 500)
   } catch (error) {
     isCheckingConflict.value = false
@@ -2008,7 +2149,6 @@ const addSchedule = async () => {
   }
 }
 
-// Quick add schedule
 const quickAddSchedule = async () => {
   console.log('🚀 Quick Add Started')
 
@@ -2016,7 +2156,6 @@ const quickAddSchedule = async () => {
 
   console.log('📋 Quick Add Values:', { userId, day, shifts })
 
-  // Validation
   if (!userId || day === null) {
     $q.notify({
       type: 'negative',
@@ -2025,7 +2164,6 @@ const quickAddSchedule = async () => {
     return
   }
 
-  // Validate all shift rows
   for (let i = 0; i < shifts.length; i++) {
     const shift = shifts[i]
     if (!shift.site || !shift.shiftType) {
@@ -2061,7 +2199,6 @@ const quickAddSchedule = async () => {
 
     console.log('Target date:', targetDate)
 
-    // Check if date is in the past
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const compareDate = new Date(targetDate)
@@ -2077,7 +2214,6 @@ const quickAddSchedule = async () => {
       return
     }
 
-    // Timezone-safe date string
     const year = targetDate.getFullYear()
     const month = String(targetDate.getMonth() + 1).padStart(2, '0')
     const dayOfMonth = String(targetDate.getDate()).padStart(2, '0')
@@ -2085,23 +2221,20 @@ const quickAddSchedule = async () => {
 
     console.log('Final dateStr:', dateStr)
 
-    // Build schedules array - all shifts on SAME date
     const schedulePayloads = shifts.map((shift) => ({
-      date: dateStr, // Same date for all shifts
+      date: dateStr,
       site_id: shift.site,
       shift_type_id: shift.shiftType,
     }))
 
-    // Build payload with multiple shifts on same day
     const payload = {
       company_id: parseInt(companyId),
       employee_ids: [userId],
-      schedules: schedulePayloads, // Multiple shifts, same date
+      schedules: schedulePayloads,
     }
 
     console.log('📤 Sending payload with multiple shifts:', JSON.stringify(payload, null, 2))
 
-    // Call API
     const response = await axios.post(
       'https://staging.wageyapp.com/organization/assignments/assign/',
       payload,
@@ -2152,11 +2285,10 @@ const quickAddSchedule = async () => {
   }
 }
 
-// NEW CODE
 const openAddModal = () => {
   newSchedule.value = {
     userId: null,
-    selectedDate: null, // ✅ Fixed
+    selectedDate: null,
     startTime: '',
     endTime: '',
     position: null,
@@ -2170,7 +2302,7 @@ const openAddModal = () => {
     repeatInterval: 1,
   }
   addConflictWarning.value = false
-  fetchEmployees() // Fetch fresh employee data when modal opens
+  fetchEmployees()
   showAddModal.value = true
 }
 
@@ -2184,7 +2316,6 @@ const openEditModal = (schedule) => {
 
 const closeEditModal = () => (showEditModal.value = false)
 
-// Update schedule
 const updateSchedule = async () => {
   const es = editingSchedule.value
   if (!es.id) return
@@ -2232,7 +2363,7 @@ const updateSchedule = async () => {
     $q.notify({ type: 'negative', message: 'Failed to update schedule' })
   }
 }
-// Delete schedule
+
 const deleteShift = async (id) => {
   try {
     const token = localStorage.getItem('access_token')
@@ -2257,6 +2388,7 @@ const deleteShift = async (id) => {
     $q.notify({ type: 'negative', message: 'Failed to delete schedule' })
   }
 }
+
 const openQuickAddModal = (userId, dayIdx) => {
   quickAdd.value = {
     userId,
@@ -2278,25 +2410,278 @@ const addShiftRow = () => {
   })
 }
 
+const removeShiftRow = (index) => {
+  quickAdd.value.shifts.splice(index, 1)
+}
+
 const closeQuickAddModal = () => {
   showQuickAddModal.value = false
   quickAdd.value = {
     userId: null,
     day: null,
-    site: null,
-    shiftType: null,
+    shifts: [],
   }
 }
+
+const openReassignModal = (shift) => {
+  console.log('=== 🔍 OPEN REASSIGN MODAL ===')
+  console.log('📋 Shift data:', {
+    id: shift.id,
+    assignmentId: shift.assignmentId,
+    shiftTypeId: shift.shiftTypeId,
+    site: shift.site,
+    department: shift.department,
+    date: shift.date,
+    userId: shift.userId,
+  })
+
+  // ✅ Validate required fields
+  const missingFields = []
+
+  if (!shift.assignmentId) missingFields.push('Assignment ID')
+  if (!shift.site) missingFields.push('Site')
+  if (!shift.shiftTypeId) missingFields.push('Shift Type')
+
+  if (missingFields.length > 0) {
+    console.error('❌ Cannot reassign - Missing:', missingFields)
+
+    $q.notify({
+      type: 'negative',
+      message: 'Cannot reassign this shift',
+      caption: `Missing required fields: ${missingFields.join(', ')}`,
+      timeout: 5000,
+    })
+    return
+  }
+
+  // ✅ Initialize reassign data - store the complete shift info
+  reassignData.value = {
+    assignmentId: shift.assignmentId,
+    shiftTypeId: shift.shiftTypeId,
+    siteId: shift.site,
+    departmentId: shift.department || null,
+    currentEmployee: shift.userId,
+    newEmployee: null,
+    date: shift.date,
+    day: shift.day,
+    originalShift: { ...shift }, // Store original shift for local update
+  }
+
+  console.log('✅ Reassign data ready:', reassignData.value)
+  showReassignModal.value = true
+}
+
+const closeReassignModal = () => {
+  showReassignModal.value = false
+  reassignData.value = {
+    assignmentId: null,
+    shiftTypeId: null,
+    siteId: null,
+    departmentId: null,
+    currentEmployee: null,
+    newEmployee: null,
+    date: null,
+    day: null,
+    originalShift: null, // Clear this too
+  }
+}
+
+// ✅ CORRECTED reassignShift function
+// This version properly uses the employee_assignment_id from the API
+
+const reassignShift = async () => {
+  isReassigning.value = true
+  const token = localStorage.getItem('access_token')
+
+  try {
+    const r = reassignData.value
+
+    console.log('🔍 Starting reassignment...')
+    console.log('📋 Reassign data:', {
+      assignmentId: r.assignmentId,
+      assignmentIdType: typeof r.assignmentId,
+      siteId: r.siteId,
+      shiftTypeId: r.shiftTypeId,
+      newEmployee: r.newEmployee,
+      currentEmployee: r.currentEmployee,
+    })
+
+    // ============================================
+    // VALIDATION
+    // ============================================
+    if (!r.assignmentId) {
+      $q.notify({
+        type: 'negative',
+        message: 'Assignment ID is missing',
+      })
+      isReassigning.value = false
+      return
+    }
+
+    if (!r.siteId) {
+      $q.notify({
+        type: 'negative',
+        message: 'Site is required',
+      })
+      isReassigning.value = false
+      return
+    }
+
+    if (!r.shiftTypeId) {
+      $q.notify({
+        type: 'negative',
+        message: 'Shift type is required',
+      })
+      isReassigning.value = false
+      return
+    }
+
+    if (!r.newEmployee) {
+      $q.notify({
+        type: 'negative',
+        message: 'Please select a new employee',
+      })
+      isReassigning.value = false
+      return
+    }
+
+    // Check if reassigning to the same employee
+    if (r.newEmployee === r.currentEmployee) {
+      $q.notify({
+        type: 'warning',
+        message: 'Please select a different employee',
+      })
+      isReassigning.value = false
+      return
+    }
+
+    // ============================================
+    // BUILD PAYLOAD
+    // ============================================
+    // Keep assignment_id as STRING (it's "78849" format, not integer)
+    const payload = {
+      assignment_id: r.assignmentId.toString(), // Keep as string!
+      shift_type_id: parseInt(r.shiftTypeId),
+      site_id: parseInt(r.siteId),
+      new_employee_id: r.newEmployee, // Add this - backend might need it
+    }
+
+    console.log('📤 Reassign payload:', JSON.stringify(payload, null, 2))
+    console.log('📤 Payload field types:', {
+      assignment_id: typeof payload.assignment_id,
+      shift_type_id: typeof payload.shift_type_id,
+      site_id: typeof payload.site_id,
+      new_employee_id: typeof payload.new_employee_id,
+    })
+
+    // ============================================
+    // MAKE API CALL
+    // ============================================
+    const response = await axios.patch(
+      'https://staging.wageyapp.com/organization/assignments/reassign/',
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+
+    console.log('✅ Reassignment API response:', response.data)
+    console.log('✅ Response status:', response.status)
+
+    // ============================================
+    // SUCCESS NOTIFICATION
+    // ============================================
+    const oldEmployeeName = getEmployeeName(r.currentEmployee)
+    const newEmployeeName = getEmployeeName(r.newEmployee)
+
+    $q.notify({
+      type: 'positive',
+      message: 'Shift reassigned successfully!',
+      caption: `From ${oldEmployeeName} to ${newEmployeeName}`,
+      icon: 'check_circle',
+      timeout: 3000,
+    })
+
+    closeReassignModal()
+
+    // ============================================
+    // FORCE REFRESH FROM API
+    // ============================================
+    console.log('🔄 Force refreshing data from server...')
+
+    // Clear current shifts to force a clean reload
+    shifts.value = []
+
+    // Wait a bit for backend to process
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    // Fetch fresh data
+    await fetchData()
+
+    console.log('✅ Data refresh complete. New shifts count:', shifts.value.length)
+  } catch (error) {
+    console.error('❌ Reassign failed:', error)
+    console.error('❌ Error response:', error.response?.data)
+    console.error('❌ Error status:', error.response?.status)
+    console.error('❌ Full error object:', JSON.stringify(error.response, null, 2))
+
+    let errorMsg = 'Failed to reassign shift.'
+    let errorCaption = ''
+
+    if (error.response?.status === 400) {
+      const data = error.response.data
+      console.error('❌ 400 Bad Request - Details:', data)
+
+      if (typeof data === 'object') {
+        const errors = []
+        Object.entries(data).forEach(([key, value]) => {
+          if (Array.isArray(value)) {
+            errors.push(`${key}: ${value.join(', ')}`)
+          } else {
+            errors.push(`${key}: ${value}`)
+          }
+        })
+        if (errors.length > 0) {
+          errorMsg = errors.join('; ')
+        }
+      } else if (data.detail) {
+        errorMsg = data.detail
+      }
+
+      errorCaption = 'Check the console for detailed validation errors'
+    } else if (error.response?.status === 404) {
+      errorMsg = 'Assignment not found'
+      errorCaption = 'The assignment may be invalid or the shift was deleted'
+    } else if (error.response?.status === 403) {
+      errorMsg = 'Permission denied'
+      errorCaption = 'You may not have access to reassign this shift'
+    } else if (error.response?.data?.detail) {
+      errorMsg = error.response.data.detail
+    }
+
+    $q.notify({
+      type: 'negative',
+      message: errorMsg,
+      caption: errorCaption,
+      timeout: 6000,
+      actions: [{ label: 'Dismiss', color: 'white' }],
+    })
+  } finally {
+    isReassigning.value = false
+  }
+}
+
 const applyFilters = () => {
   console.log('🔍 Filters applied:', {
     site: filters.value.site,
     employee: filters.value.employee,
     searchTerm: searchTerm.value,
   })
-
-  // Filter is automatically applied through computed property
-  // This function can be used for additional logic if needed
 }
+
 const filterEmployees = () => {}
 </script>
 
