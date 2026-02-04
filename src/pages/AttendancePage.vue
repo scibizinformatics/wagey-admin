@@ -219,16 +219,7 @@
               v-if="selected.length > 0"
               color="negative"
               icon="delete"
-              :label="`Delete ${selected.length} items`"
-              @click="confirmBatchDelete"
-              size="sm"
-              no-caps
-            />
-            <q-btn
-              v-if="selected.length > 0"
-              color="negative"
-              icon="delete"
-              :label="`Delete ${selected.length} items`"
+              :label="`Delete ${selected.length}`"
               @click="confirmBatchDelete"
               size="sm"
               no-caps
@@ -255,175 +246,178 @@
           </div>
         </div>
 
-        <!-- Attendance Table -->
+        <!-- Attendance Table - IMPROVED STRUCTURE -->
         <div class="modern-table-container">
-          <q-table
-            :rows="attendanceData"
-            :columns="columns"
-            row-key="id"
-            flat
-            :loading="loading"
-            class="attendance-table"
-            hide-pagination
-            :rows-per-page-options="[0]"
-            selection="multiple"
-            v-model:selected="selected"
-            :grid="$q.screen.xs"
-          >
-            <!-- Grid mode for mobile -->
-            <template v-slot:item="props" v-if="$q.screen.xs">
-              <div class="q-pa-xs col-xs-12 col-sm-6 col-md-4">
-                <q-card class="mobile-card">
-                  <q-card-section>
-                    <div class="mobile-employee">{{ getEmployeeName(props.row.employee) }}</div>
-                    <div class="mobile-date">{{ props.row.date }}</div>
-                  </q-card-section>
-                  <q-card-section class="q-pt-none">
-                    <div class="mobile-details">
-                      Time In: {{ formatTime(props.row.time_in) }}<br />
-                      Time Out: {{ formatTime(props.row.time_out) }}<br />
-                      Source: {{ props.row.source?.replace('_', ' ').toUpperCase() }}
-                    </div>
-                    <div class="mobile-selfies q-mt-md">
-                      <div v-if="props.row.time_in_selfie" class="mobile-selfie-item">
-                        <span class="mobile-selfie-label">Time In Photo:</span>
-                        <img
-                          :src="props.row.time_in_selfie"
-                          alt="Time In"
-                          class="mobile-selfie-img"
-                          @click="viewSelfie(props.row.time_in_selfie, 'Time In')"
-                        />
+          <div class="table-wrapper">
+            <q-table
+              :rows="attendanceData"
+              :columns="columns"
+              row-key="id"
+              flat
+              :loading="loading"
+              class="attendance-table"
+              hide-pagination
+              :rows-per-page-options="[0]"
+              selection="multiple"
+              v-model:selected="selected"
+              :grid="$q.screen.xs"
+              table-header-class="table-header-custom"
+            >
+              <!-- Grid mode for mobile -->
+              <template v-slot:item="props" v-if="$q.screen.xs">
+                <div class="q-pa-xs col-xs-12 col-sm-6 col-md-4">
+                  <q-card class="mobile-card">
+                    <q-card-section>
+                      <div class="mobile-employee">{{ getEmployeeName(props.row.employee) }}</div>
+                      <div class="mobile-date">{{ props.row.date }}</div>
+                    </q-card-section>
+                    <q-card-section class="q-pt-none">
+                      <div class="mobile-details">
+                        Time In: {{ formatTime(props.row.time_in) }}<br />
+                        Time Out: {{ formatTime(props.row.time_out) }}<br />
+                        Source: {{ props.row.source?.replace('_', ' ').toUpperCase() }}
                       </div>
-                      <div v-if="props.row.time_out_selfie" class="mobile-selfie-item">
-                        <span class="mobile-selfie-label">Time Out Photo:</span>
-                        <img
-                          :src="props.row.time_out_selfie"
-                          alt="Time Out"
-                          class="mobile-selfie-img"
-                          @click="viewSelfie(props.row.time_out_selfie, 'Time Out')"
-                        />
+                      <div class="mobile-selfies q-mt-md">
+                        <div v-if="props.row.time_in_selfie" class="mobile-selfie-item">
+                          <span class="mobile-selfie-label">Time In Photo:</span>
+                          <img
+                            :src="props.row.time_in_selfie"
+                            alt="Time In"
+                            class="mobile-selfie-img"
+                            @click="viewSelfie(props.row.time_in_selfie, 'Time In')"
+                          />
+                        </div>
+                        <div v-if="props.row.time_out_selfie" class="mobile-selfie-item">
+                          <span class="mobile-selfie-label">Time Out Photo:</span>
+                          <img
+                            :src="props.row.time_out_selfie"
+                            alt="Time Out"
+                            class="mobile-selfie-img"
+                            @click="viewSelfie(props.row.time_out_selfie, 'Time Out')"
+                          />
+                        </div>
                       </div>
+                    </q-card-section>
+                    <q-card-actions align="right">
+                      <q-btn flat size="sm" color="primary" @click="editAttendance(props.row)"
+                        >Edit</q-btn
+                      >
+                    </q-card-actions>
+                  </q-card>
+                </div>
+              </template>
+
+              <template v-slot:header="props">
+                <q-tr :props="props" class="table-header-row">
+                  <q-th auto-width class="table-header-cell checkbox-col">
+                    <q-checkbox v-model="selectAll" @update:model-value="toggleSelectAll" dense />
+                  </q-th>
+                  <q-th class="table-header-cell sl-col">SL No</q-th>
+                  <q-th class="table-header-cell employee-col">Employee</q-th>
+                  <q-th class="table-header-cell date-col">Date</q-th>
+                  <q-th class="table-header-cell time-col">Time In</q-th>
+                  <q-th class="table-header-cell photo-col">Photo</q-th>
+                  <q-th class="table-header-cell time-col">Time Out</q-th>
+                  <q-th class="table-header-cell photo-col">Photo</q-th>
+                  <q-th class="table-header-cell source-col">Source</q-th>
+                  <q-th class="table-header-cell actions-col">Actions</q-th>
+                </q-tr>
+              </template>
+
+              <template v-slot:body="props">
+                <q-tr :props="props" class="table-body-row">
+                  <q-td auto-width class="table-body-cell checkbox-col">
+                    <q-checkbox v-model="selected" :val="props.row" dense />
+                  </q-td>
+                  <q-td class="table-body-cell sl-col">
+                    {{ String(props.rowIndex + 1).padStart(2, '0') }}.
+                  </q-td>
+                  <q-td class="table-body-cell employee-col">
+                    <div class="employee-info">
+                      <q-avatar
+                        size="32px"
+                        class="employee-avatar clickable-avatar"
+                        @click="viewEmployeePhoto(props.row.employee)"
+                      >
+                        <img
+                          v-if="getEmployeePhoto(props.row.employee)"
+                          :src="getEmployeePhoto(props.row.employee)"
+                          alt="Employee Photo"
+                          class="avatar-image"
+                        />
+                        <span v-else class="avatar-initials">
+                          {{ getEmployeeName(props.row.employee).charAt(0) }}
+                        </span>
+                      </q-avatar>
+                      <span class="employee-name">{{ getEmployeeName(props.row.employee) }}</span>
                     </div>
-                  </q-card-section>
-                  <q-card-actions align="right">
-                    <q-btn flat size="sm" color="primary" @click="editAttendance(props.row)"
-                      >Edit</q-btn
-                    >
-                  </q-card-actions>
-                </q-card>
-              </div>
-            </template>
-
-            <template v-slot:header>
-              <q-tr class="table-header-row">
-                <q-th class="table-header-cell">
-                  <q-checkbox v-model="selectAll" @update:model-value="toggleSelectAll" />
-                </q-th>
-                <q-th class="table-header-cell">SL No</q-th>
-                <q-th class="table-header-cell">Employee</q-th>
-                <q-th class="table-header-cell">Date</q-th>
-                <q-th class="table-header-cell">Time In</q-th>
-                <q-th class="table-header-cell">Time In Photo</q-th>
-                <q-th class="table-header-cell">Time Out</q-th>
-                <q-th class="table-header-cell">Time Out Photo</q-th>
-                <q-th class="table-header-cell">Source</q-th>
-                <q-th class="table-header-cell">Actions</q-th>
-              </q-tr>
-            </template>
-
-            <template v-slot:body="props">
-              <q-tr class="table-body-row">
-                <q-td class="table-body-cell">
-                  <q-checkbox v-model="selected" :val="props.row" />
-                </q-td>
-                <q-td class="table-body-cell">
-                  {{ String(props.rowIndex + 1).padStart(2, '0') }}.
-                </q-td>
-                <q-td class="table-body-cell employee-cell">
-                  <div class="employee-info">
-                    <q-avatar
-                      size="32px"
-                      class="employee-avatar clickable-avatar"
-                      @click="viewEmployeePhoto(props.row.employee)"
-                    >
+                  </q-td>
+                  <q-td class="table-body-cell date-col">
+                    {{ props.row.date }}
+                  </q-td>
+                  <q-td class="table-body-cell time-col">
+                    <div class="time-badge time-in" :class="{ 'has-time': props.row.time_in }">
+                      {{ formatTime(props.row.time_in) }}
+                    </div>
+                  </q-td>
+                  <q-td class="table-body-cell photo-col">
+                    <div class="selfie-container">
                       <img
-                        v-if="getEmployeePhoto(props.row.employee)"
-                        :src="getEmployeePhoto(props.row.employee)"
-                        alt="Employee Photo"
-                        class="avatar-image"
+                        v-if="props.row.time_in_selfie"
+                        :src="props.row.time_in_selfie"
+                        alt="Time In Selfie"
+                        class="selfie-thumbnail"
+                        @click="viewSelfie(props.row.time_in_selfie, 'Time In')"
                       />
-                      <span v-else class="avatar-initials">
-                        {{ getEmployeeName(props.row.employee).charAt(0) }}
-                      </span>
-                    </q-avatar>
-                    <span class="employee-name">{{ getEmployeeName(props.row.employee) }}</span>
-                  </div>
-                </q-td>
-                <q-td class="table-body-cell">
-                  {{ props.row.date }}
-                </q-td>
-                <q-td class="table-body-cell">
-                  <div class="time-badge time-in" :class="{ 'has-time': props.row.time_in }">
-                    {{ formatTime(props.row.time_in) }}
-                  </div>
-                </q-td>
-                <q-td class="table-body-cell">
-                  <div class="selfie-container">
-                    <img
-                      v-if="props.row.time_in_selfie"
-                      :src="props.row.time_in_selfie"
-                      alt="Time In Selfie"
-                      class="selfie-thumbnail"
-                      @click="viewSelfie(props.row.time_in_selfie, 'Time In')"
-                    />
-                    <span v-else class="no-photo">-</span>
-                  </div>
-                </q-td>
-                <q-td class="table-body-cell">
-                  <div class="time-badge time-out" :class="{ 'has-time': props.row.time_out }">
-                    {{ formatTime(props.row.time_out) }}
-                  </div>
-                </q-td>
-                <q-td class="table-body-cell">
-                  <div class="selfie-container">
-                    <img
-                      v-if="props.row.time_out_selfie"
-                      :src="props.row.time_out_selfie"
-                      alt="Time Out Selfie"
-                      class="selfie-thumbnail"
-                      @click="viewSelfie(props.row.time_out_selfie, 'Time Out')"
-                    />
-                    <span v-else class="no-photo">-</span>
-                  </div>
-                </q-td>
-                <q-td class="table-body-cell">
-                  <div class="source-badge" :class="getSourceClass(props.row.source)">
-                    {{ formatSource(props.row.source) }}
-                  </div>
-                </q-td>
-                <q-td class="table-body-cell actions-cell">
-                  <div class="action-buttons">
-                    <q-btn
-                      flat
-                      round
-                      icon="visibility"
-                      size="sm"
-                      class="action-btn view-btn"
-                      @click="viewDetails(props.row)"
-                    />
-                    <q-btn
-                      flat
-                      round
-                      icon="edit"
-                      size="sm"
-                      class="action-btn edit-btn"
-                      @click="editAttendance(props.row)"
-                    />
-                  </div>
-                </q-td>
-              </q-tr>
-            </template>
-          </q-table>
+                      <span v-else class="no-photo">-</span>
+                    </div>
+                  </q-td>
+                  <q-td class="table-body-cell time-col">
+                    <div class="time-badge time-out" :class="{ 'has-time': props.row.time_out }">
+                      {{ formatTime(props.row.time_out) }}
+                    </div>
+                  </q-td>
+                  <q-td class="table-body-cell photo-col">
+                    <div class="selfie-container">
+                      <img
+                        v-if="props.row.time_out_selfie"
+                        :src="props.row.time_out_selfie"
+                        alt="Time Out Selfie"
+                        class="selfie-thumbnail"
+                        @click="viewSelfie(props.row.time_out_selfie, 'Time Out')"
+                      />
+                      <span v-else class="no-photo">-</span>
+                    </div>
+                  </q-td>
+                  <q-td class="table-body-cell source-col">
+                    <div class="source-badge" :class="getSourceClass(props.row.source)">
+                      {{ formatSource(props.row.source) }}
+                    </div>
+                  </q-td>
+                  <q-td class="table-body-cell actions-col">
+                    <div class="action-buttons">
+                      <q-btn
+                        flat
+                        round
+                        icon="visibility"
+                        size="sm"
+                        class="action-btn view-btn"
+                        @click="viewDetails(props.row)"
+                      />
+                      <q-btn
+                        flat
+                        round
+                        icon="edit"
+                        size="sm"
+                        class="action-btn edit-btn"
+                        @click="editAttendance(props.row)"
+                      />
+                    </div>
+                  </q-td>
+                </q-tr>
+              </template>
+            </q-table>
+          </div>
 
           <!-- Table Footer with Pagination Info -->
           <div class="table-footer">
@@ -501,245 +495,162 @@
       </q-card>
     </q-dialog>
 
-    <!-- Add Attendance Dialog - TWO STEP PROCESS -->
-    <q-dialog v-model="showAddDialog" persistent>
-      <q-card class="edit-dialog-card" style="min-width: 600px">
-        <q-card-section>
-          <div class="dialog-title">
-            {{ attendanceStep === 'time_in' ? 'Clock In' : 'Clock Out' }}
+    <!-- IMPROVED Add Attendance Dialog - COMPACT VERSION -->
+    <q-dialog v-model="showAddDialog" persistent :maximized="$q.screen.lt.sm">
+      <q-card class="compact-dialog-card">
+        <q-card-section class="compact-dialog-header">
+          <div>
+            <div class="dialog-title">Add Attendance</div>
+            <div class="dialog-subtitle">Record time in and time out</div>
           </div>
-          <div class="text-caption text-grey-7">
-            {{
-              attendanceStep === 'time_in' ? 'Step 1: Record Time In' : 'Step 2: Record Time Out'
-            }}
-          </div>
+          <q-btn flat round dense icon="close" @click="closeAddDialog" v-close-popup />
         </q-card-section>
 
-        <q-card-section class="q-pt-none">
-          <q-form @submit.prevent="handleAttendanceSubmit" class="edit-form">
-            <!-- Employee dropdown - Only show in Time In step -->
-            <q-select
-              v-if="attendanceStep === 'time_in'"
-              filled
-              v-model="newRecord.employee"
-              :options="employeeOptions"
-              label="Employee *"
-              option-label="label"
-              option-value="value"
-              emit-value
-              map-options
-              use-input
-              input-debounce="300"
-              @filter="filterEmployees"
-              @update:model-value="onEmployeeSelected"
-              class="form-field"
-              :rules="[(val) => !!val || 'Employee is required']"
-            >
-              <template v-slot:prepend>
-                <q-icon name="person" />
-              </template>
-              <template v-slot:no-option>
-                <q-item>
-                  <q-item-section class="text-grey">No employees found</q-item-section>
-                </q-item>
-              </template>
-              <template v-slot:option="scope">
-                <q-item v-bind="scope.itemProps">
-                  <q-item-section avatar>
-                    <q-avatar size="32px" color="primary" text-color="white">
-                      {{ scope.opt.label.charAt(0) }}
-                    </q-avatar>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label>{{ scope.opt.label }}</q-item-label>
-                  </q-item-section>
-                </q-item>
-              </template>
-            </q-select>
+        <q-separator />
 
-            <!-- Show selected employee info in Time Out step -->
-            <div v-if="attendanceStep === 'time_out'" class="q-mb-md">
-              <q-card flat bordered>
-                <q-card-section>
-                  <div class="row items-center">
-                    <q-avatar size="48px" color="primary" text-color="white" class="q-mr-md">
-                      {{ getSelectedEmployeeName().charAt(0) }}
-                    </q-avatar>
-                    <div>
-                      <div class="text-subtitle1 text-weight-medium">
-                        {{ getSelectedEmployeeName() }}
-                      </div>
-                      <div class="text-caption text-grey-7">
-                        Clocked in at: {{ newRecord.time_in }}
-                      </div>
-                    </div>
-                  </div>
-                </q-card-section>
-              </q-card>
+        <q-card-section class="compact-dialog-body">
+          <q-form @submit.prevent="submitAttendance" class="compact-form">
+            <!-- Employee and Date Row -->
+            <div class="form-row">
+              <q-select
+                filled
+                dense
+                v-model="newRecord.employee"
+                :options="employeeOptions"
+                label="Employee *"
+                option-label="label"
+                option-value="value"
+                emit-value
+                map-options
+                use-input
+                input-debounce="300"
+                @filter="filterEmployees"
+                @update:model-value="onEmployeeSelected"
+                class="form-field"
+                :rules="[(val) => !!val || 'Required']"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="person" size="xs" />
+                </template>
+              </q-select>
+
+              <q-input
+                filled
+                dense
+                v-model="newRecord.date"
+                label="Date *"
+                type="date"
+                class="form-field"
+                :rules="[(val) => !!val || 'Required']"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="event" size="xs" />
+                </template>
+              </q-input>
             </div>
 
-            <!-- Date Input - Only show in Time In step -->
-            <q-input
-              v-if="attendanceStep === 'time_in'"
-              filled
-              v-model="newRecord.date"
-              label="Date *"
-              type="date"
-              class="form-field"
-              :rules="[(val) => !!val || 'Date is required']"
+            <!-- Schedule Info (Compact) -->
+            <q-banner
+              v-if="employeeSchedule && newRecord.employee && newRecord.date"
+              dense
+              rounded
+              class="schedule-banner bg-blue-1"
             >
-              <template v-slot:prepend>
-                <q-icon name="event" />
+              <template v-slot:avatar>
+                <q-icon name="schedule" color="primary" />
               </template>
-            </q-input>
-
-            <!-- Schedule Calendar Section - Only show in Time In step -->
-            <div
-              v-if="attendanceStep === 'time_in' && newRecord.employee && newRecord.date"
-              class="schedule-section q-mt-md"
-            >
-              <div class="text-subtitle2 q-mb-sm">
-                <q-icon name="schedule" class="q-mr-xs" />
-                Employee Schedule
+              <div class="schedule-compact">
+                <div class="schedule-compact-row">
+                  <span class="text-weight-medium">{{ employeeSchedule.employee_name }}</span>
+                  <q-badge :color="getStatusColor(employeeSchedule.status)">
+                    {{ employeeSchedule.status }}
+                  </q-badge>
+                </div>
+                <div class="schedule-compact-row text-caption text-grey-7">
+                  <span>{{ employeeSchedule.site }} • {{ employeeSchedule.position }}</span>
+                  <span>{{ employeeSchedule.shift_start }} - {{ employeeSchedule.shift_end }}</span>
+                </div>
               </div>
+            </q-banner>
 
-              <q-card flat bordered>
-                <q-card-section>
-                  <!-- Loading State -->
-                  <div v-if="loadingSchedule" class="text-center q-pa-md">
-                    <q-spinner color="primary" size="40px" />
-                    <div class="q-mt-sm text-grey-7">Loading schedule...</div>
-                  </div>
+            <q-banner
+              v-else-if="loadingSchedule && newRecord.employee && newRecord.date"
+              dense
+              rounded
+              class="bg-grey-2"
+            >
+              <template v-slot:avatar>
+                <q-spinner color="primary" size="sm" />
+              </template>
+              Loading schedule...
+            </q-banner>
 
-                  <!-- Error State -->
-                  <div v-else-if="scheduleError" class="text-center q-pa-md">
-                    <q-icon name="error_outline" color="negative" size="40px" />
-                    <div class="q-mt-sm text-negative">{{ scheduleError }}</div>
-                  </div>
+            <!-- Time In and Out Row -->
+            <div class="form-row">
+              <q-input
+                filled
+                dense
+                v-model="newRecord.time_in"
+                label="Time In *"
+                type="time"
+                class="form-field"
+                :rules="[(val) => !!val || 'Required']"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="login" size="xs" />
+                </template>
+              </q-input>
 
-                  <!-- Schedule Found -->
-                  <div v-else-if="employeeSchedule">
-                    <div class="schedule-info">
-                      <div class="schedule-item">
-                        <q-icon name="person" color="primary" class="q-mr-sm" />
-                        <span class="text-weight-medium">Employee:</span>
-                        <span class="q-ml-sm">{{ employeeSchedule.employee_name }}</span>
-                      </div>
-                      <div class="schedule-item q-mt-sm">
-                        <q-icon name="work" color="primary" class="q-mr-sm" />
-                        <span class="text-weight-medium">Position:</span>
-                        <span class="q-ml-sm">{{ employeeSchedule.position }}</span>
-                      </div>
-                      <div class="schedule-item q-mt-sm">
-                        <q-icon name="location_on" color="primary" class="q-mr-sm" />
-                        <span class="text-weight-medium">Site:</span>
-                        <span class="q-ml-sm">{{ employeeSchedule.site }}</span>
-                      </div>
-                      <div class="schedule-item q-mt-sm">
-                        <q-icon name="event" color="primary" class="q-mr-sm" />
-                        <span class="text-weight-medium">Date:</span>
-                        <span class="q-ml-sm">{{ formatDate(employeeSchedule.date) }}</span>
-                      </div>
-                      <div class="schedule-item q-mt-sm">
-                        <q-icon name="schedule" color="primary" class="q-mr-sm" />
-                        <span class="text-weight-medium">Shift:</span>
-                        <span class="q-ml-sm"
-                          >{{ employeeSchedule.shift_start }} -
-                          {{ employeeSchedule.shift_end }}</span
-                        >
-                      </div>
-                      <div class="schedule-item q-mt-sm">
-                        <q-icon name="info" color="primary" class="q-mr-sm" />
-                        <span class="text-weight-medium">Status:</span>
-                        <q-badge :color="getStatusColor(employeeSchedule.status)" class="q-ml-sm">
-                          {{ employeeSchedule.status }}
-                        </q-badge>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- No Schedule Found -->
-                  <div v-else class="text-center q-pa-md text-grey-7">
-                    <q-icon name="event_busy" size="40px" />
-                    <div class="q-mt-sm">No schedule found for this date</div>
-                    <div class="text-caption q-mt-xs">You can still create attendance manually</div>
-                  </div>
-                </q-card-section>
-              </q-card>
+              <q-input
+                filled
+                dense
+                v-model="newRecord.time_out"
+                label="Time Out *"
+                type="time"
+                class="form-field"
+                :rules="[(val) => !!val || 'Required']"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="logout" size="xs" />
+                </template>
+              </q-input>
             </div>
 
-            <!-- Time In Input - Only show in Time In step -->
-            <q-input
-              v-if="attendanceStep === 'time_in'"
-              filled
-              v-model="newRecord.time_in"
-              label="Time In *"
-              type="time"
-              class="form-field q-mt-md"
-              :rules="[(val) => !!val || 'Time In is required']"
-            >
-              <template v-slot:prepend>
-                <q-icon name="login" />
-              </template>
-            </q-input>
-
-            <!-- Time Out Input - Only show in Time Out step -->
-            <q-input
-              v-if="attendanceStep === 'time_out'"
-              filled
-              v-model="newRecord.time_out"
-              label="Time Out *"
-              type="time"
-              class="form-field"
-              :rules="[(val) => !!val || 'Time Out is required']"
-            >
-              <template v-slot:prepend>
-                <q-icon name="logout" />
-              </template>
-            </q-input>
-
-            <!-- Working Hours Display - Show in Time Out step -->
+            <!-- Working Hours Display (Compact) -->
             <div
-              v-if="attendanceStep === 'time_out' && newRecord.time_in && newRecord.time_out"
-              class="q-mt-md"
+              v-if="newRecord.time_in && newRecord.time_out"
+              class="working-hours-compact bg-green-1"
             >
-              <q-card flat bordered class="bg-blue-1">
-                <q-card-section>
-                  <div class="text-center">
-                    <div class="text-caption text-grey-7">Total Working Hours</div>
-                    <div class="text-h4 text-primary text-weight-bold q-mt-xs">
-                      {{ calculateWorkingHours() }}
-                    </div>
-                  </div>
-                </q-card-section>
-              </q-card>
+              <q-icon name="schedule" color="positive" size="sm" />
+              <div class="working-hours-text">
+                <span class="text-caption text-grey-7">Total Hours</span>
+                <span class="text-h6 text-positive text-weight-bold">{{
+                  calculateWorkingHours()
+                }}</span>
+              </div>
             </div>
           </q-form>
         </q-card-section>
 
-        <q-card-actions align="right">
-          <q-btn flat label="Cancel" @click="closeAddDialog" />
+        <q-separator />
+
+        <q-card-actions align="right" class="compact-dialog-actions">
+          <q-btn flat label="Cancel" @click="closeAddDialog" v-close-popup />
           <q-btn
-            v-if="attendanceStep === 'time_in'"
+            unelevated
             color="primary"
-            label="Clock In"
-            icon="login"
-            @click="handleAttendanceSubmit"
-            :loading="creating"
-            :disable="!newRecord.employee || !newRecord.date || !newRecord.time_in"
-          />
-          <q-btn
-            v-if="attendanceStep === 'time_out'"
-            color="positive"
-            label="Clock Out & Complete"
+            label="Save"
             icon="check"
-            @click="handleAttendanceSubmit"
+            @click="submitAttendance"
             :loading="creating"
-            :disable="!newRecord.time_out"
+            :disable="
+              !newRecord.employee || !newRecord.date || !newRecord.time_in || !newRecord.time_out
+            "
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
+
     <!-- Employee Photo Viewer Dialog -->
     <q-dialog v-model="showEmployeePhotoDialog">
       <q-card class="employee-photo-dialog-card">
@@ -782,6 +693,7 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+
     <!-- Edit Attendance Dialog -->
     <q-dialog v-model="showEditDialog" persistent>
       <q-card class="edit-dialog-card">
@@ -865,9 +777,6 @@ const creating = ref(false)
 const employeeSchedule = ref(null)
 const loadingSchedule = ref(false)
 const scheduleError = ref(null)
-
-const attendanceStep = ref('time_in')
-const currentAttendanceId = ref(null)
 
 const showEmployeePhotoDialog = ref(false)
 const selectedEmployeePhoto = ref('')
@@ -1100,13 +1009,6 @@ function getStatusColor(status) {
     pending: 'warning',
   }
   return statusColors[status?.toLowerCase()] || 'grey'
-}
-
-function getSelectedEmployeeName() {
-  const employee = employees.value.find(
-    (emp) => emp.id === newRecord.value.employee || emp.uuid === newRecord.value.employee,
-  )
-  return employee ? getEmployeeName(employee) : 'Unknown Employee'
 }
 
 function calculateWorkingHours() {
@@ -1357,25 +1259,33 @@ async function fetchEmployeeDetails() {
     filtersLoading.value = false
   }
 }
-
-async function handleAttendanceSubmit() {
-  if (attendanceStep.value === 'time_in') {
-    await submitTimeIn()
-  } else if (attendanceStep.value === 'time_out') {
-    await submitTimeOut()
-  }
-}
-
-async function submitTimeIn() {
+// ================= NEW SINGLE SUBMIT FUNCTION FOR BOTH TIME IN AND TIME OUT =================
+async function submitAttendance() {
   if (!companyId.value) {
     showErrorNotification('Company ID not found. Please log in again.')
     return
   }
+
   if (!newRecord.value.employee) {
     showErrorNotification('Please select an employee')
     return
   }
 
+  if (!newRecord.value.time_in || !newRecord.value.time_out) {
+    showErrorNotification('Please enter both time in and time out')
+    return
+  }
+
+  // Validate time_out is after time_in
+  const timeIn = new Date(`${newRecord.value.date}T${newRecord.value.time_in}:00`)
+  const timeOut = new Date(`${newRecord.value.date}T${newRecord.value.time_out}:00`)
+
+  if (timeOut <= timeIn) {
+    showErrorNotification('Time Out must be after Time In')
+    return
+  }
+
+  // Check for schedule if needed
   if (newRecord.value.date && !employeeSchedule.value && !loadingSchedule.value) {
     try {
       await $q.dialog({
@@ -1412,104 +1322,59 @@ async function submitTimeIn() {
       return
     }
 
-    const now = new Date()
-    const timeInTimestamp = now.toISOString()
+    // Create timestamps for both time in and time out
+    const timeInDate = new Date(`${newRecord.value.date}T${newRecord.value.time_in}:00`)
+    const timeOutDate = new Date(`${newRecord.value.date}T${newRecord.value.time_out}:00`)
 
-    newRecord.value.date = now.toISOString().split('T')[0]
-    newRecord.value.time_in = now.toTimeString().slice(0, 8)
-    newRecord.value.timeInTimestamp = timeInTimestamp
+    const timeInTimestamp = timeInDate.toISOString()
+    const timeOutTimestamp = timeOutDate.toISOString()
 
-    const attendanceData = {
+    console.log('📤 Sending Time In data:', {
       source: 'admin',
       employee_id: employeeUUID,
       timestamp: timeInTimestamp,
-    }
+    })
 
-    console.log('📤 Sending Time In data:', attendanceData)
-
-    const response = await api.post(
+    // First API call - Time In
+    const timeInResponse = await api.post(
       `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
-      attendanceData,
+      {
+        source: 'admin',
+        employee_id: employeeUUID,
+        timestamp: timeInTimestamp,
+      },
     )
 
-    console.log('✅ Time In recorded:', response.data)
+    console.log('✅ Time In recorded:', timeInResponse.data)
 
-    if (response.data?.id) {
-      currentAttendanceId.value = response.data.id
-    }
+    // Small delay to ensure proper sequencing
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
-    showSuccessNotification(`Time In recorded at ${newRecord.value.time_in}`)
-
-    attendanceStep.value = 'time_out'
-
-    fetchAttendanceData()
-  } catch (error) {
-    console.error('❌ Error recording Time In:', error)
-    let errorMessage = 'Failed to record Time In'
-
-    if (error.response?.data) {
-      const data = error.response.data
-      if (typeof data === 'string') {
-        errorMessage = data
-      } else if (data.reason) {
-        errorMessage = data.reason
-      } else if (data.detail) {
-        errorMessage = data.detail
-      } else if (data.message) {
-        errorMessage = data.message
-      }
-    }
-
-    showErrorNotification(errorMessage)
-  } finally {
-    creating.value = false
-  }
-}
-
-async function submitTimeOut() {
-  if (!newRecord.value.time_out) {
-    showErrorNotification('Please select time out')
-    return
-  }
-
-  creating.value = true
-
-  try {
-    const selectedEmployee = employees.value.find(
-      (emp) => emp.id === newRecord.value.employee || emp.uuid === newRecord.value.employee,
-    )
-
-    if (!selectedEmployee) {
-      showErrorNotification('Employee not found.')
-      creating.value = false
-      return
-    }
-
-    const employeeUUID = selectedEmployee.uuid || selectedEmployee.id
-
-    const timeOutDate = new Date(`${newRecord.value.date}T${newRecord.value.time_out}:00`)
-    const timeOutTimestamp = timeOutDate.toISOString()
-
-    const attendanceData = {
+    console.log('📤 Sending Time Out data:', {
       source: 'admin',
       employee_id: employeeUUID,
       timestamp: timeOutTimestamp,
-    }
+    })
 
-    console.log('📤 Sending Time Out data:', attendanceData)
-
-    await api.post(
+    // Second API call - Time Out
+    const timeOutResponse = await api.post(
       `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
-      attendanceData,
+      {
+        source: 'admin',
+        employee_id: employeeUUID,
+        timestamp: timeOutTimestamp,
+      },
     )
+
+    console.log('✅ Time Out recorded:', timeOutResponse.data)
 
     showSuccessNotification(`Attendance completed! Total hours: ${calculateWorkingHours()}`)
 
     closeAddDialog()
     await fetchAttendanceData()
   } catch (error) {
-    console.error('❌ Error recording Time Out:', error)
-    let errorMessage = 'Failed to record Time Out'
+    console.error('❌ Error recording attendance:', error)
+    let errorMessage = 'Failed to record attendance'
 
     if (error.response?.data) {
       const data = error.response.data
@@ -1638,14 +1503,11 @@ async function batchDelete(records) {
 
 // ================= DIALOG HANDLERS =================
 function openAddDialog() {
-  attendanceStep.value = 'time_in'
-  currentAttendanceId.value = null
-
   newRecord.value = {
     employee: '',
     site_id: '',
     date: new Date().toISOString().split('T')[0],
-    time_in: new Date().toTimeString().slice(0, 5),
+    time_in: '',
     time_out: '',
     source: 'admin',
   }
@@ -1660,9 +1522,6 @@ function openAddDialog() {
 function closeAddDialog() {
   showAddDialog.value = false
 
-  attendanceStep.value = 'time_in'
-  currentAttendanceId.value = null
-
   newRecord.value = {
     employee: '',
     site_id: '',
@@ -1676,7 +1535,6 @@ function closeAddDialog() {
   scheduleError.value = null
   loadingSchedule.value = false
 }
-
 function editAttendance(record) {
   editingRecord.value = {
     ...record,
@@ -2265,7 +2123,10 @@ onMounted(async () => {
   background: #059669;
 }
 
-/* Modern Table */
+/* ===================================
+   IMPROVED TABLE STYLES - FIXED ALIGNMENT
+   =================================== */
+
 .modern-table-container {
   border: 2px solid #3b82f6;
   border-radius: 10px;
@@ -2273,10 +2134,57 @@ onMounted(async () => {
   margin: 0 16px 16px 16px;
 }
 
+.table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
 .attendance-table {
   background: white;
-  border-radius: 10px;
-  overflow: hidden;
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+/* Fixed column widths for proper alignment */
+.checkbox-col {
+  width: 50px;
+  min-width: 50px;
+}
+
+.sl-col {
+  width: 70px;
+  min-width: 70px;
+}
+
+.employee-col {
+  width: 200px;
+  min-width: 200px;
+}
+
+.date-col {
+  width: 120px;
+  min-width: 120px;
+}
+
+.time-col {
+  width: 100px;
+  min-width: 100px;
+}
+
+.photo-col {
+  width: 80px;
+  min-width: 80px;
+}
+
+.source-col {
+  width: 110px;
+  min-width: 110px;
+}
+
+.actions-col {
+  width: 100px;
+  min-width: 100px;
 }
 
 .table-header-row {
@@ -2285,13 +2193,16 @@ onMounted(async () => {
 }
 
 .table-header-cell {
-  padding: 12px 10px;
-  font-size: 13px;
+  padding: 12px 8px;
+  font-size: 12px;
   font-weight: 600;
   color: #374151;
-  text-align: left;
+  text-align: center;
   border: none;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
 .table-body-row {
@@ -2304,17 +2215,23 @@ onMounted(async () => {
 }
 
 .table-body-cell {
-  padding: 12px 10px;
+  padding: 10px 8px;
   font-size: 13px;
   color: #374151;
   border: none;
   vertical-align: middle;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .employee-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  padding: 0 4px;
+  justify-content: flex-start;
+  min-width: 0;
 }
 
 .employee-avatar {
@@ -2324,18 +2241,23 @@ onMounted(async () => {
   width: 32px;
   height: 32px;
   font-size: 14px;
+  flex-shrink: 0;
 }
 
 .employee-name {
   font-weight: 500;
   color: #1a202c;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
 }
 
 .time-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 4px 8px;
   border-radius: 16px;
   font-size: 11px;
   font-weight: 500;
@@ -2474,11 +2396,6 @@ onMounted(async () => {
   color: #64748b;
 }
 
-.actions-cell {
-  width: 100px;
-  min-width: 100px;
-}
-
 .action-buttons {
   display: flex;
   gap: 4px;
@@ -2611,6 +2528,97 @@ onMounted(async () => {
   line-height: 1.4;
 }
 
+/* ===================================
+   COMPACT DIALOG STYLES
+   =================================== */
+
+.compact-dialog-card {
+  width: 100%;
+  max-width: 550px;
+  border-radius: 12px;
+}
+
+.compact-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px 20px;
+  gap: 12px;
+}
+
+.dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a202c;
+  line-height: 1.3;
+}
+
+.dialog-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.compact-dialog-body {
+  padding: 16px 20px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.compact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-field {
+  margin-bottom: 0;
+}
+
+.schedule-banner {
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+
+.schedule-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.schedule-compact-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.working-hours-compact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.working-hours-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.compact-dialog-actions {
+  padding: 12px 20px;
+}
+
 /* Dialog Styles */
 .date-picker-card {
   width: 100%;
@@ -2622,12 +2630,6 @@ onMounted(async () => {
   width: 100%;
   max-width: 500px;
   border-radius: 12px;
-}
-
-.dialog-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a202c;
 }
 
 .date-picker-grid {
@@ -2652,10 +2654,6 @@ onMounted(async () => {
   gap: 14px;
 }
 
-.form-field {
-  margin-bottom: 0;
-}
-
 .dialog-btn {
   padding: 7px 14px;
   border-radius: 6px;
@@ -2668,25 +2666,6 @@ onMounted(async () => {
   color: white;
 }
 
-/* Schedule Section */
-.schedule-section {
-  background: #f8fafc;
-  padding: 14px;
-  border-radius: 8px;
-}
-
-.schedule-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.schedule-item {
-  display: flex;
-  align-items: center;
-  font-size: 13px;
-  color: #374151;
-}
 .clickable-avatar {
   cursor: pointer;
   transition: all 0.2s ease;
@@ -2757,31 +2736,6 @@ onMounted(async () => {
   padding: 60px;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .employee-photo-dialog-card {
-    max-width: 95vw;
-    margin: 12px;
-  }
-
-  .employee-photo-header {
-    padding: 16px;
-  }
-
-  .employee-photo-body {
-    padding: 20px;
-    min-height: 300px;
-  }
-
-  .employee-full-image {
-    max-height: 60vh;
-  }
-
-  .no-photo-placeholder {
-    padding: 40px;
-  }
-}
-
 /* Loading States */
 .q-skeleton {
   animation: skeleton-loading 1.5s infinite ease-in-out;
@@ -2812,87 +2766,10 @@ onMounted(async () => {
    RESPONSIVE BREAKPOINTS
    =================================== */
 
-/* 1440px - Large Desktop */
-@media (min-width: 1440px) {
-  .dashboard-container {
-    max-width: 1400px;
-    padding: 20px;
-  }
-
-  .stats-section {
-    gap: 16px;
-  }
-
-  .filters-grid {
-    gap: 14px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 14px 12px;
-  }
-
-  .action-buttons {
-    gap: 5px;
-  }
-
-  .action-btn {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-  }
-  .employee-photo-dialog-card {
-    max-width: 800px;
-  }
-
-  .employee-photo-header {
-    padding: 24px;
-  }
-
-  .employee-photo-title .q-avatar {
-    width: 56px;
-    height: 56px;
-  }
-
-  .dialog-title {
-    font-size: 20px;
-  }
-
-  .employee-photo-body {
-    padding: 40px;
-    min-height: 500px;
-  }
-
-  .employee-full-image {
-    max-height: 75vh;
-  }
-
-  .no-photo-placeholder {
-    padding: 80px;
-  }
-
-  .no-photo-placeholder .q-icon {
-    font-size: 140px;
-  }
-}
-
 /* 1024px - Desktop / Tablet Landscape */
 @media (max-width: 1024px) {
   .dashboard-container {
-    padding: 16px;
-  }
-
-  .page-header {
     padding: 14px;
-  }
-
-  .header-content {
-    flex-wrap: wrap;
-  }
-
-  .header-actions {
-    width: 100%;
-    justify-content: flex-end;
   }
 
   .stats-section {
@@ -2900,118 +2777,30 @@ onMounted(async () => {
     gap: 12px;
   }
 
-  .stats-card {
-    padding: 14px;
-  }
-
-  .stats-icon-wrapper {
-    width: 44px;
-    height: 44px;
-  }
-
-  .stats-icon {
-    font-size: 22px;
-  }
-
-  .stats-amount {
-    font-size: 24px;
-  }
-
-  .stats-label {
-    font-size: 12px;
-  }
-
   .filters-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
 
-  .table-header {
-    flex-wrap: wrap;
-    padding: 14px;
-  }
-
-  .table-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .modern-table-container {
-    margin: 0 14px 14px 14px;
-    overflow-x: auto;
+  .table-wrapper {
+    overflow-x: scroll;
+    -webkit-overflow-scrolling: touch;
   }
 
   .attendance-table {
     min-width: 900px;
   }
 
-  .table-header-cell,
-  .table-body-cell {
-    padding: 11px 8px;
-    font-size: 12px;
+  .employee-col {
+    width: 180px;
+    min-width: 180px;
   }
 
-  .actions-cell {
-    width: 90px;
-    min-width: 90px;
-  }
-
-  .action-buttons {
-    gap: 3px;
-  }
-
-  .action-btn {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-  }
-
-  .employee-info {
-    gap: 8px;
-  }
-
-  .employee-name {
-    font-size: 12px;
-  }
-
-  .selfie-thumbnail {
-    width: 32px;
-    height: 32px;
-  }
-  .employee-photo-dialog-card {
-    max-width: 650px;
-  }
-
-  .employee-photo-header {
-    padding: 18px;
-  }
-
-  .employee-photo-title .q-avatar {
-    width: 44px;
-    height: 44px;
-  }
-
-  .dialog-title {
-    font-size: 17px;
-  }
-
-  .employee-photo-body {
-    padding: 28px;
-    min-height: 380px;
-  }
-
-  .employee-full-image {
-    max-height: 65vh;
-  }
-
-  .no-photo-placeholder {
-    padding: 50px;
-  }
-
-  .no-photo-placeholder .q-icon {
-    font-size: 110px;
+  .compact-dialog-card {
+    max-width: 95vw;
   }
 }
+
 /* 768px - Tablet Portrait */
 @media (max-width: 768px) {
   .dashboard-container {
@@ -3020,7 +2809,6 @@ onMounted(async () => {
 
   .page-header {
     padding: 12px;
-    margin-bottom: 12px;
   }
 
   .header-content {
@@ -3033,47 +2821,9 @@ onMounted(async () => {
     justify-content: space-between;
   }
 
-  .page-title {
-    font-size: 18px;
-  }
-
   .stats-section {
     grid-template-columns: 1fr;
     gap: 10px;
-    margin-bottom: 12px;
-  }
-
-  .stats-card {
-    padding: 12px;
-  }
-
-  .stats-icon-wrapper {
-    width: 40px;
-    height: 40px;
-  }
-
-  .stats-icon {
-    font-size: 20px;
-  }
-
-  .stats-amount {
-    font-size: 22px;
-  }
-
-  .stats-label {
-    font-size: 11px;
-  }
-
-  .filters-section {
-    margin-bottom: 12px;
-  }
-
-  .filters-card {
-    padding: 12px;
-  }
-
-  .filters-title {
-    font-size: 15px;
   }
 
   .filters-grid {
@@ -3084,12 +2834,7 @@ onMounted(async () => {
   .table-header {
     flex-direction: column;
     align-items: stretch;
-    padding: 12px;
     gap: 12px;
-  }
-
-  .table-title {
-    font-size: 16px;
   }
 
   .table-actions {
@@ -3099,7 +2844,6 @@ onMounted(async () => {
 
   .table-actions button {
     width: 100%;
-    justify-content: center;
   }
 
   .modern-table-container {
@@ -3109,13 +2853,11 @@ onMounted(async () => {
   .table-footer {
     flex-direction: column;
     align-items: stretch;
-    padding: 12px;
     gap: 12px;
   }
 
   .footer-info {
     justify-content: center;
-    gap: 12px;
   }
 
   .pagination-controls {
@@ -3127,82 +2869,28 @@ onMounted(async () => {
     gap: 16px;
   }
 
-  .time-inputs {
+  .form-row {
     grid-template-columns: 1fr;
     gap: 12px;
   }
 
-  .edit-dialog-card,
-  .date-picker-card {
-    max-width: 95vw;
+  .compact-dialog-card {
+    max-width: 90vw;
     margin: 12px;
   }
 
-  .selfie-dialog-card {
-    max-width: 95vw;
-    margin: 12px;
-  }
-
-  .schedule-section {
-    padding: 12px;
-  }
-
-  .schedule-item {
-    font-size: 12px;
-  }
   .employee-photo-dialog-card {
     max-width: 90vw;
     margin: 16px;
-  }
-
-  .employee-photo-header {
-    padding: 16px;
-  }
-
-  .employee-photo-title {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .employee-photo-title .q-avatar {
-    width: 40px;
-    height: 40px;
-    margin-right: 12px;
-  }
-
-  .dialog-title {
-    font-size: 16px;
-  }
-
-  .text-caption {
-    font-size: 12px;
   }
 
   .employee-photo-body {
     padding: 24px;
     min-height: 350px;
   }
-
-  .employee-full-image {
-    max-height: 60vh;
-    border-radius: 10px;
-  }
-
-  .no-photo-placeholder {
-    padding: 40px;
-  }
-
-  .no-photo-placeholder .q-icon {
-    font-size: 100px;
-  }
-
-  .close-btn {
-    width: 36px;
-    height: 36px;
-  }
 }
 
-/* Small Mobile - 480px and below */
+/* 480px - Small Mobile */
 @media (max-width: 480px) {
   .dashboard-container {
     padding: 10px;
@@ -3210,22 +2898,10 @@ onMounted(async () => {
 
   .page-header {
     padding: 10px;
-    border-radius: 10px;
   }
 
   .page-title {
     font-size: 16px;
-  }
-
-  .header-btn {
-    width: 32px;
-    height: 32px;
-  }
-
-  .export-btn {
-    padding: 6px 12px;
-    height: 32px;
-    font-size: 12px;
   }
 
   .stats-card {
@@ -3237,56 +2913,55 @@ onMounted(async () => {
     height: 36px;
   }
 
-  .stats-icon {
-    font-size: 18px;
-  }
-
   .stats-amount {
     font-size: 20px;
-  }
-
-  .stats-label {
-    font-size: 10px;
   }
 
   .filters-card {
     padding: 10px;
   }
 
-  .filters-title {
-    font-size: 14px;
-  }
-
   .table-header {
     padding: 10px;
-  }
-
-  .table-title {
-    font-size: 15px;
   }
 
   .modern-table-container {
     margin: 0 8px 8px 8px;
   }
 
-  .action-btn {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
+  .compact-dialog-header {
+    padding: 14px 16px;
   }
 
-  .selfie-thumbnail {
-    width: 28px;
-    height: 28px;
+  .compact-dialog-body {
+    padding: 14px 16px;
+    max-height: 60vh;
+  }
+
+  .compact-dialog-actions {
+    padding: 10px 16px;
   }
 
   .dialog-title {
     font-size: 16px;
   }
 
-  .pagination-btn {
-    width: 28px;
-    height: 28px;
+  .employee-photo-header {
+    padding: 16px;
   }
+
+  .employee-photo-body {
+    padding: 20px;
+    min-height: 300px;
+  }
+}
+
+/* Prevent horizontal scroll */
+body {
+  overflow-x: hidden;
+}
+
+.attendance-dashboard {
+  overflow-x: hidden;
 }
 </style>
