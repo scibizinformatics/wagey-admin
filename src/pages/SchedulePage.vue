@@ -174,33 +174,60 @@
                       v-for="element in getShifts(user.id, dayIdx)"
                       :key="element.id"
                       class="shift-badge"
+                      :class="{ 'shift-badge-dayoff': isDayOff(element) }"
                     >
-                      <div class="shift-time">
-                        {{ formatTimeWithTimezone(element.startTime) }} - {{ element.endTime }}
-                      </div>
-                      <div class="shift-position">{{ getPositionName(element.position) }}</div>
-                      <div class="shift-actions">
-                        <q-btn
-                          flat
-                          dense
-                          round
-                          icon="swap_horiz"
-                          size="xs"
-                          class="action-btn reassign-btn"
-                          @click="openReassignModal(element)"
-                        >
-                          <q-tooltip>Update Shift</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          dense
-                          round
-                          icon="close"
-                          size="xs"
-                          class="action-btn delete-btn"
-                          @click.stop="deleteShift(element.id)"
-                        />
-                      </div>
+                      <!-- Day Off Display -->
+                      <template v-if="isDayOff(element)">
+                        <div class="dayoff-content">
+                          <q-icon name="event_busy" size="18px" class="dayoff-icon" />
+                          <div class="dayoff-label">Day Off</div>
+                        </div>
+                        <div class="shift-actions">
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            icon="close"
+                            size="xs"
+                            class="action-btn delete-btn"
+                            @click.stop="deleteShift(element.id)"
+                          >
+                            <q-tooltip>Remove Day Off</q-tooltip>
+                          </q-btn>
+                        </div>
+                      </template>
+
+                      <!-- Regular Shift Display -->
+                      <template v-else>
+                        <div class="shift-time" v-if="element.startTime && element.endTime">
+                          {{ formatTimeWithTimezone(element.startTime) }} - {{ element.endTime }}
+                        </div>
+                        <div class="shift-position">
+                          {{ getPositionName(element.position) }}
+                        </div>
+                        <div class="shift-actions">
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            icon="swap_horiz"
+                            size="xs"
+                            class="action-btn reassign-btn"
+                            @click="openReassignModal(element)"
+                          >
+                            <q-tooltip>Update Shift</q-tooltip>
+                          </q-btn>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            icon="close"
+                            size="xs"
+                            class="action-btn delete-btn"
+                            @click.stop="deleteShift(element.id)"
+                          />
+                        </div>
+                      </template>
                     </div>
 
                     <!-- Always Show Add Button -->
@@ -252,8 +279,20 @@
                       v-for="shift in getShifts(user.id, dayIdx)"
                       :key="shift.id"
                       class="shift-card"
+                      :class="{ 'shift-card-dayoff': isDayOff(shift) }"
                     >
-                      <div class="shift-position">{{ getPositionName(shift.position) }}</div>
+                      <!-- Day Off Display -->
+                      <template v-if="isDayOff(shift)">
+                        <div class="dayoff-content-mobile">
+                          <q-icon name="event_busy" size="16px" class="dayoff-icon" />
+                          <span class="dayoff-label">Day Off</span>
+                        </div>
+                      </template>
+
+                      <!-- Regular Shift Display -->
+                      <template v-else>
+                        <div class="shift-position">{{ getPositionName(shift.position) }}</div>
+                      </template>
                     </div>
                   </div>
 
@@ -353,26 +392,67 @@
               </q-input>
             </div>
 
-            <!-- For Recurring: Weekday Selection -->
-            <q-select
-              v-if="newSchedule.scheduleType === 'recurring'"
-              v-model="newSchedule.weekdays"
-              :options="weekdayOptions"
-              option-value="value"
-              option-label="label"
-              label="Repeat On"
-              outlined
-              multiple
-              emit-value
-              map-options
-              class="form-field full-width"
-              :rules="[(val) => val?.length > 0 || 'Select at least one day']"
-            >
-              <template #hint> Select which days this schedule repeats </template>
-            </q-select>
+            <!-- For Recurring: Date Range Selection -->
+            <div v-if="newSchedule.scheduleType === 'recurring'" class="form-row">
+              <q-input
+                v-model="newSchedule.recurringStartDate"
+                label="Start Date"
+                outlined
+                class="form-field"
+                :rules="[(val) => !!val || 'Start date is required']"
+                readonly
+              >
+                <template #append>
+                  <q-icon name="event" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-date
+                        v-model="newSchedule.recurringStartDate"
+                        mask="YYYY-MM-DD"
+                        :options="(date) => date >= new Date().toISOString().split('T')[0]"
+                      >
+                        <div class="row items-center justify-end">
+                          <q-btn v-close-popup label="Close" color="primary" flat />
+                        </div>
+                      </q-date>
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
+
+              <q-input
+                v-model="newSchedule.recurringEndDate"
+                label="End Date"
+                outlined
+                class="form-field"
+                :rules="[(val) => !!val || 'End date is required']"
+                readonly
+              >
+                <template #append>
+                  <q-icon name="event" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-date
+                        v-model="newSchedule.recurringEndDate"
+                        mask="YYYY-MM-DD"
+                        :options="
+                          (date) =>
+                            date >=
+                            (newSchedule.recurringStartDate ||
+                              new Date().toISOString().split('T')[0])
+                        "
+                      >
+                        <div class="row items-center justify-end">
+                          <q-btn v-close-popup label="Close" color="primary" flat />
+                        </div>
+                      </q-date>
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
+            </div>
 
             <!-- Recurring Template Selection (Optional) -->
             <q-select
+              v-if="newSchedule.scheduleType === 'recurring'"
               v-model="newSchedule.recurringSchedule"
               :options="recurringScheduleOptions"
               option-value="value"
@@ -603,127 +683,125 @@
     </q-dialog>
 
     <!-- Update Shift Assignment Modal -->
-    <q-dialog v-model="showReassignModal">
-      <q-card style="min-width: 450px">
-        <q-card-section>
-          <div class="text-h6">Update Shift Assignment</div>
-          <div class="text-caption text-grey-7" style="margin-top: 4px">
-            Modify the shift details for this assignment
+    <q-dialog v-model="showReassignModal" persistent>
+      <q-card class="modal-card" style="max-width: 500px">
+        <q-card-section class="modal-header">
+          <div class="modal-title">Update Shift Assignment</div>
+          <q-btn flat round dense icon="close" @click="closeReassignModal" />
+        </q-card-section>
+
+        <q-card-section class="modal-body">
+          <!-- Employee and Day Info -->
+          <div class="quick-info">
+            <div class="info-item">
+              <q-icon name="person" size="20px" />
+              <span>{{ getEmployeeName(reassignData.currentEmployee) }}</span>
+            </div>
+            <div class="info-item">
+              <q-icon name="event" size="20px" />
+              <span>{{ reassignData.date }}</span>
+            </div>
           </div>
+
+          <q-form @submit.prevent="reassignShift" class="schedule-form">
+            <!-- Shift Update Section -->
+            <div class="shift-row">
+              <div class="shift-row-header">
+                <span class="row-label">
+                  <q-icon name="edit" size="16px" />
+                  Shift Details
+                </span>
+              </div>
+
+              <div class="shift-fields">
+                <!-- Site Select -->
+                <q-select
+                  v-model="reassignData.siteId"
+                  :options="siteOptions"
+                  option-value="value"
+                  option-label="label"
+                  label="Select Site"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  class="form-field"
+                  :rules="[(val) => !!val || 'Site is required']"
+                />
+
+                <!-- Shift Type Select -->
+                <q-select
+                  v-model="reassignData.shiftTypeId"
+                  :options="positionOptions"
+                  option-value="value"
+                  option-label="label"
+                  label="Shift Type"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  class="form-field"
+                  :rules="[(val) => !!val || 'Shift type is required']"
+                >
+                  <template #hint>
+                    {{
+                      reassignData.shiftTypeId
+                        ? getPositionName(reassignData.shiftTypeId)
+                        : 'Select a shift type'
+                    }}
+                  </template>
+                </q-select>
+
+                <!-- Department Select (Optional) -->
+                <q-select
+                  v-model="reassignData.departmentId"
+                  :options="departmentOptions"
+                  option-value="value"
+                  option-label="label"
+                  label="Department (Optional)"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  clearable
+                  class="form-field"
+                />
+              </div>
+            </div>
+
+            <!-- Info Banner -->
+            <q-banner class="info-banner" dense>
+              <template #avatar>
+                <q-icon name="info" color="primary" />
+              </template>
+              <span style="font-size: 12px">
+                Updating shift assignment for
+                <strong>{{ getEmployeeName(reassignData.currentEmployee) }}</strong>
+              </span>
+            </q-banner>
+
+            <div class="modal-actions">
+              <q-btn
+                flat
+                label="CANCEL"
+                @click="closeReassignModal"
+                class="cancel-btn"
+                :disable="isReassigning"
+              />
+              <q-btn
+                type="submit"
+                color="primary"
+                label="UPDATE SHIFT"
+                unelevated
+                class="submit-btn"
+                :loading="isReassigning"
+                :disable="
+                  !reassignData.siteId || !reassignData.shiftTypeId || !reassignData.assignmentId
+                "
+              />
+            </div>
+          </q-form>
         </q-card-section>
-
-        <q-card-section class="q-pt-none">
-          <!-- Employee Info (read-only) -->
-          <q-input
-            :model-value="getEmployeeName(reassignData.currentEmployee)"
-            label="Employee"
-            outlined
-            dense
-            readonly
-            class="q-mb-md"
-          >
-            <template v-slot:prepend>
-              <q-icon name="person" />
-            </template>
-          </q-input>
-
-          <!-- Date (read-only) -->
-          <q-input v-model="reassignData.date" label="Date" outlined dense readonly class="q-mb-md">
-            <template v-slot:prepend>
-              <q-icon name="event" />
-            </template>
-          </q-input>
-
-          <!-- Site Select (editable) -->
-          <q-select
-            v-model="reassignData.siteId"
-            :options="siteOptions"
-            option-value="value"
-            option-label="label"
-            emit-value
-            map-options
-            label="Site *"
-            outlined
-            dense
-            class="q-mb-md"
-            :rules="[(val) => !!val || 'Site is required']"
-          >
-            <template v-slot:prepend>
-              <q-icon name="location_on" />
-            </template>
-          </q-select>
-
-          <!-- Shift Type Select (editable) -->
-          <q-select
-            v-model="reassignData.shiftTypeId"
-            :options="positionOptions"
-            option-value="value"
-            option-label="label"
-            emit-value
-            map-options
-            label="Shift Type *"
-            outlined
-            dense
-            class="q-mb-md"
-            :rules="[(val) => !!val || 'Shift type is required']"
-          >
-            <template v-slot:prepend>
-              <q-icon name="work" />
-            </template>
-          </q-select>
-
-          <!-- Department Select (editable, optional) -->
-          <q-select
-            v-model="reassignData.departmentId"
-            :options="departmentOptions"
-            option-value="value"
-            option-label="label"
-            emit-value
-            map-options
-            label="Department (Optional)"
-            outlined
-            dense
-            clearable
-            class="q-mb-md"
-          >
-            <template v-slot:prepend>
-              <q-icon name="business" />
-            </template>
-          </q-select>
-
-          <q-banner dense class="bg-blue-1">
-            <template v-slot:avatar>
-              <q-icon name="info" color="primary" />
-            </template>
-            <span style="font-size: 12px">
-              You can update the site, shift type, and department for this employee's assignment.
-            </span>
-          </q-banner>
-        </q-card-section>
-
-        <q-card-actions align="right">
-          <q-btn
-            flat
-            label="Cancel"
-            color="grey-7"
-            @click="closeReassignModal"
-            :disable="isReassigning"
-          />
-          <q-btn
-            unelevated
-            label="Update Assignment"
-            color="primary"
-            @click="reassignShift"
-            :loading="isReassigning"
-            :disable="
-              !reassignData.siteId || !reassignData.shiftTypeId || !reassignData.assignmentId
-            "
-          >
-            <template v-slot:loading>
-              <q-spinner color="white" size="20px" />
-            </template>
-          </q-btn>
-        </q-card-actions>
       </q-card>
     </q-dialog>
   </q-page>
@@ -778,6 +856,8 @@ const newSchedule = ref({
   rotationShifts: [],
   weekdays: [],
   repeatInterval: 1,
+  recurringStartDate: null,
+  recurringEndDate: null,
 })
 
 const weekdayOptions = [
@@ -881,6 +961,41 @@ const validateEndTime = (val, start = null) => {
 const getPositionName = (positionId) => {
   const position = shiftTypes.value.find((p) => p.id === positionId)
   return position?.name || positionId
+}
+
+// Check if a shift is a "day off" shift
+const isDayOff = (shift) => {
+  if (!shift) return false
+
+  // Check by position/shift type name (case insensitive)
+  const positionName =
+    (typeof shift.position === 'string'
+      ? shift.position
+      : getPositionName(shift.position)
+    )?.toLowerCase() || ''
+  const isDayOffByName =
+    positionName.includes('day off') ||
+    positionName.includes('dayoff') ||
+    positionName.includes('rest day') ||
+    positionName.includes('off day') ||
+    positionName === 'off'
+
+  // Check by status
+  const isDayOffByStatus =
+    shift.status === 'day_off' ||
+    shift.status === 'off' ||
+    shift.is_day_off === true ||
+    shift.is_off === true
+
+  // Check if both start and end times are null (common for day off)
+  const isDayOffByTime = !shift.startTime && !shift.endTime
+
+  // Check by shift type ID if you have a specific day off ID
+  // Uncomment and set the correct ID if your system has a specific day off shift type ID
+  // const dayOffShiftTypeId = 999 // Replace with actual day off shift type ID
+  // const isDayOffById = shift.shiftTypeId === dayOffShiftTypeId
+
+  return isDayOffByName || isDayOffByStatus || isDayOffByTime
 }
 
 const getInitials = (name) => {
@@ -1131,10 +1246,11 @@ const fetchSitesAndDepartments = async () => {
           default_end_time: '06:00:00',
         },
       ]
+      recurringSchedules.value = []
       return
     }
 
-    const [sitesRes, deptsRes, shiftTypesRes] = await Promise.all([
+    const [sitesRes, deptsRes, shiftTypesRes, recurringRes] = await Promise.all([
       axios.get(`https://staging.wageyapp.com/organization/sites/?company=${companyId}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
@@ -1144,16 +1260,24 @@ const fetchSitesAndDepartments = async () => {
       axios.get(`https://staging.wageyapp.com/organization/shift-types/?company=${companyId}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
+      axios.get(
+        `https://staging.wageyapp.com/organization/recurring-schedules/?company=${companyId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      ),
     ])
 
     sites.value = sitesRes.data.results || sitesRes.data || []
     departments.value = deptsRes.data.results || deptsRes.data || []
     shiftTypes.value = shiftTypesRes.data.results || shiftTypesRes.data || []
+    recurringSchedules.value = recurringRes.data.results || recurringRes.data || []
 
     console.log('✅ Data loaded:', {
       sites: sites.value.length,
       departments: departments.value.length,
       shiftTypes: shiftTypes.value.length,
+      recurringSchedules: recurringSchedules.value.length,
     })
 
     // 🆕 ADD: Log the actual shift types for debugging
@@ -1165,12 +1289,22 @@ const fetchSitesAndDepartments = async () => {
         times: `${st.default_start_time?.substring(0, 5)} - ${st.default_end_time?.substring(0, 5)}`,
       })),
     )
+
+    // 🆕 ADD: Log recurring schedules for debugging
+    console.log(
+      '🔄 Available Recurring Schedules:',
+      recurringSchedules.value.map((rs) => ({
+        id: rs.id,
+        name: rs.name,
+      })),
+    )
   } catch (error) {
     console.error('❌ Failed to fetch data:', error.response?.data || error.message)
 
     sites.value = [{ id: 1, name: 'Main Office' }]
     departments.value = [{ id: 1, name: 'Sales' }]
     shiftTypes.value = [{ id: 1, name: 'Morning Shift' }]
+    recurringSchedules.value = []
 
     $q.notify({
       type: 'warning',
@@ -1357,15 +1491,29 @@ const fetchData = async () => {
           const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24))
 
           if (daysDiff >= 0 && daysDiff < 7) {
-            // ✅ IMPROVED: Extract times first
-            const startTime =
-              schedule.actual_start_time?.substring(0, 5) ||
-              schedule.start_time?.substring(0, 5) ||
-              '09:00'
-            const endTime =
-              schedule.actual_end_time?.substring(0, 5) ||
-              schedule.end_time?.substring(0, 5) ||
-              '17:00'
+            // ✅ Check if this is a day off shift first
+            const isDayOffShift =
+              schedule.shift_type_name?.toLowerCase().includes('day off') ||
+              schedule.shift_type_name?.toLowerCase().includes('dayoff') ||
+              schedule.shift_type_name?.toLowerCase().includes('rest day') ||
+              schedule.shift_type_name?.toLowerCase().includes('off day') ||
+              schedule.shift_type_name?.toLowerCase() === 'off' ||
+              schedule.status === 'day_off' ||
+              schedule.status === 'off' ||
+              schedule.is_day_off === true ||
+              schedule.is_off === true
+
+            // ✅ Extract times (use null for day off shifts)
+            const startTime = isDayOffShift
+              ? null
+              : schedule.actual_start_time?.substring(0, 5) ||
+                schedule.start_time?.substring(0, 5) ||
+                '09:00'
+            const endTime = isDayOffShift
+              ? null
+              : schedule.actual_end_time?.substring(0, 5) ||
+                schedule.end_time?.substring(0, 5) ||
+                '17:00'
 
             // ✅ IMPROVED: Better shift type detection
             let shiftTypeId =
@@ -1378,8 +1526,16 @@ const fetchData = async () => {
             let shiftTypeName =
               schedule.shift_type_name || schedule.shiftTypeName || schedule.shift_name || 'Shift'
 
-            // ✅ If no shift type ID, match by times
-            if (!shiftTypeId && startTime && endTime && shiftTypes.value.length > 0) {
+            console.log(`📋 Processing schedule: ${shiftTypeName}, isDayOff: ${isDayOffShift}`)
+
+            // ✅ If no shift type ID, match by times (skip for day off)
+            if (
+              !shiftTypeId &&
+              !isDayOffShift &&
+              startTime &&
+              endTime &&
+              shiftTypes.value.length > 0
+            ) {
               const matchingShiftType = shiftTypes.value.find((st) => {
                 const stStart = st.default_start_time?.substring(0, 5)
                 const stEnd = st.default_end_time?.substring(0, 5)
@@ -1410,14 +1566,14 @@ const fetchData = async () => {
               )
               if (foundShiftType) {
                 shiftTypeId = foundShiftType.id
-              } else {
-                // ✅ Fallback to first shift type
+              } else if (!isDayOffShift) {
+                // ✅ Fallback to first shift type (only for non-day-off shifts)
                 shiftTypeId = shiftTypes.value[0].id
               }
             }
 
-            // ✅ Final fallback if still no shift type
-            if (!shiftTypeId && shiftTypes.value.length > 0) {
+            // ✅ Final fallback if still no shift type (skip for day off - they can have no shift type ID)
+            if (!shiftTypeId && !isDayOffShift && shiftTypes.value.length > 0) {
               console.warn('⚠️ Using fallback shift type for schedule:', schedule.id)
               shiftTypeId = shiftTypes.value[0].id
               shiftTypeName = shiftTypes.value[0].name
@@ -1437,6 +1593,7 @@ const fetchData = async () => {
               department: schedule.department || null,
               status: schedule.status || 'draft',
               date: schedule.date,
+              is_off: schedule.is_off || false, // ✅ Include is_off property from API
             }
 
             // ✅ WARN about missing critical fields
@@ -1467,6 +1624,32 @@ const fetchData = async () => {
       '📋 Shifts WITHOUT assignmentId:',
       shifts.value.filter((s) => !s.assignmentId).length,
     )
+
+    // ✅ LOG DAY OFF SHIFTS
+    const dayOffShifts = shifts.value.filter(
+      (s) =>
+        (!s.startTime && !s.endTime) ||
+        s.position?.toLowerCase().includes('day off') ||
+        s.position?.toLowerCase().includes('off'),
+    )
+    if (dayOffShifts.length > 0) {
+      console.log('🏖️ DAY OFF SHIFTS FOUND:', dayOffShifts.length)
+      console.log(
+        'Day off shift examples:',
+        dayOffShifts.slice(0, 3).map((s) => ({
+          id: s.id,
+          userId: s.userId,
+          date: s.date,
+          day: s.day,
+          position: s.position,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          status: s.status,
+        })),
+      )
+    } else {
+      console.log('⚠️ NO DAY OFF SHIFTS DETECTED')
+    }
 
     // ✅ LOG SHIFTS WITH MISSING SHIFT TYPES
     const shiftsWithoutShiftType = shifts.value.filter((s) => !s.shiftTypeId)
@@ -1714,6 +1897,73 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
   }
 }
 
+const createRecurringSchedule = async (scheduleData) => {
+  const token = localStorage.getItem('access_token')
+  let companyId = localStorage.getItem('selectedCompany')
+
+  console.log('=== CREATE RECURRING SCHEDULE DEBUG ===')
+  console.log('📋 Raw scheduleData:', scheduleData)
+
+  if (!companyId) {
+    throw new Error('No company selected')
+  }
+
+  try {
+    const parsed = JSON.parse(companyId)
+    companyId = parsed?.id || parsed
+  } catch {
+    // Already a plain value
+  }
+
+  companyId = parseInt(companyId)
+
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    scheduleData.userId,
+  )
+
+  const employeeId = isUUID ? scheduleData.userId : parseInt(scheduleData.userId)
+
+  // Build recurring payload matching your API structure
+  const payload = {
+    company_id: companyId,
+    employee_ids: [employeeId],
+    recurring: [
+      {
+        recurring_id: parseInt(scheduleData.recurringSchedule),
+        start_date: scheduleData.recurringStartDate,
+        end_date: scheduleData.recurringEndDate,
+        site_id: parseInt(scheduleData.site),
+      },
+    ],
+  }
+
+  console.log('📤 Recurring Payload:', JSON.stringify(payload, null, 2))
+
+  try {
+    const response = await axios.post(
+      'https://staging.wageyapp.com/organization/assignments/assign/',
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+
+    console.log('✅ SUCCESS - Recurring Schedule Response:', response.data)
+    return response.data
+  } catch (error) {
+    console.error('❌ FAILED - Recurring Schedule Error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+    })
+
+    throw error
+  }
+}
+
 const handleScheduleError = (error) => {
   console.error('❌ Full Error Object:', error)
   console.error('❌ Error Response:', error.response)
@@ -1884,14 +2134,35 @@ const addSchedule = async () => {
     return
   }
 
-  if (!n.selectedDate) {
-    $q.notify({ type: 'negative', message: 'Please select a date.' })
-    return
+  // Validation for one-time schedules
+  if (n.scheduleType === 'one-time') {
+    if (!n.selectedDate) {
+      $q.notify({ type: 'negative', message: 'Please select a date.' })
+      return
+    }
+
+    if (!n.position) {
+      $q.notify({ type: 'negative', message: 'Please select a shift type.' })
+      return
+    }
   }
 
-  if (!n.position) {
-    $q.notify({ type: 'negative', message: 'Please select a shift type.' })
-    return
+  // Validation for recurring schedules
+  if (n.scheduleType === 'recurring') {
+    if (!n.recurringStartDate) {
+      $q.notify({ type: 'negative', message: 'Please select a start date.' })
+      return
+    }
+
+    if (!n.recurringEndDate) {
+      $q.notify({ type: 'negative', message: 'Please select an end date.' })
+      return
+    }
+
+    if (!n.recurringSchedule) {
+      $q.notify({ type: 'negative', message: 'Please select a recurring template.' })
+      return
+    }
   }
 
   if (!n.site) {
@@ -1919,20 +2190,27 @@ const addSchedule = async () => {
 
     console.log('✅ Employee verified')
 
-    const hasConflict = await checkEmployeeScheduleOnDate(n.userId, n.selectedDate)
+    // Handle based on schedule type
+    if (n.scheduleType === 'recurring') {
+      // Create recurring schedule
+      await createRecurringSchedule(n)
+    } else {
+      // One-time schedule - check for conflicts first
+      const hasConflict = await checkEmployeeScheduleOnDate(n.userId, n.selectedDate)
 
-    if (hasConflict) {
-      isCheckingConflict.value = false
-      const selectedEmployee = employees.value.find((emp) => emp.id === n.userId)
-      $q.notify({
-        type: 'warning',
-        message: `${selectedEmployee?.full_name || 'Employee'} already has a schedule on ${n.selectedDate}.`,
-        timeout: 6000,
-      })
-      return
+      if (hasConflict) {
+        isCheckingConflict.value = false
+        const selectedEmployee = employees.value.find((emp) => emp.id === n.userId)
+        $q.notify({
+          type: 'warning',
+          message: `${selectedEmployee?.full_name || 'Employee'} already has a schedule on ${n.selectedDate}.`,
+          timeout: 6000,
+        })
+        return
+      }
+
+      await createScheduleRecord(n, n.selectedDate)
     }
-
-    await createScheduleRecord(n, n.selectedDate)
 
     isCheckingConflict.value = false
     showAddModal.value = false
@@ -1951,11 +2229,13 @@ const addSchedule = async () => {
       rotationShifts: [],
       weekdays: [],
       repeatInterval: 1,
+      recurringStartDate: null,
+      recurringEndDate: null,
     }
 
     $q.notify({
       type: 'positive',
-      message: 'Schedule created successfully!',
+      message: `${n.scheduleType === 'recurring' ? 'Recurring schedule' : 'Schedule'} created successfully!`,
       icon: 'check_circle',
     })
 
@@ -2819,6 +3099,54 @@ const filterEmployees = () => {}
   color: #3b82f6;
 }
 
+/* Day Off Shift Styles */
+.shift-badge-dayoff {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important;
+  border: 2px dashed #ff9800 !important;
+  padding: 8px 12px;
+}
+
+.shift-badge-dayoff:hover {
+  background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%) !important;
+  box-shadow: 0 3px 8px rgba(255, 152, 0, 0.3);
+  border-color: #f57c00 !important;
+}
+
+.dayoff-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.dayoff-icon {
+  color: #f57c00;
+  flex-shrink: 0;
+}
+
+.dayoff-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #e65100;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.shift-badge-dayoff .shift-position {
+  color: #6b7280;
+  font-weight: 600;
+  text-align: center;
+  font-size: 12px;
+}
+
+.dayoff-text {
+  color: #6b7280 !important;
+  font-weight: 600 !important;
+  text-align: center;
+}
+
 .shift-actions {
   display: none;
   position: absolute;
@@ -2858,6 +3186,15 @@ const filterEmployees = () => {}
 
 .edit-btn:hover {
   background: #fde68a;
+}
+
+.reassign-btn {
+  background: #ddd6fe;
+  color: #7c3aed;
+}
+
+.reassign-btn:hover {
+  background: #c4b5fd;
 }
 
 .delete-btn {
@@ -2970,6 +3307,35 @@ const filterEmployees = () => {}
   background: #bfdbfe;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.shift-card-dayoff {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important;
+  border: 2px dashed #ff9800 !important;
+}
+
+.shift-card-dayoff:hover {
+  background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%) !important;
+  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+}
+
+.dayoff-content-mobile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dayoff-content-mobile .dayoff-icon {
+  color: #f57c00;
+}
+
+.dayoff-content-mobile .dayoff-label {
+  font-weight: 700;
+  font-size: 12px;
+  color: #e65100;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Modal Styles */
