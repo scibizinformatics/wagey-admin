@@ -184,31 +184,13 @@
                           flat
                           dense
                           round
-                          icon="visibility"
-                          size="xs"
-                          class="action-btn view-btn"
-                          @click="openEditModal(element)"
-                        />
-                        <q-btn
-                          flat
-                          dense
-                          round
                           icon="swap_horiz"
                           size="xs"
                           class="action-btn reassign-btn"
                           @click="openReassignModal(element)"
                         >
-                          <q-tooltip>Reassign Shift</q-tooltip>
+                          <q-tooltip>Update Shift</q-tooltip>
                         </q-btn>
-                        <q-btn
-                          flat
-                          dense
-                          round
-                          icon="edit"
-                          size="xs"
-                          class="action-btn edit-btn"
-                          @click="openEditModal(element)"
-                        />
                         <q-btn
                           flat
                           dense
@@ -270,7 +252,6 @@
                       v-for="shift in getShifts(user.id, dayIdx)"
                       :key="shift.id"
                       class="shift-card"
-                      @click="openEditModal(shift)"
                     >
                       <div class="shift-position">{{ getPositionName(shift.position) }}</div>
                     </div>
@@ -502,137 +483,6 @@
     </q-dialog>
 
     <!-- Edit Schedule Modal -->
-    <q-dialog v-model="showEditModal" persistent>
-      <q-card class="modal-card">
-        <q-card-section class="modal-header">
-          <div class="modal-title">Edit Schedule</div>
-          <q-btn flat round dense icon="close" @click="closeEditModal" />
-        </q-card-section>
-
-        <q-card-section class="modal-body">
-          <q-form @submit="updateSchedule" class="schedule-form">
-            <div class="form-row">
-              <q-select
-                v-model="editingSchedule.userId"
-                :options="userOptions"
-                option-value="value"
-                option-label="label"
-                label="Select Employee"
-                outlined
-                emit-value
-                map-options
-                class="form-field"
-                :rules="[(val) => !!val || 'Please select an employee']"
-              />
-
-              <q-select
-                v-model="editingSchedule.day"
-                :options="dayOptions"
-                option-value="value"
-                option-label="label"
-                label="Select Day"
-                outlined
-                emit-value
-                map-options
-                class="form-field"
-                :rules="[(val) => val !== null || 'Please select a day']"
-              />
-            </div>
-
-            <div class="form-row">
-              <q-select
-                v-model="editingSchedule.site"
-                :options="siteOptions"
-                option-value="value"
-                option-label="label"
-                label="Select Site"
-                outlined
-                emit-value
-                map-options
-                class="form-field"
-                :rules="[(val) => !!val || 'Please select a site']"
-              />
-
-              <q-select
-                v-model="editingSchedule.department"
-                :options="departmentOptions"
-                option-value="value"
-                option-label="label"
-                label="Select Department"
-                outlined
-                emit-value
-                map-options
-                class="form-field"
-                :rules="[(val) => !!val || 'Please select a department']"
-              />
-            </div>
-
-            <div class="form-row">
-              <q-input
-                v-model="editingSchedule.startTime"
-                label="Start Time"
-                mask="##:##"
-                placeholder="08:00"
-                outlined
-                class="form-field"
-                :rules="[timeValidation]"
-              >
-                <template #append>
-                  <q-icon name="access_time" />
-                </template>
-                <template #hint> {{ userTimezone }} ({{ getTimezoneAbbreviation() }}) </template>
-              </q-input>
-
-              <q-input
-                v-model="editingSchedule.endTime"
-                label="End Time"
-                mask="##:##"
-                placeholder="17:00"
-                outlined
-                class="form-field"
-                :rules="[timeValidation, (val) => validateEndTime(val, editingSchedule.startTime)]"
-              >
-                <template #append>
-                  <q-icon name="access_time" />
-                </template>
-                <template #hint> {{ userTimezone }} ({{ getTimezoneAbbreviation() }}) </template>
-              </q-input>
-            </div>
-
-            <q-select
-              v-model="editingSchedule.position"
-              :options="positionOptions"
-              option-value="value"
-              option-label="label"
-              label="Position"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-              :rules="[(val) => !!val || 'Please select a position']"
-            />
-
-            <q-banner v-if="editConflictWarning" class="warning-banner">
-              <template #avatar>
-                <q-icon name="warning" />
-              </template>
-              Warning: This employee already has a shift on this day!
-            </q-banner>
-
-            <div class="modal-actions">
-              <q-btn flat label="Cancel" @click="closeEditModal" class="cancel-btn" />
-              <q-btn
-                type="submit"
-                color="primary"
-                label="Update Schedule"
-                unelevated
-                class="submit-btn"
-              />
-            </div>
-          </q-form>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
 
     <!-- Quick Add Modal - Multiple Shifts Same Day -->
     <q-dialog v-model="showQuickAddModal" persistent>
@@ -752,36 +602,77 @@
       </q-card>
     </q-dialog>
 
-    <!-- Reassign Shift Modal -->
+    <!-- Update Shift Assignment Modal -->
     <q-dialog v-model="showReassignModal">
-      <q-card style="min-width: 400px">
+      <q-card style="min-width: 450px">
         <q-card-section>
-          <div class="text-h6">Reassign Shift</div>
-          <!-- 🆕 SHOW Assignment ID -->
-          <div
-            v-if="reassignData.assignmentId"
-            class="text-caption text-primary"
-            style="margin-top: 4px; font-weight: 600"
-          >
-            Assignment ID: {{ reassignData.assignmentId }}
-          </div>
-          <div v-else class="text-caption text-negative" style="margin-top: 4px">
-            ⚠️ No Assignment ID (this will fail)
+          <div class="text-h6">Update Shift Assignment</div>
+          <div class="text-caption text-grey-7" style="margin-top: 4px">
+            Modify the shift details for this assignment
           </div>
         </q-card-section>
 
         <q-card-section class="q-pt-none">
-          <!-- 🆕 ADD: Debug info panel (remove this after debugging) -->
-          <q-banner dense class="bg-grey-2 q-mb-md" style="font-size: 11px">
-            <div><strong>Debug Info:</strong></div>
-            <div>Site ID: {{ reassignData.siteId || '(missing)' }}</div>
-            <div>Dept ID: {{ reassignData.departmentId || '(optional)' }}</div>
-            <div>Shift Type: {{ reassignData.shiftTypeId || '(missing)' }}</div>
-            <div>Current Emp: {{ reassignData.currentEmployee || '(missing)' }}</div>
-            <div>Date: {{ reassignData.date || '(missing)' }}</div>
-          </q-banner>
+          <!-- Employee Info (read-only) -->
+          <q-input
+            :model-value="getEmployeeName(reassignData.currentEmployee)"
+            label="Employee"
+            outlined
+            dense
+            readonly
+            class="q-mb-md"
+          >
+            <template v-slot:prepend>
+              <q-icon name="person" />
+            </template>
+          </q-input>
 
-          <!-- Department Select -->
+          <!-- Date (read-only) -->
+          <q-input v-model="reassignData.date" label="Date" outlined dense readonly class="q-mb-md">
+            <template v-slot:prepend>
+              <q-icon name="event" />
+            </template>
+          </q-input>
+
+          <!-- Site Select (editable) -->
+          <q-select
+            v-model="reassignData.siteId"
+            :options="siteOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            label="Site *"
+            outlined
+            dense
+            class="q-mb-md"
+            :rules="[(val) => !!val || 'Site is required']"
+          >
+            <template v-slot:prepend>
+              <q-icon name="location_on" />
+            </template>
+          </q-select>
+
+          <!-- Shift Type Select (editable) -->
+          <q-select
+            v-model="reassignData.shiftTypeId"
+            :options="positionOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            label="Shift Type *"
+            outlined
+            dense
+            class="q-mb-md"
+            :rules="[(val) => !!val || 'Shift type is required']"
+          >
+            <template v-slot:prepend>
+              <q-icon name="work" />
+            </template>
+          </q-select>
+
+          <!-- Department Select (editable, optional) -->
           <q-select
             v-model="reassignData.departmentId"
             :options="departmentOptions"
@@ -794,78 +685,20 @@
             dense
             clearable
             class="q-mb-md"
-          />
-
-          <!-- Current Employee (read-only) -->
-          <q-input
-            :model-value="getEmployeeName(reassignData.currentEmployee)"
-            label="Current Employee"
-            outlined
-            dense
-            readonly
-            class="q-mb-md"
-          >
-            <template v-slot:hint>
-              {{ reassignData.currentEmployee }}
-            </template>
-          </q-input>
-
-          <!-- Date (read-only) -->
-          <q-input
-            v-model="reassignData.date"
-            label="Date"
-            outlined
-            dense
-            readonly
-            class="q-mb-md"
-          />
-
-          <!-- Site (read-only) - SHOW WHAT WE HAVE -->
-          <q-input
-            :model-value="reassignData.siteId ? `Site ID: ${reassignData.siteId}` : 'No site'"
-            label="Site"
-            outlined
-            dense
-            readonly
-            class="q-mb-md"
-            :class="{ 'text-negative': !reassignData.siteId }"
-          />
-
-          <!-- Shift Type (read-only) - SHOW WHAT WE HAVE -->
-          <q-input
-            :model-value="
-              reassignData.shiftTypeId ? getPositionName(reassignData.shiftTypeId) : 'No shift type'
-            "
-            label="Position"
-            outlined
-            dense
-            readonly
-            class="q-mb-md"
-            :class="{ 'text-negative': !reassignData.shiftTypeId }"
-          />
-
-          <!-- Reassign to Employee -->
-          <q-select
-            v-model="reassignData.newEmployee"
-            :options="employeeOptions"
-            option-value="value"
-            option-label="label"
-            emit-value
-            map-options
-            label="Reassign to Employee"
-            outlined
-            dense
-            class="q-mb-md"
-            :rules="[(val) => !!val || 'Please select an employee']"
           >
             <template v-slot:prepend>
-              <q-icon name="person" />
+              <q-icon name="business" />
             </template>
           </q-select>
 
-          <div class="text-caption text-grey-7">
-            Select the employee who will take over this shift
-          </div>
+          <q-banner dense class="bg-blue-1">
+            <template v-slot:avatar>
+              <q-icon name="info" color="primary" />
+            </template>
+            <span style="font-size: 12px">
+              You can update the site, shift type, and department for this employee's assignment.
+            </span>
+          </q-banner>
         </q-card-section>
 
         <q-card-actions align="right">
@@ -878,11 +711,13 @@
           />
           <q-btn
             unelevated
-            label="Reassign Shift"
+            label="Update Assignment"
             color="primary"
             @click="reassignShift"
             :loading="isReassigning"
-            :disable="!reassignData.newEmployee || !reassignData.assignmentId"
+            :disable="
+              !reassignData.siteId || !reassignData.shiftTypeId || !reassignData.assignmentId
+            "
           >
             <template v-slot:loading>
               <q-spinner color="white" size="20px" />
@@ -924,9 +759,8 @@ const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const dayOptions = days.map((d, i) => ({ label: d, value: i }))
 
 const showAddModal = ref(false)
-const showEditModal = ref(false)
 const showQuickAddModal = ref(false)
-const showReassignModal = ref(false) // NEW: Reassign modal state
+const showReassignModal = ref(false)
 const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
 
@@ -956,40 +790,24 @@ const weekdayOptions = [
   { label: 'Sunday', value: 'sunday' },
 ]
 
-const editingSchedule = ref({
-  id: null,
-  userId: null,
-  day: null,
-  startTime: '',
-  endTime: '',
-  position: '',
-  site: null,
-  department: null,
-  contractType: null,
-  recurringSchedule: null,
-  isRecurring: false,
-})
-
 const quickAdd = ref({
   userId: null,
   day: null,
   shifts: [],
 })
 
-// NEW: Reassign data state
+// Reassign data state (for updating shift assignment)
 const reassignData = ref({
   assignmentId: null,
   shiftTypeId: null,
   siteId: null,
   departmentId: null,
   currentEmployee: null,
-  newEmployee: null,
   date: null,
   day: null,
 })
 
 const addConflictWarning = ref(false)
-const editConflictWarning = ref(false)
 
 // Week helpers
 const getWeekRange = (date = new Date()) => {
@@ -2308,62 +2126,6 @@ const openAddModal = () => {
 
 const closeAddModal = () => (showAddModal.value = false)
 
-const openEditModal = (schedule) => {
-  editingSchedule.value = { ...schedule }
-  editConflictWarning.value = false
-  showEditModal.value = true
-}
-
-const closeEditModal = () => (showEditModal.value = false)
-
-const updateSchedule = async () => {
-  const es = editingSchedule.value
-  if (!es.id) return
-
-  try {
-    const token = localStorage.getItem('access_token')
-
-    if (!token) {
-      const idx = shifts.value.findIndex((s) => s.id === es.id)
-      if (idx !== -1) shifts.value[idx] = { ...es }
-      showEditModal.value = false
-      return
-    }
-
-    const payload = {
-      name: `${getEmployeeName(es.userId)} - Updated`,
-      date: new Date().toISOString().split('T')[0],
-      start_time: es.startTime,
-      end_time: es.endTime,
-      shift_type: es.position,
-      site: es.site,
-      department: es.department,
-      status: 'active',
-    }
-
-    await axios.put(
-      `https://staging.wageyapp.com/organization/assignments/assign${es.id}/`,
-      payload,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-
-    const idx = shifts.value.findIndex((s) => s.id === es.id)
-    if (idx !== -1) shifts.value[idx] = { ...es }
-
-    showEditModal.value = false
-    $q.notify({ type: 'positive', message: 'Schedule updated' })
-
-    setTimeout(async () => {
-      await fetchData()
-    }, 500)
-  } catch (e) {
-    console.error('Failed to update schedule:', e.response?.data || e.message)
-    $q.notify({ type: 'negative', message: 'Failed to update schedule' })
-  }
-}
-
 const deleteShift = async (id) => {
   try {
     const token = localStorage.getItem('access_token')
@@ -2424,7 +2186,7 @@ const closeQuickAddModal = () => {
 }
 
 const openReassignModal = (shift) => {
-  console.log('=== 🔍 OPEN REASSIGN MODAL ===')
+  console.log('=== 🔍 OPEN UPDATE SHIFT MODAL ===')
   console.log('📋 Shift data:', {
     id: shift.id,
     assignmentId: shift.assignmentId,
@@ -2435,7 +2197,7 @@ const openReassignModal = (shift) => {
     userId: shift.userId,
   })
 
-  // ✅ Validate required fields
+  // Validate required fields
   const missingFields = []
 
   if (!shift.assignmentId) missingFields.push('Assignment ID')
@@ -2443,31 +2205,30 @@ const openReassignModal = (shift) => {
   if (!shift.shiftTypeId) missingFields.push('Shift Type')
 
   if (missingFields.length > 0) {
-    console.error('❌ Cannot reassign - Missing:', missingFields)
+    console.error('❌ Cannot update shift - Missing:', missingFields)
 
     $q.notify({
       type: 'negative',
-      message: 'Cannot reassign this shift',
+      message: 'Cannot update this shift',
       caption: `Missing required fields: ${missingFields.join(', ')}`,
       timeout: 5000,
     })
     return
   }
 
-  // ✅ Initialize reassign data - store the complete shift info
+  // Initialize reassign data with current shift values
   reassignData.value = {
     assignmentId: shift.assignmentId,
     shiftTypeId: shift.shiftTypeId,
     siteId: shift.site,
     departmentId: shift.department || null,
     currentEmployee: shift.userId,
-    newEmployee: null,
     date: shift.date,
     day: shift.day,
-    originalShift: { ...shift }, // Store original shift for local update
+    originalShift: { ...shift }, // Store original shift for reference
   }
 
-  console.log('✅ Reassign data ready:', reassignData.value)
+  console.log('✅ Update shift data ready:', reassignData.value)
   showReassignModal.value = true
 }
 
@@ -2479,16 +2240,14 @@ const closeReassignModal = () => {
     siteId: null,
     departmentId: null,
     currentEmployee: null,
-    newEmployee: null,
     date: null,
     day: null,
-    originalShift: null, // Clear this too
+    originalShift: null,
   }
 }
 
-// ✅ CORRECTED reassignShift function
-// This version properly uses the employee_assignment_id from the API
-
+// Update shift assignment function
+// This allows admin to change the shift_type_id, site_id, and department_id for an assignment
 const reassignShift = async () => {
   isReassigning.value = true
   const token = localStorage.getItem('access_token')
@@ -2496,13 +2255,13 @@ const reassignShift = async () => {
   try {
     const r = reassignData.value
 
-    console.log('🔍 Starting reassignment...')
-    console.log('📋 Reassign data:', {
+    console.log('🔍 Starting shift update...')
+    console.log('📋 Update data:', {
       assignmentId: r.assignmentId,
       assignmentIdType: typeof r.assignmentId,
       siteId: r.siteId,
       shiftTypeId: r.shiftTypeId,
-      newEmployee: r.newEmployee,
+      departmentId: r.departmentId,
       currentEmployee: r.currentEmployee,
     })
 
@@ -2536,42 +2295,28 @@ const reassignShift = async () => {
       return
     }
 
-    if (!r.newEmployee) {
-      $q.notify({
-        type: 'negative',
-        message: 'Please select a new employee',
-      })
-      isReassigning.value = false
-      return
-    }
-
-    // Check if reassigning to the same employee
-    if (r.newEmployee === r.currentEmployee) {
-      $q.notify({
-        type: 'warning',
-        message: 'Please select a different employee',
-      })
-      isReassigning.value = false
-      return
-    }
-
     // ============================================
     // BUILD PAYLOAD
     // ============================================
-    // Keep assignment_id as STRING (it's "78849" format, not integer)
+    // Based on the API specification:
+    // { "assignment_id": 0, "shift_type_id": 0, "site_id": 0, "department_id": 0 }
     const payload = {
-      assignment_id: r.assignmentId.toString(), // Keep as string!
+      assignment_id: parseInt(r.assignmentId),
       shift_type_id: parseInt(r.shiftTypeId),
       site_id: parseInt(r.siteId),
-      new_employee_id: r.newEmployee, // Add this - backend might need it
     }
 
-    console.log('📤 Reassign payload:', JSON.stringify(payload, null, 2))
+    // Add department_id only if it's provided
+    if (r.departmentId) {
+      payload.department_id = parseInt(r.departmentId)
+    }
+
+    console.log('📤 Update payload:', JSON.stringify(payload, null, 2))
     console.log('📤 Payload field types:', {
       assignment_id: typeof payload.assignment_id,
       shift_type_id: typeof payload.shift_type_id,
       site_id: typeof payload.site_id,
-      new_employee_id: typeof payload.new_employee_id,
+      department_id: payload.department_id ? typeof payload.department_id : 'not included',
     })
 
     // ============================================
@@ -2588,19 +2333,19 @@ const reassignShift = async () => {
       },
     )
 
-    console.log('✅ Reassignment API response:', response.data)
+    console.log('✅ Shift update API response:', response.data)
     console.log('✅ Response status:', response.status)
 
     // ============================================
     // SUCCESS NOTIFICATION
     // ============================================
-    const oldEmployeeName = getEmployeeName(r.currentEmployee)
-    const newEmployeeName = getEmployeeName(r.newEmployee)
+    const employeeName = getEmployeeName(r.currentEmployee)
+    const shiftTypeName = getPositionName(r.shiftTypeId)
 
     $q.notify({
       type: 'positive',
-      message: 'Shift reassigned successfully!',
-      caption: `From ${oldEmployeeName} to ${newEmployeeName}`,
+      message: 'Shift updated successfully!',
+      caption: `${employeeName}'s shift updated to ${shiftTypeName}`,
       icon: 'check_circle',
       timeout: 3000,
     })
