@@ -349,7 +349,13 @@
                           {{ getEmployeeName(props.row.employee).charAt(0) }}
                         </span>
                       </q-avatar>
-                      <span class="employee-name">{{ getEmployeeName(props.row.employee) }}</span>
+                      <span
+                        class="employee-name clickable-name"
+                        @click="filterByEmployeeId(props.row.employee)"
+                        :title="`Click to filter by ${getEmployeeName(props.row.employee)}`"
+                      >
+                        {{ getEmployeeName(props.row.employee) }}
+                      </span>
                     </div>
                   </q-td>
                   <q-td class="table-body-cell date-col">
@@ -1018,12 +1024,13 @@ function calculateWorkingHours() {
   const [outHours, outMinutes] = newRecord.value.time_out.split(':').map(Number)
 
   const inDate = new Date(0, 0, 0, inHours, inMinutes)
-  const outDate = new Date(0, 0, 0, outHours, outMinutes)
+  let outDate = new Date(0, 0, 0, outHours, outMinutes)
 
   let diff = (outDate - inDate) / 1000 / 60 // difference in minutes
 
+  // ✅ Handle overnight shift
   if (diff < 0) {
-    diff += 24 * 60 // handle overnight shift
+    diff += 24 * 60 // add 24 hours
   }
 
   const hours = Math.floor(diff / 60)
@@ -1069,6 +1076,14 @@ function viewEmployeePhoto(employee) {
   selectedEmployeePhoto.value = getEmployeePhoto(employee)
   showEmployeePhotoDialog.value = true
 }
+function getYearMonth() {
+  let baseDate = filters.value.date_from ? new Date(filters.value.date_from) : new Date()
+
+  const year = baseDate.getFullYear()
+  const month = String(baseDate.getMonth() + 1).padStart(2, '0')
+
+  return { year, month }
+}
 
 // ================= API FUNCTIONS =================
 async function fetchAttendanceData(params = {}) {
@@ -1078,11 +1093,13 @@ async function fetchAttendanceData(params = {}) {
   }
 
   loading.value = true
-  try {
-    // Build the URL with companyId
-    let url = `https://staging.wageyapp.com/attendance/company/${companyId.value}/`
 
-    // Add site filter to URL if selected
+  try {
+    const { year, month } = getYearMonth()
+
+    // ONLY use site filter in API (since it works)
+    let url = `https://staging.wageyapp.com/attendance/company/${companyId.value}/${year}/${month}/`
+
     if (filters.value.site) {
       url += `?site=${filters.value.site}`
     }
@@ -1093,59 +1110,78 @@ async function fetchAttendanceData(params = {}) {
       params: {
         page: pagination.value.page,
         limit: pagination.value.rowsPerPage,
-        // Spread other filters but exclude site since it's in the URL
-        date_from: filters.value.date_from,
-        date_to: filters.value.date_to,
-        source: filters.value.source,
-        employee: filters.value.employee,
-        business_owner: filters.value.business_owner,
         ...params,
       },
     })
 
-    const data = Array.isArray(response.data) ? response.data : response.data.data
+    let data = Array.isArray(response.data) ? response.data : response.data.data
+    data = data || []
 
-    attendanceData.value = (data || []).map((record) => {
-      if (record.employee && typeof record.employee === 'object') {
-        return record
-      }
+    // CLIENT-SIDE FILTERING for employee and source
+    let filteredData = data
 
-      const employeeId = record.employee || record.employee_id || record.site_id || record.user_id
+    // Filter by employee
+    if (filters.value.employee) {
+      filteredData = filteredData.filter((record) => {
+        const employeeId =
+          typeof record.employee === 'object'
+            ? record.employee.uuid || record.employee.id
+            : record.employee
 
-      if (employeeId) {
-        const employeeDetails = employees.value.find(
-          (emp) =>
-            emp.id === employeeId ||
-            emp.id === String(employeeId) ||
-            String(emp.id) === String(employeeId),
-        )
+        return employeeId === filters.value.employee
+      })
+      console.log(`🔍 Filtered by employee: ${filteredData.length} records`)
+    }
 
-        if (employeeDetails) {
-          return {
-            ...record,
-            employee: employeeDetails,
-          }
-        }
-      }
+    // Filter by source
+    if (filters.value.source) {
+      filteredData = filteredData.filter((record) => record.source === filters.value.source)
+      console.log(`🔍 Filtered by source: ${filteredData.length} records`)
+    }
 
-      return record
+    // Filter by business owner (if applicable)
+    if (filters.value.business_owner) {
+      filteredData = filteredData.filter((record) => {
+        const ownerId =
+          typeof record.business_owner === 'object'
+            ? record.business_owner.uuid || record.business_owner.id
+            : record.business_owner
+
+        return ownerId === filters.value.business_owner
+      })
+      console.log(`🔍 Filtered by business owner: ${filteredData.length} records`)
+    }
+
+    attendanceData.value = filteredData
+    pagination.value.rowsNumber = filteredData.length
+
+    console.log(`✅ Loaded ${attendanceData.value.length} attendance records (filtered)`)
+  } catch (error) {
+    console.error('❌ Error fetching attendance:', error)
+    console.error('📍 Error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
     })
 
-    pagination.value.rowsNumber =
-      response.data.total || response.data.meta?.total || attendanceData.value.length
+    let errorMessage = 'Failed to load attendance data'
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message
+    } else if (error.response?.data?.detail) {
+      errorMessage = error.response.data.detail
+    }
 
-    console.log('✅ Attendance data loaded:', attendanceData.value.length, 'records')
-
-    return response.data
-  } catch (error) {
-    console.error('Error fetching attendance data:', error)
-    showErrorNotification('Failed to load attendance data')
+    showErrorNotification(errorMessage)
     attendanceData.value = []
   } finally {
     loading.value = false
   }
 }
-
+async function filterByEmployeeId(employeeId) {
+  filters.value.employee = employeeId
+  pagination.value.page = 1
+  await fetchAttendanceData()
+}
 async function fetchSites() {
   if (!companyId.value) {
     console.error('❌ Company ID is missing:', companyId.value)
@@ -1276,13 +1312,14 @@ async function submitAttendance() {
     return
   }
 
-  // Validate time_out is after time_in
+  // ✅ UPDATED: Handle overnight shifts
   const timeIn = new Date(`${newRecord.value.date}T${newRecord.value.time_in}:00`)
-  const timeOut = new Date(`${newRecord.value.date}T${newRecord.value.time_out}:00`)
+  let timeOut = new Date(`${newRecord.value.date}T${newRecord.value.time_out}:00`)
 
+  // If time_out is earlier than time_in, it means the shift crosses midnight
+  // Add 1 day to time_out
   if (timeOut <= timeIn) {
-    showErrorNotification('Time Out must be after Time In')
-    return
+    timeOut.setDate(timeOut.getDate() + 1)
   }
 
   // Check for schedule if needed
@@ -1322,15 +1359,12 @@ async function submitAttendance() {
       return
     }
 
-    // Create timestamps for both time in and time out
-    const timeInDate = new Date(`${newRecord.value.date}T${newRecord.value.time_in}:00`)
-    const timeOutDate = new Date(`${newRecord.value.date}T${newRecord.value.time_out}:00`)
-
-    const timeInTimestamp = timeInDate.toISOString()
-    const timeOutTimestamp = timeOutDate.toISOString()
+    // ✅ Use the adjusted timeOut for timestamp
+    const timeInTimestamp = timeIn.toISOString()
+    const timeOutTimestamp = timeOut.toISOString()
 
     console.log('📤 Sending Time In data:', {
-      source: 'admin',
+      source: 'manual',
       employee_id: employeeUUID,
       timestamp: timeInTimestamp,
     })
@@ -1339,7 +1373,7 @@ async function submitAttendance() {
     const timeInResponse = await api.post(
       `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
       {
-        source: 'admin',
+        source: 'manual',
         employee_id: employeeUUID,
         timestamp: timeInTimestamp,
       },
@@ -1351,7 +1385,7 @@ async function submitAttendance() {
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     console.log('📤 Sending Time Out data:', {
-      source: 'admin',
+      source: 'manual',
       employee_id: employeeUUID,
       timestamp: timeOutTimestamp,
     })
@@ -1360,7 +1394,7 @@ async function submitAttendance() {
     const timeOutResponse = await api.post(
       `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
       {
-        source: 'admin',
+        source: 'manual',
         employee_id: employeeUUID,
         timestamp: timeOutTimestamp,
       },
@@ -1500,7 +1534,11 @@ async function batchDelete(records) {
     showErrorNotification('Failed to delete records')
   }
 }
-
+async function filterByEmployee(employeeId) {
+  filters.value.employee = employeeId
+  pagination.value.page = 1
+  await fetchAttendanceData()
+}
 // ================= DIALOG HANDLERS =================
 function openAddDialog() {
   newRecord.value = {
