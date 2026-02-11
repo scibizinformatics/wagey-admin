@@ -175,20 +175,14 @@ export default {
         })
         console.log('Companies response:', res.data)
 
-        // Handle different response structures more safely
         let companiesData = []
-
         if (Array.isArray(res.data)) {
-          // Response is directly an array
           companiesData = res.data
         } else if (res.data && Array.isArray(res.data.data)) {
-          // Response has a 'data' property containing the array
           companiesData = res.data.data
         } else if (res.data && Array.isArray(res.data.results)) {
-          // Response has a 'results' property (common in paginated APIs)
           companiesData = res.data.results
         } else if (res.data && typeof res.data === 'object') {
-          // Response is a single object, wrap it in an array
           companiesData = [res.data]
         }
 
@@ -210,15 +204,8 @@ export default {
         }))
 
         console.log('Mapped company options:', this.companyOptions)
-
-        // Auto-select if only one company
-        if (this.companyOptions.length === 1) {
-          this.setSelectedCompany(this.companyOptions[0].siteId)
-        }
       } catch (err) {
         console.error('❌ Error fetching companies:', err.response?.status, err.message)
-        console.error('Error details:', err.response?.data)
-        console.error('Full error:', err)
         this.$q.notify({
           type: 'negative',
           message: err.response?.data?.message || 'Failed to load companies',
@@ -247,7 +234,12 @@ export default {
         const match = this.companyOptions.find((opt) => String(opt.siteId) === String(saved))
         if (match) {
           this.selectedCompany = String(match.siteId)
+          return
         }
+      }
+      // Nothing saved or saved value no longer valid — default to first company
+      if (this.companyOptions.length > 0) {
+        this.setSelectedCompany(this.companyOptions[0].siteId)
       }
     },
 

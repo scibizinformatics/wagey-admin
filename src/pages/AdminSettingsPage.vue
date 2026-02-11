@@ -1,1087 +1,1260 @@
 <template>
-  <q-page class="admin-settings-page">
-    <!-- Page Header -->
-    <div class="page-header q-pa-lg">
-      <div class="header-content">
-        <div>
-          <h4 class="page-title">Admin Settings</h4>
+  <q-page class="admin-dashboard">
+    <div class="dashboard-container">
+      <!-- Header Section -->
+      <div class="page-header">
+        <div class="header-content">
+          <div class="header-left">
+            <h1 class="page-title">Admin Settings</h1>
+          </div>
+          <div class="header-actions">
+            <q-input
+              v-model="searchQuery"
+              placeholder="Search settings..."
+              class="header-search"
+              dense
+              outlined
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" class="search-icon" />
+              </template>
+            </q-input>
+          </div>
         </div>
-        <q-input
-          v-model="searchQuery"
-          dense
-          outlined
-          placeholder="Search Settings"
-          class="search-input"
-        >
-          <template v-slot:prepend>
-            <q-icon name="search" size="20px" />
-          </template>
-        </q-input>
       </div>
-    </div>
 
-    <!-- Tabs Navigation -->
-    <div class="tabs-container q-px-lg">
-      <q-tabs
-        v-model="activeTab"
-        dense
-        class="custom-tabs"
-        active-color="primary"
-        indicator-color="primary"
-        align="left"
-      >
-        <q-tab name="companies" label="Companies" class="custom-tab" />
-        <q-tab name="sites" label="Sites" class="custom-tab" />
-        <q-tab name="roles" label="Roles" class="custom-tab" />
-        <q-tab name="shifts" label="Shifts" class="custom-tab" />
-        <q-tab name="departments" label="Departments" class="custom-tab" />
-        <q-tab name="positions" label="Positions" class="custom-tab" />
-        <q-tab name="contracts" label="Contracts" class="custom-tab" />
-        <q-tab name="payslips" label="Payslips" class="custom-tab" />
-      </q-tabs>
-    </div>
+      <!-- Tabs Navigation -->
+      <div class="tabs-wrapper">
+        <q-tabs
+          v-model="activeTab"
+          dense
+          class="settings-tabs"
+          active-color="primary"
+          indicator-color="primary"
+          align="left"
+        >
+          <q-tab name="companies" label="Companies" class="settings-tab" />
+          <q-tab name="sites" label="Sites" class="settings-tab" />
+          <q-tab name="roles" label="Roles" class="settings-tab" />
+          <q-tab name="shifts" label="Shifts" class="settings-tab" />
+          <q-tab name="departments" label="Departments" class="settings-tab" />
+          <q-tab name="positions" label="Positions" class="settings-tab" />
+          <q-tab name="contracts" label="Contracts" class="settings-tab" />
+          <q-tab name="payslips" label="Payslips" class="settings-tab" />
+        </q-tabs>
+      </div>
 
-    <!-- Tab Content -->
-    <div class="page-content q-pa-lg">
+      <!-- Tab Panels -->
       <q-tab-panels v-model="activeTab" animated class="transparent-panels">
-        <!-- Companies Tab -->
+        <!-- ===================== COMPANIES ===================== -->
         <q-tab-panel name="companies" class="q-pa-none">
-          <div class="settings-section">
-            <div class="section-header">
-              <div>
-                <h5 class="section-title">Companies</h5>
-                <p class="section-description">Manage company information and branding</p>
+          <div class="table-section">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Companies</h2>
+                <p class="table-subtitle">Manage company information and branding</p>
               </div>
-              <q-btn
-                color="primary"
-                label="Add Company"
-                icon="add"
-                @click="openCompanyDialog"
-                unelevated
-                no-caps
-                class="action-btn"
-              />
+              <div class="table-actions">
+                <q-btn
+                  color="primary"
+                  label="Add Company"
+                  icon="add"
+                  class="add-btn"
+                  @click="openCompanyDialog"
+                />
+              </div>
             </div>
 
-            <q-card flat bordered class="settings-card">
+            <div class="modern-table-container">
               <q-table
-                :rows="companies"
+                :rows="filteredCompanies"
                 :columns="companyColumns"
                 row-key="id"
                 :loading="loadingCompanies"
                 flat
-                :pagination="{ rowsPerPage: 10 }"
-                class="custom-table"
+                no-data-label="No companies found"
+                class="settings-table"
+                hide-pagination
+                :rows-per-page-options="[0]"
               >
-                <template v-slot:body-cell-logo="props">
-                  <q-td :props="props">
-                    <q-avatar v-if="props.row.logo" size="40px">
-                      <img :src="props.row.logo" />
-                    </q-avatar>
-                    <q-icon v-else name="business" size="40px" color="grey-5" />
-                  </q-td>
+                <template v-slot:header>
+                  <q-tr class="table-header-row">
+                    <q-th class="table-header-cell">SL No</q-th>
+                    <q-th class="table-header-cell">Logo</q-th>
+                    <q-th class="table-header-cell">Company Name</q-th>
+                    <q-th class="table-header-cell">Address</q-th>
+                    <q-th class="table-header-cell">Contact</q-th>
+                    <q-th class="table-header-cell">Actions</q-th>
+                  </q-tr>
                 </template>
-                <template v-slot:body-cell-actions="props">
-                  <q-td :props="props">
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="edit"
-                      color="primary"
-                      size="sm"
-                      @click="editCompany(props.row)"
+                <template v-slot:body="props">
+                  <q-tr class="table-body-row">
+                    <q-td class="table-body-cell"
+                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                     >
-                      <q-tooltip>Edit</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      color="negative"
-                      size="sm"
-                      @click="deleteCompany(props.row)"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>Delete</q-tooltip>
-                    </q-btn>
-                  </q-td>
+                    <q-td class="table-body-cell">
+                      <q-avatar size="36px" v-if="props.row.logo">
+                        <img :src="props.row.logo" />
+                      </q-avatar>
+                      <q-avatar v-else size="36px" color="primary" text-color="white">
+                        <q-icon name="business" />
+                      </q-avatar>
+                    </q-td>
+                    <q-td class="table-body-cell">
+                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
+                    </q-td>
+                    <q-td class="table-body-cell">{{ props.row.address || 'N/A' }}</q-td>
+                    <q-td class="table-body-cell">{{ props.row.contact || 'N/A' }}</q-td>
+                    <q-td class="table-body-cell actions-cell">
+                      <div class="action-buttons">
+                        <q-btn
+                          flat
+                          round
+                          icon="visibility"
+                          size="sm"
+                          class="action-btn view-btn"
+                          @click="viewCompany(props.row)"
+                        >
+                          <q-tooltip>View Details</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="edit"
+                          size="sm"
+                          class="action-btn edit-btn"
+                          @click="editCompany(props.row)"
+                        >
+                          <q-tooltip>Edit Company</q-tooltip>
+                        </q-btn>
+                      </div>
+                    </q-td>
+                  </q-tr>
                 </template>
               </q-table>
-            </q-card>
+            </div>
           </div>
         </q-tab-panel>
 
-        <!-- Sites Tab -->
+        <!-- ===================== SITES ===================== -->
         <q-tab-panel name="sites" class="q-pa-none">
-          <div class="settings-section">
-            <div class="section-header">
-              <div>
-                <h5 class="section-title">Sites</h5>
-                <p class="section-description">Manage site locations and configurations</p>
+          <div class="table-section">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Sites</h2>
+                <p class="table-subtitle">Manage site locations and configurations</p>
               </div>
-              <q-btn
-                color="primary"
-                label="Add Site"
-                icon="add"
-                @click="openSiteDialog"
-                unelevated
-                no-caps
-                class="action-btn"
-              />
+              <div class="table-actions">
+                <q-btn
+                  color="primary"
+                  label="Add Site"
+                  icon="add"
+                  class="add-btn"
+                  @click="openSiteDialog"
+                />
+              </div>
             </div>
 
-            <q-card flat bordered class="settings-card">
+            <div class="modern-table-container">
               <q-table
-                :rows="sites"
+                :rows="filteredSites"
                 :columns="siteColumns"
                 row-key="id"
                 :loading="loadingSites"
                 flat
-                :pagination="{ rowsPerPage: 10 }"
-                class="custom-table"
+                no-data-label="No sites found"
+                class="settings-table"
+                hide-pagination
+                :rows-per-page-options="[0]"
               >
-                <template v-slot:body-cell-is_active="props">
-                  <q-td :props="props">
-                    <q-badge
-                      :color="props.row.is_active ? 'positive' : 'grey'"
-                      :label="props.row.is_active ? 'Active' : 'Inactive'"
-                    />
-                  </q-td>
+                <template v-slot:header>
+                  <q-tr class="table-header-row">
+                    <q-th class="table-header-cell">SL No</q-th>
+                    <q-th class="table-header-cell">Site Name</q-th>
+                    <q-th class="table-header-cell">Address</q-th>
+                    <q-th class="table-header-cell">Ownership</q-th>
+                    <q-th class="table-header-cell">Status</q-th>
+                    <q-th class="table-header-cell">Actions</q-th>
+                  </q-tr>
                 </template>
-                <template v-slot:body-cell-ownership_type="props">
-                  <q-td :props="props">
-                    <q-chip
-                      dense
-                      size="sm"
-                      :color="props.row.ownership_type === 'owned' ? 'blue-1' : 'orange-1'"
-                      :text-color="props.row.ownership_type === 'owned' ? 'blue-8' : 'orange-8'"
-                      :label="props.row.ownership_type"
-                      class="text-capitalize"
-                    />
-                  </q-td>
-                </template>
-                <template v-slot:body-cell-actions="props">
-                  <q-td :props="props">
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="edit"
-                      color="primary"
-                      size="sm"
-                      @click="editSite(props.row)"
+                <template v-slot:body="props">
+                  <q-tr class="table-body-row">
+                    <q-td class="table-body-cell"
+                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                     >
-                      <q-tooltip>Edit</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      color="negative"
-                      size="sm"
-                      @click="deleteSite(props.row)"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>Delete</q-tooltip>
-                    </q-btn>
-                  </q-td>
+                    <q-td class="table-body-cell">
+                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
+                    </q-td>
+                    <q-td class="table-body-cell">{{ props.row.address || 'N/A' }}</q-td>
+                    <q-td class="table-body-cell">
+                      <div
+                        :class="[
+                          'ownership-badge',
+                          props.row.ownership_type === 'owned' ? 'owned-badge' : 'leased-badge',
+                        ]"
+                      >
+                        {{ props.row.ownership_type || 'N/A' }}
+                      </div>
+                    </q-td>
+                    <q-td class="table-body-cell">
+                      <div
+                        :class="[
+                          'status-badge',
+                          props.row.is_active ? 'status-active' : 'status-inactive',
+                        ]"
+                      >
+                        {{ props.row.is_active ? 'Active' : 'Inactive' }}
+                      </div>
+                    </q-td>
+                    <q-td class="table-body-cell actions-cell">
+                      <div class="action-buttons">
+                        <q-btn
+                          flat
+                          round
+                          icon="visibility"
+                          size="sm"
+                          class="action-btn view-btn"
+                          @click="viewSite(props.row)"
+                        >
+                          <q-tooltip>View Details</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="edit"
+                          size="sm"
+                          class="action-btn edit-btn"
+                          @click="editSite(props.row)"
+                        >
+                          <q-tooltip>Edit Site</q-tooltip>
+                        </q-btn>
+                      </div>
+                    </q-td>
+                  </q-tr>
                 </template>
               </q-table>
-            </q-card>
-          </div>
-        </q-tab-panel>
-
-        <!-- Shifts Tab -->
-        <q-tab-panel name="shifts" class="q-pa-none">
-          <div class="settings-section">
-            <div class="section-header">
-              <div>
-                <h5 class="section-title">Shifts</h5>
-                <p class="section-description">Manage shift types and schedules</p>
-              </div>
-              <q-btn
-                color="primary"
-                label="Add Shift"
-                icon="add"
-                @click="openShiftDialog"
-                unelevated
-                no-caps
-                class="action-btn"
-              />
             </div>
-
-            <q-card flat bordered class="settings-card">
-              <q-table
-                :rows="shifts"
-                :columns="shiftColumns"
-                row-key="id"
-                :loading="loadingShifts"
-                flat
-                :pagination="{ rowsPerPage: 10 }"
-                class="custom-table"
-              >
-                <template v-slot:body-cell-times="props">
-                  <q-td :props="props">
-                    {{ formatTime(props.row.default_start_time) }} -
-                    {{ formatTime(props.row.default_end_time) }}
-                  </q-td>
-                </template>
-                <template v-slot:body-cell-is_graveyard="props">
-                  <q-td :props="props">
-                    <q-badge
-                      :color="props.row.is_graveyard ? 'deep-purple' : 'grey'"
-                      :label="props.row.is_graveyard ? 'Graveyard' : 'Regular'"
-                    />
-                  </q-td>
-                </template>
-                <template v-slot:body-cell-apply_night_differential="props">
-                  <q-td :props="props">
-                    <q-icon
-                      :name="props.row.apply_night_differential ? 'check_circle' : 'cancel'"
-                      :color="props.row.apply_night_differential ? 'positive' : 'grey'"
-                      size="20px"
-                    />
-                  </q-td>
-                </template>
-                <template v-slot:body-cell-actions="props">
-                  <q-td :props="props">
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="edit"
-                      color="primary"
-                      size="sm"
-                      @click="editShift(props.row)"
-                    >
-                      <q-tooltip>Edit</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      color="negative"
-                      size="sm"
-                      @click="deleteShift(props.row)"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>Delete</q-tooltip>
-                    </q-btn>
-                  </q-td>
-                </template>
-              </q-table>
-            </q-card>
           </div>
         </q-tab-panel>
 
-        <!-- Roles Tab -->
+        <!-- ===================== ROLES ===================== -->
         <q-tab-panel name="roles" class="q-pa-none">
-          <div class="settings-section">
-            <div class="section-header">
-              <div>
-                <h5 class="section-title">Roles</h5>
-                <p class="section-description">
-                  Manage user roles and permissions across the system
-                </p>
+          <div class="table-section">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Roles</h2>
+                <p class="table-subtitle">Manage user roles and permissions across the system</p>
               </div>
-              <q-btn
-                color="primary"
-                label="Add Role"
-                icon="add"
-                @click="openRoleDialog"
-                unelevated
-                no-caps
-                class="action-btn"
-              />
+              <div class="table-actions">
+                <q-btn
+                  color="primary"
+                  label="Add Role"
+                  icon="add"
+                  class="add-btn"
+                  @click="openRoleDialog"
+                />
+              </div>
             </div>
 
-            <q-card flat bordered class="settings-card">
+            <div class="modern-table-container">
               <q-table
-                :rows="roles"
+                :rows="filteredRoles"
                 :columns="roleColumns"
                 row-key="id"
                 :loading="loadingRoles"
                 flat
-                :pagination="{ rowsPerPage: 10 }"
-                class="custom-table"
+                no-data-label="No roles found"
+                class="settings-table"
+                hide-pagination
+                :rows-per-page-options="[0]"
               >
-                <template v-slot:body-cell-permissions="props">
-                  <q-td :props="props">
-                    <div class="permissions-container">
-                      <q-chip
-                        v-for="(permission, index) in getActivePermissions(props.row).slice(0, 3)"
-                        :key="index"
-                        dense
-                        size="sm"
-                        color="blue-1"
-                        text-color="blue-8"
-                        :label="permission"
-                        class="permission-chip"
-                      />
-                      <q-chip
-                        v-if="getActivePermissions(props.row).length > 3"
-                        dense
-                        size="sm"
-                        color="grey-3"
-                        text-color="grey-8"
-                        :label="`+${getActivePermissions(props.row).length - 3}`"
-                        class="permission-chip"
-                      />
-                    </div>
-                  </q-td>
+                <template v-slot:header>
+                  <q-tr class="table-header-row">
+                    <q-th class="table-header-cell">SL No</q-th>
+                    <q-th class="table-header-cell">Role Name</q-th>
+                    <q-th class="table-header-cell">Permissions</q-th>
+                    <q-th class="table-header-cell">Actions</q-th>
+                  </q-tr>
                 </template>
-                <template v-slot:body-cell-actions="props">
-                  <q-td :props="props">
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="edit"
-                      color="primary"
-                      size="sm"
-                      @click="editRole(props.row)"
+                <template v-slot:body="props">
+                  <q-tr class="table-body-row">
+                    <q-td class="table-body-cell"
+                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                     >
-                      <q-tooltip>Edit</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      color="negative"
-                      size="sm"
-                      @click="deleteRole(props.row)"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>Delete</q-tooltip>
-                    </q-btn>
-                  </q-td>
+                    <q-td class="table-body-cell">
+                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
+                    </q-td>
+                    <q-td class="table-body-cell">
+                      <div class="permissions-container">
+                        <q-chip
+                          v-for="(permission, index) in getActivePermissions(props.row).slice(0, 3)"
+                          :key="index"
+                          dense
+                          size="sm"
+                          color="blue-1"
+                          text-color="blue-8"
+                          :label="permission"
+                          class="permission-chip"
+                        />
+                        <q-chip
+                          v-if="getActivePermissions(props.row).length > 3"
+                          dense
+                          size="sm"
+                          color="grey-3"
+                          text-color="grey-8"
+                          :label="`+${getActivePermissions(props.row).length - 3}`"
+                          class="permission-chip"
+                        />
+                      </div>
+                    </q-td>
+                    <q-td class="table-body-cell actions-cell">
+                      <div class="action-buttons">
+                        <q-btn
+                          flat
+                          round
+                          icon="visibility"
+                          size="sm"
+                          class="action-btn view-btn"
+                          @click="viewRole(props.row)"
+                        >
+                          <q-tooltip>View Details</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="edit"
+                          size="sm"
+                          class="action-btn edit-btn"
+                          @click="editRole(props.row)"
+                        >
+                          <q-tooltip>Edit Role</q-tooltip>
+                        </q-btn>
+                      </div>
+                    </q-td>
+                  </q-tr>
                 </template>
               </q-table>
-            </q-card>
+            </div>
           </div>
         </q-tab-panel>
 
-        <!-- Positions Tab -->
-        <q-tab-panel name="positions" class="q-pa-none">
-          <div class="settings-section">
-            <div class="section-header">
-              <div>
-                <h5 class="section-title">Positions</h5>
-                <p class="section-description">Manage job positions and department structures</p>
+        <!-- ===================== SHIFTS ===================== -->
+        <q-tab-panel name="shifts" class="q-pa-none">
+          <div class="table-section">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Shifts</h2>
+                <p class="table-subtitle">Manage shift types and schedules</p>
               </div>
-              <q-btn
-                color="primary"
-                label="Add Position"
-                icon="add"
-                @click="openPositionDialog"
-                unelevated
-                no-caps
-                class="action-btn"
-              />
+              <div class="table-actions">
+                <q-btn
+                  color="primary"
+                  label="Add Shift"
+                  icon="add"
+                  class="add-btn"
+                  @click="openShiftDialog"
+                />
+              </div>
             </div>
 
-            <q-card flat bordered class="settings-card">
+            <div class="modern-table-container">
               <q-table
-                :rows="positions"
-                :columns="positionColumns"
+                :rows="filteredShifts"
+                :columns="shiftColumns"
                 row-key="id"
-                :loading="loadingPositions"
+                :loading="loadingShifts"
                 flat
-                :pagination="{ rowsPerPage: 10 }"
-                class="custom-table"
+                no-data-label="No shifts found"
+                class="settings-table"
+                hide-pagination
+                :rows-per-page-options="[0]"
               >
-                <template v-slot:body-cell-actions="props">
-                  <q-td :props="props">
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="edit"
-                      color="primary"
-                      size="sm"
-                      @click="editPosition(props.row)"
+                <template v-slot:header>
+                  <q-tr class="table-header-row">
+                    <q-th class="table-header-cell">SL No</q-th>
+                    <q-th class="table-header-cell">Shift Name</q-th>
+                    <q-th class="table-header-cell">Time</q-th>
+                    <q-th class="table-header-cell">Type</q-th>
+                    <q-th class="table-header-cell">Night Diff</q-th>
+                    <q-th class="table-header-cell">Actions</q-th>
+                  </q-tr>
+                </template>
+                <template v-slot:body="props">
+                  <q-tr class="table-body-row">
+                    <q-td class="table-body-cell"
+                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                     >
-                      <q-tooltip>Edit</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      color="negative"
-                      size="sm"
-                      @click="deletePosition(props.row)"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>Delete</q-tooltip>
-                    </q-btn>
-                  </q-td>
+                    <q-td class="table-body-cell">
+                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
+                    </q-td>
+                    <q-td class="table-body-cell">
+                      {{ formatTime(props.row.default_start_time) }} –
+                      {{ formatTime(props.row.default_end_time) }}
+                    </q-td>
+                    <q-td class="table-body-cell">
+                      <div
+                        :class="[
+                          'status-badge',
+                          props.row.is_graveyard ? 'status-graveyard' : 'status-regular',
+                        ]"
+                      >
+                        {{ props.row.is_graveyard ? 'Graveyard' : 'Regular' }}
+                      </div>
+                    </q-td>
+                    <q-td class="table-body-cell">
+                      <q-icon
+                        :name="props.row.apply_night_differential ? 'check_circle' : 'cancel'"
+                        :color="props.row.apply_night_differential ? 'positive' : 'grey'"
+                        size="20px"
+                      />
+                    </q-td>
+                    <q-td class="table-body-cell actions-cell">
+                      <div class="action-buttons">
+                        <q-btn
+                          flat
+                          round
+                          icon="visibility"
+                          size="sm"
+                          class="action-btn view-btn"
+                          @click="viewShift(props.row)"
+                        >
+                          <q-tooltip>View Details</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="edit"
+                          size="sm"
+                          class="action-btn edit-btn"
+                          @click="editShift(props.row)"
+                        >
+                          <q-tooltip>Edit Shift</q-tooltip>
+                        </q-btn>
+                      </div>
+                    </q-td>
+                  </q-tr>
                 </template>
               </q-table>
-            </q-card>
+            </div>
           </div>
         </q-tab-panel>
 
-        <!-- Department Tab -->
+        <!-- ===================== DEPARTMENTS ===================== -->
         <q-tab-panel name="departments" class="q-pa-none">
-          <div class="settings-section">
-            <div class="section-header">
-              <div>
-                <h5 class="section-title">Departments</h5>
-                <p class="section-description">Manage organizational departments</p>
+          <div class="table-section">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Departments</h2>
+                <p class="table-subtitle">Manage organizational departments</p>
               </div>
-              <q-btn
-                color="primary"
-                label="Add Department"
-                icon="add"
-                @click="openDepartmentDialog"
-                unelevated
-                no-caps
-                class="action-btn"
-              />
+              <div class="table-actions">
+                <q-btn
+                  color="primary"
+                  label="Add Department"
+                  icon="add"
+                  class="add-btn"
+                  @click="openDepartmentDialog"
+                />
+              </div>
             </div>
 
-            <q-card flat bordered class="settings-card">
+            <div class="modern-table-container">
               <q-table
-                :rows="departments"
+                :rows="filteredDepartments"
                 :columns="departmentColumns"
                 row-key="id"
                 :loading="loadingDepartments"
                 flat
-                :pagination="{ rowsPerPage: 10 }"
-                class="custom-table"
+                no-data-label="No departments found"
+                class="settings-table"
+                hide-pagination
+                :rows-per-page-options="[0]"
               >
-                <template v-slot:body-cell-date_created="props">
-                  <q-td :props="props">
-                    {{ formatDate(props.row.date_created) }}
-                  </q-td>
+                <template v-slot:header>
+                  <q-tr class="table-header-row">
+                    <q-th class="table-header-cell">SL No</q-th>
+                    <q-th class="table-header-cell">Department Name</q-th>
+                    <q-th class="table-header-cell">Description</q-th>
+                    <q-th class="table-header-cell">Date Created</q-th>
+                    <q-th class="table-header-cell">Actions</q-th>
+                  </q-tr>
                 </template>
-                <template v-slot:body-cell-actions="props">
-                  <q-td :props="props">
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="edit"
-                      color="primary"
-                      size="sm"
-                      @click="editDepartment(props.row)"
+                <template v-slot:body="props">
+                  <q-tr class="table-body-row">
+                    <q-td class="table-body-cell"
+                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                     >
-                      <q-tooltip>Edit</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      color="negative"
-                      size="sm"
-                      @click="deleteDepartment(props.row)"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>Delete</q-tooltip>
-                    </q-btn>
-                  </q-td>
+                    <q-td class="table-body-cell">
+                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
+                    </q-td>
+                    <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
+                    <q-td class="table-body-cell">{{ formatDate(props.row.date_created) }}</q-td>
+                    <q-td class="table-body-cell actions-cell">
+                      <div class="action-buttons">
+                        <q-btn
+                          flat
+                          round
+                          icon="visibility"
+                          size="sm"
+                          class="action-btn view-btn"
+                          @click="viewDepartment(props.row)"
+                        >
+                          <q-tooltip>View Details</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="edit"
+                          size="sm"
+                          class="action-btn edit-btn"
+                          @click="editDepartment(props.row)"
+                        >
+                          <q-tooltip>Edit Department</q-tooltip>
+                        </q-btn>
+                      </div>
+                    </q-td>
+                  </q-tr>
                 </template>
               </q-table>
-            </q-card>
+            </div>
           </div>
         </q-tab-panel>
 
-        <!-- Contracts Tab -->
-        <q-tab-panel name="contracts" class="q-pa-none">
-          <div class="settings-section">
-            <div class="section-header">
-              <div>
-                <h5 class="section-title">Employee Contracts</h5>
-                <p class="section-description">Manage employee contracts and assignments</p>
+        <!-- ===================== POSITIONS ===================== -->
+        <q-tab-panel name="positions" class="q-pa-none">
+          <div class="table-section">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Positions</h2>
+                <p class="table-subtitle">Manage job positions and department structures</p>
               </div>
-              <q-btn
-                color="primary"
-                label="Create Contract"
-                icon="add"
-                @click="openContractDialog"
-                unelevated
-                no-caps
-                class="action-btn"
-              />
+              <div class="table-actions">
+                <q-btn
+                  color="primary"
+                  label="Add Position"
+                  icon="add"
+                  class="add-btn"
+                  @click="openPositionDialog"
+                />
+              </div>
             </div>
 
-            <q-card flat bordered class="settings-card">
+            <div class="modern-table-container">
               <q-table
-                :rows="contracts"
+                :rows="filteredPositions"
+                :columns="positionColumns"
+                row-key="id"
+                :loading="loadingPositions"
+                flat
+                no-data-label="No positions found"
+                class="settings-table"
+                hide-pagination
+                :rows-per-page-options="[0]"
+              >
+                <template v-slot:header>
+                  <q-tr class="table-header-row">
+                    <q-th class="table-header-cell">SL No</q-th>
+                    <q-th class="table-header-cell">Position Title</q-th>
+                    <q-th class="table-header-cell">Department</q-th>
+                    <q-th class="table-header-cell">Description</q-th>
+                    <q-th class="table-header-cell">Actions</q-th>
+                  </q-tr>
+                </template>
+                <template v-slot:body="props">
+                  <q-tr class="table-body-row">
+                    <q-td class="table-body-cell"
+                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
+                    >
+                    <q-td class="table-body-cell">
+                      <span class="item-name">{{
+                        props.row.title || props.row.name || 'N/A'
+                      }}</span>
+                    </q-td>
+                    <q-td class="table-body-cell">{{ props.row.department_name || 'N/A' }}</q-td>
+                    <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
+                    <q-td class="table-body-cell actions-cell">
+                      <div class="action-buttons">
+                        <q-btn
+                          flat
+                          round
+                          icon="visibility"
+                          size="sm"
+                          class="action-btn view-btn"
+                          @click="viewPosition(props.row)"
+                        >
+                          <q-tooltip>View Details</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="edit"
+                          size="sm"
+                          class="action-btn edit-btn"
+                          @click="editPosition(props.row)"
+                        >
+                          <q-tooltip>Edit Position</q-tooltip>
+                        </q-btn>
+                      </div>
+                    </q-td>
+                  </q-tr>
+                </template>
+              </q-table>
+            </div>
+          </div>
+        </q-tab-panel>
+
+        <!-- ===================== CONTRACTS ===================== -->
+        <q-tab-panel name="contracts" class="q-pa-none">
+          <div class="table-section">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Employee Contracts</h2>
+                <p class="table-subtitle">Manage employee contracts and assignments</p>
+              </div>
+              <div class="table-actions">
+                <q-btn
+                  color="primary"
+                  label="Create Contract"
+                  icon="add"
+                  class="add-btn"
+                  @click="openContractDialog"
+                />
+              </div>
+            </div>
+
+            <div class="modern-table-container">
+              <q-table
+                :rows="filteredContracts"
                 :columns="contractColumns"
                 row-key="id"
                 :loading="loadingContracts"
                 flat
-                :pagination="{ rowsPerPage: 10 }"
-                class="custom-table"
+                no-data-label="No contracts found"
+                class="settings-table"
+                hide-pagination
+                :rows-per-page-options="[0]"
               >
-                <template v-slot:body-cell-employee="props">
-                  <q-td :props="props">
-                    {{ props.row.employee_name || 'N/A' }}
-                  </q-td>
+                <template v-slot:header>
+                  <q-tr class="table-header-row">
+                    <q-th class="table-header-cell">SL No</q-th>
+                    <q-th class="table-header-cell">Employee</q-th>
+                    <q-th class="table-header-cell">Contract Type</q-th>
+                    <q-th class="table-header-cell">Status</q-th>
+                    <q-th class="table-header-cell">Date Created</q-th>
+                    <q-th class="table-header-cell">Actions</q-th>
+                  </q-tr>
                 </template>
-                <template v-slot:body-cell-contract_type="props">
-                  <q-td :props="props">
-                    <q-chip
-                      dense
-                      size="sm"
-                      color="blue-1"
-                      text-color="blue-8"
-                      :label="props.row.contract_type_name || 'N/A'"
-                    />
-                  </q-td>
-                </template>
-                <template v-slot:body-cell-status="props">
-                  <q-td :props="props">
-                    <q-badge
-                      :color="props.row.is_acknowledged ? 'positive' : 'warning'"
-                      :label="props.row.is_acknowledged ? 'Acknowledged' : 'Pending'"
-                    />
-                  </q-td>
-                </template>
-                <template v-slot:body-cell-date_created="props">
-                  <q-td :props="props">
-                    {{ formatDate(props.row.date_created) }}
-                  </q-td>
-                </template>
-                <template v-slot:body-cell-actions="props">
-                  <q-td :props="props">
-                    <q-btn
-                      v-if="props.row.pdf_url"
-                      flat
-                      round
-                      dense
-                      icon="picture_as_pdf"
-                      color="red"
-                      size="sm"
-                      @click="viewContractPDF(props.row)"
+                <template v-slot:body="props">
+                  <q-tr class="table-body-row">
+                    <q-td class="table-body-cell"
+                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                     >
-                      <q-tooltip>View PDF</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="visibility"
-                      color="primary"
-                      size="sm"
-                      @click="viewContract(props.row)"
-                    >
-                      <q-tooltip>View Details</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="edit"
-                      color="primary"
-                      size="sm"
-                      @click="editContract(props.row)"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>Edit</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      color="negative"
-                      size="sm"
-                      @click="deleteContract(props.row)"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>Delete</q-tooltip>
-                    </q-btn>
-                  </q-td>
+                    <q-td class="table-body-cell">
+                      <span class="item-name">{{ props.row.employee_name || 'N/A' }}</span>
+                    </q-td>
+                    <q-td class="table-body-cell">
+                      <div class="ownership-badge owned-badge">
+                        {{ props.row.contract_type_name || 'N/A' }}
+                      </div>
+                    </q-td>
+                    <q-td class="table-body-cell">
+                      <div
+                        :class="[
+                          'status-badge',
+                          props.row.is_acknowledged ? 'status-active' : 'status-pending',
+                        ]"
+                      >
+                        {{ props.row.is_acknowledged ? 'Acknowledged' : 'Pending' }}
+                      </div>
+                    </q-td>
+                    <q-td class="table-body-cell">{{ formatDate(props.row.date_created) }}</q-td>
+                    <q-td class="table-body-cell actions-cell">
+                      <div class="action-buttons">
+                        <q-btn
+                          flat
+                          round
+                          icon="visibility"
+                          size="sm"
+                          class="action-btn view-btn"
+                          @click="viewContract(props.row)"
+                        >
+                          <q-tooltip>View Details</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="edit"
+                          size="sm"
+                          class="action-btn edit-btn"
+                          @click="editContract(props.row)"
+                        >
+                          <q-tooltip>Edit Contract</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          v-if="props.row.pdf_url"
+                          flat
+                          round
+                          icon="picture_as_pdf"
+                          size="sm"
+                          class="action-btn pdf-btn"
+                          @click="viewContractPDF(props.row)"
+                        >
+                          <q-tooltip>View PDF</q-tooltip>
+                        </q-btn>
+                      </div>
+                    </q-td>
+                  </q-tr>
                 </template>
               </q-table>
-            </q-card>
+            </div>
           </div>
         </q-tab-panel>
 
-        <!-- Payslips Tab -->
+        <!-- ===================== PAYSLIPS ===================== -->
         <q-tab-panel name="payslips" class="q-pa-none">
-          <div class="settings-section">
-            <!-- Sub-tabs for Payslip Management -->
+          <!-- Payslip Sub-tabs -->
+          <div class="subtabs-wrapper">
             <q-tabs
               v-model="payslipSubTab"
               dense
-              class="custom-tabs q-mb-md"
+              class="settings-tabs"
               active-color="primary"
               indicator-color="primary"
               align="left"
             >
-              <q-tab name="allowance-types" label="Allowance Types" class="custom-tab" />
-              <q-tab name="tax-brackets" label="Tax Brackets" class="custom-tab" />
-              <q-tab name="cutoff-periods" label="Cutoff Periods" class="custom-tab" />
-              <q-tab name="payroll-groups" label="Payroll Groups" class="custom-tab" />
-              <q-tab name="labor-rules" label="Labor Rules" class="custom-tab" />
-              <q-tab name="pay-structures" label="Pay Structures" class="custom-tab" />
+              <q-tab name="allowance-types" label="Allowance Types" class="settings-tab" />
+              <q-tab name="tax-brackets" label="Tax Brackets" class="settings-tab" />
+              <q-tab name="cutoff-periods" label="Cutoff Periods" class="settings-tab" />
+              <q-tab name="payroll-groups" label="Payroll Groups" class="settings-tab" />
+              <q-tab name="labor-rules" label="Labor Rules" class="settings-tab" />
+              <q-tab name="pay-structures" label="Pay Structures" class="settings-tab" />
             </q-tabs>
+          </div>
 
-            <q-tab-panels v-model="payslipSubTab" animated class="transparent-panels">
-              <!-- Allowance Types -->
-              <q-tab-panel name="allowance-types" class="q-pa-none">
-                <div class="section-header">
-                  <div>
-                    <h5 class="section-title">Allowance Types</h5>
-                    <p class="section-description">Manage employee allowance types</p>
+          <q-tab-panels v-model="payslipSubTab" animated class="transparent-panels">
+            <!-- Allowance Types -->
+            <q-tab-panel name="allowance-types" class="q-pa-none">
+              <div class="table-section">
+                <div class="table-header">
+                  <div class="table-title-section">
+                    <h2 class="table-title">Allowance Types</h2>
+                    <p class="table-subtitle">Manage employee allowance types</p>
                   </div>
-                  <q-btn
-                    color="primary"
-                    label="Add Allowance Type"
-                    icon="add"
-                    @click="openAllowanceTypeDialog"
-                    unelevated
-                    no-caps
-                    class="action-btn"
-                  />
+                  <div class="table-actions">
+                    <q-btn
+                      color="primary"
+                      label="Add Allowance Type"
+                      icon="add"
+                      class="add-btn"
+                      @click="openAllowanceTypeDialog"
+                    />
+                  </div>
                 </div>
-                <q-card flat bordered class="settings-card">
+                <div class="modern-table-container">
                   <q-table
                     :rows="allowanceTypes"
                     :columns="allowanceTypeColumns"
                     row-key="id"
                     :loading="loadingAllowanceTypes"
                     flat
-                    :pagination="{ rowsPerPage: 10 }"
-                    class="custom-table"
+                    no-data-label="No allowance types found"
+                    class="settings-table"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
                   >
-                    <template v-slot:body-cell-actions="props">
-                      <q-td :props="props">
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="edit"
-                          color="primary"
-                          size="sm"
-                          @click="editAllowanceType(props.row)"
+                    <template v-slot:header>
+                      <q-tr class="table-header-row">
+                        <q-th class="table-header-cell">SL No</q-th>
+                        <q-th class="table-header-cell">Name</q-th>
+                        <q-th class="table-header-cell">Description</q-th>
+                        <q-th class="table-header-cell">Actions</q-th>
+                      </q-tr>
+                    </template>
+                    <template v-slot:body="props">
+                      <q-tr class="table-body-row">
+                        <q-td class="table-body-cell"
+                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                         >
-                          <q-tooltip>Edit</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="delete"
-                          color="negative"
-                          size="sm"
-                          @click="deleteAllowanceType(props.row)"
-                          class="q-ml-xs"
+                        <q-td class="table-body-cell"
+                          ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
-                          <q-tooltip>Delete</q-tooltip>
-                        </q-btn>
-                      </q-td>
+                        <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
+                        <q-td class="table-body-cell actions-cell">
+                          <div class="action-buttons">
+                            <q-btn
+                              flat
+                              round
+                              icon="visibility"
+                              size="sm"
+                              class="action-btn view-btn"
+                              @click="viewAllowanceType(props.row)"
+                              ><q-tooltip>View</q-tooltip></q-btn
+                            >
+                            <q-btn
+                              flat
+                              round
+                              icon="edit"
+                              size="sm"
+                              class="action-btn edit-btn"
+                              @click="editAllowanceType(props.row)"
+                              ><q-tooltip>Edit</q-tooltip></q-btn
+                            >
+                          </div>
+                        </q-td>
+                      </q-tr>
                     </template>
                   </q-table>
-                </q-card>
-              </q-tab-panel>
-
-              <!-- Tax Brackets -->
-              <q-tab-panel name="tax-brackets" class="q-pa-none">
-                <div class="section-header">
-                  <div>
-                    <h5 class="section-title">Tax Brackets</h5>
-                    <p class="section-description">Configure tax brackets and rates</p>
-                  </div>
-                  <q-btn
-                    color="primary"
-                    label="Add Tax Bracket"
-                    icon="add"
-                    @click="openTaxBracketDialog"
-                    unelevated
-                    no-caps
-                    class="action-btn"
-                  />
                 </div>
-                <q-card flat bordered class="settings-card">
+              </div>
+            </q-tab-panel>
+
+            <!-- Tax Brackets -->
+            <q-tab-panel name="tax-brackets" class="q-pa-none">
+              <div class="table-section">
+                <div class="table-header">
+                  <div class="table-title-section">
+                    <h2 class="table-title">Tax Brackets</h2>
+                    <p class="table-subtitle">Configure tax brackets and rates</p>
+                  </div>
+                  <div class="table-actions">
+                    <q-btn
+                      color="primary"
+                      label="Add Tax Bracket"
+                      icon="add"
+                      class="add-btn"
+                      @click="openTaxBracketDialog"
+                    />
+                  </div>
+                </div>
+                <div class="modern-table-container">
                   <q-table
                     :rows="taxBrackets"
                     :columns="taxBracketColumns"
                     row-key="id"
                     :loading="loadingTaxBrackets"
                     flat
-                    :pagination="{ rowsPerPage: 10 }"
-                    class="custom-table"
+                    no-data-label="No tax brackets found"
+                    class="settings-table"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
                   >
-                    <template v-slot:body-cell-min_amount="props">
-                      <q-td :props="props">₱{{ formatAmount(props.row.min_amount) }}</q-td>
+                    <template v-slot:header>
+                      <q-tr class="table-header-row">
+                        <q-th class="table-header-cell">SL No</q-th>
+                        <q-th class="table-header-cell">Min Income</q-th>
+                        <q-th class="table-header-cell">Max Income</q-th>
+                        <q-th class="table-header-cell">Rate</q-th>
+                        <q-th class="table-header-cell">Actions</q-th>
+                      </q-tr>
                     </template>
-                    <template v-slot:body-cell-max_amount="props">
-                      <q-td :props="props">
-                        {{
-                          props.row.max_amount
-                            ? '₱' + formatAmount(props.row.max_amount)
-                            : 'No Limit'
-                        }}
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-rate="props">
-                      <q-td :props="props">{{ props.row.rate }}%</q-td>
-                    </template>
-                    <template v-slot:body-cell-actions="props">
-                      <q-td :props="props">
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="edit"
-                          color="primary"
-                          size="sm"
-                          @click="editTaxBracket(props.row)"
+                    <template v-slot:body="props">
+                      <q-tr class="table-body-row">
+                        <q-td class="table-body-cell"
+                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                         >
-                          <q-tooltip>Edit</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="delete"
-                          color="negative"
-                          size="sm"
-                          @click="deleteTaxBracket(props.row)"
-                          class="q-ml-xs"
+                        <q-td class="table-body-cell">{{ props.row.min_income || 'N/A' }}</q-td>
+                        <q-td class="table-body-cell">{{ props.row.max_income || 'N/A' }}</q-td>
+                        <q-td class="table-body-cell"
+                          ><span class="item-name">{{ props.row.rate || 'N/A' }}</span></q-td
                         >
-                          <q-tooltip>Delete</q-tooltip>
-                        </q-btn>
-                      </q-td>
+                        <q-td class="table-body-cell actions-cell">
+                          <div class="action-buttons">
+                            <q-btn
+                              flat
+                              round
+                              icon="visibility"
+                              size="sm"
+                              class="action-btn view-btn"
+                              @click="viewTaxBracket(props.row)"
+                              ><q-tooltip>View</q-tooltip></q-btn
+                            >
+                            <q-btn
+                              flat
+                              round
+                              icon="edit"
+                              size="sm"
+                              class="action-btn edit-btn"
+                              @click="editTaxBracket(props.row)"
+                              ><q-tooltip>Edit</q-tooltip></q-btn
+                            >
+                          </div>
+                        </q-td>
+                      </q-tr>
                     </template>
                   </q-table>
-                </q-card>
-              </q-tab-panel>
-
-              <!-- Cutoff Periods -->
-              <q-tab-panel name="cutoff-periods" class="q-pa-none">
-                <div class="section-header">
-                  <div>
-                    <h5 class="section-title">Cutoff Periods</h5>
-                    <p class="section-description">Define payroll cutoff periods</p>
-                  </div>
-                  <q-btn
-                    color="primary"
-                    label="Add Cutoff Period"
-                    icon="add"
-                    @click="openCutoffPeriodDialog"
-                    unelevated
-                    no-caps
-                    class="action-btn"
-                  />
                 </div>
-                <q-card flat bordered class="settings-card">
+              </div>
+            </q-tab-panel>
+
+            <!-- Cutoff Periods -->
+            <q-tab-panel name="cutoff-periods" class="q-pa-none">
+              <div class="table-section">
+                <div class="table-header">
+                  <div class="table-title-section">
+                    <h2 class="table-title">Cutoff Periods</h2>
+                    <p class="table-subtitle">Manage payroll cutoff periods</p>
+                  </div>
+                  <div class="table-actions">
+                    <q-btn
+                      color="primary"
+                      label="Add Cutoff Period"
+                      icon="add"
+                      class="add-btn"
+                      @click="openCutoffPeriodDialog"
+                    />
+                  </div>
+                </div>
+                <div class="modern-table-container">
                   <q-table
                     :rows="cutoffPeriods"
                     :columns="cutoffPeriodColumns"
                     row-key="id"
                     :loading="loadingCutoffPeriods"
                     flat
-                    :pagination="{ rowsPerPage: 10 }"
-                    class="custom-table"
+                    no-data-label="No cutoff periods found"
+                    class="settings-table"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
                   >
-                    <template v-slot:body-cell-start_date="props">
-                      <q-td :props="props">{{ formatDate(props.row.start_date) }}</q-td>
+                    <template v-slot:header>
+                      <q-tr class="table-header-row">
+                        <q-th class="table-header-cell">SL No</q-th>
+                        <q-th class="table-header-cell">Name</q-th>
+                        <q-th class="table-header-cell">Start Date</q-th>
+                        <q-th class="table-header-cell">End Date</q-th>
+                        <q-th class="table-header-cell">Actions</q-th>
+                      </q-tr>
                     </template>
-                    <template v-slot:body-cell-end_date="props">
-                      <q-td :props="props">{{ formatDate(props.row.end_date) }}</q-td>
-                    </template>
-                    <template v-slot:body-cell-is_active="props">
-                      <q-td :props="props">
-                        <q-badge
-                          :color="props.row.is_active ? 'positive' : 'grey'"
-                          :label="props.row.is_active ? 'Active' : 'Inactive'"
-                        />
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-actions="props">
-                      <q-td :props="props">
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="edit"
-                          color="primary"
-                          size="sm"
-                          @click="editCutoffPeriod(props.row)"
+                    <template v-slot:body="props">
+                      <q-tr class="table-body-row">
+                        <q-td class="table-body-cell"
+                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                         >
-                          <q-tooltip>Edit</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="delete"
-                          color="negative"
-                          size="sm"
-                          @click="deleteCutoffPeriod(props.row)"
-                          class="q-ml-xs"
+                        <q-td class="table-body-cell"
+                          ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
-                          <q-tooltip>Delete</q-tooltip>
-                        </q-btn>
-                      </q-td>
+                        <q-td class="table-body-cell">{{ formatDate(props.row.start_date) }}</q-td>
+                        <q-td class="table-body-cell">{{ formatDate(props.row.end_date) }}</q-td>
+                        <q-td class="table-body-cell actions-cell">
+                          <div class="action-buttons">
+                            <q-btn
+                              flat
+                              round
+                              icon="visibility"
+                              size="sm"
+                              class="action-btn view-btn"
+                              @click="viewCutoffPeriod(props.row)"
+                              ><q-tooltip>View</q-tooltip></q-btn
+                            >
+                            <q-btn
+                              flat
+                              round
+                              icon="edit"
+                              size="sm"
+                              class="action-btn edit-btn"
+                              @click="editCutoffPeriod(props.row)"
+                              ><q-tooltip>Edit</q-tooltip></q-btn
+                            >
+                          </div>
+                        </q-td>
+                      </q-tr>
                     </template>
                   </q-table>
-                </q-card>
-              </q-tab-panel>
-
-              <!-- Payroll Groups -->
-              <q-tab-panel name="payroll-groups" class="q-pa-none">
-                <div class="section-header">
-                  <div>
-                    <h5 class="section-title">Payroll Groups</h5>
-                    <p class="section-description">Organize employees into payroll groups</p>
-                  </div>
-                  <q-btn
-                    color="primary"
-                    label="Add Payroll Group"
-                    icon="add"
-                    @click="openPayrollGroupDialog"
-                    unelevated
-                    no-caps
-                    class="action-btn"
-                  />
                 </div>
-                <q-card flat bordered class="settings-card">
+              </div>
+            </q-tab-panel>
+
+            <!-- Payroll Groups -->
+            <q-tab-panel name="payroll-groups" class="q-pa-none">
+              <div class="table-section">
+                <div class="table-header">
+                  <div class="table-title-section">
+                    <h2 class="table-title">Payroll Groups</h2>
+                    <p class="table-subtitle">Manage payroll groups and assignments</p>
+                  </div>
+                  <div class="table-actions">
+                    <q-btn
+                      color="primary"
+                      label="Add Payroll Group"
+                      icon="add"
+                      class="add-btn"
+                      @click="openPayrollGroupDialog"
+                    />
+                  </div>
+                </div>
+                <div class="modern-table-container">
                   <q-table
                     :rows="payrollGroups"
                     :columns="payrollGroupColumns"
                     row-key="id"
                     :loading="loadingPayrollGroups"
                     flat
-                    :pagination="{ rowsPerPage: 10 }"
-                    class="custom-table"
+                    no-data-label="No payroll groups found"
+                    class="settings-table"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
                   >
-                    <template v-slot:body-cell-actions="props">
-                      <q-td :props="props">
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="edit"
-                          color="primary"
-                          size="sm"
-                          @click="editPayrollGroup(props.row)"
+                    <template v-slot:header>
+                      <q-tr class="table-header-row">
+                        <q-th class="table-header-cell">SL No</q-th>
+                        <q-th class="table-header-cell">Group Name</q-th>
+                        <q-th class="table-header-cell">Description</q-th>
+                        <q-th class="table-header-cell">Actions</q-th>
+                      </q-tr>
+                    </template>
+                    <template v-slot:body="props">
+                      <q-tr class="table-body-row">
+                        <q-td class="table-body-cell"
+                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                         >
-                          <q-tooltip>Edit</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="delete"
-                          color="negative"
-                          size="sm"
-                          @click="deletePayrollGroup(props.row)"
-                          class="q-ml-xs"
+                        <q-td class="table-body-cell"
+                          ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
-                          <q-tooltip>Delete</q-tooltip>
-                        </q-btn>
-                      </q-td>
+                        <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
+                        <q-td class="table-body-cell actions-cell">
+                          <div class="action-buttons">
+                            <q-btn
+                              flat
+                              round
+                              icon="visibility"
+                              size="sm"
+                              class="action-btn view-btn"
+                              @click="viewPayrollGroup(props.row)"
+                              ><q-tooltip>View</q-tooltip></q-btn
+                            >
+                            <q-btn
+                              flat
+                              round
+                              icon="edit"
+                              size="sm"
+                              class="action-btn edit-btn"
+                              @click="editPayrollGroup(props.row)"
+                              ><q-tooltip>Edit</q-tooltip></q-btn
+                            >
+                          </div>
+                        </q-td>
+                      </q-tr>
                     </template>
                   </q-table>
-                </q-card>
-              </q-tab-panel>
-
-              <!-- Labor Rules -->
-              <q-tab-panel name="labor-rules" class="q-pa-none">
-                <div class="section-header">
-                  <div>
-                    <h5 class="section-title">Labor Rules</h5>
-                    <p class="section-description">Configure labor law compliance rules</p>
-                  </div>
-                  <q-btn
-                    color="primary"
-                    label="Add Labor Rule"
-                    icon="add"
-                    @click="openLaborRuleDialog"
-                    unelevated
-                    no-caps
-                    class="action-btn"
-                  />
                 </div>
-                <q-card flat bordered class="settings-card">
+              </div>
+            </q-tab-panel>
+
+            <!-- Labor Rules -->
+            <q-tab-panel name="labor-rules" class="q-pa-none">
+              <div class="table-section">
+                <div class="table-header">
+                  <div class="table-title-section">
+                    <h2 class="table-title">Labor Rules</h2>
+                    <p class="table-subtitle">Configure labor regulations and overtime rules</p>
+                  </div>
+                  <div class="table-actions">
+                    <q-btn
+                      color="primary"
+                      label="Add Labor Rule"
+                      icon="add"
+                      class="add-btn"
+                      @click="openLaborRuleDialog"
+                    />
+                  </div>
+                </div>
+                <div class="modern-table-container">
                   <q-table
                     :rows="laborRules"
                     :columns="laborRuleColumns"
                     row-key="id"
                     :loading="loadingLaborRules"
                     flat
-                    :pagination="{ rowsPerPage: 10 }"
-                    class="custom-table"
+                    no-data-label="No labor rules found"
+                    class="settings-table"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
                   >
-                    <template v-slot:body-cell-is_active="props">
-                      <q-td :props="props">
-                        <q-badge
-                          :color="props.row.is_active ? 'positive' : 'grey'"
-                          :label="props.row.is_active ? 'Active' : 'Inactive'"
-                        />
-                      </q-td>
+                    <template v-slot:header>
+                      <q-tr class="table-header-row">
+                        <q-th class="table-header-cell">SL No</q-th>
+                        <q-th class="table-header-cell">Rule Name</q-th>
+                        <q-th class="table-header-cell">Description</q-th>
+                        <q-th class="table-header-cell">Actions</q-th>
+                      </q-tr>
                     </template>
-                    <template v-slot:body-cell-actions="props">
-                      <q-td :props="props">
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="edit"
-                          color="primary"
-                          size="sm"
-                          @click="editLaborRule(props.row)"
+                    <template v-slot:body="props">
+                      <q-tr class="table-body-row">
+                        <q-td class="table-body-cell"
+                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                         >
-                          <q-tooltip>Edit</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="delete"
-                          color="negative"
-                          size="sm"
-                          @click="deleteLaborRule(props.row)"
-                          class="q-ml-xs"
+                        <q-td class="table-body-cell"
+                          ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
-                          <q-tooltip>Delete</q-tooltip>
-                        </q-btn>
-                      </q-td>
+                        <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
+                        <q-td class="table-body-cell actions-cell">
+                          <div class="action-buttons">
+                            <q-btn
+                              flat
+                              round
+                              icon="visibility"
+                              size="sm"
+                              class="action-btn view-btn"
+                              @click="viewLaborRule(props.row)"
+                              ><q-tooltip>View</q-tooltip></q-btn
+                            >
+                            <q-btn
+                              flat
+                              round
+                              icon="edit"
+                              size="sm"
+                              class="action-btn edit-btn"
+                              @click="editLaborRule(props.row)"
+                              ><q-tooltip>Edit</q-tooltip></q-btn
+                            >
+                          </div>
+                        </q-td>
+                      </q-tr>
                     </template>
                   </q-table>
-                </q-card>
-              </q-tab-panel>
-              <!-- Pay Structures -->
-              <q-tab-panel name="pay-structures" class="q-pa-none">
-                <div class="section-header">
-                  <div>
-                    <h5 class="section-title">Pay Structures</h5>
-                    <p class="section-description">Define employee compensation structures</p>
-                  </div>
-                  <q-btn
-                    color="primary"
-                    label="Add Pay Structure"
-                    icon="add"
-                    @click="openPayStructureDialog"
-                    unelevated
-                    no-caps
-                    class="action-btn"
-                  />
                 </div>
-                <q-card flat bordered class="settings-card">
+              </div>
+            </q-tab-panel>
+
+            <!-- Pay Structures -->
+            <q-tab-panel name="pay-structures" class="q-pa-none">
+              <div class="table-section">
+                <div class="table-header">
+                  <div class="table-title-section">
+                    <h2 class="table-title">Pay Structures</h2>
+                    <p class="table-subtitle">Define compensation structures and salary grades</p>
+                  </div>
+                  <div class="table-actions">
+                    <q-btn
+                      color="primary"
+                      label="Add Pay Structure"
+                      icon="add"
+                      class="add-btn"
+                      @click="openPayStructureDialog"
+                    />
+                  </div>
+                </div>
+                <div class="modern-table-container">
                   <q-table
                     :rows="payStructures"
                     :columns="payStructureColumns"
                     row-key="id"
                     :loading="loadingPayStructures"
                     flat
-                    :pagination="{ rowsPerPage: 10 }"
-                    class="custom-table"
+                    no-data-label="No pay structures found"
+                    class="settings-table"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
                   >
-                    <template v-slot:body-cell-position="props">
-                      <q-td :props="props">
-                        {{ props.row.position_name }}
-                      </q-td>
+                    <template v-slot:header>
+                      <q-tr class="table-header-row">
+                        <q-th class="table-header-cell">SL No</q-th>
+                        <q-th class="table-header-cell">Structure Name</q-th>
+                        <q-th class="table-header-cell">Base Pay</q-th>
+                        <q-th class="table-header-cell">Actions</q-th>
+                      </q-tr>
                     </template>
-                    <template v-slot:body-cell-pay_type="props">
-                      <q-td :props="props">
-                        <q-chip
-                          dense
-                          size="sm"
-                          :color="props.row.pay_type === 'monthly' ? 'blue-1' : 'green-1'"
-                          :text-color="props.row.pay_type === 'monthly' ? 'blue-8' : 'green-8'"
-                          :label="props.row.pay_type"
-                          class="text-capitalize"
-                        />
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-rate="props">
-                      <q-td :props="props">
-                        {{ props.row.currency }} {{ formatAmount(props.row.rate) }}
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-effective_from="props">
-                      <q-td :props="props">{{ formatDate(props.row.effective_from) }}</q-td>
-                    </template>
-                    <template v-slot:body-cell-effective_to="props">
-                      <q-td :props="props">
-                        {{
-                          props.row.effective_to ? formatDate(props.row.effective_to) : 'Ongoing'
-                        }}
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-actions="props">
-                      <q-td :props="props">
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="edit"
-                          color="primary"
-                          size="sm"
-                          @click="editPayStructure(props.row)"
+                    <template v-slot:body="props">
+                      <q-tr class="table-body-row">
+                        <q-td class="table-body-cell"
+                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
                         >
-                          <q-tooltip>Edit</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="delete"
-                          color="negative"
-                          size="sm"
-                          @click="deletePayStructure(props.row)"
-                          class="q-ml-xs"
+                        <q-td class="table-body-cell"
+                          ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
-                          <q-tooltip>Delete</q-tooltip>
-                        </q-btn>
-                      </q-td>
+                        <q-td class="table-body-cell">{{ props.row.base_pay || 'N/A' }}</q-td>
+                        <q-td class="table-body-cell actions-cell">
+                          <div class="action-buttons">
+                            <q-btn
+                              flat
+                              round
+                              icon="visibility"
+                              size="sm"
+                              class="action-btn view-btn"
+                              @click="viewPayStructure(props.row)"
+                              ><q-tooltip>View</q-tooltip></q-btn
+                            >
+                            <q-btn
+                              flat
+                              round
+                              icon="edit"
+                              size="sm"
+                              class="action-btn edit-btn"
+                              @click="editPayStructure(props.row)"
+                              ><q-tooltip>Edit</q-tooltip></q-btn
+                            >
+                          </div>
+                        </q-td>
+                      </q-tr>
                     </template>
                   </q-table>
-                </q-card>
-              </q-tab-panel>
-            </q-tab-panels>
-          </div>
+                </div>
+              </div>
+            </q-tab-panel>
+          </q-tab-panels>
         </q-tab-panel>
       </q-tab-panels>
     </div>
 
-    <!-- ALL DIALOGS BELOW -->
-
-    <!-- Company Dialog -->
+    <!-- ===================== COMPANY DIALOG ===================== -->
     <q-dialog v-model="companyDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">{{ editingCompany ? 'Edit Company' : 'Add New Company' }}</div>
+      <q-card style="min-width: 460px; max-width: 520px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">{{ editingCompany ? 'Edit Company' : 'Add Company' }}</div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form @submit="saveCompany" class="q-gutter-md">
-            <q-input
-              v-model="companyForm.name"
-              label="Company Name *"
-              outlined
+
+        <q-card-section class="q-pt-md q-gutter-md">
+          <q-input v-model="companyForm.name" label="Company Name *" outlined dense />
+          <q-input v-model="companyForm.address" label="Address" outlined dense />
+          <q-input v-model="companyForm.contact" label="Contact" outlined dense />
+
+          <!-- Logo Section -->
+          <div>
+            <div class="text-subtitle2 q-mb-sm">Logo</div>
+
+            <!-- Toggle between URL and File -->
+            <q-btn-toggle
+              v-model="logoUploadMethod"
+              spread
+              no-caps
               dense
-              :rules="[(val) => !!val || 'Company name is required']"
+              unelevated
+              toggle-color="primary"
+              color="grey-3"
+              text-color="grey-8"
+              toggle-text-color="white"
+              :options="[
+                { label: 'Upload File', value: 'file' },
+                { label: 'Paste URL', value: 'url' },
+              ]"
+              class="q-mb-md"
             />
-            <div>
-              <div class="text-subtitle2 q-mb-sm text-grey-8">Company Logo</div>
-              <q-btn-toggle
-                v-model="logoUploadMethod"
-                toggle-color="primary"
-                :options="[
-                  { label: 'Upload File', value: 'file' },
-                  { label: 'Use URL', value: 'url' },
-                ]"
-                unelevated
+
+            <!-- File Upload -->
+            <div v-if="logoUploadMethod === 'file'">
+              <q-file
+                v-model="logoFile"
+                label="Choose logo image"
+                outlined
                 dense
-                class="q-mb-md"
-              />
+                accept=".jpg,.jpeg,.png,.svg,.webp"
+                max-file-size="2097152"
+                @update:model-value="onLogoFileSelected"
+                @rejected="onFileRejected"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="attach_file" />
+                </template>
+                <template v-slot:append v-if="logoFile">
+                  <q-icon name="close" class="cursor-pointer" @click.stop="clearLogoFile" />
+                </template>
+              </q-file>
+              <div class="text-caption text-grey q-mt-xs">Max 2MB · JPG, PNG, SVG, WEBP</div>
             </div>
+
+            <!-- URL Input -->
             <div v-if="logoUploadMethod === 'url'">
               <q-input
                 v-model="companyForm.logo"
@@ -1089,1045 +1262,668 @@
                 outlined
                 dense
                 placeholder="https://example.com/logo.png"
-                hint="Enter the URL of the company logo"
+                @update:model-value="logoPreview = companyForm.logo || null"
               >
-                <template v-slot:append>
-                  <q-icon
-                    v-if="companyForm.logo"
-                    name="close"
-                    @click="companyForm.logo = ''"
-                    class="cursor-pointer"
-                  />
+                <template v-slot:prepend>
+                  <q-icon name="link" />
+                </template>
+                <template v-slot:append v-if="companyForm.logo">
+                  <q-icon name="close" class="cursor-pointer" @click="clearLogoUrl" />
                 </template>
               </q-input>
             </div>
-            <div v-if="logoUploadMethod === 'file'">
-              <q-file
-                v-model="logoFile"
-                label="Upload Logo"
-                outlined
-                dense
-                accept="image/*"
-                max-file-size="5242880"
-                @update:model-value="onLogoFileSelected"
-                @rejected="onFileRejected"
-                hint="Maximum file size: 5MB (JPG, PNG, GIF, SVG)"
+
+            <!-- Preview -->
+            <div v-if="logoPreview" class="q-mt-md flex items-center q-gutter-sm">
+              <div class="text-caption text-grey">Preview:</div>
+              <q-avatar
+                size="56px"
+                square
+                style="border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden"
               >
-                <template v-slot:prepend>
-                  <q-icon name="cloud_upload" />
-                </template>
-                <template v-slot:append>
-                  <q-icon
-                    v-if="logoFile"
-                    name="close"
-                    @click.stop="clearLogoFile"
-                    class="cursor-pointer"
-                  />
-                </template>
-              </q-file>
+                <img :src="logoPreview" @error="handleImageError" style="object-fit: contain" />
+              </q-avatar>
             </div>
-            <div v-if="logoPreview" class="q-mt-md">
-              <div class="text-caption text-grey-7 q-mb-sm">Logo Preview</div>
-              <q-card flat bordered class="logo-preview-card">
-                <q-avatar size="120px" class="q-ma-md">
-                  <img :src="logoPreview" @error="handleImageError" />
-                </q-avatar>
-              </q-card>
-            </div>
-          </q-form>
+          </div>
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+
+        <q-card-actions align="right" class="q-pt-none">
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="saveCompany"
+            :label="editingCompany ? 'Update Company' : 'Save Company'"
             :loading="savingCompany"
-            unelevated
-            no-caps
+            @click="saveCompany"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <!-- Site Dialog -->
+    <!-- ===================== SITE DIALOG ===================== -->
     <q-dialog v-model="siteDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">{{ editingSite ? 'Edit Site' : 'Add New Site' }}</div>
+      <q-card style="min-width: 480px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">{{ editingSite ? 'Edit Site' : 'Add Site' }}</div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form @submit="saveSite" class="q-gutter-md">
-            <q-input
-              v-model="siteForm.name"
-              label="Site Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Site name is required']"
-            />
-            <q-input
-              v-model="siteForm.location"
-              label="Location *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Location is required']"
-            />
-            <div class="row q-col-gutter-md">
-              <div class="col-6">
-                <q-input
-                  v-model="siteForm.latitude"
-                  label="Latitude *"
-                  outlined
-                  dense
-                  type="number"
-                  step="any"
-                  :rules="[(val) => !!val || 'Latitude is required']"
-                />
-              </div>
-              <div class="col-6">
-                <q-input
-                  v-model="siteForm.longitude"
-                  label="Longitude *"
-                  outlined
-                  dense
-                  type="number"
-                  step="any"
-                  :rules="[(val) => !!val || 'Longitude is required']"
-                />
-              </div>
+        <q-card-section class="q-pt-md">
+          <q-input v-model="siteForm.name" label="Site Name *" outlined dense class="q-mb-md" />
+          <q-input
+            v-model="siteForm.location"
+            label="Location / Address *"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-6">
+              <q-input v-model="siteForm.latitude" label="Latitude *" outlined dense />
             </div>
-            <q-input
-              v-model.number="siteForm.radius_meters"
-              label="Radius (meters)"
-              outlined
-              dense
-              type="number"
-            />
-            <q-select
-              v-model="siteForm.ownership_type"
-              :options="ownershipOptions"
-              label="Ownership Type *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Ownership type is required']"
-            />
-            <q-toggle v-model="siteForm.is_active" label="Active" color="positive" />
-          </q-form>
+            <div class="col-6">
+              <q-input v-model="siteForm.longitude" label="Longitude *" outlined dense />
+            </div>
+          </div>
+          <q-input
+            v-model.number="siteForm.radius_meters"
+            label="Radius (meters)"
+            type="number"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-select
+            v-model="siteForm.ownership_type"
+            :options="ownershipOptions"
+            label="Ownership Type"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-toggle v-model="siteForm.is_active" label="Active" class="q-mb-sm" />
+          <q-toggle v-model="siteForm.requires_otp" label="Requires OTP" class="q-mb-sm" />
+          <q-toggle
+            v-model="siteForm.allow_manual_attendance"
+            label="Allow Manual Attendance"
+            class="q-mb-sm"
+          />
+          <q-toggle
+            v-model="siteForm.allow_service_charge"
+            label="Allow Service Charge"
+            class="q-mb-sm"
+          />
+          <q-toggle v-model="siteForm.multiply_nd_by_holiday" label="Multiply ND by Holiday" />
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="saveSite"
+            :label="editingSite ? 'Update' : 'Save'"
             :loading="savingSite"
-            unelevated
-            no-caps
+            @click="saveSite"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <!-- Shift Dialog -->
-    <q-dialog v-model="shiftDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">{{ editingShift ? 'Edit Shift' : 'Add New Shift' }}</div>
-          <q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form @submit="saveShift" class="q-gutter-md">
-            <q-input
-              v-model="shiftForm.name"
-              label="Shift Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Shift name is required']"
-            />
-            <q-input
-              v-model="shiftForm.description"
-              label="Description"
-              outlined
-              dense
-              type="textarea"
-              rows="2"
-            />
-            <div class="row q-col-gutter-md">
-              <div class="col-6">
-                <q-input
-                  v-model="shiftForm.default_start_time"
-                  label="Start Time *"
-                  outlined
-                  dense
-                  type="time"
-                  :rules="[(val) => !!val || 'Start time is required']"
-                />
-              </div>
-              <div class="col-6">
-                <q-input
-                  v-model="shiftForm.default_end_time"
-                  label="End Time *"
-                  outlined
-                  dense
-                  type="time"
-                  :rules="[(val) => !!val || 'End time is required']"
-                />
-              </div>
-            </div>
-            <q-toggle
-              v-model="shiftForm.is_graveyard"
-              label="Graveyard Shift"
-              color="deep-purple"
-            />
-            <q-toggle
-              v-model="shiftForm.apply_night_differential"
-              label="Apply Night Differential"
-              color="primary"
-            />
-          </q-form>
-        </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
-          <q-btn
-            label="Save"
-            color="primary"
-            @click="saveShift"
-            :loading="savingShift"
-            unelevated
-            no-caps
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <!-- Role Dialog -->
+    <!-- ===================== ROLE DIALOG ===================== -->
     <q-dialog v-model="roleDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">{{ editingRole ? 'Edit Role' : 'Add New Role' }}</div>
+      <q-card style="min-width: 500px; max-width: 560px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">{{ editingRole ? 'Edit Role' : 'Add Role' }}</div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form @submit="saveRole" class="q-gutter-md">
-            <q-input
-              v-model="roleForm.name"
-              label="Role Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Role name is required']"
-            />
-            <div>
-              <div class="text-subtitle2 q-mb-sm text-grey-8">Permissions</div>
-              <q-select
-                v-model="roleForm.permissions"
-                :options="availablePermissions"
-                label="Select Permissions"
+        <q-card-section class="q-pt-md">
+          <q-input v-model="roleForm.name" label="Role Name *" outlined dense class="q-mb-lg" />
+
+          <div class="text-subtitle2 q-mb-xs">
+            Permissions
+            <span class="text-caption text-grey q-ml-sm"
+              >({{ roleForm.permissions.length }} selected)</span
+            >
+          </div>
+          <q-separator class="q-mb-md" />
+
+          <div class="row">
+            <div v-for="perm in availablePermissions" :key="perm" class="col-6 q-mb-sm">
+              <q-checkbox
+                :model-value="roleForm.permissions.includes(perm)"
+                :label="perm"
+                dense
+                @update:model-value="(val) => togglePermission(perm, val)"
+              />
+            </div>
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            :label="editingRole ? 'Update Role' : 'Save Role'"
+            :loading="savingRole"
+            @click="saveRole"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ===================== SHIFT DIALOG ===================== -->
+    <q-dialog v-model="shiftDialog" persistent>
+      <q-card style="min-width: 420px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">{{ editingShift ? 'Edit Shift' : 'Add Shift' }}</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section class="q-pt-md">
+          <q-input v-model="shiftForm.name" label="Shift Name *" outlined dense class="q-mb-md" />
+          <q-input
+            v-model="shiftForm.description"
+            label="Description"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-6">
+              <q-input
+                v-model="shiftForm.default_start_time"
+                label="Start Time *"
+                type="time"
                 outlined
                 dense
-                multiple
-                use-chips
-                stack-label
-                hint="Select one or more permissions for this role"
-                class="q-mb-md"
-              >
-                <template v-slot:selected>
-                  <div class="q-gutter-xs" style="max-width: 100%">
-                    <q-chip
-                      v-for="(permission, index) in roleForm.permissions"
-                      :key="index"
-                      removable
-                      dense
-                      color="blue-1"
-                      text-color="blue-8"
-                      @remove="roleForm.permissions.splice(index, 1)"
-                    >
-                      {{ permission }}
-                    </q-chip>
-                  </div>
-                </template>
-              </q-select>
+              />
             </div>
-          </q-form>
+            <div class="col-6">
+              <q-input
+                v-model="shiftForm.default_end_time"
+                label="End Time *"
+                type="time"
+                outlined
+                dense
+              />
+            </div>
+          </div>
+          <q-toggle v-model="shiftForm.is_graveyard" label="Graveyard Shift" class="q-mb-sm" />
+          <q-toggle v-model="shiftForm.apply_night_differential" label="Apply Night Differential" />
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="saveRole"
-            :loading="savingRole"
-            unelevated
-            no-caps
+            :label="editingShift ? 'Update' : 'Save'"
+            :loading="savingShift"
+            @click="saveShift"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <!-- Position Dialog -->
-    <q-dialog v-model="positionDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">{{ editingPosition ? 'Edit Position' : 'Add New Position' }}</div>
-          <q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form @submit="savePosition" class="q-gutter-md">
-            <q-input
-              v-model="positionForm.name"
-              label="Position Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Position name is required']"
-            />
-            <q-input
-              v-model="positionForm.description"
-              label="Description"
-              outlined
-              dense
-              type="textarea"
-              rows="2"
-            />
-          </q-form>
-        </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
-          <q-btn
-            label="Save"
-            color="primary"
-            @click="savePosition"
-            :loading="savingPosition"
-            unelevated
-            no-caps
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <!-- Department Dialog -->
+    <!-- ===================== DEPARTMENT DIALOG ===================== -->
     <q-dialog v-model="departmentDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">
-            {{ editingDepartment ? 'Edit Department' : 'Add New Department' }}
-          </div>
+      <q-card style="min-width: 380px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">{{ editingDepartment ? 'Edit Department' : 'Add Department' }}</div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form @submit="saveDepartment" class="q-gutter-md">
-            <q-input
-              v-model="departmentForm.name"
-              label="Department Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Department name is required']"
-            />
-          </q-form>
+        <q-card-section class="q-pt-md">
+          <q-input v-model="departmentForm.name" label="Department Name *" outlined dense />
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="saveDepartment"
+            :label="editingDepartment ? 'Update' : 'Save'"
             :loading="savingDepartment"
-            unelevated
-            no-caps
+            @click="saveDepartment"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <!-- Pay Structure Dialog -->
-    <q-dialog v-model="payStructureDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">
-            {{ editingPayStructure ? 'Edit Pay Structure' : 'Add Pay Structure' }}
-          </div>
+    <!-- ===================== POSITION DIALOG ===================== -->
+    <q-dialog v-model="positionDialog" persistent>
+      <q-card style="min-width: 380px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">{{ editingPosition ? 'Edit Position' : 'Add Position' }}</div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form class="q-gutter-md">
-            <q-select
-              v-model="payStructureForm.position"
-              :options="positions"
-              option-value="id"
-              option-label="name"
-              label="Position *"
-              outlined
-              dense
-              emit-value
-              map-options
-              :rules="[(val) => !!val || 'Position is required']"
-            />
-            <q-select
-              v-model="payStructureForm.pay_type"
-              :options="payTypeOptions"
-              label="Pay Type *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Pay type is required']"
-            />
-            <q-input
-              v-model.number="payStructureForm.rate"
-              label="Rate *"
-              outlined
-              dense
-              type="number"
-              step="0.01"
-              :rules="[(val) => val > 0 || 'Rate must be greater than 0']"
-            />
-            <q-input
-              v-model="payStructureForm.currency"
-              label="Currency *"
-              outlined
-              dense
-              placeholder="e.g., PHP, USD"
-              :rules="[(val) => !!val || 'Currency is required']"
-            />
-            <div class="row q-col-gutter-md">
-              <div class="col-6">
-                <q-input
-                  v-model="payStructureForm.effective_from"
-                  label="Effective From *"
-                  outlined
-                  dense
-                  type="date"
-                  :rules="[(val) => !!val || 'Effective from date is required']"
-                />
-              </div>
-              <div class="col-6">
-                <q-input
-                  v-model="payStructureForm.effective_to"
-                  label="Effective To"
-                  outlined
-                  dense
-                  type="date"
-                  hint="Leave empty for ongoing"
-                />
-              </div>
-            </div>
-          </q-form>
+        <q-card-section class="q-pt-md">
+          <q-input
+            v-model="positionForm.name"
+            label="Position Name *"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model="positionForm.description"
+            label="Description"
+            outlined
+            dense
+            type="textarea"
+            rows="3"
+          />
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="savePayStructure"
-            :loading="savingPayStructure"
-            unelevated
-            no-caps
+            :label="editingPosition ? 'Update' : 'Save'"
+            :loading="savingPosition"
+            @click="savePosition"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
-    <!-- Contract Dialog -->
-    <!-- Contract Dialog - Updated Structure -->
+
+    <!-- ===================== CONTRACT DIALOG ===================== -->
     <q-dialog v-model="contractDialog" persistent>
-      <q-card style="min-width: 700px; max-width: 900px">
+      <q-card style="min-width: 520px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">{{ editingContract ? 'Edit Contract' : 'Add Contract' }}</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section class="q-pt-md">
+          <q-select
+            v-model="contractForm.employee_id"
+            :options="employees.map((e) => ({ label: e.full_name || e.name, value: e.id }))"
+            label="Employee *"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-md"
+          />
+          <q-select
+            v-model="contractForm.contract_type_id"
+            :options="contractTypes.map((c) => ({ label: c.name, value: c.id }))"
+            label="Contract Type *"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-md"
+          />
+          <q-select
+            v-model="contractForm.pay_structure.position_id"
+            :options="positions.map((p) => ({ label: p.name, value: p.id }))"
+            label="Position *"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-md"
+          />
+          <q-select
+            v-model="contractForm.site_id"
+            :options="sites.map((s) => ({ label: s.name, value: s.id }))"
+            label="Site"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-md"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            :label="editingContract ? 'Update' : 'Save'"
+            :loading="savingContract"
+            @click="saveContract"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ===================== CONTRACT VIEW DIALOG ===================== -->
+    <q-dialog v-model="contractViewDialog">
+      <q-card style="min-width: 480px" v-if="selectedContract">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">Contract Details</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <q-list>
+            <q-item
+              ><q-item-section
+                ><q-item-label caption>Employee</q-item-label
+                ><q-item-label>{{
+                  selectedContract.employee_name || 'N/A'
+                }}</q-item-label></q-item-section
+              ></q-item
+            >
+            <q-item
+              ><q-item-section
+                ><q-item-label caption>Contract Type</q-item-label
+                ><q-item-label>{{
+                  selectedContract.contract_type_name || 'N/A'
+                }}</q-item-label></q-item-section
+              ></q-item
+            >
+            <q-item
+              ><q-item-section
+                ><q-item-label caption>Company</q-item-label
+                ><q-item-label>{{
+                  selectedContract.company_name || 'N/A'
+                }}</q-item-label></q-item-section
+              ></q-item
+            >
+            <q-item
+              ><q-item-section
+                ><q-item-label caption>Status</q-item-label
+                ><q-item-label>{{
+                  selectedContract.is_acknowledged ? 'Acknowledged' : 'Pending'
+                }}</q-item-label></q-item-section
+              ></q-item
+            >
+            <q-item
+              ><q-item-section
+                ><q-item-label caption>Date Created</q-item-label
+                ><q-item-label>{{
+                  formatDate(selectedContract.date_created)
+                }}</q-item-label></q-item-section
+              ></q-item
+            >
+          </q-list>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Close" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ===================== ALLOWANCE TYPE DIALOG ===================== -->
+    <q-dialog v-model="allowanceTypeDialog" persistent>
+      <q-card style="min-width: 380px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
-            {{ editingContract ? 'Edit Contract' : 'Create Contract' }}
+            {{ editingAllowanceType ? 'Edit Allowance Type' : 'Add Allowance Type' }}
           </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-
-        <q-card-section>
-          <div class="row q-col-gutter-md">
-            <!-- Employee -->
-            <div class="col-6">
-              <q-select
-                v-model="contractForm.employee_id"
-                :options="employees"
-                option-value="id"
-                option-label="full_name"
-                emit-value
-                map-options
-                label="Employee *"
-                outlined
-                dense
-              />
-            </div>
-
-            <!-- Contract Type -->
-            <div class="col-6">
-              <q-select
-                v-model="contractForm.contract_type_id"
-                :options="contractTypes"
-                option-value="id"
-                option-label="name"
-                emit-value
-                map-options
-                label="Contract Type *"
-                outlined
-                dense
-              />
-            </div>
-
-            <!-- Site -->
-            <div class="col-12">
-              <q-select
-                v-model="contractForm.site_id"
-                :options="sites"
-                option-value="id"
-                option-label="name"
-                emit-value
-                map-options
-                label="Site *"
-                outlined
-                dense
-              />
-            </div>
-          </div>
-
-          <!-- Pay Structure Section -->
-          <div class="text-subtitle1 q-mt-md q-mb-sm">Pay Structure</div>
-          <div class="row q-col-gutter-md">
-            <div class="col-6">
-              <q-select
-                v-model="contractForm.pay_structure.position_id"
-                :options="positions"
-                option-value="id"
-                option-label="name"
-                emit-value
-                map-options
-                label="Position *"
-                outlined
-                dense
-              />
-            </div>
-
-            <div class="col-6">
-              <q-select
-                v-model="contractForm.pay_structure.pay_type"
-                :options="payTypeOptions"
-                label="Pay Type *"
-                outlined
-                dense
-              />
-            </div>
-
-            <div class="col-4">
-              <q-input
-                v-model.number="contractForm.pay_structure.rate"
-                type="number"
-                label="Rate *"
-                outlined
-                dense
-                prefix="₱"
-              />
-            </div>
-
-            <div class="col-4">
-              <q-input
-                v-model="contractForm.pay_structure.effective_from"
-                type="date"
-                label="Effective From *"
-                outlined
-                dense
-              />
-            </div>
-
-            <div class="col-4">
-              <q-input
-                v-model="contractForm.pay_structure.effective_to"
-                type="date"
-                label="Effective To"
-                outlined
-                dense
-                clearable
-              />
-            </div>
-          </div>
-
-          <!-- Schedules Section -->
-          <div class="text-subtitle1 q-mt-md q-mb-sm">
-            Schedules
-            <q-btn
-              size="sm"
-              color="primary"
-              icon="add"
-              label="Add Schedule"
-              @click="showScheduleForm = !showScheduleForm"
-              flat
-              dense
-            />
-          </div>
-
-          <!-- Schedule Form (collapsible) -->
-          <div v-if="showScheduleForm" class="q-pa-md bg-grey-2 rounded-borders q-mb-md">
-            <div class="row q-col-gutter-sm">
-              <div class="col-3">
-                <q-input v-model="scheduleForm.date" type="date" label="Date *" outlined dense />
-              </div>
-              <div class="col-3">
-                <q-select
-                  v-model="scheduleForm.site_id"
-                  :options="sites"
-                  option-value="id"
-                  option-label="name"
-                  emit-value
-                  map-options
-                  label="Site *"
-                  outlined
-                  dense
-                />
-              </div>
-              <div class="col-3">
-                <q-select
-                  v-model="scheduleForm.department_id"
-                  :options="departments"
-                  option-value="id"
-                  option-label="name"
-                  emit-value
-                  map-options
-                  label="Department *"
-                  outlined
-                  dense
-                />
-              </div>
-              <div class="col-2">
-                <q-select
-                  v-model="scheduleForm.shift_type_id"
-                  :options="shiftTypes"
-                  option-value="id"
-                  option-label="name"
-                  emit-value
-                  map-options
-                  label="Shift *"
-                  outlined
-                  dense
-                />
-              </div>
-              <div class="col-1">
-                <q-btn color="primary" icon="add" @click="addSchedule" dense />
-              </div>
-            </div>
-          </div>
-
-          <!-- Schedules List -->
-          <q-list v-if="contractForm.schedules.length > 0" bordered separator>
-            <q-item v-for="(schedule, index) in contractForm.schedules" :key="index">
-              <q-item-section>
-                <q-item-label>{{ formatDate(schedule.date) }}</q-item-label>
-                <q-item-label caption>
-                  Site: {{ getSiteName(schedule.site_id) }} | Dept:
-                  {{ getDepartmentName(schedule.department_id) }} | Shift:
-                  {{ getShiftTypeName(schedule.shift_type_id) }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-btn icon="delete" flat dense color="negative" @click="removeSchedule(index)" />
-              </q-item-section>
-            </q-item>
-          </q-list>
-
-          <!-- Recurring Section -->
-          <div class="text-subtitle1 q-mt-md q-mb-sm">
-            Recurring Schedules
-            <q-btn
-              size="sm"
-              color="primary"
-              icon="add"
-              label="Add Recurring"
-              @click="showRecurringForm = !showRecurringForm"
-              flat
-              dense
-            />
-          </div>
-
-          <!-- Recurring Form (collapsible) -->
-          <div v-if="showRecurringForm" class="q-pa-md bg-grey-2 rounded-borders q-mb-md">
-            <div class="row q-col-gutter-sm">
-              <div class="col-3">
-                <q-input
-                  v-model="recurringForm.start_date"
-                  type="date"
-                  label="Start Date *"
-                  outlined
-                  dense
-                />
-              </div>
-              <div class="col-3">
-                <q-input
-                  v-model="recurringForm.end_date"
-                  type="date"
-                  label="End Date *"
-                  outlined
-                  dense
-                />
-              </div>
-              <div class="col-2">
-                <q-select
-                  v-model="recurringForm.site_id"
-                  :options="sites"
-                  option-value="id"
-                  option-label="name"
-                  emit-value
-                  map-options
-                  label="Site *"
-                  outlined
-                  dense
-                />
-              </div>
-              <div class="col-3">
-                <q-select
-                  v-model="recurringForm.department_id"
-                  :options="departments"
-                  option-value="id"
-                  option-label="name"
-                  emit-value
-                  map-options
-                  label="Department *"
-                  outlined
-                  dense
-                />
-              </div>
-              <div class="col-1">
-                <q-btn color="primary" icon="add" @click="addRecurring" dense />
-              </div>
-            </div>
-          </div>
-
-          <!-- Recurring List -->
-          <q-list v-if="contractForm.recurring.length > 0" bordered separator>
-            <q-item v-for="(recurring, index) in contractForm.recurring" :key="index">
-              <q-item-section>
-                <q-item-label>
-                  {{ formatDate(recurring.start_date) }} - {{ formatDate(recurring.end_date) }}
-                </q-item-label>
-                <q-item-label caption>
-                  Site: {{ getSiteName(recurring.site_id) }} | Dept:
-                  {{ getDepartmentName(recurring.department_id) }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-btn icon="delete" flat dense color="negative" @click="removeRecurring(index)" />
-              </q-item-section>
-            </q-item>
-          </q-list>
+        <q-card-section class="q-pt-md">
+          <q-input v-model="allowanceTypeForm.name" label="Name *" outlined dense class="q-mb-md" />
+          <q-input v-model="allowanceTypeForm.description" label="Description" outlined dense />
         </q-card-section>
-
         <q-card-actions align="right">
-          <q-btn label="Cancel" color="grey" flat v-close-popup />
-          <q-btn label="Save" color="primary" @click="saveContract" :loading="savingContract" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <!-- Contract View Dialog -->
-    <q-dialog v-model="contractViewDialog">
-      <q-card class="dialog-card" style="min-width: 600px">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">Contract Details</div>
-          <q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-        <q-separator />
-        <q-card-section v-if="selectedContract" class="q-pt-lg">
-          <div class="q-gutter-md">
-            <div class="row">
-              <div class="col-4 text-grey-7">Employee:</div>
-              <div class="col-8 text-weight-medium">{{ selectedContract.employee_name }}</div>
-            </div>
-            <div class="row">
-              <div class="col-4 text-grey-7">Contract Type:</div>
-              <div class="col-8 text-weight-medium">{{ selectedContract.contract_type_name }}</div>
-            </div>
-            <div class="row">
-              <div class="col-4 text-grey-7">Company:</div>
-              <div class="col-8 text-weight-medium">{{ selectedContract.company_name }}</div>
-            </div>
-            <div class="row">
-              <div class="col-4 text-grey-7">Status:</div>
-              <div class="col-8">
-                <q-badge
-                  :color="selectedContract.is_acknowledged ? 'positive' : 'warning'"
-                  :label="selectedContract.is_acknowledged ? 'Acknowledged' : 'Pending'"
-                />
-              </div>
-            </div>
-            <div class="row">
-              <div class="col-4 text-grey-7">Created:</div>
-              <div class="col-8 text-weight-medium">
-                {{ formatDate(selectedContract.date_created) }}
-              </div>
-            </div>
-          </div>
-        </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn label="Close" color="primary" v-close-popup no-caps unelevated />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <!-- Allowance Type Dialog -->
-    <q-dialog v-model="allowanceTypeDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
-          <div class="text-h6">
-            {{ editingAllowanceType ? 'Edit Allowance Type' : 'Add Allowance Type' }}
-          </div>
-          <q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form class="q-gutter-md">
-            <q-input
-              v-model="allowanceTypeForm.name"
-              label="Allowance Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Allowance name is required']"
-            />
-          </q-form>
-        </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="saveAllowanceType"
+            :label="editingAllowanceType ? 'Update' : 'Save'"
             :loading="savingAllowanceType"
-            unelevated
-            no-caps
+            @click="saveAllowanceType"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <!-- Tax Bracket Dialog -->
+    <!-- ===================== TAX BRACKET DIALOG ===================== -->
     <q-dialog v-model="taxBracketDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
+      <q-card style="min-width: 400px">
+        <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingTaxBracket ? 'Edit Tax Bracket' : 'Add Tax Bracket' }}
           </div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form class="q-gutter-md">
-            <q-input
-              v-model="taxBracketForm.name"
-              label="Bracket Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Bracket name is required']"
-            />
-            <q-input
-              v-model.number="taxBracketForm.min_amount"
-              label="Minimum Amount *"
-              outlined
-              dense
-              type="number"
-              prefix="₱"
-              :rules="[(val) => val >= 0 || 'Must be 0 or greater']"
-            />
-            <q-input
-              v-model.number="taxBracketForm.max_amount"
-              label="Maximum Amount"
-              outlined
-              dense
-              type="number"
-              prefix="₱"
-              hint="Leave empty for no limit"
-            />
-            <q-input
-              v-model.number="taxBracketForm.rate"
-              label="Tax Rate (%) *"
-              outlined
-              dense
-              type="number"
-              step="0.01"
-              suffix="%"
-              :rules="[(val) => (val >= 0 && val <= 100) || 'Rate must be between 0 and 100']"
-            />
-          </q-form>
+        <q-card-section class="q-pt-md">
+          <q-input
+            v-model="taxBracketForm.name"
+            label="Bracket Name *"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model.number="taxBracketForm.min_amount"
+            label="Min Income"
+            type="number"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model.number="taxBracketForm.max_amount"
+            label="Max Income"
+            type="number"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model.number="taxBracketForm.rate"
+            label="Rate (%)"
+            type="number"
+            step="0.01"
+            outlined
+            dense
+          />
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="saveTaxBracket"
+            :label="editingTaxBracket ? 'Update' : 'Save'"
             :loading="savingTaxBracket"
-            unelevated
-            no-caps
+            @click="saveTaxBracket"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <!-- Cutoff Period Dialog -->
+    <!-- ===================== CUTOFF PERIOD DIALOG ===================== -->
     <q-dialog v-model="cutoffPeriodDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
+      <q-card style="min-width: 420px">
+        <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingCutoffPeriod ? 'Edit Cutoff Period' : 'Add Cutoff Period' }}
           </div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form class="q-gutter-md">
-            <q-input
-              v-model="cutoffPeriodForm.name"
-              label="Period Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Period name is required']"
-            />
-            <div class="row q-col-gutter-md">
-              <div class="col-6">
-                <q-input
-                  v-model="cutoffPeriodForm.start_date"
-                  label="Start Date *"
-                  outlined
-                  dense
-                  type="date"
-                  :rules="[(val) => !!val || 'Start date is required']"
-                />
-              </div>
-              <div class="col-6">
-                <q-input
-                  v-model="cutoffPeriodForm.end_date"
-                  label="End Date *"
-                  outlined
-                  dense
-                  type="date"
-                  :rules="[(val) => !!val || 'End date is required']"
-                />
-              </div>
-            </div>
-            <q-toggle v-model="cutoffPeriodForm.is_active" label="Active" color="positive" />
-          </q-form>
+        <q-card-section class="q-pt-md">
+          <q-input
+            v-model="cutoffPeriodForm.name"
+            label="Period Name *"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model="cutoffPeriodForm.start_date"
+            label="Start Date *"
+            type="date"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model="cutoffPeriodForm.end_date"
+            label="End Date *"
+            type="date"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-toggle v-model="cutoffPeriodForm.is_active" label="Active" />
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="saveCutoffPeriod"
+            :label="editingCutoffPeriod ? 'Update' : 'Save'"
             :loading="savingCutoffPeriod"
-            unelevated
-            no-caps
+            @click="saveCutoffPeriod"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <!-- Payroll Group Dialog -->
+    <!-- ===================== PAYROLL GROUP DIALOG ===================== -->
     <q-dialog v-model="payrollGroupDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
+      <q-card style="min-width: 380px">
+        <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingPayrollGroup ? 'Edit Payroll Group' : 'Add Payroll Group' }}
           </div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form class="q-gutter-md">
-            <q-input
-              v-model="payrollGroupForm.name"
-              label="Group Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Group name is required']"
-            />
-            <q-input
-              v-model="payrollGroupForm.description"
-              label="Description"
-              outlined
-              dense
-              type="textarea"
-              rows="2"
-            />
-          </q-form>
+        <q-card-section class="q-pt-md">
+          <q-input
+            v-model="payrollGroupForm.name"
+            label="Group Name *"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model="payrollGroupForm.description"
+            label="Description"
+            outlined
+            dense
+            type="textarea"
+            rows="3"
+          />
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="savePayrollGroup"
+            :label="editingPayrollGroup ? 'Update' : 'Save'"
             :loading="savingPayrollGroup"
-            unelevated
-            no-caps
+            @click="savePayrollGroup"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <!-- Labor Rule Dialog -->
+    <!-- ===================== LABOR RULE DIALOG ===================== -->
     <q-dialog v-model="laborRuleDialog" persistent>
-      <q-card class="dialog-card">
-        <q-card-section class="dialog-header">
+      <q-card style="min-width: 420px">
+        <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">{{ editingLaborRule ? 'Edit Labor Rule' : 'Add Labor Rule' }}</div>
+          <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-separator />
-        <q-card-section class="q-pt-lg">
-          <q-form class="q-gutter-md">
-            <q-input
-              v-model="laborRuleForm.name"
-              label="Rule Name *"
-              outlined
-              dense
-              :rules="[(val) => !!val || 'Rule name is required']"
-            />
-            <q-input
-              v-model="laborRuleForm.description"
-              label="Description"
-              outlined
-              dense
-              type="textarea"
-              rows="3"
-            />
-            <q-input
-              v-model.number="laborRuleForm.multiplier"
-              label="Rate Multiplier *"
-              outlined
-              dense
-              type="number"
-              step="0.01"
-              hint="E.g., 1.5 for 150% of base rate"
-              :rules="[(val) => val > 0 || 'Multiplier must be greater than 0']"
-            />
-            <q-toggle v-model="laborRuleForm.is_active" label="Active" color="positive" />
-          </q-form>
+        <q-card-section class="q-pt-md">
+          <q-input
+            v-model="laborRuleForm.name"
+            label="Rule Name *"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model="laborRuleForm.description"
+            label="Description"
+            outlined
+            dense
+            class="q-mb-md"
+            type="textarea"
+            rows="3"
+          />
+          <q-input
+            v-model.number="laborRuleForm.multiplier"
+            label="Multiplier"
+            type="number"
+            step="0.01"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-toggle v-model="laborRuleForm.is_active" label="Active" />
         </q-card-section>
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup no-caps />
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
           <q-btn
-            label="Save"
             color="primary"
-            @click="saveLaborRule"
+            :label="editingLaborRule ? 'Update' : 'Save'"
             :loading="savingLaborRule"
-            unelevated
-            no-caps
+            @click="saveLaborRule"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ===================== PAY STRUCTURE DIALOG ===================== -->
+    <q-dialog v-model="payStructureDialog" persistent>
+      <q-card style="min-width: 440px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            {{ editingPayStructure ? 'Edit Pay Structure' : 'Add Pay Structure' }}
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section class="q-pt-md">
+          <q-select
+            v-model="payStructureForm.position"
+            :options="positions.map((p) => ({ label: p.name, value: p.id }))"
+            label="Position *"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-md"
+          />
+          <q-select
+            v-model="payStructureForm.pay_type"
+            :options="payTypeOptions"
+            label="Pay Type *"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model.number="payStructureForm.rate"
+            label="Rate *"
+            type="number"
+            step="0.01"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model="payStructureForm.currency"
+            label="Currency"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model="payStructureForm.effective_from"
+            label="Effective From *"
+            type="date"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+          <q-input
+            v-model="payStructureForm.effective_to"
+            label="Effective To"
+            type="date"
+            outlined
+            dense
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            :label="editingPayStructure ? 'Update' : 'Save'"
+            :loading="savingPayStructure"
+            @click="savePayStructure"
           />
         </q-card-actions>
       </q-card>
@@ -2593,6 +2389,67 @@ export default {
     console.log('🏁 [MOUNTED] Component mounted successfully')
   },
 
+  computed: {
+    filteredCompanies() {
+      if (!this.searchQuery) return this.companies
+      const q = this.searchQuery.toLowerCase()
+      return this.companies.filter(
+        (c) =>
+          (c.name || '').toLowerCase().includes(q) ||
+          (c.address || '').toLowerCase().includes(q) ||
+          (c.contact || '').toLowerCase().includes(q),
+      )
+    },
+    filteredSites() {
+      if (!this.searchQuery) return this.sites
+      const q = this.searchQuery.toLowerCase()
+      return this.sites.filter(
+        (s) =>
+          (s.name || '').toLowerCase().includes(q) ||
+          (s.address || '').toLowerCase().includes(q) ||
+          (s.ownership_type || '').toLowerCase().includes(q),
+      )
+    },
+    filteredRoles() {
+      if (!this.searchQuery) return this.roles
+      const q = this.searchQuery.toLowerCase()
+      return this.roles.filter((r) => (r.name || '').toLowerCase().includes(q))
+    },
+    filteredShifts() {
+      if (!this.searchQuery) return this.shifts
+      const q = this.searchQuery.toLowerCase()
+      return this.shifts.filter(
+        (s) =>
+          (s.name || '').toLowerCase().includes(q) ||
+          (s.description || '').toLowerCase().includes(q),
+      )
+    },
+    filteredDepartments() {
+      if (!this.searchQuery) return this.departments
+      const q = this.searchQuery.toLowerCase()
+      return this.departments.filter((d) => (d.name || '').toLowerCase().includes(q))
+    },
+    filteredPositions() {
+      if (!this.searchQuery) return this.positions
+      const q = this.searchQuery.toLowerCase()
+      return this.positions.filter(
+        (p) =>
+          (p.name || '').toLowerCase().includes(q) ||
+          (p.description || '').toLowerCase().includes(q),
+      )
+    },
+    filteredContracts() {
+      if (!this.searchQuery) return this.contracts
+      const q = this.searchQuery.toLowerCase()
+      return this.contracts.filter(
+        (c) =>
+          (c.employee_name || '').toLowerCase().includes(q) ||
+          (c.contract_type_name || '').toLowerCase().includes(q) ||
+          (c.company_name || '').toLowerCase().includes(q),
+      )
+    },
+  },
+
   methods: {
     // ==================== HELPER METHODS ====================
     getCompanyId() {
@@ -2710,7 +2567,7 @@ export default {
     async fetchCompanies() {
       this.loadingCompanies = true
       try {
-        const response = await api.get('https://staging.wageyapp.com/organization/companies/', {
+        const response = await api.get('/organization/companies/', {
           headers: this.getAuthHeaders(),
         })
         this.companies = response.data.data || response.data || []
@@ -2766,6 +2623,11 @@ export default {
       this.companyForm.logo = ''
     },
 
+    clearLogoUrl() {
+      this.companyForm.logo = ''
+      this.logoPreview = null
+    },
+
     onFileRejected(rejectedEntries) {
       this.$q.notify({
         type: 'negative',
@@ -2812,11 +2674,7 @@ export default {
         }
 
         if (this.editingCompany) {
-          await api.put(
-            `https://staging.wageyapp.com/organization/companies/${this.companyForm.id}/`,
-            formData,
-            { headers },
-          )
+          await api.put(`/organization/companies/${this.companyForm.id}/`, formData, { headers })
           this.$q.notify({ type: 'positive', message: 'Company updated successfully' })
         } else {
           await api.post('/organization/companies/create/', formData, { headers })
@@ -2860,7 +2718,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`https://staging.wageyapp.com/organization/companies/${company.id}/`, {
+            await api.delete(`/organization/companies/${company.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Company deleted successfully' })
@@ -2872,7 +2730,6 @@ export default {
         })
     },
 
-    // ==================== SITES ====================
     async fetchSites() {
       this.loadingSites = true
       try {
@@ -2882,7 +2739,7 @@ export default {
           return
         }
 
-        const response = await api.get('https://staging.wageyapp.com/organization/sites/', {
+        const response = await api.get('/organization/sites/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -2911,6 +2768,10 @@ export default {
         radius_meters: 100,
         ownership_type: 'owned',
         is_active: true,
+        requires_otp: false,
+        allow_manual_attendance: true,
+        allow_service_charge: true,
+        multiply_nd_by_holiday: false,
         company: this.getCompanyId(),
       }
       this.siteDialog = true
@@ -2918,20 +2779,40 @@ export default {
 
     editSite(site) {
       this.editingSite = true
-      this.siteForm = { ...site }
+      this.siteForm = {
+        ...site,
+        requires_otp: site.requires_otp ?? false,
+        allow_manual_attendance: site.allow_manual_attendance ?? true,
+        allow_service_charge: site.allow_service_charge ?? true,
+        multiply_nd_by_holiday: site.multiply_nd_by_holiday ?? false,
+      }
       this.siteDialog = true
     },
 
     async saveSite() {
-      if (
-        !this.siteForm.name.trim() ||
-        !this.siteForm.location.trim() ||
-        !this.siteForm.latitude ||
-        !this.siteForm.longitude
-      ) {
+      // Validation
+      if (!this.siteForm.name.trim()) {
         this.$q.notify({
           type: 'negative',
-          message: 'Please fill all required fields',
+          message: 'Site name is required',
+          position: 'top',
+        })
+        return
+      }
+
+      if (!this.siteForm.location.trim()) {
+        this.$q.notify({
+          type: 'negative',
+          message: 'Location is required',
+          position: 'top',
+        })
+        return
+      }
+
+      if (!this.siteForm.latitude || !this.siteForm.longitude) {
+        this.$q.notify({
+          type: 'negative',
+          message: 'Latitude and longitude are required',
           position: 'top',
         })
         return
@@ -2939,41 +2820,76 @@ export default {
 
       this.savingSite = true
       try {
+        const formatCoordinate = (value, decimals = 5) => {
+          const num = Number(value)
+          if (isNaN(num)) return '0.00000'
+          return num.toFixed(decimals).padStart(decimals + 4, '0')
+        }
+
         const payload = {
-          name: this.siteForm.name,
-          location: this.siteForm.location,
-          latitude: Number(this.siteForm.latitude).toFixed(6),
-          longitude: Number(this.siteForm.longitude).toFixed(6),
+          name: this.siteForm.name.trim(),
+          location: this.siteForm.location.trim(),
+          latitude: formatCoordinate(this.siteForm.latitude),
+          longitude: formatCoordinate(this.siteForm.longitude),
           radius_meters: parseInt(this.siteForm.radius_meters) || 100,
-          ownership_type: this.siteForm.ownership_type,
-          is_active: this.siteForm.is_active,
+          ownership_type: this.siteForm.ownership_type || 'owned',
+          is_active: Boolean(this.siteForm.is_active),
+          requires_otp: Boolean(this.siteForm.requires_otp),
+          allow_manual_attendance: Boolean(this.siteForm.allow_manual_attendance),
+          allow_service_charge: Boolean(this.siteForm.allow_service_charge),
+          multiply_nd_by_holiday: Boolean(this.siteForm.multiply_nd_by_holiday),
           company: this.getCompanyId(),
         }
 
+        if (this.siteForm.business_type) {
+          payload.business_type = this.siteForm.business_type
+        }
+
         if (this.editingSite) {
-          await api.put(
-            `https://staging.wageyapp.com/organization/sites/${this.siteForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Site updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/organization/sites/', payload, {
+          await api.put(`/organization/sites/${this.siteForm.id}/`, payload, {
             headers: this.getAuthHeaders(),
           })
-          this.$q.notify({ type: 'positive', message: 'Site created successfully' })
+          this.$q.notify({
+            type: 'positive',
+            message: 'Site updated successfully',
+            position: 'top',
+          })
+        } else {
+          await api.post('/organization/sites/', payload, {
+            headers: this.getAuthHeaders(),
+          })
+          this.$q.notify({
+            type: 'positive',
+            message: 'Site created successfully',
+            position: 'top',
+          })
         }
 
         this.siteDialog = false
         await this.fetchSites()
       } catch (error) {
         console.error('Error saving site:', error)
+
+        let errorMessage = 'Failed to save site'
+
+        if (error.response?.data) {
+          const errorData = error.response.data
+
+          if (typeof errorData === 'object') {
+            const firstError = Object.values(errorData)[0]
+            errorMessage = Array.isArray(firstError) ? firstError[0] : firstError
+          } else if (errorData.message) {
+            errorMessage = errorData.message
+          } else if (typeof errorData === 'string') {
+            errorMessage = errorData
+          }
+        }
+
         this.$q.notify({
           type: 'negative',
-          message: error.response?.data?.message || 'Failed to save site',
+          message: errorMessage,
           position: 'top',
+          timeout: 3000,
         })
       } finally {
         this.savingSite = false
@@ -2987,17 +2903,41 @@ export default {
           message: `Are you sure you want to delete "${site.name}"?`,
           cancel: true,
           persistent: true,
+          ok: {
+            color: 'negative',
+            label: 'Delete',
+          },
+          cancel: {
+            color: 'grey',
+            flat: true,
+          },
         })
         .onOk(async () => {
           try {
-            await api.delete(`https://staging.wageyapp.com/organization/sites/${site.id}/`, {
+            await api.delete(`/organization/sites/${site.id}/`, {
               headers: this.getAuthHeaders(),
             })
-            this.$q.notify({ type: 'positive', message: 'Site deleted successfully' })
+
+            this.$q.notify({
+              type: 'positive',
+              message: 'Site deleted successfully',
+              position: 'top',
+            })
+
             await this.fetchSites()
           } catch (error) {
             console.error('Error deleting site:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete site' })
+
+            let errorMessage = 'Failed to delete site'
+            if (error.response?.data?.message) {
+              errorMessage = error.response.data.message
+            }
+
+            this.$q.notify({
+              type: 'negative',
+              message: errorMessage,
+              position: 'top',
+            })
           }
         })
     },
@@ -3012,7 +2952,7 @@ export default {
           return
         }
 
-        const response = await api.get('https://staging.wageyapp.com/organization/departments/', {
+        const response = await api.get('/organization/departments/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3081,16 +3021,12 @@ export default {
         }
 
         if (this.editingDepartment) {
-          await api.put(
-            `https://staging.wageyapp.com/organization/departments/${this.departmentForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/organization/departments/${this.departmentForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Department updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/organization/departments/', payload, {
+          await api.post('/organization/departments/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Department created successfully' })
@@ -3134,12 +3070,9 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(
-              `https://staging.wageyapp.com/organization/departments/${department.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
+            await api.delete(`/organization/departments/${department.id}/`, {
+              headers: this.getAuthHeaders(),
+            })
             this.$q.notify({ type: 'positive', message: 'Department deleted successfully' })
             await this.fetchDepartments()
           } catch (error) {
@@ -3165,7 +3098,7 @@ export default {
           return
         }
 
-        const response = await api.get('https://staging.wageyapp.com/user/user-roles/', {
+        const response = await api.get('/user/user-roles/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3212,10 +3145,11 @@ export default {
 
       let permissionsArray = []
       if (Array.isArray(role.permissions)) {
-        permissionsArray = [...role.permissions]
+        permissionsArray = role.permissions.slice() // fresh copy
       } else if (typeof role.permissions === 'string') {
         try {
-          permissionsArray = JSON.parse(role.permissions)
+          const parsed = JSON.parse(role.permissions)
+          permissionsArray = Array.isArray(parsed) ? parsed.slice() : []
         } catch {
           permissionsArray = []
         }
@@ -3228,6 +3162,17 @@ export default {
         company: role.company || this.getCompanyId(),
       }
       this.roleDialog = true
+    },
+
+    togglePermission(perm, checked) {
+      const perms = this.roleForm.permissions.slice()
+      if (checked) {
+        if (!perms.includes(perm)) perms.push(perm)
+      } else {
+        const idx = perms.indexOf(perm)
+        if (idx !== -1) perms.splice(idx, 1)
+      }
+      this.roleForm.permissions = perms
     },
 
     async saveRole() {
@@ -3255,21 +3200,19 @@ export default {
       try {
         const payload = {
           name: this.roleForm.name.trim(),
-          permissions: this.roleForm.permissions || [],
+          permissions: Array.isArray(this.roleForm.permissions)
+            ? [...this.roleForm.permissions]
+            : [],
           company: parseInt(companyId),
         }
 
         if (this.editingRole) {
-          await api.put(
-            `https://staging.wageyapp.com/user/user-roles/${this.roleForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/user/user-roles/${this.roleForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Role updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/user/user-roles/', payload, {
+          await api.post('/user/user-roles/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Role created successfully' })
@@ -3301,7 +3244,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            const url = `https://staging.wageyapp.com/user/user-roles/${role.id}/`
+            const url = `/user/user-roles/${role.id}/`
             console.log('DELETE URL:', url) // Add this
 
             await api.delete(url, {
@@ -3333,7 +3276,7 @@ export default {
           return
         }
 
-        const response = await api.get('https://staging.wageyapp.com/organization/shift-types/', {
+        const response = await api.get('/organization/shift-types/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3429,16 +3372,12 @@ export default {
         console.log('Payload being sent:', payload)
 
         if (this.editingShift) {
-          await api.put(
-            `https://staging.wageyapp.com/organization/shift-types/${this.shiftForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/organization/shift-types/${this.shiftForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Shift updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/organization/shift-types/', payload, {
+          await api.post('/organization/shift-types/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Shift created successfully' })
@@ -3494,7 +3433,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`https://staging.wageyapp.com/organization/shift-types/${shift.id}/`, {
+            await api.delete(`/organization/shift-types/${shift.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Shift deleted successfully' })
@@ -3545,7 +3484,7 @@ export default {
           return
         }
 
-        const response = await api.get('https://staging.wageyapp.com/user/positions/', {
+        const response = await api.get('/user/positions/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3593,16 +3532,12 @@ export default {
         }
 
         if (this.editingPosition) {
-          await api.put(
-            `https://staging.wageyapp.com/user/positions/${this.positionForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/user/positions/${this.positionForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Position updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/user/positions/', payload, {
+          await api.post('/user/positions/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Position created successfully' })
@@ -3628,7 +3563,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`https://staging.wageyapp.com/user/positions/${position.id}/`, {
+            await api.delete(`/user/positions/${position.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Position deleted successfully' })
@@ -3835,13 +3770,10 @@ export default {
           return
         }
 
-        const response = await api.get(
-          'https://staging.wageyapp.com/payroll/admin/allowance-types/',
-          {
-            params: { company: companyId },
-            headers: this.getAuthHeaders(),
-          },
-        )
+        const response = await api.get('/payroll/admin/allowance-types/', {
+          params: { company: companyId },
+          headers: this.getAuthHeaders(),
+        })
         this.allowanceTypes = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching allowance types:', error)
@@ -3880,16 +3812,12 @@ export default {
         }
 
         if (this.editingAllowanceType) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/allowance-types/${this.allowanceTypeForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/payroll/admin/allowance-types/${this.allowanceTypeForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Allowance type updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/allowance-types/', payload, {
+          await api.post('/payroll/admin/allowance-types/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Allowance type created successfully' })
@@ -3915,12 +3843,9 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(
-              `https://staging.wageyapp.com/payroll/admin/allowance-types/${item.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
+            await api.delete(`/payroll/admin/allowance-types/${item.id}/`, {
+              headers: this.getAuthHeaders(),
+            })
             this.$q.notify({ type: 'positive', message: 'Allowance type deleted successfully' })
             await this.fetchAllowanceTypes()
           } catch (error) {
@@ -3940,7 +3865,7 @@ export default {
           return
         }
 
-        const response = await api.get('https://staging.wageyapp.com/payroll/admin/tax-brackets/', {
+        const response = await api.get('/payroll/admin/tax-brackets/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3988,16 +3913,12 @@ export default {
         }
 
         if (this.editingTaxBracket) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/tax-brackets/${this.taxBracketForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/payroll/admin/tax-brackets/${this.taxBracketForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Tax bracket updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/tax-brackets/', payload, {
+          await api.post('/payroll/admin/tax-brackets/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Tax bracket created successfully' })
@@ -4023,12 +3944,9 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(
-              `https://staging.wageyapp.com/payroll/admin/tax-brackets/${item.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
+            await api.delete(`/payroll/admin/tax-brackets/${item.id}/`, {
+              headers: this.getAuthHeaders(),
+            })
             this.$q.notify({ type: 'positive', message: 'Tax bracket deleted successfully' })
             await this.fetchTaxBrackets()
           } catch (error) {
@@ -4048,13 +3966,10 @@ export default {
           return
         }
 
-        const response = await api.get(
-          'https://staging.wageyapp.com/payroll/admin/cutoff-periods/',
-          {
-            params: { company: companyId },
-            headers: this.getAuthHeaders(),
-          },
-        )
+        const response = await api.get('/payroll/admin/cutoff-periods/', {
+          params: { company: companyId },
+          headers: this.getAuthHeaders(),
+        })
         this.cutoffPeriods = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching cutoff periods:', error)
@@ -4103,16 +4018,12 @@ export default {
         }
 
         if (this.editingCutoffPeriod) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/cutoff-periods/${this.cutoffPeriodForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/payroll/admin/cutoff-periods/${this.cutoffPeriodForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Cutoff period updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/cutoff-periods/', payload, {
+          await api.post('/payroll/admin/cutoff-periods/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Cutoff period created successfully' })
@@ -4138,12 +4049,9 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(
-              `https://staging.wageyapp.com/payroll/admin/cutoff-periods/${item.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
+            await api.delete(`/payroll/admin/cutoff-periods/${item.id}/`, {
+              headers: this.getAuthHeaders(),
+            })
             this.$q.notify({ type: 'positive', message: 'Cutoff period deleted successfully' })
             await this.fetchCutoffPeriods()
           } catch (error) {
@@ -4163,13 +4071,10 @@ export default {
           return
         }
 
-        const response = await api.get(
-          'https://staging.wageyapp.com/payroll/admin/payroll-groups/',
-          {
-            params: { company: companyId },
-            headers: this.getAuthHeaders(),
-          },
-        )
+        const response = await api.get('/payroll/admin/payroll-groups/', {
+          params: { company: companyId },
+          headers: this.getAuthHeaders(),
+        })
         this.payrollGroups = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching payroll groups:', error)
@@ -4210,16 +4115,12 @@ export default {
         }
 
         if (this.editingPayrollGroup) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/payroll-groups/${this.payrollGroupForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/payroll/admin/payroll-groups/${this.payrollGroupForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Payroll group updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/payroll-groups/', payload, {
+          await api.post('/payroll/admin/payroll-groups/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Payroll group created successfully' })
@@ -4245,12 +4146,9 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(
-              `https://staging.wageyapp.com/payroll/admin/payroll-groups/${item.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
+            await api.delete(`/payroll/admin/payroll-groups/${item.id}/`, {
+              headers: this.getAuthHeaders(),
+            })
             this.$q.notify({ type: 'positive', message: 'Payroll group deleted successfully' })
             await this.fetchPayrollGroups()
           } catch (error) {
@@ -4270,7 +4168,7 @@ export default {
           return
         }
 
-        const response = await api.get('https://staging.wageyapp.com/payroll/admin/labor-rules/', {
+        const response = await api.get('/payroll/admin/labor-rules/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -4318,16 +4216,12 @@ export default {
         }
 
         if (this.editingLaborRule) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/labor-rules/${this.laborRuleForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/payroll/admin/labor-rules/${this.laborRuleForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Labor rule updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/labor-rules/', payload, {
+          await api.post('/payroll/admin/labor-rules/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Labor rule created successfully' })
@@ -4353,7 +4247,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`https://staging.wageyapp.com/payroll/admin/labor-rules/${item.id}/`, {
+            await api.delete(`/payroll/admin/labor-rules/${item.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Labor rule deleted successfully' })
@@ -4375,7 +4269,7 @@ export default {
           return
         }
 
-        const response = await api.get('https://staging.wageyapp.com/payroll/pay-structures/', {
+        const response = await api.get('/payroll/pay-structures/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -4458,16 +4352,12 @@ export default {
         console.log('💾 Saving pay structure with payload:', payload)
 
         if (this.editingPayStructure) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/pay-structures/${this.payStructureForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
+          await api.put(`/payroll/pay-structures/${this.payStructureForm.id}/`, payload, {
+            headers: this.getAuthHeaders(),
+          })
           this.$q.notify({ type: 'positive', message: 'Pay structure updated successfully' })
         } else {
-          await api.post('https://staging.wageyapp.com/payroll/pay-structures/', payload, {
+          await api.post('/payroll/pay-structures/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Pay structure created successfully' })
@@ -4526,7 +4416,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`https://staging.wageyapp.com/payroll/pay-structures/${item.id}/`, {
+            await api.delete(`/payroll/pay-structures/${item.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Pay structure deleted successfully' })
@@ -4537,144 +4427,383 @@ export default {
           }
         })
     },
+
+    // ==================== VIEW METHODS ====================
+    viewCompany(company) {
+      this.editCompany(company)
+    },
+    viewSite(site) {
+      this.editSite(site)
+    },
+    viewRole(role) {
+      this.editRole(role)
+    },
+    viewShift(shift) {
+      this.editShift(shift)
+    },
+    viewDepartment(department) {
+      this.editDepartment(department)
+    },
+    viewPosition(position) {
+      this.editPosition(position)
+    },
+    viewAllowanceType(item) {
+      this.editAllowanceType(item)
+    },
+    viewTaxBracket(item) {
+      this.editTaxBracket(item)
+    },
+    viewCutoffPeriod(item) {
+      this.editCutoffPeriod(item)
+    },
+    viewPayrollGroup(item) {
+      this.editPayrollGroup(item)
+    },
+    viewLaborRule(item) {
+      this.editLaborRule(item)
+    },
+    viewPayStructure(item) {
+      this.editPayStructure(item)
+    },
   },
 }
 </script>
 
 <style scoped>
-.admin-settings-page {
-  max-width: 1500px;
-  margin: 0 auto;
-  padding: 24px;
+/* ============================================
+   BASE LAYOUT
+   ============================================ */
+.admin-dashboard {
+  background: #f8fafc;
+  min-height: 100vh;
+  padding: 0;
 }
 
+.dashboard-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* ============================================
+   PAGE HEADER — matches EmployeesPage exactly
+   ============================================ */
 .page-header {
   background: white;
-  border-radius: 16px;
-  padding: 40px;
-  margin-bottom: 8px;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
   border: 1px solid #e2e8f0;
 }
 
 .header-content {
-  max-width: 1400px;
-  margin: 0 auto;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 24px;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-left {
+  flex: 1;
 }
 
 .page-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
-  margin: 0 0 4px 0;
+  color: #1a202c;
+  margin: 0;
 }
 
-.search-input {
-  width: 280px;
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.tabs-container {
-  background-color: white;
-  border-bottom: 1px solid #e0e0e0;
+.header-search {
+  min-width: 180px;
+  max-width: 280px;
+  flex: 1;
 }
 
-.custom-tabs {
-  max-width: 1400px;
-  margin: 0 auto;
+.header-search :deep(.q-field__control) {
+  border-radius: 8px;
+  height: 36px;
 }
 
-.custom-tab {
-  font-size: 14px;
+.search-icon {
+  color: #9ca3af;
+}
+
+/* ============================================
+   TABS
+   ============================================ */
+.tabs-wrapper {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.subtabs-wrapper {
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-tabs {
+  padding: 0 8px;
+  min-width: max-content;
+}
+
+.settings-tab {
+  font-size: 13px;
   font-weight: 500;
   text-transform: none;
   color: #616161;
-  padding: 12px 20px;
-}
-
-.page-content {
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 12px 16px;
+  white-space: nowrap;
 }
 
 .transparent-panels {
   background: transparent;
 }
 
-.settings-section {
-  margin-top: 24px;
+/* ============================================
+   TABLE SECTION — matches EmployeesPage exactly
+   ============================================ */
+.table-section {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  margin-bottom: 0;
 }
 
-.section-header {
+.table-header {
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
 }
 
-.section-title {
-  font-size: 18px;
+.table-title-section {
+  flex: 1;
+}
+
+.table-title {
+  font-size: 17px;
   font-weight: 600;
-  color: #1a1a1a;
-  margin: 0 0 4px 0;
+  color: #1a202c;
+  margin: 0 0 2px 0;
 }
 
-.section-description {
-  font-size: 13px;
-  color: #757575;
+.table-subtitle {
+  font-size: 12px;
+  color: #6b7280;
   margin: 0;
 }
 
-.action-btn {
-  font-size: 14px;
-  font-weight: 500;
-  padding: 8px 20px;
-  border-radius: 6px;
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.settings-card {
-  background-color: white;
-  border: 1px solid #e0e0e0;
+.add-btn {
+  height: 36px;
   border-radius: 8px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+/* ============================================
+   TABLE STYLES — matches EmployeesPage exactly
+   ============================================ */
+.modern-table-container {
+  border: 2px solid #3b82f6;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 0 16px 16px 16px;
+}
+
+.settings-table {
+  background: white;
+  border-radius: 10px;
   overflow: hidden;
 }
 
-.custom-table :deep(thead tr) {
-  background-color: #fafafa;
+.table-header-row {
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
 }
 
-.custom-table :deep(thead th) {
+.table-header-cell {
+  padding: 12px 10px;
   font-size: 13px;
   font-weight: 600;
-  color: #424242;
+  color: #374151;
+  text-align: left;
+  border: none;
+  white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  padding: 12px 16px;
 }
 
-.custom-table :deep(tbody td) {
-  font-size: 14px;
-  color: #424242;
-  padding: 14px 16px;
+.table-body-row {
+  border-bottom: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
 }
 
-.custom-table :deep(tbody tr) {
-  border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.2s;
+.table-body-row:hover {
+  background: #f8fafc;
 }
 
-.custom-table :deep(tbody tr:hover) {
-  background-color: #fafafa;
+.table-body-cell {
+  padding: 12px 10px;
+  font-size: 13px;
+  color: #374151;
+  border: none;
+  vertical-align: middle;
 }
 
+.item-name {
+  font-weight: 500;
+  color: #1a202c;
+  font-size: 13px;
+}
+
+/* ============================================
+   STATUS & OWNERSHIP BADGES
+   ============================================ */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-active {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-graveyard {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.status-regular {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.ownership-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.owned-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.leased-badge {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+/* ============================================
+   ACTION BUTTONS — matches EmployeesPage exactly
+   ============================================ */
+.actions-cell {
+  width: 100px;
+  min-width: 100px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.view-btn {
+  background: #dbeafe;
+  color: #3b82f6;
+}
+
+.view-btn:hover {
+  background: #bfdbfe;
+}
+
+.edit-btn {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.edit-btn:hover {
+  background: #fde68a;
+}
+
+.pdf-btn {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.pdf-btn:hover {
+  background: #fecaca;
+}
+
+/* ============================================
+   PERMISSIONS
+   ============================================ */
 .permissions-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  max-width: 300px;
+  gap: 4px;
+  max-width: 320px;
 }
 
 .permission-chip {
@@ -4683,444 +4812,155 @@ export default {
   margin: 0;
 }
 
-.text-capitalize {
-  text-transform: capitalize;
-}
-
-.logo-preview-card {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #fafafa;
-  border: 1px dashed #e0e0e0;
-  border-radius: 8px;
-}
-
-/* Dialog Styles */
-.dialog-card {
-  min-width: 500px;
-  max-width: 600px;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-}
-
-.dialog-header .text-h6 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.dialog-card :deep(.q-card-section:not(.dialog-header):not(.q-card-actions)) {
-  padding: 24px;
-  max-height: calc(90vh - 150px);
-  overflow-y: auto;
-}
-
-.dialog-card :deep(.q-form) {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.dialog-card :deep(.q-input),
-.dialog-card :deep(.q-select),
-.dialog-card :deep(.q-file),
-.dialog-card :deep(.q-btn-toggle) {
-  width: 93%;
-}
-
-.dialog-card :deep(.row.q-col-gutter-md) {
-  margin: 0 -8px;
-}
-
-.dialog-card :deep(.row.q-col-gutter-md > div) {
-  padding: 0 23px;
-}
-
-.dialog-card :deep(.q-card-actions) {
-  padding: 16px 24px;
-  gap: 12px;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-}
-
-/* ========================================
-   RESPONSIVE BREAKPOINTS
-   ======================================== */
-
-/* 1440px screens */
-@media (min-width: 1440px) {
-  .admin-settings-page {
-    max-width: 1600px;
+/* ============================================
+   RESPONSIVE — 1024px
+   ============================================ */
+@media (max-width: 1024px) {
+  .dashboard-container {
+    padding: 14px;
   }
 
   .page-header {
-    padding: 48px;
-  }
-
-  .page-content {
-    padding: 40px 48px;
-  }
-
-  .header-content,
-  .custom-tabs {
-    max-width: 1500px;
+    padding: 14px;
   }
 
   .page-title {
-    font-size: 28px;
-  }
-
-  .section-title {
-    font-size: 20px;
-  }
-
-  /* Dialog size for 1440px */
-  .dialog-card {
-    min-width: 600px;
-    max-width: 700px;
-  }
-
-  .dialog-header {
-    padding: 24px 28px;
-  }
-
-  .dialog-header .text-h6 {
-    font-size: 20px;
-  }
-
-  .dialog-card :deep(.q-card-section:not(.dialog-header):not(.q-card-actions)) {
-    padding: 28px;
-  }
-
-  .dialog-card :deep(.q-card-actions) {
-    padding: 18px 28px;
-  }
-}
-
-/* 1024px screens */
-@media (min-width: 1024px) and (max-width: 1439px) {
-  .admin-settings-page {
-    max-width: 1200px;
-    padding: 20px;
-  }
-
-  .page-header {
-    padding: 32px;
-  }
-
-  .header-content,
-  .custom-tabs,
-  .page-content {
-    max-width: 1100px;
-  }
-
-  .page-title {
-    font-size: 22px;
-  }
-
-  .search-input {
-    width: 240px;
-  }
-
-  .section-title {
-    font-size: 17px;
-  }
-
-  /* Dialog size for 1024px */
-  .dialog-card {
-    min-width: 520px;
-    max-width: 580px;
-  }
-
-  .dialog-header {
-    padding: 20px 24px;
-  }
-
-  .dialog-header .text-h6 {
     font-size: 18px;
   }
 
-  .dialog-card :deep(.q-card-section:not(.dialog-header):not(.q-card-actions)) {
-    padding: 24px;
-    max-height: calc(85vh - 140px);
-  }
-
-  .dialog-card :deep(.q-card-actions) {
-    padding: 16px 24px;
-  }
-}
-
-/* 768px screens (Tablet) */
-@media (max-width: 1023px) {
-  .admin-settings-page {
-    padding: 16px;
-  }
-
-  .page-header {
-    padding: 24px;
-    border-radius: 12px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-  }
-
-  .page-title {
-    font-size: 20px;
-  }
-
-  .search-input {
-    width: 100%;
-  }
-
-  .tabs-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .custom-tabs {
-    padding: 0 24px;
-    min-width: max-content;
-  }
-
-  .custom-tab {
-    padding: 12px 16px;
-    font-size: 13px;
-  }
-
-  .page-content {
-    padding: 24px 16px;
-  }
-
-  .section-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .section-title {
+  .table-title {
     font-size: 16px;
   }
 
-  .action-btn {
-    width: auto;
-    margin-left: auto;
-  }
-
-  .settings-card {
-    overflow-x: auto;
-  }
-
-  .custom-table {
-    min-width: 800px;
-  }
-
-  .custom-table :deep(thead th),
-  .custom-table :deep(tbody td) {
-    padding: 12px;
-    font-size: 13px;
-  }
-
-  .permissions-container {
-    max-width: 250px;
-  }
-
-  /* Dialog size for 768px */
-  .dialog-card {
-    min-width: 85vw;
-    max-width: 85vw;
-    width: 85vw;
-  }
-
-  .dialog-header {
-    padding: 18px 20px;
-  }
-
-  .dialog-header .text-h6 {
-    font-size: 17px;
-  }
-
-  .dialog-card :deep(.q-card-section:not(.dialog-header):not(.q-card-actions)) {
-    padding: 20px;
-    max-height: calc(80vh - 130px);
-  }
-
-  .dialog-card :deep(.q-card-actions) {
-    padding: 14px 20px;
-  }
-
-  .dialog-card :deep(.row.q-col-gutter-md > .col-6) {
-    width: 100%;
+  .modern-table-container {
+    margin: 0 12px 12px 12px;
   }
 }
 
-/* Mobile - 767px and below */
-@media (max-width: 767px) {
-  .admin-settings-page {
+/* ============================================
+   RESPONSIVE — 768px (Tablet)
+   ============================================ */
+@media (max-width: 768px) {
+  .dashboard-container {
     padding: 12px;
   }
 
   .page-header {
-    padding: 20px 16px;
-    border-radius: 8px;
+    padding: 14px;
     margin-bottom: 12px;
   }
 
   .header-content {
-    gap: 12px;
-  }
-
-  .page-title {
-    font-size: 18px;
-  }
-
-  .tabs-container {
-    margin-left: -12px;
-    margin-right: -12px;
-    border-radius: 0;
-  }
-
-  .custom-tabs {
-    padding: 0 16px;
-  }
-
-  .custom-tab {
-    padding: 10px 12px;
-    font-size: 12px;
-    min-width: 80px;
-  }
-
-  .page-content {
-    padding: 20px 12px;
-  }
-
-  .settings-section {
-    margin-top: 16px;
-  }
-
-  .section-header {
-    margin-bottom: 16px;
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
 
-  .section-title {
-    font-size: 15px;
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
   }
 
-  .section-description {
-    font-size: 12px;
-  }
-
-  .action-btn {
+  .header-search {
+    max-width: 100%;
     width: 100%;
-    margin-left: 0;
-    padding: 10px 16px;
-    font-size: 13px;
   }
 
-  .settings-card {
-    border-radius: 6px;
-    margin: 0 -4px;
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 
-  .custom-table {
+  .table-actions {
+    width: 100%;
+  }
+
+  .add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modern-table-container {
+    margin: 0 10px 10px 10px;
+    overflow-x: auto;
+  }
+
+  .settings-table {
     min-width: 700px;
   }
 
-  .custom-table :deep(thead th),
-  .custom-table :deep(tbody td) {
+  .table-header-cell,
+  .table-body-cell {
     padding: 10px 8px;
     font-size: 12px;
   }
 
-  .permissions-container {
-    max-width: 200px;
+  .actions-cell {
+    width: 90px;
+    min-width: 90px;
   }
 
-  .permission-chip {
-    font-size: 10px;
-    padding: 3px 6px;
-  }
-
-  /* Full-screen dialog on mobile */
-  .dialog-card {
-    min-width: 100vw;
-    max-width: 100vw;
-    width: 100vw;
-    max-height: 100vh;
-    height: 100vh;
-    border-radius: 0;
-    margin: 0;
-  }
-
-  .dialog-header {
-    padding: 16px;
-  }
-
-  .dialog-header .text-h6 {
-    font-size: 16px;
-  }
-
-  .dialog-card :deep(.q-card-section:not(.dialog-header):not(.q-card-actions)) {
-    padding: 16px;
-    max-height: calc(100vh - 120px);
-  }
-
-  .dialog-card :deep(.q-form) {
-    gap: 16px;
-  }
-
-  .dialog-card :deep(.q-card-actions) {
-    padding: 12px 16px;
-    flex-direction: column-reverse;
-    gap: 8px;
-  }
-
-  .dialog-card :deep(.q-card-actions .q-btn) {
-    width: 100%;
-    margin: 0;
-  }
-
-  .logo-preview-card {
-    width: 100%;
-  }
-
-  .logo-preview-card :deep(.q-avatar) {
-    width: 80px !important;
-    height: 80px !important;
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
   }
 }
 
-/* Extra small - 480px and below */
+/* ============================================
+   RESPONSIVE — 480px (Small Mobile)
+   ============================================ */
 @media (max-width: 480px) {
+  .dashboard-container {
+    padding: 10px;
+  }
+
+  .page-header {
+    padding: 12px;
+    border-radius: 10px;
+  }
+
   .page-title {
-    font-size: 16px;
+    font-size: 17px;
   }
 
-  .section-title {
-    font-size: 14px;
+  .table-section {
+    border-radius: 10px;
   }
 
-  .custom-table {
+  .table-title {
+    font-size: 15px;
+  }
+
+  .table-subtitle {
+    font-size: 11px;
+  }
+
+  .modern-table-container {
+    margin: 0 8px 8px 8px;
+  }
+
+  .settings-table {
     min-width: 600px;
   }
 
-  .custom-table :deep(thead th),
-  .custom-table :deep(tbody td) {
+  .table-header-cell,
+  .table-body-cell {
     font-size: 11px;
     padding: 8px 6px;
+  }
+
+  .status-badge,
+  .ownership-badge {
+    font-size: 10px;
+    padding: 3px 7px;
+  }
+
+  .action-btn {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
   }
 }
 </style>
