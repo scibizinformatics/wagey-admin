@@ -44,23 +44,23 @@
 
         <div class="stats-card corporate-card">
           <div class="stats-icon-wrapper">
-            <q-icon name="qr_code" class="stats-icon" />
+            <q-icon name="phone_android" class="stats-icon" />
           </div>
           <div class="stats-content">
             <q-skeleton v-if="loading" type="text" class="text-h5" />
             <div v-else class="stats-amount">{{ stats[1].count }}</div>
-            <div class="stats-label">QR Scans</div>
+            <div class="stats-label">App</div>
           </div>
         </div>
 
         <div class="stats-card business-card">
           <div class="stats-icon-wrapper">
-            <q-icon name="edit" class="stats-icon" />
+            <q-icon name="language" class="stats-icon" />
           </div>
           <div class="stats-content">
             <q-skeleton v-if="loading" type="text" class="text-h5" />
             <div v-else class="stats-amount">{{ stats[2].count }}</div>
-            <div class="stats-label">Manual Entry</div>
+            <div class="stats-label">Web</div>
           </div>
         </div>
 
@@ -69,8 +69,9 @@
             <q-icon name="schedule" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-label">Auto Login</div>
-            <div class="stats-sublabel">System Generated</div>
+            <q-skeleton v-if="loading" type="text" class="text-h5" />
+            <div v-else class="stats-amount">{{ stats[3].count }}</div>
+            <div class="stats-label">System</div>
           </div>
         </div>
       </div>
@@ -92,20 +93,38 @@
           </div>
 
           <div class="filters-grid">
-            <q-input
-              dense
-              outlined
-              label="Date Range"
-              v-model="dateRange"
-              class="filter-input"
-              clearable
-              readonly
-              @click="showDatePicker = true"
-            >
-              <template v-slot:prepend>
-                <q-icon name="event" class="cursor-pointer" @click="showDatePicker = true" />
-              </template>
-            </q-input>
+            <!-- Date Navigation -->
+            <div class="date-nav-wrapper">
+              <q-btn
+                flat
+                round
+                dense
+                icon="chevron_left"
+                class="date-nav-btn"
+                @click="goToPreviousDay"
+              />
+              <q-input
+                dense
+                outlined
+                v-model="currentDate"
+                type="date"
+                class="filter-input date-nav-input"
+                @update:model-value="onDateNavChange"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="event" />
+                </template>
+              </q-input>
+              <q-btn
+                flat
+                round
+                dense
+                icon="chevron_right"
+                class="date-nav-btn"
+                @click="goToNextDay"
+                :disable="currentDate >= today"
+              />
+            </div>
 
             <q-select
               dense
@@ -715,7 +734,13 @@
               label="Date"
               type="date"
               class="form-field"
-            />
+              readonly
+              disable
+            >
+              <template v-slot:append>
+                <q-icon name="lock" />
+              </template>
+            </q-input>
 
             <div class="time-inputs">
               <q-input
@@ -794,9 +819,12 @@ const pagination = ref({
   rowsNumber: 0,
 })
 
+const now = new Date()
+const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
 const filters = ref({
-  date_from: '',
-  date_to: '',
+  date_from: today,
+  date_to: today,
   source: '',
   employee: '',
   business_owner: '',
@@ -804,11 +832,48 @@ const filters = ref({
 })
 
 // Date range handling
-const dateRange = ref('')
+const dateRange = ref(today)
+const currentDate = ref(today)
+
 const tempDateRange = ref({
   from: '',
   to: '',
 })
+
+// ================= DATE NAVIGATION =================
+function goToPreviousDay() {
+  const date = new Date(currentDate.value)
+  date.setDate(date.getDate() - 1)
+  const newDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  currentDate.value = newDate
+  filters.value.date_from = newDate
+  filters.value.date_to = newDate
+  dateRange.value = newDate
+  pagination.value.page = 1
+  fetchAttendanceData()
+}
+
+function goToNextDay() {
+  const date = new Date(currentDate.value)
+  date.setDate(date.getDate() + 1)
+  const newDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  currentDate.value = newDate
+  filters.value.date_from = newDate
+  filters.value.date_to = newDate
+  dateRange.value = newDate
+  pagination.value.page = 1
+  fetchAttendanceData()
+}
+
+function onDateNavChange(val) {
+  if (!val) return
+  currentDate.value = val
+  filters.value.date_from = val
+  filters.value.date_to = val
+  dateRange.value = val
+  pagination.value.page = 1
+  fetchAttendanceData()
+}
 
 // Edit form
 const editingRecord = ref(null)
@@ -828,9 +893,10 @@ const employeeOptions = ref([])
 const businessOwnerOptions = ref([])
 const siteOptions = ref([])
 const sourceOptions = ref([
-  { label: 'QR Scan', value: 'qr_scan' },
-  { label: 'Manual Entry', value: 'admin' },
-  { label: 'Auto Login', value: 'auto_login' },
+  { label: 'App', value: 'app' },
+  { label: 'Web', value: 'web' },
+  { label: 'System', value: 'system' },
+  { label: 'Manual', value: 'manual' },
 ])
 
 // Get company ID
@@ -855,13 +921,16 @@ const companyId = ref(getCompanyId())
 const stats = computed(() => {
   const data = attendanceData.value
   const total = data.length
-  const qrScans = data.filter((item) => item.source === 'qr_scan').length
+  const app = data.filter((item) => item.source === 'app').length
+  const web = data.filter((item) => item.source === 'web').length
   const manual = data.filter((item) => item.source === 'manual').length
+  const system = data.filter((item) => item.source === 'system').length
 
   return [
     { label: 'Total Records', count: total },
-    { label: 'QR Scans', count: qrScans },
-    { label: 'Manual Entry', count: manual },
+    { label: 'App', count: app },
+    { label: 'Web', count: web },
+    { label: 'System', count: system },
   ]
 })
 
@@ -877,27 +946,76 @@ if (userData.role === 'admin') {
 
 // ================= TABLE COLUMNS =================
 const columns = [
-  { name: 'id', label: 'ID', align: 'left', field: 'id', sortable: true },
-  { name: 'employee', label: 'Employee', align: 'left', field: 'employee', sortable: true },
-  { name: 'date', label: 'Date', align: 'center', field: 'date', sortable: true },
-  { name: 'time_in', label: 'Time In', align: 'center', field: 'time_in', sortable: true },
   {
-    name: 'time_in_selfie',
-    label: 'Time In Photo',
+    name: 'select',
+    label: '',
+    align: 'center',
+    field: 'id',
+    sortable: false,
+  },
+  {
+    name: 'sl_no',
+    label: 'SL No',
+    align: 'center',
+    field: 'id',
+    sortable: false,
+  },
+  {
+    name: 'employee',
+    label: 'Employee',
+    align: 'left',
+    field: 'employee',
+    sortable: true,
+  },
+  {
+    name: 'date',
+    label: 'Date',
+    align: 'center',
+    field: 'date',
+    sortable: true,
+  },
+  {
+    name: 'time_in',
+    label: 'Time In',
+    align: 'center',
+    field: 'time_in',
+    sortable: true,
+  },
+  {
+    name: 'time_in_photo',
+    label: 'Photo',
     align: 'center',
     field: 'time_in_selfie',
     sortable: false,
   },
-  { name: 'time_out', label: 'Time Out', align: 'center', field: 'time_out', sortable: true },
   {
-    name: 'time_out_selfie',
-    label: 'Time Out Photo',
+    name: 'time_out',
+    label: 'Time Out',
+    align: 'center',
+    field: 'time_out',
+    sortable: true,
+  },
+  {
+    name: 'time_out_photo',
+    label: 'Photo',
     align: 'center',
     field: 'time_out_selfie',
     sortable: false,
   },
-  { name: 'source', label: 'Source', align: 'center', field: 'source', sortable: true },
-  { name: 'action', label: 'Actions', align: 'center', field: 'action', sortable: false },
+  {
+    name: 'source',
+    label: 'Source',
+    align: 'center',
+    field: 'source',
+    sortable: true,
+  },
+  {
+    name: 'actions',
+    label: 'Actions',
+    align: 'center',
+    field: 'actions',
+    sortable: false,
+  },
 ]
 
 // ================= SELFIE VIEWER FUNCTION =================
@@ -1054,7 +1172,15 @@ function getEmployeePhoto(employee) {
       null
     )
   }
-
+  function debugAttendanceData() {
+    console.log('=== ATTENDANCE DEBUG INFO ===')
+    console.log('Total records in attendanceData:', attendanceData.value.length)
+    console.log('Active filters:', filters.value)
+    console.log('Sample record:', attendanceData.value[0])
+    console.log('Employees loaded:', employees.value.length)
+    console.log('Company ID:', companyId.value)
+    console.log('===========================')
+  }
   // If employee is ID, find in employees array
   const foundEmployee = employees.value.find((emp) => emp.id === employee || emp.uuid === employee)
 
@@ -1097,7 +1223,7 @@ async function fetchAttendanceData(params = {}) {
   try {
     const { year, month } = getYearMonth()
 
-    // ONLY use site filter in API (since it works)
+    // Build URL with site filter if present
     let url = `https://staging.wageyapp.com/attendance/company/${companyId.value}/${year}/${month}/`
 
     if (filters.value.site) {
@@ -1114,11 +1240,14 @@ async function fetchAttendanceData(params = {}) {
       },
     })
 
+    // Extract data from response
     let data = Array.isArray(response.data) ? response.data : response.data.data
     data = data || []
 
-    // CLIENT-SIDE FILTERING for employee and source
-    let filteredData = data
+    console.log(`📊 Raw data received: ${data.length} records`)
+
+    // Apply client-side filters
+    let filteredData = [...data] // Create a copy
 
     // Filter by employee
     if (filters.value.employee) {
@@ -1130,16 +1259,16 @@ async function fetchAttendanceData(params = {}) {
 
         return employeeId === filters.value.employee
       })
-      console.log(`🔍 Filtered by employee: ${filteredData.length} records`)
+      console.log(`🔍 After employee filter: ${filteredData.length} records`)
     }
 
     // Filter by source
     if (filters.value.source) {
       filteredData = filteredData.filter((record) => record.source === filters.value.source)
-      console.log(`🔍 Filtered by source: ${filteredData.length} records`)
+      console.log(`🔍 After source filter: ${filteredData.length} records`)
     }
 
-    // Filter by business owner (if applicable)
+    // Filter by business owner
     if (filters.value.business_owner) {
       filteredData = filteredData.filter((record) => {
         const ownerId =
@@ -1149,13 +1278,31 @@ async function fetchAttendanceData(params = {}) {
 
         return ownerId === filters.value.business_owner
       })
-      console.log(`🔍 Filtered by business owner: ${filteredData.length} records`)
+      console.log(`🔍 After business owner filter: ${filteredData.length} records`)
+    }
+
+    // Filter by date range if set
+    if (filters.value.date_from && filters.value.date_to) {
+      filteredData = filteredData.filter((record) => {
+        const recordDate = new Date(record.date)
+        const fromDate = new Date(filters.value.date_from)
+        const toDate = new Date(filters.value.date_to)
+        return recordDate >= fromDate && recordDate <= toDate
+      })
+      console.log(`🔍 After date range filter: ${filteredData.length} records`)
     }
 
     attendanceData.value = filteredData
     pagination.value.rowsNumber = filteredData.length
 
-    console.log(`✅ Loaded ${attendanceData.value.length} attendance records (filtered)`)
+    console.log(`✅ Final displayed records: ${attendanceData.value.length}`)
+
+    // Show message if no data after filtering
+    if (filteredData.length === 0 && data.length > 0) {
+      showErrorNotification('No records match the current filters. Try adjusting your filters.')
+    } else if (filteredData.length === 0) {
+      showErrorNotification('No attendance records found for this period.')
+    }
   } catch (error) {
     console.error('❌ Error fetching attendance:', error)
     console.error('📍 Error details:', {
@@ -1454,6 +1601,8 @@ async function updateAttendance() {
       return
     }
 
+    // Construct timestamps using the ORIGINAL date (date field is readonly)
+    // Only time_in and time_out are being updated
     let timeInTimestamp = null
     let timeOutTimestamp = null
 
@@ -1467,6 +1616,7 @@ async function updateAttendance() {
       timeOutTimestamp = timeOutDate.toISOString()
     }
 
+    // Only send time_in, time_out, and source - date is NOT included in update
     const attendanceData = {
       time_in: timeInTimestamp,
       time_out: timeOutTimestamp,
@@ -1621,14 +1771,15 @@ function viewDetails(record) {
 // ================= FILTERS =================
 function clearAllFilters() {
   filters.value = {
-    date_from: '',
-    date_to: '',
+    date_from: today,
+    date_to: today,
     source: '',
     employee: '',
     business_owner: '',
     site: '',
   }
-  dateRange.value = ''
+  dateRange.value = today
+  currentDate.value = today
   pagination.value.page = 1
   selected.value = []
   selectAll.value = false
@@ -2787,6 +2938,22 @@ onMounted(async () => {
   50% {
     opacity: 1;
   }
+}
+
+/* Date Navigation */
+.date-nav-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.date-nav-btn {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.date-nav-input {
+  flex: 1;
 }
 
 /* Focus States */
