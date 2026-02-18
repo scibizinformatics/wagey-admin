@@ -187,6 +187,17 @@
                             flat
                             dense
                             round
+                            icon="swap_horiz"
+                            size="xs"
+                            class="action-btn reassign-btn"
+                            @click="openReassignModal(element)"
+                          >
+                            <q-tooltip>Reassign Day Off</q-tooltip>
+                          </q-btn>
+                          <q-btn
+                            flat
+                            dense
+                            round
                             icon="close"
                             size="xs"
                             class="action-btn delete-btn"
@@ -343,8 +354,32 @@
               </template>
             </q-select>
 
-            <!-- Employee & Day Selection -->
-            <div class="form-row">
+            <!-- Employee Selection -->
+            <!-- Multi-select for recurring, single-select for one-time -->
+            <q-select
+              v-if="newSchedule.scheduleType === 'recurring'"
+              v-model="newSchedule.userIds"
+              :options="employeeOptions"
+              option-value="value"
+              option-label="label"
+              label="Select Employees"
+              outlined
+              emit-value
+              map-options
+              multiple
+              use-chips
+              class="form-field full-width"
+              :rules="[(val) => (val && val.length > 0) || 'At least one employee is required']"
+              :loading="loadingEmployees"
+            >
+              <template #no-option>
+                <q-item>
+                  <q-item-section class="text-grey"> No employees available </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+
+            <div v-else class="form-row">
               <q-select
                 v-model="newSchedule.userId"
                 :options="employeeOptions"
@@ -366,7 +401,6 @@
               </q-select>
 
               <q-input
-                v-if="newSchedule.scheduleType === 'one-time'"
                 v-model="newSchedule.selectedDate"
                 label="Select Date"
                 outlined
@@ -450,14 +484,14 @@
               </q-input>
             </div>
 
-            <!-- Recurring Template Selection (Optional) -->
+            <!-- Recurring Template Selection -->
             <q-select
               v-if="newSchedule.scheduleType === 'recurring'"
               v-model="newSchedule.recurringSchedule"
               :options="recurringScheduleOptions"
               option-value="value"
               option-label="label"
-              label="Use Recurring Template (Optional)"
+              label="Use Recurring Template"
               outlined
               emit-value
               map-options
@@ -499,16 +533,17 @@
 
             <!-- Shift Type / Position -->
             <q-select
+              v-if="newSchedule.scheduleType !== 'recurring'"
               v-model="newSchedule.position"
               :options="positionOptions"
-              option-value="value"
-              option-label="label"
-              label="Shift Type / Position"
+              option-value="id"
+              option-label="name"
+              label="Select Shift/Position"
               outlined
+              dense
               emit-value
               map-options
-              class="form-field full-width"
-              :rules="[(val) => !!val || 'Shift type is required']"
+              :rules="[(val) => val !== null || 'Position is required']"
             />
 
             <!-- Repeat Interval (for recurring) -->
@@ -844,6 +879,7 @@ const isAddingShift = ref(false)
 
 const newSchedule = ref({
   userId: null,
+  userIds: [],
   selectedDate: null,
   startTime: '',
   endTime: '',
@@ -989,11 +1025,6 @@ const isDayOff = (shift) => {
 
   // Check if both start and end times are null (common for day off)
   const isDayOffByTime = !shift.startTime && !shift.endTime
-
-  // Check by shift type ID if you have a specific day off ID
-  // Uncomment and set the correct ID if your system has a specific day off shift type ID
-  // const dayOffShiftTypeId = 999 // Replace with actual day off shift type ID
-  // const isDayOffById = shift.shiftTypeId === dayOffShiftTypeId
 
   return isDayOffByName || isDayOffByStatus || isDayOffByTime
 }
@@ -1193,13 +1224,25 @@ const onRecurringTemplateChange = (templateId) => {
     quickAdd.value.department = template.department
   }
 
+  // 🆕 ADD: Auto-fill date range from template
+  if (template.start_date) {
+    newSchedule.value.recurringStartDate = template.start_date
+  }
+
+  if (template.end_date) {
+    newSchedule.value.recurringEndDate = template.end_date
+  }
+
   $q.notify({
     type: 'info',
     message: 'Template loaded successfully',
-    timeout: 2000,
+    caption:
+      template.start_date && template.end_date
+        ? `Valid dates: ${template.start_date} to ${template.end_date}`
+        : undefined,
+    timeout: 3000,
   })
 }
-
 const parseWeekdays = (weekdaysStr) => {
   if (!weekdaysStr) return []
 
@@ -1280,7 +1323,6 @@ const fetchSitesAndDepartments = async () => {
       recurringSchedules: recurringSchedules.value.length,
     })
 
-    // 🆕 ADD: Log the actual shift types for debugging
     console.log(
       '📋 Available Shift Types:',
       shiftTypes.value.map((st) => ({
@@ -1290,7 +1332,6 @@ const fetchSitesAndDepartments = async () => {
       })),
     )
 
-    // 🆕 ADD: Log recurring schedules for debugging
     console.log(
       '🔄 Available Recurring Schedules:',
       recurringSchedules.value.map((rs) => ({
@@ -1372,6 +1413,12 @@ const fetchData = async () => {
     console.log('🔑 Token exists:', !!token)
     console.log('🏢 Raw companyId from localStorage:', companyId)
 
+    // 🆕 ADD: Log selected week range
+    console.log('📅 Selected week range:', {
+      start: selectedWeek.value.start.toISOString().split('T')[0],
+      end: selectedWeek.value.end.toISOString().split('T')[0],
+    })
+
     try {
       const parsed = JSON.parse(companyId)
       companyId = parsed?.id || parsed
@@ -1438,6 +1485,9 @@ const fetchData = async () => {
     console.log('📊 Processing', employeesData.length, 'employees with schedules')
 
     let loggedFirstSchedule = false
+    let totalSchedulesProcessed = 0
+    let schedulesInWeekRange = 0
+    let schedulesOutsideWeekRange = 0
 
     employeesData.forEach((empData, index) => {
       let employee = null
@@ -1485,12 +1535,23 @@ const fetchData = async () => {
             return
           }
 
+          totalSchedulesProcessed++
+
           const scheduleDate = new Date(schedule.date)
           const weekStart = new Date(selectedWeek.value.start)
           const timeDiff = scheduleDate.getTime() - weekStart.getTime()
           const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24))
 
+          // 🆕 ADD: Detailed date comparison logging
+          if (totalSchedulesProcessed <= 5) {
+            console.log(
+              `📅 Schedule ${totalSchedulesProcessed}: date=${schedule.date}, daysDiff=${daysDiff}, weekStart=${weekStart.toISOString().split('T')[0]}`,
+            )
+          }
+
           if (daysDiff >= 0 && daysDiff < 7) {
+            schedulesInWeekRange++
+
             // ✅ Check if this is a day off shift first
             const isDayOffShift =
               schedule.shift_type_name?.toLowerCase().includes('day off') ||
@@ -1526,8 +1587,6 @@ const fetchData = async () => {
             let shiftTypeName =
               schedule.shift_type_name || schedule.shiftTypeName || schedule.shift_name || 'Shift'
 
-            console.log(`📋 Processing schedule: ${shiftTypeName}, isDayOff: ${isDayOffShift}`)
-
             // ✅ If no shift type ID, match by times (skip for day off)
             if (
               !shiftTypeId &&
@@ -1545,9 +1604,7 @@ const fetchData = async () => {
               if (matchingShiftType) {
                 shiftTypeId = matchingShiftType.id
                 shiftTypeName = matchingShiftType.name
-                console.log(`✅ Matched shift type by time: ${shiftTypeName} (ID: ${shiftTypeId})`)
               } else {
-                // ✅ No match found - use first shift type as fallback
                 console.warn(`⚠️ No shift type match for ${startTime}-${endTime}, using fallback`)
                 shiftTypeId = shiftTypes.value[0].id
                 shiftTypeName = shiftTypes.value[0].name
@@ -1567,12 +1624,11 @@ const fetchData = async () => {
               if (foundShiftType) {
                 shiftTypeId = foundShiftType.id
               } else if (!isDayOffShift) {
-                // ✅ Fallback to first shift type (only for non-day-off shifts)
                 shiftTypeId = shiftTypes.value[0].id
               }
             }
 
-            // ✅ Final fallback if still no shift type (skip for day off - they can have no shift type ID)
+            // ✅ Final fallback if still no shift type (skip for day off)
             if (!shiftTypeId && !isDayOffShift && shiftTypes.value.length > 0) {
               console.warn('⚠️ Using fallback shift type for schedule:', schedule.id)
               shiftTypeId = shiftTypes.value[0].id
@@ -1588,12 +1644,12 @@ const fetchData = async () => {
               startTime: startTime,
               endTime: endTime,
               position: shiftTypeName,
-              shiftTypeId: shiftTypeId, // ✅ Should now always have a value
+              shiftTypeId: shiftTypeId,
               site: schedule.site || null,
               department: schedule.department || null,
               status: schedule.status || 'draft',
               date: schedule.date,
-              is_off: schedule.is_off || false, // ✅ Include is_off property from API
+              is_off: schedule.is_off || false,
             }
 
             // ✅ WARN about missing critical fields
@@ -1608,11 +1664,23 @@ const fetchData = async () => {
             }
 
             shifts.value.push(shift)
+          } else {
+            schedulesOutsideWeekRange++
           }
         } catch (err) {
           console.error('❌ Error processing schedule:', err)
         }
       })
+    })
+
+    // 🆕 ADD: Summary of date filtering
+    console.log('\n=== 📅 DATE FILTERING SUMMARY ===')
+    console.log('Total schedules processed:', totalSchedulesProcessed)
+    console.log('Schedules within week range:', schedulesInWeekRange)
+    console.log('Schedules outside week range:', schedulesOutsideWeekRange)
+    console.log('Selected week:', {
+      start: selectedWeek.value.start.toISOString().split('T')[0],
+      end: selectedWeek.value.end.toISOString().split('T')[0],
     })
 
     console.log('\n=== FINAL RESULTS ===')
@@ -1680,15 +1748,10 @@ const fetchData = async () => {
         siteType: typeof shift.site,
         department: shift.department,
         position: shift.position,
-        shiftTypeId: shift.shiftTypeId, // ✅ Check this!
+        shiftTypeId: shift.shiftTypeId,
         shiftTypeIdType: typeof shift.shiftTypeId,
       })
     })
-
-    console.log(
-      '🔍 ALL ASSIGNMENT IDS:',
-      shifts.value.map((s) => s.assignmentId),
-    )
 
     if (shifts.value.length > 0) {
       $q.notify({
@@ -1714,6 +1777,7 @@ const fetchData = async () => {
     })
   }
 }
+
 onMounted(async () => {
   await fetchSitesAndDepartments()
   await fetchEmployees()
@@ -1805,8 +1869,8 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
   console.log('🏢 Site ID:', scheduleData.site, typeof scheduleData.site)
   console.log('👔 Shift Type ID:', scheduleData.position, typeof scheduleData.position)
 
-  if (!scheduleData.userId) {
-    throw new Error('Employee ID is required')
+  if (!scheduleData.userIds || scheduleData.userIds.length === 0) {
+    throw new Error('At least one employee is required')
   }
 
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -1825,7 +1889,7 @@ const createScheduleRecord = async (scheduleData, dateStr) => {
         date: dateStr,
         site_id: parseInt(scheduleData.site),
         shift_type_id: parseInt(scheduleData.position),
-        department_id: parseInt(scheduleData.department || departments.value[0]?.id), // fallback to first department
+        department_id: parseInt(scheduleData.department || departments.value[0]?.id),
       },
     ],
   }
@@ -1904,9 +1968,7 @@ const createRecurringSchedule = async (scheduleData) => {
   console.log('=== CREATE RECURRING SCHEDULE DEBUG ===')
   console.log('📋 Raw scheduleData:', scheduleData)
 
-  if (!companyId) {
-    throw new Error('No company selected')
-  }
+  if (!companyId) throw new Error('No company selected')
 
   try {
     const parsed = JSON.parse(companyId)
@@ -1917,16 +1979,128 @@ const createRecurringSchedule = async (scheduleData) => {
 
   companyId = parseInt(companyId)
 
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    scheduleData.userId,
+  // Validate required fields
+  if (!scheduleData.userIds || scheduleData.userIds.length === 0) {
+    throw new Error('At least one employee is required')
+  }
+  if (!scheduleData.recurringSchedule) throw new Error('Recurring template is required')
+  if (!scheduleData.recurringStartDate) throw new Error('Start date is required')
+  if (!scheduleData.recurringEndDate) throw new Error('End date is required')
+  if (!scheduleData.site) throw new Error('Site is required')
+
+  console.log('✅ All required fields present')
+
+  // Normalize employee IDs (handle both UUID and integer)
+  const employeeIds = scheduleData.userIds.map((id) => {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      String(id),
+    )
+    return isUUID ? id : parseInt(id)
+  })
+
+  console.log('👥 Employee IDs to assign:', employeeIds)
+
+  // Verify all employees belong to the company
+  try {
+    const companyEmpsRes = await axios.get(
+      `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    const invalidIds = employeeIds.filter((id) => !companyEmpsRes.data.some((emp) => emp.id === id))
+    if (invalidIds.length > 0) {
+      throw new Error(`Some employees are not linked to this company: ${invalidIds.join(', ')}`)
+    }
+    console.log('✅ All employees verified in company')
+  } catch (verifyError) {
+    console.error('❌ Could not verify employees:', verifyError)
+    throw verifyError
+  }
+
+  // Validate recurring template
+  const templateExists = recurringSchedules.value.find(
+    (r) => r.id === parseInt(scheduleData.recurringSchedule),
   )
+  if (!templateExists) {
+    throw new Error(`Recurring template ${scheduleData.recurringSchedule} not found`)
+  }
+  console.log('✅ Recurring template verified:', templateExists.name)
 
-  const employeeId = isUUID ? scheduleData.userId : parseInt(scheduleData.userId)
+  if (templateExists.start_date && templateExists.end_date) {
+    const userStart = new Date(scheduleData.recurringStartDate)
+    const userEnd = new Date(scheduleData.recurringEndDate)
+    if (
+      userStart < new Date(templateExists.start_date) ||
+      userEnd > new Date(templateExists.end_date)
+    ) {
+      throw new Error(
+        `Selected dates (${scheduleData.recurringStartDate} to ${scheduleData.recurringEndDate}) are outside the template's valid range (${templateExists.start_date} to ${templateExists.end_date}).`,
+      )
+    }
+    console.log('✅ Dates are within template range')
+  }
 
-  // Build recurring payload matching your API structure
+  // Validate site
+  const siteExists = sites.value.find((s) => s.id === parseInt(scheduleData.site))
+  if (!siteExists) throw new Error(`Site ${scheduleData.site} not found`)
+  console.log('✅ Site verified:', siteExists.name)
+
+  // Pre-check: filter out employees who already have schedules in the date range
+  let finalEmployeeIds = [...employeeIds]
+  try {
+    const existingRes = await axios.get(
+      `https://staging.wageyapp.com/organization/schedules/company/monthly/?company=${companyId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    const existingData = existingRes.data?.results || existingRes.data || []
+    const rangeStart = new Date(scheduleData.recurringStartDate)
+    const rangeEnd = new Date(scheduleData.recurringEndDate)
+
+    const conflictingNames = []
+    const cleanIds = []
+
+    for (const empId of employeeIds) {
+      const empData = existingData.find((e) => e.employee?.id === empId || e.id === empId)
+      const schedules = empData?.schedules || empData?.schedule || []
+      const hasConflict = schedules.some((s) => {
+        const d = new Date(s.date)
+        return d >= rangeStart && d <= rangeEnd
+      })
+
+      if (hasConflict) {
+        const emp = employees.value.find((e) => e.id === empId)
+        conflictingNames.push(emp?.full_name || emp?.name || String(empId))
+      } else {
+        cleanIds.push(empId)
+      }
+    }
+
+    if (conflictingNames.length > 0) {
+      $q.notify({
+        type: 'warning',
+        message: `Skipped ${conflictingNames.length} employee(s) with existing schedules`,
+        caption: conflictingNames.join(', '),
+        timeout: 8000,
+        position: 'top',
+        multiLine: true,
+        actions: [{ label: 'Dismiss', color: 'white' }],
+      })
+
+      if (cleanIds.length === 0) {
+        throw new Error('All selected employees already have schedules in this date range.')
+      }
+
+      finalEmployeeIds = cleanIds
+    }
+  } catch (preCheckError) {
+    if (preCheckError.message?.includes('already have schedules')) throw preCheckError
+    // If pre-check fails for other reasons, proceed with all employees
+    console.warn('⚠️ Pre-check skipped due to error:', preCheckError.message)
+  }
+
+  // Build and send payload
   const payload = {
     company_id: companyId,
-    employee_ids: [employeeId],
+    employee_ids: finalEmployeeIds,
     recurring: [
       {
         recurring_id: parseInt(scheduleData.recurringSchedule),
@@ -1935,6 +2109,10 @@ const createRecurringSchedule = async (scheduleData) => {
         site_id: parseInt(scheduleData.site),
       },
     ],
+  }
+
+  if (scheduleData.department) {
+    payload.recurring[0].department_id = parseInt(scheduleData.department)
   }
 
   console.log('📤 Recurring Payload:', JSON.stringify(payload, null, 2))
@@ -1950,15 +2128,28 @@ const createRecurringSchedule = async (scheduleData) => {
         },
       },
     )
-
     console.log('✅ SUCCESS - Recurring Schedule Response:', response.data)
     return response.data
   } catch (error) {
     console.error('❌ FAILED - Recurring Schedule Error:', {
       status: error.response?.status,
-      statusText: error.response?.statusText,
       data: error.response?.data,
     })
+    console.error('❌ Failed payload was:', JSON.stringify(payload, null, 2))
+
+    // Parse duplicate key errors and show human-readable names
+    const apiErrors = error.response?.data?.errors
+    if (Array.isArray(apiErrors) && apiErrors.length > 0) {
+      const names = apiErrors.map((e) => {
+        const uuidMatch = e.match(/^([0-9a-f-]{36})/)
+        const empId = uuidMatch?.[1]
+        const emp = employees.value.find((em) => em.id === empId)
+        return emp?.full_name || emp?.name || empId || 'Unknown employee'
+      })
+      throw new Error(
+        `Duplicate schedule detected for: ${names.join(', ')}. These employees already have assignments in the selected date range.`,
+      )
+    }
 
     throw error
   }
@@ -1980,7 +2171,7 @@ const handleScheduleError = (error) => {
     if (data.results && Array.isArray(data.results) && data.results.length === 0) {
       errorMessage = 'Could not create schedule'
       caption =
-        'Common causes: Employee not linked to company, invalid site/shift type, or data mismatch. Check console for details.'
+        'Common causes: Employee not linked to company, invalid recurring template, invalid site, date format issues, or permission problems. Check console for details.'
     } else if (data.errors && Array.isArray(data.errors)) {
       errorMessage = data.errors.join('; ')
       caption = 'Please correct the errors above'
@@ -2129,12 +2320,11 @@ const verifyEmployeeCompanyLink = async (employeeId) => {
 const addSchedule = async () => {
   const n = newSchedule.value
 
-  if (!n.userId) {
+  if (n.scheduleType !== 'recurring' && !n.userId) {
     $q.notify({ type: 'negative', message: 'Please select an employee.' })
     return
   }
 
-  // Validation for one-time schedules
   if (n.scheduleType === 'one-time') {
     if (!n.selectedDate) {
       $q.notify({ type: 'negative', message: 'Please select a date.' })
@@ -2147,18 +2337,19 @@ const addSchedule = async () => {
     }
   }
 
-  // Validation for recurring schedules
   if (n.scheduleType === 'recurring') {
+    if (!n.userIds || n.userIds.length === 0) {
+      $q.notify({ type: 'negative', message: 'Please select at least one employee.' })
+      return
+    }
     if (!n.recurringStartDate) {
       $q.notify({ type: 'negative', message: 'Please select a start date.' })
       return
     }
-
     if (!n.recurringEndDate) {
       $q.notify({ type: 'negative', message: 'Please select an end date.' })
       return
     }
-
     if (!n.recurringSchedule) {
       $q.notify({ type: 'negative', message: 'Please select a recurring template.' })
       return
@@ -2174,28 +2365,26 @@ const addSchedule = async () => {
   addConflictWarning.value = false
 
   try {
-    console.log('🔍 Verifying employee-company link...')
-    const isLinked = await verifyEmployeeCompanyLink(n.userId)
-
-    if (!isLinked) {
-      isCheckingConflict.value = false
-      const selectedEmployee = employees.value.find((emp) => emp.id === n.userId)
-      $q.notify({
-        type: 'negative',
-        message: `${selectedEmployee?.full_name || 'Employee'} is not linked to this company.`,
-        timeout: 8000,
-      })
-      return
-    }
-
-    console.log('✅ Employee verified')
-
-    // Handle based on schedule type
     if (n.scheduleType === 'recurring') {
-      // Create recurring schedule
+      // Multi-employee verification is handled inside createRecurringSchedule
       await createRecurringSchedule(n)
     } else {
-      // One-time schedule - check for conflicts first
+      console.log('🔍 Verifying employee-company link...')
+      const isLinked = await verifyEmployeeCompanyLink(n.userId)
+
+      if (!isLinked) {
+        isCheckingConflict.value = false
+        const selectedEmployee = employees.value.find((emp) => emp.id === n.userId)
+        $q.notify({
+          type: 'negative',
+          message: `${selectedEmployee?.full_name || 'Employee'} is not linked to this company.`,
+          timeout: 8000,
+        })
+        return
+      }
+
+      console.log('✅ Employee verified')
+
       const hasConflict = await checkEmployeeScheduleOnDate(n.userId, n.selectedDate)
 
       if (hasConflict) {
@@ -2217,6 +2406,7 @@ const addSchedule = async () => {
 
     newSchedule.value = {
       userId: null,
+      userIds: [],
       selectedDate: null,
       startTime: '',
       endTime: '',
@@ -2297,21 +2487,6 @@ const quickAddSchedule = async () => {
 
     console.log('Target date:', targetDate)
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const compareDate = new Date(targetDate)
-    compareDate.setHours(0, 0, 0, 0)
-
-    if (compareDate < today) {
-      $q.notify({
-        type: 'warning',
-        message: 'Cannot schedule shifts in the past',
-        caption: `Selected date: ${targetDate.toLocaleDateString()}`,
-      })
-      isAddingShift.value = false
-      return
-    }
-
     const year = targetDate.getFullYear()
     const month = String(targetDate.getMonth() + 1).padStart(2, '0')
     const dayOfMonth = String(targetDate.getDate()).padStart(2, '0')
@@ -2386,6 +2561,7 @@ const quickAddSchedule = async () => {
 const openAddModal = () => {
   newSchedule.value = {
     userId: null,
+    userIds: [],
     selectedDate: null,
     startTime: '',
     endTime: '',
@@ -2415,19 +2591,25 @@ const deleteShift = async (id) => {
       return
     }
 
-    await axios.delete(`https://staging.wageyapp.com/organization/assignments/assign/${id}/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    // Find the shift to get its assignmentId
+    const shift = shifts.value.find((s) => s.id === id)
+    const assignmentId = shift?.assignmentId || id
+
+    await axios.patch(
+      `https://staging.wageyapp.com/organization/assignments/${assignmentId}/cancel/`,
+      { status: 'cancelled' },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
 
     shifts.value = shifts.value.filter((s) => s.id !== id)
-    $q.notify({ type: 'positive', message: 'Schedule deleted successfully' })
+    $q.notify({ type: 'positive', message: 'Schedule cancelled successfully' })
 
     setTimeout(async () => {
       await fetchData()
     }, 500)
   } catch (e) {
-    console.error('Failed to delete schedule:', e.response?.data || e.message)
-    $q.notify({ type: 'negative', message: 'Failed to delete schedule' })
+    console.error('Failed to cancel schedule:', e.response?.data || e.message)
+    $q.notify({ type: 'negative', message: 'Failed to cancel schedule' })
   }
 }
 
@@ -2475,43 +2657,35 @@ const openReassignModal = (shift) => {
     department: shift.department,
     date: shift.date,
     userId: shift.userId,
+    isDayOff: isDayOff(shift),
   })
 
-  // Validate required fields
-  const missingFields = []
-
-  if (!shift.assignmentId) missingFields.push('Assignment ID')
-  if (!shift.site) missingFields.push('Site')
-  if (!shift.shiftTypeId) missingFields.push('Shift Type')
-
-  if (missingFields.length > 0) {
-    console.error('❌ Cannot update shift - Missing:', missingFields)
-
+  // Only assignmentId is strictly required to update/reassign
+  if (!shift.assignmentId) {
+    console.error('❌ Cannot update shift - Missing: Assignment ID')
     $q.notify({
       type: 'negative',
       message: 'Cannot update this shift',
-      caption: `Missing required fields: ${missingFields.join(', ')}`,
+      caption: 'Missing required field: Assignment ID',
       timeout: 5000,
     })
     return
   }
 
-  // Initialize reassign data with current shift values
   reassignData.value = {
     assignmentId: shift.assignmentId,
-    shiftTypeId: shift.shiftTypeId,
-    siteId: shift.site,
+    shiftTypeId: shift.shiftTypeId || null, // null for day off shifts — user will pick a new one
+    siteId: shift.site || null,
     departmentId: shift.department || null,
     currentEmployee: shift.userId,
     date: shift.date,
     day: shift.day,
-    originalShift: { ...shift }, // Store original shift for reference
+    originalShift: { ...shift },
   }
 
   console.log('✅ Update shift data ready:', reassignData.value)
   showReassignModal.value = true
 }
-
 const closeReassignModal = () => {
   showReassignModal.value = false
   reassignData.value = {
@@ -2526,8 +2700,6 @@ const closeReassignModal = () => {
   }
 }
 
-// Update shift assignment function
-// This allows admin to change the shift_type_id, site_id, and department_id for an assignment
 const reassignShift = async () => {
   isReassigning.value = true
   const token = localStorage.getItem('access_token')
@@ -2545,9 +2717,6 @@ const reassignShift = async () => {
       currentEmployee: r.currentEmployee,
     })
 
-    // ============================================
-    // VALIDATION
-    // ============================================
     if (!r.assignmentId) {
       $q.notify({
         type: 'negative',
@@ -2575,33 +2744,18 @@ const reassignShift = async () => {
       return
     }
 
-    // ============================================
-    // BUILD PAYLOAD
-    // ============================================
-    // Based on the API specification:
-    // { "assignment_id": 0, "shift_type_id": 0, "site_id": 0, "department_id": 0 }
     const payload = {
       assignment_id: parseInt(r.assignmentId),
       shift_type_id: parseInt(r.shiftTypeId),
       site_id: parseInt(r.siteId),
     }
 
-    // Add department_id only if it's provided
     if (r.departmentId) {
       payload.department_id = parseInt(r.departmentId)
     }
 
     console.log('📤 Update payload:', JSON.stringify(payload, null, 2))
-    console.log('📤 Payload field types:', {
-      assignment_id: typeof payload.assignment_id,
-      shift_type_id: typeof payload.shift_type_id,
-      site_id: typeof payload.site_id,
-      department_id: payload.department_id ? typeof payload.department_id : 'not included',
-    })
 
-    // ============================================
-    // MAKE API CALL
-    // ============================================
     const response = await axios.patch(
       'https://staging.wageyapp.com/organization/assignments/reassign/',
       payload,
@@ -2614,11 +2768,7 @@ const reassignShift = async () => {
     )
 
     console.log('✅ Shift update API response:', response.data)
-    console.log('✅ Response status:', response.status)
 
-    // ============================================
-    // SUCCESS NOTIFICATION
-    // ============================================
     const employeeName = getEmployeeName(r.currentEmployee)
     const shiftTypeName = getPositionName(r.shiftTypeId)
 
@@ -2632,33 +2782,21 @@ const reassignShift = async () => {
 
     closeReassignModal()
 
-    // ============================================
-    // FORCE REFRESH FROM API
-    // ============================================
     console.log('🔄 Force refreshing data from server...')
-
-    // Clear current shifts to force a clean reload
     shifts.value = []
-
-    // Wait a bit for backend to process
     await new Promise((resolve) => setTimeout(resolve, 500))
-
-    // Fetch fresh data
     await fetchData()
 
     console.log('✅ Data refresh complete. New shifts count:', shifts.value.length)
   } catch (error) {
     console.error('❌ Reassign failed:', error)
     console.error('❌ Error response:', error.response?.data)
-    console.error('❌ Error status:', error.response?.status)
-    console.error('❌ Full error object:', JSON.stringify(error.response, null, 2))
 
     let errorMsg = 'Failed to reassign shift.'
     let errorCaption = ''
 
     if (error.response?.status === 400) {
       const data = error.response.data
-      console.error('❌ 400 Bad Request - Details:', data)
 
       if (typeof data === 'object') {
         const errors = []
