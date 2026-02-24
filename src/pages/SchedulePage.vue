@@ -213,6 +213,10 @@
                         <div class="shift-time" v-if="element.startTime && element.endTime">
                           {{ formatTimeWithTimezone(element.startTime) }} - {{ element.endTime }}
                         </div>
+                        <div class="shift-site" v-if="getSiteName(element.site)">
+                          <q-icon name="location_on" size="11px" />
+                          {{ getSiteName(element.site) }}
+                        </div>
                         <div class="shift-position">
                           {{ getPositionName(element.position) }}
                         </div>
@@ -1007,6 +1011,13 @@ const validateEndTime = (val, start = null) => {
 const getPositionName = (positionId) => {
   const position = shiftTypes.value.find((p) => p.id === positionId)
   return position?.name || positionId
+}
+
+const getSiteName = (siteId) => {
+  if (!siteId) return null
+  const id = typeof siteId === 'number' ? siteId : parseInt(siteId)
+  const site = sites.value.find((s) => s.id === id)
+  return site?.name || null
 }
 
 // Check if a shift is a "day off" shift
@@ -2571,7 +2582,10 @@ const quickAddSchedule = async () => {
 
     if (error.response?.data) {
       const data = error.response.data
-      if (data.detail) {
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        // API returns { errors: ["...message..."], results: [] }
+        errorMsg = data.errors.join('\n')
+      } else if (data.detail) {
         errorMsg = data.detail
       } else if (data.results && data.results.length === 0) {
         errorMsg = 'Unable to create schedules. Check for conflicts or invalid data.'
@@ -2586,7 +2600,9 @@ const quickAddSchedule = async () => {
     $q.notify({
       type: 'negative',
       message: errorMsg,
-      timeout: 5000,
+      multiLine: true,
+      timeout: 6000,
+      icon: 'warning',
     })
   } finally {
     isAddingShift.value = false
@@ -3270,6 +3286,15 @@ const filterEmployees = () => {}
 .shift-position {
   font-size: 11px;
   color: #3b82f6;
+}
+
+.shift-site {
+  font-size: 11px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 2px;
 }
 
 /* Day Off Shift Styles */
