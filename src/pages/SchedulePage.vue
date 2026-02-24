@@ -358,8 +358,9 @@
             <!-- Multi-select for recurring, single-select for one-time -->
             <q-select
               v-if="newSchedule.scheduleType === 'recurring'"
+              ref="multiEmployeeSelectRef"
               v-model="newSchedule.userIds"
-              :options="employeeOptions"
+              :options="filteredEmployeeOptions"
               option-value="value"
               option-label="label"
               label="Select Employees"
@@ -368,34 +369,43 @@
               map-options
               multiple
               use-chips
+              use-input
+              input-debounce="0"
+              @filter="filterEmployeeOptions"
+              @update:model-value="() => multiEmployeeSelectRef?.updateInputValue('')"
               class="form-field full-width"
               :rules="[(val) => (val && val.length > 0) || 'At least one employee is required']"
               :loading="loadingEmployees"
             >
               <template #no-option>
                 <q-item>
-                  <q-item-section class="text-grey"> No employees available </q-item-section>
+                  <q-item-section class="text-grey"> No employees found </q-item-section>
                 </q-item>
               </template>
             </q-select>
 
             <div v-else class="form-row">
               <q-select
+                ref="singleEmployeeSelectRef"
                 v-model="newSchedule.userId"
-                :options="employeeOptions"
+                :options="filteredEmployeeOptions"
                 option-value="value"
                 option-label="label"
                 label="Select Employee"
                 outlined
                 emit-value
                 map-options
+                use-input
+                input-debounce="0"
+                @filter="filterEmployeeOptions"
+                @update:model-value="() => singleEmployeeSelectRef?.updateInputValue('')"
                 class="form-field"
                 :rules="[(val) => !!val || 'Employee is required']"
                 :loading="loadingEmployees"
               >
                 <template #no-option>
                   <q-item>
-                    <q-item-section class="text-grey"> No employees available </q-item-section>
+                    <q-item-section class="text-grey"> No employees found </q-item-section>
                   </q-item>
                 </template>
               </q-select>
@@ -843,7 +853,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import axios from 'axios'
 
@@ -1079,6 +1089,31 @@ const employeeOptions = computed(() =>
     value: emp.id,
   })),
 )
+
+const filteredEmployeeOptions = ref([])
+const singleEmployeeSelectRef = ref(null)
+const multiEmployeeSelectRef = ref(null)
+
+watch(
+  employeeOptions,
+  (newOptions) => {
+    filteredEmployeeOptions.value = newOptions
+  },
+  { immediate: true },
+)
+
+const filterEmployeeOptions = (val, update) => {
+  update(() => {
+    if (!val) {
+      filteredEmployeeOptions.value = employeeOptions.value
+    } else {
+      const needle = val.toLowerCase()
+      filteredEmployeeOptions.value = employeeOptions.value.filter((opt) =>
+        opt.label.toLowerCase().includes(needle),
+      )
+    }
+  })
+}
 
 const shiftTypeOptions = computed(() =>
   shiftTypes.value.map((st) => ({
