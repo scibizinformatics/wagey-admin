@@ -1019,7 +1019,22 @@ const fetchEmployees = async () => {
     console.log('Sample employee picture_url:', response.data[0]?.user?.picture_url)
     console.log('Total employees:', response.data.length)
 
-    employees.value = response.data || []
+    const list = response.data || []
+
+    // Fetch full details for all employees in parallel to get phone_number
+    const detailed = await Promise.all(
+      list.map(
+        (emp) =>
+          axios
+            .get(`https://staging.wageyapp.com/user/companies/${companyId}/employees/${emp.id}/`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            .then((r) => ({ ...emp, phone_number: r.data.phone_number || '' }))
+            .catch(() => emp), // fall back to original row if detail fetch fails
+      ),
+    )
+
+    employees.value = detailed
     filteredEmployees.value = employees.value
     sortEmployees()
   } catch (error) {
