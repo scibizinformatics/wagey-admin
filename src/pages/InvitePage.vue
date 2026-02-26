@@ -128,7 +128,7 @@
                   {{ props.row.company || 'N/A' }}
                 </q-td>
                 <q-td class="table-body-cell">
-                  {{ props.row.role || 'N/A' }}
+                  {{ getRoleLabel(props.row.role ?? props.row.user_role) }}
                 </q-td>
                 <q-td class="table-body-cell">
                   <code class="code-text">{{ props.row.code || 'N/A' }}</code>
@@ -444,6 +444,12 @@ const getStatusClass = (status) => {
   if (statusLower === 'declined' || statusLower === 'expired' || statusLower === 'cancelled')
     return 'status-terminated'
   return 'status-default'
+}
+
+const getRoleLabel = (roleValue) => {
+  if (!roleValue && roleValue !== 0) return 'N/A'
+  const match = userRoleOptions.value.find((r) => r.value === Number(roleValue))
+  return match ? match.label : roleValue
 }
 
 const formatDate = (dateString) => {
