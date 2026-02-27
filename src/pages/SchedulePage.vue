@@ -388,7 +388,9 @@
               </template>
             </q-select>
 
-            <div v-else class="form-row">
+            <!-- One-Time: Employee + Multi-date picker + Shift rows -->
+            <div v-else>
+              <!-- Employee -->
               <q-select
                 ref="singleEmployeeSelectRef"
                 v-model="newSchedule.userId"
@@ -403,41 +405,100 @@
                 input-debounce="0"
                 @filter="filterEmployeeOptions"
                 @update:model-value="() => singleEmployeeSelectRef?.updateInputValue('')"
-                class="form-field"
+                class="form-field full-width q-mb-md"
                 :rules="[(val) => !!val || 'Employee is required']"
                 :loading="loadingEmployees"
               >
                 <template #no-option>
                   <q-item>
-                    <q-item-section class="text-grey"> No employees found </q-item-section>
+                    <q-item-section class="text-grey">No employees found</q-item-section>
                   </q-item>
                 </template>
               </q-select>
 
-              <q-input
-                v-model="newSchedule.selectedDate"
-                label="Select Date"
-                outlined
-                class="form-field"
-                :rules="[(val) => !!val || 'Date is required']"
-                readonly
+              <!-- Multi-date picker -->
+              <div class="q-mb-sm text-caption text-grey-7">Select Date(s)</div>
+              <q-date
+                v-model="newSchedule.selectedDates"
+                multiple
+                mask="YYYY-MM-DD"
+                :options="(date) => date >= new Date().toISOString().split('T')[0]"
+                class="q-mb-xs"
+                minimal
+                style="transform: scale(0.82); transform-origin: top left; width: 122%"
+              />
+              <div
+                class="text-caption q-mb-md"
+                :class="newSchedule.selectedDates.length ? 'text-primary' : 'text-negative'"
               >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-date
-                        v-model="newSchedule.selectedDate"
-                        mask="YYYY-MM-DD"
-                        :options="(date) => date >= new Date().toISOString().split('T')[0]"
-                      >
-                        <div class="row items-center justify-end">
-                          <q-btn v-close-popup label="Close" color="primary" flat />
-                        </div>
-                      </q-date>
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
+                {{
+                  newSchedule.selectedDates.length
+                    ? `${newSchedule.selectedDates.length} date(s) selected`
+                    : 'Please select at least one date'
+                }}
+              </div>
+
+              <!-- Shift rows (like Quick Add) -->
+              <div
+                v-for="(shift, index) in newSchedule.oneTimeShifts"
+                :key="index"
+                class="shift-row"
+              >
+                <div class="shift-row-header">
+                  <span class="row-label">
+                    <q-icon name="schedule" size="16px" />
+                    Shift {{ index + 1 }}
+                  </span>
+                  <q-btn
+                    v-if="newSchedule.oneTimeShifts.length > 1"
+                    flat
+                    dense
+                    round
+                    icon="close"
+                    size="sm"
+                    @click="newSchedule.oneTimeShifts.splice(index, 1)"
+                    class="remove-btn"
+                  />
+                </div>
+                <div class="shift-fields">
+                  <q-select
+                    v-model="shift.site"
+                    :options="siteOptions"
+                    option-value="value"
+                    option-label="label"
+                    label="Select Site"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="form-field"
+                    :rules="[(val) => !!val || 'Site is required']"
+                  />
+                  <q-select
+                    v-model="shift.shiftType"
+                    :options="shiftTypeOptions"
+                    option-value="value"
+                    option-label="label"
+                    label="Shift Type"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="form-field"
+                    :rules="[(val) => !!val || 'Shift type is required']"
+                  />
+                </div>
+              </div>
+
+              <q-btn
+                flat
+                icon="add"
+                label="Add Another Shift"
+                @click="newSchedule.oneTimeShifts.push({ site: null, shiftType: null })"
+                color="primary"
+                size="sm"
+                class="add-row-btn q-mb-sm"
+              />
             </div>
 
             <!-- For Recurring: Date Range Selection -->
@@ -516,8 +577,8 @@
               <template #hint> Select a template to auto-fill schedule details </template>
             </q-select>
 
-            <!-- Site & Department -->
-            <div class="form-row">
+            <!-- Site & Department (recurring only) -->
+            <div v-if="newSchedule.scheduleType === 'recurring'" class="form-row">
               <q-select
                 v-model="newSchedule.site"
                 :options="siteOptions"
@@ -544,21 +605,6 @@
                 clearable
               />
             </div>
-
-            <!-- Shift Type / Position -->
-            <q-select
-              v-if="newSchedule.scheduleType !== 'recurring'"
-              v-model="newSchedule.position"
-              :options="positionOptions"
-              option-value="id"
-              option-label="name"
-              label="Select Shift/Position"
-              outlined
-              dense
-              emit-value
-              map-options
-              :rules="[(val) => val !== null || 'Position is required']"
-            />
 
             <!-- Repeat Interval (for recurring) -->
             <q-input
@@ -895,6 +941,8 @@ const newSchedule = ref({
   userId: null,
   userIds: [],
   selectedDate: null,
+  selectedDates: [],
+  oneTimeShifts: [{ site: null, shiftType: null }],
   startTime: '',
   endTime: '',
   position: null,
@@ -1583,15 +1631,19 @@ const fetchData = async () => {
 
           totalSchedulesProcessed++
 
-          const scheduleDate = new Date(schedule.date)
-          const weekStart = new Date(selectedWeek.value.start)
-          const timeDiff = scheduleDate.getTime() - weekStart.getTime()
-          const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24))
+          // Compare as local date strings to avoid UTC vs local midnight mismatch
+          // (e.g. UTC+8: new Date('2026-02-23') = UTC midnight ≠ local midnight → off-by-one)
+          const scheduleDateStr = schedule.date.substring(0, 10)
+          const weekStartStr = selectedWeek.value.start.toLocaleDateString('en-CA') // YYYY-MM-DD local
+          const scheduleDate = new Date(scheduleDateStr + 'T00:00:00')
+          const weekStartLocal = new Date(weekStartStr + 'T00:00:00')
+          const timeDiff = scheduleDate.getTime() - weekStartLocal.getTime()
+          const daysDiff = Math.round(timeDiff / (1000 * 60 * 60 * 24))
 
           // 🆕 ADD: Detailed date comparison logging
           if (totalSchedulesProcessed <= 5) {
             console.log(
-              `📅 Schedule ${totalSchedulesProcessed}: date=${schedule.date}, daysDiff=${daysDiff}, weekStart=${weekStart.toISOString().split('T')[0]}`,
+              `📅 Schedule ${totalSchedulesProcessed}: date=${schedule.date}, daysDiff=${daysDiff}, weekStart=${weekStartLocal.toISOString().split('T')[0]}`,
             )
           }
 
@@ -1622,67 +1674,42 @@ const fetchData = async () => {
                 schedule.end_time?.substring(0, 5) ||
                 '17:00'
 
-            // ✅ IMPROVED: Better shift type detection
-            let shiftTypeId =
-              schedule.shift_type_id ||
-              schedule.shift_type ||
-              schedule.shiftType ||
-              schedule.shiftTypeId ||
-              null
+            // ✅ The API never returns a shift_type_id.
+            // Match shift type by comparing actual times to shift type defaults.
+            let shiftTypeId = null
+            let shiftTypeName = 'Shift'
 
-            let shiftTypeName =
-              schedule.shift_type_name || schedule.shiftTypeName || schedule.shift_name || 'Shift'
-
-            // ✅ If no shift type ID, match by times (skip for day off)
-            if (
-              !shiftTypeId &&
-              !isDayOffShift &&
-              startTime &&
-              endTime &&
-              shiftTypes.value.length > 0
-            ) {
-              const matchingShiftType = shiftTypes.value.find((st) => {
+            if (isDayOffShift) {
+              shiftTypeName = 'Day Off'
+            } else if (startTime && shiftTypes.value.length > 0) {
+              // Try exact start + end time match
+              const exactMatch = shiftTypes.value.find((st) => {
                 const stStart = st.default_start_time?.substring(0, 5)
                 const stEnd = st.default_end_time?.substring(0, 5)
                 return stStart === startTime && stEnd === endTime
               })
 
-              if (matchingShiftType) {
-                shiftTypeId = matchingShiftType.id
-                shiftTypeName = matchingShiftType.name
+              if (exactMatch) {
+                shiftTypeId = exactMatch.id
+                shiftTypeName = exactMatch.name
               } else {
-                console.warn(`⚠️ No shift type match for ${startTime}-${endTime}, using fallback`)
-                shiftTypeId = shiftTypes.value[0].id
-                shiftTypeName = shiftTypes.value[0].name
+                // Fall back to start-time-only match (handles graveyard cross-midnight)
+                const startMatch = shiftTypes.value.find(
+                  (st) => st.default_start_time?.substring(0, 5) === startTime,
+                )
+                if (startMatch) {
+                  shiftTypeId = startMatch.id
+                  shiftTypeName = startMatch.name
+                } else {
+                  // Last resort: use first shift type
+                  shiftTypeId = shiftTypes.value[0].id
+                  shiftTypeName = shiftTypes.value[0].name
+                }
               }
-            }
-
-            // ✅ If we have name but no ID, find ID by name
-            if (
-              !shiftTypeId &&
-              shiftTypeName &&
-              shiftTypeName !== 'Shift' &&
-              shiftTypes.value.length > 0
-            ) {
-              const foundShiftType = shiftTypes.value.find(
-                (st) => st.name.toLowerCase() === shiftTypeName.toLowerCase(),
-              )
-              if (foundShiftType) {
-                shiftTypeId = foundShiftType.id
-              } else if (!isDayOffShift) {
-                shiftTypeId = shiftTypes.value[0].id
-              }
-            }
-
-            // ✅ Final fallback if still no shift type (skip for day off)
-            if (!shiftTypeId && !isDayOffShift && shiftTypes.value.length > 0) {
-              console.warn('⚠️ Using fallback shift type for schedule:', schedule.id)
-              shiftTypeId = shiftTypes.value[0].id
-              shiftTypeName = shiftTypes.value[0].name
             }
 
             const shift = {
-              id: schedule.id || `temp-${Date.now()}-${sIndex}`,
+              id: schedule.id ? `${schedule.id}-${sIndex}` : `temp-${Date.now()}-${sIndex}`,
               assignmentId:
                 schedule.employee_assignment_id || schedule.assignment_id || schedule.id,
               userId: employee.id,
@@ -1766,7 +1793,9 @@ const fetchData = async () => {
     }
 
     // ✅ LOG SHIFTS WITH MISSING SHIFT TYPES
-    const shiftsWithoutShiftType = shifts.value.filter((s) => !s.shiftTypeId)
+    const shiftsWithoutShiftType = shifts.value.filter(
+      (s) => !s.shiftTypeId && s.startTime && s.endTime,
+    )
     if (shiftsWithoutShiftType.length > 0) {
       console.error(
         '❌ CRITICAL: Some shifts are missing shift type IDs:',
@@ -2372,13 +2401,18 @@ const addSchedule = async () => {
   }
 
   if (n.scheduleType === 'one-time') {
-    if (!n.selectedDate) {
-      $q.notify({ type: 'negative', message: 'Please select a date.' })
+    if (!n.selectedDates || n.selectedDates.length === 0) {
+      $q.notify({ type: 'negative', message: 'Please select at least one date.' })
       return
     }
 
-    if (!n.position) {
-      $q.notify({ type: 'negative', message: 'Please select a shift type.' })
+    if (!n.oneTimeShifts || n.oneTimeShifts.length === 0) {
+      $q.notify({ type: 'negative', message: 'Please add at least one shift.' })
+      return
+    }
+
+    if (n.oneTimeShifts.some((s) => !s.site || !s.shiftType)) {
+      $q.notify({ type: 'negative', message: 'Please fill in site and shift type for all shifts.' })
       return
     }
   }
@@ -2402,7 +2436,8 @@ const addSchedule = async () => {
     }
   }
 
-  if (!n.site) {
+  // Only require site at top level for recurring (one-time has site per shift row)
+  if (n.scheduleType === 'recurring' && !n.site) {
     $q.notify({ type: 'negative', message: 'Please select a site.' })
     return
   }
@@ -2415,6 +2450,7 @@ const addSchedule = async () => {
       // Multi-employee verification is handled inside createRecurringSchedule
       await createRecurringSchedule(n)
     } else {
+      // One-time: build payload from selectedDates x oneTimeShifts
       console.log('🔍 Verifying employee-company link...')
       const isLinked = await verifyEmployeeCompanyLink(n.userId)
 
@@ -2431,20 +2467,36 @@ const addSchedule = async () => {
 
       console.log('✅ Employee verified')
 
-      const hasConflict = await checkEmployeeScheduleOnDate(n.userId, n.selectedDate)
+      const token = localStorage.getItem('access_token')
+      let companyId = localStorage.getItem('selectedCompany')
+      try {
+        const parsed = JSON.parse(companyId)
+        companyId = parsed?.id || parsed
+      } catch {}
+      companyId = parseInt(companyId)
 
-      if (hasConflict) {
-        isCheckingConflict.value = false
-        const selectedEmployee = employees.value.find((emp) => emp.id === n.userId)
-        $q.notify({
-          type: 'warning',
-          message: `${selectedEmployee?.full_name || 'Employee'} already has a schedule on ${n.selectedDate}.`,
-          timeout: 6000,
-        })
-        return
+      const schedulePayloads = []
+      for (const dateStr of n.selectedDates) {
+        for (const shift of n.oneTimeShifts) {
+          schedulePayloads.push({
+            date: dateStr,
+            site_id: parseInt(shift.site),
+            shift_type_id: parseInt(shift.shiftType),
+          })
+        }
       }
 
-      await createScheduleRecord(n, n.selectedDate)
+      const payload = {
+        company_id: companyId,
+        employee_ids: [n.userId],
+        schedules: schedulePayloads,
+      }
+
+      console.log('📤 One-time payload:', JSON.stringify(payload, null, 2))
+
+      await axios.post('https://staging.wageyapp.com/organization/assignments/assign/', payload, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      })
     }
 
     isCheckingConflict.value = false
@@ -2454,6 +2506,8 @@ const addSchedule = async () => {
       userId: null,
       userIds: [],
       selectedDate: null,
+      selectedDates: [],
+      oneTimeShifts: [{ site: null, shiftType: null }],
       startTime: '',
       endTime: '',
       position: null,
@@ -2513,9 +2567,9 @@ const quickAddSchedule = async () => {
 
   try {
     const token = localStorage.getItem('access_token')
-    const companyId = localStorage.getItem('selectedCompany')
+    let rawCompanyId = localStorage.getItem('selectedCompany')
 
-    if (!token || !companyId) {
+    if (!token || !rawCompanyId) {
       $q.notify({
         type: 'negative',
         message: 'Authentication required. Please log in.',
@@ -2523,6 +2577,16 @@ const quickAddSchedule = async () => {
       isAddingShift.value = false
       return
     }
+
+    // Parse companyId the same way as addSchedule/createScheduleRecord do
+    let companyId
+    try {
+      const parsed = JSON.parse(rawCompanyId)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = rawCompanyId
+    }
+    companyId = parseInt(companyId)
 
     console.log('=== DATE CALCULATION DEBUG ===')
     const { start } = selectedWeek.value
@@ -2542,12 +2606,12 @@ const quickAddSchedule = async () => {
 
     const schedulePayloads = shifts.map((shift) => ({
       date: dateStr,
-      site_id: shift.site,
-      shift_type_id: shift.shiftType,
+      site_id: parseInt(shift.site),
+      shift_type_id: parseInt(shift.shiftType),
     }))
 
     const payload = {
-      company_id: parseInt(companyId),
+      company_id: companyId,
       employee_ids: [userId],
       schedules: schedulePayloads,
     }
@@ -2578,30 +2642,49 @@ const quickAddSchedule = async () => {
   } catch (error) {
     console.error('❌ Error:', error.response?.data || error.message)
 
+    const resolveEmployeeName = (id) => {
+      const emp = users.value.find((u) => String(u.id) === String(id))
+      return emp?.name || null
+    }
+
+    const humanizeErrorMessage = (msg) => {
+      return msg.replace(
+        /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi,
+        (match) => resolveEmployeeName(match) || match,
+      )
+    }
+
     let errorMsg = 'Failed to add shifts'
+    let errorCaption = ''
 
     if (error.response?.data) {
       const data = error.response.data
       if (Array.isArray(data.errors) && data.errors.length > 0) {
-        // API returns { errors: ["...message..."], results: [] }
-        errorMsg = data.errors.join('\n')
+        const humanized = data.errors.map(humanizeErrorMessage)
+        if (humanized.length === 1) {
+          errorMsg = humanized[0]
+        } else {
+          errorMsg = 'Some shifts could not be created'
+          errorCaption = humanized.join('\n')
+        }
       } else if (data.detail) {
-        errorMsg = data.detail
+        errorMsg = humanizeErrorMessage(data.detail)
       } else if (data.results && data.results.length === 0) {
         errorMsg = 'Unable to create schedules. Check for conflicts or invalid data.'
       } else if (typeof data === 'object') {
         const errors = Object.entries(data)
           .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
           .join('; ')
-        if (errors) errorMsg = errors
+        if (errors) errorMsg = humanizeErrorMessage(errors)
       }
     }
 
     $q.notify({
       type: 'negative',
       message: errorMsg,
+      caption: errorCaption || undefined,
       multiLine: true,
-      timeout: 6000,
+      timeout: 8000,
       icon: 'warning',
     })
   } finally {
@@ -2614,6 +2697,8 @@ const openAddModal = () => {
     userId: null,
     userIds: [],
     selectedDate: null,
+    selectedDates: [],
+    oneTimeShifts: [{ site: null, shiftType: null }],
     startTime: '',
     endTime: '',
     position: null,
@@ -2625,6 +2710,8 @@ const openAddModal = () => {
     rotationShifts: [],
     weekdays: [],
     repeatInterval: 1,
+    recurringStartDate: null,
+    recurringEndDate: null,
   }
   addConflictWarning.value = false
   fetchEmployees()
@@ -3538,9 +3625,12 @@ const filterEmployees = () => {}
 
 /* Modal Styles */
 .modal-card {
-  border-radius: 12px;
+  border-radius: 16px !important;
   max-width: 480px;
   width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
@@ -3550,6 +3640,7 @@ const filterEmployees = () => {}
   justify-content: space-between;
   align-items: center;
   padding: 16px;
+  border-radius: 16px 16px 0 0;
 }
 
 .modal-title {
@@ -3560,6 +3651,14 @@ const filterEmployees = () => {}
 
 .modal-body {
   padding: 16px;
+  overflow-y: auto;
+  max-height: 70vh;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.modal-body::-webkit-scrollbar {
+  display: none;
 }
 
 .schedule-form {
