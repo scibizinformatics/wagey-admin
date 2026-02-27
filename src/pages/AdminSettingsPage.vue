@@ -127,6 +127,16 @@
                         >
                           <q-tooltip>Edit Company</q-tooltip>
                         </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="delete"
+                          size="sm"
+                          class="action-btn delete-btn"
+                          @click="deleteCompany(props.row)"
+                        >
+                          <q-tooltip>Delete Company</q-tooltip>
+                        </q-btn>
                       </div>
                     </q-td>
                   </q-tr>
@@ -227,6 +237,16 @@
                           @click="editSite(props.row)"
                         >
                           <q-tooltip>Edit Site</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="delete"
+                          size="sm"
+                          class="action-btn delete-btn"
+                          @click="deleteSite(props.row)"
+                        >
+                          <q-tooltip>Delete Site</q-tooltip>
                         </q-btn>
                       </div>
                     </q-td>
@@ -329,6 +349,16 @@
                         >
                           <q-tooltip>Edit Role</q-tooltip>
                         </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="delete"
+                          size="sm"
+                          class="action-btn delete-btn"
+                          @click="deleteRole(props.row)"
+                        >
+                          <q-tooltip>Delete Role</q-tooltip>
+                        </q-btn>
                       </div>
                     </q-td>
                   </q-tr>
@@ -340,103 +370,226 @@
 
         <!-- ===================== SHIFTS ===================== -->
         <q-tab-panel name="shifts" class="q-pa-none">
-          <div class="table-section">
-            <div class="table-header">
-              <div class="table-title-section">
-                <h2 class="table-title">Shifts</h2>
-                <p class="table-subtitle">Manage shift types and schedules</p>
-              </div>
-              <div class="table-actions">
-                <q-btn
-                  color="primary"
-                  label="Add Shift"
-                  icon="add"
-                  class="add-btn"
-                  @click="openShiftDialog"
-                />
-              </div>
-            </div>
-
-            <div class="modern-table-container">
-              <q-table
-                :rows="filteredShifts"
-                :columns="shiftColumns"
-                row-key="id"
-                :loading="loadingShifts"
-                flat
-                no-data-label="No shifts found"
-                class="settings-table"
-                hide-pagination
-                :rows-per-page-options="[0]"
-              >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">SL No</q-th>
-                    <q-th class="table-header-cell">Shift Name</q-th>
-                    <q-th class="table-header-cell">Time</q-th>
-                    <q-th class="table-header-cell">Type</q-th>
-                    <q-th class="table-header-cell">Night Diff</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
-                  </q-tr>
-                </template>
-                <template v-slot:body="props">
-                  <q-tr class="table-body-row">
-                    <q-td class="table-body-cell"
-                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                    >
-                    <q-td class="table-body-cell">
-                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
-                    </q-td>
-                    <q-td class="table-body-cell">
-                      {{ formatTime(props.row.default_start_time) }} –
-                      {{ formatTime(props.row.default_end_time) }}
-                    </q-td>
-                    <q-td class="table-body-cell">
-                      <div
-                        :class="[
-                          'status-badge',
-                          props.row.is_graveyard ? 'status-graveyard' : 'status-regular',
-                        ]"
-                      >
-                        {{ props.row.is_graveyard ? 'Graveyard' : 'Regular' }}
-                      </div>
-                    </q-td>
-                    <q-td class="table-body-cell">
-                      <q-icon
-                        :name="props.row.apply_night_differential ? 'check_circle' : 'cancel'"
-                        :color="props.row.apply_night_differential ? 'positive' : 'grey'"
-                        size="20px"
-                      />
-                    </q-td>
-                    <q-td class="table-body-cell actions-cell">
-                      <div class="action-buttons">
-                        <q-btn
-                          flat
-                          round
-                          icon="visibility"
-                          size="sm"
-                          class="action-btn view-btn"
-                          @click="viewShift(props.row)"
-                        >
-                          <q-tooltip>View Details</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="edit"
-                          size="sm"
-                          class="action-btn edit-btn"
-                          @click="editShift(props.row)"
-                        >
-                          <q-tooltip>Edit Shift</q-tooltip>
-                        </q-btn>
-                      </div>
-                    </q-td>
-                  </q-tr>
-                </template>
-              </q-table>
-            </div>
+          <!-- Shift Sub-Tabs -->
+          <div class="subtabs-wrapper">
+            <q-tabs
+              v-model="shiftSubTab"
+              dense
+              class="settings-tabs"
+              active-color="primary"
+              indicator-color="primary"
+              align="left"
+            >
+              <q-tab name="one-time" label="One-Time Schedule" class="settings-tab" />
+              <q-tab name="recurring" label="Recurring Schedule" class="settings-tab" />
+            </q-tabs>
           </div>
+
+          <q-tab-panels v-model="shiftSubTab" animated class="transparent-panels">
+            <!-- ---- One-Time Schedule (existing) ---- -->
+            <q-tab-panel name="one-time" class="q-pa-none">
+              <div class="table-section">
+                <div class="table-header">
+                  <div class="table-title-section">
+                    <h2 class="table-title">Shifts</h2>
+                    <p class="table-subtitle">Manage shift types and schedules</p>
+                  </div>
+                  <div class="table-actions">
+                    <q-btn
+                      color="primary"
+                      label="Add Shift"
+                      icon="add"
+                      class="add-btn"
+                      @click="openShiftDialog"
+                    />
+                  </div>
+                </div>
+
+                <div class="modern-table-container">
+                  <q-table
+                    :rows="filteredShifts"
+                    :columns="shiftColumns"
+                    row-key="id"
+                    :loading="loadingShifts"
+                    flat
+                    no-data-label="No shifts found"
+                    class="settings-table"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
+                  >
+                    <template v-slot:header>
+                      <q-tr class="table-header-row">
+                        <q-th class="table-header-cell">SL No</q-th>
+                        <q-th class="table-header-cell">Shift Name</q-th>
+                        <q-th class="table-header-cell">Time</q-th>
+                        <q-th class="table-header-cell">Type</q-th>
+                        <q-th class="table-header-cell">Night Diff</q-th>
+                        <q-th class="table-header-cell">Actions</q-th>
+                      </q-tr>
+                    </template>
+                    <template v-slot:body="props">
+                      <q-tr class="table-body-row">
+                        <q-td class="table-body-cell"
+                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
+                        >
+                        <q-td class="table-body-cell">
+                          <span class="item-name">{{ props.row.name || 'N/A' }}</span>
+                        </q-td>
+                        <q-td class="table-body-cell">
+                          {{ formatTime(props.row.default_start_time) }} –
+                          {{ formatTime(props.row.default_end_time) }}
+                        </q-td>
+                        <q-td class="table-body-cell">
+                          <div
+                            :class="[
+                              'status-badge',
+                              props.row.is_graveyard ? 'status-graveyard' : 'status-regular',
+                            ]"
+                          >
+                            {{ props.row.is_graveyard ? 'Graveyard' : 'Regular' }}
+                          </div>
+                        </q-td>
+                        <q-td class="table-body-cell">
+                          <q-icon
+                            :name="props.row.apply_night_differential ? 'check_circle' : 'cancel'"
+                            :color="props.row.apply_night_differential ? 'positive' : 'grey'"
+                            size="20px"
+                          />
+                        </q-td>
+                        <q-td class="table-body-cell actions-cell">
+                          <div class="action-buttons">
+                            <q-btn
+                              flat
+                              round
+                              icon="visibility"
+                              size="sm"
+                              class="action-btn view-btn"
+                              @click="viewShift(props.row)"
+                            >
+                              <q-tooltip>View Details</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                              flat
+                              round
+                              icon="edit"
+                              size="sm"
+                              class="action-btn edit-btn"
+                              @click="editShift(props.row)"
+                            >
+                              <q-tooltip>Edit Shift</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                              flat
+                              round
+                              icon="delete"
+                              size="sm"
+                              class="action-btn delete-btn"
+                              @click="deleteShift(props.row)"
+                            >
+                              <q-tooltip>Delete Shift</q-tooltip>
+                            </q-btn>
+                          </div>
+                        </q-td>
+                      </q-tr>
+                    </template>
+                  </q-table>
+                </div>
+              </div>
+            </q-tab-panel>
+
+            <!-- ---- Recurring Schedule ---- -->
+            <q-tab-panel name="recurring" class="q-pa-none">
+              <div class="table-section">
+                <div class="table-header">
+                  <div class="table-title-section">
+                    <h2 class="table-title">Recurring Schedules</h2>
+                    <p class="table-subtitle">Manage recurring shift schedule templates</p>
+                  </div>
+                  <div class="table-actions">
+                    <q-btn
+                      color="primary"
+                      label="Add Recurring Schedule"
+                      icon="add"
+                      class="add-btn"
+                      @click="openRecurringDialog"
+                    />
+                  </div>
+                </div>
+
+                <div class="modern-table-container">
+                  <q-table
+                    :rows="recurringSchedules"
+                    :columns="recurringColumns"
+                    row-key="id"
+                    :loading="loadingRecurring"
+                    flat
+                    no-data-label="No recurring schedules found"
+                    class="settings-table"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
+                  >
+                    <template v-slot:header>
+                      <q-tr class="table-header-row">
+                        <q-th class="table-header-cell">SL No</q-th>
+                        <q-th class="table-header-cell">Name</q-th>
+                        <q-th class="table-header-cell">Primary Shift</q-th>
+                        <q-th class="table-header-cell">Secondary Shift</q-th>
+                        <q-th class="table-header-cell">Weekdays</q-th>
+                        <q-th class="table-header-cell">Repeat Interval</q-th>
+                        <q-th class="table-header-cell">Actions</q-th>
+                      </q-tr>
+                    </template>
+                    <template v-slot:body="props">
+                      <q-tr class="table-body-row">
+                        <q-td class="table-body-cell"
+                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
+                        >
+                        <q-td class="table-body-cell">
+                          <span class="item-name">{{ props.row.name || 'N/A' }}</span>
+                        </q-td>
+                        <q-td class="table-body-cell">{{
+                          props.row.shift_type_name || props.row.shift_type || 'N/A'
+                        }}</q-td>
+                        <q-td class="table-body-cell">{{
+                          props.row.shift_type_2_name || props.row.shift_type_2 || '—'
+                        }}</q-td>
+                        <q-td class="table-body-cell">{{
+                          formatWeekdays(props.row.weekdays)
+                        }}</q-td>
+                        <q-td class="table-body-cell">{{
+                          props.row.repeat_interval || 'N/A'
+                        }}</q-td>
+                        <q-td class="table-body-cell actions-cell">
+                          <div class="action-buttons">
+                            <q-btn
+                              flat
+                              round
+                              icon="edit"
+                              size="sm"
+                              class="action-btn edit-btn"
+                              @click="editRecurring(props.row)"
+                            >
+                              <q-tooltip>Edit</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                              flat
+                              round
+                              icon="delete"
+                              size="sm"
+                              class="action-btn delete-btn"
+                              @click="deleteRecurring(props.row)"
+                            >
+                              <q-tooltip>Delete</q-tooltip>
+                            </q-btn>
+                          </div>
+                        </q-td>
+                      </q-tr>
+                    </template>
+                  </q-table>
+                </div>
+              </div>
+            </q-tab-panel>
+          </q-tab-panels>
         </q-tab-panel>
 
         <!-- ===================== DEPARTMENTS ===================== -->
@@ -510,6 +663,16 @@
                           @click="editDepartment(props.row)"
                         >
                           <q-tooltip>Edit Department</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="delete"
+                          size="sm"
+                          class="action-btn delete-btn"
+                          @click="deleteDepartment(props.row)"
+                        >
+                          <q-tooltip>Delete Department</q-tooltip>
                         </q-btn>
                       </div>
                     </q-td>
@@ -593,6 +756,16 @@
                           @click="editPosition(props.row)"
                         >
                           <q-tooltip>Edit Position</q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="delete"
+                          size="sm"
+                          class="action-btn delete-btn"
+                          @click="deletePosition(props.row)"
+                        >
+                          <q-tooltip>Delete Position</q-tooltip>
                         </q-btn>
                       </div>
                     </q-td>
@@ -701,6 +874,16 @@
                         >
                           <q-tooltip>View PDF</q-tooltip>
                         </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          icon="delete"
+                          size="sm"
+                          class="action-btn delete-btn"
+                          @click="deleteContract(props.row)"
+                        >
+                          <q-tooltip>Delete Contract</q-tooltip>
+                        </q-btn>
                       </div>
                     </q-td>
                   </q-tr>
@@ -799,6 +982,15 @@
                               @click="editAllowanceType(props.row)"
                               ><q-tooltip>Edit</q-tooltip></q-btn
                             >
+                            <q-btn
+                              flat
+                              round
+                              icon="delete"
+                              size="sm"
+                              class="action-btn delete-btn"
+                              @click="deleteAllowanceType(props.row)"
+                              ><q-tooltip>Delete</q-tooltip></q-btn
+                            >
                           </div>
                         </q-td>
                       </q-tr>
@@ -876,6 +1068,15 @@
                               class="action-btn edit-btn"
                               @click="editTaxBracket(props.row)"
                               ><q-tooltip>Edit</q-tooltip></q-btn
+                            >
+                            <q-btn
+                              flat
+                              round
+                              icon="delete"
+                              size="sm"
+                              class="action-btn delete-btn"
+                              @click="deleteTaxBracket(props.row)"
+                              ><q-tooltip>Delete</q-tooltip></q-btn
                             >
                           </div>
                         </q-td>
@@ -955,6 +1156,15 @@
                               @click="editCutoffPeriod(props.row)"
                               ><q-tooltip>Edit</q-tooltip></q-btn
                             >
+                            <q-btn
+                              flat
+                              round
+                              icon="delete"
+                              size="sm"
+                              class="action-btn delete-btn"
+                              @click="deleteCutoffPeriod(props.row)"
+                              ><q-tooltip>Delete</q-tooltip></q-btn
+                            >
                           </div>
                         </q-td>
                       </q-tr>
@@ -1030,6 +1240,15 @@
                               class="action-btn edit-btn"
                               @click="editPayrollGroup(props.row)"
                               ><q-tooltip>Edit</q-tooltip></q-btn
+                            >
+                            <q-btn
+                              flat
+                              round
+                              icon="delete"
+                              size="sm"
+                              class="action-btn delete-btn"
+                              @click="deletePayrollGroup(props.row)"
+                              ><q-tooltip>Delete</q-tooltip></q-btn
                             >
                           </div>
                         </q-td>
@@ -1107,6 +1326,15 @@
                               @click="editLaborRule(props.row)"
                               ><q-tooltip>Edit</q-tooltip></q-btn
                             >
+                            <q-btn
+                              flat
+                              round
+                              icon="delete"
+                              size="sm"
+                              class="action-btn delete-btn"
+                              @click="deleteLaborRule(props.row)"
+                              ><q-tooltip>Delete</q-tooltip></q-btn
+                            >
                           </div>
                         </q-td>
                       </q-tr>
@@ -1182,6 +1410,15 @@
                               class="action-btn edit-btn"
                               @click="editPayStructure(props.row)"
                               ><q-tooltip>Edit</q-tooltip></q-btn
+                            >
+                            <q-btn
+                              flat
+                              round
+                              icon="delete"
+                              size="sm"
+                              class="action-btn delete-btn"
+                              @click="deletePayStructure(props.row)"
+                              ><q-tooltip>Delete</q-tooltip></q-btn
                             >
                           </div>
                         </q-td>
@@ -1300,67 +1537,151 @@
     </q-dialog>
 
     <!-- ===================== SITE DIALOG ===================== -->
+    <!-- ===================== SITE DIALOG ===================== -->
     <q-dialog v-model="siteDialog" persistent>
-      <q-card style="min-width: 480px">
-        <q-card-section class="row items-center q-pb-none">
-          <div class="text-h6">{{ editingSite ? 'Edit Site' : 'Add Site' }}</div>
+      <q-card style="min-width: 560px; max-width: 620px; border-radius: 12px">
+        <!-- Header -->
+        <q-card-section class="dialog-header row items-center q-pb-sm">
+          <div class="row items-center gap-sm">
+            <q-icon name="location_on" color="primary" size="24px" class="q-mr-sm" />
+            <span class="text-h6 text-weight-bold">{{
+              editingSite ? 'Edit Site' : 'Add Site'
+            }}</span>
+          </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-card-section class="q-pt-md">
-          <q-input v-model="siteForm.name" label="Site Name *" outlined dense class="q-mb-md" />
-          <q-input
-            v-model="siteForm.location"
-            label="Location / Address *"
-            outlined
-            dense
-            class="q-mb-md"
-          />
-          <div class="row q-col-gutter-md q-mb-md">
-            <div class="col-6">
-              <q-input v-model="siteForm.latitude" label="Latitude *" outlined dense />
+
+        <q-separator />
+
+        <q-card-section class="q-pt-md q-pb-none" style="max-height: 65vh; overflow-y: auto">
+          <!-- Section: Basic Info -->
+          <div class="form-section-label">Basic Information</div>
+          <div class="row q-col-gutter-md q-mb-sm">
+            <div class="col-12">
+              <q-input v-model="siteForm.name" label="Site Name *" outlined dense>
+                <template v-slot:prepend><q-icon name="business" size="18px" /></template>
+              </q-input>
             </div>
-            <div class="col-6">
-              <q-input v-model="siteForm.longitude" label="Longitude *" outlined dense />
+            <div class="col-12">
+              <q-input v-model="siteForm.brand_name" label="Brand Name" outlined dense>
+                <template v-slot:prepend><q-icon name="label" size="18px" /></template>
+              </q-input>
             </div>
           </div>
-          <q-input
-            v-model.number="siteForm.radius_meters"
-            label="Radius (meters)"
-            type="number"
-            outlined
-            dense
-            class="q-mb-md"
-          />
-          <q-select
-            v-model="siteForm.ownership_type"
-            :options="ownershipOptions"
-            label="Ownership Type"
-            outlined
-            dense
-            class="q-mb-md"
-          />
-          <q-toggle v-model="siteForm.is_active" label="Active" class="q-mb-sm" />
-          <q-toggle v-model="siteForm.requires_otp" label="Requires OTP" class="q-mb-sm" />
-          <q-toggle
-            v-model="siteForm.allow_manual_attendance"
-            label="Allow Manual Attendance"
-            class="q-mb-sm"
-          />
-          <q-toggle
-            v-model="siteForm.allow_service_charge"
-            label="Allow Service Charge"
-            class="q-mb-sm"
-          />
-          <q-toggle v-model="siteForm.multiply_nd_by_holiday" label="Multiply ND by Holiday" />
+
+          <!-- Section: Location -->
+          <div class="form-section-label">Location Details</div>
+          <div class="row q-col-gutter-md q-mb-sm">
+            <div class="col-12">
+              <q-input v-model="siteForm.location" label="Location / Address *" outlined dense>
+                <template v-slot:prepend><q-icon name="map" size="18px" /></template>
+              </q-input>
+            </div>
+            <div class="col-6">
+              <q-input v-model="siteForm.latitude" label="Latitude *" outlined dense>
+                <template v-slot:prepend><q-icon name="my_location" size="18px" /></template>
+              </q-input>
+            </div>
+            <div class="col-6">
+              <q-input v-model="siteForm.longitude" label="Longitude *" outlined dense>
+                <template v-slot:prepend><q-icon name="my_location" size="18px" /></template>
+              </q-input>
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model.number="siteForm.radius_meters"
+                label="Radius (meters)"
+                type="number"
+                outlined
+                dense
+              >
+                <template v-slot:prepend
+                  ><q-icon name="radio_button_unchecked" size="18px"
+                /></template>
+              </q-input>
+            </div>
+            <div class="col-6">
+              <q-select
+                v-model="siteForm.ownership_type"
+                :options="ownershipOptions"
+                label="Ownership Type"
+                outlined
+                dense
+              >
+                <template v-slot:prepend><q-icon name="home_work" size="18px" /></template>
+              </q-select>
+            </div>
+          </div>
+
+          <!-- Section: Settings / Toggles -->
+          <div class="form-section-label">Site Settings</div>
+          <div class="toggles-grid q-mb-sm">
+            <div class="toggle-item">
+              <q-toggle v-model="siteForm.is_active" color="primary" />
+              <div class="toggle-label-group">
+                <span class="toggle-label">Active</span>
+                <span class="toggle-hint">Site is currently operational</span>
+              </div>
+            </div>
+            <div class="toggle-item">
+              <q-toggle v-model="siteForm.requires_otp" color="primary" />
+              <div class="toggle-label-group">
+                <span class="toggle-label">Requires OTP</span>
+                <span class="toggle-hint">Enable OTP verification</span>
+              </div>
+            </div>
+            <div class="toggle-item">
+              <q-toggle v-model="siteForm.allow_manual_attendance" color="primary" />
+              <div class="toggle-label-group">
+                <span class="toggle-label">Manual Attendance</span>
+                <span class="toggle-hint">Allow manual clock-in/out</span>
+              </div>
+            </div>
+            <div class="toggle-item">
+              <q-toggle v-model="siteForm.allow_service_charge" color="primary" />
+              <div class="toggle-label-group">
+                <span class="toggle-label">Service Charge</span>
+                <span class="toggle-hint">Include service charge</span>
+              </div>
+            </div>
+            <div class="toggle-item">
+              <q-toggle v-model="siteForm.multiply_nd_by_holiday" color="primary" />
+              <div class="toggle-label-group">
+                <span class="toggle-label">Multiply ND by Holiday</span>
+                <span class="toggle-hint">Apply holiday multiplier</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Extended Shift Days -->
+          <div class="form-section-label">Additional</div>
+          <div class="row q-mb-md">
+            <div class="col-12">
+              <q-input
+                v-model="siteForm.extended_shift_days"
+                label="Extended Shift Days"
+                outlined
+                dense
+                placeholder="e.g. Mon,Tue,Wed"
+              >
+                <template v-slot:prepend><q-icon name="date_range" size="18px" /></template>
+                <template v-slot:hint>Comma-separated days for extended shifts</template>
+              </q-input>
+            </div>
+          </div>
         </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Cancel" v-close-popup />
+
+        <q-separator />
+
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat label="Cancel" color="grey-7" v-close-popup style="border-radius: 8px" />
           <q-btn
             color="primary"
-            :label="editingSite ? 'Update' : 'Save'"
+            :label="editingSite ? 'Update Site' : 'Save Site'"
             :loading="savingSite"
             @click="saveSite"
+            style="border-radius: 8px; min-width: 110px"
           />
         </q-card-actions>
       </q-card>
@@ -1377,22 +1698,12 @@
         <q-card-section class="q-pt-md">
           <q-input v-model="roleForm.name" label="Role Name *" outlined dense class="q-mb-lg" />
 
-          <div class="text-subtitle2 q-mb-xs">
-            Permissions
-            <span class="text-caption text-grey q-ml-sm"
-              >({{ roleForm.permissions.length }} selected)</span
-            >
-          </div>
+          <div class="text-subtitle2 q-mb-xs">Permissions</div>
           <q-separator class="q-mb-md" />
 
           <div class="row">
-            <div v-for="perm in availablePermissions" :key="perm" class="col-6 q-mb-sm">
-              <q-checkbox
-                :model-value="roleForm.permissions.includes(perm)"
-                :label="perm"
-                dense
-                @update:model-value="(val) => togglePermission(perm, val)"
-              />
+            <div v-for="perm in permissionFields" :key="perm.key" class="col-6 q-mb-sm">
+              <q-checkbox v-model="roleForm[perm.key]" :label="perm.label" dense />
             </div>
           </div>
         </q-card-section>
@@ -1445,8 +1756,6 @@
               />
             </div>
           </div>
-          <q-toggle v-model="shiftForm.is_graveyard" label="Graveyard Shift" class="q-mb-sm" />
-          <q-toggle v-model="shiftForm.apply_night_differential" label="Apply Night Differential" />
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Cancel" v-close-popup />
@@ -1455,6 +1764,118 @@
             :label="editingShift ? 'Update' : 'Save'"
             :loading="savingShift"
             @click="saveShift"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ===================== RECURRING SCHEDULE DIALOG ===================== -->
+    <q-dialog v-model="recurringDialog" persistent>
+      <q-card style="min-width: 480px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            {{ editingRecurring ? 'Edit Recurring Schedule' : 'Add Recurring Schedule' }}
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section class="q-pt-md">
+          <!-- Name -->
+          <q-input
+            v-model="recurringForm.name"
+            label="Schedule Name *"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+
+          <!-- Shift Types (Split Shift Support) -->
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-6">
+              <q-select
+                v-model="recurringForm.shift_type"
+                :options="shiftTypes"
+                option-value="id"
+                option-label="name"
+                emit-value
+                map-options
+                label="Primary Shift *"
+                outlined
+                dense
+                clearable
+              />
+            </div>
+            <div class="col-6">
+              <q-select
+                v-model="recurringForm.shift_type_2"
+                :options="shiftTypes"
+                option-value="id"
+                option-label="name"
+                emit-value
+                map-options
+                label="Secondary Shift (Split)"
+                outlined
+                dense
+                clearable
+              />
+            </div>
+          </div>
+
+          <!-- Date Range -->
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-6">
+              <q-input
+                v-model="recurringForm.start_date"
+                label="Start Date *"
+                type="date"
+                outlined
+                dense
+              />
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model="recurringForm.end_date"
+                label="End Date *"
+                type="date"
+                outlined
+                dense
+              />
+            </div>
+          </div>
+
+          <!-- Weekdays -->
+          <q-select
+            v-model="recurringForm.weekdays"
+            :options="weekdayOptions"
+            label="Weekdays *"
+            outlined
+            dense
+            multiple
+            use-chips
+            emit-value
+            map-options
+            class="q-mb-md"
+            option-value="value"
+            option-label="label"
+          />
+
+          <!-- Repeat Interval -->
+          <q-input
+            v-model.number="recurringForm.repeat_interval"
+            label="Repeat Interval (weeks) *"
+            type="number"
+            min="1"
+            outlined
+            dense
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            :label="editingRecurring ? 'Update' : 'Save'"
+            :loading="savingRecurring"
+            @click="saveRecurringSchedule"
           />
         </q-card-actions>
       </q-card>
@@ -1550,6 +1971,21 @@
             class="q-mb-md"
           />
           <q-select
+            v-model="contractForm.site_id"
+            :options="sites.map((s) => ({ label: s.name, value: s.id }))"
+            label="Site"
+            outlined
+            dense
+            emit-value
+            map-options
+            clearable
+            class="q-mb-md"
+          />
+
+          <div class="text-subtitle2 q-mb-sm q-mt-md">Pay Structure</div>
+          <q-separator class="q-mb-md" />
+
+          <q-select
             v-model="contractForm.pay_structure.position_id"
             :options="positions.map((p) => ({ label: p.name, value: p.id }))"
             label="Position *"
@@ -1560,15 +1996,54 @@
             class="q-mb-md"
           />
           <q-select
-            v-model="contractForm.site_id"
-            :options="sites.map((s) => ({ label: s.name, value: s.id }))"
-            label="Site"
+            v-model="contractForm.pay_structure.pay_type"
+            :options="payTypeOptions"
+            label="Pay Type *"
             outlined
             dense
-            emit-value
-            map-options
             class="q-mb-md"
           />
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-8">
+              <q-input
+                v-model="contractForm.pay_structure.rate"
+                label="Rate *"
+                outlined
+                dense
+                type="number"
+                step="0.01"
+              />
+            </div>
+            <div class="col-4">
+              <q-input
+                v-model="contractForm.pay_structure.currency"
+                label="Currency"
+                outlined
+                dense
+              />
+            </div>
+          </div>
+          <div class="row q-col-gutter-md">
+            <div class="col-6">
+              <q-input
+                v-model="contractForm.pay_structure.effective_from"
+                label="Effective From *"
+                type="date"
+                outlined
+                dense
+              />
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model="contractForm.pay_structure.effective_to"
+                label="Effective To"
+                type="date"
+                outlined
+                dense
+                clearable
+              />
+            </div>
+          </div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Cancel" v-close-popup />
@@ -1970,13 +2445,21 @@ export default {
       siteForm: {
         id: null,
         name: '',
+        brand_name: '',
+        otp_secret: '',
         location: '',
         latitude: '',
         longitude: '',
         radius_meters: 100,
         ownership_type: 'owned',
         is_active: true,
+        requires_otp: false,
+        allow_manual_attendance: true,
+        allow_service_charge: true,
+        multiply_nd_by_holiday: false,
+        extended_shift_days: '',
         company: null,
+        business_type: null,
       },
       siteColumns: [
         { name: 'name', label: 'Site Name', field: 'name', align: 'left', sortable: true },
@@ -2012,27 +2495,41 @@ export default {
       roleForm: {
         id: null,
         name: '',
-        permissions: [],
+        company: null,
+        can_view_dashboard: false,
+        can_manage_employees: false,
+        can_view_attendance: false,
+        can_edit_attendance: false,
+        can_view_payroll: false,
+        can_release_payroll: false,
+        can_approve_requests: false,
+        can_manage_schedules: false,
+        can_access_admin_settings: false,
+        can_access_web_admin: false,
+        can_access_manager_app: false,
+        can_view_salary: false,
       },
       roleColumns: [
         { name: 'name', label: 'Role Name', field: 'name', align: 'left', sortable: true },
         { name: 'permissions', label: 'Permissions', field: 'permissions', align: 'left' },
         { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
       ],
-      availablePermissions: [
-        'View Dashboard',
-        'Manage Employees',
-        'View Attendance',
-        'Edit Attendance',
-        'View Payroll',
-        'Release Payroll',
-        'Approve Requests',
-        'Manage Schedules',
-        'Admin Settings',
-        'Web Admin',
-        'View Salary',
+      permissionFields: [
+        { key: 'can_view_dashboard', label: 'View Dashboard' },
+        { key: 'can_manage_employees', label: 'Manage Employees' },
+        { key: 'can_view_attendance', label: 'View Attendance' },
+        { key: 'can_edit_attendance', label: 'Edit Attendance' },
+        { key: 'can_view_payroll', label: 'View Payroll' },
+        { key: 'can_release_payroll', label: 'Release Payroll' },
+        { key: 'can_approve_requests', label: 'Approve Requests' },
+        { key: 'can_manage_schedules', label: 'Manage Schedules' },
+        { key: 'can_access_admin_settings', label: 'Admin Settings' },
+        { key: 'can_access_web_admin', label: 'Web Admin' },
+        { key: 'can_access_manager_app', label: 'Manager App' },
+        { key: 'can_view_salary', label: 'View Salary' },
       ],
       // Shifts
+      shiftSubTab: 'one-time',
       shifts: [],
       loadingShifts: false,
       shiftDialog: false,
@@ -2047,6 +2544,8 @@ export default {
         default_end_time: '',
         is_graveyard: false,
         apply_night_differential: false,
+        is_off: false,
+        is_extended: false,
       },
       shiftColumns: [
         { name: 'name', label: 'Shift Name', field: 'name', align: 'left', sortable: true },
@@ -2061,6 +2560,50 @@ export default {
         },
         { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
       ],
+
+      // Recurring Schedules
+      recurringSchedules: [],
+      loadingRecurring: false,
+      recurringDialog: false,
+      editingRecurring: false,
+      savingRecurring: false,
+      recurringForm: {
+        id: null,
+        name: '',
+        shift_type: null,
+        shift_type_2: null,
+        start_date: '',
+        end_date: '',
+        start_time: '',
+        end_time: '',
+        weekdays: [],
+        repeat_interval: 1,
+      },
+      weekdayOptions: [
+        { label: 'Monday', value: 'Mon' },
+        { label: 'Tuesday', value: 'Tue' },
+        { label: 'Wednesday', value: 'Wed' },
+        { label: 'Thursday', value: 'Thu' },
+        { label: 'Friday', value: 'Fri' },
+        { label: 'Saturday', value: 'Sat' },
+        { label: 'Sunday', value: 'Sun' },
+      ],
+      recurringColumns: [
+        { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
+        { name: 'shift_type', label: 'Primary Shift', field: 'shift_type', align: 'left' },
+        { name: 'shift_type_2', label: 'Secondary Shift', field: 'shift_type_2', align: 'left' },
+        { name: 'date_range', label: 'Date Range', align: 'left' },
+        { name: 'time', label: 'Time', align: 'left' },
+        { name: 'weekdays', label: 'Weekdays', field: 'weekdays', align: 'left' },
+        {
+          name: 'repeat_interval',
+          label: 'Repeat Interval',
+          field: 'repeat_interval',
+          align: 'center',
+        },
+        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+      ],
+
       // Positions
       positions: [],
       loadingPositions: false,
@@ -2094,8 +2637,6 @@ export default {
         company_id: null,
         contract_type_id: null,
         site_id: null,
-
-        // Pay Structure (nested object)
         pay_structure: {
           position_id: null,
           pay_type: 'monthly',
@@ -2104,31 +2645,8 @@ export default {
           effective_from: '',
           effective_to: null,
         },
-
-        // Schedules array
-        schedules: [],
-
-        // Recurring array
-        recurring: [],
       },
 
-      // Add these to help with schedule/recurring management
-      scheduleForm: {
-        date: '',
-        site_id: null,
-        department_id: null,
-        shift_type_id: null,
-      },
-
-      recurringForm: {
-        recurring_id: null,
-        start_date: '',
-        end_date: '',
-        site_id: null,
-        department_id: null,
-      },
-
-      // You'll also need to fetch departments and shift types
       shiftTypes: [],
       loadingShiftTypes: false,
       contractColumns: [
@@ -2340,6 +2858,7 @@ export default {
           this.fetchSites(),
           this.fetchRoles(),
           this.fetchShifts(),
+          this.fetchRecurringSchedules(),
           this.fetchAllowanceTypes(),
           this.fetchTaxBrackets(),
           this.fetchCutoffPeriods(),
@@ -2530,20 +3049,23 @@ export default {
     },
 
     getActivePermissions(role) {
-      if (Array.isArray(role.permissions)) {
-        return role.permissions
+      // GET returns { id, name, permissions: ["can_view_dashboard", ...] }
+      if (!Array.isArray(role.permissions)) return []
+      const labelMap = {
+        can_view_dashboard: 'View Dashboard',
+        can_manage_employees: 'Manage Employees',
+        can_view_attendance: 'View Attendance',
+        can_edit_attendance: 'Edit Attendance',
+        can_view_payroll: 'View Payroll',
+        can_release_payroll: 'Release Payroll',
+        can_approve_requests: 'Approve Requests',
+        can_manage_schedules: 'Manage Schedules',
+        can_access_admin_settings: 'Admin Settings',
+        can_access_web_admin: 'Web Admin',
+        can_access_manager_app: 'Manager App',
+        can_view_salary: 'View Salary',
       }
-
-      if (typeof role.permissions === 'string') {
-        try {
-          const parsed = JSON.parse(role.permissions)
-          return Array.isArray(parsed) ? parsed : []
-        } catch (e) {
-          console.warn('⚠️ Failed to parse permissions:', e)
-        }
-      }
-
-      return []
+      return role.permissions.map((p) => labelMap[p] || p)
     },
 
     formatDate(date) {
@@ -2553,6 +3075,41 @@ export default {
         month: 'short',
         day: 'numeric',
       })
+    },
+
+    formatWeekdays(weekdays) {
+      if (!weekdays) return 'N/A'
+      let days = weekdays
+      if (typeof days === 'string') {
+        const trimmed = days.trim()
+        if (trimmed.startsWith('[')) {
+          try {
+            days = JSON.parse(trimmed)
+          } catch (e) {
+            days = trimmed.split(',')
+          }
+        } else {
+          days = trimmed.split(',')
+        }
+      }
+      if (!Array.isArray(days) || days.length === 0) return 'N/A'
+      const map = {
+        monday: 'Mon',
+        tuesday: 'Tue',
+        wednesday: 'Wed',
+        thursday: 'Thu',
+        friday: 'Fri',
+        saturday: 'Sat',
+        sunday: 'Sun',
+        mon: 'Mon',
+        tue: 'Tue',
+        wed: 'Wed',
+        thu: 'Thu',
+        fri: 'Fri',
+        sat: 'Sat',
+        sun: 'Sun',
+      }
+      return days.map((d) => map[d.trim().toLowerCase()] || d.trim()).join(', ')
     },
 
     formatAmount(amount) {
@@ -2567,7 +3124,7 @@ export default {
     async fetchCompanies() {
       this.loadingCompanies = true
       try {
-        const response = await api.get('/organization/companies/', {
+        const response = await api.get('https://staging.wageyapp.com/organization/companies/', {
           headers: this.getAuthHeaders(),
         })
         this.companies = response.data.data || response.data || []
@@ -2588,6 +3145,8 @@ export default {
       this.companyForm = {
         id: null,
         name: '',
+        address: '',
+        contact: '',
         logo: '',
       }
       this.logoUploadMethod = 'url'
@@ -2659,6 +3218,8 @@ export default {
       try {
         const formData = new FormData()
         formData.append('name', this.companyForm.name)
+        if (this.companyForm.address) formData.append('address', this.companyForm.address)
+        if (this.companyForm.contact) formData.append('contact', this.companyForm.contact)
 
         if (this.logoUploadMethod === 'file' && this.logoFile) {
           formData.append('logo', this.logoFile)
@@ -2674,10 +3235,16 @@ export default {
         }
 
         if (this.editingCompany) {
-          await api.put(`/organization/companies/${this.companyForm.id}/`, formData, { headers })
+          await api.put(
+            `https://staging.wageyapp.com/organization/companies/${this.companyForm.id}/`,
+            formData,
+            { headers },
+          )
           this.$q.notify({ type: 'positive', message: 'Company updated successfully' })
         } else {
-          await api.post('/organization/companies/create/', formData, { headers })
+          await api.post('https://staging.wageyapp.com/organization/companies/create/', formData, {
+            headers,
+          })
           this.$q.notify({ type: 'positive', message: 'Company created successfully' })
         }
 
@@ -2718,7 +3285,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/organization/companies/${company.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/organization/companies/${company.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Company deleted successfully' })
@@ -2739,7 +3306,7 @@ export default {
           return
         }
 
-        const response = await api.get('/organization/sites/', {
+        const response = await api.get('https://staging.wageyapp.com/organization/sites/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -2762,6 +3329,8 @@ export default {
       this.siteForm = {
         id: null,
         name: '',
+        brand_name: '',
+        otp_secret: '',
         location: '',
         latitude: '',
         longitude: '',
@@ -2772,7 +3341,9 @@ export default {
         allow_manual_attendance: true,
         allow_service_charge: true,
         multiply_nd_by_holiday: false,
+        extended_shift_days: '',
         company: this.getCompanyId(),
+        business_type: null,
       }
       this.siteDialog = true
     },
@@ -2828,6 +3399,8 @@ export default {
 
         const payload = {
           name: this.siteForm.name.trim(),
+          brand_name: this.siteForm.brand_name?.trim() || '',
+          otp_secret: this.siteForm.otp_secret?.trim() || '',
           location: this.siteForm.location.trim(),
           latitude: formatCoordinate(this.siteForm.latitude),
           longitude: formatCoordinate(this.siteForm.longitude),
@@ -2838,6 +3411,7 @@ export default {
           allow_manual_attendance: Boolean(this.siteForm.allow_manual_attendance),
           allow_service_charge: Boolean(this.siteForm.allow_service_charge),
           multiply_nd_by_holiday: Boolean(this.siteForm.multiply_nd_by_holiday),
+          extended_shift_days: this.siteForm.extended_shift_days || '',
           company: this.getCompanyId(),
         }
 
@@ -2846,16 +3420,20 @@ export default {
         }
 
         if (this.editingSite) {
-          await api.put(`/organization/sites/${this.siteForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/organization/sites/${this.siteForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({
             type: 'positive',
             message: 'Site updated successfully',
             position: 'top',
           })
         } else {
-          await api.post('/organization/sites/', payload, {
+          await api.post('https://staging.wageyapp.com/organization/sites/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({
@@ -2914,7 +3492,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/organization/sites/${site.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/organization/sites/${site.id}/`, {
               headers: this.getAuthHeaders(),
             })
 
@@ -2952,7 +3530,7 @@ export default {
           return
         }
 
-        const response = await api.get('/organization/departments/', {
+        const response = await api.get('https://staging.wageyapp.com/organization/departments/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3021,12 +3599,16 @@ export default {
         }
 
         if (this.editingDepartment) {
-          await api.put(`/organization/departments/${this.departmentForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/organization/departments/${this.departmentForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Department updated successfully' })
         } else {
-          await api.post('/organization/departments/', payload, {
+          await api.post('https://staging.wageyapp.com/organization/departments/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Department created successfully' })
@@ -3070,9 +3652,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/organization/departments/${department.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/organization/departments/${department.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Department deleted successfully' })
             await this.fetchDepartments()
           } catch (error) {
@@ -3098,7 +3683,7 @@ export default {
           return
         }
 
-        const response = await api.get('/user/user-roles/', {
+        const response = await api.get('https://staging.wageyapp.com/user/user-roles/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3134,45 +3719,64 @@ export default {
       this.roleForm = {
         id: null,
         name: '',
-        permissions: [],
         company: companyId,
+        can_view_dashboard: false,
+        can_manage_employees: false,
+        can_view_attendance: false,
+        can_edit_attendance: false,
+        can_view_payroll: false,
+        can_release_payroll: false,
+        can_approve_requests: false,
+        can_manage_schedules: false,
+        can_access_admin_settings: false,
+        can_access_web_admin: false,
+        can_access_manager_app: false,
+        can_view_salary: false,
       }
       this.roleDialog = true
     },
 
     editRole(role) {
+      // Debug: log the raw role object to confirm the ID field name
+      console.log('🔍 Raw role object:', JSON.stringify(role, null, 2))
+
+      // Resolve ID — backend might use 'id', 'role_id', or nested field
+      const roleId = role.id ?? role.role_id ?? role.pk ?? null
+
+      if (!roleId) {
+        console.error('❌ Could not resolve role ID from object:', role)
+        this.$q.notify({
+          type: 'negative',
+          message: 'Role ID is missing. Check console for raw role data.',
+          position: 'top',
+        })
+        return
+      }
+
       this.editingRole = true
 
-      let permissionsArray = []
-      if (Array.isArray(role.permissions)) {
-        permissionsArray = role.permissions.slice() // fresh copy
-      } else if (typeof role.permissions === 'string') {
-        try {
-          const parsed = JSON.parse(role.permissions)
-          permissionsArray = Array.isArray(parsed) ? parsed.slice() : []
-        } catch {
-          permissionsArray = []
-        }
-      }
+      const perms = Array.isArray(role.permissions) ? role.permissions : []
 
       this.roleForm = {
-        id: role.id,
-        name: role.name,
-        permissions: permissionsArray,
-        company: role.company || this.getCompanyId(),
+        id: roleId,
+        name: role.name || '',
+        company: role.company ?? role.company_id ?? this.getCompanyId(),
+        can_view_dashboard: perms.includes('can_view_dashboard'),
+        can_manage_employees: perms.includes('can_manage_employees'),
+        can_view_attendance: perms.includes('can_view_attendance'),
+        can_edit_attendance: perms.includes('can_edit_attendance'),
+        can_view_payroll: perms.includes('can_view_payroll'),
+        can_release_payroll: perms.includes('can_release_payroll'),
+        can_approve_requests: perms.includes('can_approve_requests'),
+        can_manage_schedules: perms.includes('can_manage_schedules'),
+        can_access_admin_settings: perms.includes('can_access_admin_settings'),
+        can_access_web_admin: perms.includes('can_access_web_admin'),
+        can_access_manager_app: perms.includes('can_access_manager_app'),
+        can_view_salary: perms.includes('can_view_salary'),
       }
-      this.roleDialog = true
-    },
 
-    togglePermission(perm, checked) {
-      const perms = this.roleForm.permissions.slice()
-      if (checked) {
-        if (!perms.includes(perm)) perms.push(perm)
-      } else {
-        const idx = perms.indexOf(perm)
-        if (idx !== -1) perms.splice(idx, 1)
-      }
-      this.roleForm.permissions = perms
+      console.log('✅ roleForm.id set to:', this.roleForm.id)
+      this.roleDialog = true
     },
 
     async saveRole() {
@@ -3195,37 +3799,81 @@ export default {
         return
       }
 
+      if (this.editingRole && !this.roleForm.id) {
+        this.$q.notify({
+          type: 'negative',
+          message: 'Cannot update: Role ID is missing.',
+          position: 'top',
+        })
+        return
+      }
+
       this.savingRole = true
 
       try {
-        const payload = {
-          name: this.roleForm.name.trim(),
-          permissions: Array.isArray(this.roleForm.permissions)
-            ? [...this.roleForm.permissions]
-            : [],
-          company: parseInt(companyId),
-        }
+        // Build permissions as array of strings — matches backend GET response format
+        const permissions = this.permissionFields
+          .filter((perm) => Boolean(this.roleForm[perm.key]))
+          .map((perm) => perm.key)
 
         if (this.editingRole) {
-          await api.put(`/user/user-roles/${this.roleForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
+          // PATCH — only name + permissions in body, company as query param
+          const payload = {
+            name: this.roleForm.name.trim(),
+            permissions,
+          }
+
+          await api.patch(
+            `https://staging.wageyapp.com/user/user-roles/${this.roleForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+              params: { company: parseInt(companyId) },
+            },
+          )
+
+          this.$q.notify({
+            type: 'positive',
+            message: 'Role updated successfully',
+            position: 'top',
           })
-          this.$q.notify({ type: 'positive', message: 'Role updated successfully' })
         } else {
-          await api.post('/user/user-roles/', payload, {
+          // POST — company goes in the body for creation
+          const payload = {
+            name: this.roleForm.name.trim(),
+            company: parseInt(companyId),
+            permissions,
+          }
+
+          await api.post('https://staging.wageyapp.com/user/user-roles/', payload, {
             headers: this.getAuthHeaders(),
           })
-          this.$q.notify({ type: 'positive', message: 'Role created successfully' })
+
+          this.$q.notify({
+            type: 'positive',
+            message: 'Role created successfully',
+            position: 'top',
+          })
         }
 
         this.roleDialog = false
         await this.fetchRoles()
       } catch (error) {
-        console.error('Error saving role:', error)
+        console.error('❌ Error saving role:', error)
+        console.error('❌ Response data:', error.response?.data)
+
+        const backendMsg =
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
+          error.response?.data?.non_field_errors?.[0] ||
+          (typeof error.response?.data === 'string' ? error.response.data : null) ||
+          `Request failed (${error.response?.status})`
+
         this.$q.notify({
           type: 'negative',
-          message: error.response?.data?.message || 'Failed to save role',
+          message: backendMsg,
           position: 'top',
+          timeout: 6000,
         })
       } finally {
         this.savingRole = false
@@ -3244,7 +3892,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            const url = `/user/user-roles/${role.id}/`
+            const url = `https://staging.wageyapp.com/user/user-roles/${role.id}/`
             console.log('DELETE URL:', url) // Add this
 
             await api.delete(url, {
@@ -3276,7 +3924,7 @@ export default {
           return
         }
 
-        const response = await api.get('/organization/shift-types/', {
+        const response = await api.get('https://staging.wageyapp.com/organization/shift-types/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3308,6 +3956,8 @@ export default {
         default_end_time: '',
         is_graveyard: false,
         apply_night_differential: false,
+        is_off: false,
+        is_extended: false,
       }
       this.shiftDialog = true
     },
@@ -3323,6 +3973,8 @@ export default {
         default_end_time: this.extractTime(shift.default_end_time),
         is_graveyard: shift.is_graveyard || false,
         apply_night_differential: shift.apply_night_differential || false,
+        is_off: shift.is_off || false,
+        is_extended: shift.is_extended || false,
       }
       this.shiftDialog = true
     },
@@ -3367,17 +4019,23 @@ export default {
           default_end_time: formatTimeToAPI(this.shiftForm.default_end_time),
           is_graveyard: Boolean(this.shiftForm.is_graveyard),
           apply_night_differential: Boolean(this.shiftForm.apply_night_differential),
+          is_off: Boolean(this.shiftForm.is_off),
+          is_extended: Boolean(this.shiftForm.is_extended),
         }
 
         console.log('Payload being sent:', payload)
 
         if (this.editingShift) {
-          await api.put(`/organization/shift-types/${this.shiftForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/organization/shift-types/${this.shiftForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Shift updated successfully' })
         } else {
-          await api.post('/organization/shift-types/', payload, {
+          await api.post('https://staging.wageyapp.com/organization/shift-types/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Shift created successfully' })
@@ -3433,7 +4091,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/organization/shift-types/${shift.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/organization/shift-types/${shift.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Shift deleted successfully' })
@@ -3444,6 +4102,260 @@ export default {
               type: 'negative',
               message: error.response?.data?.message || 'Failed to delete shift',
               position: 'top',
+            })
+          }
+        })
+    },
+
+    // ==================== RECURRING SCHEDULES ====================
+    async fetchRecurringSchedules() {
+      this.loadingRecurring = true
+      try {
+        const companyId = this.getCompanyId()
+        if (!companyId) {
+          this.recurringSchedules = []
+          return
+        }
+        const response = await api.get(
+          'https://staging.wageyapp.com/organization/recurring-schedules/',
+          {
+            params: { company: companyId },
+            headers: this.getAuthHeaders(),
+          },
+        )
+        this.recurringSchedules = (response.data.data || response.data || []).map((schedule) => {
+          const shiftType = this.shiftTypes.find(
+            (st) => st.id === (schedule.shift_type_id || schedule.shift_type),
+          )
+          return {
+            ...schedule,
+            shift_type_name: schedule.shift_type_name || shiftType?.name || null,
+          }
+        })
+      } catch (error) {
+        console.error('Error fetching recurring schedules:', error)
+        this.$q.notify({
+          type: 'negative',
+          message: error.response?.data?.message || 'Failed to load recurring schedules',
+          position: 'top',
+        })
+      } finally {
+        this.loadingRecurring = false
+      }
+    },
+
+    openRecurringDialog() {
+      const companyId = this.validateCompanySelection()
+      if (!companyId) return
+      this.editingRecurring = false
+      this.recurringForm = {
+        id: null,
+        name: '',
+        shift_type: null,
+        shift_type_2: null,
+        start_date: '',
+        end_date: '',
+        start_time: '',
+        end_time: '',
+        weekdays: [],
+        repeat_interval: 1,
+      }
+      this.recurringDialog = true
+    },
+
+    editRecurring(row) {
+      this.editingRecurring = true
+      this.recurringForm = {
+        id: row.id,
+        name: row.name,
+        shift_type: row.shift_type,
+        shift_type_2: row.shift_type_2 || null,
+        start_date: row.start_date,
+        end_date: row.end_date,
+        start_time: this.extractTime(row.start_time),
+        end_time: this.extractTime(row.end_time),
+        weekdays: (() => {
+          if (!row.weekdays) return []
+          let days = row.weekdays
+          if (typeof days === 'string') {
+            const t = days.trim()
+            if (t.startsWith('[')) {
+              try {
+                days = JSON.parse(t)
+              } catch (e) {
+                days = t.split(',')
+              }
+            } else {
+              days = t.split(',')
+            }
+          }
+          const map = {
+            monday: 'Mon',
+            tuesday: 'Tue',
+            wednesday: 'Wed',
+            thursday: 'Thu',
+            friday: 'Fri',
+            saturday: 'Sat',
+            sunday: 'Sun',
+            mon: 'Mon',
+            tue: 'Tue',
+            wed: 'Wed',
+            thu: 'Thu',
+            fri: 'Fri',
+            sat: 'Sat',
+            sun: 'Sun',
+          }
+          return Array.isArray(days) ? days.map((d) => map[d.trim().toLowerCase()] || d.trim()) : []
+        })(),
+        repeat_interval: row.repeat_interval,
+      }
+      this.recurringDialog = true
+    },
+
+    async saveRecurringSchedule() {
+      if (!this.recurringForm.name?.trim()) {
+        this.$q.notify({ type: 'warning', message: 'Schedule name is required', position: 'top' })
+        return
+      }
+      if (!this.recurringForm.shift_type) {
+        this.$q.notify({
+          type: 'warning',
+          message: 'Primary shift type is required',
+          position: 'top',
+        })
+        return
+      }
+      if (!this.recurringForm.start_date || !this.recurringForm.end_date) {
+        this.$q.notify({
+          type: 'warning',
+          message: 'Start and end dates are required',
+          position: 'top',
+        })
+        return
+      }
+
+      const getShiftTimes = (shiftTypeId) => {
+        const shift = this.shiftTypes.find((s) => s.id === shiftTypeId)
+        return {
+          start_time: shift?.default_start_time || '00:00:00',
+          end_time: shift?.default_end_time || '00:00:00',
+        }
+      }
+
+      const weekdays = Array.isArray(this.recurringForm.weekdays)
+        ? this.recurringForm.weekdays.join(',')
+        : this.recurringForm.weekdays
+
+      const basePayload = {
+        company: parseInt(this.getCompanyId()),
+        start_date: this.recurringForm.start_date,
+        end_date: this.recurringForm.end_date,
+        weekdays,
+        repeat_interval: parseInt(this.recurringForm.repeat_interval) || 1,
+      }
+
+      const primaryTimes = getShiftTimes(this.recurringForm.shift_type)
+      const primaryPayload = {
+        ...basePayload,
+        name: this.recurringForm.name.trim(),
+        shift_type: parseInt(this.recurringForm.shift_type),
+        start_time: primaryTimes.start_time,
+        end_time: primaryTimes.end_time,
+      }
+
+      const isSplitShift = !!this.recurringForm.shift_type_2
+      const secondaryPayload = isSplitShift
+        ? (() => {
+            const secondaryTimes = getShiftTimes(this.recurringForm.shift_type_2)
+            const secondaryShift = this.shiftTypes.find(
+              (s) => s.id === this.recurringForm.shift_type_2,
+            )
+            return {
+              ...basePayload,
+              name: `${this.recurringForm.name.trim()} (Split - ${secondaryShift?.name || 'Secondary'})`,
+              shift_type: parseInt(this.recurringForm.shift_type_2),
+              start_time: secondaryTimes.start_time,
+              end_time: secondaryTimes.end_time,
+            }
+          })()
+        : null
+
+      this.savingRecurring = true
+      try {
+        if (this.editingRecurring) {
+          await api.put(
+            `https://staging.wageyapp.com/organization/recurring-schedules/${this.recurringForm.id}/`,
+            primaryPayload,
+            { headers: this.getAuthHeaders() },
+          )
+          if (isSplitShift) {
+            await api.post(
+              'https://staging.wageyapp.com/organization/recurring-schedules/',
+              secondaryPayload,
+              { headers: this.getAuthHeaders() },
+            )
+          }
+          this.$q.notify({ type: 'positive', message: 'Recurring schedule updated successfully' })
+        } else {
+          await api.post(
+            'https://staging.wageyapp.com/organization/recurring-schedules/',
+            primaryPayload,
+            { headers: this.getAuthHeaders() },
+          )
+          if (isSplitShift) {
+            await api.post(
+              'https://staging.wageyapp.com/organization/recurring-schedules/',
+              secondaryPayload,
+              { headers: this.getAuthHeaders() },
+            )
+          }
+          this.$q.notify({
+            type: 'positive',
+            message: isSplitShift
+              ? 'Split shift schedules created successfully'
+              : 'Recurring schedule created successfully',
+          })
+        }
+        this.recurringDialog = false
+        await this.fetchRecurringSchedules()
+      } catch (error) {
+        console.error('Error saving recurring schedule:', error)
+        let errorMessage = 'Failed to save recurring schedule'
+        if (error.response?.data && typeof error.response.data === 'object') {
+          const errors = Object.entries(error.response.data).map(
+            ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`,
+          )
+          if (errors.length) errorMessage = errors.join(' | ')
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message
+        }
+        this.$q.notify({ type: 'negative', message: errorMessage, position: 'top', timeout: 5000 })
+      } finally {
+        this.savingRecurring = false
+      }
+    },
+
+    async deleteRecurring(schedule) {
+      this.$q
+        .dialog({
+          title: 'Confirm Delete',
+          message: `Are you sure you want to delete "${schedule.name}"?`,
+          cancel: true,
+          persistent: true,
+        })
+        .onOk(async () => {
+          try {
+            await api.delete(
+              `https://staging.wageyapp.com/organization/recurring-schedules/${schedule.id}/`,
+              { headers: this.getAuthHeaders() },
+            )
+            this.$q.notify({ type: 'positive', message: 'Recurring schedule deleted successfully' })
+            await this.fetchRecurringSchedules()
+          } catch (error) {
+            console.error('Error deleting recurring schedule:', error)
+            this.$q.notify({
+              type: 'negative',
+              message: error.response?.data?.message || 'Failed to delete recurring schedule',
             })
           }
         })
@@ -3484,12 +4396,18 @@ export default {
           return
         }
 
-        const response = await api.get('/user/positions/', {
+        const response = await api.get('https://staging.wageyapp.com/user/positions/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
 
-        this.positions = response.data || []
+        this.positions = (response.data || []).map((pos) => {
+          const dept = this.departments.find((d) => d.id === (pos.department_id || pos.department))
+          return {
+            ...pos,
+            department_name: pos.department_name || dept?.name || null,
+          }
+        })
       } catch (error) {
         console.error('Error fetching positions:', error)
       } finally {
@@ -3503,6 +4421,7 @@ export default {
         id: null,
         name: '',
         description: '',
+        company: this.getCompanyId(),
       }
       this.positionDialog = true
     },
@@ -3512,7 +4431,8 @@ export default {
       this.positionForm = {
         id: position.id,
         name: position.name,
-        description: position.description,
+        description: position.description || '',
+        company: position.company || this.getCompanyId(),
       }
       this.positionDialog = true
     },
@@ -3532,12 +4452,16 @@ export default {
         }
 
         if (this.editingPosition) {
-          await api.put(`/user/positions/${this.positionForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/user/positions/${this.positionForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Position updated successfully' })
         } else {
-          await api.post('/user/positions/', payload, {
+          await api.post('https://staging.wageyapp.com/user/positions/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Position created successfully' })
@@ -3563,7 +4487,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/user/positions/${position.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/user/positions/${position.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Position deleted successfully' })
@@ -3587,12 +4511,28 @@ export default {
 
         // Note: You may need to check what the LIST endpoint is
         // The provided endpoint is for CREATE only
-        const response = await api.get('/user/contracts/', {
+        const response = await api.get('https://staging.wageyapp.com/user/contracts/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
 
-        this.contracts = response.data.data || response.data || []
+        this.contracts = (response.data.data || response.data || []).map((contract) => {
+          const employee = this.employees.find((e) => e.id === contract.employee_id)
+          const contractType = this.contractTypes.find((t) => t.id === contract.contract_type_id)
+          const company = this.companies.find(
+            (c) => c.id === (contract.company_id || contract.company),
+          )
+          return {
+            ...contract,
+            employee_name:
+              contract.employee_name ||
+              (employee
+                ? `${employee.user?.first_name || ''} ${employee.user?.last_name || ''}`.trim()
+                : null),
+            contract_type_name: contract.contract_type_name || contractType?.name || null,
+            company_name: contract.company_name || company?.name || null,
+          }
+        })
       } catch (error) {
         console.error('Error fetching contracts:', error)
         this.$q.notify({
@@ -3607,9 +4547,12 @@ export default {
 
     async fetchShiftTypes() {
       try {
-        const response = await api.get('/attendance/shift-types/', {
-          headers: this.getAuthHeaders(),
-        })
+        const companyId = this.getCompanyId()
+        if (!companyId) return
+        const response = await api.get(
+          `https://staging.wageyapp.com/organization/shift-types/?company=${companyId}`,
+          { headers: this.getAuthHeaders() },
+        )
         this.shiftTypes = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching shift types:', error)
@@ -3621,7 +4564,7 @@ export default {
         const companyId = this.getCompanyId()
         if (!companyId) return
 
-        const response = await api.get('/user/employees/', {
+        const response = await api.get('https://staging.wageyapp.com/user/employees/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3634,7 +4577,7 @@ export default {
 
     async fetchContractTypes() {
       try {
-        const response = await api.get('/contracts/contract-types/', {
+        const response = await api.get('https://staging.wageyapp.com/contracts/contract-types/', {
           headers: this.getAuthHeaders(),
         })
 
@@ -3656,11 +4599,15 @@ export default {
         employee_id: null,
         company_id: companyId,
         contract_type_id: null,
-        position_id: null,
-        schedules: [],
-        recurring_id: null,
-        start_date: '',
-        end_date: '',
+        site_id: null,
+        pay_structure: {
+          position_id: null,
+          pay_type: 'monthly',
+          rate: '',
+          currency: 'PHP',
+          effective_from: '',
+          effective_to: null,
+        },
       }
       this.contractDialog = true
     },
@@ -3671,14 +4618,18 @@ export default {
       this.editingContract = true
       this.contractForm = {
         id: contract.id,
-        employee_id: contract.employee_id,
-        company_id: contract.company_id,
-        contract_type_id: contract.contract_type_id,
-        position_id: contract.position_id,
-        schedules: contract.schedules || [],
-        recurring_id: contract.recurring_id,
-        start_date: contract.start_date,
-        end_date: contract.end_date,
+        employee_id: contract.employee_company || null,
+        company_id: contract.employee_company || this.getCompanyId(),
+        contract_type_id: contract.contract_type_name || null,
+        site_id: null,
+        pay_structure: {
+          position_id: null,
+          pay_type: 'monthly',
+          rate: '',
+          currency: 'PHP',
+          effective_from: '',
+          effective_to: null,
+        },
       }
       this.contractDialog = true
     },
@@ -3687,11 +4638,20 @@ export default {
       if (
         !this.contractForm.employee_id ||
         !this.contractForm.contract_type_id ||
-        !this.contractForm.position_id
+        !this.contractForm.pay_structure?.position_id
       ) {
         this.$q.notify({
           type: 'negative',
-          message: 'Please fill all required fields',
+          message: 'Please fill all required fields (Employee, Contract Type, Position)',
+          position: 'top',
+        })
+        return
+      }
+
+      if (!this.contractForm.pay_structure?.rate) {
+        this.$q.notify({
+          type: 'negative',
+          message: 'Pay rate is required',
           position: 'top',
         })
         return
@@ -3699,15 +4659,32 @@ export default {
 
       this.savingContract = true
       try {
-        const payload = { ...this.contractForm }
+        const payload = {
+          employee_id: this.contractForm.employee_id,
+          company_id: this.contractForm.company_id || this.getCompanyId(),
+          contract_type_id: this.contractForm.contract_type_id,
+          site_id: this.contractForm.site_id || null,
+          pay_structure: {
+            position_id: this.contractForm.pay_structure.position_id,
+            pay_type: this.contractForm.pay_structure.pay_type || 'monthly',
+            rate: String(this.contractForm.pay_structure.rate),
+            currency: this.contractForm.pay_structure.currency || 'PHP',
+            effective_from: this.contractForm.pay_structure.effective_from || null,
+            effective_to: this.contractForm.pay_structure.effective_to || null,
+          },
+        }
 
         if (this.editingContract) {
-          await api.put(`/contracts/employee-contracts/${this.contractForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.patch(
+            `https://staging.wageyapp.com/contracts/employee-contracts/${this.contractForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Contract updated successfully' })
         } else {
-          await api.post('/contracts/employee-contracts/', payload, {
+          await api.post('https://staging.wageyapp.com/contracts/employee-contracts/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Contract created successfully' })
@@ -3748,9 +4725,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/contracts/employee-contracts/${contract.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/contracts/employee-contracts/${contract.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Contract deleted successfully' })
             await this.fetchContracts()
           } catch (error) {
@@ -3770,10 +4750,13 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/allowance-types/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
+        const response = await api.get(
+          'https://staging.wageyapp.com/payroll/admin/allowance-types/',
+          {
+            params: { company: companyId },
+            headers: this.getAuthHeaders(),
+          },
+        )
         this.allowanceTypes = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching allowance types:', error)
@@ -3812,12 +4795,16 @@ export default {
         }
 
         if (this.editingAllowanceType) {
-          await api.put(`/payroll/admin/allowance-types/${this.allowanceTypeForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/allowance-types/${this.allowanceTypeForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Allowance type updated successfully' })
         } else {
-          await api.post('/payroll/admin/allowance-types/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/allowance-types/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Allowance type created successfully' })
@@ -3843,9 +4830,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/allowance-types/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/payroll/admin/allowance-types/${item.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Allowance type deleted successfully' })
             await this.fetchAllowanceTypes()
           } catch (error) {
@@ -3865,7 +4855,7 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/tax-brackets/', {
+        const response = await api.get('https://staging.wageyapp.com/payroll/admin/tax-brackets/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -3913,12 +4903,16 @@ export default {
         }
 
         if (this.editingTaxBracket) {
-          await api.put(`/payroll/admin/tax-brackets/${this.taxBracketForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/tax-brackets/${this.taxBracketForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Tax bracket updated successfully' })
         } else {
-          await api.post('/payroll/admin/tax-brackets/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/tax-brackets/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Tax bracket created successfully' })
@@ -3944,9 +4938,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/tax-brackets/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/payroll/admin/tax-brackets/${item.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Tax bracket deleted successfully' })
             await this.fetchTaxBrackets()
           } catch (error) {
@@ -3966,10 +4963,13 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/cutoff-periods/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
+        const response = await api.get(
+          'https://staging.wageyapp.com/payroll/admin/cutoff-periods/',
+          {
+            params: { company: companyId },
+            headers: this.getAuthHeaders(),
+          },
+        )
         this.cutoffPeriods = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching cutoff periods:', error)
@@ -4018,12 +5018,16 @@ export default {
         }
 
         if (this.editingCutoffPeriod) {
-          await api.put(`/payroll/admin/cutoff-periods/${this.cutoffPeriodForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/cutoff-periods/${this.cutoffPeriodForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Cutoff period updated successfully' })
         } else {
-          await api.post('/payroll/admin/cutoff-periods/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/cutoff-periods/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Cutoff period created successfully' })
@@ -4049,9 +5053,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/cutoff-periods/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/payroll/admin/cutoff-periods/${item.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Cutoff period deleted successfully' })
             await this.fetchCutoffPeriods()
           } catch (error) {
@@ -4071,10 +5078,13 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/payroll-groups/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
+        const response = await api.get(
+          'https://staging.wageyapp.com/payroll/admin/payroll-groups/',
+          {
+            params: { company: companyId },
+            headers: this.getAuthHeaders(),
+          },
+        )
         this.payrollGroups = response.data.data || response.data || []
       } catch (error) {
         console.error('Error fetching payroll groups:', error)
@@ -4115,12 +5125,16 @@ export default {
         }
 
         if (this.editingPayrollGroup) {
-          await api.put(`/payroll/admin/payroll-groups/${this.payrollGroupForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/payroll-groups/${this.payrollGroupForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Payroll group updated successfully' })
         } else {
-          await api.post('/payroll/admin/payroll-groups/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/payroll-groups/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Payroll group created successfully' })
@@ -4146,9 +5160,12 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/payroll-groups/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
+            await api.delete(
+              `https://staging.wageyapp.com/payroll/admin/payroll-groups/${item.id}/`,
+              {
+                headers: this.getAuthHeaders(),
+              },
+            )
             this.$q.notify({ type: 'positive', message: 'Payroll group deleted successfully' })
             await this.fetchPayrollGroups()
           } catch (error) {
@@ -4168,7 +5185,7 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/admin/labor-rules/', {
+        const response = await api.get('https://staging.wageyapp.com/payroll/admin/labor-rules/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -4216,12 +5233,16 @@ export default {
         }
 
         if (this.editingLaborRule) {
-          await api.put(`/payroll/admin/labor-rules/${this.laborRuleForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/admin/labor-rules/${this.laborRuleForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Labor rule updated successfully' })
         } else {
-          await api.post('/payroll/admin/labor-rules/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/admin/labor-rules/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Labor rule created successfully' })
@@ -4247,7 +5268,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/admin/labor-rules/${item.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/payroll/admin/labor-rules/${item.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Labor rule deleted successfully' })
@@ -4269,7 +5290,7 @@ export default {
           return
         }
 
-        const response = await api.get('/payroll/pay-structures/', {
+        const response = await api.get('https://staging.wageyapp.com/payroll/pay-structures/', {
           params: { company: companyId },
           headers: this.getAuthHeaders(),
         })
@@ -4352,12 +5373,16 @@ export default {
         console.log('💾 Saving pay structure with payload:', payload)
 
         if (this.editingPayStructure) {
-          await api.put(`/payroll/pay-structures/${this.payStructureForm.id}/`, payload, {
-            headers: this.getAuthHeaders(),
-          })
+          await api.put(
+            `https://staging.wageyapp.com/payroll/pay-structures/${this.payStructureForm.id}/`,
+            payload,
+            {
+              headers: this.getAuthHeaders(),
+            },
+          )
           this.$q.notify({ type: 'positive', message: 'Pay structure updated successfully' })
         } else {
-          await api.post('/payroll/pay-structures/', payload, {
+          await api.post('https://staging.wageyapp.com/payroll/pay-structures/', payload, {
             headers: this.getAuthHeaders(),
           })
           this.$q.notify({ type: 'positive', message: 'Pay structure created successfully' })
@@ -4416,7 +5441,7 @@ export default {
         })
         .onOk(async () => {
           try {
-            await api.delete(`/payroll/pay-structures/${item.id}/`, {
+            await api.delete(`https://staging.wageyapp.com/payroll/pay-structures/${item.id}/`, {
               headers: this.getAuthHeaders(),
             })
             this.$q.notify({ type: 'positive', message: 'Pay structure deleted successfully' })
@@ -4534,6 +5559,59 @@ export default {
 
 .search-icon {
   color: #9ca3af;
+}
+
+/* ============================================
+   SITE DIALOG STYLES
+   ============================================ */
+.dialog-header {
+  padding: 16px 20px 12px;
+}
+
+.form-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6b7280;
+  margin-bottom: 10px;
+  margin-top: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.toggles-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.toggle-label-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a202c;
+  line-height: 1.2;
+}
+
+.toggle-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.2;
 }
 
 /* ============================================
@@ -4793,6 +5871,15 @@ export default {
 }
 
 .pdf-btn:hover {
+  background: #fecaca;
+}
+
+.delete-btn {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.delete-btn:hover {
   background: #fecaca;
 }
 
