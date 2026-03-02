@@ -236,6 +236,18 @@
                             flat
                             dense
                             round
+                            icon="event_busy"
+                            size="xs"
+                            class="action-btn dayoff-btn"
+                            :loading="isAssigningDayOff"
+                            @click.stop="assignDayOff(element)"
+                          >
+                            <q-tooltip>Assign Day Off</q-tooltip>
+                          </q-btn>
+                          <q-btn
+                            flat
+                            dense
+                            round
                             icon="close"
                             size="xs"
                             class="action-btn delete-btn"
@@ -936,6 +948,7 @@ const showQuickAddModal = ref(false)
 const showReassignModal = ref(false)
 const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
+const isAssigningDayOff = ref(false)
 
 const newSchedule = ref({
   userId: null,
@@ -2101,19 +2114,21 @@ const createRecurringSchedule = async (scheduleData) => {
   console.log('✅ Recurring template verified:', templateExists.name)
 
   if (templateExists.start_date && templateExists.end_date) {
-    const userStart = new Date(scheduleData.recurringStartDate)
-    const userEnd = new Date(scheduleData.recurringEndDate)
-    if (
-      userStart < new Date(templateExists.start_date) ||
-      userEnd > new Date(templateExists.end_date)
-    ) {
-      throw new Error(
-        `Selected dates (${scheduleData.recurringStartDate} to ${scheduleData.recurringEndDate}) are outside the template's valid range (${templateExists.start_date} to ${templateExists.end_date}).`,
-      )
-    }
-    console.log('✅ Dates are within template range')
-  }
+    const templateStart = new Date(templateExists.start_date)
+    const templateEnd = new Date(templateExists.end_date)
 
+    scheduleData.recurringStartDate =
+      scheduleData.recurringStartDate < templateExists.start_date
+        ? templateExists.start_date
+        : scheduleData.recurringStartDate
+
+    scheduleData.recurringEndDate =
+      scheduleData.recurringEndDate > templateExists.end_date
+        ? templateExists.end_date
+        : scheduleData.recurringEndDate
+
+    console.log('⚠️ Dates clamped to template range')
+  }
   // Validate site
   const siteExists = sites.value.find((s) => s.id === parseInt(scheduleData.site))
   if (!siteExists) throw new Error(`Site ${scheduleData.site} not found`)
@@ -2782,6 +2797,92 @@ const closeQuickAddModal = () => {
     userId: null,
     day: null,
     shifts: [],
+  }
+}
+
+const assignDayOff = async (element) => {
+  const dayOffShiftType = shiftTypes.value.find((st) => {
+    const name = st.name?.toLowerCase() || ''
+    return (
+      name.includes('day off') ||
+      name.includes('dayoff') ||
+      name.includes('rest day') ||
+      name.includes('off day') ||
+      name === 'off'
+    )
+  })
+
+  if (!dayOffShiftType) {
+    $q.notify({
+      type: 'warning',
+      message: 'No "Day Off" shift type found.',
+      caption: 'Please create a shift type named "Day Off" in your settings.',
+      timeout: 5000,
+    })
+    return
+  }
+
+  if (!element.assignmentId) {
+    $q.notify({
+      type: 'negative',
+      message: 'Cannot assign day off — missing assignment ID.',
+      timeout: 4000,
+    })
+    return
+  }
+
+  isAssigningDayOff.value = true
+  const token = localStorage.getItem('access_token')
+
+  try {
+    const payload = {
+      assignment_id: parseInt(element.assignmentId),
+      shift_type_id: parseInt(dayOffShiftType.id),
+      site_id: parseInt(element.site),
+    }
+
+    if (element.department) {
+      payload.department_id = parseInt(element.department)
+    }
+
+    await axios.patch('https://staging.wageyapp.com/organization/assignments/reassign/', payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    const employeeName = getEmployeeName(element.userId)
+    $q.notify({
+      type: 'positive',
+      message: 'Day off assigned!',
+      caption: `${employeeName}'s shift changed to Day Off`,
+      icon: 'event_busy',
+      timeout: 3000,
+    })
+
+    shifts.value = []
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    await fetchData()
+  } catch (error) {
+    console.error('❌ Assign day off failed:', error.response?.data || error.message)
+
+    let errorMsg = 'Failed to assign day off.'
+    if (error.response?.data?.detail) {
+      errorMsg = error.response.data.detail
+    } else if (typeof error.response?.data === 'object') {
+      errorMsg = Object.entries(error.response.data)
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+        .join('; ')
+    }
+
+    $q.notify({
+      type: 'negative',
+      message: errorMsg,
+      timeout: 5000,
+    })
+  } finally {
+    isAssigningDayOff.value = false
   }
 }
 
@@ -3480,6 +3581,15 @@ const filterEmployees = () => {}
 
 .reassign-btn:hover {
   background: #c4b5fd;
+}
+
+.dayoff-btn {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.dayoff-btn:hover {
+  background: #fde68a;
 }
 
 .delete-btn {
