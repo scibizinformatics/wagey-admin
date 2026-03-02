@@ -641,6 +641,22 @@
               </q-input>
             </div>
 
+            <!-- Overnight Shift Indicator -->
+            <q-banner
+              v-if="newRecord.time_in && newRecord.time_out && isOvernightShift()"
+              dense
+              rounded
+              class="bg-deep-purple-1 q-mb-sm"
+            >
+              <template v-slot:avatar>
+                <q-icon name="dark_mode" color="deep-purple" />
+              </template>
+              <span class="text-deep-purple text-caption text-weight-medium">
+                Graveyard shift detected — Time Out is on
+                <strong>{{ getTimeOutDate() }}</strong>
+              </span>
+            </q-banner>
+
             <!-- Working Hours Display (Compact) -->
             <div
               v-if="newRecord.time_in && newRecord.time_out"
@@ -1135,6 +1151,25 @@ function getStatusColor(status) {
   return statusColors[status?.toLowerCase()] || 'grey'
 }
 
+function isOvernightShift() {
+  if (!newRecord.value.time_in || !newRecord.value.time_out) return false
+  const [inH, inM] = newRecord.value.time_in.split(':').map(Number)
+  const [outH, outM] = newRecord.value.time_out.split(':').map(Number)
+  return outH * 60 + outM < inH * 60 + inM
+}
+
+function getTimeOutDate() {
+  if (!newRecord.value.date) return ''
+  const next = new Date(newRecord.value.date)
+  next.setDate(next.getDate() + 1)
+  return next.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 function calculateWorkingHours() {
   if (!newRecord.value.time_in || !newRecord.value.time_out) return '0h 0m'
 
@@ -1144,11 +1179,11 @@ function calculateWorkingHours() {
   const inDate = new Date(0, 0, 0, inHours, inMinutes)
   let outDate = new Date(0, 0, 0, outHours, outMinutes)
 
-  let diff = (outDate - inDate) / 1000 / 60 // difference in minutes
+  let diff = (outDate - inDate) / 1000 / 60
 
-  // ✅ Handle overnight shift
+  // Auto-detect overnight shift: if time out < time in, add 24 hours
   if (diff < 0) {
-    diff += 24 * 60 // add 24 hours
+    diff += 24 * 60
   }
 
   const hours = Math.floor(diff / 60)
@@ -1459,12 +1494,11 @@ async function submitAttendance() {
     return
   }
 
-  // ✅ UPDATED: Handle overnight shifts
+  // Build timestamps — auto-detect overnight/graveyard shift
   const timeIn = new Date(`${newRecord.value.date}T${newRecord.value.time_in}:00`)
   let timeOut = new Date(`${newRecord.value.date}T${newRecord.value.time_out}:00`)
 
-  // If time_out is earlier than time_in, it means the shift crosses midnight
-  // Add 1 day to time_out
+  // If time out is earlier than time in, the shift crosses midnight — add 1 day
   if (timeOut <= timeIn) {
     timeOut.setDate(timeOut.getDate() + 1)
   }
@@ -1612,7 +1646,14 @@ async function updateAttendance() {
     }
 
     if (editingRecord.value.time_out) {
-      const timeOutDate = new Date(`${editingRecord.value.date}T${editingRecord.value.time_out}:00`)
+      let timeOutDate = new Date(`${editingRecord.value.date}T${editingRecord.value.time_out}:00`)
+      // Auto-detect overnight: if time out < time in, shift crosses midnight
+      if (
+        editingRecord.value.time_in &&
+        timeOutDate <= new Date(`${editingRecord.value.date}T${editingRecord.value.time_in}:00`)
+      ) {
+        timeOutDate.setDate(timeOutDate.getDate() + 1)
+      }
       timeOutTimestamp = timeOutDate.toISOString()
     }
 
@@ -1691,10 +1732,11 @@ async function filterByEmployee(employeeId) {
 }
 // ================= DIALOG HANDLERS =================
 function openAddDialog() {
+  const todayDate = new Date().toISOString().split('T')[0]
   newRecord.value = {
     employee: '',
     site_id: '',
-    date: new Date().toISOString().split('T')[0],
+    date: todayDate,
     time_in: '',
     time_out: '',
     source: 'admin',
