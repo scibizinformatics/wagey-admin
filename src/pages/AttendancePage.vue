@@ -538,6 +538,7 @@
             <!-- Employee and Date Row -->
             <div class="form-row">
               <q-select
+                ref="employeeSelectRef"
                 filled
                 dense
                 v-model="newRecord.employee"
@@ -548,9 +549,12 @@
                 emit-value
                 map-options
                 use-input
+                fill-input
+                hide-selected
                 input-debounce="300"
                 @filter="filterEmployees"
                 @update:model-value="onEmployeeSelected"
+                @click="onEmployeeDropdownClick"
                 class="form-field"
                 :rules="[(val) => !!val || 'Required']"
               >
@@ -573,6 +577,34 @@
                 </template>
               </q-input>
             </div>
+
+            <!-- Site Dropdown -->
+            <q-select
+              filled
+              dense
+              v-model="newRecord.site_id"
+              :options="siteOptions"
+              label="Site"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              clearable
+              :loading="filtersLoading"
+              class="form-field q-mb-sm"
+              behavior="menu"
+              menu-anchor="bottom left"
+              menu-self="top left"
+            >
+              <template v-slot:prepend>
+                <q-icon name="location_on" size="xs" />
+              </template>
+              <template v-slot:no-option>
+                <q-item>
+                  <q-item-section class="text-grey">No sites found</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
 
             <!-- Schedule Info (Compact) -->
             <q-banner
@@ -794,11 +826,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 
 const $q = useQuasar()
+
+// Template refs
+const employeeSelectRef = ref(null)
 
 // Reactive data
 const attendanceData = ref([])
@@ -1112,10 +1147,35 @@ function onEmployeeSelected(employeeId) {
   }
 }
 
+function onEmployeeDropdownClick() {
+  if (newRecord.value.employee) {
+    newRecord.value.employee = ''
+    employeeSchedule.value = null
+    scheduleError.value = null
+    // Reset input and reload full employee list
+    nextTick(() => {
+      employeeSelectRef.value?.updateInputValue('', true)
+    })
+  }
+}
+
 function formatScheduleTime(timeString) {
   if (!timeString) return '-'
   try {
+    // Handle plain time strings like "08:00:00" or "08:00"
+    const timeOnlyRegex = /^(\d{1,2}):(\d{2})(:\d{2})?$/
+    if (timeOnlyRegex.test(timeString)) {
+      const [hours, minutes] = timeString.split(':').map(Number)
+      const date = new Date(1970, 0, 1, hours, minutes)
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    }
+    // Handle full ISO datetime strings
     const date = new Date(timeString)
+    if (isNaN(date.getTime())) return timeString
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
@@ -1557,6 +1617,7 @@ async function submitAttendance() {
         source: 'manual',
         employee_id: employeeUUID,
         timestamp: timeInTimestamp,
+        ...(newRecord.value.site_id && { site_id: newRecord.value.site_id }),
       },
     )
 
@@ -1578,6 +1639,7 @@ async function submitAttendance() {
         source: 'manual',
         employee_id: employeeUUID,
         timestamp: timeOutTimestamp,
+        ...(newRecord.value.site_id && { site_id: newRecord.value.site_id }),
       },
     )
 
