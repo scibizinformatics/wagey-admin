@@ -9,23 +9,13 @@
           </div>
           <div class="header-actions">
             <q-btn
-              color="primary"
-              icon="refresh"
-              label="Refresh"
-              class="refresh-btn"
-              @click="fetchSwapRequests"
-              :loading="loading"
-            />
-            <q-btn
-              icon="bug_report"
               flat
               round
-              color="orange"
-              class="debug-btn"
-              @click="showDebugInfo"
-            >
-              <q-tooltip>Show Debug Info</q-tooltip>
-            </q-btn>
+              icon="refresh"
+              size="md"
+              class="header-btn"
+              @click="fetchSwapRequests"
+            />
             <q-input
               v-model="search"
               placeholder="Search swap requests..."
@@ -40,33 +30,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Debug Info Card -->
-      <q-card
-        v-if="showDebug"
-        class="debug-card"
-        style="background: #fff3cd; border: 2px solid #ffc107; margin-bottom: 16px"
-      >
-        <q-card-section>
-          <div class="debug-header">
-            <div class="debug-title">🐛 Debug Information</div>
-            <q-btn flat dense round icon="close" @click="showDebug = false" />
-          </div>
-          <div class="debug-content">
-            <div><strong>Loading:</strong> {{ loading }}</div>
-            <div><strong>Swap Requests Count:</strong> {{ swapRequests.length }}</div>
-            <div><strong>Filtered Requests Count:</strong> {{ filteredRequests.length }}</div>
-            <div><strong>Current Page:</strong> {{ pagination.page }}</div>
-            <div><strong>Company ID:</strong> {{ currentUserCompany }}</div>
-            <div class="debug-data">
-              <strong>First Request:</strong>
-              <pre>{{
-                swapRequests[0] ? JSON.stringify(swapRequests[0], null, 2) : 'No data'
-              }}</pre>
-            </div>
-          </div>
-        </q-card-section>
-      </q-card>
 
       <!-- Stats Cards -->
       <div class="stats-section">
@@ -535,7 +498,6 @@ export default {
     const swapRequests = ref([])
     const viewDialog = ref(false)
     const selectedRequest = ref(null)
-    const showDebug = ref(false)
     const currentUserCompany = ref(null)
     const userHasApprovalRights = ref(true)
 
@@ -1036,10 +998,6 @@ export default {
       })
     }
 
-    const showDebugInfo = () => {
-      showDebug.value = !showDebug.value
-    }
-
     onMounted(async () => {
       console.log('🚀 Component mounted')
       await fetchSwapRequests()
@@ -1063,10 +1021,8 @@ export default {
       paginatedRequests,
       viewDialog,
       selectedRequest,
-      showDebug,
       currentUserCompany,
       processingId,
-      showDebugInfo,
       approveRequest,
       rejectRequest,
       viewRequest,
@@ -1130,19 +1086,14 @@ export default {
   flex-wrap: wrap;
 }
 
-.refresh-btn {
-  height: 36px;
-  border-radius: 8px;
-  font-weight: 500;
-  text-transform: none;
-  white-space: nowrap;
-  padding: 0 16px;
-  font-size: 13px;
-}
-
-.debug-btn {
+.header-btn {
   width: 36px;
   height: 36px;
+  color: #374151;
+}
+
+.header-btn:hover {
+  background: #f3f4f6;
 }
 
 .header-search {
@@ -1158,43 +1109,6 @@ export default {
 
 .search-icon {
   color: #9ca3af;
-}
-
-/* Debug Card */
-.debug-card {
-  border-radius: 12px;
-}
-
-.debug-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.debug-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #f59e0b;
-}
-
-.debug-content {
-  font-size: 12px;
-  color: #78716c;
-}
-
-.debug-data {
-  margin-top: 12px;
-}
-
-.debug-data pre {
-  font-size: 10px;
-  max-height: 200px;
-  overflow: auto;
-  background: #ffffff;
-  padding: 8px;
-  border-radius: 4px;
-  margin-top: 4px;
 }
 
 /* ===================================
