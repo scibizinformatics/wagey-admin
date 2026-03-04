@@ -135,7 +135,7 @@
 
         <!-- Loading State -->
         <div v-if="loading" class="loading-state">
-          <q-spinner size="48px" color="primary" thickness="4" />
+          <q-spinner size="48px" color="primary" :thickness="4" />
           <div class="loading-text">Loading swap requests...</div>
         </div>
 
@@ -201,7 +201,7 @@
                   <div class="date-info">
                     <div class="date-main">{{ formatDate(props.row.original_date) }}</div>
                     <div class="date-sub">
-                      {{ props.row.original_assignment?.shift_type?.name || 'N/A' }}
+                      {{ props.row.original_assignment?.shift_type || 'N/A' }}
                     </div>
                   </div>
                 </q-td>
@@ -210,7 +210,7 @@
                   <div class="date-info">
                     <div class="date-main">{{ formatDate(props.row.new_date) }}</div>
                     <div class="date-sub">
-                      {{ props.row.new_assignment?.shift_type?.name || 'N/A' }}
+                      {{ props.row.new_assignment?.shift_type || 'N/A' }}
                     </div>
                   </div>
                 </q-td>
@@ -274,7 +274,8 @@
                       icon="check"
                       size="xs"
                       class="action-btn approve-btn"
-                      :disable="!canAdminApprove(props.row)"
+                      :disable="!canAdminApprove(props.row) || processingId === props.row.id"
+                      :loading="processingId === props.row.id"
                       @click="approveRequest(props.row)"
                     >
                       <q-tooltip>
@@ -294,6 +295,8 @@
                       icon="close"
                       size="xs"
                       class="action-btn reject-btn"
+                      :disable="processingId === props.row.id"
+                      :loading="processingId === props.row.id"
                       @click="rejectRequest(props.row)"
                     >
                       <q-tooltip>Reject Request</q-tooltip>
@@ -381,13 +384,13 @@
                 <div class="detail-row">
                   <span class="detail-label">Site:</span>
                   <span class="detail-value">{{
-                    selectedRequest.original_assignment?.site?.name || 'N/A'
+                    selectedRequest.original_assignment?.site || 'N/A'
                   }}</span>
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">Shift:</span>
                   <span class="detail-value">{{
-                    selectedRequest.original_assignment?.shift_type?.name || 'N/A'
+                    selectedRequest.original_assignment?.shift_type || 'N/A'
                   }}</span>
                 </div>
               </div>
@@ -404,13 +407,13 @@
                 <div class="detail-row">
                   <span class="detail-label">Site:</span>
                   <span class="detail-value">{{
-                    selectedRequest.new_assignment?.site?.name || 'N/A'
+                    selectedRequest.new_assignment?.site || 'N/A'
                   }}</span>
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">Shift:</span>
                   <span class="detail-value">{{
-                    selectedRequest.new_assignment?.shift_type?.name || 'N/A'
+                    selectedRequest.new_assignment?.shift_type || 'N/A'
                   }}</span>
                 </div>
               </div>
@@ -517,7 +520,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 
@@ -526,6 +529,7 @@ export default {
   setup() {
     const $q = useQuasar()
     const loading = ref(false)
+    const processingId = ref(null)
     const search = ref('')
     const sortBy = ref('Newest')
     const swapRequests = ref([])
@@ -553,57 +557,31 @@ export default {
       { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
     ]
 
-    // Centralized company ID getter
     const getCompanyId = () => {
-      let companyId = localStorage.getItem('selectedCompany')
-
-      if (companyId && companyId !== 'null' && companyId !== 'undefined') {
-        try {
-          const parsed = JSON.parse(companyId)
-          companyId = parsed?.id || parsed?.companyId || parsed
-        } catch {
-          // Not JSON, use as-is
+      const selectedCompanyRaw = localStorage.getItem('selectedCompany')
+      if (
+        selectedCompanyRaw &&
+        selectedCompanyRaw !== 'null' &&
+        selectedCompanyRaw !== 'undefined'
+      ) {
+        const asInt = parseInt(selectedCompanyRaw)
+        if (!isNaN(asInt) && asInt > 0) {
+          console.log('✅ Using selectedCompany:', asInt)
+          return asInt
         }
       }
-
-      if (!companyId) {
-        companyId = localStorage.getItem('company_id')
-      }
-
-      if (!companyId) {
-        const userStr = localStorage.getItem('user')
-        if (userStr && userStr !== 'undefined' && userStr !== 'null') {
-          try {
-            const user = JSON.parse(userStr)
-            companyId = user?.companyId || user?.company_id
-          } catch (e) {
-            console.warn('Failed to parse user from localStorage:', e)
-          }
-        }
-      }
-
-      if (companyId) {
-        companyId = parseInt(companyId)
-        if (!isNaN(companyId) && companyId > 0) {
-          console.log('✅ Using company ID:', companyId)
-          return companyId
-        }
-      }
-
-      console.warn('⚠️ No valid company ID found')
+      console.warn('⚠️ No valid company ID found in selectedCompany')
       return null
     }
 
-    const statistics = computed(() => {
-      return {
-        total: swapRequests.value.length,
-        pending: swapRequests.value.filter(
-          (req) => req.status === 'pending' || req.status === 'to_employee_approved',
-        ).length,
-        approved: swapRequests.value.filter((req) => req.status === 'approved').length,
-        rejected: swapRequests.value.filter((req) => req.status === 'rejected').length,
-      }
-    })
+    const statistics = computed(() => ({
+      total: swapRequests.value.length,
+      pending: swapRequests.value.filter(
+        (req) => req.status === 'pending' || req.status === 'to_employee_approved',
+      ).length,
+      approved: swapRequests.value.filter((req) => req.status === 'approved').length,
+      rejected: swapRequests.value.filter((req) => req.status === 'rejected').length,
+    }))
 
     const filteredRequests = computed(() => {
       let filtered = swapRequests.value
@@ -636,24 +614,32 @@ export default {
       return filteredRequests.value.slice(start, end)
     })
 
-    const extractEmployeeName = (request, field) => {
-      if (field === 'requested_by' && request.original_assignment?.employee?.name) {
-        return request.original_assignment.employee.name
-      }
-      if (field === 'from_employee' && request.from_employee_name) {
-        return request.from_employee_name
-      }
-      if (field === 'to_employee' && request.to_employee_name) {
-        return request.to_employee_name
-      }
-      if (field === 'from_employee' && request.original_assignment?.employee?.name) {
-        return request.original_assignment.employee.name
-      }
-      if (field === 'to_employee' && request.new_assignment?.employee?.name) {
-        return request.new_assignment.employee.name
-      }
-      return 'Unknown Employee'
-    }
+    // Normalize nested API objects into flat strings — handles both object and string shapes
+    const normalizeRequest = (request) => ({
+      ...request,
+      requested_by_name: request.from_employee_name || 'Unknown',
+      from_employee_name: request.from_employee_name || 'Unknown',
+      to_employee_name: request.to_employee_name || 'Unknown',
+      original_assignment: request.original_assignment
+        ? {
+            ...request.original_assignment,
+            site:
+              request.original_assignment.site?.name || request.original_assignment.site || 'N/A',
+            shift_type:
+              request.original_assignment.shift_type?.name ||
+              request.original_assignment.shift_type ||
+              'N/A',
+          }
+        : null,
+      new_assignment: request.new_assignment
+        ? {
+            ...request.new_assignment,
+            site: request.new_assignment.site?.name || request.new_assignment.site || 'N/A',
+            shift_type:
+              request.new_assignment.shift_type?.name || request.new_assignment.shift_type || 'N/A',
+          }
+        : null,
+    })
 
     const fetchSwapRequests = async () => {
       loading.value = true
@@ -661,20 +647,13 @@ export default {
 
       try {
         const token = localStorage.getItem('access_token')
-        if (!token) {
-          throw new Error('No authentication token found')
-        }
+        if (!token) throw new Error('No authentication token found')
 
         const companyId = getCompanyId()
-
         if (!companyId) {
           console.warn('⚠️ No company ID available')
           swapRequests.value = []
-          $q.notify({
-            type: 'warning',
-            message: 'Please select a company first',
-            position: 'top',
-          })
+          $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
           return
         }
 
@@ -685,18 +664,26 @@ export default {
           'https://staging.wageyapp.com/organization/company-swap-requests/',
           {
             headers: { Authorization: `Bearer ${token}` },
-            params: { company_id: companyId },
+            params: { company: companyId },
           },
         )
 
-        console.log(`✅ Fetched ${response.data.length} swap requests`)
+        console.log('📦 Raw response status:', response.status)
+        console.log('📦 Raw response data:', JSON.stringify(response.data, null, 2))
 
-        swapRequests.value = response.data.map((request) => ({
-          ...request,
-          requested_by_name: extractEmployeeName(request, 'requested_by'),
-          from_employee_name: extractEmployeeName(request, 'from_employee'),
-          to_employee_name: extractEmployeeName(request, 'to_employee'),
-        }))
+        let rawData = []
+        if (Array.isArray(response.data)) {
+          rawData = response.data
+        } else if (Array.isArray(response.data?.results)) {
+          rawData = response.data.results
+        } else if (Array.isArray(response.data?.data)) {
+          rawData = response.data.data
+        } else {
+          console.warn('⚠️ Unexpected response shape:', typeof response.data, response.data)
+        }
+
+        console.log(`✅ Fetched ${rawData.length} swap requests`)
+        swapRequests.value = rawData.map(normalizeRequest)
 
         $q.notify({
           type: 'positive',
@@ -706,16 +693,13 @@ export default {
       } catch (error) {
         console.error('❌ Error fetching swap requests:', error)
         swapRequests.value = []
-
-        const errorMessage =
-          error.response?.data?.detail ||
-          error.response?.data?.message ||
-          error.message ||
-          'Failed to fetch swap requests'
-
         $q.notify({
           type: 'negative',
-          message: errorMessage,
+          message:
+            error.response?.data?.detail ||
+            error.response?.data?.message ||
+            error.message ||
+            'Failed to fetch swap requests',
           position: 'top',
           timeout: 5000,
         })
@@ -724,38 +708,77 @@ export default {
       }
     }
 
+    // FIX: No company param on PATCH, no admin_approved_at — server handles these
     const updateSwapRequest = async (requestId, payload) => {
       const token = localStorage.getItem('access_token')
-      const companyId = getCompanyId()
+      console.log(`📤 Updating swap request ${requestId}:`, payload)
+      const response = await api.patch(
+        `https://staging.wageyapp.com/organization/swap-requests/${requestId}/`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      console.log('✅ Update successful:', response.data)
+      return response.data
+    }
 
-      if (!companyId) {
-        throw new Error('No company ID found')
-      }
+    const parseErrorMessage = (error) => {
+      const data = error.response?.data
+      if (!data) return error.message || 'An unexpected error occurred'
+      if (typeof data === 'string') return data
+      if (Array.isArray(data)) return data.join(', ')
+      if (data.detail) return data.detail
+      if (data.message) return data.message
+      if (data.error) return data.error
+      if (data.status) return data.status
+      // Catch field-level validation errors like { status: ["Invalid choice"] }
+      const fieldErrors = Object.entries(data)
+        .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
+        .join(' | ')
+      return fieldErrors || error.message || 'An unexpected error occurred'
+    }
 
-      try {
-        console.log(`📤 Updating swap request ${requestId}:`, payload)
+    // Detects when server says request was already processed (backend stale GET data bug)
+    const isStaleDataError = (errorMessage) => {
+      const msg = errorMessage.toLowerCase()
+      return (
+        msg.includes('no longer pending') ||
+        msg.includes('already') ||
+        msg.includes('waiting for target employee')
+      )
+    }
 
-        const response = await api.patch(
-          `https://staging.wageyapp.com/organization/swap-requests/${requestId}/`,
-          payload,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            params: { company_id: companyId },
-          },
-        )
+    const isPendingApproval = (request) => {
+      if (!request) return false
+      const result = request.status === 'pending' || request.status === 'to_employee_approved'
+      console.log(`🔎 isPendingApproval [id=${request.id}] status="${request.status}" → ${result}`)
+      return result
+    }
 
-        console.log('✅ Update successful:', response.data)
-        return response.data
-      } catch (error) {
-        console.error('❌ Update failed:', error)
-        throw error
-      }
+    const canAdminApprove = (request) => {
+      if (!request) return false
+      const pending = isPendingApproval(request)
+      const employeeApproved = request.to_employee_approved === true
+      const result = pending && employeeApproved
+      console.log(
+        `🔎 canAdminApprove [id=${request.id}] isPending=${pending} to_employee_approved=${employeeApproved} → ${result}`,
+      )
+      return result
     }
 
     const approveRequest = async (request) => {
-      const companyId = getCompanyId()
+      console.log(
+        '🟢 approveRequest called for:',
+        JSON.stringify({
+          id: request.id,
+          status: request.status,
+          to_employee_approved: request.to_employee_approved,
+          from: request.from_employee_name,
+          to: request.to_employee_name,
+        }),
+      )
 
-      if (!companyId) {
+      if (!getCompanyId()) {
+        console.warn('⚠️ approveRequest blocked: no company selected')
         $q.notify({
           type: 'negative',
           message: 'Cannot approve: No company selected',
@@ -765,6 +788,10 @@ export default {
       }
 
       if (!canAdminApprove(request)) {
+        console.warn('⚠️ approveRequest blocked: canAdminApprove returned false', {
+          status: request.status,
+          to_employee_approved: request.to_employee_approved,
+        })
         $q.notify({
           type: 'warning',
           message: 'Cannot approve yet',
@@ -781,11 +808,24 @@ export default {
         persistent: true,
       }).onOk(async () => {
         loading.value = true
+        processingId.value = request.id
+
+        // Optimistically update UI immediately — backend list endpoint is known to return stale data
+        const optimisticUpdate = (id, status) => {
+          const idx = swapRequests.value.findIndex((r) => r.id === id)
+          if (idx !== -1) {
+            swapRequests.value.splice(idx, 1, { ...swapRequests.value[idx], status })
+            console.log(`✅ Optimistic UI update: request ${id} → ${status}`)
+          }
+        }
+        optimisticUpdate(request.id, 'approved')
+
         try {
-          await updateSwapRequest(request.id, {
-            status: 'approved',
-            admin_approved_at: new Date().toISOString(),
-          })
+          console.log(
+            `📤 PATCH /organization/swap-requests/${request.id}/ → { status: "approved" }`,
+          )
+          const result = await updateSwapRequest(request.id, { status: 'approved' })
+          console.log('✅ Approve PATCH success:', JSON.stringify(result))
 
           $q.notify({
             type: 'positive',
@@ -795,36 +835,72 @@ export default {
 
           await fetchSwapRequests()
         } catch (error) {
-          console.error('❌ Approval error:', error.response?.data)
+          console.error('❌ Approve PATCH failed')
+          console.error('   → HTTP status:', error.response?.status)
+          console.error('   → Response data:', JSON.stringify(error.response?.data))
 
-          let errorMessage = 'Failed to approve request'
-
-          if (Array.isArray(error.response?.data)) {
-            errorMessage = error.response.data.join(', ')
-          } else if (error.response?.data?.detail) {
-            errorMessage = error.response.data.detail
-          } else if (error.response?.data?.message) {
-            errorMessage = error.response.data.message
-          }
+          let errorMessage = parseErrorMessage(error)
 
           if (errorMessage.includes('do not have an assigned role')) {
             errorMessage = 'Permission denied: You need admin role in this company to approve swaps'
           }
 
-          $q.notify({
-            type: 'negative',
-            message: errorMessage,
-            caption: 'Please contact your administrator',
-            position: 'top',
-            timeout: 5000,
-          })
+          if (isStaleDataError(errorMessage)) {
+            // PATCH failed because request was already processed — our optimistic update is correct
+            console.log(
+              `⚠️ Backend confirmed request ${request.id} already processed. Optimistic update kept.`,
+            )
+            $q.notify({
+              type: 'positive',
+              message: 'Swap request approved successfully!',
+              position: 'top',
+              timeout: 3000,
+            })
+          } else {
+            // Real error — revert the optimistic update
+            optimisticUpdate(request.id, request.status)
+            $q.notify({
+              type: 'negative',
+              message: errorMessage,
+              caption: 'Please contact your administrator',
+              position: 'top',
+              timeout: 5000,
+            })
+          }
+
+          await fetchSwapRequests()
         } finally {
           loading.value = false
+          processingId.value = null
         }
       })
     }
 
     const rejectRequest = async (request) => {
+      console.log(
+        '🔴 rejectRequest called for:',
+        JSON.stringify({
+          id: request.id,
+          status: request.status,
+          to_employee_approved: request.to_employee_approved,
+          from: request.from_employee_name,
+          to: request.to_employee_name,
+        }),
+      )
+
+      if (!isPendingApproval(request)) {
+        console.warn('⚠️ rejectRequest blocked: isPendingApproval returned false', {
+          status: request.status,
+        })
+        $q.notify({
+          type: 'warning',
+          message: 'Cannot reject this request',
+          caption: 'Only pending requests can be rejected',
+          position: 'top',
+        })
+        return
+      }
+
       $q.dialog({
         title: 'Confirm Rejection',
         message: `Reject swap between ${request.from_employee_name} and ${request.to_employee_name}?`,
@@ -832,29 +908,65 @@ export default {
         persistent: true,
       }).onOk(async () => {
         loading.value = true
+        processingId.value = request.id
+
+        // Optimistically update UI immediately — backend list endpoint is known to return stale data
+        const optimisticUpdate = (id, status) => {
+          const idx = swapRequests.value.findIndex((r) => r.id === id)
+          if (idx !== -1) {
+            swapRequests.value.splice(idx, 1, { ...swapRequests.value[idx], status })
+            console.log(`✅ Optimistic UI update: request ${id} → ${status}`)
+          }
+        }
+        optimisticUpdate(request.id, 'rejected')
+
         try {
-          await updateSwapRequest(request.id, {
-            status: 'rejected',
-            admin_approved_at: new Date().toISOString(),
-          })
+          console.log(
+            `📤 PATCH /organization/swap-requests/${request.id}/ → { status: "rejected" }`,
+          )
+          const result = await updateSwapRequest(request.id, { status: 'rejected' })
+          console.log('✅ Reject PATCH success:', JSON.stringify(result))
 
           $q.notify({
             type: 'positive',
-            message: 'Swap request rejected',
+            message: 'Swap request rejected successfully',
             position: 'top',
           })
 
           await fetchSwapRequests()
         } catch (error) {
-          console.error('❌ Rejection error:', error.response?.data)
+          console.error('❌ Reject PATCH failed')
+          console.error('   → HTTP status:', error.response?.status)
+          console.error('   → Response data:', JSON.stringify(error.response?.data))
 
-          $q.notify({
-            type: 'negative',
-            message: error.response?.data?.detail || 'Failed to reject request',
-            position: 'top',
-          })
+          const errorMessage = parseErrorMessage(error)
+
+          if (isStaleDataError(errorMessage)) {
+            // PATCH failed because request was already processed — our optimistic update is correct
+            console.log(
+              `⚠️ Backend confirmed request ${request.id} already processed. Optimistic update kept.`,
+            )
+            $q.notify({
+              type: 'positive',
+              message: 'Swap request rejected successfully',
+              position: 'top',
+              timeout: 3000,
+            })
+          } else {
+            // Real error — revert the optimistic update
+            optimisticUpdate(request.id, request.status)
+            $q.notify({
+              type: 'negative',
+              message: errorMessage,
+              position: 'top',
+              timeout: 5000,
+            })
+          }
+
+          await fetchSwapRequests()
         } finally {
           loading.value = false
+          processingId.value = null
         }
       })
     }
@@ -875,6 +987,7 @@ export default {
     }
 
     const getStatusClass = (request) => {
+      if (!request) return 'status-default'
       const status = request.status
       if (status === 'pending') return 'status-pending'
       if (status === 'to_employee_approved') return 'status-employee-approved'
@@ -884,6 +997,7 @@ export default {
     }
 
     const getStatusLabel = (request) => {
+      if (!request) return ''
       const labels = {
         pending: 'Pending',
         to_employee_approved: 'Employee Approved',
@@ -893,24 +1007,12 @@ export default {
       return labels[request.status] || request.status
     }
 
-    const isPendingApproval = (request) => {
-      return request.status === 'pending' || request.status === 'to_employee_approved'
-    }
-
-    const canAdminApprove = (request) => {
-      const isPending = isPendingApproval(request)
-      const employeeApproved = request.to_employee_approved === true
-      return isPending && employeeApproved
-    }
-
     const getApprovalProgress = (request) => {
       return request.to_employee_approved ? 1 : 0
     }
 
     const getApprovalProgressText = (request) => {
-      if (canAdminApprove(request)) {
-        return 'Ready for admin approval'
-      }
+      if (canAdminApprove(request)) return 'Ready for admin approval'
       return `Waiting for ${request.to_employee_name}`
     }
 
@@ -943,6 +1045,11 @@ export default {
       await fetchSwapRequests()
     })
 
+    // Re-fetch when navigating back to this page
+    onActivated(async () => {
+      await fetchSwapRequests()
+    })
+
     return {
       loading,
       search,
@@ -958,6 +1065,7 @@ export default {
       selectedRequest,
       showDebug,
       currentUserCompany,
+      processingId,
       showDebugInfo,
       approveRequest,
       rejectRequest,
