@@ -257,15 +257,40 @@
                       </template>
                     </div>
 
-                    <!-- Always Show Add Button -->
-                    <q-btn
-                      flat
-                      dense
-                      size="sm"
-                      :label="getShifts(user.id, dayIdx).length === 0 ? '+ Add' : '+ Add More'"
-                      @click="openQuickAddModal(user.id, dayIdx)"
-                      class="add-shift-btn"
-                    />
+                    <!-- Quick Action Buttons -->
+                    <div class="cell-quick-actions">
+                      <q-btn
+                        flat
+                        dense
+                        size="xs"
+                        icon="add"
+                        label="Schedule"
+                        @click="openQuickAddModal(user.id, dayIdx)"
+                        class="cell-btn cell-btn-add"
+                      />
+                      <template v-if="getShifts(user.id, dayIdx).length === 0">
+                        <q-btn
+                          flat
+                          dense
+                          size="xs"
+                          icon="beach_access"
+                          label="Leave"
+                          :loading="quickActionLoading === `${user.id}-${dayIdx}-leave`"
+                          @click="quickDirectAssign(user.id, dayIdx, 'leave')"
+                          class="cell-btn cell-btn-leave"
+                        />
+                        <q-btn
+                          flat
+                          dense
+                          size="xs"
+                          icon="event_busy"
+                          label="Day Off"
+                          :loading="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
+                          @click="quickDirectAssign(user.id, dayIdx, 'dayoff')"
+                          class="cell-btn cell-btn-dayoff"
+                        />
+                      </template>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -323,15 +348,40 @@
                     </div>
                   </div>
 
-                  <!-- Always show add button -->
-                  <q-btn
-                    flat
-                    dense
-                    size="sm"
-                    :label="getShifts(user.id, dayIdx).length === 0 ? 'Add' : '+ Add More'"
-                    @click="openQuickAddModal(user.id, dayIdx)"
-                    class="add-shift-btn mobile-add-btn"
-                  />
+                  <!-- Quick Action Buttons -->
+                  <div class="cell-quick-actions cell-quick-actions-mobile">
+                    <q-btn
+                      flat
+                      dense
+                      size="xs"
+                      icon="add"
+                      label="Schedule"
+                      @click="openQuickAddModal(user.id, dayIdx)"
+                      class="cell-btn cell-btn-add"
+                    />
+                    <template v-if="getShifts(user.id, dayIdx).length === 0">
+                      <q-btn
+                        flat
+                        dense
+                        size="xs"
+                        icon="beach_access"
+                        label="Leave"
+                        :loading="quickActionLoading === `${user.id}-${dayIdx}-leave`"
+                        @click="quickDirectAssign(user.id, dayIdx, 'leave')"
+                        class="cell-btn cell-btn-leave"
+                      />
+                      <q-btn
+                        flat
+                        dense
+                        size="xs"
+                        icon="event_busy"
+                        label="Day Off"
+                        :loading="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
+                        @click="quickDirectAssign(user.id, dayIdx, 'dayoff')"
+                        class="cell-btn cell-btn-dayoff"
+                      />
+                    </template>
+                  </div>
                 </div>
               </div>
             </div>
@@ -949,6 +999,7 @@ const showReassignModal = ref(false)
 const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
 const isAssigningDayOff = ref(false)
+const quickActionLoading = ref(null) // tracks `${userId}-${dayIdx}-leave/dayoff`
 
 const newSchedule = ref({
   userId: null,
@@ -985,6 +1036,7 @@ const quickAdd = ref({
   userId: null,
   day: null,
   shifts: [],
+  leaveType: null,
 })
 
 // Reassign data state (for updating shift assignment)
@@ -2776,6 +2828,7 @@ const openQuickAddModal = (userId, dayIdx) => {
         shiftType: null,
       },
     ],
+    leaveType: null,
   }
   showQuickAddModal.value = true
 }
@@ -2797,6 +2850,143 @@ const closeQuickAddModal = () => {
     userId: null,
     day: null,
     shifts: [],
+    leaveType: null,
+  }
+}
+
+// Leave type options — shift types that represent leaves/absences
+const leaveTypeOptions = computed(() => {
+  const leaveKeywords = [
+    'day off',
+    'dayoff',
+    'rest day',
+    'off day',
+    'sick',
+    'leave',
+    'vacation',
+    'annual',
+    'emergency',
+    'absent',
+    'holiday',
+  ]
+  const leaveTypes = shiftTypes.value.filter((st) => {
+    const name = (st.name || '').toLowerCase()
+    return leaveKeywords.some((kw) => name.includes(kw))
+  })
+  if (leaveTypes.length > 0) {
+    return leaveTypes.map((st) => ({ label: st.name, value: st.id }))
+  }
+  return shiftTypes.value.map((st) => ({ label: st.name, value: st.id }))
+})
+
+// When a leave type is selected from the dropdown, auto-populate the first shift row
+const onLeaveTypeSelected = (shiftTypeId) => {
+  if (!shiftTypeId) return
+  const firstShift = quickAdd.value.shifts[0]
+  if (firstShift) {
+    firstShift.shiftType = shiftTypeId
+    // Auto-pick first site if none selected
+    if (!firstShift.site && siteOptions.value.length > 0) {
+      firstShift.site = siteOptions.value[0].value
+    }
+  }
+}
+
+// Directly assign day off without opening the full shift form
+const quickAssignDayOff = async () => {
+  const { userId, day } = quickAdd.value
+
+  if (!userId || day === null) {
+    $q.notify({ type: 'negative', message: 'Employee and day are required.' })
+    return
+  }
+
+  const dayOffShiftType = shiftTypes.value.find((st) => {
+    const name = (st.name || '').toLowerCase()
+    return (
+      name.includes('day off') ||
+      name.includes('dayoff') ||
+      name.includes('rest day') ||
+      name.includes('off day') ||
+      name === 'off'
+    )
+  })
+
+  if (!dayOffShiftType) {
+    $q.notify({
+      type: 'warning',
+      message: 'No "Day Off" shift type found.',
+      caption: 'Please create a shift type named "Day Off" in your settings.',
+      timeout: 5000,
+    })
+    return
+  }
+
+  if (siteOptions.value.length === 0) {
+    $q.notify({ type: 'negative', message: 'No sites available to assign day off.' })
+    return
+  }
+
+  isAssigningDayOff.value = true
+
+  try {
+    const token = localStorage.getItem('access_token')
+    let rawCompanyId = localStorage.getItem('selectedCompany')
+
+    let companyId
+    try {
+      const parsed = JSON.parse(rawCompanyId)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = rawCompanyId
+    }
+    companyId = parseInt(companyId)
+
+    const { start } = selectedWeek.value
+    const weekStart = start instanceof Date ? start : new Date(start)
+    const targetDate = new Date(weekStart)
+    targetDate.setDate(targetDate.getDate() + day)
+
+    const year = targetDate.getFullYear()
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0')
+    const dayOfMonth = String(targetDate.getDate()).padStart(2, '0')
+    const dateStr = `${year}-${month}-${dayOfMonth}`
+
+    const payload = {
+      company_id: companyId,
+      employee_ids: [userId],
+      schedules: [
+        {
+          date: dateStr,
+          site_id: parseInt(siteOptions.value[0].value),
+          shift_type_id: parseInt(dayOffShiftType.id),
+        },
+      ],
+    }
+
+    await axios.post('https://staging.wageyapp.com/organization/assignments/assign/', payload, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    })
+
+    $q.notify({
+      type: 'positive',
+      message: 'Day off assigned!',
+      caption: `${getEmployeeName(userId)} — ${days[day]}`,
+      icon: 'event_busy',
+      timeout: 3000,
+    })
+
+    closeQuickAddModal()
+    setTimeout(() => fetchData(), 500)
+  } catch (error) {
+    console.error('❌ Quick day off failed:', error.response?.data || error.message)
+    $q.notify({
+      type: 'negative',
+      message: error.response?.data?.detail || 'Failed to assign day off.',
+      timeout: 5000,
+    })
+  } finally {
+    isAssigningDayOff.value = false
   }
 }
 
@@ -2883,6 +3073,112 @@ const assignDayOff = async (element) => {
     })
   } finally {
     isAssigningDayOff.value = false
+  }
+}
+
+// Quick direct assign from cell buttons — no modal needed
+const quickDirectAssign = async (userId, dayIdx, type) => {
+  const key = `${userId}-${dayIdx}-${type}`
+  quickActionLoading.value = key
+
+  try {
+    const token = localStorage.getItem('access_token')
+    let rawCompanyId = localStorage.getItem('selectedCompany')
+
+    let companyId
+    try {
+      const parsed = JSON.parse(rawCompanyId)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = rawCompanyId
+    }
+    companyId = parseInt(companyId)
+
+    // Resolve the shift type based on action type
+    let matchedShiftType = null
+    if (type === 'dayoff') {
+      const keywords = ['day off', 'dayoff', 'rest day', 'off day']
+      matchedShiftType = shiftTypes.value.find((st) => {
+        const name = (st.name || '').toLowerCase()
+        return keywords.some((kw) => name.includes(kw)) || name === 'off'
+      })
+    } else if (type === 'leave') {
+      const keywords = ['leave', 'sick', 'vacation', 'annual', 'emergency', 'absent', 'holiday']
+      matchedShiftType = shiftTypes.value.find((st) => {
+        const name = (st.name || '').toLowerCase()
+        return keywords.some((kw) => name.includes(kw))
+      })
+      // Fallback to day off type if no dedicated leave type exists
+      if (!matchedShiftType) {
+        const dayOffKeywords = ['day off', 'dayoff', 'rest day', 'off day']
+        matchedShiftType = shiftTypes.value.find((st) => {
+          const name = (st.name || '').toLowerCase()
+          return dayOffKeywords.some((kw) => name.includes(kw)) || name === 'off'
+        })
+      }
+    }
+
+    if (!matchedShiftType) {
+      $q.notify({
+        type: 'warning',
+        message: `No "${type === 'dayoff' ? 'Day Off' : 'Leave'}" shift type found.`,
+        caption: `Please create a matching shift type in your settings.`,
+        timeout: 5000,
+      })
+      return
+    }
+
+    if (siteOptions.value.length === 0) {
+      $q.notify({ type: 'negative', message: 'No sites available.' })
+      return
+    }
+
+    const { start } = selectedWeek.value
+    const weekStart = start instanceof Date ? start : new Date(start)
+    const targetDate = new Date(weekStart)
+    targetDate.setDate(targetDate.getDate() + dayIdx)
+
+    const year = targetDate.getFullYear()
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0')
+    const day = String(targetDate.getDate()).padStart(2, '0')
+    const dateStr = `${year}-${month}-${day}`
+
+    const payload = {
+      company_id: companyId,
+      employee_ids: [userId],
+      schedules: [
+        {
+          date: dateStr,
+          site_id: parseInt(siteOptions.value[0].value),
+          shift_type_id: parseInt(matchedShiftType.id),
+        },
+      ],
+    }
+
+    await axios.post('https://staging.wageyapp.com/organization/assignments/assign/', payload, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    })
+
+    $q.notify({
+      type: 'positive',
+      message: `${type === 'dayoff' ? 'Day off' : 'Leave'} assigned!`,
+      caption: `${getEmployeeName(userId)} — ${days[dayIdx]}`,
+      icon: type === 'dayoff' ? 'event_busy' : 'beach_access',
+      timeout: 3000,
+    })
+
+    setTimeout(() => fetchData(), 500)
+  } catch (error) {
+    console.error(`❌ Quick ${type} failed:`, error.response?.data || error.message)
+    $q.notify({
+      type: 'negative',
+      message:
+        error.response?.data?.detail ||
+        `Failed to assign ${type === 'dayoff' ? 'day off' : 'leave'}.`,
+      timeout: 5000,
+    })
+  } finally {
+    quickActionLoading.value = null
   }
 }
 
@@ -3123,6 +3419,92 @@ const filterEmployees = () => {}
   align-items: center;
   gap: 8px;
   font-size: 13px;
+}
+
+.quick-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: #fff8f0;
+  border: 1px solid #ffe0b2;
+  border-radius: 8px;
+}
+
+.quick-dayoff-btn {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  height: 38px;
+}
+
+.leave-type-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Cell quick action buttons */
+.cell-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.cell-quick-actions-mobile {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.cell-btn {
+  font-size: 10px !important;
+  font-weight: 500;
+  border-radius: 5px;
+  padding: 2px 6px !important;
+  justify-content: flex-start;
+  min-height: 24px !important;
+  height: 24px !important;
+}
+
+.cell-btn :deep(.q-btn__content) {
+  gap: 3px;
+}
+
+.cell-btn-add {
+  color: #1565c0;
+  background: #deeeff;
+  border: 1px solid #90caf9;
+  box-shadow: 0 1px 3px rgba(21, 101, 192, 0.15);
+}
+.cell-btn-add:hover {
+  background: #c5e0fb !important;
+  border-color: #64b5f6 !important;
+  box-shadow: 0 2px 6px rgba(21, 101, 192, 0.25) !important;
+}
+
+.cell-btn-leave {
+  color: #6a1b9a;
+  background: #f0e6fb;
+  border: 1px solid #ce93d8;
+  box-shadow: 0 1px 3px rgba(106, 27, 154, 0.15);
+}
+.cell-btn-leave:hover {
+  background: #e1bee7 !important;
+  border-color: #ba68c8 !important;
+  box-shadow: 0 2px 6px rgba(106, 27, 154, 0.25) !important;
+}
+
+.cell-btn-dayoff {
+  color: #c84b00;
+  background: #ffeadb;
+  border: 1px solid #ffb74d;
+  box-shadow: 0 1px 3px rgba(200, 75, 0, 0.15);
+}
+.cell-btn-dayoff:hover {
+  background: #ffd5b0 !important;
+  border-color: #ffa726 !important;
+  box-shadow: 0 2px 6px rgba(200, 75, 0, 0.25) !important;
 }
 
 .modern-page {
