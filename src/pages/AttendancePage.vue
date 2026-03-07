@@ -235,24 +235,6 @@
             </q-select>
 
             <q-btn
-              v-if="selected.length > 0"
-              color="negative"
-              icon="delete"
-              :label="`Delete ${selected.length}`"
-              @click="confirmBatchDelete"
-              size="sm"
-              no-caps
-            />
-            <q-btn
-              v-if="selected.length > 0"
-              color="primary"
-              icon="file_download"
-              label="Export Selected"
-              @click="exportSelected"
-              size="sm"
-              no-caps
-            />
-            <q-btn
               unelevated
               color="primary"
               icon="add"
@@ -277,8 +259,6 @@
               class="attendance-table"
               hide-pagination
               :rows-per-page-options="[0]"
-              selection="multiple"
-              v-model:selected="selected"
               :grid="$q.screen.xs"
               table-header-class="table-header-custom"
             >
@@ -317,40 +297,25 @@
                         </div>
                       </div>
                     </q-card-section>
-                    <q-card-actions align="right">
-                      <q-btn flat size="sm" color="primary" @click="editAttendance(props.row)"
-                        >Edit</q-btn
-                      >
-                    </q-card-actions>
                   </q-card>
                 </div>
               </template>
 
               <template v-slot:header="props">
                 <q-tr :props="props" class="table-header-row">
-                  <q-th auto-width class="table-header-cell checkbox-col">
-                    <q-checkbox v-model="selectAll" @update:model-value="toggleSelectAll" dense />
-                  </q-th>
-                  <q-th class="table-header-cell sl-col">SL No</q-th>
                   <q-th class="table-header-cell employee-col">Employee</q-th>
-                  <q-th class="table-header-cell date-col">Date</q-th>
+                  <q-th class="table-header-cell site-col">Site</q-th>
                   <q-th class="table-header-cell time-col">Time In</q-th>
                   <q-th class="table-header-cell photo-col">Photo</q-th>
+                  <q-th class="table-header-cell source-mini-col">In Source</q-th>
                   <q-th class="table-header-cell time-col">Time Out</q-th>
                   <q-th class="table-header-cell photo-col">Photo</q-th>
-                  <q-th class="table-header-cell source-col">Source</q-th>
-                  <q-th class="table-header-cell actions-col">Actions</q-th>
+                  <q-th class="table-header-cell source-mini-col">Out Source</q-th>
                 </q-tr>
               </template>
 
               <template v-slot:body="props">
                 <q-tr :props="props" class="table-body-row">
-                  <q-td auto-width class="table-body-cell checkbox-col">
-                    <q-checkbox v-model="selected" :val="props.row" dense />
-                  </q-td>
-                  <q-td class="table-body-cell sl-col">
-                    {{ String(props.rowIndex + 1).padStart(2, '0') }}.
-                  </q-td>
                   <q-td class="table-body-cell employee-col">
                     <div class="employee-info">
                       <q-avatar
@@ -368,17 +333,17 @@
                           {{ getEmployeeName(props.row.employee).charAt(0) }}
                         </span>
                       </q-avatar>
-                      <span
-                        class="employee-name clickable-name"
-                        @click="filterByEmployeeId(props.row.employee)"
-                        :title="`Click to filter by ${getEmployeeName(props.row.employee)}`"
-                      >
+                      <span class="employee-name">
                         {{ getEmployeeName(props.row.employee) }}
                       </span>
                     </div>
                   </q-td>
-                  <q-td class="table-body-cell date-col">
-                    {{ props.row.date }}
+                  <q-td class="table-body-cell site-col">
+                    <div v-if="props.row.site" class="site-name-text">
+                      <q-icon name="location_on" size="12px" class="q-mr-xs text-grey-6" />
+                      {{ props.row.site }}
+                    </div>
+                    <span v-else class="no-photo">-</span>
                   </q-td>
                   <q-td class="table-body-cell time-col">
                     <div class="time-badge time-in" :class="{ 'has-time': props.row.time_in }">
@@ -395,6 +360,11 @@
                         @click="viewSelfie(props.row.time_in_selfie, 'Time In')"
                       />
                       <span v-else class="no-photo">-</span>
+                    </div>
+                  </q-td>
+                  <q-td class="table-body-cell source-mini-col">
+                    <div class="source-mini-badge" :class="getSourceClass(props.row.source)">
+                      {{ formatSource(props.row.source) }}
                     </div>
                   </q-td>
                   <q-td class="table-body-cell time-col">
@@ -414,29 +384,9 @@
                       <span v-else class="no-photo">-</span>
                     </div>
                   </q-td>
-                  <q-td class="table-body-cell source-col">
-                    <div class="source-badge" :class="getSourceClass(props.row.source)">
+                  <q-td class="table-body-cell source-mini-col">
+                    <div class="source-mini-badge" :class="getSourceClass(props.row.source)">
                       {{ formatSource(props.row.source) }}
-                    </div>
-                  </q-td>
-                  <q-td class="table-body-cell actions-col">
-                    <div class="action-buttons">
-                      <q-btn
-                        flat
-                        round
-                        icon="visibility"
-                        size="sm"
-                        class="action-btn view-btn"
-                        @click="viewDetails(props.row)"
-                      />
-                      <q-btn
-                        flat
-                        round
-                        icon="edit"
-                        size="sm"
-                        class="action-btn edit-btn"
-                        @click="editAttendance(props.row)"
-                      />
                     </div>
                   </q-td>
                 </q-tr>
@@ -449,9 +399,6 @@
             <div class="footer-info">
               <span class="total-label">Total</span>
               <span class="total-records">{{ attendanceData.length }} Records</span>
-              <span class="total-selected" v-if="selected.length > 0"
-                >{{ selected.length }} Selected</span
-              >
             </div>
             <div class="pagination-controls">
               <q-btn
@@ -1026,6 +973,13 @@ const columns = [
     sortable: true,
   },
   {
+    name: 'site',
+    label: 'Site',
+    align: 'left',
+    field: 'site',
+    sortable: true,
+  },
+  {
     name: 'time_in',
     label: 'Time In',
     align: 'center',
@@ -1037,6 +991,13 @@ const columns = [
     label: 'Photo',
     align: 'center',
     field: 'time_in_selfie',
+    sortable: false,
+  },
+  {
+    name: 'time_in_source',
+    label: 'In Source',
+    align: 'center',
+    field: 'source',
     sortable: false,
   },
   {
@@ -1054,11 +1015,11 @@ const columns = [
     sortable: false,
   },
   {
-    name: 'source',
-    label: 'Source',
+    name: 'time_out_source',
+    label: 'Out Source',
     align: 'center',
     field: 'source',
-    sortable: true,
+    sortable: false,
   },
   {
     name: 'actions',
@@ -2521,8 +2482,8 @@ onMounted(async () => {
 .employee-info {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 4px;
+  gap: 10px;
+  padding: 4px 6px;
   justify-content: flex-start;
   min-width: 0;
 }
@@ -2531,20 +2492,26 @@ onMounted(async () => {
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
   color: white;
   font-weight: 600;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   font-size: 14px;
   flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .employee-name {
-  font-weight: 500;
-  color: #1a202c;
+  font-weight: 600;
+  color: #1e293b;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: left;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
 }
 
 .time-badge {
@@ -3097,7 +3064,7 @@ onMounted(async () => {
   }
 
   .attendance-table {
-    min-width: 900px;
+    min-width: 1400px;
   }
 
   .employee-col {
@@ -3272,5 +3239,52 @@ body {
 
 .attendance-dashboard {
   overflow-x: hidden;
+}
+
+/* New column styles */
+.source-mini-col {
+  width: 90px;
+  min-width: 90px;
+}
+
+.site-col {
+  width: 140px;
+  min-width: 140px;
+}
+
+.cost-center-col {
+  width: 130px;
+  min-width: 130px;
+}
+
+.source-mini-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.site-name-text {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.cost-center-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
 }
 </style>
