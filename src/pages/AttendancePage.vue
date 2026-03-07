@@ -55,12 +55,12 @@
 
         <div class="stats-card business-card">
           <div class="stats-icon-wrapper">
-            <q-icon name="language" class="stats-icon" />
+            <q-icon name="computer" class="stats-icon" />
           </div>
           <div class="stats-content">
             <q-skeleton v-if="loading" type="text" class="text-h5" />
             <div v-else class="stats-amount">{{ stats[2].count }}</div>
-            <div class="stats-label">Web</div>
+            <div class="stats-label">Terminal</div>
           </div>
         </div>
 
@@ -892,7 +892,7 @@ const businessOwnerOptions = ref([])
 const siteOptions = ref([])
 const sourceOptions = ref([
   { label: 'App', value: 'app' },
-  { label: 'Web', value: 'web' },
+  { label: 'Terminal', value: 'terminal' },
   { label: 'System', value: 'system' },
   { label: 'Manual', value: 'manual' },
 ])
@@ -920,14 +920,14 @@ const stats = computed(() => {
   const data = attendanceData.value
   const total = data.length
   const app = data.filter((item) => item.source === 'app').length
-  const web = data.filter((item) => item.source === 'web').length
+  const terminal = data.filter((item) => item.source === 'terminal').length
   const manual = data.filter((item) => item.source === 'manual').length
   const system = data.filter((item) => item.source === 'system').length
 
   return [
     { label: 'Total Records', count: total },
     { label: 'App', count: app },
-    { label: 'Web', count: web },
+    { label: 'Terminal', count: terminal },
     { label: 'System', count: system },
   ]
 })
