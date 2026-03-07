@@ -341,7 +341,7 @@
                   <q-td class="table-body-cell site-col">
                     <div v-if="props.row.site" class="site-name-text">
                       <q-icon name="location_on" size="12px" class="q-mr-xs text-grey-6" />
-                      {{ props.row.site }}
+                      {{ props.row.site.replace(/\s*\(None\)\s*/gi, ' ').trim() }}
                     </div>
                     <span v-else class="no-photo">-</span>
                   </q-td>
@@ -3042,6 +3042,57 @@ onMounted(async () => {
    RESPONSIVE BREAKPOINTS
    =================================== */
 
+/* 1440px - Large Desktop */
+@media (min-width: 1440px) {
+  .dashboard-container {
+    padding: 24px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  .stats-section {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  .stats-card {
+    padding: 20px;
+  }
+
+  .stats-amount {
+    font-size: 32px;
+  }
+
+  .filters-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  .attendance-table {
+    min-width: 1400px;
+  }
+
+  .employee-col {
+    width: 220px;
+    min-width: 220px;
+  }
+
+  .site-col {
+    width: 200px;
+    min-width: 200px;
+  }
+
+  .table-header-cell {
+    font-size: 13px;
+    padding: 14px 10px;
+  }
+
+  .table-body-cell {
+    font-size: 14px;
+    padding: 12px 10px;
+  }
+}
+
 /* 1024px - Desktop / Tablet Landscape */
 @media (max-width: 1024px) {
   .dashboard-container {
@@ -3064,16 +3115,46 @@ onMounted(async () => {
   }
 
   .attendance-table {
-    min-width: 1400px;
+    min-width: 1100px;
   }
 
   .employee-col {
-    width: 180px;
-    min-width: 180px;
+    width: 160px;
+    min-width: 160px;
+  }
+
+  .site-col {
+    width: 160px;
+    min-width: 160px;
+  }
+
+  .source-mini-col {
+    width: 80px;
+    min-width: 80px;
+  }
+
+  .time-col {
+    width: 90px;
+    min-width: 90px;
+  }
+
+  .photo-col {
+    width: 70px;
+    min-width: 70px;
   }
 
   .compact-dialog-card {
     max-width: 95vw;
+  }
+
+  .table-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .table-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
 
@@ -3098,38 +3179,100 @@ onMounted(async () => {
   }
 
   .stats-section {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
 
+  .stats-card {
+    padding: 12px;
+  }
+
+  .stats-amount {
+    font-size: 22px;
+  }
+
+  .stats-icon-wrapper {
+    width: 38px;
+    height: 38px;
+  }
+
   .filters-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
 
   .table-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 10px;
   }
 
   .table-actions {
     width: 100%;
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: space-between;
   }
 
-  .table-actions button {
-    width: 100%;
+  .add-attendance-btn {
+    flex: 1;
+  }
+
+  .site-filter-dropdown {
+    flex: 1;
   }
 
   .modern-table-container {
     margin: 0 10px 10px 10px;
   }
 
+  .table-wrapper {
+    overflow-x: scroll;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .attendance-table {
+    min-width: 900px;
+  }
+
+  .employee-col {
+    width: 140px;
+    min-width: 140px;
+  }
+
+  .site-col {
+    width: 130px;
+    min-width: 130px;
+  }
+
+  .time-col {
+    width: 85px;
+    min-width: 85px;
+  }
+
+  .photo-col {
+    width: 60px;
+    min-width: 60px;
+  }
+
+  .source-mini-col {
+    width: 75px;
+    min-width: 75px;
+  }
+
+  .table-header-cell {
+    font-size: 11px;
+    padding: 10px 6px;
+  }
+
+  .table-body-cell {
+    font-size: 12px;
+    padding: 8px 6px;
+  }
+
   .table-footer {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 10px;
   }
 
   .footer-info {
@@ -3180,17 +3323,31 @@ onMounted(async () => {
     font-size: 16px;
   }
 
+  .stats-section {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
   .stats-card {
     padding: 10px;
   }
 
   .stats-icon-wrapper {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
   }
 
   .stats-amount {
-    font-size: 20px;
+    font-size: 18px;
+  }
+
+  .stats-label {
+    font-size: 11px;
+  }
+
+  .filters-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .filters-card {
@@ -3199,6 +3356,19 @@ onMounted(async () => {
 
   .table-header {
     padding: 10px;
+  }
+
+  .table-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .add-attendance-btn {
+    width: 100%;
+  }
+
+  .site-filter-dropdown {
+    width: 100%;
   }
 
   .modern-table-container {
