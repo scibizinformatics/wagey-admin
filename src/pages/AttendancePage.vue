@@ -345,9 +345,16 @@
                     </div>
                     <span v-else class="no-photo">-</span>
                   </q-td>
+                  <!-- Time In — clickable inline edit -->
                   <q-td class="table-body-cell time-col">
-                    <div class="time-badge time-in" :class="{ 'has-time': props.row.time_in }">
-                      {{ formatTime(props.row.time_in) }}
+                    <div
+                      class="time-badge time-in"
+                      :class="{ 'has-time': props.row.time_in, 'time-editable': true }"
+                      @click="openInlineEdit(props.row, 'time_in')"
+                      title="Click to edit"
+                    >
+                      {{ props.row.time_in ? formatTime(props.row.time_in) : '--:--' }}
+                      <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
                     </div>
                   </q-td>
                   <q-td class="table-body-cell photo-col">
@@ -367,9 +374,16 @@
                       {{ formatSource(props.row.source) }}
                     </div>
                   </q-td>
+                  <!-- Time Out — clickable inline edit -->
                   <q-td class="table-body-cell time-col">
-                    <div class="time-badge time-out" :class="{ 'has-time': props.row.time_out }">
-                      {{ formatTime(props.row.time_out) }}
+                    <div
+                      class="time-badge time-out"
+                      :class="{ 'has-time': props.row.time_out, 'time-editable': true }"
+                      @click="openInlineEdit(props.row, 'time_out')"
+                      title="Click to edit"
+                    >
+                      {{ props.row.time_out ? formatTime(props.row.time_out) : '--:--' }}
+                      <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
                     </div>
                   </q-td>
                   <q-td class="table-body-cell photo-col">
@@ -714,6 +728,57 @@
       </q-card>
     </q-dialog>
 
+    <!-- Inline Time Edit Dialog -->
+    <q-dialog v-model="showInlineEditDialog" persistent>
+      <q-card class="inline-edit-card">
+        <q-card-section class="inline-edit-header">
+          <div>
+            <div class="dialog-title">
+              Edit {{ inlineEdit.field === 'time_in' ? 'Time In' : 'Time Out' }}
+            </div>
+            <div class="dialog-subtitle text-grey-6 text-caption">
+              {{ inlineEdit.employeeName }} — {{ inlineEdit.date }}
+            </div>
+          </div>
+          <q-btn flat round dense icon="close" @click="closeInlineEdit" />
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section class="q-pt-md q-pb-md">
+          <q-input
+            filled
+            dense
+            v-model="inlineEdit.value"
+            :label="inlineEdit.field === 'time_in' ? 'New Time In' : 'New Time Out'"
+            type="time"
+            class="form-field"
+            autofocus
+          >
+            <template v-slot:prepend>
+              <q-icon :name="inlineEdit.field === 'time_in' ? 'login' : 'logout'" size="xs" />
+            </template>
+          </q-input>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-actions align="right" class="q-pa-sm">
+          <q-btn flat label="Cancel" @click="closeInlineEdit" size="sm" />
+          <q-btn
+            unelevated
+            color="primary"
+            label="Save"
+            icon="check"
+            size="sm"
+            @click="saveInlineEdit"
+            :loading="inlineEdit.saving"
+            :disable="!inlineEdit.value"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Edit Attendance Dialog -->
     <q-dialog v-model="showEditDialog" persistent>
       <q-card class="edit-dialog-card">
@@ -797,6 +862,17 @@ const showAddDialog = ref(false)
 const showSelfieDialog = ref(false)
 const selectedSelfie = ref('')
 const selfieDialogTitle = ref('')
+
+// Inline time edit state
+const showInlineEditDialog = ref(false)
+const inlineEdit = ref({
+  record: null,
+  field: '', // 'time_in' or 'time_out'
+  value: '', // HH:MM format
+  date: '',
+  employeeName: '',
+  saving: false,
+})
 
 // Loading states
 const updating = ref(false)
@@ -1633,6 +1709,91 @@ async function submitAttendance() {
   }
 }
 
+// ================= INLINE TIME EDIT =================
+function openInlineEdit(row, field) {
+  const currentValue = field === 'time_in' ? row.time_in : row.time_out
+  inlineEdit.value = {
+    record: row,
+    field,
+    value: formatTimeForInput(currentValue),
+    date: row.date,
+    employeeName: getEmployeeName(row.employee),
+    saving: false,
+  }
+  showInlineEditDialog.value = true
+}
+
+function closeInlineEdit() {
+  showInlineEditDialog.value = false
+  inlineEdit.value = {
+    record: null,
+    field: '',
+    value: '',
+    date: '',
+    employeeName: '',
+    saving: false,
+  }
+}
+
+async function saveInlineEdit() {
+  if (!inlineEdit.value.value || !inlineEdit.value.record) return
+  if (!companyId.value) {
+    showErrorNotification('Company ID not found.')
+    return
+  }
+
+  inlineEdit.value.saving = true
+
+  try {
+    const record = inlineEdit.value.record
+    const field = inlineEdit.value.field
+    const date = record.date
+
+    // Build the updated timestamp
+    let newTimestamp = new Date(`${date}T${inlineEdit.value.value}:00`).toISOString()
+
+    // Get existing timestamps to keep the other field intact
+    const existingTimeIn = field === 'time_in' ? newTimestamp : record.time_in
+    const existingTimeOut = field === 'time_out' ? newTimestamp : record.time_out
+
+    // Handle overnight: if time_out < time_in, push time_out to next day
+    let timeOutTimestamp = existingTimeOut
+    if (existingTimeIn && existingTimeOut) {
+      const tIn = new Date(existingTimeIn)
+      let tOut = new Date(existingTimeOut)
+      if (tOut <= tIn) {
+        tOut.setDate(tOut.getDate() + 1)
+        timeOutTimestamp = tOut.toISOString()
+      }
+    }
+
+    const payload = {
+      time_in: existingTimeIn,
+      time_out: timeOutTimestamp,
+      source: record.source || 'admin',
+    }
+
+    console.log(`📤 Inline updating ${field}:`, payload)
+
+    await api.put(
+      `https://staging.wageyapp.com/attendance/log-update/${companyId.value}/${record.id}/`,
+      payload,
+    )
+
+    showSuccessNotification(`${field === 'time_in' ? 'Time In' : 'Time Out'} updated successfully`)
+    closeInlineEdit()
+    await fetchAttendanceData()
+  } catch (error) {
+    console.error('❌ Inline edit error:', error)
+    const data = error.response?.data
+    const msg =
+      typeof data === 'string' ? data : data?.detail || data?.message || 'Failed to update'
+    showErrorNotification(msg)
+  } finally {
+    inlineEdit.value.saving = false
+  }
+}
+
 async function updateAttendance() {
   if (!editingRecord.value) return
   if (!companyId.value) {
@@ -2215,12 +2376,12 @@ onMounted(async () => {
 
 .stats-card {
   background: white;
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 8px;
+  padding: 6px 12px;
   border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   transition: all 0.2s ease;
   min-width: 0;
 }
@@ -2247,9 +2408,9 @@ onMounted(async () => {
 }
 
 .stats-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2259,7 +2420,7 @@ onMounted(async () => {
 }
 
 .stats-icon {
-  font-size: 24px;
+  font-size: 14px;
   color: #374151;
 }
 
@@ -2269,22 +2430,22 @@ onMounted(async () => {
 }
 
 .stats-amount {
-  font-size: 26px;
+  font-size: 16px;
   font-weight: 700;
   color: #1a202c;
   line-height: 1;
-  margin-bottom: 4px;
+  margin-bottom: 1px;
 }
 
 .stats-label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .stats-sublabel {
-  font-size: 12px;
+  font-size: 10px;
   color: #64748b;
 }
 
@@ -2389,56 +2550,48 @@ onMounted(async () => {
 }
 
 .table-wrapper {
-  overflow-x: auto;
+  overflow-x: visible;
   overflow-y: visible;
 }
 
 .attendance-table {
   background: white;
   width: 100%;
-  table-layout: fixed;
+  table-layout: auto;
   border-collapse: collapse;
 }
 
-/* Fixed column widths for proper alignment */
+/* Percentage-based column widths — no fixed min-widths so table always fits */
 .checkbox-col {
-  width: 50px;
-  min-width: 50px;
+  width: 3%;
 }
 
 .sl-col {
-  width: 70px;
-  min-width: 70px;
+  width: 4%;
 }
 
 .employee-col {
-  width: 200px;
-  min-width: 200px;
+  width: 14%;
 }
 
 .date-col {
-  width: 120px;
-  min-width: 120px;
+  width: 7%;
 }
 
 .time-col {
-  width: 100px;
-  min-width: 100px;
+  width: 7%;
 }
 
 .photo-col {
-  width: 80px;
-  min-width: 80px;
+  width: 5%;
 }
 
 .source-col {
-  width: 110px;
-  min-width: 110px;
+  width: 7%;
 }
 
 .actions-col {
-  width: 100px;
-  min-width: 100px;
+  width: 6%;
 }
 
 .table-header-row {
@@ -2517,6 +2670,7 @@ onMounted(async () => {
 .time-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 4px 8px;
   border-radius: 16px;
   font-size: 11px;
@@ -2524,6 +2678,7 @@ onMounted(async () => {
   background: #f1f5f9;
   color: #64748b;
   white-space: nowrap;
+  min-width: 80px;
 }
 
 .time-badge.has-time.time-in {
@@ -3069,17 +3224,15 @@ onMounted(async () => {
   }
 
   .attendance-table {
-    min-width: 1400px;
+    width: 100%;
   }
 
   .employee-col {
-    width: 220px;
-    min-width: 220px;
+    width: 16%;
   }
 
   .site-col {
-    width: 200px;
-    min-width: 200px;
+    width: 12%;
   }
 
   .table-header-cell {
@@ -3110,37 +3263,21 @@ onMounted(async () => {
   }
 
   .table-wrapper {
-    overflow-x: scroll;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: visible;
   }
 
   .attendance-table {
-    min-width: 1100px;
+    width: 100%;
   }
 
-  .employee-col {
-    width: 160px;
-    min-width: 160px;
+  .table-header-cell {
+    font-size: 11px;
+    padding: 10px 4px;
   }
 
-  .site-col {
-    width: 160px;
-    min-width: 160px;
-  }
-
-  .source-mini-col {
-    width: 80px;
-    min-width: 80px;
-  }
-
-  .time-col {
-    width: 90px;
-    min-width: 90px;
-  }
-
-  .photo-col {
-    width: 70px;
-    min-width: 70px;
+  .table-body-cell {
+    font-size: 11px;
+    padding: 8px 4px;
   }
 
   .compact-dialog-card {
@@ -3226,47 +3363,39 @@ onMounted(async () => {
   }
 
   .table-wrapper {
-    overflow-x: scroll;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: visible;
   }
 
   .attendance-table {
-    min-width: 900px;
-  }
-
-  .employee-col {
-    width: 140px;
-    min-width: 140px;
-  }
-
-  .site-col {
-    width: 130px;
-    min-width: 130px;
-  }
-
-  .time-col {
-    width: 85px;
-    min-width: 85px;
-  }
-
-  .photo-col {
-    width: 60px;
-    min-width: 60px;
-  }
-
-  .source-mini-col {
-    width: 75px;
-    min-width: 75px;
+    width: 100%;
   }
 
   .table-header-cell {
-    font-size: 11px;
-    padding: 10px 6px;
+    font-size: 10px;
+    padding: 8px 3px;
+    white-space: normal;
+    word-break: break-word;
   }
 
   .table-body-cell {
-    font-size: 12px;
-    padding: 8px 6px;
+    font-size: 10px;
+    padding: 7px 3px;
+  }
+
+  .selfie-thumbnail {
+    width: 28px;
+    height: 28px;
+  }
+
+  .employee-avatar {
+    width: 26px !important;
+    height: 26px !important;
+  }
+
+  .source-mini-badge,
+  .source-badge {
+    font-size: 9px;
+    padding: 2px 4px;
   }
 
   .table-footer {
@@ -3411,20 +3540,54 @@ body {
   overflow-x: hidden;
 }
 
+/* Inline Edit Dialog */
+.inline-edit-card {
+  width: 100%;
+  max-width: 320px;
+  border-radius: 12px;
+}
+
+.inline-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 16px;
+}
+
+/* Clickable time badge */
+.time-editable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.time-editable:hover {
+  filter: brightness(0.93);
+  transform: scale(1.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.time-editable:hover .edit-icon {
+  opacity: 1;
+}
+
+.edit-icon {
+  opacity: 1;
+  transition: opacity 0.15s ease;
+  color: inherit;
+}
+
 /* New column styles */
 .source-mini-col {
-  width: 90px;
-  min-width: 90px;
+  width: 7%;
 }
 
 .site-col {
-  width: 140px;
-  min-width: 140px;
+  width: 10%;
 }
 
 .cost-center-col {
-  width: 130px;
-  min-width: 130px;
+  width: 8%;
 }
 
 .source-mini-badge {
