@@ -465,13 +465,22 @@ const fetchInvitations = async () => {
     const token = localStorage.getItem('access_token')
     const selectedCompanyRaw = localStorage.getItem('selectedCompany')
 
+    console.log('📋 selectedCompanyRaw:', selectedCompanyRaw)
+
     if (!token) {
       throw new Error('No authentication token found')
     }
 
     const companyId = parseSelectedCompany(selectedCompanyRaw)
+    console.log('🏢 companyId parsed:', companyId)
+
     if (!companyId) {
       console.warn('⚠️ No valid company selected')
+      $q.notify({
+        type: 'warning',
+        message: 'No company selected. Please select a company first.',
+        position: 'top',
+      })
       invitations.value = []
       filteredInvitations.value = []
       return
@@ -482,6 +491,8 @@ const fetchInvitations = async () => {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     })
 
+    console.log('📨 invite-list response:', response.data)
+
     let allInvitations = []
     if (Array.isArray(response.data)) {
       allInvitations = response.data
@@ -489,8 +500,13 @@ const fetchInvitations = async () => {
       allInvitations = response.data.results
     } else if (response.data?.data && Array.isArray(response.data.data)) {
       allInvitations = response.data.data
+    } else if (response.data?.invitations && Array.isArray(response.data.invitations)) {
+      allInvitations = response.data.invitations
+    } else {
+      console.warn('⚠️ Unexpected response shape:', response.data)
     }
 
+    console.log('✅ Invitations loaded:', allInvitations.length)
     invitations.value = allInvitations
     filteredInvitations.value = allInvitations
   } catch (error) {
@@ -500,7 +516,10 @@ const fetchInvitations = async () => {
 
     $q.notify({
       type: 'negative',
-      message: error?.response?.data?.detail || 'Failed to load invitations',
+      message:
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        'Failed to load invitations',
       position: 'top',
     })
   } finally {
@@ -652,7 +671,7 @@ const sendInvitation = async () => {
     }
 
     const invitationData = {
-      email: invitationForm.value.email.trim(),
+      emails: [invitationForm.value.email.trim()],
       user_role: Number(invitationForm.value.user_role),
       company_id: companyId,
     }
