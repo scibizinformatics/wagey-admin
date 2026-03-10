@@ -167,10 +167,33 @@
                       v-for="element in getShifts(user.id, dayIdx)"
                       :key="element.id"
                       class="shift-badge"
-                      :class="{ 'shift-badge-dayoff': isDayOff(element) }"
+                      :class="{
+                        'shift-badge-dayoff': isDayOff(element),
+                        'shift-badge-leave': element.isLeave,
+                      }"
                     >
+                      <!-- Leave Display -->
+                      <template v-if="element.isLeave">
+                        <div class="leave-content">
+                          <q-icon name="beach_access" size="15px" class="leave-icon" />
+                          <div class="leave-label">{{ element.leaveTypeName }}</div>
+                        </div>
+                        <div class="shift-actions">
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            icon="close"
+                            size="xs"
+                            class="action-btn delete-btn"
+                            @click.stop="cancelLeave(element)"
+                          >
+                            <q-tooltip>Cancel Leave</q-tooltip>
+                          </q-btn>
+                        </div>
+                      </template>
                       <!-- Day Off Display -->
-                      <template v-if="isDayOff(element)">
+                      <template v-else-if="isDayOff(element)">
                         <div class="dayoff-content">
                           <q-icon name="event_busy" size="18px" class="dayoff-icon" />
                           <div class="dayoff-label">Day Off</div>
@@ -275,28 +298,22 @@
                         >
                           <q-list dense>
                             <q-item
+                              v-for="lt in leaveTypes"
+                              :key="lt.id"
                               clickable
                               v-close-popup
-                              @click="quickDirectAssign(user.id, dayIdx, 'leave', 'sick')"
+                              @click="quickDirectAssign(user.id, dayIdx, 'leave', lt.id)"
                               style="min-height: 28px; padding: 4px 8px"
                             >
-                              <q-item-section style="font-size: 11px">Sick Leave</q-item-section>
+                              <q-item-section style="font-size: 11px">{{ lt.name }}</q-item-section>
                             </q-item>
                             <q-item
-                              clickable
-                              v-close-popup
-                              @click="quickDirectAssign(user.id, dayIdx, 'leave', 'paid')"
+                              v-if="leaveTypes.length === 0"
                               style="min-height: 28px; padding: 4px 8px"
                             >
-                              <q-item-section style="font-size: 11px">Paid Leave</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              @click="quickDirectAssign(user.id, dayIdx, 'leave', 'unpaid')"
-                              style="min-height: 28px; padding: 4px 8px"
-                            >
-                              <q-item-section style="font-size: 11px">Unpaid Leave</q-item-section>
+                              <q-item-section style="font-size: 11px; color: grey"
+                                >No leave types found</q-item-section
+                              >
                             </q-item>
                           </q-list>
                         </q-btn-dropdown>
@@ -893,6 +910,7 @@ const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
 const assigningDayOffId = ref(null) // tracks per-element shift id
 const quickActionLoading = ref(null) // tracks `${userId}-${dayIdx}-leave/dayoff`
+const leaveTypes = ref([])
 const newSchedule = ref({
   userId: null,
   userIds: [],
@@ -957,19 +975,21 @@ const getWeekRange = (date = new Date()) => {
   return { start: monday, end: sunday }
 }
 const selectedWeek = ref(getWeekRange())
-const nextWeek = () => {
+const nextWeek = async () => {
   const newStart = new Date(selectedWeek.value.start)
   newStart.setDate(newStart.getDate() + 7)
   selectedWeek.value = getWeekRange(newStart)
   console.log('📅 Moving to next week:', selectedWeek.value.start.toISOString().split('T')[0])
-  fetchData()
+  await fetchData()
+  fetchLeaves()
 }
-const prevWeek = () => {
+const prevWeek = async () => {
   const newStart = new Date(selectedWeek.value.start)
   newStart.setDate(newStart.getDate() - 7)
   selectedWeek.value = getWeekRange(newStart)
   console.log('📅 Moving to previous week:', selectedWeek.value.start.toISOString().split('T')[0])
-  fetchData()
+  await fetchData()
+  fetchLeaves()
 }
 // Utilities
 const getTimezoneAbbreviation = () => {
@@ -1333,6 +1353,30 @@ const fetchSitesAndDepartments = async () => {
     })
   }
 }
+const fetchLeaveTypes = async () => {
+  try {
+    const token = localStorage.getItem('access_token')
+    let companyId = localStorage.getItem('selectedCompany')
+    try {
+      const parsed = JSON.parse(companyId)
+      companyId = parsed?.id || parsed
+    } catch {
+      // Already a plain value
+    }
+    if (!token || !companyId) {
+      console.warn('⚠️ Cannot fetch leave types: missing token or company ID')
+      return
+    }
+    const res = await axios.get(
+      `https://staging.wageyapp.com/attendance/leave-types/?company=${companyId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    leaveTypes.value = res.data.results || res.data || []
+    console.log('✅ Leave types loaded:', leaveTypes.value)
+  } catch (error) {
+    console.error('❌ Failed to fetch leave types:', error.response?.data || error.message)
+  }
+}
 const fetchEmployees = async () => {
   try {
     const token = localStorage.getItem('access_token')
@@ -1485,9 +1529,9 @@ const fetchData = async () => {
           }
           totalSchedulesProcessed++
           // Compare as local date strings to avoid UTC vs local midnight mismatch
-          // (e.g. UTC+8: new Date('2026-02-23') = UTC midnight ≠ local midnight → off-by-one)
           const scheduleDateStr = schedule.date.substring(0, 10)
-          const weekStartStr = selectedWeek.value.start.toLocaleDateString('en-CA') // YYYY-MM-DD local
+          const ws = selectedWeek.value.start
+          const weekStartStr = `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
           const scheduleDate = new Date(scheduleDateStr + 'T00:00:00')
           const weekStartLocal = new Date(weekStartStr + 'T00:00:00')
           const timeDiff = scheduleDate.getTime() - weekStartLocal.getTime()
@@ -1688,10 +1732,95 @@ const fetchData = async () => {
     })
   }
 }
+// ── localStorage leave helpers ──────────────────────────────────────────────
+const LEAVE_STORAGE_KEY = 'wagey_leaves'
+
+const getStoredLeaves = () => {
+  try {
+    return JSON.parse(localStorage.getItem(LEAVE_STORAGE_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+const saveLeaveToStorage = (leave) => {
+  const leaves = getStoredLeaves()
+  if (!leaves.find((l) => l.localId === leave.localId)) {
+    leaves.push(leave)
+    localStorage.setItem(LEAVE_STORAGE_KEY, JSON.stringify(leaves))
+  }
+}
+
+const removeLeaveFromStorage = (localId) => {
+  const leaves = getStoredLeaves().filter((l) => l.localId !== localId)
+  localStorage.setItem(LEAVE_STORAGE_KEY, JSON.stringify(leaves))
+}
+
+const fetchLeaves = () => {
+  let companyId = localStorage.getItem('selectedCompany')
+  try {
+    const parsed = JSON.parse(companyId)
+    companyId = parsed?.id || parsed
+  } catch {}
+  companyId = String(companyId)
+
+  const ws = selectedWeek.value.start
+  const weekStartStr = `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
+
+  const allLeaves = getStoredLeaves().filter((l) => String(l.companyId) === companyId)
+  console.log('📦 Leaves from localStorage:', allLeaves.length)
+
+  // Remove old leave injections then re-inject
+  shifts.value = shifts.value.filter((s) => !s.isLeave)
+
+  const weekStart = new Date(weekStartStr + 'T00:00:00')
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 6)
+
+  allLeaves.forEach((leave) => {
+    if (!leave.start_date) return
+    const ls = new Date(leave.start_date + 'T00:00:00')
+    const le = new Date((leave.end_date || leave.start_date) + 'T00:00:00')
+    if (ls > weekEnd || le < weekStart) return
+
+    const leaveTypeName =
+      leaveTypes.value.find((lt) => lt.id === leave.leave_type)?.name ||
+      leave.leave_type_name ||
+      'Leave'
+
+    for (let d = new Date(ls); d <= le; d.setDate(d.getDate() + 1)) {
+      const timeDiff = d.getTime() - weekStart.getTime()
+      const daysDiff = Math.round(timeDiff / (1000 * 60 * 60 * 24))
+      if (daysDiff >= 0 && daysDiff < 7) {
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        shifts.value.push({
+          id: `leave-${leave.localId}-${daysDiff}`,
+          assignmentId: leave.localId,
+          userId: leave.employee_id,
+          day: daysDiff,
+          startTime: null,
+          endTime: null,
+          position: leaveTypeName,
+          shiftTypeId: null,
+          site: null,
+          department: null,
+          status: 'approved',
+          date: dateStr,
+          isLeave: true,
+          leaveTypeName,
+        })
+      }
+    }
+  })
+
+  console.log('📋 Shifts after leave injection:', shifts.value.length)
+}
 onMounted(async () => {
   await fetchSitesAndDepartments()
   await fetchEmployees()
+  await fetchLeaveTypes()
   await fetchData()
+  fetchLeaves()
   await debugEmployeeAndCompany()
 })
 const checkEmployeeScheduleOnDate = async (employeeId, dateStr) => {
@@ -2260,7 +2389,10 @@ const addSchedule = async () => {
       message: `${n.scheduleType === 'recurring' ? 'Recurring schedule' : 'Schedule'} created successfully!`,
       icon: 'check_circle',
     })
-    setTimeout(() => fetchData(), 500)
+    setTimeout(async () => {
+      await fetchData()
+      fetchLeaves()
+    }, 500)
   } catch (error) {
     isCheckingConflict.value = false
     console.error('❌ Error adding schedule:', error)
@@ -2348,7 +2480,10 @@ const quickAddSchedule = async () => {
       icon: 'check_circle',
     })
     closeQuickAddModal()
-    setTimeout(() => fetchData(), 500)
+    setTimeout(async () => {
+      await fetchData()
+      fetchLeaves()
+    }, 500)
   } catch (error) {
     console.error('❌ Error:', error.response?.data || error.message)
     const resolveEmployeeName = (id) => {
@@ -2440,7 +2575,10 @@ const deleteShift = async (id) => {
     )
     shifts.value = shifts.value.filter((s) => s.id !== id)
     $q.notify({ type: 'positive', message: 'Schedule cancelled successfully' })
-    setTimeout(() => fetchData(), 1500)
+    setTimeout(async () => {
+      await fetchData()
+      fetchLeaves()
+    }, 1500)
   } catch (e) {
     console.error('Failed to cancel schedule:', e.response?.data || e.message)
     $q.notify({ type: 'negative', message: 'Failed to cancel schedule' })
@@ -2586,7 +2724,10 @@ const quickAssignDayOff = async () => {
       timeout: 3000,
     })
     closeQuickAddModal()
-    setTimeout(() => fetchData(), 1500)
+    setTimeout(async () => {
+      await fetchData()
+      fetchLeaves()
+    }, 1500)
   } catch (error) {
     console.error('❌ Quick day off failed:', error.response?.data || error.message)
     $q.notify({
@@ -2663,7 +2804,10 @@ const assignDayOff = async (element) => {
         endTime: null,
       }
     }
-    setTimeout(() => fetchData(), 1500)
+    setTimeout(async () => {
+      await fetchData()
+      fetchLeaves()
+    }, 1500)
   } catch (error) {
     console.error('❌ Assign day off failed:', error.response?.data || error.message)
     let errorMsg = 'Failed to assign day off.'
@@ -2700,31 +2844,42 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
     const dateStr = `${year}-${month}-${day}`
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     if (type === 'leave') {
-      // Map leaveSubType label to reason string
-      const reasonMap = { sick: 'sick', paid: 'paid', unpaid: 'unpaid' }
-      const leaveLabel =
-        leaveSubType === 'sick'
-          ? 'Sick Leave'
-          : leaveSubType === 'paid'
-            ? 'Paid Leave'
-            : 'Unpaid Leave'
-      // Map leaveSubType to leave_type id
-      const leaveTypeMap = { sick: 1, paid: 2, unpaid: 3 }
+      const leaveType = leaveTypes.value.find((lt) => lt.id === leaveSubType)
       const payload = {
         employee_id: userId,
-        leave_type: leaveTypeMap[leaveSubType] ?? 1,
+        leave_type: leaveSubType,
         start_date: dateStr,
         end_date: dateStr,
-        reason: reasonMap[leaveSubType] ?? leaveSubType,
+        reason: leaveType?.name ?? 'Leave',
       }
-      await axios.post(
+      const postRes = await axios.post(
         'https://staging.wageyapp.com/attendance/leave/apply-for-employee/',
         payload,
         { headers },
       )
+      // Save to localStorage so it persists across page refreshes
+      // Capture the real integer ID returned by the API for cancellation
+      const apiLeaveId = postRes.data?.id ?? null
+      console.log('✅ Leave POST response:', postRes.data)
+      let companyId = localStorage.getItem('selectedCompany')
+      try {
+        const parsed = JSON.parse(companyId)
+        companyId = parsed?.id || parsed
+      } catch {}
+      const localId = `${userId}-${dateStr}-${leaveSubType}-${Date.now()}`
+      saveLeaveToStorage({
+        localId,
+        apiId: apiLeaveId,
+        companyId: String(companyId),
+        employee_id: userId,
+        leave_type: leaveSubType,
+        leave_type_name: leaveType?.name ?? 'Leave',
+        start_date: dateStr,
+        end_date: dateStr,
+      })
       $q.notify({
         type: 'positive',
-        message: `${leaveLabel} assigned!`,
+        message: `${leaveType?.name ?? 'Leave'} assigned!`,
         caption: `${getEmployeeName(userId)} — ${days[dayIdx]}`,
         icon: 'beach_access',
         timeout: 3000,
@@ -2780,7 +2935,10 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
         timeout: 3000,
       })
     }
-    setTimeout(() => fetchData(), 500)
+    setTimeout(async () => {
+      await fetchData()
+      fetchLeaves()
+    }, 500)
   } catch (error) {
     console.error(`❌ Quick ${type} failed:`, error.response?.data || error.message)
     $q.notify({
@@ -2958,6 +3116,53 @@ const reassignShift = async () => {
   } finally {
     isReassigning.value = false
   }
+}
+const cancelLeave = async (element) => {
+  // element.assignmentId is the localId stored in localStorage
+  const localId = element.assignmentId
+
+  // Look up the real integer API ID from localStorage
+  const storedLeave = getStoredLeaves().find((l) => l.localId === localId)
+  const apiId = storedLeave?.apiId ?? null
+
+  // Always clean up localStorage and UI immediately
+  removeLeaveFromStorage(localId)
+  shifts.value = shifts.value.filter((s) => s.id !== element.id)
+
+  // Only attempt API cancellation if we have a real integer ID
+  if (apiId) {
+    try {
+      const token = localStorage.getItem('access_token')
+      const headers = { Authorization: `Bearer ${token}` }
+      try {
+        await axios.patch(
+          `https://staging.wageyapp.com/attendance/leaves/${apiId}/`,
+          { status: 'cancelled' },
+          { headers },
+        )
+      } catch (patchErr) {
+        if (patchErr.response?.status === 404 || patchErr.response?.status === 405) {
+          await axios.delete(`https://staging.wageyapp.com/attendance/leaves/${apiId}/`, {
+            headers,
+          })
+        } else {
+          throw patchErr
+        }
+      }
+      $q.notify({ type: 'positive', message: 'Leave cancelled successfully', timeout: 3000 })
+    } catch (error) {
+      console.warn('⚠️ Leave API cancel failed (already removed from UI):', error.response?.status)
+      $q.notify({ type: 'warning', message: 'Leave removed from schedule.', timeout: 3000 })
+    }
+  } else {
+    // No API ID — leave was created before fix or API didn't return an ID
+    $q.notify({ type: 'positive', message: 'Leave removed from schedule.', timeout: 3000 })
+  }
+
+  setTimeout(async () => {
+    await fetchData()
+    fetchLeaves()
+  }, 500)
 }
 const applyFilters = () => {
   console.log('🔍 Filters applied:', {
@@ -3396,6 +3601,28 @@ const filterEmployees = () => {}
   background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%) !important;
   box-shadow: 0 3px 8px rgba(255, 152, 0, 0.3);
   border-color: #f57c00 !important;
+}
+/* Leave badge */
+.shift-badge-leave {
+  background: linear-gradient(135deg, #f3e5f5, #ede7f6);
+  border: 1.5px solid #ce93d8;
+  border-left: 4px solid #9c27b0;
+}
+.leave-content {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 2px;
+}
+.leave-icon {
+  color: #7b1fa2;
+  flex-shrink: 0;
+}
+.leave-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6a1b9a;
+  line-height: 1.2;
 }
 .dayoff-content {
   display: flex;
