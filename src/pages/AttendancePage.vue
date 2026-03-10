@@ -487,7 +487,9 @@
         <q-card-section class="compact-dialog-header">
           <div>
             <div class="dialog-title">Add Attendance</div>
-            <div class="dialog-subtitle">Record time in and time out</div>
+            <div class="dialog-subtitle">
+              Record time in and time out for {{ formatDate(currentDate) }}
+            </div>
           </div>
           <q-btn flat round dense icon="close" @click="closeAddDialog" v-close-popup />
         </q-card-section>
@@ -524,17 +526,20 @@
                 </template>
               </q-select>
 
+              <!-- Date is auto-filled from the active calendar filter -->
               <q-input
                 filled
                 dense
-                v-model="newRecord.date"
-                label="Date *"
-                type="date"
+                :model-value="newRecord.date"
+                label="Date"
                 class="form-field"
-                :rules="[(val) => !!val || 'Required']"
+                readonly
               >
                 <template v-slot:prepend>
                   <q-icon name="event" size="xs" />
+                </template>
+                <template v-slot:append>
+                  <q-icon name="lock" size="xs" color="grey-5" />
                 </template>
               </q-input>
             </div>
@@ -677,9 +682,7 @@
             icon="check"
             @click="submitAttendance"
             :loading="creating"
-            :disable="
-              !newRecord.employee || !newRecord.date || !newRecord.time_in || !newRecord.time_out
-            "
+            :disable="!newRecord.employee || !newRecord.time_in || !newRecord.time_out"
           />
         </q-card-actions>
       </q-card>
@@ -1179,8 +1182,18 @@ function onEmployeeSelected(employeeId) {
   employeeSchedule.value = null
   scheduleError.value = null
 
-  if (employeeId && newRecord.value.date) {
-    fetchEmployeeSchedule(employeeId, newRecord.value.date)
+  // Only fetch schedule if we have a valid date — prevents 400 errors
+  const date = newRecord.value.date
+  if (employeeId && date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    fetchEmployeeSchedule(employeeId, date)
+  }
+}
+
+function onAddDialogDateChange(val) {
+  if (!val || !/^\d{4}-\d{2}-\d{2}$/.test(val)) return
+  // Re-fetch schedule when date changes and employee is already selected
+  if (newRecord.value.employee) {
+    fetchEmployeeSchedule(newRecord.value.employee, val)
   }
 }
 
@@ -1916,11 +1929,11 @@ async function filterByEmployee(employeeId) {
 }
 // ================= DIALOG HANDLERS =================
 function openAddDialog() {
-  const todayDate = new Date().toISOString().split('T')[0]
+  // Date is always auto-filled from the active calendar filter (currentDate)
   newRecord.value = {
     employee: '',
     site_id: '',
-    date: todayDate,
+    date: currentDate.value || today,
     time_in: '',
     time_out: '',
     source: 'admin',
@@ -1932,6 +1945,16 @@ function openAddDialog() {
 
   showAddDialog.value = true
 }
+
+// Keep newRecord.date in sync if the calendar filter changes while dialog is open
+watch(currentDate, (newDate) => {
+  if (showAddDialog.value && newDate) {
+    newRecord.value.date = newDate
+    if (newRecord.value.employee) {
+      fetchEmployeeSchedule(newRecord.value.employee, newDate)
+    }
+  }
+})
 
 function closeAddDialog() {
   showAddDialog.value = false
@@ -3552,6 +3575,16 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   padding: 14px 16px;
+}
+
+/* Selected date display in Add dialog */
+.selected-date-display {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f0f4ff;
+  border-radius: 8px;
+  border: 1px solid #c7d7f9;
 }
 
 /* Clickable time badge */
