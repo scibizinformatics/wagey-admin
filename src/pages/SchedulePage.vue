@@ -428,7 +428,15 @@
                 v-model="newSchedule.selectedDates"
                 multiple
                 mask="YYYY-MM-DD"
-                :options="(date) => date >= new Date().toISOString().split('T')[0]"
+                :options="
+                  (date) => {
+                    const n = new Date()
+                    return (
+                      date >=
+                      `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+                    )
+                  }
+                "
                 class="q-mb-xs"
                 minimal
                 style="transform: scale(0.82); transform-origin: top left; width: 122%"
@@ -520,7 +528,15 @@
                       <q-date
                         v-model="newSchedule.recurringStartDate"
                         mask="YYYY-MM-DD"
-                        :options="(date) => date >= new Date().toISOString().split('T')[0]"
+                        :options="
+                          (date) => {
+                            const n = new Date()
+                            return (
+                              date >=
+                              `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+                            )
+                          }
+                        "
                       >
                         <div class="row items-center justify-end">
                           <q-btn v-close-popup label="Close" color="primary" flat />
@@ -545,10 +561,11 @@
                         v-model="newSchedule.recurringEndDate"
                         mask="YYYY-MM-DD"
                         :options="
-                          (date) =>
-                            date >=
-                            (newSchedule.recurringStartDate ||
-                              new Date().toISOString().split('T')[0])
+                          (date) => {
+                            const n = new Date()
+                            const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+                            return date >= (newSchedule.recurringStartDate || today)
+                          }
                         "
                       >
                         <div class="row items-center justify-end">
@@ -2491,10 +2508,24 @@ const quickAddSchedule = async () => {
       return emp?.name || null
     }
     const humanizeErrorMessage = (msg) => {
-      return msg.replace(
+      // Replace UUIDs with employee names
+      let result = msg.replace(
         /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi,
         (match) => resolveEmployeeName(match) || match,
       )
+      // Friendly message for daily hours exceeded
+      result = result.replace(
+        /(.+?)\s+exceeds allowed daily hours on (\d{4}-\d{2}-\d{2})/i,
+        (_, name, date) =>
+          `"${name}" has already reached the maximum allowed hours on ${date}. Remove or shorten an existing shift first.`,
+      )
+      // Friendly message for duplicate/conflict
+      result = result.replace(
+        /(.+?)\s+already has a schedule on (\d{4}-\d{2}-\d{2})/i,
+        (_, name, date) =>
+          `"${name}" already has a schedule on ${date}. Please remove the existing shift first.`,
+      )
+      return result
     }
     let errorMsg = 'Failed to add shifts'
     let errorCaption = ''
