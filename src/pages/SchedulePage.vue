@@ -4035,11 +4035,13 @@ const filterEmployees = () => {}
 /* Modal Styles */
 .modal-card {
   border-radius: 16px !important;
-  max-width: 480px;
-  width: 100%;
-  overflow: hidden;
+  width: 480px !important;
+  min-width: 480px !important;
+  max-width: 480px !important;
+  overflow: visible;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0 !important;
 }
 .modal-header {
   background: #f9fafb;
@@ -4058,9 +4060,13 @@ const filterEmployees = () => {}
 .modal-body {
   padding: 16px;
   overflow-y: auto;
+  overflow-x: hidden;
   max-height: 70vh;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 .modal-body::-webkit-scrollbar {
   display: none;
@@ -4326,6 +4332,8 @@ const filterEmployees = () => {}
   }
   .modal-card {
     max-width: 90vw;
+    min-width: unset !important;
+    width: 90vw !important;
   }
 }
 /* 768px - Tablet Portrait */
@@ -4447,6 +4455,8 @@ const filterEmployees = () => {}
   }
   .modal-card {
     max-width: 95vw;
+    min-width: unset !important;
+    width: calc(95vw - 24px) !important;
     margin: 12px;
   }
   .modal-header,
