@@ -76,6 +76,7 @@
       <div class="controls-row">
         <div class="filter-group">
           <q-select
+            ref="siteFilterRef"
             v-model="filters.site"
             :options="siteFilterOptions"
             option-value="value"
@@ -88,8 +89,11 @@
             emit-value
             map-options
             @update:model-value="applyFilters"
+            @popup-show="pinDropdown(siteFilterRef)"
+            popup-content-class="filter-dropdown-popup"
           />
           <q-select
+            ref="employeeFilterRef"
             v-model="filters.employee"
             :options="[{ label: 'All Employees', value: null }, ...userOptions]"
             option-value="value"
@@ -102,6 +106,8 @@
             emit-value
             map-options
             @update:model-value="applyFilters"
+            @popup-show="pinDropdown(employeeFilterRef)"
+            popup-content-class="filter-dropdown-popup"
           />
         </div>
         <div class="week-nav">
@@ -400,20 +406,22 @@
               <!-- Employee -->
               <q-select
                 ref="singleEmployeeSelectRef"
-                v-model="newSchedule.userId"
+                v-model="newSchedule.userIds"
                 :options="filteredEmployeeOptions"
                 option-value="value"
                 option-label="label"
-                label="Select Employee"
+                label="Select Employees"
                 outlined
                 emit-value
                 map-options
+                multiple
+                use-chips
                 use-input
                 input-debounce="0"
                 @filter="filterEmployeeOptions"
                 @update:model-value="() => singleEmployeeSelectRef?.updateInputValue('')"
                 class="form-field full-width q-mb-md"
-                :rules="[(val) => !!val || 'Employee is required']"
+                :rules="[(val) => (val && val.length > 0) || 'At least one employee is required']"
                 :loading="loadingEmployees"
               >
                 <template #no-option>
@@ -423,33 +431,70 @@
                 </template>
               </q-select>
               <!-- Multi-date picker -->
-              <div class="q-mb-sm text-caption text-grey-7">Select Date(s)</div>
-              <q-date
-                v-model="newSchedule.selectedDates"
-                multiple
-                mask="YYYY-MM-DD"
-                :options="
-                  (date) => {
-                    const n = new Date()
-                    return (
-                      date >=
-                      `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-                    )
-                  }
-                "
-                class="q-mb-xs"
-                minimal
-                style="transform: scale(0.82); transform-origin: top left; width: 122%"
-              />
-              <div
-                class="text-caption q-mb-md"
-                :class="newSchedule.selectedDates.length ? 'text-primary' : 'text-negative'"
-              >
-                {{
-                  newSchedule.selectedDates.length
-                    ? `${newSchedule.selectedDates.length} date(s) selected`
-                    : 'Please select at least one date'
-                }}
+              <div class="recurring-calendar-preview">
+                <div class="calendar-preview-header">
+                  <q-icon name="event_note" size="16px" color="primary" />
+                  <span class="calendar-preview-title">Select Date(s)</span>
+                  <q-badge
+                    :color="(newSchedule.selectedDates || []).length ? 'primary' : 'grey'"
+                    :label="
+                      (newSchedule.selectedDates || []).length
+                        ? `${newSchedule.selectedDates.length} selected`
+                        : 'None selected'
+                    "
+                  />
+                </div>
+                <div class="calendar-preview-legend">
+                  <span class="legend-dot legend-dot-active"></span>
+                  <span class="legend-text">Click dates to select or deselect</span>
+                </div>
+                <q-date
+                  v-model="newSchedule.selectedDates"
+                  multiple
+                  mask="YYYY-MM-DD"
+                  :options="
+                    (date) => {
+                      const n = new Date()
+                      return (
+                        date >=
+                        `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+                      )
+                    }
+                  "
+                  :events="newSchedule.selectedDates || []"
+                  event-color="primary"
+                  minimal
+                  class="recurring-calendar"
+                />
+                <div
+                  v-if="(newSchedule.selectedDates || []).length > 0"
+                  class="calendar-weekdays-summary"
+                >
+                  <span class="weekdays-label">Selected:</span>
+                  <q-chip
+                    v-for="date in (newSchedule.selectedDates || []).slice().sort()"
+                    :key="date"
+                    dense
+                    color="primary"
+                    text-color="white"
+                    size="sm"
+                    removable
+                    @remove="
+                      newSchedule.selectedDates = (newSchedule.selectedDates || []).filter(
+                        (d) => d !== date,
+                      )
+                    "
+                    >{{ date }}</q-chip
+                  >
+                </div>
+                <div
+                  v-else
+                  class="calendar-weekdays-summary"
+                  style="color: #ef4444; font-size: 12px"
+                >
+                  <q-icon name="info" size="14px" color="negative" />
+                  Please select at least one date
+                </div>
               </div>
               <!-- Shift rows (like Quick Add) -->
               <div
@@ -594,6 +639,47 @@
             >
               <template #hint> Select a template to auto-fill schedule details </template>
             </q-select>
+            <!-- Recurring Calendar Preview -->
+            <div
+              v-if="
+                newSchedule.scheduleType === 'recurring' &&
+                newSchedule.recurringSchedule &&
+                recurringCalendarDates.length > 0
+              "
+              class="recurring-calendar-preview"
+            >
+              <div class="calendar-preview-header">
+                <q-icon name="event_note" size="16px" color="primary" />
+                <span class="calendar-preview-title">Schedule Preview</span>
+                <q-badge color="primary" :label="`${recurringCalendarDates.length} days`" />
+              </div>
+              <div class="calendar-preview-legend">
+                <span class="legend-dot legend-dot-active"></span>
+                <span class="legend-text">Scheduled working days</span>
+              </div>
+              <q-date
+                v-model="recurringCalendarModel"
+                :options="recurringCalendarOptions"
+                :events="recurringCalendarDates"
+                event-color="primary"
+                minimal
+                readonly
+                :default-year-month="recurringCalendarDefaultMonth"
+                class="recurring-calendar"
+              />
+              <div class="calendar-weekdays-summary">
+                <span class="weekdays-label">Active on:</span>
+                <q-chip
+                  v-for="day in recurringActiveWeekdays"
+                  :key="day"
+                  dense
+                  color="primary"
+                  text-color="white"
+                  size="sm"
+                  >{{ day }}</q-chip
+                >
+              </div>
+            </div>
             <!-- Site & Department (recurring only) -->
             <div v-if="newSchedule.scheduleType === 'recurring'" class="form-row">
               <q-select
@@ -1113,6 +1199,23 @@ const employeeOptions = computed(() =>
 const filteredEmployeeOptions = ref([])
 const singleEmployeeSelectRef = ref(null)
 const multiEmployeeSelectRef = ref(null)
+const siteFilterRef = ref(null)
+const employeeFilterRef = ref(null)
+
+// Pin dropdown to fixed position anchored below the input, immune to page scroll
+const pinDropdown = (selectRef) => {
+  if (!selectRef?.value) return
+  const el = selectRef.value.$el
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const popup = document.querySelector('.filter-dropdown-popup')
+  if (!popup) return
+  popup.style.position = 'fixed'
+  popup.style.top = rect.bottom + 4 + 'px'
+  popup.style.left = rect.left + 'px'
+  popup.style.width = rect.width + 'px'
+  popup.style.zIndex = '9999'
+}
 watch(
   employeeOptions,
   (newOptions) => {
@@ -1271,6 +1374,79 @@ const onRecurringTemplateChange = (templateId) => {
     timeout: 3000,
   })
 }
+// Recurring calendar preview
+const recurringCalendarModel = ref(null)
+
+const recurringCalendarDefaultMonth = computed(() => {
+  if (newSchedule.value.recurringStartDate) {
+    const [year, month] = newSchedule.value.recurringStartDate.split('-')
+    return `${year}/${month}`
+  }
+  const now = new Date()
+  return `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
+})
+
+const WEEKDAY_MAP = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+}
+
+const recurringCalendarDates = computed(() => {
+  const startStr = newSchedule.value.recurringStartDate
+  const endStr = newSchedule.value.recurringEndDate
+  const weekdays = newSchedule.value.weekdays
+
+  if (!startStr || !endStr || !weekdays || weekdays.length === 0) return []
+
+  const start = new Date(startStr + 'T00:00:00')
+  const end = new Date(endStr + 'T00:00:00')
+  const interval = newSchedule.value.repeatInterval || 1
+  const targetDays = weekdays
+    .map((d) => WEEKDAY_MAP[d.toLowerCase()])
+    .filter((d) => d !== undefined)
+  const dates = []
+
+  // Walk through each week by interval
+  let weekStart = new Date(start)
+  // Find the Monday of the start week
+  const dayOfWeek = weekStart.getDay()
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+  weekStart.setDate(weekStart.getDate() + diffToMonday)
+
+  while (weekStart <= end) {
+    for (const targetDay of targetDays) {
+      const date = new Date(weekStart)
+      // targetDay: 0=Sun,1=Mon...6=Sat. Monday is start of week (offset 0).
+      const offset = targetDay === 0 ? 6 : targetDay - 1
+      date.setDate(weekStart.getDate() + offset)
+
+      if (date >= start && date <= end) {
+        const yyyy = date.getFullYear()
+        const mm = String(date.getMonth() + 1).padStart(2, '0')
+        const dd = String(date.getDate()).padStart(2, '0')
+        dates.push(`${yyyy}/${mm}/${dd}`)
+      }
+    }
+    weekStart.setDate(weekStart.getDate() + 7 * interval)
+  }
+
+  return dates
+})
+
+const recurringCalendarOptions = computed(() => {
+  const dateSet = new Set(recurringCalendarDates.value)
+  return (dateStr) => dateSet.has(dateStr)
+})
+
+const recurringActiveWeekdays = computed(() => {
+  return (newSchedule.value.weekdays || []).map((d) => d.charAt(0).toUpperCase() + d.slice(1))
+})
+
 const parseWeekdays = (weekdaysStr) => {
   if (!weekdaysStr) return []
   if (Array.isArray(weekdaysStr)) {
@@ -2290,8 +2466,8 @@ const verifyEmployeeCompanyLink = async (employeeId) => {
 }
 const addSchedule = async () => {
   const n = newSchedule.value
-  if (n.scheduleType !== 'recurring' && !n.userId) {
-    $q.notify({ type: 'negative', message: 'Please select an employee.' })
+  if (n.scheduleType !== 'recurring' && (!n.userIds || n.userIds.length === 0)) {
+    $q.notify({ type: 'negative', message: 'Please select at least one employee.' })
     return
   }
   if (n.scheduleType === 'one-time') {
@@ -2339,19 +2515,25 @@ const addSchedule = async () => {
       await createRecurringSchedule(n)
     } else {
       // One-time: build payload from selectedDates x oneTimeShifts
-      console.log('🔍 Verifying employee-company link...')
-      const isLinked = await verifyEmployeeCompanyLink(n.userId)
-      if (!isLinked) {
+      console.log('🔍 Verifying employee-company links...')
+      const invalidEmployees = []
+      for (const empId of n.userIds) {
+        const isLinked = await verifyEmployeeCompanyLink(empId)
+        if (!isLinked) {
+          const emp = employees.value.find((e) => e.id === empId)
+          invalidEmployees.push(emp?.full_name || emp?.name || empId)
+        }
+      }
+      if (invalidEmployees.length > 0) {
         isCheckingConflict.value = false
-        const selectedEmployee = employees.value.find((emp) => emp.id === n.userId)
         $q.notify({
           type: 'negative',
-          message: `${selectedEmployee?.full_name || 'Employee'} is not linked to this company.`,
+          message: `Some employees are not linked to this company: ${invalidEmployees.join(', ')}`,
           timeout: 8000,
         })
         return
       }
-      console.log('✅ Employee verified')
+      console.log('✅ All employees verified')
       const token = localStorage.getItem('access_token')
       let companyId = localStorage.getItem('selectedCompany')
       try {
@@ -2371,7 +2553,7 @@ const addSchedule = async () => {
       }
       const payload = {
         company_id: companyId,
-        employee_ids: [n.userId],
+        employee_ids: n.userIds,
         schedules: schedulePayloads,
       }
       console.log('📤 One-time payload:', JSON.stringify(payload, null, 2))
@@ -3924,6 +4106,83 @@ const filterEmployees = () => {}
 /* ===================================
    RESPONSIVE BREAKPOINTS
    =================================== */
+/* Filter dropdowns - fixed position, always drops downward */
+.filter-dropdown-popup {
+  position: fixed !important;
+  max-height: 280px !important;
+  overflow-y: auto !important;
+  z-index: 9999 !important;
+  transform: none !important;
+}
+
+/* Recurring Calendar Preview */
+.recurring-calendar-preview {
+  background: linear-gradient(135deg, #f0f4ff 0%, #f8f0ff 100%);
+  border: 1.5px solid #c7d2fe;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.calendar-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.calendar-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4338ca;
+  flex: 1;
+}
+.calendar-preview-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.legend-dot-active {
+  background-color: #6366f1;
+}
+.legend-text {
+  font-size: 11px;
+  color: #6b7280;
+}
+.recurring-calendar {
+  width: 100% !important;
+  max-width: 100% !important;
+  border-radius: 10px;
+  box-shadow: none !important;
+  border: 1px solid #e0e7ff;
+}
+.recurring-calendar :deep(.q-date__calendar-item--active) {
+  background: #6366f1 !important;
+  border-radius: 50%;
+}
+.recurring-calendar :deep(.q-date__event) {
+  background: #6366f1 !important;
+}
+.calendar-weekdays-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e0e7ff;
+}
+.weekdays-label {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
 /* 1440px - Large Desktop */
 /* 1440px - Large Desktop */
 @media (min-width: 1440px) {
