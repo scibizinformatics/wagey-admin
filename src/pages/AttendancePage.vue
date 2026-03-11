@@ -305,6 +305,7 @@
                 <q-tr :props="props" class="table-header-row">
                   <q-th class="table-header-cell employee-col">Employee</q-th>
                   <q-th class="table-header-cell site-col">Site</q-th>
+                  <q-th class="table-header-cell cost-center-col">Cost Center</q-th>
                   <q-th class="table-header-cell time-col">Time In</q-th>
                   <q-th class="table-header-cell photo-col">Photo</q-th>
                   <q-th class="table-header-cell source-mini-col">In Source</q-th>
@@ -341,9 +342,21 @@
                   <q-td class="table-body-cell site-col">
                     <div v-if="props.row.site" class="site-name-text">
                       <q-icon name="location_on" size="12px" class="q-mr-xs text-grey-6" />
-                      {{ props.row.site.replace(/\s*\(None\)\s*/gi, ' ').trim() }}
+                      {{ getSiteName(props.row.site) }}
                     </div>
                     <span v-else class="no-photo">-</span>
+                  </q-td>
+                  <!-- Cost Center -->
+                  <q-td class="table-body-cell cost-center-col">
+                    <div
+                      class="cost-center-badge time-editable"
+                      @click="openCostCenterInlineEdit(props.row)"
+                      title="Click to edit cost center"
+                    >
+                      <q-icon name="account_balance_wallet" size="12px" class="q-mr-xs" />
+                      {{ getCostCenterName(props.row.cost_center) || 'None' }}
+                      <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
+                    </div>
                   </q-td>
                   <!-- Time In — clickable inline edit -->
                   <q-td class="table-body-cell time-col">
@@ -370,8 +383,11 @@
                     </div>
                   </q-td>
                   <q-td class="table-body-cell source-mini-col">
-                    <div class="source-mini-badge" :class="getSourceClass(props.row.source)">
-                      {{ formatSource(props.row.source) }}
+                    <div
+                      class="source-mini-badge"
+                      :class="getSourceClass(props.row.time_in_source || props.row.source)"
+                    >
+                      {{ formatSource(props.row.time_in_source || props.row.source) }}
                     </div>
                   </q-td>
                   <!-- Time Out — clickable inline edit -->
@@ -399,9 +415,14 @@
                     </div>
                   </q-td>
                   <q-td class="table-body-cell source-mini-col">
-                    <div class="source-mini-badge" :class="getSourceClass(props.row.source)">
-                      {{ formatSource(props.row.source) }}
+                    <div
+                      v-if="props.row.time_out"
+                      class="source-mini-badge"
+                      :class="getSourceClass(props.row.time_out_source || props.row.source)"
+                    >
+                      {{ formatSource(props.row.time_out_source || props.row.source) }}
                     </div>
+                    <span v-else class="no-photo">-</span>
                   </q-td>
                 </q-tr>
               </template>
@@ -568,6 +589,34 @@
               <template v-slot:no-option>
                 <q-item>
                   <q-item-section class="text-grey">No sites found</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+
+            <!-- Cost Center Dropdown -->
+            <q-select
+              filled
+              dense
+              v-model="newRecord.cost_center_id"
+              :options="costCenterOptions"
+              label="Cost Center"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              clearable
+              :loading="filtersLoading"
+              class="form-field q-mb-sm"
+              behavior="menu"
+              menu-anchor="bottom left"
+              menu-self="top left"
+            >
+              <template v-slot:prepend>
+                <q-icon name="account_balance_wallet" size="xs" />
+              </template>
+              <template v-slot:no-option>
+                <q-item>
+                  <q-item-section class="text-grey">No cost centers found</q-item-section>
                 </q-item>
               </template>
             </q-select>
@@ -782,6 +831,68 @@
       </q-card>
     </q-dialog>
 
+    <!-- Inline Cost Center Edit Dialog -->
+    <q-dialog v-model="showCostCenterInlineDialog" persistent>
+      <q-card class="inline-edit-card">
+        <q-card-section class="inline-edit-header">
+          <div>
+            <div class="dialog-title">Edit Cost Center</div>
+            <div class="dialog-subtitle text-grey-6 text-caption">
+              {{ costCenterInlineEdit.employeeName }} — {{ costCenterInlineEdit.date }}
+            </div>
+          </div>
+          <q-btn flat round dense icon="close" @click="closeCostCenterInlineEdit" />
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section class="q-pt-md q-pb-md">
+          <q-select
+            filled
+            dense
+            v-model="costCenterInlineEdit.value"
+            :options="costCenterOptions"
+            label="Cost Center"
+            option-label="label"
+            option-value="value"
+            emit-value
+            map-options
+            clearable
+            :loading="filtersLoading"
+            class="form-field"
+            behavior="menu"
+            menu-anchor="bottom left"
+            menu-self="top left"
+            autofocus
+          >
+            <template v-slot:prepend>
+              <q-icon name="account_balance_wallet" size="xs" />
+            </template>
+            <template v-slot:no-option>
+              <q-item>
+                <q-item-section class="text-grey">No cost centers found</q-item-section>
+              </q-item>
+            </template>
+          </q-select>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-actions align="right" class="q-pa-sm">
+          <q-btn flat label="Cancel" @click="closeCostCenterInlineEdit" size="sm" />
+          <q-btn
+            unelevated
+            color="primary"
+            label="Save"
+            icon="check"
+            size="sm"
+            @click="saveCostCenterInlineEdit"
+            :loading="costCenterInlineEdit.saving"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Edit Attendance Dialog -->
     <q-dialog v-model="showEditDialog" persistent>
       <q-card class="edit-dialog-card">
@@ -822,6 +933,33 @@
                 class="form-field"
               />
             </div>
+
+            <!-- Cost Center Dropdown -->
+            <q-select
+              filled
+              v-model="editingRecord.cost_center_id"
+              :options="costCenterOptions"
+              label="Cost Center"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              clearable
+              :loading="filtersLoading"
+              class="form-field q-mt-sm"
+              behavior="menu"
+              menu-anchor="bottom left"
+              menu-self="top left"
+            >
+              <template v-slot:prepend>
+                <q-icon name="account_balance_wallet" />
+              </template>
+              <template v-slot:no-option>
+                <q-item>
+                  <q-item-section class="text-grey">No cost centers found</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
           </q-form>
         </q-card-section>
 
@@ -872,6 +1010,16 @@ const inlineEdit = ref({
   record: null,
   field: '', // 'time_in' or 'time_out'
   value: '', // HH:MM format
+  date: '',
+  employeeName: '',
+  saving: false,
+})
+
+// Inline cost center edit state
+const showCostCenterInlineDialog = ref(false)
+const costCenterInlineEdit = ref({
+  record: null,
+  value: null,
   date: '',
   employeeName: '',
   saving: false,
@@ -959,6 +1107,7 @@ const editingRecord = ref(null)
 const newRecord = ref({
   employee: '',
   site_id: '',
+  cost_center_id: '',
   date: '',
   time_in: '',
   time_out: '',
@@ -969,6 +1118,7 @@ const newRecord = ref({
 const employeeOptions = ref([])
 const businessOwnerOptions = ref([])
 const siteOptions = ref([])
+const costCenterOptions = ref([])
 const sourceOptions = ref([
   { label: 'App', value: 'app' },
   { label: 'Terminal', value: 'terminal' },
@@ -1528,6 +1678,31 @@ async function fetchSites() {
   }
 }
 
+async function fetchCostCenters() {
+  if (!companyId.value) return
+
+  try {
+    const response = await api.get('https://staging.wageyapp.com/payroll/cost-centers/', {
+      params: { company: companyId.value },
+    })
+
+    const data = response.data.data || response.data || []
+
+    costCenterOptions.value = Array.isArray(data)
+      ? data.map((cc) => ({
+          label: cc.name || `Cost Center ${cc.id}`,
+          value: cc.id,
+          costCenter: cc,
+        }))
+      : []
+
+    console.log('✅ Cost center options ready:', costCenterOptions.value)
+  } catch (error) {
+    console.error('❌ Error fetching cost centers:', error)
+    costCenterOptions.value = []
+  }
+}
+
 async function fetchEmployeeDetails() {
   if (!companyId.value) {
     console.error('❌ Company ID is missing:', companyId.value)
@@ -1665,9 +1840,13 @@ async function submitAttendance() {
       `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
       {
         source: 'manual',
+        time_in_source: 'manual',
         employee_id: employeeUUID,
         timestamp: timeInTimestamp,
         ...(newRecord.value.site_id && { site_id: newRecord.value.site_id }),
+        ...(newRecord.value.cost_center_id != null && {
+          cost_center: newRecord.value.cost_center_id,
+        }),
       },
     )
 
@@ -1687,9 +1866,13 @@ async function submitAttendance() {
       `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
       {
         source: 'manual',
+        time_out_source: 'manual',
         employee_id: employeeUUID,
         timestamp: timeOutTimestamp,
         ...(newRecord.value.site_id && { site_id: newRecord.value.site_id }),
+        ...(newRecord.value.cost_center_id != null && {
+          cost_center: newRecord.value.cost_center_id,
+        }),
       },
     )
 
@@ -1807,6 +1990,87 @@ async function saveInlineEdit() {
   }
 }
 
+// ================= INLINE COST CENTER EDIT =================
+function openCostCenterInlineEdit(row) {
+  // cost_center may be an object {id, name} or a plain string/id
+  const rawCc = row.cost_center
+  let resolvedId = null
+  if (rawCc) {
+    if (typeof rawCc === 'object') {
+      resolvedId = rawCc.id ?? null
+    } else {
+      const match = costCenterOptions.value.find((cc) => cc.label === rawCc || cc.value === rawCc)
+      resolvedId = match ? match.value : null
+    }
+  }
+  costCenterInlineEdit.value = {
+    record: row,
+    value: resolvedId,
+    date: row.date,
+    employeeName: getEmployeeName(row.employee),
+    saving: false,
+  }
+  showCostCenterInlineDialog.value = true
+}
+
+function closeCostCenterInlineEdit() {
+  showCostCenterInlineDialog.value = false
+  costCenterInlineEdit.value = {
+    record: null,
+    value: null,
+    date: '',
+    employeeName: '',
+    saving: false,
+  }
+}
+
+async function saveCostCenterInlineEdit() {
+  if (!costCenterInlineEdit.value.record) return
+  if (!companyId.value) {
+    showErrorNotification('Company ID not found.')
+    return
+  }
+
+  costCenterInlineEdit.value.saving = true
+
+  try {
+    const record = costCenterInlineEdit.value.record
+
+    // Build timestamps from existing record values
+    const existingTimeIn = record.time_in || null
+    const existingTimeOut = record.time_out || null
+
+    const payload = {
+      time_in: existingTimeIn,
+      time_out: existingTimeOut,
+      time_in_source: record.time_in_source || record.source || 'admin',
+      time_out_source: record.time_out_source || record.source || 'admin',
+      source: record.source || 'admin',
+      cost_center: costCenterInlineEdit.value.value ?? null,
+    }
+
+    console.log('📤 Inline updating cost center:', payload)
+
+    await api.patch(`https://staging.wageyapp.com/attendance/cost-center/${record.id}/patch/`, {
+      cost_center: costCenterInlineEdit.value.value ?? null,
+    })
+
+    showSuccessNotification('Cost center updated successfully')
+    closeCostCenterInlineEdit()
+    await fetchAttendanceData()
+  } catch (error) {
+    console.error('❌ Cost center inline edit error:', error)
+    const data = error.response?.data
+    const msg =
+      typeof data === 'string'
+        ? data
+        : data?.detail || data?.message || 'Failed to update cost center'
+    showErrorNotification(msg)
+  } finally {
+    costCenterInlineEdit.value.saving = false
+  }
+}
+
 async function updateAttendance() {
   if (!editingRecord.value) return
   if (!companyId.value) {
@@ -1854,11 +2118,16 @@ async function updateAttendance() {
       timeOutTimestamp = timeOutDate.toISOString()
     }
 
-    // Only send time_in, time_out, and source - date is NOT included in update
+    // Only send time_in, time_out, source, cost_center - date is NOT included in update
     const attendanceData = {
       time_in: timeInTimestamp,
       time_out: timeOutTimestamp,
+      time_in_source: editingRecord.value.time_in_source || editingRecord.value.source || 'admin',
+      time_out_source: editingRecord.value.time_out_source || editingRecord.value.source || 'admin',
       source: editingRecord.value.source || 'admin',
+      ...(editingRecord.value.cost_center_id != null && {
+        cost_center: editingRecord.value.cost_center_id,
+      }),
     }
 
     console.log('📤 Sending Update data:', attendanceData)
@@ -1933,6 +2202,7 @@ function openAddDialog() {
   newRecord.value = {
     employee: '',
     site_id: '',
+    cost_center_id: '',
     date: currentDate.value || today,
     time_in: '',
     time_out: '',
@@ -1962,6 +2232,7 @@ function closeAddDialog() {
   newRecord.value = {
     employee: '',
     site_id: '',
+    cost_center_id: '',
     date: '',
     time_in: '',
     time_out: '',
@@ -1973,9 +2244,22 @@ function closeAddDialog() {
   loadingSchedule.value = false
 }
 function editAttendance(record) {
+  // Match cost_center — may be object {id, name} or a plain string/name
+  let resolvedCostCenterId = null
+  const rawCc = record.cost_center
+  if (rawCc) {
+    if (typeof rawCc === 'object') {
+      resolvedCostCenterId = rawCc.id ?? null
+    } else {
+      const match = costCenterOptions.value.find((cc) => cc.label === rawCc || cc.value === rawCc)
+      resolvedCostCenterId = match ? match.value : null
+    }
+  }
+
   editingRecord.value = {
     ...record,
     employee: record.employee?.id || record.employee?.uuid || record.employee,
+    cost_center_id: resolvedCostCenterId,
   }
 
   if (editingRecord.value.time_in) {
@@ -2159,6 +2443,26 @@ function downloadFile(data, filename) {
 }
 
 // ================= HELPERS =================
+function getSiteName(site) {
+  if (!site) return ''
+  let name = ''
+  if (typeof site === 'object') {
+    name = site.name || site.site_name || site.title || ''
+  } else {
+    name = String(site)
+  }
+  // Strip anything in parentheses and clean up extra whitespace
+  return name.replace(/\s*\(.*?\)\s*/g, '').trim()
+}
+
+function getCostCenterName(costCenter) {
+  if (!costCenter) return ''
+  if (typeof costCenter === 'object') {
+    return costCenter.name || costCenter.cost_center_name || ''
+  }
+  return String(costCenter)
+}
+
 function getEmployeeName(employee) {
   if (!employee) return 'Unknown Employee'
 
@@ -2312,6 +2616,9 @@ onMounted(async () => {
     // Always fetch sites for the company
     console.log('🏢 Fetching sites for company:', companyId.value)
     await fetchSites()
+
+    console.log('💰 Fetching cost centers...')
+    await fetchCostCenters()
 
     console.log('👥 Fetching employees...')
     await fetchEmployeeDetails()
