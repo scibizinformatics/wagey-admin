@@ -2036,13 +2036,9 @@ async function saveCostCenterInlineEdit() {
   try {
     const record = costCenterInlineEdit.value.record
 
-    // Build timestamps from existing record values
-    const existingTimeIn = record.time_in || null
-    const existingTimeOut = record.time_out || null
-
     const payload = {
-      time_in: existingTimeIn,
-      time_out: existingTimeOut,
+      time_in: record.time_in || null,
+      time_out: record.time_out || null,
       time_in_source: record.time_in_source || record.source || 'admin',
       time_out_source: record.time_out_source || record.source || 'admin',
       source: record.source || 'admin',
@@ -2051,9 +2047,10 @@ async function saveCostCenterInlineEdit() {
 
     console.log('📤 Inline updating cost center:', payload)
 
-    await api.patch(`https://staging.wageyapp.com/attendance/cost-center/${record.id}/patch/`, {
-      cost_center: costCenterInlineEdit.value.value ?? null,
-    })
+    await api.put(
+      `https://staging.wageyapp.com/attendance/log-update/${companyId.value}/${record.id}/`,
+      payload,
+    )
 
     showSuccessNotification('Cost center updated successfully')
     closeCostCenterInlineEdit()
