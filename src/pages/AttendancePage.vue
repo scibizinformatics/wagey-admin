@@ -305,6 +305,7 @@
                 <q-tr :props="props" class="table-header-row">
                   <q-th class="table-header-cell employee-col">Employee</q-th>
                   <q-th class="table-header-cell site-col">Site</q-th>
+                  <q-th class="table-header-cell employment-status-col">Work Type</q-th>
                   <q-th class="table-header-cell cost-center-col">Cost Center</q-th>
                   <q-th class="table-header-cell time-col">Time In</q-th>
                   <q-th class="table-header-cell photo-col">Photo</q-th>
@@ -343,6 +344,17 @@
                     <div v-if="props.row.site" class="site-name-text">
                       <q-icon name="location_on" size="12px" class="q-mr-xs text-grey-6" />
                       {{ getSiteName(props.row.site) }}
+                    </div>
+                    <span v-else class="no-photo">-</span>
+                  </q-td>
+                  <!-- Work Type -->
+                  <q-td class="table-body-cell employment-status-col">
+                    <div
+                      v-if="props.row.work_type"
+                      class="employment-status-badge"
+                      :class="getEmploymentStatusClass(props.row.work_type)"
+                    >
+                      {{ props.row.work_type }}
                     </div>
                     <span v-else class="no-photo">-</span>
                   </q-td>
@@ -2486,6 +2498,22 @@ function getSourceClass(source) {
   }
 }
 
+function getEmploymentStatusClass(status) {
+  if (!status) return ''
+  switch (status.toLowerCase()) {
+    case 'regular':
+      return 'employment-status-regular'
+    case 'probationary':
+      return 'employment-status-probationary'
+    case 'contractual':
+      return 'employment-status-contractual'
+    case 'part-time':
+      return 'employment-status-parttime'
+    default:
+      return 'employment-status-default'
+  }
+}
+
 function formatSource(source) {
   if (!source) return '-'
   return source.replace('_', ' ').toUpperCase()
@@ -3928,5 +3956,45 @@ body {
   background: #f1f5f9;
   color: #475569;
   border: 1px solid #e2e8f0;
+}
+
+/* Employment Status Column */
+.employment-status-col {
+  width: 10%;
+}
+
+.employment-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.employment-status-regular {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.employment-status-probationary {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.employment-status-contractual {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.employment-status-parttime {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.employment-status-default {
+  background: #f1f5f9;
+  color: #475569;
 }
 </style>
