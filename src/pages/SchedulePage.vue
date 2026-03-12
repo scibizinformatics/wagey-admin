@@ -168,14 +168,15 @@
                 </td>
                 <td v-for="(day, dayIdx) in days" :key="dayIdx" class="schedule-cell">
                   <div class="shifts-wrapper">
-                    <!-- Existing Shifts -->
+                    <!-- Existing Shifts (merged when dual-shift) -->
                     <div
-                      v-for="element in getShifts(user.id, dayIdx)"
+                      v-for="element in getMergedShifts(user.id, dayIdx)"
                       :key="element.id"
                       class="shift-badge"
                       :class="{
                         'shift-badge-dayoff': isDayOff(element),
                         'shift-badge-leave': element.isLeave,
+                        'shift-badge-merged': element.isMerged,
                       }"
                     >
                       <!-- Leave Display -->
@@ -226,6 +227,62 @@
                             @click.stop="deleteShift(element.id)"
                           >
                             <q-tooltip>Remove Day Off</q-tooltip>
+                          </q-btn>
+                        </div>
+                      </template>
+                      <!-- Merged Dual-Shift Display -->
+                      <template v-else-if="element.isMerged">
+                        <!-- Each shift on its own compact line -->
+                        <template v-for="(sub, si) in element.shifts" :key="sub.id">
+                          <div class="shift-time">
+                            {{ formatTimeWithTimezone(sub.startTime) }} - {{ sub.endTime }}
+                          </div>
+                          <div class="shift-site" v-if="getSiteName(sub.site)">
+                            <q-icon name="location_on" size="10px" />
+                            {{ getSiteName(sub.site) }}
+                          </div>
+                          <div class="shift-position">{{ getPositionName(sub.position) }}</div>
+                          <div
+                            v-if="si < element.shifts.length - 1"
+                            class="merged-shift-separator"
+                          />
+                        </template>
+                        <!-- Merged shift actions -->
+                        <div class="shift-actions">
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            icon="swap_horiz"
+                            size="xs"
+                            class="action-btn reassign-btn"
+                            @click="openReassignModal(element)"
+                          >
+                            <q-tooltip>Update Shifts</q-tooltip>
+                          </q-btn>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            icon="event_busy"
+                            size="xs"
+                            class="action-btn dayoff-btn"
+                            :loading="assigningDayOffId === element.id"
+                            :disable="assigningDayOffId === element.id"
+                            @click.stop="assignDualDayOff(element)"
+                          >
+                            <q-tooltip>Assign Day Off (Both)</q-tooltip>
+                          </q-btn>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            icon="close"
+                            size="xs"
+                            class="action-btn delete-btn"
+                            @click.stop="deleteDualShift(element)"
+                          >
+                            <q-tooltip>Remove Both Shifts</q-tooltip>
                           </q-btn>
                         </div>
                       </template>
@@ -867,9 +924,11 @@
     </q-dialog>
     <!-- Update Shift Assignment Modal -->
     <q-dialog v-model="showReassignModal" persistent>
-      <q-card class="modal-card" style="max-width: 500px">
+      <q-card class="modal-card" style="max-width: 520px">
         <q-card-section class="modal-header">
-          <div class="modal-title">Update Shift Assignment</div>
+          <div class="modal-title">
+            {{ reassignData.isDualShift ? 'Update Dual Shift' : 'Update Shift Assignment' }}
+          </div>
           <q-btn flat round dense icon="close" @click="closeReassignModal" />
         </q-card-section>
         <q-card-section class="modal-body">
@@ -885,74 +944,132 @@
             </div>
           </div>
           <q-form @submit.prevent="reassignShift" class="schedule-form">
-            <!-- Shift Update Section -->
-            <div class="shift-row">
-              <div class="shift-row-header">
-                <span class="row-label">
-                  <q-icon name="edit" size="16px" />
-                  Shift Details
-                </span>
-              </div>
-              <div class="shift-fields">
-                <!-- Site Select -->
-                <q-select
-                  v-model="reassignData.siteId"
-                  :options="siteOptions"
-                  option-value="value"
-                  option-label="label"
-                  label="Select Site"
-                  outlined
-                  dense
-                  emit-value
-                  map-options
-                  class="form-field"
-                  :rules="[(val) => !!val || 'Site is required']"
-                />
-                <!-- Shift Type Select -->
-                <q-select
-                  v-model="reassignData.shiftTypeId"
-                  :options="positionOptions"
-                  option-value="value"
-                  option-label="label"
-                  label="Shift Type"
-                  outlined
-                  dense
-                  emit-value
-                  map-options
-                  class="form-field"
-                  :rules="[(val) => !!val || 'Shift type is required']"
-                >
-                  <template #hint>
-                    {{
+            <!-- ── SINGLE SHIFT ── -->
+            <template v-if="!reassignData.isDualShift">
+              <div class="shift-row">
+                <div class="shift-row-header">
+                  <span class="row-label"><q-icon name="edit" size="16px" /> Shift Details</span>
+                </div>
+                <div class="shift-fields">
+                  <q-select
+                    v-model="reassignData.siteId"
+                    :options="siteOptions"
+                    option-value="value"
+                    option-label="label"
+                    label="Select Site"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="form-field"
+                    :rules="[(val) => !!val || 'Site is required']"
+                  />
+                  <q-select
+                    v-model="reassignData.shiftTypeId"
+                    :options="positionOptions"
+                    option-value="value"
+                    option-label="label"
+                    label="Shift Type"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="form-field"
+                    :rules="[(val) => !!val || 'Shift type is required']"
+                  >
+                    <template #hint>{{
                       reassignData.shiftTypeId
                         ? getPositionName(reassignData.shiftTypeId)
                         : 'Select a shift type'
-                    }}
-                  </template>
-                </q-select>
-                <!-- Department Select (Optional) -->
-                <q-select
-                  v-model="reassignData.departmentId"
-                  :options="departmentOptions"
-                  option-value="value"
-                  option-label="label"
-                  label="Department (Optional)"
-                  outlined
-                  dense
-                  emit-value
-                  map-options
-                  clearable
-                  class="form-field"
-                />
+                    }}</template>
+                  </q-select>
+                  <q-select
+                    v-model="reassignData.departmentId"
+                    :options="departmentOptions"
+                    option-value="value"
+                    option-label="label"
+                    label="Department (Optional)"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    clearable
+                    class="form-field"
+                  />
+                </div>
               </div>
-            </div>
+            </template>
+
+            <!-- ── DUAL SHIFT ── -->
+            <template v-else>
+              <div
+                v-for="(sub, idx) in reassignData.dualShifts"
+                :key="sub.assignmentId"
+                class="shift-row"
+                style="margin-bottom: 12px"
+              >
+                <div class="shift-row-header">
+                  <span class="row-label">
+                    <q-icon name="edit" size="16px" />
+                    Shift {{ idx + 1 }}
+                    <span style="font-size: 10px; color: #6b7280; margin-left: 4px">
+                      {{ sub.startTime }} - {{ sub.endTime }}
+                    </span>
+                  </span>
+                </div>
+                <div class="shift-fields">
+                  <q-select
+                    v-model="sub.siteId"
+                    :options="siteOptions"
+                    option-value="value"
+                    option-label="label"
+                    :label="`Site (Shift ${idx + 1})`"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="form-field"
+                    :rules="[(val) => !!val || 'Site is required']"
+                  />
+                  <q-select
+                    v-model="sub.shiftTypeId"
+                    :options="positionOptions"
+                    option-value="value"
+                    option-label="label"
+                    :label="`Shift Type (Shift ${idx + 1})`"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="form-field"
+                    :rules="[(val) => !!val || 'Shift type is required']"
+                  >
+                    <template #hint>{{
+                      sub.shiftTypeId ? getPositionName(sub.shiftTypeId) : 'Select a shift type'
+                    }}</template>
+                  </q-select>
+                  <q-select
+                    v-model="sub.departmentId"
+                    :options="departmentOptions"
+                    option-value="value"
+                    option-label="label"
+                    :label="`Department (Shift ${idx + 1}, Optional)`"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    clearable
+                    class="form-field"
+                  />
+                </div>
+              </div>
+            </template>
+
             <!-- Info Banner -->
             <q-banner class="info-banner" dense>
-              <template #avatar>
-                <q-icon name="info" color="primary" />
-              </template>
+              <template #avatar><q-icon name="info" color="primary" /></template>
               <span style="font-size: 12px">
-                Updating shift assignment for
+                Updating {{ reassignData.isDualShift ? 'dual shift' : 'shift' }} for
                 <strong>{{ getEmployeeName(reassignData.currentEmployee) }}</strong>
               </span>
             </q-banner>
@@ -967,12 +1084,16 @@
               <q-btn
                 type="submit"
                 color="primary"
-                label="UPDATE SHIFT"
+                :label="reassignData.isDualShift ? 'UPDATE BOTH SHIFTS' : 'UPDATE SHIFT'"
                 unelevated
                 class="submit-btn"
                 :loading="isReassigning"
                 :disable="
-                  !reassignData.siteId || !reassignData.shiftTypeId || !reassignData.assignmentId
+                  reassignData.isDualShift
+                    ? reassignData.dualShifts.some((s) => !s.siteId || !s.shiftTypeId)
+                    : !reassignData.siteId ||
+                      !reassignData.shiftTypeId ||
+                      !reassignData.assignmentId
                 "
               />
             </div>
@@ -1058,6 +1179,8 @@ const reassignData = ref({
   currentEmployee: null,
   date: null,
   day: null,
+  isDualShift: false,
+  dualShifts: [], // [{ assignmentId, shiftTypeId, siteId, departmentId, startTime, endTime }]
 })
 const addConflictWarning = ref(false)
 // Week helpers
@@ -1808,10 +1931,24 @@ const fetchData = async () => {
                 }
               }
             }
+            // Log all ID-related fields on first dual shift to diagnose wrong assignmentId
+            console.log(`🔑 Schedule ID fields [${sIndex}]:`, {
+              id: schedule.id,
+              employee_assignment_id: schedule.employee_assignment_id,
+              assignment_id: schedule.assignment_id,
+              all_keys: Object.keys(schedule).filter((k) => k.includes('id') || k.includes('Id')),
+            })
+            const resolvedAssignmentId =
+              schedule.employee_assignment_id || schedule.assignment_id || null
+            if (!resolvedAssignmentId) {
+              console.error(
+                '❌ CRITICAL: assignment ID missing — schedule.id is NOT the assignment ID and must NOT be used as fallback. Raw schedule:',
+                schedule,
+              )
+            }
             const shift = {
               id: schedule.id ? `${schedule.id}-${sIndex}` : `temp-${Date.now()}-${sIndex}`,
-              assignmentId:
-                schedule.employee_assignment_id || schedule.assignment_id || schedule.id,
+              assignmentId: resolvedAssignmentId,
               userId: employee.id,
               day: daysDiff,
               startTime: startTime,
@@ -2067,6 +2204,60 @@ const checkEmployeeScheduleOnDate = async (employeeId, dateStr) => {
 // Helpers
 const getShifts = (employeeId, dayIdx) =>
   shifts.value.filter((shift) => shift.userId === employeeId && shift.day === dayIdx)
+
+// Returns shifts merged: multiple regular shifts on the same day are combined into one entry.
+// Leave and Day Off shifts are never merged with regular shifts.
+const getMergedShifts = (employeeId, dayIdx) => {
+  const dayShifts = getShifts(employeeId, dayIdx)
+
+  // Separate special shifts (leave / day off) from regular shifts
+  const specialShifts = dayShifts.filter((s) => s.isLeave || isDayOff(s))
+  const regularShifts = dayShifts.filter((s) => !s.isLeave && !isDayOff(s))
+
+  if (regularShifts.length <= 1) {
+    // Nothing to merge — return as-is
+    return [...specialShifts, ...regularShifts]
+  }
+
+  // Sort regular shifts by startTime so earliest shows first
+  const sorted = [...regularShifts].sort((a, b) =>
+    (a.startTime || '').localeCompare(b.startTime || ''),
+  )
+
+  // Build labels in the desired format:
+  // Line 1: "09:00 GMT - 18:00/22:00 GMT - 06:00"
+  const timeParts = sorted.map((s) => `${formatTimeWithTimezone(s.startTime)} - ${s.endTime}`)
+  const mergedTimeLabel = timeParts.join('/')
+
+  // Line 2: "Fatima Station/Fatima Station"
+  const mergedSiteLabel = sorted
+    .map((s) => getSiteName(s.site) || '')
+    .filter(Boolean)
+    .join('/')
+
+  // Line 3: "Whole Day/Night Shift" — just the position names joined
+  const mergedPositionLabel = sorted
+    .map((s) => getPositionName(s.position) || '')
+    .filter(Boolean)
+    .join(' / ')
+
+  const merged = {
+    id: `merged-${employeeId}-${dayIdx}`,
+    userId: employeeId,
+    day: dayIdx,
+    isMerged: true,
+    shifts: sorted,
+    mergedTimeLabel,
+    mergedSiteLabel,
+    mergedPositionLabel,
+    site: sorted[0].site,
+    position: sorted[0].position,
+    startTime: sorted[0].startTime,
+    endTime: sorted[sorted.length - 1].endTime,
+  }
+
+  return [...specialShifts, merged]
+}
 const getUserShiftCount = (userId) => shifts.value.filter((s) => s.userId === userId).length
 const getEmployeeName = (id) => {
   const user = users.value.find((u) => u.id === id)
@@ -3001,6 +3192,7 @@ const assignDayOff = async (element) => {
   assigningDayOffId.value = element.id
   const token = localStorage.getItem('access_token')
   try {
+    // Use the shift's original site_id — the API requires it to match the assignment's site
     const payload = {
       assignment_id: parseInt(element.assignmentId),
       shift_type_id: parseInt(dayOffShiftType.id),
@@ -3058,6 +3250,137 @@ const assignDayOff = async (element) => {
     assigningDayOffId.value = null
   }
 }
+// Assign day off to BOTH shifts in a merged/dual shift
+const assignDualDayOff = async (mergedElement) => {
+  const dayOffShiftType = shiftTypes.value.find((st) => {
+    const name = st.name?.toLowerCase() || ''
+    return (
+      name.includes('day off') ||
+      name.includes('dayoff') ||
+      name.includes('rest day') ||
+      name.includes('off day') ||
+      name === 'off'
+    )
+  })
+  if (!dayOffShiftType) {
+    $q.notify({
+      type: 'warning',
+      message: 'No "Day Off" shift type found.',
+      caption: 'Please create a shift type named "Day Off" in your settings.',
+      timeout: 5000,
+    })
+    return
+  }
+  const missing = mergedElement.shifts.find((s) => !s.assignmentId)
+  if (missing) {
+    $q.notify({
+      type: 'negative',
+      message: 'Cannot assign day off — assignment ID missing.',
+      timeout: 6000,
+    })
+    return
+  }
+  assigningDayOffId.value = mergedElement.id
+  const token = localStorage.getItem('access_token')
+  try {
+    // Get company ID from localStorage
+    let rawCompanyId = localStorage.getItem('selectedCompany')
+    let companyId
+    try {
+      const parsed = JSON.parse(rawCompanyId)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = rawCompanyId
+    }
+    companyId = parseInt(companyId)
+
+    // Step 1: Cancel all existing shifts — cancel/ only needs assignmentId in the URL,
+    // no site_id required, so it works regardless of which company the assignment belongs to.
+    await Promise.all(
+      mergedElement.shifts.map((s) =>
+        axios.patch(
+          `https://staging.wageyapp.com/organization/assignments/${s.assignmentId}/cancel/`,
+          { status: 'cancelled' },
+          { headers: { Authorization: `Bearer ${token}` } },
+        ),
+      ),
+    )
+
+    // Step 2: Re-assign each as day off via assign/ — creates fresh assignments under the
+    // correct company, avoiding the DoesNotExist error that reassign/ throws for cross-company assignments.
+    await axios.post(
+      'https://staging.wageyapp.com/organization/assignments/assign/',
+      {
+        company_id: companyId,
+        employee_ids: [mergedElement.userId],
+        schedules: mergedElement.shifts.map((s) => ({
+          date: s.date,
+          site_id: parseInt(s.site),
+          shift_type_id: parseInt(dayOffShiftType.id),
+          ...(s.department ? { department_id: parseInt(s.department) } : {}),
+        })),
+      },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+    )
+
+    const employeeName = getEmployeeName(mergedElement.userId)
+    $q.notify({
+      type: 'positive',
+      message: 'Day off assigned to both shifts!',
+      caption: `${employeeName}'s dual shift changed to Day Off`,
+      icon: 'event_busy',
+      timeout: 3000,
+    })
+    setTimeout(async () => {
+      await fetchData()
+      fetchLeaves()
+    }, 1500)
+  } catch (error) {
+    console.error('Failed to assign dual day off:', error.response?.data || error.message)
+    $q.notify({
+      type: 'negative',
+      message: error.response?.data?.detail || 'Failed to assign day off.',
+      timeout: 5000,
+    })
+  } finally {
+    assigningDayOffId.value = null
+  }
+}
+
+// Delete (cancel) BOTH shifts in a merged/dual shift
+const deleteDualShift = async (mergedElement) => {
+  const token = localStorage.getItem('access_token')
+  try {
+    if (!token) {
+      mergedElement.shifts.forEach((s) => {
+        shifts.value = shifts.value.filter((x) => x.id !== s.id)
+      })
+      $q.notify({ type: 'positive', message: 'Both shifts removed (local)' })
+      return
+    }
+    await Promise.all(
+      mergedElement.shifts.map((s) =>
+        axios.patch(
+          `https://staging.wageyapp.com/organization/assignments/${s.assignmentId}/cancel/`,
+          { status: 'cancelled' },
+          { headers: { Authorization: `Bearer ${token}` } },
+        ),
+      ),
+    )
+    mergedElement.shifts.forEach((s) => {
+      shifts.value = shifts.value.filter((x) => x.id !== s.id)
+    })
+    $q.notify({ type: 'positive', message: 'Both shifts cancelled successfully' })
+    setTimeout(async () => {
+      await fetchData()
+      fetchLeaves()
+    }, 1500)
+  } catch (e) {
+    console.error('Failed to cancel dual shift:', e.response?.data || e.message)
+    $q.notify({ type: 'negative', message: 'Failed to cancel shifts' })
+  }
+}
+
 // Quick direct assign from cell buttons — no modal needed
 const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
   const key = `${userId}-${dayIdx}-${type}`
@@ -3184,18 +3507,42 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
   }
 }
 const openReassignModal = (shift) => {
-  console.log('=== 🔍 OPEN UPDATE SHIFT MODAL ===')
-  console.log('📋 Shift data:', {
-    id: shift.id,
-    assignmentId: shift.assignmentId,
-    shiftTypeId: shift.shiftTypeId,
-    site: shift.site,
-    department: shift.department,
-    date: shift.date,
-    userId: shift.userId,
-    isDayOff: isDayOff(shift),
-  })
-  // Only assignmentId is strictly required to update/reassign
+  console.log('=== 🔍 OPEN UPDATE SHIFT MODAL ===', shift)
+
+  // ── Dual / merged shift ──
+  if (shift.isMerged && shift.shifts?.length > 1) {
+    const missingId = shift.shifts.find((s) => !s.assignmentId)
+    if (missingId) {
+      $q.notify({
+        type: 'negative',
+        message: 'Cannot update — missing assignment ID on one of the shifts',
+        timeout: 5000,
+      })
+      return
+    }
+    reassignData.value = {
+      assignmentId: null,
+      shiftTypeId: null,
+      siteId: null,
+      departmentId: null,
+      currentEmployee: shift.userId,
+      date: shift.shifts[0].date,
+      day: shift.day,
+      isDualShift: true,
+      dualShifts: shift.shifts.map((s) => ({
+        assignmentId: s.assignmentId,
+        shiftTypeId: s.shiftTypeId || null,
+        siteId: s.site || null,
+        departmentId: s.department || null,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      })),
+    }
+    showReassignModal.value = true
+    return
+  }
+
+  // ── Single shift ──
   if (!shift.assignmentId) {
     console.error('❌ Cannot update shift - Missing: Assignment ID')
     $q.notify({
@@ -3208,12 +3555,14 @@ const openReassignModal = (shift) => {
   }
   reassignData.value = {
     assignmentId: shift.assignmentId,
-    shiftTypeId: shift.shiftTypeId || null, // null for day off shifts — user will pick a new one
+    shiftTypeId: shift.shiftTypeId || null,
     siteId: shift.site || null,
     departmentId: shift.department || null,
     currentEmployee: shift.userId,
     date: shift.date,
     day: shift.day,
+    isDualShift: false,
+    dualShifts: [],
     originalShift: { ...shift },
   }
   console.log('✅ Update shift data ready:', reassignData.value)
@@ -3229,82 +3578,73 @@ const closeReassignModal = () => {
     currentEmployee: null,
     date: null,
     day: null,
+    isDualShift: false,
+    dualShifts: [],
     originalShift: null,
   }
 }
 const reassignShift = async () => {
   isReassigning.value = true
   const token = localStorage.getItem('access_token')
-  try {
-    const r = reassignData.value
-    console.log('🔍 Starting shift update...')
-    console.log('📋 Update data:', {
-      assignmentId: r.assignmentId,
-      assignmentIdType: typeof r.assignmentId,
-      siteId: r.siteId,
-      shiftTypeId: r.shiftTypeId,
-      departmentId: r.departmentId,
-      currentEmployee: r.currentEmployee,
-    })
-    if (!r.assignmentId) {
-      $q.notify({
-        type: 'negative',
-        message: 'Assignment ID is missing',
-      })
-      isReassigning.value = false
-      return
-    }
-    if (!r.siteId) {
-      $q.notify({
-        type: 'negative',
-        message: 'Site is required',
-      })
-      isReassigning.value = false
-      return
-    }
-    if (!r.shiftTypeId) {
-      $q.notify({
-        type: 'negative',
-        message: 'Shift type is required',
-      })
-      isReassigning.value = false
-      return
-    }
+  const r = reassignData.value
+
+  // helper to patch one assignment
+  const patchOne = (assignmentId, shiftTypeId, siteId, departmentId) => {
     const payload = {
-      assignment_id: parseInt(r.assignmentId),
-      shift_type_id: parseInt(r.shiftTypeId),
-      site_id: parseInt(r.siteId),
+      assignment_id: parseInt(assignmentId),
+      shift_type_id: parseInt(shiftTypeId),
+      site_id: parseInt(siteId),
     }
-    if (r.departmentId) {
-      payload.department_id = parseInt(r.departmentId)
-    }
-    console.log('📤 Update payload:', JSON.stringify(payload, null, 2))
-    const response = await axios.patch(
-      'https://staging.wageyapp.com/organization/assignments/reassign/',
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      },
-    )
-    console.log('✅ Shift update API response:', response.data)
-    const employeeName = getEmployeeName(r.currentEmployee)
-    const shiftTypeName = getPositionName(r.shiftTypeId)
-    $q.notify({
-      type: 'positive',
-      message: 'Shift updated successfully!',
-      caption: `${employeeName}'s shift updated to ${shiftTypeName}`,
-      icon: 'check_circle',
-      timeout: 3000,
+    if (departmentId) payload.department_id = parseInt(departmentId)
+    return axios.patch('https://staging.wageyapp.com/organization/assignments/reassign/', payload, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     })
+  }
+
+  try {
+    if (r.isDualShift) {
+      // Patch both shifts in parallel
+      await Promise.all(
+        r.dualShifts.map((s) => patchOne(s.assignmentId, s.shiftTypeId, s.siteId, s.departmentId)),
+      )
+      $q.notify({
+        type: 'positive',
+        message: 'Both shifts updated successfully!',
+        icon: 'check_circle',
+        timeout: 3000,
+      })
+    } else {
+      console.log('🔍 Starting shift update...')
+      if (!r.assignmentId) {
+        $q.notify({ type: 'negative', message: 'Assignment ID is missing' })
+        isReassigning.value = false
+        return
+      }
+      if (!r.siteId) {
+        $q.notify({ type: 'negative', message: 'Site is required' })
+        isReassigning.value = false
+        return
+      }
+      if (!r.shiftTypeId) {
+        $q.notify({ type: 'negative', message: 'Shift type is required' })
+        isReassigning.value = false
+        return
+      }
+      await patchOne(r.assignmentId, r.shiftTypeId, r.siteId, r.departmentId)
+      const employeeName = getEmployeeName(r.currentEmployee)
+      const shiftTypeName = getPositionName(r.shiftTypeId)
+      $q.notify({
+        type: 'positive',
+        message: 'Shift updated successfully!',
+        caption: `${employeeName}'s shift updated to ${shiftTypeName}`,
+        icon: 'check_circle',
+        timeout: 3000,
+      })
+    }
     closeReassignModal()
-    console.log('🔄 Force refreshing data from server...')
     shifts.value = []
     await new Promise((resolve) => setTimeout(resolve, 500))
     await fetchData()
-    console.log('✅ Data refresh complete. New shifts count:', shifts.value.length)
   } catch (error) {
     console.error('❌ Reassign failed:', error)
     console.error('❌ Error response:', error.response?.data)
@@ -3729,6 +4069,7 @@ const filterEmployees = () => {}
 }
 .schedule-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   background: white;
 }
@@ -3736,7 +4077,7 @@ const filterEmployees = () => {}
   background: #f9fafb;
 }
 .schedule-table th {
-  padding: 12px 10px;
+  padding: 8px 4px;
   text-align: left;
   font-weight: 600;
   color: #374151;
@@ -3745,12 +4086,12 @@ const filterEmployees = () => {}
   white-space: nowrap;
 }
 .employee-col {
-  width: 180px;
-  min-width: 180px;
+  width: 130px;
+  min-width: 0;
 }
 .day-col {
-  width: 120px;
-  min-width: 120px;
+  width: auto;
+  min-width: 0;
   text-align: center !important;
 }
 .table-row {
@@ -3761,17 +4102,17 @@ const filterEmployees = () => {}
   background: #f9fafb;
 }
 .employee-cell {
-  padding: 12px 10px;
+  padding: 8px 4px;
 }
 .employee-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 .employee-avatar {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
 }
 .avatar-text {
   color: white;
@@ -3781,22 +4122,23 @@ const filterEmployees = () => {}
 .employee-name {
   font-weight: 500;
   color: #1f2937;
-  font-size: 13px;
+  font-size: 11px;
+  word-break: break-word;
 }
 .schedule-cell {
-  padding: 10px 8px;
+  padding: 6px 4px;
   vertical-align: top;
 }
 .shifts-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 50px;
+  gap: 4px;
+  min-height: 0;
 }
 .shift-badge {
   background: #dbeafe;
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 6px;
+  padding: 5px 6px;
   position: relative;
   transition: all 0.2s;
 }
@@ -3805,23 +4147,30 @@ const filterEmployees = () => {}
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 .shift-time {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #1e40af;
-  margin-bottom: 4px;
+  margin-bottom: 1px;
   line-height: 1.3;
+  white-space: normal;
+  word-break: break-word;
 }
 .shift-position {
-  font-size: 11px;
+  font-size: 10px;
   color: #3b82f6;
+  line-height: 1.3;
+  white-space: normal;
+  word-break: break-word;
 }
 .shift-site {
-  font-size: 11px;
+  font-size: 10px;
   color: #6b7280;
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
+  white-space: normal;
+  word-break: break-word;
 }
 /* Day Off Shift Styles */
 .shift-badge-dayoff {
@@ -3834,6 +4183,56 @@ const filterEmployees = () => {}
   border-color: #f57c00 !important;
 }
 /* Leave badge */
+/* Merged / dual-shift badge */
+.shift-badge-merged {
+  border-left: 3px solid #7c3aed;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  padding: 5px 7px;
+}
+.merged-shift-separator {
+  border-top: 1px dashed #c4b5fd;
+  margin: 3px 0;
+}
+.shift-badge-merged .shift-time {
+  font-size: 11px;
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.3;
+}
+.shift-badge-merged .shift-site {
+  font-size: 10px;
+  white-space: normal;
+  word-break: break-word;
+}
+.shift-badge-merged .shift-position {
+  font-size: 10px;
+  white-space: normal;
+  word-break: break-word;
+}
+.merged-shift-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #7c3aed;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.merged-icon {
+  color: #7c3aed;
+}
+.merged-shift-row {
+  padding: 2px 0;
+}
+.merged-sub-actions {
+  margin-top: 2px;
+}
+.merged-divider {
+  margin: 4px 0;
+  opacity: 0.3;
+}
 .shift-badge-leave {
   background: linear-gradient(135deg, #f3e5f5, #ede7f6);
   border: 1.5px solid #ce93d8;
