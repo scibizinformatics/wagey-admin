@@ -193,7 +193,7 @@
                             icon="close"
                             size="xs"
                             class="action-btn delete-btn"
-                            @click.stop="cancelLeave(element)"
+                            @click.stop="confirmDelete('leave', element)"
                           >
                             <q-tooltip>Cancel Leave</q-tooltip>
                           </q-btn>
@@ -224,7 +224,7 @@
                             icon="close"
                             size="xs"
                             class="action-btn delete-btn"
-                            @click.stop="deleteShift(element.id)"
+                            @click.stop="confirmDelete('single', element.id)"
                           >
                             <q-tooltip>Remove Day Off</q-tooltip>
                           </q-btn>
@@ -280,7 +280,7 @@
                             icon="close"
                             size="xs"
                             class="action-btn delete-btn"
-                            @click.stop="deleteDualShift(element)"
+                            @click.stop="confirmDelete('dual', element)"
                           >
                             <q-tooltip>Remove Both Shifts</q-tooltip>
                           </q-btn>
@@ -330,7 +330,7 @@
                             icon="close"
                             size="xs"
                             class="action-btn delete-btn"
-                            @click.stop="deleteShift(element.id)"
+                            @click.stop="confirmDelete('single', element.id)"
                           />
                         </div>
                       </template>
@@ -401,7 +401,34 @@
         </div>
       </div>
     </div>
+    <!-- Delete Confirmation Modal -->
+    <q-dialog v-model="showDeleteModal" persistent>
+      <q-card class="modal-card" style="min-width: 320px; max-width: 420px">
+        <q-card-section class="modal-header">
+          <div class="modal-title" style="display: flex; align-items: center; gap: 8px">
+            <q-icon name="warning" color="negative" size="22px" />
+            Delete Schedule
+          </div>
+        </q-card-section>
+        <q-card-section class="modal-body">
+          <p style="margin: 0; font-size: 15px; color: #374151">
+            Are you sure you want to delete this schedule? This action cannot be undone.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right" class="modal-actions" style="padding: 12px 16px; gap: 8px">
+          <q-btn flat label="No, Keep It" class="cancel-btn" @click="showDeleteModal = false" />
+          <q-btn
+            unelevated
+            color="negative"
+            label="Yes, Delete"
+            class="submit-btn"
+            @click="confirmDeleteAction"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
     <!-- Add Schedule Modal -->
+
     <q-dialog v-model="showAddModal" persistent>
       <q-card class="modal-card">
         <q-card-section class="modal-header">
@@ -1130,6 +1157,8 @@ const dayOptions = days.map((d, i) => ({ label: d, value: i }))
 const showAddModal = ref(false)
 const showQuickAddModal = ref(false)
 const showReassignModal = ref(false)
+const showDeleteModal = ref(false)
+const pendingDelete = ref(null) // { type: 'single' | 'dual' | 'leave', payload: any }
 const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
 const assigningDayOffId = ref(null) // tracks per-element shift id
@@ -2979,6 +3008,18 @@ const openAddModal = () => {
   showAddModal.value = true
 }
 const closeAddModal = () => (showAddModal.value = false)
+const confirmDelete = (type, payload) => {
+  pendingDelete.value = { type, payload }
+  showDeleteModal.value = true
+}
+const confirmDeleteAction = async () => {
+  showDeleteModal.value = false
+  const { type, payload } = pendingDelete.value
+  if (type === 'single') await deleteShift(payload)
+  else if (type === 'dual') await deleteDualShift(payload)
+  else if (type === 'leave') await cancelLeave(payload)
+  pendingDelete.value = null
+}
 const deleteShift = async (id) => {
   try {
     const token = localStorage.getItem('access_token')
