@@ -141,7 +141,6 @@ export default {
         { label: 'Payroll', icon: 'paid', to: '/payroll' },
         { label: 'Requests', icon: 'mark_email_unread', to: '/requests' },
         { label: 'Swap Requests', icon: 'swap_horiz', to: '/swap-requests' },
-        { label: 'Cash Advance', icon: 'account_balance_wallet', to: '/cash-advance' },
         { label: 'Invite', icon: 'email', to: '/invite' },
         { label: 'Announcement', icon: 'announcement', to: '/announcements' },
         { label: 'Admin Settings', icon: 'settings', to: '/admin-settings' },
