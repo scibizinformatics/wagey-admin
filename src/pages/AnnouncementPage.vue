@@ -124,12 +124,12 @@
           >
             <template v-slot:header>
               <q-tr class="table-header-row">
-                <q-th class="table-header-cell">Title</q-th>
-                <q-th class="table-header-cell">Type</q-th>
-                <q-th class="table-header-cell">Message</q-th>
-                <q-th class="table-header-cell">Target</q-th>
-                <q-th class="table-header-cell">Schedule</q-th>
-                <q-th class="table-header-cell">Status</q-th>
+                <q-th class="table-header-cell col-title">Title</q-th>
+                <q-th class="table-header-cell col-type">Type</q-th>
+                <q-th class="table-header-cell col-message">Message</q-th>
+                <q-th class="table-header-cell col-target">Target</q-th>
+                <q-th class="table-header-cell col-schedule">Schedule</q-th>
+                <q-th class="table-header-cell col-status">Status</q-th>
               </q-tr>
             </template>
 
@@ -138,18 +138,18 @@
                 class="table-body-row"
                 :class="{ 'urgent-row': props.row.announcement_type === 'urgent' }"
               >
-                <q-td class="table-body-cell title-cell">
+                <q-td class="table-body-cell title-cell col-title">
                   <span class="announcement-title-text">{{ props.row.title }}</span>
                 </q-td>
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell col-type">
                   <div :class="['type-badge', getTypeBadgeClass(props.row.announcement_type)]">
                     {{ props.row.announcement_type }}
                   </div>
                 </q-td>
-                <q-td class="table-body-cell message-cell">
+                <q-td class="table-body-cell message-cell col-message">
                   <span class="message-preview">{{ props.row.message }}</span>
                 </q-td>
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell col-target">
                   <span v-if="props.row.target_everyone" class="target-everyone">
                     <q-icon name="group" size="14px" /> Everyone
                   </span>
@@ -189,7 +189,7 @@
                     </q-chip>
                   </div>
                 </q-td>
-                <q-td class="table-body-cell schedule-cell">
+                <q-td class="table-body-cell schedule-cell col-schedule">
                   <div v-if="props.row.start_at || props.row.end_at" class="schedule-info">
                     <div v-if="props.row.start_at" class="time-item">
                       <q-icon name="schedule" size="13px" />
@@ -202,7 +202,7 @@
                   </div>
                   <span v-else class="no-schedule">—</span>
                 </q-td>
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell col-status">
                   <div
                     :class="[
                       'status-badge',
@@ -235,7 +235,7 @@
           <q-btn icon="close" flat round class="modal-close-btn" @click="closeDialog" />
         </q-card-section>
         <q-separator />
-        <q-card-section class="modal-content" style="max-height: 65vh; overflow-y: auto">
+        <q-card-section class="modal-content" style="max-height: 75vh; overflow-y: auto">
           <div class="form-sections">
             <div class="form-section">
               <div class="section-title">Announcement Details</div>
@@ -549,7 +549,7 @@ export default {
       try {
         const token = localStorage.getItem('access_token')
         const selectedCompany = localStorage.getItem('selectedCompany')
-        const res = await api.get('https://staging.wageyapp.com/user/positions/', {
+        const res = await api.get('/user/positions/', {
           headers: { Authorization: `Bearer ${token}` },
           params: { company: selectedCompany },
         })
@@ -579,10 +579,9 @@ export default {
         }
         if (!token || !companyId) return
         loadingUsers.value = true
-        const response = await api.get(
-          `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
+        const response = await api.get(`/user/companies/${companyId}/employees/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
         users.value = (response.data || []).map((u) => {
           const fullName =
             u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || `User #${u.id}`
@@ -602,7 +601,7 @@ export default {
       try {
         const token = localStorage.getItem('access_token')
         const selectedCompany = localStorage.getItem('selectedCompany')
-        const res = await api.get('https://staging.wageyapp.com/user/user-roles/', {
+        const res = await api.get('/user/user-roles/', {
           headers: { Authorization: `Bearer ${token}` },
           params: { company: selectedCompany },
         })
@@ -632,7 +631,7 @@ export default {
           })
           return
         }
-        const res = await api.get('https://staging.wageyapp.com/communication/announcements/', {
+        const res = await api.get('/communication/announcements/', {
           headers: { Authorization: `Bearer ${token}` },
         })
         const data = Array.isArray(res.data) ? res.data : res.data.results || res.data.data || []
@@ -672,30 +671,45 @@ export default {
           /* comment */
         }
 
+        const targetEveryone = formData.value.target_everyone ?? true
         const payload = {
           title: formData.value.title,
           message: formData.value.message,
           announcement_type:
             typeof formData.value.announcement_type === 'object'
               ? formData.value.announcement_type.value
-              : formData.value.announcement_type,
+              : formData.value.announcement_type || 'general',
           is_active: formData.value.is_active ?? true,
-          start_at: formData.value.start_at
-            ? new Date(formData.value.start_at).toISOString()
-            : null,
-          end_at: formData.value.end_at ? new Date(formData.value.end_at).toISOString() : null,
-          target_everyone: formData.value.target_everyone ?? true,
-          target_users: formData.value.target_users.map((u) => (typeof u === 'object' ? u.id : u)),
-          target_roles: formData.value.target_roles.map((r) => (typeof r === 'object' ? r.id : r)),
-          target_positions: formData.value.target_positions.map((p) =>
-            typeof p === 'object' ? p.id : p,
-          ),
+          target_everyone: targetEveryone,
           company: parseInt(companyId),
         }
 
+        // Only include schedule fields if they have values
+        if (formData.value.start_at) {
+          payload.start_at = new Date(formData.value.start_at).toISOString()
+        }
+        if (formData.value.end_at) {
+          payload.end_at = new Date(formData.value.end_at).toISOString()
+        }
+
+        // Only include targeting arrays if not sending to everyone
+        if (!targetEveryone) {
+          payload.target_users = formData.value.target_users.map((u) =>
+            typeof u === 'object' ? u.id : u,
+          )
+          payload.target_roles = formData.value.target_roles.map((r) =>
+            typeof r === 'object' ? r.id : r,
+          )
+          payload.target_positions = formData.value.target_positions.map((p) =>
+            typeof p === 'object' ? p.id : p,
+          )
+        }
+
+        console.log('Sending payload:', JSON.stringify(payload, null, 2))
+
         const url = editingAnnouncement.value
-          ? `https://staging.wageyapp.com/communication/announcements/${editingAnnouncement.value.id}/`
-          : 'https://staging.wageyapp.com/communication/announcements/create/'
+          ? `/communication/announcements/${editingAnnouncement.value.id}/`
+          : '/communication/announcements/create/'
         const method = editingAnnouncement.value ? 'put' : 'post'
 
         await api[method](url, payload, { headers: { Authorization: `Bearer ${token}` } })
@@ -712,11 +726,16 @@ export default {
         showDialog.value = false
       } catch (error) {
         console.error('Save error:', error)
-        $q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || error.message || 'Failed to save announcement',
-          position: 'top',
-        })
+        const data = error.response?.data
+        let errMsg = 'Failed to save announcement'
+        if (data && typeof data === 'object') {
+          // Django REST returns field errors as { field: ["msg"] } or { detail: "msg" }
+          const first = Object.values(data)[0]
+          errMsg = Array.isArray(first) ? first[0] : data.detail || data.message || errMsg
+        } else if (typeof data === 'string' && !data.startsWith('<')) {
+          errMsg = data
+        }
+        $q.notify({ type: 'negative', message: errMsg, position: 'top' })
       } finally {
         submitting.value = false
       }
@@ -731,10 +750,9 @@ export default {
       deleting.value = true
       try {
         const token = localStorage.getItem('access_token')
-        await api.delete(
-          `https://staging.wageyapp.com/communication/announcements/${announcementToDelete.value.id}/`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
+        await api.delete(`/communication/announcements/${announcementToDelete.value.id}/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
         $q.notify({
           type: 'positive',
           message: 'Announcement deleted successfully',
@@ -757,6 +775,7 @@ export default {
 
     const openCreateDialog = () => {
       editingAnnouncement.value = null
+      submitting.value = false
       formData.value = {
         title: '',
         message: '',
@@ -784,7 +803,10 @@ export default {
       showDialog.value = true
     }
 
-    const closeDialog = () => (showDialog.value = false)
+    const closeDialog = () => {
+      showDialog.value = false
+      submitting.value = false
+    }
 
     onMounted(fetchAnnouncements)
 
@@ -1045,13 +1067,40 @@ export default {
 }
 
 .table-header-cell {
-  padding: 12px 10px;
+  padding: 12px 16px;
   font-size: 13px;
   font-weight: 600;
   color: #374151;
   text-align: left;
   border: none;
   white-space: nowrap;
+}
+
+/* Column widths */
+.col-title {
+  width: 15%;
+  min-width: 120px;
+}
+.col-type {
+  width: 12%;
+  min-width: 100px;
+}
+.col-message {
+  width: 28%;
+  min-width: 160px;
+}
+.col-target {
+  width: 18%;
+  min-width: 120px;
+}
+.col-schedule {
+  width: 17%;
+  min-width: 140px;
+}
+.col-status {
+  width: 10%;
+  min-width: 90px;
+  text-align: center;
 }
 
 .table-body-row {
@@ -1068,11 +1117,15 @@ export default {
 }
 
 .table-body-cell {
-  padding: 12px 10px;
+  padding: 14px 16px;
   font-size: 13px;
   color: #374151;
   border: none;
   vertical-align: middle;
+}
+
+.col-status {
+  text-align: center;
 }
 
 .title-cell .announcement-title-text {
@@ -1088,7 +1141,7 @@ export default {
   overflow: hidden;
   color: #6b7280;
   font-size: 12px;
-  max-width: 260px;
+  max-width: 100%;
 }
 
 .target-everyone {
@@ -1337,43 +1390,211 @@ export default {
   background: #fafafa;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
+/* ── Responsive ─────────────────────────────────────────── */
+
+/* 1440px – large desktop */
+@media (min-width: 1440px) {
+  .dashboard-container {
+    max-width: 1400px;
+    padding: 24px 32px;
+  }
+
+  .page-header {
+    padding: 20px 24px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
   .stats-section {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+
+  .stats-card {
+    padding: 20px;
+  }
+
+  .stats-amount {
+    font-size: 32px;
+  }
+
+  .stats-icon-wrapper {
+    width: 56px;
+    height: 56px;
+  }
+
+  .stats-icon {
+    font-size: 28px;
+  }
+
+  .table-header {
+    padding: 20px 24px;
+  }
+
+  .table-title {
+    font-size: 19px;
+  }
+
+  .type-select {
+    min-width: 220px;
+  }
+
+  .modern-table-container {
+    margin: 0 20px 20px 20px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 14px 14px;
+    font-size: 14px;
+  }
+
+  .header-search {
+    min-width: 240px;
+    max-width: 320px;
+  }
+
+  .dialog-modal {
+    width: 720px;
   }
 }
 
+/* 1024px – small desktop / large tablet landscape */
+@media (max-width: 1024px) {
+  .dashboard-container {
+    padding: 14px 16px;
+  }
+
+  .stats-section {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stats-card {
+    padding: 14px;
+  }
+
+  .stats-amount {
+    font-size: 22px;
+  }
+
+  .stats-icon-wrapper {
+    width: 42px;
+    height: 42px;
+  }
+
+  .header-search {
+    min-width: 160px;
+    max-width: 200px;
+  }
+
+  .type-select {
+    min-width: 160px;
+  }
+
+  .modern-table-container {
+    overflow-x: auto;
+  }
+
+  .announcement-table {
+    min-width: 700px;
+  }
+
+  .message-cell .message-preview {
+    max-width: 180px;
+  }
+
+  .dialog-modal {
+    width: 580px;
+  }
+}
+
+/* 768px – tablet portrait */
 @media (max-width: 768px) {
   .dashboard-container {
-    padding: 12px;
+    padding: 10px 12px;
+  }
+
+  /* Header */
+  .page-header {
+    padding: 14px;
+    margin-top: 10px;
+    margin-bottom: 12px;
   }
 
   .header-content {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
+  }
+
+  .page-title {
+    font-size: 18px;
   }
 
   .header-actions {
-    flex-direction: column;
-    gap: 12px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  .add-announcement-btn,
-  .header-search,
-  .type-select {
-    width: 100%;
+  .add-announcement-btn {
+    flex: 1 1 auto;
+    min-width: 140px;
+  }
+
+  .header-search {
+    flex: 2 1 160px;
+    min-width: 140px;
     max-width: 100%;
   }
 
+  /* Stats */
   .stats-section {
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 16px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
   }
 
+  .stats-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .stats-icon-wrapper {
+    width: 38px;
+    height: 38px;
+  }
+
+  .stats-icon {
+    font-size: 20px;
+  }
+
+  .stats-amount {
+    font-size: 20px;
+  }
+
+  .stats-label {
+    font-size: 11px;
+  }
+
+  /* Table */
   .table-header {
     padding: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .table-title {
+    font-size: 15px;
+  }
+
+  .type-select {
+    width: 100%;
+    min-width: unset;
   }
 
   .modern-table-container {
@@ -1383,11 +1604,29 @@ export default {
   }
 
   .announcement-table {
-    min-width: 800px;
+    min-width: 640px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .message-cell .message-preview {
+    max-width: 140px;
+    font-size: 11px;
+  }
+
+  /* Modal */
+  .dialog-modal {
+    width: 95vw;
+    max-width: 95vw;
   }
 
   .form-grid {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .col-span-2 {
@@ -1395,23 +1634,9 @@ export default {
   }
 
   .toggle-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-}
-
-@media (max-width: 480px) {
-  .stats-section {
-    grid-template-columns: 1fr;
-  }
-
-  .page-title {
-    font-size: 18px;
-  }
-
-  .stats-amount {
-    font-size: 22px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
   }
 
   .modal-card {
