@@ -593,34 +593,6 @@
               </template>
             </q-select>
 
-            <!-- Cost Center Dropdown -->
-            <q-select
-              filled
-              dense
-              v-model="newRecord.cost_center_id"
-              :options="costCenterOptions"
-              label="Cost Center"
-              option-label="label"
-              option-value="value"
-              emit-value
-              map-options
-              clearable
-              :loading="filtersLoading"
-              class="form-field q-mb-sm"
-              behavior="menu"
-              menu-anchor="bottom left"
-              menu-self="top left"
-            >
-              <template v-slot:prepend>
-                <q-icon name="account_balance_wallet" size="xs" />
-              </template>
-              <template v-slot:no-option>
-                <q-item>
-                  <q-item-section class="text-grey">No cost centers found</q-item-section>
-                </q-item>
-              </template>
-            </q-select>
-
             <!-- Schedule Info (Compact) -->
             <q-banner
               v-if="employeeSchedule && newRecord.employee && newRecord.date"
