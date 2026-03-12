@@ -24,6 +24,7 @@ module.exports = function (ctx) {
       esbuildTarget: {
         browser: ['es2022', 'firefox115', 'chrome115', 'safari14'],
         node: 'node20',
+        favicon: 'favicon.ico',
       },
       // webpackTranspile: false,
       // webpackTranspileDependencies: [],
@@ -46,6 +47,11 @@ module.exports = function (ctx) {
           secure: false,
         },
         '/organization': {
+          target: 'https://staging.wageyapp.com',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/communication': {
           target: 'https://staging.wageyapp.com',
           changeOrigin: true,
           secure: false,
