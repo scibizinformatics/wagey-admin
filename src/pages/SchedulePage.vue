@@ -658,12 +658,12 @@
                 <span class="legend-text">Scheduled working days</span>
               </div>
               <q-date
-                v-model="recurringCalendarModel"
-                :options="recurringCalendarOptions"
-                :events="recurringCalendarDates"
-                event-color="primary"
+                v-model="recurringCalendarDates"
+                multiple
+                mask="YYYY/MM/DD"
                 minimal
                 readonly
+                no-unset
                 :default-year-month="recurringCalendarDefaultMonth"
                 class="recurring-calendar"
               />
@@ -1357,9 +1357,12 @@ const onRecurringTemplateChange = (templateId) => {
     newSchedule.value.department = template.department
     quickAdd.value.department = template.department
   }
-  // 🆕 ADD: Auto-fill date range from template
+  // Auto-fill date range from template; default to today if no start_date
   if (template.start_date) {
     newSchedule.value.recurringStartDate = template.start_date
+  } else if (!newSchedule.value.recurringStartDate) {
+    const now = new Date()
+    newSchedule.value.recurringStartDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   }
   if (template.end_date) {
     newSchedule.value.recurringEndDate = template.end_date
@@ -1396,24 +1399,27 @@ const WEEKDAY_MAP = {
   saturday: 6,
 }
 
-const recurringCalendarDates = computed(() => {
-  const startStr = newSchedule.value.recurringStartDate
-  const endStr = newSchedule.value.recurringEndDate
-  const weekdays = newSchedule.value.weekdays
+const buildRecurringDates = (startStr, endStr, weekdays, interval) => {
+  if (!weekdays || weekdays.length === 0) return []
 
-  if (!startStr || !endStr || !weekdays || weekdays.length === 0) return []
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const oneYearLater = new Date(now)
+  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1)
+  const defaultEndStr = `${oneYearLater.getFullYear()}-${String(oneYearLater.getMonth() + 1).padStart(2, '0')}-${String(oneYearLater.getDate()).padStart(2, '0')}`
 
-  const start = new Date(startStr + 'T00:00:00')
-  const end = new Date(endStr + 'T00:00:00')
-  const interval = newSchedule.value.repeatInterval || 1
+  const resolvedStart = startStr || todayStr
+  const resolvedEnd = endStr || defaultEndStr
+
+  const start = new Date(resolvedStart + 'T00:00:00')
+  const end = new Date(resolvedEnd + 'T00:00:00')
+  const repeatEvery = interval || 1
   const targetDays = weekdays
     .map((d) => WEEKDAY_MAP[d.toLowerCase()])
     .filter((d) => d !== undefined)
   const dates = []
 
-  // Walk through each week by interval
   let weekStart = new Date(start)
-  // Find the Monday of the start week
   const dayOfWeek = weekStart.getDay()
   const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
   weekStart.setDate(weekStart.getDate() + diffToMonday)
@@ -1421,10 +1427,8 @@ const recurringCalendarDates = computed(() => {
   while (weekStart <= end) {
     for (const targetDay of targetDays) {
       const date = new Date(weekStart)
-      // targetDay: 0=Sun,1=Mon...6=Sat. Monday is start of week (offset 0).
       const offset = targetDay === 0 ? 6 : targetDay - 1
       date.setDate(weekStart.getDate() + offset)
-
       if (date >= start && date <= end) {
         const yyyy = date.getFullYear()
         const mm = String(date.getMonth() + 1).padStart(2, '0')
@@ -1432,10 +1436,24 @@ const recurringCalendarDates = computed(() => {
         dates.push(`${yyyy}/${mm}/${dd}`)
       }
     }
-    weekStart.setDate(weekStart.getDate() + 7 * interval)
+    weekStart.setDate(weekStart.getDate() + 7 * repeatEvery)
   }
-
   return dates
+}
+
+// Writable computed so q-date multiple v-model works (readonly: ignore writes)
+const recurringCalendarDates = computed({
+  get() {
+    return buildRecurringDates(
+      newSchedule.value.recurringStartDate,
+      newSchedule.value.recurringEndDate,
+      newSchedule.value.weekdays,
+      newSchedule.value.repeatInterval,
+    )
+  },
+  set() {
+    // readonly — ignore any writes from q-date (it's readonly anyway)
+  },
 })
 
 const recurringCalendarOptions = computed(() => {
