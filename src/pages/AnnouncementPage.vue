@@ -1,351 +1,417 @@
 <template>
-  <q-page class="announcements-page">
-    <!-- Header Section -->
-    <div class="page-header">
-      <div class="header-content">
-        <!-- Title Section -->
-        <div class="title-section">
-          <h1 class="page-title">Announcements</h1>
+  <q-page class="announcement-dashboard">
+    <div class="dashboard-container">
+      <!-- Header Section -->
+      <div class="page-header">
+        <div class="header-content">
+          <div class="header-left">
+            <h1 class="page-title">Announcements</h1>
+          </div>
+          <div class="header-actions">
+            <q-btn
+              color="primary"
+              label="New Announcement"
+              icon="add"
+              class="add-announcement-btn"
+              @click="openCreateDialog"
+            />
+            <q-input
+              v-model="searchQuery"
+              placeholder="Search announcements..."
+              class="header-search"
+              dense
+              outlined
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" class="search-icon" />
+              </template>
+            </q-input>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Stats Section -->
-    <!-- <div class="stats-section">
-      <div class="stats-grid">
-        <q-card class="stat-card">
-          <q-card-section class="stat-content">
-            <div class="stat-icon-wrapper total">
-              <q-icon name="announcement" size="28px" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ announcements.length }}</div>
-              <div class="stat-label">Total Announcements</div>
-            </div>
-          </q-card-section>
-        </q-card>
+      <!-- Stats Cards -->
+      <div class="stats-section">
+        <div class="stats-card total-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="announcement" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ announcements.length }}</div>
+            <div class="stats-label">Total Announcements</div>
+          </div>
+        </div>
 
-        <q-card class="stat-card">
-          <q-card-section class="stat-content">
-            <div class="stat-icon-wrapper active">
-              <q-icon name="check_circle" size="28px" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ activeCount }}</div>
-              <div class="stat-label">Active</div>
-            </div>
-          </q-card-section>
-        </q-card>
+        <div class="stats-card active-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="check_circle" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ activeCount }}</div>
+            <div class="stats-label">Active</div>
+          </div>
+        </div>
 
-        <q-card class="stat-card">
-          <q-card-section class="stat-content">
-            <div class="stat-icon-wrapper scheduled">
-              <q-icon name="schedule" size="28px" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ scheduledCount }}</div>
-              <div class="stat-label">Scheduled</div>
-            </div>
-          </q-card-section>
-        </q-card>
+        <div class="stats-card scheduled-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="schedule" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ scheduledCount }}</div>
+            <div class="stats-label">Scheduled</div>
+          </div>
+        </div>
 
-        <q-card class="stat-card">
-          <q-card-section class="stat-content">
-            <div class="stat-icon-wrapper urgent">
-              <q-icon name="priority_high" size="28px" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ urgentCount }}</div>
-              <div class="stat-label">Urgent</div>
-            </div>
-          </q-card-section>
-        </q-card>
-      </div>
-    </div>-->
-
-    <!-- Filter Section -->
-    <div class="filter-section">
-      <div class="filter-content">
-        <q-input
-          v-model="searchQuery"
-          outlined
-          placeholder="Search announcements..."
-          dense
-          class="search-input"
-        >
-          <template v-slot:prepend>
-            <q-icon name="search" />
-          </template>
-        </q-input>
-        <q-select
-          v-model="typeFilter"
-          :options="typeOptions"
-          outlined
-          dense
-          label="Type"
-          class="filter-select"
-        />
-        <q-btn
-          color="primary"
-          label="New Announcement"
-          icon="add"
-          unelevated
-          @click="openCreateDialog"
-          class="add-btn"
-        />
-      </div>
-    </div>
-
-    <!-- Content Section -->
-    <div class="content-section">
-      <q-spinner v-if="loading" size="lg" color="primary" class="loading-spinner" />
-
-      <div v-else-if="filteredAnnouncements.length === 0" class="empty-state">
-        <q-icon name="inbox" size="80px" color="grey-4" />
-        <div class="empty-title">No announcements found</div>
-        <div class="empty-subtitle">Create your first announcement to get started</div>
+        <div class="stats-card urgent-card">
+          <div class="stats-icon-wrapper">
+            <q-icon name="priority_high" class="stats-icon" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-amount">{{ urgentCount }}</div>
+            <div class="stats-label">Urgent</div>
+          </div>
+        </div>
       </div>
 
-      <div v-else class="announcements-grid">
-        <q-card
-          v-for="a in filteredAnnouncements"
-          :key="a.id"
-          class="announcement-card"
-          :class="{ urgent: a.announcement_type === 'urgent' }"
-        >
-          <q-card-section class="card-header">
-            <div class="card-header-top">
-              <div class="header-chips">
-                <q-chip
-                  :color="getTypeColor(a.announcement_type)"
-                  text-color="white"
-                  dense
-                  size="sm"
-                  class="type-chip"
-                >
-                  {{ a.announcement_type }}
-                </q-chip>
-                <q-badge :color="a.is_active ? 'green' : 'grey'" class="status-badge">
-                  {{ a.is_active ? 'Active' : 'Inactive' }}
-                </q-badge>
-              </div>
-            </div>
-          </q-card-section>
+      <!-- Main Table Section -->
+      <div class="table-section">
+        <div class="table-header">
+          <div class="table-title-section">
+            <h2 class="table-title">Announcement Overview</h2>
+          </div>
+          <q-select
+            v-model="typeFilter"
+            :options="typeOptions"
+            option-label="label"
+            option-value="value"
+            emit-value
+            map-options
+            label="Filter by Type"
+            class="type-select"
+            dense
+            outlined
+            clearable
+          >
+            <template v-slot:prepend>
+              <q-icon name="filter_list" />
+            </template>
+          </q-select>
+        </div>
 
-          <q-card-section class="card-content">
-            <h3 class="announcement-title">{{ a.title }}</h3>
-            <p class="announcement-message">{{ a.message }}</p>
+        <!-- Loading -->
+        <div v-if="loading" class="loading-wrapper">
+          <q-spinner size="lg" color="primary" />
+        </div>
 
-            <div v-if="!a.target_everyone" class="targeting-section">
-              <div class="targeting-chips">
-                <q-chip
-                  v-for="(pos, idx) in a.target_positions"
-                  :key="`pos-${idx}`"
-                  size="sm"
-                  dense
-                  color="blue-1"
-                  text-color="blue-9"
-                  icon="work"
-                >
-                  {{ getPositionName(pos) }}
-                </q-chip>
-                <q-chip
-                  v-for="(role, idx) in a.target_roles"
-                  :key="`role-${idx}`"
-                  size="sm"
-                  dense
-                  color="purple-1"
-                  text-color="purple-9"
-                  icon="badge"
-                >
-                  {{ getRoleName(role) }}
-                </q-chip>
-                <q-chip
-                  v-for="(user, idx) in a.target_users"
-                  :key="`user-${idx}`"
-                  size="sm"
-                  dense
-                  color="green-1"
-                  text-color="green-9"
-                  icon="person"
-                >
-                  {{ getUserName(user) }}
-                </q-chip>
-              </div>
-            </div>
-          </q-card-section>
+        <!-- Empty State -->
+        <div v-else-if="filteredAnnouncements.length === 0" class="empty-state">
+          <q-icon name="inbox" size="80px" color="grey-4" />
+          <div class="empty-title">No announcements found</div>
+          <div class="empty-subtitle">Create your first announcement to get started</div>
+        </div>
 
-          <q-separator />
+        <!-- Announcements Table -->
+        <div v-else class="modern-table-container">
+          <q-table
+            :rows="filteredAnnouncements"
+            :columns="columns"
+            row-key="id"
+            flat
+            no-data-label="No announcements found"
+            class="announcement-table"
+            hide-pagination
+            :rows-per-page-options="[0]"
+          >
+            <template v-slot:header>
+              <q-tr class="table-header-row">
+                <q-th class="table-header-cell">Title</q-th>
+                <q-th class="table-header-cell">Type</q-th>
+                <q-th class="table-header-cell">Message</q-th>
+                <q-th class="table-header-cell">Target</q-th>
+                <q-th class="table-header-cell">Schedule</q-th>
+                <q-th class="table-header-cell">Status</q-th>
+              </q-tr>
+            </template>
 
-          <q-card-section class="card-footer">
-            <div class="timing-info">
-              <div v-if="a.start_at" class="time-item">
-                <q-icon name="schedule" size="16px" />
-                <span>{{ formatDate(a.start_at) }}</span>
-              </div>
-              <div v-if="a.end_at" class="time-item">
-                <q-icon name="event" size="16px" />
-                <span>Ends {{ formatDate(a.end_at) }}</span>
-              </div>
-            </div>
-            <div class="engagement-info">
-              <q-icon name="visibility" size="16px" />
-              <span>{{ a.views || 0 }} views</span>
-            </div>
-          </q-card-section>
-        </q-card>
+            <template v-slot:body="props">
+              <q-tr
+                class="table-body-row"
+                :class="{ 'urgent-row': props.row.announcement_type === 'urgent' }"
+              >
+                <q-td class="table-body-cell title-cell">
+                  <span class="announcement-title-text">{{ props.row.title }}</span>
+                </q-td>
+                <q-td class="table-body-cell">
+                  <div :class="['type-badge', getTypeBadgeClass(props.row.announcement_type)]">
+                    {{ props.row.announcement_type }}
+                  </div>
+                </q-td>
+                <q-td class="table-body-cell message-cell">
+                  <span class="message-preview">{{ props.row.message }}</span>
+                </q-td>
+                <q-td class="table-body-cell">
+                  <span v-if="props.row.target_everyone" class="target-everyone">
+                    <q-icon name="group" size="14px" /> Everyone
+                  </span>
+                  <div v-else class="target-chips">
+                    <q-chip
+                      v-for="(pos, idx) in props.row.target_positions"
+                      :key="`pos-${idx}`"
+                      size="xs"
+                      dense
+                      color="blue-1"
+                      text-color="blue-9"
+                      icon="work"
+                    >
+                      {{ getPositionName(pos) }}
+                    </q-chip>
+                    <q-chip
+                      v-for="(role, idx) in props.row.target_roles"
+                      :key="`role-${idx}`"
+                      size="xs"
+                      dense
+                      color="purple-1"
+                      text-color="purple-9"
+                      icon="badge"
+                    >
+                      {{ getRoleName(role) }}
+                    </q-chip>
+                    <q-chip
+                      v-for="(user, idx) in props.row.target_users"
+                      :key="`user-${idx}`"
+                      size="xs"
+                      dense
+                      color="green-1"
+                      text-color="green-9"
+                      icon="person"
+                    >
+                      {{ getUserName(user) }}
+                    </q-chip>
+                  </div>
+                </q-td>
+                <q-td class="table-body-cell schedule-cell">
+                  <div v-if="props.row.start_at || props.row.end_at" class="schedule-info">
+                    <div v-if="props.row.start_at" class="time-item">
+                      <q-icon name="schedule" size="13px" />
+                      <span>{{ formatDate(props.row.start_at) }}</span>
+                    </div>
+                    <div v-if="props.row.end_at" class="time-item">
+                      <q-icon name="event" size="13px" />
+                      <span>{{ formatDate(props.row.end_at) }}</span>
+                    </div>
+                  </div>
+                  <span v-else class="no-schedule">—</span>
+                </q-td>
+                <q-td class="table-body-cell">
+                  <div
+                    :class="[
+                      'status-badge',
+                      props.row.is_active ? 'status-active' : 'status-inactive',
+                    ]"
+                  >
+                    {{ props.row.is_active ? 'Active' : 'Inactive' }}
+                  </div>
+                </q-td>
+              </q-tr>
+            </template>
+          </q-table>
+        </div>
       </div>
     </div>
 
     <!-- Create/Edit Dialog -->
     <q-dialog v-model="showDialog" persistent>
-      <q-card class="dialog-card" style="min-width: 500px; max-width: 600px">
-        <q-card-section class="dialog-header">
-          <div class="dialog-title">
-            {{ editingAnnouncement ? 'Edit Announcement' : 'Add New Announcement' }}
+      <q-card class="modal-card dialog-modal">
+        <q-card-section class="modal-header">
+          <div class="modal-title-section">
+            <q-icon name="campaign" class="modal-icon" />
+            <div>
+              <div class="modal-title">
+                {{ editingAnnouncement ? 'Edit Announcement' : 'Add New Announcement' }}
+              </div>
+              <div class="modal-subtitle">Fill in the announcement details</div>
+            </div>
           </div>
-          <q-btn flat round dense icon="close" @click="closeDialog" />
+          <q-btn icon="close" flat round class="modal-close-btn" @click="closeDialog" />
         </q-card-section>
-
         <q-separator />
-
-        <q-card-section class="dialog-content" style="max-height: 70vh; overflow-y: auto">
-          <div class="form-field">
-            <label class="field-label">Title *</label>
-            <q-input
-              v-model="formData.title"
-              outlined
-              dense
-              placeholder="Enter announcement title"
-            />
-          </div>
-
-          <div class="form-field">
-            <label class="field-label">Message *</label>
-            <q-input
-              v-model="formData.message"
-              type="textarea"
-              outlined
-              rows="4"
-              placeholder="Enter announcement message"
-            />
-          </div>
-
-          <div class="form-field">
-            <label class="field-label">Type</label>
-            <q-select
-              v-model="formData.announcement_type"
-              :options="typeSelectOptions"
-              outlined
-              dense
-              emit-value
-              map-options
-            />
-          </div>
-
-          <div class="form-field">
-            <label class="field-label">Start Date</label>
-            <q-input v-model="formData.start_at" type="datetime-local" outlined dense />
-          </div>
-
-          <div class="form-field">
-            <label class="field-label">End Date</label>
-            <q-input v-model="formData.end_at" type="datetime-local" outlined dense />
-          </div>
-
-          <div class="form-field">
-            <q-toggle v-model="formData.is_active" label="Active" color="primary" />
-          </div>
-
-          <div class="form-field">
-            <q-toggle v-model="formData.target_everyone" label="Send to Everyone" color="primary" />
-          </div>
-
-          <div v-if="!formData.target_everyone" class="targeting-fields">
-            <div class="form-field">
-              <label class="field-label">Target Positions</label>
-              <q-select
-                v-model="formData.target_positions"
-                :options="positions"
-                outlined
-                dense
-                multiple
-                emit-value
-                map-options
-                use-chips
-                :loading="loadingPositions"
-                placeholder="Select positions"
-                hint="Select one or more positions"
-              >
-                <template v-slot:no-option>
-                  <q-item>
-                    <q-item-section class="text-grey"> No positions available </q-item-section>
-                  </q-item>
-                </template>
-              </q-select>
+        <q-card-section class="modal-content" style="max-height: 65vh; overflow-y: auto">
+          <div class="form-sections">
+            <div class="form-section">
+              <div class="section-title">Announcement Details</div>
+              <div class="form-grid">
+                <q-input
+                  v-model="formData.title"
+                  label="Title *"
+                  outlined
+                  dense
+                  class="col-span-2"
+                  :rules="[(val) => !!val || 'Title is required']"
+                />
+                <q-input
+                  v-model="formData.message"
+                  type="textarea"
+                  label="Message *"
+                  outlined
+                  rows="4"
+                  class="col-span-2"
+                  :rules="[(val) => !!val || 'Message is required']"
+                />
+                <q-select
+                  v-model="formData.announcement_type"
+                  :options="typeSelectOptions"
+                  label="Type"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                />
+                <div class="toggle-row">
+                  <q-toggle v-model="formData.is_active" label="Active" color="primary" />
+                  <q-toggle
+                    v-model="formData.target_everyone"
+                    label="Send to Everyone"
+                    color="primary"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div class="form-field">
-              <label class="field-label">Target Users</label>
-              <q-select
-                v-model="formData.target_users"
-                :options="users"
-                outlined
-                dense
-                multiple
-                emit-value
-                map-options
-                use-chips
-                :loading="loadingUsers"
-                placeholder="Select users"
-                hint="Select one or more users"
-              >
-                <template v-slot:no-option>
-                  <q-item>
-                    <q-item-section class="text-grey"> No users available </q-item-section>
-                  </q-item>
-                </template>
-              </q-select>
+            <div class="form-section">
+              <div class="section-title">Schedule</div>
+              <div class="form-grid">
+                <q-input
+                  v-model="formData.start_at"
+                  label="Start Date"
+                  type="datetime-local"
+                  outlined
+                  dense
+                />
+                <q-input
+                  v-model="formData.end_at"
+                  label="End Date"
+                  type="datetime-local"
+                  outlined
+                  dense
+                />
+              </div>
             </div>
 
-            <div class="form-field">
-              <label class="field-label">Target Roles</label>
-              <q-select
-                v-model="formData.target_roles"
-                :options="roles"
-                outlined
-                dense
-                multiple
-                emit-value
-                map-options
-                use-chips
-                :loading="loadingRoles"
-                placeholder="Select roles"
-                hint="Select one or more roles"
-              >
-                <template v-slot:no-option>
-                  <q-item>
-                    <q-item-section class="text-grey"> No roles available </q-item-section>
-                  </q-item>
-                </template>
-              </q-select>
+            <div v-if="!formData.target_everyone" class="form-section">
+              <div class="section-title">Targeting</div>
+              <div class="form-grid">
+                <q-select
+                  v-model="formData.target_positions"
+                  :options="positions"
+                  label="Target Positions"
+                  outlined
+                  dense
+                  multiple
+                  emit-value
+                  map-options
+                  use-chips
+                  :loading="loadingPositions"
+                  placeholder="Select positions"
+                  class="col-span-2"
+                >
+                  <template v-slot:no-option>
+                    <q-item>
+                      <q-item-section class="text-grey">No positions available</q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
+
+                <q-select
+                  v-model="formData.target_users"
+                  :options="users"
+                  label="Target Users"
+                  outlined
+                  dense
+                  multiple
+                  emit-value
+                  map-options
+                  use-chips
+                  :loading="loadingUsers"
+                  placeholder="Select users"
+                  class="col-span-2"
+                >
+                  <template v-slot:no-option>
+                    <q-item>
+                      <q-item-section class="text-grey">No users available</q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
+
+                <q-select
+                  v-model="formData.target_roles"
+                  :options="roles"
+                  label="Target Roles"
+                  outlined
+                  dense
+                  multiple
+                  emit-value
+                  map-options
+                  use-chips
+                  :loading="loadingRoles"
+                  placeholder="Select roles"
+                  class="col-span-2"
+                >
+                  <template v-slot:no-option>
+                    <q-item>
+                      <q-item-section class="text-grey">No roles available</q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
+              </div>
             </div>
           </div>
         </q-card-section>
-
         <q-separator />
-
-        <q-card-actions class="dialog-actions">
-          <q-btn label="CANCEL" flat color="grey-7" @click="closeDialog" />
+        <q-card-section class="form-actions">
+          <q-btn label="Cancel" flat color="grey-7" @click="closeDialog" />
           <q-btn
-            :label="editingAnnouncement ? 'UPDATE' : 'CREATE'"
+            :label="editingAnnouncement ? 'Update' : 'Create'"
             color="primary"
-            unelevated
-            @click="saveAnnouncement"
             :loading="submitting"
             :disable="submitting"
+            @click="saveAnnouncement"
           />
-        </q-card-actions>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- Delete Confirmation Dialog -->
+    <q-dialog v-model="showDeleteDialog" persistent>
+      <q-card class="modal-card confirm-modal">
+        <q-card-section class="modal-header">
+          <div class="modal-title-section">
+            <q-icon name="warning" class="modal-icon warning-icon" />
+            <div>
+              <div class="modal-title">Delete Announcement</div>
+              <div class="modal-subtitle">This action cannot be undone</div>
+            </div>
+          </div>
+          <q-btn
+            icon="close"
+            flat
+            round
+            class="modal-close-btn"
+            @click="showDeleteDialog = false"
+          />
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="modal-content">
+          <p class="confirm-text">
+            Are you sure you want to delete
+            <strong>{{ announcementToDelete?.title }}</strong
+            >?
+          </p>
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="form-actions">
+          <q-btn label="Cancel" flat color="grey-7" @click="showDeleteDialog = false" />
+          <q-btn label="Delete" color="negative" :loading="deleting" @click="deleteAnnouncement" />
+        </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>
@@ -366,14 +432,18 @@ export default {
     const announcements = ref([])
     const loading = ref(false)
     const submitting = ref(false)
+    const deleting = ref(false)
     const showDialog = ref(false)
+    const showDeleteDialog = ref(false)
     const editingAnnouncement = ref(null)
+    const announcementToDelete = ref(null)
     const searchQuery = ref('')
-    const typeFilter = ref({ label: 'All Types', value: null })
+    const typeFilter = ref(null)
+
+    const columns = []
 
     // Type options
     const typeOptions = [
-      { label: 'All Types', value: null },
       { label: 'General', value: 'general' },
       { label: 'Urgent', value: 'urgent' },
       { label: 'Maintenance', value: 'maintenance' },
@@ -401,10 +471,6 @@ export default {
       target_roles: [],
     })
 
-    const targetPositionsInput = ref('')
-    const targetUsersInput = ref('')
-    const targetRolesInput = ref('')
-
     // Dropdown data
     const positions = ref([])
     const users = ref([])
@@ -423,7 +489,7 @@ export default {
       () => announcements.value.filter((a) => a.announcement_type === 'urgent').length,
     )
 
-    // ✅ Name getters
+    // Name getters
     const getRoleName = (roleId) => {
       const role = roles.value.find((r) => r.value === roleId)
       return role ? role.label : `Role #${roleId}`
@@ -450,21 +516,21 @@ export default {
         )
       }
 
-      if (typeFilter.value && typeFilter.value.value) {
-        filtered = filtered.filter((a) => a.announcement_type === typeFilter.value.value)
+      if (typeFilter.value) {
+        filtered = filtered.filter((a) => a.announcement_type === typeFilter.value)
       }
 
       return filtered
     })
 
-    const getTypeColor = (type) => {
-      const colors = {
-        general: 'blue',
-        urgent: 'red',
-        maintenance: 'orange',
-        policy: 'purple',
+    const getTypeBadgeClass = (type) => {
+      const classes = {
+        general: 'type-general',
+        urgent: 'type-urgent',
+        maintenance: 'type-maintenance',
+        policy: 'type-policy',
       }
-      return colors[type] || 'grey'
+      return classes[type] || 'type-general'
     }
 
     const formatDate = (dateStr) => {
@@ -483,25 +549,17 @@ export default {
       try {
         const token = localStorage.getItem('access_token')
         const selectedCompany = localStorage.getItem('selectedCompany')
-
         const res = await api.get('https://staging.wageyapp.com/user/positions/', {
           headers: { Authorization: `Bearer ${token}` },
           params: { company: selectedCompany },
         })
-
         positions.value = (res.data.results || res.data).map((p) => ({
           label: p.name || p.title || p.position_name,
           value: p.id,
         }))
-
-        console.log('Positions loaded:', positions.value.length)
       } catch (error) {
         console.error('Failed to fetch positions:', error)
-        $q.notify({
-          type: 'warning',
-          message: 'Failed to load positions',
-          position: 'top',
-        })
+        $q.notify({ type: 'warning', message: 'Failed to load positions', position: 'top' })
       } finally {
         loadingPositions.value = false
       }
@@ -513,51 +571,26 @@ export default {
         const token = localStorage.getItem('access_token')
         let storedCompany = localStorage.getItem('selectedCompany')
         let companyId = null
-
         try {
           const parsed = JSON.parse(storedCompany)
           companyId = parsed?.id || parsed
         } catch {
           companyId = storedCompany
         }
-
-        if (!token || !companyId) {
-          $q.notify({
-            type: 'negative',
-            message: 'Missing token or company ID.',
-            position: 'top',
-          })
-          return
-        }
-
+        if (!token || !companyId) return
         loadingUsers.value = true
-
         const response = await api.get(
           `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
           { headers: { Authorization: `Bearer ${token}` } },
         )
-
-        // 🟢 Transform users into Quasar-friendly objects
         users.value = (response.data || []).map((u) => {
           const fullName =
             u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || `User #${u.id}`
-
-          return {
-            id: u.id,
-            label: fullName,
-            value: u.id,
-            full_name: fullName,
-          }
+          return { id: u.id, label: fullName, value: u.id, full_name: fullName }
         })
-
-        console.log('✅ Users mapped for dropdown:', users.value)
       } catch (error) {
-        console.error('❌ Error fetching users:', error)
-        $q.notify({
-          type: 'negative',
-          message: 'Failed to fetch users',
-          position: 'top',
-        })
+        console.error('Error fetching users:', error)
+        $q.notify({ type: 'negative', message: 'Failed to fetch users', position: 'top' })
       } finally {
         loadingUsers.value = false
       }
@@ -569,23 +602,17 @@ export default {
       try {
         const token = localStorage.getItem('access_token')
         const selectedCompany = localStorage.getItem('selectedCompany')
-
         const res = await api.get('https://staging.wageyapp.com/user/user-roles/', {
           headers: { Authorization: `Bearer ${token}` },
           params: { company: selectedCompany },
         })
-
         roles.value = (res.data.results || res.data).map((r) => ({
           label: r.name || r.role_name || r.title,
           value: r.id,
         }))
       } catch (error) {
         console.error('Failed to fetch roles:', error)
-        $q.notify({
-          type: 'warning',
-          message: 'Failed to load roles',
-          position: 'top',
-        })
+        $q.notify({ type: 'warning', message: 'Failed to load roles', position: 'top' })
       } finally {
         loadingRoles.value = false
       }
@@ -597,7 +624,6 @@ export default {
       try {
         const token = localStorage.getItem('access_token')
         const selectedCompany = localStorage.getItem('selectedCompany')
-
         if (!token || !selectedCompany) {
           $q.notify({
             type: 'warning',
@@ -606,13 +632,10 @@ export default {
           })
           return
         }
-
         const res = await api.get('https://staging.wageyapp.com/communication/announcements/', {
           headers: { Authorization: `Bearer ${token}` },
         })
-
         const data = Array.isArray(res.data) ? res.data : res.data.results || res.data.data || []
-
         announcements.value = data.filter((a) => String(a.company) === String(selectedCompany))
       } catch (error) {
         console.error('Fetch error:', error)
@@ -632,7 +655,6 @@ export default {
       try {
         const token = localStorage.getItem('access_token')
         const storedCompany = localStorage.getItem('selectedCompany')
-
         if (!token || !storedCompany) {
           $q.notify({
             type: 'warning',
@@ -642,13 +664,12 @@ export default {
           submitting.value = false
           return
         }
-
         let companyId = storedCompany
         try {
           const parsed = JSON.parse(storedCompany)
           companyId = parsed?.id || parsed
         } catch {
-          //comment
+          /* comment */
         }
 
         const payload = {
@@ -675,12 +696,9 @@ export default {
         const url = editingAnnouncement.value
           ? `https://staging.wageyapp.com/communication/announcements/${editingAnnouncement.value.id}/`
           : 'https://staging.wageyapp.com/communication/announcements/create/'
-
         const method = editingAnnouncement.value ? 'put' : 'post'
 
-        await api[method](url, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        await api[method](url, payload, { headers: { Authorization: `Bearer ${token}` } })
 
         $q.notify({
           type: 'positive',
@@ -704,6 +722,39 @@ export default {
       }
     }
 
+    const confirmDelete = (announcement) => {
+      announcementToDelete.value = announcement
+      showDeleteDialog.value = true
+    }
+
+    const deleteAnnouncement = async () => {
+      deleting.value = true
+      try {
+        const token = localStorage.getItem('access_token')
+        await api.delete(
+          `https://staging.wageyapp.com/communication/announcements/${announcementToDelete.value.id}/`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        $q.notify({
+          type: 'positive',
+          message: 'Announcement deleted successfully',
+          position: 'top',
+        })
+        await fetchAnnouncements()
+        showDeleteDialog.value = false
+      } catch (error) {
+        console.error('Delete error:', error)
+        $q.notify({
+          type: 'negative',
+          message:
+            error.response?.data?.message || error.message || 'Failed to delete announcement',
+          position: 'top',
+        })
+      } finally {
+        deleting.value = false
+      }
+    }
+
     const openCreateDialog = () => {
       editingAnnouncement.value = null
       formData.value = {
@@ -718,7 +769,6 @@ export default {
         target_users: [],
         target_roles: [],
       }
-
       fetchPositions()
       fetchUsers()
       fetchRoles()
@@ -738,21 +788,20 @@ export default {
 
     onMounted(fetchAnnouncements)
 
-    // ✅ Return all refs, methods, and getters used in template
     return {
       announcements,
       loading,
       submitting,
+      deleting,
       showDialog,
+      showDeleteDialog,
       editingAnnouncement,
+      announcementToDelete,
       searchQuery,
       typeFilter,
       typeOptions,
       typeSelectOptions,
       formData,
-      targetPositionsInput,
-      targetUsersInput,
-      targetRolesInput,
       positions,
       users,
       roles,
@@ -763,7 +812,8 @@ export default {
       scheduledCount,
       urgentCount,
       filteredAnnouncements,
-      getTypeColor,
+      columns,
+      getTypeBadgeClass,
       formatDate,
       fetchAnnouncements,
       fetchPositions,
@@ -773,169 +823,193 @@ export default {
       editAnnouncement,
       closeDialog,
       saveAnnouncement,
+      confirmDelete,
+      deleteAnnouncement,
       getRoleName,
-      getPositionName, // ✅ added
-      getUserName, // ✅ added
+      getPositionName,
+      getUserName,
     }
   },
 }
 </script>
 
-<style scoped lang="scss">
-.announcements-page {
+<style scoped>
+.announcement-dashboard {
+  background: #f8fafc;
+  min-height: 100vh;
+  padding: 0;
+}
+
+.dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 24px;
-  background: #f8fafc;
+  padding: 16px;
 }
 
 /* Header */
 .page-header {
   background: white;
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 24px;
-  margin-top: 27px;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  margin-top: 16px;
   border: 1px solid #e2e8f0;
 }
 
 .header-content {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.title-section {
-  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
   color: #1a202c;
   margin: 0 0 4px 0;
 }
 
-/* Stats Section */
-.stats-section {
-  max-width: 1400px;
-  margin: 24px auto;
-  padding: 0 40px;
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-}
-
-.stat-card {
-  background: white;
+.add-announcement-btn {
+  height: 36px;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
 }
 
-.stat-content {
+.header-search {
+  min-width: 180px;
+  max-width: 250px;
+  flex: 1;
+}
+
+.search-icon {
+  color: #9ca3af;
+}
+
+.type-select {
+  min-width: 180px;
+}
+
+/* Stats */
+.stats-section {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stats-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px !important;
+  gap: 12px;
+  transition: all 0.2s ease;
+  min-width: 0;
 }
 
-.stat-icon-wrapper {
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
+.stats-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.total-card {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+}
+
+.active-card {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+}
+
+.scheduled-card {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+}
+
+.urgent-card {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+}
+
+.stats-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 
-.stat-icon-wrapper.total {
-  background: #e3f2fd;
-  color: #1976d2;
+.stats-icon {
+  font-size: 24px;
+  color: #374151;
 }
 
-.stat-icon-wrapper.active {
-  background: #e8f5e9;
-  color: #388e3c;
-}
-
-.stat-icon-wrapper.scheduled {
-  background: #fff3e0;
-  color: #f57c00;
-}
-
-.stat-icon-wrapper.urgent {
-  background: #ffebee;
-  color: #d32f2f;
-}
-
-.stat-info {
+.stats-content {
   flex: 1;
+  min-width: 0;
 }
 
-.stat-number {
-  font-size: 32px;
-  font-weight: 600;
-  color: #1a1a1a;
+.stats-amount {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a202c;
   line-height: 1;
+  margin-bottom: 4px;
 }
 
-.stat-label {
-  font-size: 14px;
-  color: #666;
-  margin-top: 4px;
+.stats-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 2px;
 }
 
-/* Filter Section */
-.filter-section {
-  max-width: 1400px;
-  margin: 24px auto;
-  padding: 0 40px;
-}
-
-.filter-content {
+/* Table Section */
+.table-section {
   background: white;
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.table-header {
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
   display: flex;
-  gap: 16px;
+  justify-content: space-between;
   align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  gap: 12px;
 }
 
-.search-input {
-  flex: 1;
-  max-width: 400px;
+.table-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1a202c;
+  margin: 0;
 }
 
-.filter-select {
-  width: 200px;
-}
-
-.add-btn {
-  border-radius: 4px;
-  font-weight: 500;
-  text-transform: none;
-  padding: 8px 20px;
-}
-
-/* Content Section */
-.content-section {
-  max-width: 1400px;
-  margin: 0 auto 40px;
-  padding: 0 40px;
-}
-
-.loading-spinner {
+.loading-wrapper {
   display: flex;
   justify-content: center;
   padding: 80px 0;
 }
 
 .empty-state {
-  background: white;
-  border-radius: 8px;
   padding: 80px 40px;
   text-align: center;
 }
@@ -952,266 +1026,397 @@ export default {
   color: #666;
 }
 
-/* Announcements Grid */
-.announcements-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 20px;
+.modern-table-container {
+  border: 2px solid #3b82f6;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 0 16px 16px 16px;
 }
 
-.announcement-card {
+.announcement-table {
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s;
+  border-radius: 10px;
   overflow: hidden;
 }
 
-.announcement-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
+.table-header-row {
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
 }
 
-.announcement-card.urgent {
-  border-left: 4px solid #d32f2f;
-}
-
-.card-header {
-  padding: 16px !important;
-}
-
-.card-header-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.header-chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.type-chip {
-  text-transform: uppercase;
-  font-size: 11px;
+.table-header-cell {
+  padding: 12px 10px;
+  font-size: 13px;
   font-weight: 600;
+  color: #374151;
+  text-align: left;
+  border: none;
+  white-space: nowrap;
 }
 
-.status-badge {
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 4px;
+.table-body-row {
+  border-bottom: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
 }
 
-.card-actions {
-  display: flex;
-  gap: 4px;
+.table-body-row:hover {
+  background: #f8fafc;
 }
 
-.card-content {
-  padding: 0 16px 16px !important;
+.urgent-row {
+  border-left: 3px solid #dc2626;
 }
 
-.announcement-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0 0 8px 0;
-  line-height: 1.4;
+.table-body-cell {
+  padding: 12px 10px;
+  font-size: 13px;
+  color: #374151;
+  border: none;
+  vertical-align: middle;
 }
 
-.announcement-message {
-  font-size: 14px;
-  color: #666;
-  line-height: 1.6;
-  margin: 0;
+.title-cell .announcement-title-text {
+  font-weight: 500;
+  color: #1a202c;
+}
+
+.message-cell .message-preview {
   display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  color: #6b7280;
+  font-size: 12px;
+  max-width: 260px;
 }
 
-.targeting-section {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+.target-everyone {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #374151;
 }
 
-.targeting-chips {
+.target-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
-.card-footer {
-  padding: 12px 16px !important;
-  background: #fafafa;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.timing-info {
+.schedule-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .time-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #666;
+  gap: 5px;
+  font-size: 11px;
+  color: #6b7280;
 }
 
-.engagement-info {
-  display: flex;
+.no-schedule {
+  color: #9ca3af;
+}
+
+/* Type Badges */
+.type-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #666;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
 }
 
-/* Dialog */
-.dialog-card {
-  width: 600px;
-  max-width: 95vw;
+.type-general {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.type-urgent {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.type-maintenance {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.type-policy {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-active {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-inactive {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Actions */
+.actions-cell {
+  width: 90px;
+  min-width: 90px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.edit-btn {
+  background: #dbeafe;
+  color: #3b82f6;
+}
+
+.edit-btn:hover {
+  background: #bfdbfe;
+}
+
+.delete-btn {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.delete-btn:hover {
+  background: #fecaca;
+}
+
+/* Modal */
+.modal-card {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.dialog-modal {
+  width: 640px;
+  max-width: 90vw;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
 }
 
-.dialog-header {
-  padding: 20px 24px !important;
+.confirm-modal {
+  width: 420px;
+  max-width: 90vw;
+}
+
+.modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 20px 24px !important;
   background: #fafafa;
 }
 
-.dialog-title {
+.modal-title-section {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.modal-icon {
+  font-size: 28px;
+  color: #3b82f6;
+  background: #dbeafe;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+.warning-icon {
+  color: #f59e0b;
+  background: #fef3c7;
+}
+
+.modal-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #1a202c;
 }
 
-.dialog-content {
-  padding: 24px !important;
-  overflow-y: auto;
+.modal-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.modal-close-btn {
+  color: #9ca3af;
+}
+
+.modal-content {
+  padding: 20px 24px !important;
   flex: 1;
+  overflow-y: auto;
 }
 
-.form-field {
-  margin-bottom: 20px;
-}
-
-.form-field:last-child {
-  margin-bottom: 0;
-}
-
-.field-label {
-  display: block;
+.confirm-text {
   font-size: 14px;
-  font-weight: 500;
-  color: #424242;
-  margin-bottom: 8px;
+  color: #374151;
+  line-height: 1.6;
 }
 
-.form-row {
+/* Form Sections */
+.form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-section {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 14px;
 }
 
-.targeting-fields {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #e0e0e0;
+.col-span-2 {
+  grid-column: span 2;
 }
 
-.dialog-actions {
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  grid-column: span 1;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
   padding: 16px 24px !important;
   background: #fafafa;
-  justify-content: flex-end;
-  gap: 12px;
 }
 
 /* Responsive */
 @media (max-width: 1024px) {
-  .page-header,
-  .stats-section,
-  .filter-section,
-  .content-section {
-    padding-left: 24px;
-    padding-right: 24px;
-  }
-
-  .announcements-grid {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  .stats-section {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    padding: 24px 16px;
+  .dashboard-container {
+    padding: 12px;
   }
 
-  .stats-section,
-  .filter-section,
-  .content-section {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-
-  .filter-content {
+  .header-content {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .search-input,
-  .filter-select {
-    max-width: none;
+  .header-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .add-announcement-btn,
+  .header-search,
+  .type-select {
     width: 100%;
+    max-width: 100%;
   }
 
-  .announcements-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
+  .stats-section {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
   }
 
-  .form-row {
+  .table-header {
+    padding: 12px;
+  }
+
+  .modern-table-container {
+    margin: 0 8px 8px 8px;
+    overflow-x: auto;
+    border-radius: 8px;
+  }
+
+  .announcement-table {
+    min-width: 800px;
+  }
+
+  .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .col-span-2 {
+    grid-column: span 1;
+  }
+
+  .toggle-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }
 
 @media (max-width: 480px) {
-  .page-title {
-    font-size: 26px;
-  }
-
-  .page-subtitle {
-    font-size: 14px;
-  }
-
-  .stats-grid {
+  .stats-section {
     grid-template-columns: 1fr;
   }
 
-  .stat-content {
-    padding: 16px !important;
+  .page-title {
+    font-size: 18px;
   }
 
-  .stat-number {
-    font-size: 28px;
+  .stats-amount {
+    font-size: 22px;
+  }
+
+  .modal-card {
+    margin: 8px;
+    max-width: calc(100vw - 16px);
   }
 }
 </style>
