@@ -3,9 +3,10 @@ import { boot } from 'quasar/wrappers'
 import axios from 'axios'
 import { useAuthStore } from 'boot/auth'
 
-// In dev: empty string (proxy handles routing to staging.wageyapp.com)
-// In production: /api prefix for same-origin requests
-const baseURL = process.env.NODE_ENV === 'production' ? '/api' : '' // Empty in dev - requests like /api/employee/login/ go through proxy
+// Empty baseURL in both dev and production
+// Dev: proxy in quasar.config.js handles forwarding /api to staging.wageyapp.com
+// Production: nginx/server handles forwarding /api to backend
+const baseURL = ''
 
 const api = axios.create({ baseURL })
 

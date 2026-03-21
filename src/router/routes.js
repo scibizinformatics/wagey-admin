@@ -5,7 +5,6 @@ import InvitePage from 'pages/InvitePage.vue'
 import LoginPage from 'pages/LoginPage.vue'
 import RequestPage from 'pages/RequestPage.vue'
 import AuthLayout from 'layouts/AuthLayout.vue'
-import CashAdvanceRequest from 'pages/CashAdvanceRequestPage.vue'
 
 const routes = [
   {
@@ -84,13 +83,6 @@ const routes = [
         component: () => import('pages/AnnouncementPage.vue'),
         alias: '/announcements',
       },
-      {
-        path: '/cash-advance',
-        name: 'cash-advance',
-        component: CashAdvanceRequest, // ✅ uses the imported component
-        meta: { requiresAuth: true },
-      },
-
       {
         path: 'admin-settings',
         name: 'admin-settings',
