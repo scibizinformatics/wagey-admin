@@ -1,32 +1,49 @@
 <template>
   <q-layout view="lHh Lpr lFf">
     <!-- Header -->
-    <div class="header-bar bg-white shadow-2 q-pa-md">
-      <div class="row items-center justify-between q-col-gutter-sm">
-        <div class="col-12 col-sm-6 row items-center">
-          <!-- Mobile menu toggle -->
-          <q-btn
-            flat
-            dense
-            round
-            icon="menu"
-            class="mobile-menu-btn lt-md"
-            @click="leftDrawerOpen = !leftDrawerOpen"
-          />
+    <q-header class="header-bar bg-white shadow-2 q-pa-md">
+      <div class="row items-center justify-between no-wrap">
+        <!-- Mobile menu toggle -->
+        <q-btn
+          flat
+          dense
+          round
+          icon="menu"
+          class="mobile-menu-btn lt-md q-mr-sm"
+          @click="leftDrawerOpen = !leftDrawerOpen"
+        />
+
+        <!-- Company Tabs -->
+        <div class="company-tabs-wrapper row no-wrap q-gutter-sm flex-1">
+          <div
+            v-for="company in companyOptions"
+            :key="company.siteId"
+            class="company-tab"
+            :class="{ 'company-tab-active': selectedCompany === company.siteId }"
+            @click="onCompanyChange(company.siteId)"
+          >
+            <q-icon name="business" size="14px" class="q-mr-xs" />
+            <span>{{ company.siteName }}</span>
+          </div>
+          <div v-if="loadingCompanies" class="company-tab">
+            <q-spinner size="14px" class="q-mr-xs" />
+            <span>Loading...</span>
+          </div>
         </div>
-        <div class="col-12 col-sm-6 row items-center justify-end q-gutter-sm">
-          <span class="text-body2 email-text">drake.carcellar16@gmail.com</span>
-          <q-btn flat round icon="notifications" size="sm">
-            <q-badge color="red" floating>4</q-badge>
-          </q-btn>
+
+        <!-- Right side -->
+        <div class="row items-center q-gutter-sm q-ml-md">
+          <span class="text-body2 email-text" style="color: #000000">
+            drake.carcellar16@gmail.com
+          </span>
           <q-avatar size="32px">
             <q-icon name="person" />
           </q-avatar>
         </div>
       </div>
-    </div>
+    </q-header>
 
-    <!-- Sidebar -->
+    <!-- Sidebar Drawer -->
     <q-drawer
       show-if-above
       v-model="leftDrawerOpen"
@@ -34,48 +51,23 @@
       bordered
       class="modern-sidebar"
       :width="drawerWidth"
+      :mini="isMini"
+      :mini-width="68"
       :breakpoint="768"
     >
+      <!-- Background image layer -->
+      <div class="drawer-bg" :style="{ backgroundImage: `url(${terrainBg})` }"></div>
+
       <!-- Sidebar Header -->
-      <div class="sidebar-header q-pa-lg">
-        <div class="row items-center no-wrap">
-          <div class="sidebar-logo">
+      <div class="sidebar-header q-pa-lg" :class="{ 'sidebar-header-mini': isMini }">
+        <div class="row items-center no-wrap" :class="isMini ? 'justify-center' : ''">
+          <div class="sidebar-logo" :class="{ 'sidebar-logo-mini': isMini }">
             <img :src="logo" alt="Wagey Logo" />
           </div>
-          <div class="q-ml-md">
+          <div class="q-ml-md" v-if="!isMini">
             <div class="sidebar-title">Wagey</div>
           </div>
         </div>
-      </div>
-
-      <!-- Company Selector -->
-      <div class="company-selector q-px-md q-pb-md">
-        <div class="selector-label q-mb-sm">
-          <span class="text-caption text-grey-7">Select Company</span>
-        </div>
-        <q-select
-          v-model="selectedCompany"
-          :options="companyOptions"
-          option-value="siteId"
-          option-label="siteName"
-          emit-value
-          map-options
-          outlined
-          dense
-          :loading="loadingCompanies"
-          placeholder="Choose a company..."
-          class="company-dropdown"
-          @update:model-value="onCompanyChange"
-        >
-          <template v-slot:prepend>
-            <q-icon name="business" />
-          </template>
-          <template v-slot:no-option>
-            <q-item>
-              <q-item-section class="text-grey"> No companies available </q-item-section>
-            </q-item>
-          </template>
-        </q-select>
       </div>
 
       <!-- Navigation -->
@@ -88,30 +80,75 @@
             tag="router-link"
             :to="link.to"
             class="nav-item"
-            :class="{ 'nav-item-active': $route.path === link.to }"
+            :class="{ 'nav-item-active': $route.path === link.to, 'nav-item-mini': isMini }"
           >
             <q-item-section avatar class="nav-icon">
               <q-icon :name="link.icon" size="20px" />
             </q-item-section>
-            <q-item-section class="nav-label">
+            <q-item-section class="nav-label" v-if="!isMini">
               {{ link.label }}
             </q-item-section>
+
+            <!-- Tooltip shown only when collapsed -->
+            <q-tooltip
+              v-if="isMini"
+              anchor="center right"
+              self="center left"
+              :offset="[12, 0]"
+              class="nav-tooltip"
+            >
+              {{ link.label }}
+            </q-tooltip>
           </q-item>
         </q-list>
       </div>
 
-      <!-- Settings & Logout -->
+      <!-- Sign Out -->
       <div class="sidebar-nav q-px-md q-mt-md">
         <q-list class="nav-list">
-          <q-item clickable class="nav-item" @click="logout">
+          <q-item clickable class="nav-item" :class="{ 'nav-item-mini': isMini }" @click="logout">
             <q-item-section avatar class="nav-icon">
               <q-icon name="logout" size="20px" />
             </q-item-section>
-            <q-item-section class="nav-label">Sign Out</q-item-section>
+            <q-item-section class="nav-label" v-if="!isMini"> Sign Out </q-item-section>
+
+            <q-tooltip
+              v-if="isMini"
+              anchor="center right"
+              self="center left"
+              :offset="[12, 0]"
+              class="nav-tooltip"
+            >
+              Sign Out
+            </q-tooltip>
           </q-item>
         </q-list>
       </div>
     </q-drawer>
+
+    <!-- Half Circle Toggle Button -->
+    <div
+      class="sidebar-bookmark"
+      :class="{ 'sidebar-bookmark-mini': isMini }"
+      @click="isMini = !isMini"
+    >
+      <svg class="bookmark-svg" viewBox="0 0 28 56" xmlns="http://www.w3.org/2000/svg">
+        <!-- Half circle: flat on left, curve bulges right -->
+        <path d="M0 0 A28 28 0 0 1 0 56 Z" fill="#13283d" />
+        <!-- Arrow always points right; CSS scaleX(-1) flips it left when expanded -->
+        <polyline
+          points="11,23 17,28 11,33"
+          fill="none"
+          stroke="white"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <q-tooltip anchor="center right" self="center left" :offset="[10, 0]">
+        {{ isMini ? 'Expand sidebar' : 'Collapse sidebar' }}
+      </q-tooltip>
+    </div>
 
     <!-- Page Container -->
     <q-page-container>
@@ -122,16 +159,19 @@
 
 <script>
 import { api } from 'src/boot/axios'
-import wageyLogo from 'src/assets/wagey_logo.png'
+import wageyLogo from 'src/assets/wagey_icon(White).png'
+import terrainBg from 'src/assets/terrain.svg'
 
 export default {
   name: 'MainLayout',
   data() {
     return {
       leftDrawerOpen: true,
+      isMini: false, // ← controls collapsed/expanded state
       selectedCompany: null,
       companyOptions: [],
       logo: wageyLogo,
+      terrainBg: terrainBg,
       loadingCompanies: false,
       links: [
         { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
@@ -150,12 +190,12 @@ export default {
 
   computed: {
     drawerWidth() {
-      if (this.$q.screen.width < 640) return 240
-      if (this.$q.screen.width < 768) return 248
-      if (this.$q.screen.width < 1024) return 224
-      if (this.$q.screen.width < 1280) return 240
-      if (this.$q.screen.width < 1440) return 248
-      return 256
+      if (this.$q.screen.width < 640) return 260
+      if (this.$q.screen.width < 768) return 268
+      if (this.$q.screen.width < 1024) return 244
+      if (this.$q.screen.width < 1280) return 260
+      if (this.$q.screen.width < 1440) return 268
+      return 276
     },
   },
 
@@ -172,23 +212,14 @@ export default {
         const res = await api.get('https://staging.wageyapp.com/organization/companies/', {
           headers: { Authorization: `Bearer ${token}` },
         })
-        console.log('Companies response:', res.data)
 
         let companiesData = []
-        if (Array.isArray(res.data)) {
-          companiesData = res.data
-        } else if (res.data && Array.isArray(res.data.data)) {
-          companiesData = res.data.data
-        } else if (res.data && Array.isArray(res.data.results)) {
-          companiesData = res.data.results
-        } else if (res.data && typeof res.data === 'object') {
-          companiesData = [res.data]
-        }
-
-        console.log('Extracted companies data:', companiesData)
+        if (Array.isArray(res.data)) companiesData = res.data
+        else if (res.data && Array.isArray(res.data.data)) companiesData = res.data.data
+        else if (res.data && Array.isArray(res.data.results)) companiesData = res.data.results
+        else if (res.data && typeof res.data === 'object') companiesData = [res.data]
 
         if (!Array.isArray(companiesData) || companiesData.length === 0) {
-          console.warn('No companies found in response')
           this.$q.notify({
             type: 'warning',
             message: 'No companies found for your account',
@@ -201,10 +232,7 @@ export default {
           siteId: String(company.id),
           siteName: company.name || `Company ${company.id}`,
         }))
-
-        console.log('Mapped company options:', this.companyOptions)
       } catch (err) {
-        console.error('❌ Error fetching companies:', err.response?.status, err.message)
         this.$q.notify({
           type: 'negative',
           message: err.response?.data?.message || 'Failed to load companies',
@@ -224,7 +252,6 @@ export default {
     setSelectedCompany(siteId) {
       this.selectedCompany = String(siteId)
       localStorage.setItem('selectedCompany', String(siteId))
-      console.log('✅ Selected company saved:', siteId)
     },
 
     loadSavedCompany() {
@@ -236,7 +263,6 @@ export default {
           return
         }
       }
-      // Nothing saved or saved value no longer valid — default to first company
       if (this.companyOptions.length > 0) {
         this.setSelectedCompany(this.companyOptions[0].siteId)
       }
@@ -245,7 +271,6 @@ export default {
     logout() {
       localStorage.removeItem('access_token')
       localStorage.removeItem('selectedCompany')
-      console.log('👋 Logging out...')
       this.$router.push({ name: 'login' }).then(() => {
         window.location.reload()
       })
@@ -254,20 +279,25 @@ export default {
 }
 </script>
 
+<style>
+/* Global override for Quasar drawer background */
+.modern-sidebar .q-drawer__content {
+  background-color: #13283d !important;
+}
+</style>
+
 <style scoped>
 /* Hide Scrollbar Globally */
 :deep(*) {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
-
 :deep(*::-webkit-scrollbar) {
   display: none;
 }
 
 /* Modern Sidebar Styling */
 .modern-sidebar {
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border: none;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
   display: flex;
@@ -277,77 +307,121 @@ export default {
   overflow-x: hidden;
 }
 
-/* Sidebar Header */
+.modern-sidebar :deep(.q-drawer__content) {
+  background-color: #13283d !important;
+  position: relative;
+}
+
+.drawer-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.15;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.modern-sidebar :deep(.q-drawer__content) > *:not(.drawer-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Sidebar Header ── */
 .sidebar-header {
-  border-bottom: 1px solid #e2e8f0;
-  background: white;
-  margin: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  margin: 18px 10px 10px 10px;
   border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   padding: 12px 14px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Collapsed header: shrink & center */
+.sidebar-header-mini {
+  margin: 18px 6px 10px 6px;
+  padding: 10px 6px !important;
+  display: flex;
+  justify-content: center;
 }
 
 .sidebar-logo {
-  width: 34px;
-  height: 34px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
 .sidebar-logo img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
+/* Collapsed logo: smaller */
+.sidebar-logo-mini {
+  width: 36px;
+  height: 36px;
+}
+
 .sidebar-title {
-  font-size: 17px;
+  font-size: 21px;
   font-weight: 700;
-  color: #1e293b;
+  color: #ffffff;
   letter-spacing: -0.025em;
   white-space: nowrap;
 }
 
-/* Company Selector Styling */
-.company-selector {
-  margin: 10px 0;
-  padding: 0 10px 10px 10px;
-  border-bottom: 1px solid #e2e8f0;
+/* ── Half Circle Toggle Button ── */
+.sidebar-bookmark {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  left: calc(276px - 28px);
+  width: 28px;
+  height: 56px;
+  cursor: pointer;
+  z-index: 1100;
+  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(-3px 0px 5px rgba(0, 0, 0, 0.4));
 }
 
-.selector-label {
-  font-weight: 500;
-  padding-left: 2px;
+/* Expanded: flip SVG so flat edge is on RIGHT, curve bulges LEFT */
+.sidebar-bookmark:not(.sidebar-bookmark-mini) .bookmark-svg {
+  transform: scaleX(-1);
 }
 
-.selector-label .text-caption {
-  font-size: 11px;
+/* Collapsed: normal orientation — flat on left, curve bulges RIGHT (outside sidebar) */
+.sidebar-bookmark-mini {
+  left: calc(68px - 1px);
 }
 
-.company-dropdown {
-  background: white;
-  border-radius: 7px;
-  margin-bottom: 10px;
+.sidebar-bookmark-mini .bookmark-svg {
+  transform: scaleX(1);
 }
 
-.company-dropdown :deep(.q-field__control) {
-  border-radius: 7px;
-  min-height: 38px;
-  padding: 0 10px;
+.bookmark-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.company-dropdown :deep(.q-field__native) {
-  font-size: 13px;
-  padding: 4px 0;
+.sidebar-bookmark:hover path {
+  fill: #1e3f61;
+  transition: fill 0.2s ease;
 }
 
-.company-dropdown :deep(.q-field__control:hover) {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
-/* Navigation Styling */
+/* ── Navigation ── */
 .sidebar-nav {
   flex: 1;
   padding: 6px 10px 16px 10px;
@@ -364,13 +438,23 @@ export default {
   padding: 9px 12px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Center icons when collapsed */
+.nav-item-mini {
+  justify-content: center;
+  padding: 9px 0;
 }
 
 .nav-item:hover {
-  background: rgba(99, 102, 241, 0.08);
-  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.15);
+  color: #ffffff;
   transform: translateX(2px);
+}
+
+.nav-item-mini:hover {
+  transform: translateX(0);
 }
 
 .nav-item-active {
@@ -398,11 +482,61 @@ export default {
   font-size: 13px;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  color: inherit;
 }
 
-/* Header bar styling */
+/* Tooltip style */
+.nav-tooltip {
+  background: #1e3a55;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 5px 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Header bar ── */
 .header-bar {
   z-index: 1001;
+}
+
+.company-tabs-wrapper {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex: 1;
+}
+.company-tabs-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.company-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.company-tab:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.company-tab-active {
+  background: #13283d;
+  color: #ffffff;
+  border-color: #13283d;
+  box-shadow: 0 2px 8px rgba(19, 40, 61, 0.3);
 }
 
 .mobile-menu-btn {
@@ -418,280 +552,213 @@ export default {
   padding-right: 10px;
 }
 
-/* Responsive Breakpoints */
-
-/* Extra Small Mobile: < 640px */
+/* ── Responsive ── */
 @media (max-width: 639px) {
   .mobile-menu-btn {
     display: inline-flex;
   }
-
   .sidebar-header {
     margin: 8px;
     padding: 10px 12px !important;
   }
-
   .sidebar-logo {
-    width: 30px;
-    height: 30px;
+    width: 44px;
+    height: 44px;
   }
-
   .sidebar-title {
     font-size: 16px;
   }
-
-  .company-selector {
-    margin: 8px 0;
-    padding: 0 8px 8px 8px;
-  }
-
-  .company-dropdown :deep(.q-field__control) {
-    min-height: 36px;
-  }
-
-  .company-dropdown :deep(.q-field__native) {
-    font-size: 12px;
-  }
-
-  .selector-label .text-caption {
-    font-size: 10.5px;
-  }
-
   .sidebar-nav {
     padding: 4px 8px 14px 8px;
   }
-
   .nav-item {
     min-height: 40px;
     padding: 8px 10px;
     margin-bottom: 2px;
     border-radius: 8px;
   }
-
   .nav-label {
     font-size: 12.5px;
   }
-
   .nav-icon {
     min-width: 32px;
   }
-
   .nav-icon :deep(.q-icon) {
     font-size: 17px;
   }
-
   .email-text {
     display: none;
   }
-
   .header-bar {
     padding: 8px 12px;
   }
+  .sidebar-bookmark {
+    display: none;
+  } /* hidden on mobile, use hamburger instead */
 }
 
-/* Small Mobile: 640px - 767px */
 @media (min-width: 640px) and (max-width: 767px) {
   .mobile-menu-btn {
     display: inline-flex;
   }
-
   .sidebar-header {
     margin: 9px;
     padding: 11px 13px !important;
   }
-
   .sidebar-logo {
-    width: 32px;
-    height: 32px;
+    width: 48px;
+    height: 48px;
   }
-
   .sidebar-title {
     font-size: 16.5px;
   }
-
-  .company-selector {
-    padding: 0 9px 9px 9px;
-  }
-
-  .company-dropdown :deep(.q-field__control) {
-    min-height: 37px;
-  }
-
   .nav-item {
     min-height: 41px;
     padding: 8px 11px;
     border-radius: 8px;
   }
-
   .nav-label {
     font-size: 12.75px;
   }
-
   .nav-icon {
     min-width: 33px;
   }
-
   .email-text {
     display: none;
   }
 }
 
-/* Tablet: 768px - 1023px */
 @media (min-width: 768px) and (max-width: 1023px) {
   .sidebar-header {
     margin: 9px;
     padding: 10px 12px !important;
   }
-
   .sidebar-logo {
-    width: 32px;
-    height: 32px;
+    width: 48px;
+    height: 48px;
   }
-
   .sidebar-title {
     font-size: 16px;
   }
-
-  .company-selector {
-    padding: 0 8px 9px 8px;
-  }
-
-  .selector-label .text-caption {
-    font-size: 10.5px;
-  }
-
-  .company-dropdown :deep(.q-field__control) {
-    min-height: 36px;
-  }
-
-  .company-dropdown :deep(.q-field__native) {
-    font-size: 12.5px;
-  }
-
   .sidebar-nav {
     padding: 5px 8px 15px 8px;
   }
-
   .nav-item {
     min-height: 40px;
     padding: 8px 10px;
     margin-bottom: 2px;
     border-radius: 8px;
   }
-
   .nav-label {
     font-size: 12.5px;
   }
-
   .nav-icon {
     min-width: 32px;
   }
-
   .nav-icon :deep(.q-icon) {
     font-size: 17px;
   }
+  .sidebar-bookmark {
+    left: calc(244px - 28px);
+  }
+  .sidebar-bookmark.sidebar-bookmark-mini {
+    left: calc(68px - 1px);
+  }
 }
 
-/* Small Desktop: 1024px - 1279px */
 @media (min-width: 1024px) and (max-width: 1279px) {
   .sidebar-header {
     margin: 10px;
     padding: 11px 13px !important;
   }
-
   .sidebar-logo {
-    width: 33px;
-    height: 33px;
+    width: 50px;
+    height: 50px;
   }
-
   .sidebar-title {
     font-size: 16.5px;
   }
-
-  .company-selector {
-    padding: 0 9px 10px 9px;
-  }
-
-  .company-dropdown :deep(.q-field__control) {
-    min-height: 37px;
-  }
-
   .sidebar-nav {
     padding: 5px 9px 16px 9px;
   }
-
   .nav-item {
     min-height: 41px;
     padding: 8.5px 11px;
   }
-
   .nav-label {
     font-size: 12.75px;
   }
-
   .nav-icon {
     min-width: 33px;
   }
+  .sidebar-bookmark {
+    left: calc(260px - 28px);
+  }
+  .sidebar-bookmark.sidebar-bookmark-mini {
+    left: calc(68px - 1px);
+  }
 }
 
-/* Medium Desktop: 1280px - 1439px */
 @media (min-width: 1280px) and (max-width: 1439px) {
   .sidebar-header {
     margin: 10px;
     padding: 11px 13px !important;
   }
-
   .sidebar-logo {
-    width: 33px;
-    height: 33px;
+    width: 50px;
+    height: 50px;
   }
-
   .sidebar-title {
     font-size: 16.75px;
   }
-
   .nav-item {
     min-height: 41px;
     padding: 9px 11px;
   }
-
   .nav-label {
     font-size: 12.85px;
   }
+  .sidebar-bookmark {
+    left: calc(268px - 28px);
+  }
+  .sidebar-bookmark.sidebar-bookmark-mini {
+    left: calc(68px - 1px);
+  }
 }
 
-/* Large Desktop: 1440px+ */
 @media (min-width: 1440px) {
   .sidebar-header {
     margin: 10px;
     padding: 12px 14px !important;
   }
-
   .sidebar-logo {
-    width: 34px;
-    height: 34px;
+    width: 52px;
+    height: 52px;
   }
-
   .sidebar-title {
     font-size: 17px;
   }
-
   .nav-item {
     min-height: 42px;
     padding: 9px 12px;
   }
-
   .nav-label {
     font-size: 13px;
   }
+  .sidebar-bookmark {
+    left: calc(276px - 28px);
+  }
+  .sidebar-bookmark.sidebar-bookmark-mini {
+    left: calc(68px - 1px);
+  }
 }
 
-/* Extra smooth transitions */
 @media (prefers-reduced-motion: no-preference) {
   .modern-sidebar,
   .nav-item,
-  .company-dropdown {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  .sidebar-header,
+  .sidebar-logo {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 </style>
