@@ -4,62 +4,76 @@
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
-          <div class="header-left">
-            <h1 class="page-title">Employees</h1>
-          </div>
+          <h1 class="page-title">Employees</h1>
           <div class="header-actions">
-            <q-btn
-              color="primary"
-              label="Add Employee"
-              icon="add"
-              class="add-employee-btn"
-              @click="openAddModal"
-            />
             <q-input
               v-model="searchTerm"
               placeholder="Search employees..."
               class="header-search"
               dense
               outlined
-              @input="filterEmployees"
+              @update:model-value="filterEmployees"
             >
               <template v-slot:prepend>
                 <q-icon name="search" class="search-icon" />
               </template>
             </q-input>
+            <q-btn
+              color="primary"
+              label="Add Employee"
+              icon="add"
+              class="add-employee-btn"
+              unelevated
+              @click="openAddModal"
+            />
           </div>
         </div>
       </div>
 
       <!-- Stats Cards -->
       <div class="stats-section">
-        <div class="stats-card personal-card">
-          <div class="stats-icon-wrapper">
-            <q-icon name="people" class="stats-icon" />
+        <div class="stats-card stats-total">
+          <div class="stats-icon-wrapper stats-icon-blue">
+            <q-icon name="people" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ employeeStats.total }}</div>
             <div class="stats-label">Total Employees</div>
+            <div class="stats-amount">{{ employeeStats.total }}</div>
+            <div class="stats-delta stats-delta-neutral">All time</div>
           </div>
         </div>
 
-        <div class="stats-card corporate-card">
-          <div class="stats-icon-wrapper">
-            <q-icon name="business" class="stats-icon" />
+        <div class="stats-card stats-active">
+          <div class="stats-icon-wrapper stats-icon-green">
+            <q-icon name="check_circle" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ employeeStats.active }}</div>
             <div class="stats-label">Active</div>
+            <div class="stats-amount">{{ employeeStats.active }}</div>
+            <div class="stats-delta stats-delta-positive">
+              {{
+                employeeStats.total > 0
+                  ? Math.round((employeeStats.active / employeeStats.total) * 100)
+                  : 0
+              }}% of total
+            </div>
           </div>
         </div>
 
-        <div class="stats-card business-card">
-          <div class="stats-icon-wrapper">
-            <q-icon name="trending_down" class="stats-icon" />
+        <div class="stats-card stats-terminated">
+          <div class="stats-icon-wrapper stats-icon-red">
+            <q-icon name="remove_circle" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ employeeStats.terminated }}</div>
             <div class="stats-label">Terminated</div>
+            <div class="stats-amount">{{ employeeStats.terminated }}</div>
+            <div class="stats-delta stats-delta-negative">
+              {{
+                employeeStats.total > 0
+                  ? Math.round((employeeStats.terminated / employeeStats.total) * 100)
+                  : 0
+              }}% of total
+            </div>
           </div>
         </div>
       </div>
@@ -67,9 +81,7 @@
       <!-- Main Table Section -->
       <div class="table-section">
         <div class="table-header">
-          <div class="table-title-section">
-            <h2 class="table-title">Employee Overview</h2>
-          </div>
+          <h2 class="table-title">Employee Overview</h2>
           <div class="table-actions">
             <q-select
               v-model="selectedSite"
@@ -105,138 +117,180 @@
             hide-pagination
             :rows-per-page-options="[0]"
           >
-            <template v-slot:header>
+            <!-- Loading skeleton -->
+            <template v-slot:loading>
+              <q-inner-loading showing color="primary" />
+            </template>
+
+            <template v-slot:header="props">
               <q-tr class="table-header-row">
-                <q-th class="table-header-cell">SL No</q-th>
-                <q-th class="table-header-cell">Employee Name</q-th>
-                <q-th class="table-header-cell">Email</q-th>
-                <q-th class="table-header-cell">Phone</q-th>
-                <q-th class="table-header-cell">Role</q-th>
-                <q-th class="table-header-cell">Status</q-th>
-                <q-th class="table-header-cell">Actions</q-th>
+                <q-th key="name" :props="props" class="table-header-cell">Employee</q-th>
+                <q-th key="role" :props="props" class="table-header-cell">Role</q-th>
+                <q-th key="phone" :props="props" class="table-header-cell">Phone</q-th>
+                <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
+                <q-th key="actions" :props="props" class="table-header-cell table-header-actions"
+                  >Actions</q-th
+                >
               </q-tr>
             </template>
 
             <template v-slot:body="props">
-              <q-tr
-                class="table-body-row"
-                :class="{ 'terminated-row': getStatus(props.row) === 'Terminated' }"
-              >
-                <q-td class="table-body-cell">
-                  {{ String(props.rowIndex + 1).padStart(2, '0') }}.
-                </q-td>
-                <q-td class="table-body-cell employee-name-cell">
+              <q-tr class="table-body-row">
+                <!-- Employee name + avatar + email merged cell -->
+                <q-td key="name" :props="props" class="table-body-cell employee-name-cell">
                   <div class="employee-info">
-                    <q-avatar size="32px" v-if="props.row.user?.picture_url">
+                    <q-avatar size="34px" v-if="props.row.user?.picture_url">
                       <img
                         :src="props.row.user.picture_url"
                         :alt="getFullName(props.row)"
                         @error="handleImageError"
                       />
                     </q-avatar>
-                    <q-avatar v-else size="32px" color="primary" text-color="white">
+                    <q-avatar v-else size="34px" class="avatar-fallback">
                       {{ getInitials(getFullName(props.row)) }}
                     </q-avatar>
-                    <span class="employee-name">{{ getFullName(props.row) }}</span>
+                    <div class="employee-name-block">
+                      <span class="employee-name">{{ getFullName(props.row) }}</span>
+                      <a :href="`mailto:${getEmail(props.row)}`" class="email-link">
+                        {{ getEmail(props.row) }}
+                      </a>
+                    </div>
                   </div>
                 </q-td>
-                <q-td class="table-body-cell email-cell">
-                  <a :href="`mailto:${getEmail(props.row)}`" class="email-link">
-                    {{ getEmail(props.row) }}
-                  </a>
+
+                <q-td key="role" :props="props" class="table-body-cell">
+                  <span class="role-chip">{{ getRole(props.row) }}</span>
                 </q-td>
-                <q-td class="table-body-cell">
+
+                <q-td key="phone" :props="props" class="table-body-cell">
                   {{ getPhoneNumber(props.row) }}
                 </q-td>
-                <q-td class="table-body-cell">
-                  {{ getRole(props.row) }}
-                </q-td>
-                <q-td class="table-body-cell">
+
+                <q-td key="status" :props="props" class="table-body-cell">
                   <div :class="['status-badge', getStatusClass(props.row)]">
+                    <span class="status-dot"></span>
                     {{ getStatus(props.row) }}
                   </div>
                 </q-td>
-                <q-td class="table-body-cell actions-cell">
-                  <div class="action-buttons">
-                    <q-btn
-                      flat
-                      round
-                      icon="visibility"
-                      size="sm"
-                      class="action-btn view-btn"
-                      @click="viewEmployee(props.row)"
-                    >
-                      <q-tooltip>View Details</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      icon="edit"
-                      size="sm"
-                      class="action-btn edit-btn"
-                      @click="editEmployee(props.row)"
-                      :disable="getStatus(props.row) === 'Terminated'"
-                    >
-                      <q-tooltip>Edit Employee</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      v-if="getStatus(props.row) !== 'Terminated'"
-                      flat
-                      round
-                      icon="block"
-                      size="sm"
-                      class="action-btn terminate-btn"
-                      @click="confirmTerminate(props.row)"
-                    >
-                      <q-tooltip>Terminate Employee</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      v-else
-                      flat
-                      round
-                      icon="restore"
-                      size="sm"
-                      class="action-btn restore-btn"
-                      @click="confirmRestore(props.row)"
-                    >
-                      <q-tooltip>Restore Employee</q-tooltip>
-                    </q-btn>
-                  </div>
+
+                <!-- Actions: ⋯ dropdown -->
+                <q-td key="actions" :props="props" class="table-body-cell actions-cell">
+                  <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                    <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                      <q-list dense style="min-width: 150px">
+                        <q-item
+                          clickable
+                          v-close-popup
+                          @click="viewEmployee(props.row)"
+                          class="dropdown-item"
+                        >
+                          <q-item-section avatar
+                            ><q-icon name="visibility" size="16px"
+                          /></q-item-section>
+                          <q-item-section>View details</q-item-section>
+                        </q-item>
+                        <q-item
+                          clickable
+                          v-close-popup
+                          @click="editEmployee(props.row)"
+                          :disable="getStatus(props.row) === 'Terminated'"
+                          class="dropdown-item"
+                        >
+                          <q-item-section avatar><q-icon name="edit" size="16px" /></q-item-section>
+                          <q-item-section>Edit</q-item-section>
+                        </q-item>
+                        <q-separator />
+                        <q-item
+                          v-if="getStatus(props.row) !== 'Terminated'"
+                          clickable
+                          v-close-popup
+                          @click="confirmTerminate(props.row)"
+                          class="dropdown-item dropdown-item-danger"
+                        >
+                          <q-item-section avatar
+                            ><q-icon name="block" size="16px"
+                          /></q-item-section>
+                          <q-item-section>Terminate</q-item-section>
+                        </q-item>
+                        <q-item
+                          v-else
+                          clickable
+                          v-close-popup
+                          @click="confirmRestore(props.row)"
+                          class="dropdown-item dropdown-item-restore"
+                        >
+                          <q-item-section avatar
+                            ><q-icon name="restore" size="16px"
+                          /></q-item-section>
+                          <q-item-section>Restore</q-item-section>
+                        </q-item>
+                      </q-list>
+                    </q-menu>
+                  </q-btn>
                 </q-td>
               </q-tr>
+            </template>
+
+            <!-- Empty state -->
+            <template v-slot:no-data>
+              <div class="empty-state">
+                <q-icon name="group_off" size="48px" class="empty-state-icon" />
+                <div class="empty-state-title">No employees found</div>
+                <div class="empty-state-sub">
+                  Try adjusting your search or filters, or add your first employee.
+                </div>
+                <q-btn
+                  unelevated
+                  color="primary"
+                  icon="add"
+                  label="Add Employee"
+                  class="empty-state-btn"
+                  @click="openAddModal"
+                />
+              </div>
             </template>
           </q-table>
         </div>
       </div>
     </div>
 
-    <!-- Add Employee Modal -->
+    <!-- ======================== ADD EMPLOYEE MODAL (Stepper) ======================== -->
     <q-dialog v-model="showAddModal" persistent>
       <q-card class="modal-card add-modal">
         <q-card-section class="modal-header">
           <div class="modal-title-section">
-            <q-icon name="person_add" class="modal-icon" />
+            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add">
+              <q-icon name="person_add" size="22px" />
+            </q-avatar>
             <div>
               <div class="modal-title">Add New Employee</div>
-              <div class="modal-subtitle">Fill in the employee details</div>
+              <div class="modal-subtitle" id="add-step-label">Step 1 of 3 — User information</div>
             </div>
           </div>
-          <q-btn icon="close" flat round class="modal-close-btn" @click="cancelAdd" />
+          <q-btn icon="close" flat round dense class="modal-close-btn" @click="cancelAdd" />
         </q-card-section>
         <q-separator />
+
+        <!-- Stepper dots -->
+        <div class="stepper-dots">
+          <span :class="['dot', addStep >= 1 ? 'dot-active' : '']"></span>
+          <span :class="['dot', addStep >= 2 ? 'dot-active' : '']"></span>
+          <span :class="['dot', addStep >= 3 ? 'dot-active' : '']"></span>
+        </div>
+
         <q-card-section class="modal-content">
-          <q-form @submit="addEmployee" class="edit-form">
-            <div class="form-sections">
+          <q-form @submit="addEmployee" class="edit-form" ref="addFormRef">
+            <!-- Step 1: User Info -->
+            <div v-show="addStep === 1">
               <!-- Avatar Upload Section -->
               <div class="avatar-upload-section">
                 <div class="avatar-preview-wrapper">
-                  <q-avatar size="120px" v-if="avatarPreview">
+                  <q-avatar size="90px" v-if="avatarPreview">
                     <img :src="avatarPreview" alt="Avatar Preview" />
                   </q-avatar>
-                  <q-avatar v-else size="120px" color="grey-3" text-color="grey-6">
-                    <q-icon name="person" size="60px" />
+                  <q-avatar v-else size="90px" class="avatar-placeholder">
+                    <q-icon name="person" size="40px" />
                   </q-avatar>
-
                   <input
                     type="file"
                     ref="avatarInputAdd"
@@ -244,7 +298,6 @@
                     style="display: none"
                     @change="handleAvatarSelect"
                   />
-
                   <div class="avatar-actions">
                     <q-btn
                       flat
@@ -264,15 +317,12 @@
                       @click="removeAvatar"
                     />
                   </div>
-                  <div class="avatar-hint">
-                    Maximum file size: 5MB. Accepted formats: JPG, PNG, GIF
-                  </div>
+                  <div class="avatar-hint">Max 5MB · JPG, PNG, GIF</div>
                 </div>
               </div>
 
-              <!-- User Information Section -->
               <div class="form-section">
-                <div class="section-title">User Information</div>
+                <div class="section-title">User information</div>
                 <div class="form-grid">
                   <q-input
                     v-model="addForm.user.username"
@@ -314,7 +364,7 @@
                     dense
                     :rules="[
                       (val) => !!val || 'Password is required',
-                      (val) => val.length >= 8 || 'Password must be at least 8 characters',
+                      (val) => val.length >= 8 || 'Min 8 characters',
                     ]"
                   />
                   <q-input
@@ -367,10 +417,51 @@
                   />
                 </div>
               </div>
+            </div>
 
-              <!-- Employment Information Section -->
+            <!-- Step 2: Personal Info -->
+            <div v-show="addStep === 2">
               <div class="form-section">
-                <div class="section-title">Employment Information</div>
+                <div class="section-title">Personal information</div>
+                <div class="form-grid">
+                  <q-select
+                    v-model="addForm.civil_status"
+                    :options="civilStatusOptions"
+                    label="Civil Status"
+                    outlined
+                    dense
+                  />
+                  <q-input v-model="addForm.birthday" label="Birthday" type="date" outlined dense />
+                  <q-input
+                    v-model="addForm.phone_number"
+                    label="Phone Number"
+                    outlined
+                    dense
+                    mask="###########"
+                  />
+                  <q-input
+                    v-model="addForm.emergency_contact"
+                    label="Emergency Contact"
+                    outlined
+                    dense
+                  />
+                  <q-input
+                    v-model="addForm.address"
+                    label="Address"
+                    outlined
+                    dense
+                    type="textarea"
+                    rows="2"
+                    class="col-span-2"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3: Employment Info -->
+            <div v-show="addStep === 3">
+              <div class="form-section">
+                <div class="section-title">Employment information</div>
                 <div class="form-grid">
                   <q-select
                     v-model="addForm.user_role"
@@ -397,11 +488,21 @@
             </div>
 
             <div class="form-actions">
+              <q-btn v-if="addStep > 1" label="Back" flat color="grey-7" @click="addStep--" />
               <q-btn label="Cancel" flat color="grey-7" @click="cancelAdd" />
               <q-btn
+                v-if="addStep < 3"
+                label="Next"
+                color="primary"
+                unelevated
+                @click="addStep++"
+              />
+              <q-btn
+                v-else
                 label="Add Employee"
                 type="submit"
                 color="primary"
+                unelevated
                 :loading="savingEmployee || uploadingAvatar"
               />
             </div>
@@ -410,291 +511,308 @@
       </q-card>
     </q-dialog>
 
-    <!-- View Employee Modal -->
+    <!-- ======================== VIEW EMPLOYEE MODAL (Tabbed) ======================== -->
     <q-dialog v-model="showViewModal" persistent>
       <q-card class="modal-card view-modal">
         <q-card-section class="modal-header">
           <div class="modal-title-section">
-            <q-avatar size="80px" v-if="selectedEmployee?.user?.picture_url">
+            <q-avatar size="52px" v-if="selectedEmployee?.user?.picture_url">
               <img :src="selectedEmployee.user.picture_url" :alt="getFullName(selectedEmployee)" />
             </q-avatar>
-            <q-avatar v-else size="80px" color="primary" text-color="white" class="modal-avatar">
+            <q-avatar v-else size="52px" class="avatar-fallback avatar-fallback-lg">
               {{ getInitials(getFullName(selectedEmployee)) }}
             </q-avatar>
             <div>
               <div class="modal-title">{{ getFullName(selectedEmployee) }}</div>
-              <div class="modal-subtitle">Employee Details</div>
+              <div class="modal-subtitle">
+                <span
+                  :class="['status-badge', getStatusClass(selectedEmployee)]"
+                  style="font-size: 11px"
+                >
+                  <span class="status-dot"></span>{{ getStatus(selectedEmployee) }}
+                </span>
+              </div>
             </div>
           </div>
-          <q-btn icon="close" flat round class="modal-close-btn" @click="showViewModal = false" />
+          <q-btn
+            icon="close"
+            flat
+            round
+            dense
+            class="modal-close-btn"
+            @click="showViewModal = false"
+          />
         </q-card-section>
         <q-separator />
+
+        <!-- Tabs -->
+        <q-tabs
+          v-model="viewTab"
+          dense
+          align="left"
+          class="view-tabs"
+          indicator-color="primary"
+          active-color="primary"
+        >
+          <q-tab name="user" label="User info" />
+          <q-tab name="personal" label="Personal" />
+          <q-tab name="employment" label="Employment" />
+        </q-tabs>
+        <q-separator />
+
         <q-card-section class="modal-content">
-          <div class="detail-sections">
-            <!-- User Information -->
-            <div class="detail-section">
-              <div class="section-title">User Information</div>
-              <div class="detail-grid">
-                <div class="detail-row">
-                  <span class="detail-label">Username:</span>
-                  <span class="detail-value">{{ selectedEmployee?.user?.username || 'N/A' }}</span>
+          <q-tab-panels v-model="viewTab" animated>
+            <!-- User Info Tab -->
+            <q-tab-panel name="user" class="q-pa-none">
+              <div class="detail-grid-cards">
+                <div class="detail-card">
+                  <div class="detail-card-label">Username</div>
+                  <div class="detail-card-value">
+                    {{ selectedEmployee?.user?.username || 'N/A' }}
+                  </div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Email:</span>
-                  <span class="detail-value">{{ getEmail(selectedEmployee) }}</span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Email</div>
+                  <div class="detail-card-value">{{ getEmail(selectedEmployee) }}</div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Full Name:</span>
-                  <span class="detail-value">{{ getFullName(selectedEmployee) }}</span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Full Name</div>
+                  <div class="detail-card-value">{{ getFullName(selectedEmployee) }}</div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Role:</span>
-                  <span class="detail-value">{{ getRole(selectedEmployee) }}</span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Role</div>
+                  <div class="detail-card-value">{{ getRole(selectedEmployee) }}</div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Status:</span>
-                  <span class="detail-value">
-                    <div :class="['status-badge', getStatusClass(selectedEmployee)]">
-                      {{ getStatus(selectedEmployee) }}
-                    </div>
-                  </span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Status</div>
+                  <div class="detail-card-value">
+                    <span :class="['status-badge', getStatusClass(selectedEmployee)]"
+                      ><span class="status-dot"></span>{{ getStatus(selectedEmployee) }}</span
+                    >
+                  </div>
                 </div>
               </div>
-            </div>
+            </q-tab-panel>
 
-            <!-- Personal Information -->
-            <div class="detail-section">
-              <div class="section-title">Personal Information</div>
-              <div class="detail-grid">
-                <div class="detail-row">
-                  <span class="detail-label">Civil Status:</span>
-                  <span class="detail-value">{{ getCivilStatus(selectedEmployee) }}</span>
+            <!-- Personal Tab -->
+            <q-tab-panel name="personal" class="q-pa-none">
+              <div class="detail-grid-cards">
+                <div class="detail-card">
+                  <div class="detail-card-label">Civil Status</div>
+                  <div class="detail-card-value">{{ getCivilStatus(selectedEmployee) }}</div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Birthday:</span>
-                  <span class="detail-value">{{
-                    formatDate(selectedEmployee?.birthday) || 'N/A'
-                  }}</span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Birthday</div>
+                  <div class="detail-card-value">
+                    {{ formatDate(selectedEmployee?.birthday) || 'N/A' }}
+                  </div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Phone:</span>
-                  <span class="detail-value">{{ getPhoneNumber(selectedEmployee) }}</span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Phone</div>
+                  <div class="detail-card-value">{{ getPhoneNumber(selectedEmployee) }}</div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Emergency Contact:</span>
-                  <span class="detail-value">{{
-                    selectedEmployee?.emergency_contact || 'N/A'
-                  }}</span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Emergency Contact</div>
+                  <div class="detail-card-value">
+                    {{ selectedEmployee?.emergency_contact || 'N/A' }}
+                  </div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Address:</span>
-                  <span class="detail-value">{{ selectedEmployee?.address || 'N/A' }}</span>
+                <div class="detail-card detail-card-full">
+                  <div class="detail-card-label">Address</div>
+                  <div class="detail-card-value">{{ selectedEmployee?.address || 'N/A' }}</div>
                 </div>
               </div>
-            </div>
+            </q-tab-panel>
 
-            <!-- Employment Information -->
-            <div class="detail-section">
-              <div class="section-title">Employment Information</div>
-              <div class="detail-grid">
-                <div class="detail-row">
-                  <span class="detail-label">Bank Account:</span>
-                  <span class="detail-value">{{ selectedEmployee?.bank_acct || 'N/A' }}</span>
+            <!-- Employment Tab -->
+            <q-tab-panel name="employment" class="q-pa-none">
+              <div class="detail-grid-cards">
+                <div class="detail-card">
+                  <div class="detail-card-label">Bank Account</div>
+                  <div class="detail-card-value">{{ selectedEmployee?.bank_acct || 'N/A' }}</div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Timezone:</span>
-                  <span class="detail-value">{{ selectedEmployee?.timezone || 'N/A' }}</span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Timezone</div>
+                  <div class="detail-card-value">{{ selectedEmployee?.timezone || 'N/A' }}</div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Last Updated:</span>
-                  <span class="detail-value">{{
-                    formatDateTime(selectedEmployee?.last_date_updated) || 'N/A'
-                  }}</span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Last Updated</div>
+                  <div class="detail-card-value">
+                    {{ formatDateTime(selectedEmployee?.last_date_updated) || 'N/A' }}
+                  </div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Updated By:</span>
-                  <span class="detail-value">{{ selectedEmployee?.updated_by || 'N/A' }}</span>
+                <div class="detail-card">
+                  <div class="detail-card-label">Updated By</div>
+                  <div class="detail-card-value">{{ selectedEmployee?.updated_by || 'N/A' }}</div>
                 </div>
               </div>
-            </div>
-          </div>
+            </q-tab-panel>
+          </q-tab-panels>
         </q-card-section>
       </q-card>
     </q-dialog>
 
-    <!-- Edit Employee Modal -->
+    <!-- ======================== EDIT EMPLOYEE MODAL ======================== -->
     <q-dialog v-model="showEditModal" persistent>
       <q-card class="modal-card edit-modal">
         <q-card-section class="modal-header">
           <div class="modal-title-section">
-            <q-icon name="edit" class="modal-icon" />
+            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-edit">
+              <q-icon name="edit" size="20px" />
+            </q-avatar>
             <div>
               <div class="modal-title">Edit Employee</div>
               <div class="modal-subtitle">{{ getFullName(selectedEmployee) }}</div>
             </div>
           </div>
-          <q-btn icon="close" flat round class="modal-close-btn" @click="cancelEdit" />
+          <q-btn icon="close" flat round dense class="modal-close-btn" @click="cancelEdit" />
         </q-card-section>
         <q-separator />
         <q-card-section class="modal-content">
           <q-form @submit="saveEmployee" class="edit-form">
-            <div class="form-sections">
-              <!-- Avatar Upload Section for Edit -->
-              <div class="avatar-upload-section">
-                <div class="avatar-preview-wrapper">
-                  <q-avatar size="120px" v-if="editAvatarPreview">
-                    <img :src="editAvatarPreview" alt="Avatar Preview" />
-                  </q-avatar>
-                  <q-avatar v-else-if="selectedEmployee?.user?.picture_url" size="120px">
-                    <img
-                      :src="selectedEmployee.user.picture_url"
-                      :alt="getFullName(selectedEmployee)"
-                    />
-                  </q-avatar>
-                  <q-avatar v-else size="120px" color="grey-3" text-color="grey-6">
-                    <q-icon name="person" size="60px" />
-                  </q-avatar>
-
-                  <input
-                    type="file"
-                    ref="avatarInputEdit"
-                    accept="image/*"
-                    style="display: none"
-                    @change="handleEditAvatarSelect"
+            <!-- Avatar Upload Section for Edit -->
+            <div class="avatar-upload-section">
+              <div class="avatar-preview-wrapper">
+                <q-avatar size="90px" v-if="editAvatarPreview">
+                  <img :src="editAvatarPreview" alt="Avatar Preview" />
+                </q-avatar>
+                <q-avatar v-else-if="selectedEmployee?.user?.picture_url" size="90px">
+                  <img
+                    :src="selectedEmployee.user.picture_url"
+                    :alt="getFullName(selectedEmployee)"
                   />
-
-                  <div class="avatar-actions">
-                    <q-btn
-                      flat
-                      dense
-                      color="primary"
-                      icon="upload"
-                      label="Change Photo"
-                      @click="$refs.avatarInputEdit.click()"
-                    />
-                    <q-btn
-                      v-if="editAvatarPreview"
-                      flat
-                      dense
-                      color="negative"
-                      icon="delete"
-                      label="Remove"
-                      @click="removeEditAvatar"
-                    />
-                  </div>
-                  <div class="avatar-hint">
-                    Maximum file size: 5MB. Accepted formats: JPG, PNG, GIF
-                  </div>
+                </q-avatar>
+                <q-avatar v-else size="90px" class="avatar-placeholder">
+                  <q-icon name="person" size="40px" />
+                </q-avatar>
+                <input
+                  type="file"
+                  ref="avatarInputEdit"
+                  accept="image/*"
+                  style="display: none"
+                  @change="handleEditAvatarSelect"
+                />
+                <div class="avatar-actions">
+                  <q-btn
+                    flat
+                    dense
+                    color="primary"
+                    icon="upload"
+                    label="Change Photo"
+                    @click="$refs.avatarInputEdit.click()"
+                  />
+                  <q-btn
+                    v-if="editAvatarPreview"
+                    flat
+                    dense
+                    color="negative"
+                    icon="delete"
+                    label="Remove"
+                    @click="removeEditAvatar"
+                  />
                 </div>
+                <div class="avatar-hint">Max 5MB · JPG, PNG, GIF</div>
               </div>
+            </div>
 
-              <!-- User Information Section -->
-              <div class="form-section">
-                <div class="section-title">User Information</div>
-                <div class="form-grid">
-                  <q-input
-                    v-model="editForm.user.username"
-                    label="Username *"
-                    outlined
-                    dense
-                    :rules="[(val) => !!val || 'Username is required']"
-                  />
-                  <q-input
-                    v-model="editForm.user.email"
-                    label="Email *"
-                    type="email"
-                    outlined
-                    dense
-                    :rules="[
-                      (val) => !!val || 'Email is required',
-                      (val) => /.+@.+\..+/.test(val) || 'Please enter a valid email',
-                    ]"
-                  />
-                  <q-input
-                    v-model="editForm.user.first_name"
-                    label="First Name *"
-                    outlined
-                    dense
-                    :rules="[(val) => !!val || 'First name is required']"
-                  />
-                  <q-input
-                    v-model="editForm.user.last_name"
-                    label="Last Name *"
-                    outlined
-                    dense
-                    :rules="[(val) => !!val || 'Last name is required']"
-                  />
-                </div>
+            <div class="form-section">
+              <div class="section-title">User information</div>
+              <div class="form-grid">
+                <q-input
+                  v-model="editForm.user.username"
+                  label="Username *"
+                  outlined
+                  dense
+                  :rules="[(val) => !!val || 'Username is required']"
+                />
+                <q-input
+                  v-model="editForm.user.email"
+                  label="Email *"
+                  type="email"
+                  outlined
+                  dense
+                  :rules="[
+                    (val) => !!val || 'Email is required',
+                    (val) => /.+@.+\..+/.test(val) || 'Please enter a valid email',
+                  ]"
+                />
+                <q-input
+                  v-model="editForm.user.first_name"
+                  label="First Name *"
+                  outlined
+                  dense
+                  :rules="[(val) => !!val || 'First name is required']"
+                />
+                <q-input
+                  v-model="editForm.user.last_name"
+                  label="Last Name *"
+                  outlined
+                  dense
+                  :rules="[(val) => !!val || 'Last name is required']"
+                />
               </div>
+            </div>
 
-              <!-- Personal Information Section -->
-              <div class="form-section">
-                <div class="section-title">Personal Information</div>
-                <div class="form-grid">
-                  <q-select
-                    v-model="editForm.civil_status"
-                    :options="civilStatusOptions"
-                    label="Civil Status"
-                    outlined
-                    dense
-                  />
-                  <q-input
-                    v-model="editForm.birthday"
-                    label="Birthday"
-                    type="date"
-                    outlined
-                    dense
-                  />
-                  <q-input
-                    v-model="editForm.phone_number"
-                    label="Phone Number"
-                    outlined
-                    dense
-                    mask="############"
-                  />
-                  <q-input
-                    v-model="editForm.emergency_contact"
-                    label="Emergency Contact"
-                    outlined
-                    dense
-                  />
-                  <q-input
-                    v-model="editForm.address"
-                    label="Address"
-                    outlined
-                    dense
-                    type="textarea"
-                    rows="2"
-                    class="col-span-2"
-                  />
-                </div>
+            <!-- Personal Information Section -->
+            <div class="form-section">
+              <div class="section-title">Personal Information</div>
+              <div class="form-grid">
+                <q-select
+                  v-model="editForm.civil_status"
+                  :options="civilStatusOptions"
+                  label="Civil Status"
+                  outlined
+                  dense
+                />
+                <q-input v-model="editForm.birthday" label="Birthday" type="date" outlined dense />
+                <q-input
+                  v-model="editForm.phone_number"
+                  label="Phone Number"
+                  outlined
+                  dense
+                  mask="############"
+                />
+                <q-input
+                  v-model="editForm.emergency_contact"
+                  label="Emergency Contact"
+                  outlined
+                  dense
+                />
+                <q-input
+                  v-model="editForm.address"
+                  label="Address"
+                  outlined
+                  dense
+                  type="textarea"
+                  rows="2"
+                  class="col-span-2"
+                />
               </div>
+            </div>
 
-              <!-- Employment Information Section -->
-              <div class="form-section">
-                <div class="section-title">Employment Information</div>
-                <div class="form-grid">
-                  <q-select
-                    v-model="editForm.user_role"
-                    :options="roleOptions"
-                    option-label="name"
-                    option-value="id"
-                    label="Role *"
-                    outlined
-                    dense
-                    :rules="[(val) => !!val || 'Role is required']"
-                  />
-                  <q-input v-model="editForm.bank_acct" label="Bank Account" outlined dense />
-                  <q-select
-                    v-model="editForm.timezone"
-                    :options="timezoneOptions"
-                    label="Timezone"
-                    outlined
-                    dense
-                    use-input
-                    @filter="filterTimezones"
-                  />
-                </div>
+            <div class="form-section">
+              <div class="section-title">Employment information</div>
+              <div class="form-grid">
+                <q-select
+                  v-model="editForm.user_role"
+                  :options="roleOptions"
+                  option-label="name"
+                  option-value="id"
+                  label="Role *"
+                  outlined
+                  dense
+                  :rules="[(val) => !!val || 'Role is required']"
+                />
+                <q-input v-model="editForm.bank_acct" label="Bank Account" outlined dense />
+                <q-select
+                  v-model="editForm.timezone"
+                  :options="timezoneOptions"
+                  label="Timezone"
+                  outlined
+                  dense
+                  use-input
+                  @filter="filterTimezones"
+                />
               </div>
             </div>
 
@@ -704,6 +822,7 @@
                 label="Save Changes"
                 type="submit"
                 color="primary"
+                unelevated
                 :loading="savingEmployee || uploadingAvatar"
               />
             </div>
@@ -712,23 +831,23 @@
       </q-card>
     </q-dialog>
 
-    <!-- Terminate Confirmation Dialog -->
+    <!-- ======================== TERMINATE CONFIRMATION ======================== -->
     <q-dialog v-model="showTerminateDialog" persistent>
-      <q-card class="terminate-dialog">
-        <q-card-section class="terminate-header">
-          <q-icon name="block" class="terminate-icon" />
-          <div class="terminate-title">Confirm Termination</div>
+      <q-card class="confirm-dialog">
+        <q-card-section class="confirm-header confirm-header-danger">
+          <q-avatar size="44px" class="confirm-icon-wrap confirm-icon-danger">
+            <q-icon name="block" size="22px" />
+          </q-avatar>
+          <div class="confirm-title">Terminate employee?</div>
         </q-card-section>
-        <q-card-section class="terminate-content">
-          Are you sure you want to terminate employee
-          <strong>{{ getFullName(employeeToTerminate) }}</strong
-          >? This will change their status to "Terminated" and they will no longer have access to
-          the system.
+        <q-card-section class="confirm-content">
+          <strong>{{ getFullName(employeeToTerminate) }}</strong> will be marked as Terminated and
+          lose system access. This can be reversed.
         </q-card-section>
-        <q-card-actions align="right" class="terminate-actions">
+        <q-card-actions align="right" class="confirm-actions">
           <q-btn flat label="Cancel" color="grey-7" @click="showTerminateDialog = false" />
           <q-btn
-            flat
+            unelevated
             label="Terminate"
             color="negative"
             @click="terminateEmployee"
@@ -738,22 +857,23 @@
       </q-card>
     </q-dialog>
 
-    <!-- Restore Confirmation Dialog -->
+    <!-- ======================== RESTORE CONFIRMATION ======================== -->
     <q-dialog v-model="showRestoreDialog" persistent>
-      <q-card class="restore-dialog">
-        <q-card-section class="restore-header">
-          <q-icon name="restore" class="restore-icon" />
-          <div class="restore-title">Confirm Restoration</div>
+      <q-card class="confirm-dialog">
+        <q-card-section class="confirm-header confirm-header-success">
+          <q-avatar size="44px" class="confirm-icon-wrap confirm-icon-success">
+            <q-icon name="restore" size="22px" />
+          </q-avatar>
+          <div class="confirm-title">Restore employee?</div>
         </q-card-section>
-        <q-card-section class="restore-content">
-          Are you sure you want to restore employee
-          <strong>{{ getFullName(employeeToRestore) }}</strong
-          >? This will change their status back to "Active" and restore their system access.
+        <q-card-section class="confirm-content">
+          <strong>{{ getFullName(employeeToRestore) }}</strong> will be restored to Active status
+          and regain system access.
         </q-card-section>
-        <q-card-actions align="right" class="restore-actions">
+        <q-card-actions align="right" class="confirm-actions">
           <q-btn flat label="Cancel" color="grey-7" @click="showRestoreDialog = false" />
           <q-btn
-            flat
+            unelevated
             label="Restore"
             color="positive"
             @click="restoreEmployee"
@@ -794,6 +914,10 @@ const employeeToRestore = ref({})
 const savingEmployee = ref(false)
 const terminating = ref(false)
 const restoring = ref(false)
+
+// Stepper & tab state
+const addStep = ref(1)
+const viewTab = ref('user')
 
 //avatar
 const avatarFile = ref(null)
@@ -860,12 +984,10 @@ const filteredTimezoneOptions = ref([])
 
 // Table columns
 const columns = ref([
-  { name: 'sl_no', label: 'SL No', field: 'id', align: 'left' },
-  { name: 'name', label: 'Employee Name', field: 'full_name', align: 'left' },
-  { name: 'email', label: 'Email', field: (row) => row.user?.email, align: 'left' },
+  { name: 'name', label: 'Employee', field: (row) => getFullName(row), align: 'left' },
+  { name: 'role', label: 'Role', field: (row) => getRole(row), align: 'left' },
   { name: 'phone', label: 'Phone', field: 'phone_number', align: 'left' },
-  { name: 'role', label: 'Role', field: 'user_role_name', align: 'left' },
-  { name: 'status', label: 'Status', field: 'status', align: 'left' },
+  { name: 'status', label: 'Status', field: (row) => getStatus(row), align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ])
 
@@ -1908,6 +2030,7 @@ const filterTimezones = (val, update) => {
 // Modal Actions
 const openAddModal = () => {
   resetAddForm()
+  addStep.value = 1
   showAddModal.value = true
 }
 
@@ -1916,6 +2039,7 @@ const viewEmployee = async (emp) => {
   const detailed = await fetchEmployeeDetails(emp.id)
   if (detailed) {
     selectedEmployee.value = detailed
+    viewTab.value = 'user'
     showViewModal.value = true
   }
 }
@@ -1995,8 +2119,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ==============================
+   BASE
+============================== */
 .employee-dashboard {
-  background: #f8fafc;
+  background: #f4f6f9;
   min-height: 100vh;
   padding: 0;
 }
@@ -2004,15 +2131,18 @@ onMounted(() => {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 
+/* ==============================
+   HEADER
+============================== */
 .page-header {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 20px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
@@ -2025,33 +2155,20 @@ onMounted(() => {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
-  margin: 0 0 4px 0;
+  color: #111827;
+  margin: 0;
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
 }
-.site-select {
-  min-width: 200px;
-}
-.add-employee-btn {
-  height: 36px;
-  border-radius: 8px;
-  font-weight: 500;
-  text-transform: none;
-  white-space: nowrap;
-  padding: 0 16px;
-  font-size: 13px;
-}
 
 .header-search {
-  min-width: 180px;
-  max-width: 250px;
-  flex: 1;
+  min-width: 200px;
+  max-width: 260px;
 }
 
 .header-search .q-field__control {
@@ -2063,6 +2180,19 @@ onMounted(() => {
   color: #9ca3af;
 }
 
+.add-employee-btn {
+  height: 36px;
+  border-radius: 8px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+/* ==============================
+   STATS CARDS
+============================== */
 .stats-section {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -2071,155 +2201,166 @@ onMounted(() => {
 }
 
 .stats-card {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  padding: 16px 18px;
+  border: 1px solid #e8ecf0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transition: all 0.2s ease;
+  gap: 14px;
   min-width: 0;
+  transition: box-shadow 0.2s ease;
 }
 
 .stats-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-.personal-card {
-  background: linear-gradient(135deg, #fce7f3 0%, #f3e8ff 100%);
-}
-
-.corporate-card {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-}
-
-.business-card {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
 }
 
 .stats-icon-wrapper {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
   flex-shrink: 0;
+  font-size: 20px;
 }
 
-.stats-icon {
-  font-size: 24px;
-  color: #374151;
+.stats-icon-blue {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+.stats-icon-green {
+  background: #f0fdf4;
+  color: #22c55e;
+}
+.stats-icon-red {
+  background: #fef2f2;
+  color: #ef4444;
 }
 
 .stats-content {
-  flex: 1;
   min-width: 0;
 }
 
-.stats-amount {
-  font-size: 26px;
-  font-weight: 700;
-  color: #1a202c;
-  line-height: 1;
-  margin-bottom: 4px;
-}
-
 .stats-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
+  font-size: 12px;
+  color: #6b7280;
   margin-bottom: 2px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
+.stats-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+}
+
+.stats-delta {
+  font-size: 12px;
+  margin-top: 3px;
+  font-weight: 500;
+}
+
+.stats-delta-positive {
+  color: #22c55e;
+}
+.stats-delta-negative {
+  color: #ef4444;
+}
+.stats-delta-neutral {
+  color: #9ca3af;
+}
+
+/* ==============================
+   TABLE SECTION
+============================== */
 .table-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   overflow: hidden;
 }
 
 .table-header {
-  padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .table-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a202c;
+  color: #111827;
   margin: 0;
 }
 
-.sort-select {
-  width: 160px;
+.table-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
-.sort-select .q-field__control {
-  border-radius: 8px;
-  height: 36px;
+.site-select {
+  min-width: 180px;
 }
 
 .modern-table-container {
-  border: 2px solid #3b82f6;
-  border-radius: 10px;
-  overflow: hidden;
-  margin: 0 16px 16px 16px;
+  overflow-x: auto;
 }
 
 .loan-table {
-  background: white;
-  border-radius: 10px;
-  overflow: hidden;
+  width: 100%;
+  min-width: 700px;
 }
 
+/* Table header */
 .table-header-row {
   background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
 }
 
 .table-header-cell {
-  padding: 12px 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  text-align: left;
-  border: none;
-  white-space: nowrap;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
 }
 
+.table-header-actions {
+  text-align: center !important;
+}
+
+/* Table body */
 .table-body-row {
-  border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease;
 }
 
-.table-body-row:hover {
-  background: #f8fafc;
-}
-
-.terminated-row {
-  opacity: 0.6;
-  background: #fef2f2;
-}
-
-.terminated-row:hover {
-  background: #fee2e2;
+.table-body-row:hover .table-body-cell {
+  background: #f9fafb;
 }
 
 .table-body-cell {
-  padding: 12px 10px;
   font-size: 13px;
   color: #374151;
-  border: none;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle;
+}
+
+/* Employee info cell */
+.employee-name-cell {
+  min-width: 200px;
 }
 
 .employee-info {
@@ -2228,134 +2369,228 @@ onMounted(() => {
   gap: 10px;
 }
 
+.employee-name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
 .employee-name {
-  font-weight: 500;
-  color: #1a202c;
+  font-weight: 600;
+  color: #111827;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.email-cell .email-link {
-  color: #3b82f6;
+.email-link {
+  font-size: 11px;
+  color: #6b7280;
   text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.email-cell .email-link:hover {
+.email-link:hover {
+  color: #3b82f6;
   text-decoration: underline;
 }
 
+/* Avatar fallback */
+.avatar-fallback {
+  background: #e0e7ff !important;
+  color: #4338ca !important;
+  font-weight: 600 !important;
+  min-width: 34px !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+.avatar-fallback :deep(.q-avatar__content) {
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+
+.avatar-fallback-lg {
+  min-width: 52px !important;
+  width: 52px !important;
+  height: 52px !important;
+}
+
+.avatar-fallback-lg :deep(.q-avatar__content) {
+  font-size: 16px !important;
+}
+
+/* Role chip */
+.role-chip {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+/* Status badge */
 .status-badge {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 11px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }
 
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .status-active {
-  background: #dcfce7;
+  background: #f0fdf4;
   color: #16a34a;
 }
 
+.status-active .status-dot {
+  background: #22c55e;
+}
+
 .status-terminated {
-  background: #fee2e2;
+  background: #fef2f2;
   color: #dc2626;
+}
+
+.status-terminated .status-dot {
+  background: #ef4444;
 }
 
 .status-default {
   background: #f3f4f6;
-  color: #374151;
+  color: #6b7280;
 }
 
+.status-default .status-dot {
+  background: #9ca3af;
+}
+
+/* Action menu */
 .actions-cell {
-  width: 120px;
-  min-width: 120px;
+  text-align: center !important;
+  width: 60px;
 }
 
-.action-buttons {
+.action-menu-btn {
+  color: #6b7280 !important;
+  border-radius: 6px !important;
+}
+
+.action-menu-btn:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.action-dropdown {
+  border-radius: 8px !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dropdown-item {
+  font-size: 13px !important;
+  color: #374151 !important;
+  min-height: 36px !important;
+  padding: 0 12px !important;
+}
+
+.dropdown-item:hover {
+  background: #f9fafb !important;
+}
+
+.dropdown-item-danger {
+  color: #dc2626 !important;
+}
+
+.dropdown-item-danger:hover {
+  background: #fef2f2 !important;
+}
+
+.dropdown-item-restore {
+  color: #16a34a !important;
+}
+
+.dropdown-item-restore:hover {
+  background: #f0fdf4 !important;
+}
+
+/* ==============================
+   EMPTY STATE
+============================== */
+.empty-state {
   display: flex;
-  gap: 4px;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  flex-wrap: nowrap;
+  padding: 56px 20px;
+  text-align: center;
 }
 
-.action-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
+.empty-state-icon {
+  color: #d1d5db;
+  margin-bottom: 12px;
 }
 
-.view-btn {
-  background: #dbeafe;
-  color: #3b82f6;
+.empty-state-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
 }
 
-.view-btn:hover {
-  background: #bfdbfe;
+.empty-state-sub {
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 16px;
 }
 
-.edit-btn {
-  background: #fef3c7;
-  color: #d97706;
+.empty-state-btn {
+  border-radius: 8px;
+  font-size: 13px;
+  text-transform: none;
 }
 
-.edit-btn:hover {
-  background: #fde68a;
-}
-
-.edit-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.terminate-btn {
-  background: #fef2f2;
-  color: #ef4444;
-}
-
-.terminate-btn:hover {
-  background: #fee2e2;
-}
-
-.restore-btn {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.restore-btn:hover {
-  background: #bbf7d0;
-}
-
+/* ==============================
+   MODALS - SHARED
+============================== */
 .modal-card {
-  width: 100%;
-  max-width: 800px;
-  max-height: 85vh;
-  border-radius: 12px;
+  width: 560px;
+  max-width: 95vw;
+  max-height: 90vh;
+  border-radius: 14px !important;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.add-modal,
-.edit-modal {
-  max-width: 900px;
-}
-
-.view-modal {
-  max-width: 800px;
-}
-
 .modal-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  background: #f9fafb;
-  flex-shrink: 0;
+  justify-content: space-between;
+  padding: 16px 20px !important;
+  background: #ffffff;
 }
 
 .modal-title-section {
@@ -2364,368 +2599,260 @@ onMounted(() => {
   gap: 12px;
 }
 
-.modal-avatar {
+.modal-avatar-icon {
+  border-radius: 10px !important;
   flex-shrink: 0;
 }
 
-.modal-icon {
-  font-size: 28px;
-  color: #3b82f6;
-  background: #dbeafe;
-  padding: 8px;
-  border-radius: 8px;
+.modal-avatar-add {
+  background: #eff6ff !important;
+  color: #3b82f6 !important;
+}
+
+.modal-avatar-edit {
+  background: #fefce8 !important;
+  color: #ca8a04 !important;
 }
 
 .modal-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #111827;
-  margin: 0;
 }
 
 .modal-subtitle {
-  font-size: 13px;
+  font-size: 12px;
   color: #6b7280;
   margin-top: 2px;
 }
 
 .modal-close-btn {
-  color: #6b7280;
+  color: #9ca3af !important;
+  flex-shrink: 0;
 }
 
 .modal-close-btn:hover {
-  background: #f3f4f6;
+  background: #f3f4f6 !important;
+  color: #374151 !important;
 }
 
 .modal-content {
-  padding: 20px;
+  padding: 20px !important;
   overflow-y: auto;
   flex: 1;
 }
 
-.avatar-upload-section {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 16px;
+/* ==============================
+   STEPPER DOTS (Add Modal)
+============================== */
+.stepper-dots {
   display: flex;
   justify-content: center;
+  gap: 6px;
+  padding: 10px 0 0 0;
+  background: #ffffff;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.dot-active {
+  background: #3b82f6;
+  transform: scale(1.2);
+}
+
+/* ==============================
+   VIEW MODAL TABS
+============================== */
+.view-tabs {
+  background: #ffffff;
+  padding: 0 20px;
+  font-size: 13px;
+}
+
+.view-modal {
+  width: 560px;
+}
+
+/* Detail grid cards */
+.detail-grid-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.detail-card {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 14px;
+  border: 1px solid #f1f3f5;
+}
+
+.detail-card-full {
+  grid-column: 1 / -1;
+}
+
+.detail-card-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.detail-card-value {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+/* ==============================
+   FORM SECTIONS
+============================== */
+.form-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.col-span-2 {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f3f5;
+  margin-top: 8px;
+}
+
+/* ==============================
+   AVATAR UPLOAD
+============================== */
+.avatar-upload-section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .avatar-preview-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+}
+
+.avatar-placeholder {
+  background: #f3f4f6 !important;
+  color: #9ca3af !important;
 }
 
 .avatar-actions {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .avatar-hint {
   font-size: 11px;
-  color: #6b7280;
+  color: #9ca3af;
   text-align: center;
-  max-width: 280px;
 }
 
-.form-sections,
-.detail-sections {
+/* ==============================
+   CONFIRM DIALOGS
+============================== */
+.confirm-dialog {
+  width: 400px;
+  max-width: 95vw;
+  border-radius: 14px !important;
+}
+
+.confirm-header {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.form-section,
-.detail-section {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 16px;
-}
-
-.section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0 0 12px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.col-span-2 {
-  grid-column: span 2;
-}
-
-.detail-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #f3f4f6;
+  gap: 12px;
+  padding: 18px 20px 14px !important;
 }
 
-.detail-row:last-child {
-  border-bottom: none;
-}
-
-.detail-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #6b7280;
+.confirm-icon-wrap {
+  border-radius: 10px !important;
   flex-shrink: 0;
-  margin-right: 16px;
 }
 
-.detail-value {
-  font-size: 13px;
-  color: #111827;
-  text-align: right;
-  word-break: break-word;
+.confirm-icon-danger {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
 }
 
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
-  margin-top: 16px;
+.confirm-icon-success {
+  background: #f0fdf4 !important;
+  color: #16a34a !important;
 }
 
-.terminate-dialog,
-.restore-dialog {
-  max-width: 420px;
-  border-radius: 12px;
-}
-
-.terminate-header,
-.restore-header {
-  text-align: center;
-  padding: 20px 20px 12px;
-}
-
-.terminate-icon {
-  font-size: 42px;
-  color: #ef4444;
-  margin-bottom: 10px;
-}
-
-.restore-icon {
-  font-size: 42px;
-  color: #16a34a;
-  margin-bottom: 10px;
-}
-
-.terminate-title,
-.restore-title {
-  font-size: 18px;
+.confirm-title {
+  font-size: 16px;
   font-weight: 600;
   color: #111827;
 }
 
-.terminate-content,
-.restore-content {
-  padding: 0 20px 12px;
-  text-align: center;
-  color: #4b5563;
+.confirm-content {
+  padding: 0 20px 16px !important;
   font-size: 13px;
+  color: #4b5563;
   line-height: 1.6;
 }
 
-.terminate-content strong,
-.restore-content strong {
-  color: #111827;
+.confirm-actions {
+  padding: 12px 16px !important;
+  border-top: 1px solid #f1f3f5;
+  gap: 8px;
 }
 
-.terminate-actions,
-.restore-actions {
-  padding: 12px 20px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.modal-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.modal-content::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 3px;
-}
-
-.modal-content::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
-.modal-content::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-.q-field--loading .q-field__control::before {
-  background: #f3f4f6;
-}
-
-.modal-close-btn:focus,
-.form-actions button:focus {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
-
-.q-field--focused .q-field__control {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 1px #3b82f6;
-}
-
-/* ===================================
-   RESPONSIVE BREAKPOINTS
-   =================================== */
-
-/* 1440px - Large Desktop */
-@media (min-width: 1440px) {
-  .dashboard-container {
-    max-width: 1400px;
-    padding: 20px;
-  }
-
-  .stats-section {
-    gap: 16px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 14px 12px;
-  }
-
-  .action-buttons {
-    gap: 5px;
-  }
-
-  .action-btn {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-  }
-}
-
-/* 1024px - Desktop / Tablet Landscape */
-@media (max-width: 1024px) {
-  .dashboard-container {
-    padding: 16px;
-  }
-
-  .page-header {
-    padding: 14px;
-  }
-
-  .header-content {
-    flex-wrap: wrap;
-  }
-
-  .header-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .header-search {
-    min-width: 200px;
-  }
-
+/* ==============================
+   RESPONSIVE
+============================== */
+@media (max-width: 900px) {
   .stats-section {
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-  }
-
-  .stats-card {
-    padding: 14px;
-  }
-
-  .stats-icon-wrapper {
-    width: 44px;
-    height: 44px;
-  }
-
-  .stats-icon {
-    font-size: 22px;
+    gap: 10px;
   }
 
   .stats-amount {
-    font-size: 24px;
-  }
-
-  .stats-label {
-    font-size: 12px;
-  }
-
-  .table-header {
-    padding: 14px;
-  }
-
-  .modern-table-container {
-    margin: 0 14px 14px 14px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 11px 8px;
-    font-size: 12px;
-  }
-
-  .actions-cell {
-    width: 110px;
-    min-width: 110px;
-  }
-
-  .action-buttons {
-    gap: 3px;
-  }
-
-  .action-btn {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-  }
-
-  .employee-info {
-    gap: 8px;
-  }
-
-  .employee-name {
-    font-size: 12px;
-  }
-
-  .modal-card {
-    max-width: 90vw;
-  }
-
-  .form-grid {
-    gap: 12px;
+    font-size: 22px;
   }
 }
 
-/* 768px - Tablet Portrait */
 @media (max-width: 768px) {
   .dashboard-container {
-    padding: 16px;
-  }
-
-  .page-header {
-    padding: 16px;
-    margin-bottom: 16px;
+    padding: 14px;
   }
 
   .header-content {
@@ -2735,242 +2862,93 @@ onMounted(() => {
 
   .header-actions {
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
   }
 
-  .add-employee-btn,
-  .header-search {
+  .header-search,
+  .add-employee-btn {
     width: 100%;
     max-width: 100%;
   }
 
   .stats-section {
     grid-template-columns: 1fr;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-
-  .stats-card {
-    padding: 16px;
-  }
-
-  .stats-icon-wrapper {
-    width: 44px;
-    height: 44px;
-  }
-
-  .stats-icon {
-    font-size: 22px;
-  }
-
-  .stats-amount {
-    font-size: 24px;
-  }
-
-  .stats-label {
-    font-size: 13px;
+    gap: 10px;
   }
 
   .table-header {
     flex-direction: column;
     align-items: stretch;
-    padding: 16px;
-    gap: 12px;
+    gap: 10px;
   }
 
-  .sort-select {
+  .site-select {
     width: 100%;
   }
 
   .modern-table-container {
-    margin: 0 12px 12px 12px;
     overflow-x: auto;
-    border-radius: 8px;
   }
 
   .loan-table {
-    min-width: 800px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 12px 8px;
-    font-size: 12px;
-  }
-
-  .table-header-cell {
-    white-space: nowrap;
-  }
-
-  .employee-info {
-    gap: 8px;
-  }
-
-  .employee-name {
-    font-size: 12px;
-  }
-
-  .actions-cell {
-    width: 120px;
-    min-width: 120px;
-    padding: 12px 6px;
-  }
-
-  .action-buttons {
-    gap: 3px;
-    justify-content: center;
-  }
-
-  .action-btn {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-  }
-
-  .status-badge {
-    font-size: 11px;
-    padding: 4px 10px;
+    min-width: 600px;
   }
 
   .modal-card {
-    margin: 12px;
-    max-width: calc(100vw - 24px);
+    max-width: calc(100vw - 20px);
     max-height: calc(100vh - 24px);
-  }
-
-  .modal-header {
-    padding: 16px;
-  }
-
-  .modal-title-section {
-    gap: 12px;
-  }
-
-  .modal-title {
-    font-size: 18px;
-  }
-
-  .modal-subtitle {
-    font-size: 13px;
-  }
-
-  .modal-content {
-    padding: 16px;
   }
 
   .form-grid {
     grid-template-columns: 1fr;
-    gap: 12px;
   }
 
   .col-span-2 {
     grid-column: span 1;
   }
 
-  .form-section,
-  .detail-section {
-    padding: 16px;
+  .detail-grid-cards {
+    grid-template-columns: 1fr;
   }
 
-  .section-title {
-    font-size: 15px;
-    margin-bottom: 12px;
-  }
-
-  .detail-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 10px 0;
-  }
-
-  .detail-value {
-    text-align: left;
+  .detail-card-full {
+    grid-column: span 1;
   }
 
   .form-actions {
     flex-direction: column-reverse;
-    gap: 8px;
   }
 
-  .form-actions button {
+  .form-actions .q-btn {
     width: 100%;
   }
 
-  .avatar-upload-section {
-    padding: 16px;
-  }
-
-  .avatar-actions {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .avatar-actions button {
-    width: 100%;
+  .confirm-dialog {
+    max-width: calc(100vw - 20px);
   }
 }
 
-/* Small Mobile - 480px and below */
 @media (max-width: 480px) {
   .dashboard-container {
-    padding: 12px;
-  }
-
-  .page-header {
-    padding: 12px;
-    border-radius: 12px;
+    padding: 10px;
   }
 
   .page-title {
-    font-size: 20px;
-  }
-
-  .stats-card {
-    padding: 14px;
-  }
-
-  .stats-icon-wrapper {
-    width: 40px;
-    height: 40px;
-  }
-
-  .stats-icon {
-    font-size: 20px;
-  }
-
-  .stats-amount {
-    font-size: 22px;
-  }
-
-  .stats-label {
-    font-size: 12px;
-  }
-
-  .table-header {
-    padding: 12px;
-  }
-
-  .table-title {
     font-size: 18px;
   }
 
-  .modern-table-container {
-    margin: 0 8px 8px 8px;
+  .stats-amount {
+    font-size: 20px;
   }
 
-  .action-btn {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-  }
-
-  .modal-header {
-    padding: 12px;
+  .table-header-cell,
+  .table-body-cell {
+    padding: 10px 10px !important;
+    font-size: 12px;
   }
 
   .modal-title {
-    font-size: 16px;
+    font-size: 15px;
   }
 }
 </style>

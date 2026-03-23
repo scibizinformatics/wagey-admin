@@ -4,34 +4,36 @@
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
-          <div class="header-left">
-            <h1 class="page-title">Attendance</h1>
-          </div>
+          <h1 class="page-title">Attendance</h1>
           <div class="header-actions">
             <q-btn
-              flat
-              round
-              icon="refresh"
-              size="md"
-              class="header-btn"
-              @click="fetchAttendanceData()"
-            />
-            <q-btn
               unelevated
-              icon="file_download"
-              label="Export All"
               color="primary"
-              class="export-btn"
+              icon="add"
+              label="Add Attendance"
+              class="add-attendance-btn"
               no-caps
-              @click="exportAll"
+              @click="openAddDialog"
             />
+            <q-input
+              v-model="employeeSearch"
+              placeholder="Search by employee name..."
+              class="header-search"
+              dense
+              outlined
+              clearable
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" class="search-icon" />
+              </template>
+            </q-input>
           </div>
         </div>
       </div>
 
       <!-- Stats Cards -->
       <div class="stats-section">
-        <div class="stats-card personal-card">
+        <div class="stats-card total-card">
           <div class="stats-icon-wrapper">
             <q-icon name="people" class="stats-icon" />
           </div>
@@ -42,7 +44,7 @@
           </div>
         </div>
 
-        <div class="stats-card corporate-card">
+        <div class="stats-card pending-card">
           <div class="stats-icon-wrapper">
             <q-icon name="phone_android" class="stats-icon" />
           </div>
@@ -53,7 +55,7 @@
           </div>
         </div>
 
-        <div class="stats-card business-card">
+        <div class="stats-card approved-card">
           <div class="stats-icon-wrapper">
             <q-icon name="computer" class="stats-icon" />
           </div>
@@ -64,7 +66,7 @@
           </div>
         </div>
 
-        <div class="stats-card custom-card">
+        <div class="stats-card scheduled-card">
           <div class="stats-icon-wrapper">
             <q-icon name="schedule" class="stats-icon" />
           </div>
@@ -125,83 +127,6 @@
                 :disable="currentDate >= today"
               />
             </div>
-
-            <q-select
-              dense
-              outlined
-              label="Source"
-              v-model="filters.source"
-              :options="sourceOptions"
-              :loading="filtersLoading"
-              class="filter-input"
-              clearable
-              map-options
-              emit-value
-              behavior="menu"
-              menu-anchor="bottom left"
-              menu-self="top left"
-            />
-
-            <q-select
-              dense
-              outlined
-              label="Employee"
-              v-model="filters.employee"
-              :options="employeeOptions"
-              :loading="filtersLoading"
-              class="filter-input"
-              clearable
-              map-options
-              emit-value
-              use-input
-              input-debounce="300"
-              @filter="filterEmployees"
-              option-label="label"
-              option-value="value"
-              behavior="menu"
-              menu-anchor="bottom left"
-              menu-self="top left"
-            >
-              <template v-slot:no-option>
-                <q-item>
-                  <q-item-section class="text-grey"> No employees found </q-item-section>
-                </q-item>
-              </template>
-              <template v-slot:option="scope">
-                <q-item v-bind="scope.itemProps">
-                  <q-item-section avatar>
-                    <q-avatar size="32px" color="primary" text-color="white">
-                      <img
-                        v-if="scope.opt.employee?.photo || scope.opt.employee?.image"
-                        :src="scope.opt.employee?.photo || scope.opt.employee?.image"
-                        alt="Employee"
-                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%"
-                      />
-                      <span v-else>{{ scope.opt.label.charAt(0) }}</span>
-                    </q-avatar>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label>{{ scope.opt.label }}</q-item-label>
-                  </q-item-section>
-                </q-item>
-              </template>
-            </q-select>
-
-            <q-select
-              dense
-              outlined
-              label="Business Owner"
-              v-model="filters.business_owner"
-              :options="businessOwnerOptions"
-              :loading="filtersLoading"
-              class="filter-input"
-              clearable
-              map-options
-              emit-value
-              behavior="menu"
-              menu-anchor="bottom left"
-              menu-self="top left"
-            />
           </div>
         </div>
       </div>
@@ -209,10 +134,9 @@
       <!-- Main Table Section -->
       <div class="table-section">
         <div class="table-header">
-          <div class="table-title-section">
-            <h2 class="table-title">Attendance Overview</h2>
-          </div>
+          <h2 class="table-title">Attendance Overview</h2>
           <div class="table-actions">
+            <q-btn flat round icon="refresh" class="header-btn" @click="fetchAttendanceData()" />
             <q-select
               dense
               outlined
@@ -233,17 +157,6 @@
                 <q-icon name="location_on" />
               </template>
             </q-select>
-
-            <q-btn
-              unelevated
-              color="primary"
-              icon="add"
-              label="Add Attendance"
-              @click="openAddDialog"
-              size="sm"
-              no-caps
-              class="add-attendance-btn"
-            />
           </div>
         </div>
 
@@ -251,7 +164,7 @@
         <div class="modern-table-container">
           <div class="table-wrapper">
             <q-table
-              :rows="attendanceData"
+              :rows="filteredAttendanceRows"
               :columns="columns"
               row-key="id"
               flat
@@ -261,6 +174,7 @@
               :rows-per-page-options="[0]"
               :grid="$q.screen.xs"
               table-header-class="table-header-custom"
+              separator="none"
             >
               <!-- Grid mode for mobile -->
               <template v-slot:item="props" v-if="$q.screen.xs">
@@ -303,22 +217,49 @@
 
               <template v-slot:header="props">
                 <q-tr :props="props" class="table-header-row">
-                  <q-th class="table-header-cell employee-col">Employee</q-th>
-                  <q-th class="table-header-cell site-col">Site</q-th>
-                  <q-th class="table-header-cell employment-status-col">Work Type</q-th>
-                  <q-th class="table-header-cell cost-center-col">Cost Center</q-th>
-                  <q-th class="table-header-cell time-col">Time In</q-th>
-                  <q-th class="table-header-cell photo-col">Photo</q-th>
-                  <q-th class="table-header-cell source-mini-col">In Source</q-th>
-                  <q-th class="table-header-cell time-col">Time Out</q-th>
-                  <q-th class="table-header-cell photo-col">Photo</q-th>
-                  <q-th class="table-header-cell source-mini-col">Out Source</q-th>
+                  <q-th key="employee" :props="props" class="table-header-cell employee-col"
+                    >Employee</q-th
+                  >
+                  <q-th key="site" :props="props" class="table-header-cell site-col">Site</q-th>
+                  <q-th
+                    key="work_type"
+                    :props="props"
+                    class="table-header-cell employment-status-col"
+                    >Work Type</q-th
+                  >
+                  <q-th key="cost_center" :props="props" class="table-header-cell cost-center-col"
+                    >Cost Center</q-th
+                  >
+                  <q-th key="time_in" :props="props" class="table-header-cell time-col"
+                    >Time In</q-th
+                  >
+                  <q-th key="time_in_photo" :props="props" class="table-header-cell photo-col"
+                    >Photo</q-th
+                  >
+                  <q-th
+                    key="time_in_source"
+                    :props="props"
+                    class="table-header-cell source-mini-col"
+                    >In Source</q-th
+                  >
+                  <q-th key="time_out" :props="props" class="table-header-cell time-col"
+                    >Time Out</q-th
+                  >
+                  <q-th key="time_out_photo" :props="props" class="table-header-cell photo-col"
+                    >Photo</q-th
+                  >
+                  <q-th
+                    key="time_out_source"
+                    :props="props"
+                    class="table-header-cell source-mini-col"
+                    >Out Source</q-th
+                  >
                 </q-tr>
               </template>
 
               <template v-slot:body="props">
                 <q-tr :props="props" class="table-body-row">
-                  <q-td class="table-body-cell employee-col">
+                  <q-td key="employee" :props="props" class="table-body-cell employee-col">
                     <div class="employee-info">
                       <q-avatar
                         size="32px"
@@ -340,7 +281,7 @@
                       </span>
                     </div>
                   </q-td>
-                  <q-td class="table-body-cell site-col">
+                  <q-td key="site" :props="props" class="table-body-cell site-col">
                     <div v-if="props.row.site" class="site-name-text">
                       <q-icon name="location_on" size="12px" class="q-mr-xs text-grey-6" />
                       {{ getSiteName(props.row.site) }}
@@ -348,7 +289,11 @@
                     <span v-else class="no-photo">-</span>
                   </q-td>
                   <!-- Work Type -->
-                  <q-td class="table-body-cell employment-status-col">
+                  <q-td
+                    key="work_type"
+                    :props="props"
+                    class="table-body-cell employment-status-col"
+                  >
                     <div
                       v-if="props.row.work_type"
                       class="employment-status-badge"
@@ -359,7 +304,7 @@
                     <span v-else class="no-photo">-</span>
                   </q-td>
                   <!-- Cost Center -->
-                  <q-td class="table-body-cell cost-center-col">
+                  <q-td key="cost_center" :props="props" class="table-body-cell cost-center-col">
                     <div
                       class="cost-center-badge time-editable"
                       @click="openCostCenterInlineEdit(props.row)"
@@ -371,7 +316,7 @@
                     </div>
                   </q-td>
                   <!-- Time In — clickable inline edit -->
-                  <q-td class="table-body-cell time-col">
+                  <q-td key="time_in" :props="props" class="table-body-cell time-col">
                     <div
                       class="time-badge time-in"
                       :class="{ 'has-time': props.row.time_in, 'time-editable': true }"
@@ -382,7 +327,7 @@
                       <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
                     </div>
                   </q-td>
-                  <q-td class="table-body-cell photo-col">
+                  <q-td key="time_in_photo" :props="props" class="table-body-cell photo-col">
                     <div class="selfie-container">
                       <img
                         v-if="props.row.time_in_selfie"
@@ -394,7 +339,7 @@
                       <span v-else class="no-photo">-</span>
                     </div>
                   </q-td>
-                  <q-td class="table-body-cell source-mini-col">
+                  <q-td key="time_in_source" :props="props" class="table-body-cell source-mini-col">
                     <div
                       class="source-mini-badge"
                       :class="getSourceClass(props.row.time_in_source || props.row.source)"
@@ -403,7 +348,7 @@
                     </div>
                   </q-td>
                   <!-- Time Out — clickable inline edit -->
-                  <q-td class="table-body-cell time-col">
+                  <q-td key="time_out" :props="props" class="table-body-cell time-col">
                     <div
                       class="time-badge time-out"
                       :class="{ 'has-time': props.row.time_out, 'time-editable': true }"
@@ -414,7 +359,7 @@
                       <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
                     </div>
                   </q-td>
-                  <q-td class="table-body-cell photo-col">
+                  <q-td key="time_out_photo" :props="props" class="table-body-cell photo-col">
                     <div class="selfie-container">
                       <img
                         v-if="props.row.time_out_selfie"
@@ -426,7 +371,11 @@
                       <span v-else class="no-photo">-</span>
                     </div>
                   </q-td>
-                  <q-td class="table-body-cell source-mini-col">
+                  <q-td
+                    key="time_out_source"
+                    :props="props"
+                    class="table-body-cell source-mini-col"
+                  >
                     <div
                       v-if="props.row.time_out"
                       class="source-mini-badge"
@@ -445,7 +394,7 @@
           <div class="table-footer">
             <div class="footer-info">
               <span class="total-label">Total</span>
-              <span class="total-records">{{ attendanceData.length }} Records</span>
+              <span class="total-records">{{ filteredAttendanceRows.length }} Records</span>
             </div>
             <div class="pagination-controls">
               <q-btn
@@ -1034,9 +983,6 @@ const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0'
 const filters = ref({
   date_from: today,
   date_to: today,
-  source: '',
-  employee: '',
-  business_owner: '',
   site: '',
 })
 
@@ -1099,16 +1045,10 @@ const newRecord = ref({
 })
 
 // Filter options
-const employeeOptions = ref([])
-const businessOwnerOptions = ref([])
 const siteOptions = ref([])
 const costCenterOptions = ref([])
-const sourceOptions = ref([
-  { label: 'App', value: 'app' },
-  { label: 'Terminal', value: 'terminal' },
-  { label: 'System', value: 'system' },
-  { label: 'Manual', value: 'manual' },
-])
+const employeeOptions = ref([])
+const employeeSearch = ref('')
 
 // Get company ID
 const getCompanyId = () => {
@@ -1145,6 +1085,14 @@ const stats = computed(() => {
   ]
 })
 
+const filteredAttendanceRows = computed(() => {
+  if (!employeeSearch.value || !employeeSearch.value.trim()) return attendanceData.value
+  const term = employeeSearch.value.trim().toLowerCase()
+  return attendanceData.value.filter((row) =>
+    getEmployeeName(row.employee).toLowerCase().includes(term),
+  )
+})
+
 const totalPages = computed(() => {
   return Math.ceil(pagination.value.rowsNumber / pagination.value.rowsPerPage) || 1
 })
@@ -1160,13 +1108,6 @@ const columns = [
   {
     name: 'select',
     label: '',
-    align: 'center',
-    field: 'id',
-    sortable: false,
-  },
-  {
-    name: 'sl_no',
-    label: 'SL No',
     align: 'center',
     field: 'id',
     sortable: false,
@@ -1191,6 +1132,20 @@ const columns = [
     align: 'left',
     field: 'site',
     sortable: true,
+  },
+  {
+    name: 'work_type',
+    label: 'Work Type',
+    align: 'left',
+    field: 'work_type',
+    sortable: true,
+  },
+  {
+    name: 'cost_center',
+    label: 'Cost Center',
+    align: 'left',
+    field: 'cost_center',
+    sortable: false,
   },
   {
     name: 'time_in',
@@ -1527,38 +1482,6 @@ async function fetchAttendanceData(params = {}) {
 
     // Apply client-side filters
     let filteredData = [...data] // Create a copy
-
-    // Filter by employee
-    if (filters.value.employee) {
-      filteredData = filteredData.filter((record) => {
-        const employeeId =
-          typeof record.employee === 'object'
-            ? record.employee.uuid || record.employee.id
-            : record.employee
-
-        return employeeId === filters.value.employee
-      })
-      console.log(`🔍 After employee filter: ${filteredData.length} records`)
-    }
-
-    // Filter by source
-    if (filters.value.source) {
-      filteredData = filteredData.filter((record) => record.source === filters.value.source)
-      console.log(`🔍 After source filter: ${filteredData.length} records`)
-    }
-
-    // Filter by business owner
-    if (filters.value.business_owner) {
-      filteredData = filteredData.filter((record) => {
-        const ownerId =
-          typeof record.business_owner === 'object'
-            ? record.business_owner.uuid || record.business_owner.id
-            : record.business_owner
-
-        return ownerId === filters.value.business_owner
-      })
-      console.log(`🔍 After business owner filter: ${filteredData.length} records`)
-    }
 
     // Filter by date range if set
     if (filters.value.date_from && filters.value.date_to) {
@@ -2287,9 +2210,6 @@ function clearAllFilters() {
   filters.value = {
     date_from: today,
     date_to: today,
-    source: '',
-    employee: '',
-    business_owner: '',
     site: '',
   }
   dateRange.value = today
@@ -2631,25 +2551,33 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ==============================
+   PAGE ROOT
+============================== */
 .attendance-dashboard {
-  background: #f8fafc;
+  background: #f4f6f9;
   min-height: 100vh;
   padding: 0;
 }
 
+/* ==============================
+   BASE
+============================== */
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 
-/* Header Section */
+/* ==============================
+   HEADER
+============================== */
 .page-header {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 20px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
@@ -2662,9 +2590,772 @@ onMounted(async () => {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
-  margin: 0 0 4px 0;
+  color: #111827;
+  margin: 0;
 }
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.header-btn {
+  color: #6b7280 !important;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px !important;
+}
+
+.header-btn:hover {
+  background: #f3f4f6 !important;
+}
+
+.header-search {
+  min-width: 280px;
+  max-width: 280px;
+}
+
+.header-search .q-field__control,
+.header-search :deep(.q-field__control) {
+  border-radius: 8px;
+  height: 36px;
+}
+
+.search-icon {
+  color: #9ca3af;
+}
+
+/* ==============================
+   STATS CARDS
+============================== */
+.stats-section {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stats-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px 18px;
+  border: 1px solid #e8ecf0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  transition: box-shadow 0.2s ease;
+}
+
+.stats-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+}
+
+.stats-icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stats-icon {
+  font-size: 20px;
+}
+
+.stats-content {
+  min-width: 0;
+}
+
+.stats-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 2px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stats-amount {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+}
+
+/* Stat card color variants */
+.total-card .stats-icon-wrapper,
+.personal-card .stats-icon-wrapper {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+.pending-card .stats-icon-wrapper,
+.corporate-card .stats-icon-wrapper {
+  background: #fefce8;
+  color: #ca8a04;
+}
+.approved-card .stats-icon-wrapper,
+.active-card .stats-icon-wrapper,
+.business-card .stats-icon-wrapper {
+  background: #f0fdf4;
+  color: #22c55e;
+}
+.rejected-card .stats-icon-wrapper,
+.urgent-card .stats-icon-wrapper {
+  background: #fef2f2;
+  color: #ef4444;
+}
+.scheduled-card .stats-icon-wrapper,
+.custom-card .stats-icon-wrapper {
+  background: #f5f3ff;
+  color: #8b5cf6;
+}
+.overtime-total-card .stats-icon-wrapper {
+  background: #fff7ed;
+  color: #f97316;
+}
+
+/* ==============================
+   TABLE SECTION
+============================== */
+.table-section {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.table-title-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.modern-table-container {
+  overflow-x: auto;
+}
+
+.table-header-row {
+  background: #f8fafc;
+}
+
+.table-header-cell {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
+  white-space: nowrap;
+}
+
+.table-body-row {
+  transition: background 0.15s ease;
+}
+
+.table-body-row:hover .table-body-cell {
+  background: #f9fafb;
+}
+
+.table-body-cell {
+  font-size: 13px;
+  color: #374151;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
+  vertical-align: middle;
+}
+
+/* ==============================
+   STATUS BADGES
+============================== */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-active,
+.status-approved,
+.status-accepted {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+.status-active::before,
+.status-approved::before,
+.status-accepted::before {
+  background: #22c55e;
+}
+
+.status-pending {
+  background: #fefce8;
+  color: #ca8a04;
+}
+.status-pending::before {
+  background: #eab308;
+}
+
+.status-rejected,
+.status-terminated,
+.status-inactive {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.status-rejected::before,
+.status-terminated::before,
+.status-inactive::before {
+  background: #ef4444;
+}
+
+.status-scheduled {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+.status-scheduled::before {
+  background: #8b5cf6;
+}
+
+.status-default {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+.status-default::before {
+  background: #9ca3af;
+}
+
+/* ==============================
+   ACTION BUTTONS (⋯ menu style)
+============================== */
+.action-buttons,
+.action-buttons-wrapper {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  border-radius: 6px !important;
+  color: #6b7280 !important;
+}
+
+.action-btn:hover {
+  background: #f3f4f6 !important;
+}
+
+.view-btn:hover {
+  color: #3b82f6 !important;
+  background: #eff6ff !important;
+}
+.approve-btn {
+  color: #16a34a !important;
+}
+.approve-btn:hover {
+  background: #f0fdf4 !important;
+  color: #16a34a !important;
+}
+.reject-btn {
+  color: #dc2626 !important;
+}
+.reject-btn:hover {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+}
+.edit-btn:hover {
+  color: #ca8a04 !important;
+  background: #fefce8 !important;
+}
+.delete-btn {
+  color: #dc2626 !important;
+}
+.delete-btn:hover {
+  background: #fef2f2 !important;
+}
+.restore-btn {
+  color: #16a34a !important;
+}
+.restore-btn:hover {
+  background: #f0fdf4 !important;
+}
+
+/* ==============================
+   LOADING / EMPTY STATES
+============================== */
+.loading-state,
+.loading-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 20px;
+  gap: 14px;
+}
+
+.loading-text {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 56px 20px;
+  text-align: center;
+  gap: 6px;
+}
+
+.empty-title,
+.empty-state-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+  margin-top: 6px;
+}
+
+.empty-subtitle,
+.empty-state-sub {
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+/* ==============================
+   MODALS
+============================== */
+.modal-card {
+  width: 560px;
+  max-width: 95vw;
+  max-height: 90vh;
+  border-radius: 14px !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px !important;
+  background: #ffffff;
+}
+
+.modal-title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-icon {
+  font-size: 24px;
+  color: #3b82f6;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.modal-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.modal-close-btn {
+  color: #9ca3af !important;
+  flex-shrink: 0;
+}
+
+.modal-close-btn:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.modal-content {
+  padding: 20px !important;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ==============================
+   FORM SECTIONS
+============================== */
+.form-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.col-span-2 {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f3f5;
+  margin-top: 8px;
+}
+
+/* Detail grid cards */
+.detail-sections,
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-grid-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.detail-card {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 14px;
+  border: 1px solid #f1f3f5;
+}
+
+.detail-card-full {
+  grid-column: 1 / -1;
+}
+
+.detail-card-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.detail-card-value {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+/* Confirm dialogs */
+.confirm-dialog,
+.terminate-dialog,
+.restore-dialog {
+  width: 400px;
+  max-width: 95vw;
+  border-radius: 14px !important;
+}
+
+.confirm-actions,
+.terminate-actions,
+.restore-actions {
+  padding: 12px 16px !important;
+  border-top: 1px solid #f1f3f5;
+  gap: 8px;
+}
+
+/* Filters section */
+.filters-section {
+  margin-bottom: 16px;
+}
+
+.filters-card {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  padding: 16px 20px;
+}
+
+.filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.filters-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.clear-btn {
+  color: #6b7280 !important;
+  font-size: 12px;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.filter-input :deep(.q-field__control),
+.filter-input .q-field__control {
+  border-radius: 8px;
+}
+
+/* Pagination */
+.pagination-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid #f1f3f5;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Sort / filter selects */
+.sort-select,
+.type-select,
+.site-select,
+.status-filter {
+  min-width: 160px;
+}
+
+/* Employee info cell */
+.employee-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.employee-name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.employee-name {
+  font-weight: 600;
+  color: #111827;
+  font-size: 13px;
+}
+
+.email-link {
+  font-size: 11px;
+  color: #6b7280;
+  text-decoration: none;
+}
+
+.email-link:hover {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+/* Role chip */
+.role-chip {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+/* Primary action buttons in header */
+.add-employee-btn,
+.add-announcement-btn,
+.export-btn,
+.invite-btn {
+  height: 36px;
+  border-radius: 8px !important;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+/* ==============================
+   RESPONSIVE
+============================== */
+@media (max-width: 900px) {
+  .stats-section {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 14px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .header-search,
+  .add-employee-btn,
+  .add-announcement-btn,
+  .export-btn,
+  .invite-btn {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .stats-section {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modern-table-container {
+    overflow-x: auto;
+  }
+
+  .modal-card {
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .col-span-2 {
+    grid-column: span 1;
+  }
+
+  .detail-grid-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-card-full {
+    grid-column: span 1;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .form-actions .q-btn {
+    width: 100%;
+  }
+
+  .pagination-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-container {
+    padding: 10px;
+  }
+  .page-title {
+    font-size: 18px;
+  }
+  .stats-amount {
+    font-size: 22px;
+  }
+  .table-header-cell,
+  .table-body-cell {
+    padding: 10px 10px !important;
+    font-size: 12px;
+  }
+  .modal-title {
+    font-size: 15px;
+  }
+}
+
+/* Attendance-specific */
+.attendance-dashboard {
+  background: #f8fafc;
+  min-height: 100vh;
+  padding: 0;
+}
+
+/* Header Section */
 
 .page-subtitle {
   font-size: 13px;
@@ -2672,51 +3363,7 @@ onMounted(async () => {
   margin: 0;
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.header-btn {
-  color: #64748b;
-  width: 36px;
-  height: 36px;
-}
-
-.export-btn {
-  background: #6366f1;
-  border-radius: 8px;
-  font-weight: 500;
-  padding: 6px 14px;
-  height: 36px;
-  font-size: 13px;
-}
-
 /* Stats Section */
-.stats-section {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.stats-card {
-  background: white;
-  border-radius: 8px;
-  padding: 6px 12px;
-  border: 1px solid #e2e8f0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s ease;
-  min-width: 0;
-}
-
-.stats-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
 
 .personal-card {
   background: linear-gradient(135deg, #fce7f3 0%, #f3e8ff 100%);
@@ -2734,131 +3381,24 @@ onMounted(async () => {
   background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
 }
 
-.stats-icon-wrapper {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
-  flex-shrink: 0;
-}
-
-.stats-icon {
-  font-size: 14px;
-  color: #374151;
-}
-
-.stats-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.stats-amount {
-  font-size: 16px;
-  font-weight: 700;
-  color: #1a202c;
-  line-height: 1;
-  margin-bottom: 1px;
-}
-
-.stats-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 0;
-}
-
 .stats-sublabel {
   font-size: 10px;
   color: #64748b;
 }
 
 /* Filters Section */
-.filters-section {
-  margin-bottom: 16px;
-}
-
-.filters-card {
-  background: white;
-  border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
-}
-
-.filters-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.filters-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a202c;
-  margin: 0;
-}
-
-.clear-btn {
-  color: #64748b;
-  font-weight: 500;
-  font-size: 13px;
-}
-
-.filters-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-.filter-input {
-  background: #f8fafc;
-  border-radius: 8px;
-}
-
-.filter-input .q-field__control {
-  border-radius: 8px;
-  height: 36px;
-}
 
 /* Table Section */
-.table-section {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  overflow: hidden;
-}
-
-.table-header {
-  padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.table-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1a202c;
-  margin: 0;
-}
-
-.table-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 
 .add-attendance-btn {
   background: #10b981;
-  font-weight: 600;
+  font-weight: 500;
   height: 36px;
   font-size: 13px;
+  border-radius: 8px !important;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
 }
 
 .add-attendance-btn:hover {
@@ -2869,13 +3409,6 @@ onMounted(async () => {
    IMPROVED TABLE STYLES - FIXED ALIGNMENT
    =================================== */
 
-.modern-table-container {
-  border: 2px solid #3b82f6;
-  border-radius: 10px;
-  overflow: hidden;
-  margin: 0 16px 16px 16px;
-}
-
 .table-wrapper {
   overflow-x: visible;
   overflow-y: visible;
@@ -2884,88 +3417,107 @@ onMounted(async () => {
 .attendance-table {
   background: white;
   width: 100%;
-  table-layout: auto;
-  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-/* Percentage-based column widths — no fixed min-widths so table always fits */
-.checkbox-col {
-  width: 3%;
+.attendance-table :deep(.q-table__bottom-border),
+.attendance-table :deep(thead tr:last-child th),
+.attendance-table :deep(.q-table__top),
+.attendance-table :deep(.q-table__bottom) {
+  border: none !important;
 }
 
-.sl-col {
-  width: 4%;
+.attendance-table :deep(.q-table) {
+  border-bottom: none !important;
 }
 
+/* Fixed column widths — all 10 cols fit within 100% */
 .employee-col {
-  width: 14%;
+  width: 15%;
 }
-
-.date-col {
-  width: 7%;
+.site-col {
+  width: 11%;
 }
-
+.employment-status-col {
+  width: 9%;
+}
+.cost-center-col {
+  width: 10%;
+}
 .time-col {
-  width: 7%;
+  width: 9%;
 }
-
 .photo-col {
-  width: 5%;
-}
-
-.source-col {
-  width: 7%;
-}
-
-.actions-col {
   width: 6%;
 }
-
-.table-header-row {
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+.source-mini-col {
+  width: 8%;
 }
 
-.table-header-cell {
-  padding: 12px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-  text-align: center;
-  border: none;
+/* Attendance table cell sizing — bigger text, still fits */
+.attendance-table .table-header-cell {
+  padding: 11px 10px !important;
+  font-size: 11px !important;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  vertical-align: middle;
 }
 
-.table-body-row {
-  border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
-}
-
-.table-body-row:hover {
-  background: #f8fafc;
-}
-
-.table-body-cell {
-  padding: 10px 8px;
-  font-size: 13px;
-  color: #374151;
-  border: none;
-  vertical-align: middle;
-  text-align: center;
+.attendance-table .table-body-cell {
+  padding: 10px 10px !important;
+  font-size: 13px !important;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.employee-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 6px;
-  justify-content: flex-start;
-  min-width: 0;
+.attendance-table .employee-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  display: block;
+}
+
+.attendance-table .time-badge {
+  font-size: 12px;
+  padding: 4px 8px;
+  min-width: 72px;
+}
+
+.attendance-table .selfie-thumbnail {
+  width: 34px;
+  height: 34px;
+}
+
+.attendance-table .cost-center-badge {
+  font-size: 12px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+}
+
+.attendance-table .employment-status-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.attendance-table .source-mini-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.attendance-table .employee-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  font-size: 12px !important;
+  flex-shrink: 0;
 }
 
 .employee-avatar {
@@ -2980,18 +3532,6 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.employee-name {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: left;
-  line-height: 1.4;
-  letter-spacing: 0.01em;
 }
 
 .time-badge {
@@ -3138,53 +3678,11 @@ onMounted(async () => {
   color: #64748b;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-  flex-wrap: nowrap;
-}
-
-.action-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  border-radius: 6px;
-  flex-shrink: 0;
-}
-
-.view-btn {
-  background: #dbeafe;
-  color: #3b82f6;
-}
-
-.view-btn:hover {
-  background: #bfdbfe;
-}
-
-.edit-btn {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.edit-btn:hover {
-  background: #fde68a;
-}
-
-.delete-btn {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.delete-btn:hover {
-  background: #fecaca;
-}
-
 /* Table Footer */
 .table-footer {
   background: #f8fafc;
   padding: 14px 16px;
-  border-top: 2px solid #3b82f6;
+  border-top: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -3510,10 +4008,6 @@ onMounted(async () => {
 }
 
 /* Focus States */
-.filter-input .q-field--focused .q-field__control {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 1px #3b82f6;
-}
 
 .dialog-btn:focus {
   outline: 2px solid #3b82f6;
@@ -3914,18 +4408,7 @@ body {
   color: inherit;
 }
 
-/* New column styles */
-.source-mini-col {
-  width: 7%;
-}
-
-.site-col {
-  width: 10%;
-}
-
-.cost-center-col {
-  width: 8%;
-}
+/* Column widths defined above in attendance-table section */
 
 .source-mini-badge {
   display: inline-flex;
@@ -3956,11 +4439,6 @@ body {
   background: #f1f5f9;
   color: #475569;
   border: 1px solid #e2e8f0;
-}
-
-/* Employment Status Column */
-.employment-status-col {
-  width: 10%;
 }
 
 .employment-status-badge {

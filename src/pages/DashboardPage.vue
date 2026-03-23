@@ -1,202 +1,147 @@
 <template>
-  <div class="dashboard-container">
-    <!-- Main Content -->
-    <div class="main-content q-pa-md">
-      <div class="row q-col-gutter-xl q-mb-xl">
+  <div class="dashboard-page">
+    <div class="dashboard-inner">
+      <!-- Top Stats Row -->
+      <div class="stats-row">
+        <div v-for="(stat, i) in statsCards" :key="i" class="stat-tile" :class="`tile-${i}`">
+          <div class="tile-icon-wrap">
+            <q-icon :name="stat.icon" size="22px" />
+          </div>
+          <div class="tile-body">
+            <div class="tile-count">{{ stat.count }}</div>
+            <div class="tile-label">{{ stat.label }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Grid -->
+      <div class="main-grid">
         <!-- Left Column -->
-        <div class="col-12 col-lg-8">
+        <div class="col-main">
           <!-- Payroll Status -->
-          <q-card class="modern-card q-mb-md">
-            <q-card-section>
-              <div class="section-header">
-                <q-icon name="receipt" class="section-icon" />
-                <span class="section-title">Current Payroll Status</span>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-head-left">
+                <q-icon name="receipt" size="18px" class="panel-icon" />
+                <span class="panel-title">Current Payroll Status</span>
               </div>
+            </div>
+            <q-table
+              :rows="payrollRows"
+              :columns="payrollColumns"
+              row-key="id"
+              flat
+              dense
+              hide-pagination
+              :rows-per-page-options="[0]"
+              class="ct-table"
+            >
+              <template v-slot:header="props">
+                <q-tr :props="props" class="ct-thead-row">
+                  <q-th v-for="col in props.cols" :key="col.name" class="ct-th">{{
+                    col.label
+                  }}</q-th>
+                </q-tr>
+              </template>
+              <template v-slot:body-cell-status="props">
+                <q-td :props="props">
+                  <span
+                    :class="[
+                      'ct-status',
+                      props.value === 'Released' ? 'ct-status--green' : 'ct-status--amber',
+                    ]"
+                  >
+                    {{ props.value }}
+                  </span>
+                </q-td>
+              </template>
+            </q-table>
+          </div>
 
-              <q-table
-                :rows="payrollRows"
-                :columns="payrollColumns"
-                row-key="id"
-                flat
-                bordered
-                dense
-                hide-pagination
-                :rows-per-page-options="[0]"
-                class="modern-table"
-              >
-                <template v-slot:body-cell-status="props">
-                  <q-td :props="props">
-                    <q-chip
-                      :class="
-                        props.value === 'Released' ? 'status-chip-success' : 'status-chip-pending'
-                      "
-                      text-color="white"
-                      size="sm"
-                    >
-                      {{ props.value }}
-                    </q-chip>
-                  </q-td>
-                </template>
-              </q-table>
-            </q-card-section>
-          </q-card>
-
-          <!-- Charts + Attendance -->
-          <div class="row q-col-gutter-md">
-            <div class="col-12 col-sm-6">
-              <q-card class="modern-card chart-card equal-height-card">
-                <q-card-section class="full-height-section">
-                  <div class="section-header">
-                    <span class="section-title">Payroll History</span>
-                  </div>
-                  <div class="chart-container">
-                    <div class="chart-placeholder">
-                      <div class="chart-content">
-                        <q-icon name="show_chart" class="chart-icon" />
-                        <div class="chart-label">Payroll History Chart</div>
-                      </div>
-                    </div>
-                  </div>
-                </q-card-section>
-              </q-card>
+          <!-- Charts Row -->
+          <div class="two-col-row">
+            <div class="panel panel--flex">
+              <div class="panel-head">
+                <span class="panel-title">Payroll History</span>
+              </div>
+              <div class="chart-placeholder">
+                <q-icon name="show_chart" size="48px" color="grey-4" />
+                <div class="chart-placeholder-label">Payroll History Chart</div>
+              </div>
             </div>
 
-            <div class="col-12 col-sm-6">
-              <q-card class="modern-card equal-height-card">
-                <q-card-section class="full-height-section">
-                  <div class="section-header">
-                    <span class="section-title">Smart Attendance</span>
-                  </div>
-                  <div class="attendance-content">
-                    <q-list dense class="modern-list">
-                      <q-item
-                        v-for="(alert, index) in attendanceAlerts"
-                        :key="index"
-                        class="alert-item"
-                      >
-                        <q-item-section>
-                          <q-item-label class="alert-text">{{ alert }}</q-item-label>
-                        </q-item-section>
-                      </q-item>
-                    </q-list>
-                  </div>
-                </q-card-section>
-              </q-card>
+            <div class="panel panel--flex">
+              <div class="panel-head">
+                <span class="panel-title">Smart Attendance</span>
+              </div>
+              <div class="alert-list">
+                <div v-for="(alert, index) in attendanceAlerts" :key="index" class="alert-item">
+                  <div class="alert-dot"></div>
+                  <span class="alert-text">{{ alert }}</span>
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- Recent Activity -->
-          <q-card class="modern-card q-mt-lg">
-            <q-card-section>
-              <div class="section-header">
-                <span class="section-title">Recent Activity</span>
+          <div class="panel">
+            <div class="panel-head">
+              <span class="panel-title">Recent Activity</span>
+            </div>
+            <div class="activity-list">
+              <div v-for="activity in recentActivities" :key="activity.id" class="activity-row">
+                <q-avatar size="36px" class="activity-avatar">
+                  {{ activity.user.charAt(0) }}
+                </q-avatar>
+                <div class="activity-info">
+                  <div class="activity-user">{{ activity.user }}</div>
+                  <div class="activity-time">{{ activity.time }}</div>
+                </div>
+                <div class="activity-status-badge">{{ activity.status }}</div>
+                <div class="activity-details">{{ activity.details }}</div>
               </div>
-              <q-list separator class="modern-activity-list">
-                <q-item
-                  v-for="activity in recentActivities"
-                  :key="activity.id"
-                  class="activity-item"
-                >
-                  <q-item-section avatar>
-                    <q-avatar size="40px" class="modern-avatar">
-                      {{ activity.user.charAt(0) }}
-                    </q-avatar>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label class="activity-user">{{ activity.user }}</q-item-label>
-                    <q-item-label class="activity-time">{{ activity.time }}</q-item-label>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label class="activity-status">{{ activity.status }}</q-item-label>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label class="activity-details">{{ activity.details }}</q-item-label>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-card-section>
-          </q-card>
+            </div>
+          </div>
         </div>
 
         <!-- Right Column -->
-        <div class="col-12 col-lg-4">
-          <!-- Stats Cards -->
-          <div class="row q-col-gutter-sm q-mb-md">
-            <div v-for="(stat, i) in statsCards" :key="i" class="col-6 q-mb-sm">
-              <q-card class="stat-card" :class="stat.gradient">
-                <q-card-section class="stat-content">
-                  <q-icon :name="stat.icon" class="stat-icon" />
-                  <div class="stat-number">{{ stat.count }}</div>
-                  <div class="stat-label">{{ stat.label }}</div>
-                </q-card-section>
-              </q-card>
+        <div class="col-side">
+          <!-- Notifications -->
+          <div class="panel">
+            <div class="panel-head">
+              <q-icon name="notifications" size="16px" class="panel-icon" />
+              <span class="panel-title">Notifications</span>
+              <q-badge color="negative" :label="notifications.length" class="q-ml-auto" />
+            </div>
+            <div class="notif-list">
+              <div v-for="(note, i) in notifications" :key="i" class="notif-item">
+                <q-icon name="circle" size="7px" color="primary" class="notif-dot" />
+                <span class="notif-text">{{ note }}</span>
+              </div>
             </div>
           </div>
 
-          <!-- Notifications -->
-          <q-card class="modern-card q-mb-md">
-            <q-card-section>
-              <div class="section-header">
-                <q-icon name="notifications" class="section-icon notification-icon" />
-                <span class="section-title">Notifications</span>
+          <!-- Fraud Alerts -->
+          <div class="panel">
+            <div class="panel-head">
+              <q-icon name="security" size="16px" class="panel-icon panel-icon--red" />
+              <span class="panel-title">Device / Fraud Alerts</span>
+            </div>
+            <div class="fraud-list">
+              <div class="fraud-item fraud-item--critical">
+                <q-icon name="error" size="16px" />
+                <span>Date / Time - Critical Message</span>
               </div>
-              <q-list dense class="modern-list">
-                <q-item v-for="(note, i) in notifications" :key="i" class="notification-item">
-                  <q-item-section>
-                    <q-item-label class="notification-text">{{ note }}</q-item-label>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-card-section>
-          </q-card>
-
-          <!-- Device/Fraud Alerts -->
-          <q-card class="modern-card alerts-card">
-            <q-card-section>
-              <div class="section-header">
-                <q-icon name="security" class="section-icon alert-icon" />
-                <span class="section-title">Device/Fraud Alerts</span>
+              <div class="fraud-item fraud-item--warning">
+                <q-icon name="warning" size="16px" />
+                <span>Date / Time - Warning Message</span>
               </div>
-              <q-list dense class="modern-list">
-                <q-item class="alert-item-modern critical">
-                  <q-item-section avatar>
-                    <div class="alert-indicator critical-indicator">
-                      <q-icon name="error" size="16px" />
-                    </div>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label class="alert-text-modern"
-                      >Date / Time - Critical Message</q-item-label
-                    >
-                  </q-item-section>
-                </q-item>
-                <q-item class="alert-item-modern warning">
-                  <q-item-section avatar>
-                    <div class="alert-indicator warning-indicator">
-                      <q-icon name="warning" size="16px" />
-                    </div>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label class="alert-text-modern"
-                      >Date / Time - Warning Message</q-item-label
-                    >
-                  </q-item-section>
-                </q-item>
-                <q-item class="alert-item-modern info">
-                  <q-item-section avatar>
-                    <div class="alert-indicator info-indicator">
-                      <q-icon name="info" size="16px" />
-                    </div>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label class="alert-text-modern"
-                      >Date / Time - Info Message</q-item-label
-                    >
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-card-section>
-          </q-card>
+              <div class="fraud-item fraud-item--info">
+                <q-icon name="info" size="16px" />
+                <span>Date / Time - Info Message</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -214,7 +159,7 @@ export default {
         { name: 'type', label: 'Type', field: 'type', align: 'left' },
         { name: 'start', label: 'Start', field: 'start', align: 'left' },
         { name: 'end', label: 'End', field: 'end', align: 'left' },
-        { name: 'employees', label: 'Number of Employees', field: 'employees', align: 'center' },
+        { name: 'employees', label: 'No. of Employees', field: 'employees', align: 'center' },
         { name: 'status', label: 'Status', field: 'status', align: 'center' },
         { name: 'date', label: 'Date Released', field: 'date', align: 'left' },
         { name: 'amount', label: 'Total Amount', field: 'amount', align: 'right' },
@@ -288,12 +233,12 @@ export default {
         },
       ],
       statsCards: [
-        { icon: 'people', count: 64, label: 'Active', gradient: 'gradient-blue' },
-        { icon: 'person_off', count: 1, label: 'Paid Leave', gradient: 'gradient-red' },
-        { icon: 'schedule', count: 60, label: 'Clocked In', gradient: 'gradient-green' },
-        { icon: 'person_remove', count: 1, label: 'Absent', gradient: 'gradient-orange' },
-        { icon: 'access_time', count: 2, label: 'Time Off', gradient: 'gradient-purple' },
-        { icon: 'request_page', count: 6, label: 'Requests', gradient: 'gradient-cyan' },
+        { icon: 'people', count: 64, label: 'Active' },
+        { icon: 'person_off', count: 1, label: 'Paid Leave' },
+        { icon: 'schedule', count: 60, label: 'Clocked In' },
+        { icon: 'person_remove', count: 1, label: 'Absent' },
+        { icon: 'access_time', count: 2, label: 'Time Off' },
+        { icon: 'request_page', count: 6, label: 'Requests' },
       ],
       attendanceAlerts: [
         '3 employees clocked in outside workplace location',
@@ -315,347 +260,371 @@ export default {
 </script>
 
 <style scoped>
-.dashboard-container {
+/* ── Base ── */
+.dashboard-page {
+  background: #f5f6fa;
   min-height: 100vh;
-  background: #ffffff;
+  padding: 0;
 }
-
-.main-content {
+.dashboard-inner {
   max-width: 1400px;
   margin: 0 auto;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-/* Modern Cards */
-.modern-card {
-  border-radius: 20px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
+/* ── Top Stats Row ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
 }
-
-.modern-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-}
-
-/* Section Headers */
-.section-header {
+.stat-tile {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e8eaf0;
+  padding: 14px 12px;
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
+  gap: 10px;
+  transition: box-shadow 0.2s;
+}
+.stat-tile:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
-.section-icon {
-  font-size: 24px;
-  margin-right: 12px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* Colour accents per tile */
+.tile-0 .tile-icon-wrap {
+  background: #e8f4ff;
+  color: #1a73e8;
+}
+.tile-1 .tile-icon-wrap {
+  background: #fdecea;
+  color: #d32f2f;
+}
+.tile-2 .tile-icon-wrap {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+.tile-3 .tile-icon-wrap {
+  background: #fff3e0;
+  color: #f57c00;
+}
+.tile-4 .tile-icon-wrap {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+.tile-5 .tile-icon-wrap {
+  background: #e0f7fa;
+  color: #0097a7;
 }
 
-.section-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #2d3748;
-  letter-spacing: -0.5px;
-}
-
-/* Stats Cards */
-.stat-card {
-  border-radius: 16px;
-  border: none;
-  overflow: hidden;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.stat-card:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-}
-
-.stat-content {
-  text-align: center;
-  padding: 24px 16px !important;
-  color: white;
-  position: relative;
-}
-
-.stat-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-  opacity: 0.9;
-}
-
-.stat-number {
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 1;
-  margin-bottom: 8px;
-}
-
-.stat-label {
-  font-size: 12px;
-  font-weight: 500;
-  opacity: 0.9;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* Gradient Backgrounds */
-.gradient-blue {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.gradient-red {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.gradient-green {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-.gradient-orange {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-.gradient-purple {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-}
-
-.gradient-cyan {
-  background: linear-gradient(135deg, #96fbc4 0%, #f9f047 100%);
-}
-
-/* Modern Table */
-.modern-table {
-  border-radius: 12px;
-  overflow: hidden;
-  background: white;
-}
-
-.modern-table .q-table__top,
-.modern-table .q-table__bottom,
-.modern-table thead tr:first-child th {
-  background-color: #f8fafc;
-}
-
-.modern-table th {
-  font-weight: 600;
-  color: #4a5568;
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 1px;
-}
-
-.modern-table td {
-  color: #2d3748;
-  font-weight: 500;
-}
-
-/* Status Chips */
-.status-chip-success {
-  background: linear-gradient(135deg, #48bb78, #38a169) !important;
-  border-radius: 20px;
-  font-weight: 600;
-}
-
-.status-chip-pending {
-  background: linear-gradient(135deg, #ed8936, #dd6b20) !important;
-  border-radius: 20px;
-  font-weight: 600;
-}
-
-/* Equal Height Cards */
-.equal-height-card {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.full-height-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.attendance-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.chart-container {
-  width: 100%;
-  flex: 1;
-  min-height: 200px;
-}
-
-.chart-placeholder {
-  height: 100%;
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-  border-radius: 12px;
+.tile-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px dashed #cbd5e0;
+  flex-shrink: 0;
 }
-
-.chart-content {
-  text-align: center;
+.tile-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1d23;
+  line-height: 1;
 }
-
-.chart-icon {
-  font-size: 48px;
-  color: #a0aec0;
-  margin-bottom: 8px;
-}
-
-.chart-label {
-  font-size: 14px;
-  color: #718096;
+.tile-label {
+  font-size: 11px;
+  color: #6b7280;
   font-weight: 500;
-}
-
-/* Modern Lists */
-.modern-list .q-item {
-  border-radius: 8px;
-  margin-bottom: 4px;
-  transition: all 0.2s ease;
-}
-
-.modern-list .q-item:hover {
-  background-color: #f7fafc;
-}
-
-.alert-text,
-.notification-text {
-  font-size: 13px;
-  color: #4a5568;
-  line-height: 1.4;
-}
-
-/* Activity List */
-.modern-activity-list .activity-item {
-  padding: 16px 0;
-  border-radius: 12px;
-  margin-bottom: 8px;
-  transition: all 0.2s ease;
-}
-
-.modern-activity-list .activity-item:hover {
-  background-color: #f7fafc;
-  transform: translateX(4px);
-}
-
-.modern-avatar {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  font-weight: 600;
-}
-
-.activity-user {
-  font-weight: 600;
-  color: #2d3748;
-  font-size: 14px;
-}
-
-.activity-time {
-  color: #718096;
-  font-size: 12px;
   margin-top: 2px;
 }
 
-.activity-status {
-  font-weight: 600;
-  color: #4a5568;
-  font-size: 13px;
+/* ── Layout ── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+}
+.col-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.col-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.activity-details {
-  color: #718096;
-  font-size: 12px;
+/* ── Panel ── */
+.panel {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e8eaf0;
+  overflow: hidden;
 }
-
-/* Alert Items */
-.alert-item-modern {
-  padding: 12px 0;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  transition: all 0.2s ease;
+.panel--flex {
+  display: flex;
+  flex-direction: column;
 }
-
-.alert-indicator {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+.panel-head {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: white;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0f1f5;
+}
+.panel-icon {
+  color: #1a73e8;
+}
+.panel-icon--red {
+  color: #d32f2f;
+}
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1d23;
 }
 
-.critical-indicator {
-  background: linear-gradient(135deg, #f56565, #e53e3e);
+/* ── CT Table (Connecteam-style) ── */
+.ct-table {
+  background: transparent;
 }
-
-.warning-indicator {
-  background: linear-gradient(135deg, #ed8936, #dd6b20);
+.ct-thead-row {
+  background: #f8f9fb;
 }
-
-.info-indicator {
-  background: linear-gradient(135deg, #48bb78, #38a169);
+.ct-th {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e8eaf0;
 }
-
-.alert-text-modern {
+.ct-table :deep(td) {
   font-size: 13px;
-  color: #4a5568;
-  font-weight: 500;
+  color: #374151;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f5f6fa;
+}
+.ct-table :deep(tr:last-child td) {
+  border-bottom: none;
+}
+.ct-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ct-status--green {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.ct-status--amber {
+  background: #fff8e1;
+  color: #f57f17;
 }
 
-/* Icons */
-.notification-icon {
-  color: #667eea;
+/* ── Two-col row ── */
+.two-col-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.chart-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background: #fafafa;
+  border-top: 1px solid #f0f1f5;
+  gap: 8px;
+}
+.chart-placeholder-label {
+  font-size: 13px;
+  color: #9ca3af;
 }
 
-.alert-icon {
-  color: #e53e3e;
+/* ── Alert list ── */
+.alert-list {
+  padding: 8px 0;
+  border-top: 1px solid #f0f1f5;
+}
+.alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 16px;
+  border-bottom: 1px solid #f5f6fa;
+}
+.alert-item:last-child {
+  border-bottom: none;
+}
+.alert-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.alert-text {
+  font-size: 12px;
+  color: #4b5563;
+  line-height: 1.5;
 }
 
-/* Responsive */
+/* ── Activity list ── */
+.activity-list {
+  padding: 0;
+}
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f5f6fa;
+}
+.activity-row:last-child {
+  border-bottom: none;
+}
+.activity-avatar {
+  background: linear-gradient(135deg, #1a73e8, #6c63ff);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.activity-info {
+  flex: 1;
+  min-width: 0;
+}
+.activity-user {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1d23;
+}
+.activity-time {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 1px;
+}
+.activity-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a73e8;
+  background: #e8f4ff;
+  padding: 3px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.activity-details {
+  font-size: 11px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* ── Notifications ── */
+.notif-list {
+  padding: 4px 0;
+}
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f5f6fa;
+}
+.notif-item:last-child {
+  border-bottom: none;
+}
+.notif-dot {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.notif-text {
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+/* ── Fraud Alerts ── */
+.fraud-list {
+  padding: 4px 0;
+}
+.fraud-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  font-size: 12px;
+  border-bottom: 1px solid #f5f6fa;
+}
+.fraud-item:last-child {
+  border-bottom: none;
+}
+.fraud-item--critical {
+  color: #c62828;
+}
+.fraud-item--critical .q-icon {
+  color: #c62828;
+}
+.fraud-item--warning {
+  color: #e65100;
+}
+.fraud-item--warning .q-icon {
+  color: #e65100;
+}
+.fraud-item--info {
+  color: #2e7d32;
+}
+.fraud-item--info .q-icon {
+  color: #2e7d32;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1200px) {
+  .stats-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+  .col-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
 @media (max-width: 768px) {
-  .main-content {
-    padding: 16px;
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
   }
-
-  .stat-number {
-    font-size: 24px;
+  .two-col-row {
+    grid-template-columns: 1fr;
   }
-
-  .stat-icon {
-    font-size: 28px;
+  .col-side {
+    grid-template-columns: 1fr;
   }
-}
-
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  .activity-details {
+    display: none;
   }
 }
-
-.modern-card {
-  animation: fadeIn 0.6s ease forwards;
-}
-
-.stat-card {
-  animation: fadeIn 0.8s ease forwards;
+@media (max-width: 480px) {
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>
