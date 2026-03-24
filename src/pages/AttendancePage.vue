@@ -220,7 +220,6 @@
                   <q-th key="employee" :props="props" class="table-header-cell employee-col"
                     >Employee</q-th
                   >
-                  <q-th key="site" :props="props" class="table-header-cell site-col">Site</q-th>
                   <q-th
                     key="work_type"
                     :props="props"
@@ -281,13 +280,6 @@
                       </span>
                     </div>
                   </q-td>
-                  <q-td key="site" :props="props" class="table-body-cell site-col">
-                    <div v-if="props.row.site" class="site-name-text">
-                      <q-icon name="location_on" size="12px" class="q-mr-xs text-grey-6" />
-                      {{ getSiteName(props.row.site) }}
-                    </div>
-                    <span v-else class="no-photo">-</span>
-                  </q-td>
                   <!-- Work Type -->
                   <q-td
                     key="work_type"
@@ -303,16 +295,39 @@
                     </div>
                     <span v-else class="no-photo">-</span>
                   </q-td>
-                  <!-- Cost Center -->
+                  <!-- Cost Center (merged with Site) -->
                   <q-td key="cost_center" :props="props" class="table-body-cell cost-center-col">
                     <div
                       class="cost-center-badge time-editable"
                       @click="openCostCenterInlineEdit(props.row)"
                       title="Click to edit cost center"
                     >
-                      <q-icon name="account_balance_wallet" size="12px" class="q-mr-xs" />
-                      {{ getCostCenterName(props.row.cost_center) || 'None' }}
-                      <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
+                      <div
+                        style="
+                          display: flex;
+                          flex-direction: column;
+                          align-items: flex-start;
+                          gap: 2px;
+                        "
+                      >
+                        <div style="display: flex; align-items: center">
+                          <q-icon name="account_balance_wallet" size="12px" class="q-mr-xs" />
+                          {{ getCostCenterName(props.row.cost_center) || 'None' }}
+                          <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
+                        </div>
+                        <div
+                          v-if="props.row.site"
+                          style="
+                            display: flex;
+                            align-items: center;
+                            font-size: 11px;
+                            color: #6b7280;
+                          "
+                        >
+                          <q-icon name="location_on" size="11px" class="q-mr-xs" />
+                          {{ getSiteName(props.row.site) }}
+                        </div>
+                      </div>
                     </div>
                   </q-td>
                   <!-- Time In — clickable inline edit -->
@@ -2353,7 +2368,10 @@ function getSiteName(site) {
     name = String(site)
   }
   // Strip anything in parentheses and clean up extra whitespace
-  return name.replace(/\s*\(.*?\)\s*/g, '').trim()
+  name = name.replace(/\s*\(.*?\)\s*/g, '').trim()
+  // Return only the first part before a dash
+  const dashIndex = name.indexOf('-')
+  return dashIndex !== -1 ? name.substring(0, dashIndex).trim() : name
 }
 
 function getCostCenterName(costCenter) {
@@ -3150,10 +3168,11 @@ onMounted(async () => {
 }
 
 .filters-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: end;
+  justify-content: flex-start;
 }
 
 .filter-input :deep(.q-field__control),
@@ -3923,7 +3942,7 @@ onMounted(async () => {
 }
 
 .date-nav-input {
-  flex: 1;
+  width: 175px;
 }
 
 /* Focus States */
