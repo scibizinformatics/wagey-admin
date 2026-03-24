@@ -994,7 +994,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import axios from 'axios'
 import { api } from 'src/boot/axios'
@@ -1003,6 +1003,23 @@ const $q = useQuasar()
 
 // ===== SHARED STATE =====
 const activeTab = ref('leave')
+const getCompanyId = () => {
+  // First try: selectedCompany as an object with an id
+  try {
+    const parsed = JSON.parse(localStorage.getItem('selectedCompany'))
+    const id = parsed?.id || parsed?.companyId
+    if (id) return String(id)
+  } catch {}
+
+  // Second try: selectedCompany as a plain number/string
+  const raw = localStorage.getItem('selectedCompany')
+  if (raw) return String(raw)
+
+  // Third try: fallback to company_id key
+  const direct = localStorage.getItem('company_id')
+  return direct ? String(direct) : ''
+}
+const selectedCompany = ref(getCompanyId())
 const loading = ref(false)
 const searchTerm = ref('')
 
@@ -1110,7 +1127,7 @@ const overtimeStats = computed(() => ({
 const filteredLeaveRequests = computed(() => {
   let filtered = [...leaveList.value]
 
-  if (statusFilter.value && statusFilter.value !== 'all') {
+  if (statusFilter.value && statusFilter.value !== 'all' && statusFilter.value !== null) {
     filtered = filtered.filter((r) => r.status === statusFilter.value)
   }
 
@@ -1129,7 +1146,7 @@ const filteredLeaveRequests = computed(() => {
 const filteredOvertimeRequests = computed(() => {
   let filtered = [...overtimeList.value]
 
-  if (statusFilter.value && statusFilter.value !== 'all') {
+  if (statusFilter.value && statusFilter.value !== 'all' && statusFilter.value !== null) {
     filtered = filtered.filter((r) => r.status === statusFilter.value)
   }
 
@@ -1277,7 +1294,7 @@ const fetchLeaveRequests = async () => {
     const token = localStorage.getItem('access_token')
     if (!token) throw new Error('No access token found')
 
-    const companyId = localStorage.getItem('selectedCompany')
+    const companyId = selectedCompany.value
     if (!companyId) throw new Error('No company selected')
 
     const res = await axios.get(`https://staging.wageyapp.com/attendance/leave-list/`, {
@@ -1324,8 +1341,10 @@ const fetchOvertimeCategories = async () => {
   try {
     const token = localStorage.getItem('access_token')
     if (!token) return
+    const companyId = selectedCompany.value
     const res = await axios.get('https://staging.wageyapp.com/payroll/overtime-categories/', {
       headers: { Authorization: `Bearer ${token}` },
+      params: companyId ? { company_id: companyId } : {},
     })
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
     overtimeCategories.value = data.filter((c) => c.is_active)
@@ -1340,15 +1359,27 @@ const fetchOvertimeRequests = async () => {
     const token = localStorage.getItem('access_token')
     if (!token) throw new Error('No access token found')
 
-    const companyId = localStorage.getItem('selectedCompany')
+    const companyId = selectedCompany.value
     if (!companyId) throw new Error('No company selected')
 
-    const res = await axios.get(`https://staging.wageyapp.com/payroll/overtime-list/`, {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { company_id: companyId },
-    })
+    console.log(
+      '[OT] Fetching overtime | company_id:',
+      companyId,
+      '| token:',
+      token?.slice(0, 20) + '...',
+    )
+
+    const res = await axios.get(
+      `https://staging.wageyapp.com/payroll/overtime-list/?company=${companyId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+
+    console.log('[OT] Response status:', res.status, '| raw data:', res.data)
 
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
+    console.log('[OT] Parsed records:', data.length)
     overtimeList.value = data.map((item) => ({
       id: item.id,
       employeeName:
@@ -1533,11 +1564,10 @@ const getAuthConfig = () => {
     localStorage.getItem('authToken') ||
     localStorage.getItem('access_token') ||
     localStorage.getItem('token')
-  const selectedCompany = localStorage.getItem('selectedCompany')
   if (!token) throw new Error('No authentication token found')
   return {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    params: selectedCompany ? { company_id: selectedCompany, company: selectedCompany } : {},
+    params: selectedCompany.value ? { company_id: selectedCompany.value } : {},
   }
 }
 
@@ -1631,6 +1661,7 @@ const handleRefresh = () => {
 
 // Fetch data when tab changes
 watch(activeTab, (newTab) => {
+  statusFilter.value = 'all'
   if (newTab === 'cash_advance') {
     fetchCaRequests()
   } else if (newTab === 'overtime') {
@@ -1640,9 +1671,32 @@ watch(activeTab, (newTab) => {
   }
 })
 
+// Re-fetch all data when selected company changes
+watch(selectedCompany, () => {
+  fetchLeaveRequests()
+  fetchOvertimeRequests()
+  fetchOvertimeCategories()
+  fetchCaRequests()
+})
+
+// Sync selectedCompany with localStorage (e.g. from a company switcher elsewhere in the app)
+const syncCompany = () => {
+  const stored = getCompanyId()
+  if (stored !== selectedCompany.value) {
+    selectedCompany.value = stored
+  }
+}
+window.addEventListener('storage', syncCompany)
+
 onMounted(() => {
   fetchLeaveRequests()
+  fetchOvertimeRequests()
   fetchOvertimeCategories()
+  fetchCaRequests()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('storage', syncCompany)
 })
 </script>
 
