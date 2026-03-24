@@ -857,7 +857,7 @@ export default {
 
 <style scoped>
 .announcement-dashboard {
-  background: #f8fafc;
+  background: #f4f6f9;
   min-height: 100vh;
   padding: 0;
 }
@@ -865,17 +865,16 @@ export default {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 
 /* Header */
 .page-header {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 20px;
   margin-bottom: 16px;
-  margin-top: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
@@ -888,8 +887,8 @@ export default {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
-  margin: 0 0 4px 0;
+  color: #111827;
+  margin: 0;
 }
 
 .header-actions {
@@ -932,53 +931,71 @@ export default {
 }
 
 .stats-card {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  padding: 16px 18px;
+  border: 1px solid #e8ecf0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transition: all 0.2s ease;
+  gap: 14px;
+  transition: box-shadow 0.2s ease;
   min-width: 0;
 }
 
 .stats-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
 }
 
 .total-card {
-  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  background: #ffffff;
 }
 
 .active-card {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  background: #ffffff;
 }
 
 .scheduled-card {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  background: #ffffff;
 }
 
 .urgent-card {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  background: #ffffff;
 }
 
 .stats-icon-wrapper {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
   flex-shrink: 0;
+  font-size: 20px;
 }
 
 .stats-icon {
-  font-size: 24px;
-  color: #374151;
+  font-size: 20px;
+}
+
+.total-card .stats-icon-wrapper {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.active-card .stats-icon-wrapper {
+  background: #f0fdf4;
+  color: #22c55e;
+}
+
+.scheduled-card .stats-icon-wrapper {
+  background: #fffbeb;
+  color: #f59e0b;
+}
+
+.urgent-card .stats-icon-wrapper {
+  background: #fef2f2;
+  color: #ef4444;
 }
 
 .stats-content {
@@ -987,41 +1004,43 @@ export default {
 }
 
 .stats-amount {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
-  color: #1a202c;
-  line-height: 1;
-  margin-bottom: 4px;
+  color: #111827;
+  line-height: 1.1;
 }
 
 .stats-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
+  font-size: 12px;
+  color: #6b7280;
   margin-bottom: 2px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Table Section */
 .table-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   overflow: hidden;
 }
 
 .table-header {
-  padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .table-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a202c;
+  color: #111827;
   margin: 0;
 }
 
@@ -1049,8 +1068,6 @@ export default {
 }
 
 .modern-table-container {
-  border: 2px solid #3b82f6;
-  border-radius: 10px;
   overflow: hidden;
   margin: 0 16px 16px 16px;
 }
@@ -1063,16 +1080,17 @@ export default {
 
 .table-header-row {
   background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
 }
 
 .table-header-cell {
-  padding: 12px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  text-align: left;
-  border: none;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
+  vertical-align: middle !important;
   white-space: nowrap;
 }
 
@@ -1105,11 +1123,11 @@ export default {
 
 .table-body-row {
   border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease;
 }
 
-.table-body-row:hover {
-  background: #f8fafc;
+.table-body-row:hover .table-body-cell {
+  background: #f9fafb;
 }
 
 .urgent-row {
@@ -1117,11 +1135,11 @@ export default {
 }
 
 .table-body-cell {
-  padding: 14px 16px;
   font-size: 13px;
   color: #374151;
-  border: none;
-  vertical-align: middle;
+  padding: 13px 16px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
+  vertical-align: middle !important;
 }
 
 .col-status {
@@ -1129,8 +1147,8 @@ export default {
 }
 
 .title-cell .announcement-title-text {
-  font-weight: 500;
-  color: #1a202c;
+  font-weight: 600;
+  color: #111827;
 }
 
 .message-cell .message-preview {
@@ -1391,76 +1409,6 @@ export default {
 }
 
 /* ── Responsive ─────────────────────────────────────────── */
-
-/* 1440px – large desktop */
-@media (min-width: 1440px) {
-  .dashboard-container {
-    max-width: 1400px;
-    padding: 24px 32px;
-  }
-
-  .page-header {
-    padding: 20px 24px;
-  }
-
-  .page-title {
-    font-size: 24px;
-  }
-
-  .stats-section {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-    margin-bottom: 24px;
-  }
-
-  .stats-card {
-    padding: 20px;
-  }
-
-  .stats-amount {
-    font-size: 32px;
-  }
-
-  .stats-icon-wrapper {
-    width: 56px;
-    height: 56px;
-  }
-
-  .stats-icon {
-    font-size: 28px;
-  }
-
-  .table-header {
-    padding: 20px 24px;
-  }
-
-  .table-title {
-    font-size: 19px;
-  }
-
-  .type-select {
-    min-width: 220px;
-  }
-
-  .modern-table-container {
-    margin: 0 20px 20px 20px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 14px 14px;
-    font-size: 14px;
-  }
-
-  .header-search {
-    min-width: 240px;
-    max-width: 320px;
-  }
-
-  .dialog-modal {
-    width: 720px;
-  }
-}
 
 /* 1024px – small desktop / large tablet landscape */
 @media (max-width: 1024px) {

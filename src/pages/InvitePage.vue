@@ -715,7 +715,7 @@ onMounted(async () => {
 <style scoped>
 /* Copy all the styles from the employee page */
 .employee-dashboard {
-  background: #f8fafc;
+  background: #f4f6f9;
   min-height: 100vh;
   padding: 0;
 }
@@ -723,15 +723,15 @@ onMounted(async () => {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 
 .page-header {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 20px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
@@ -744,8 +744,8 @@ onMounted(async () => {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
-  margin: 0 0 4px 0;
+  color: #111827;
+  margin: 0;
 }
 
 .header-actions {
@@ -788,49 +788,62 @@ onMounted(async () => {
 }
 
 .stats-card {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  padding: 16px 18px;
+  border: 1px solid #e8ecf0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transition: all 0.2s ease;
+  gap: 14px;
+  transition: box-shadow 0.2s ease;
   min-width: 0;
 }
 
 .stats-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
 }
 
 .personal-card {
-  background: linear-gradient(135deg, #fce7f3 0%, #f3e8ff 100%);
+  background: #ffffff;
 }
 
 .corporate-card {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  background: #ffffff;
 }
 
 .business-card {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  background: #ffffff;
 }
 
 .stats-icon-wrapper {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
   flex-shrink: 0;
+  font-size: 20px;
 }
 
 .stats-icon {
-  font-size: 24px;
-  color: #374151;
+  font-size: 20px;
+}
+
+.personal-card .stats-icon-wrapper {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.corporate-card .stats-icon-wrapper {
+  background: #fffbeb;
+  color: #f59e0b;
+}
+
+.business-card .stats-icon-wrapper {
+  background: #f0fdf4;
+  color: #22c55e;
 }
 
 .stats-content {
@@ -839,46 +852,46 @@ onMounted(async () => {
 }
 
 .stats-amount {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
-  color: #1a202c;
-  line-height: 1;
-  margin-bottom: 4px;
+  color: #111827;
+  line-height: 1.1;
 }
 
 .stats-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
+  font-size: 12px;
+  color: #6b7280;
   margin-bottom: 2px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .table-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   overflow: hidden;
 }
 
 .table-header {
-  padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .table-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a202c;
+  color: #111827;
   margin: 0;
 }
 
 .modern-table-container {
-  border: 2px solid #3b82f6;
-  border-radius: 10px;
   overflow: hidden;
   margin: 0 16px 16px 16px;
 }
@@ -891,34 +904,35 @@ onMounted(async () => {
 
 .table-header-row {
   background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
 }
 
 .table-header-cell {
-  padding: 12px 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  text-align: left;
-  border: none;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
+  vertical-align: middle !important;
   white-space: nowrap;
 }
 
 .table-body-row {
   border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease;
 }
 
-.table-body-row:hover {
-  background: #f8fafc;
+.table-body-row:hover .table-body-cell {
+  background: #f9fafb;
 }
 
 .table-body-cell {
-  padding: 12px 10px;
   font-size: 13px;
   color: #374151;
-  border: none;
-  vertical-align: middle;
+  padding: 13px 16px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
+  vertical-align: middle !important;
 }
 
 .employee-info {
@@ -928,8 +942,8 @@ onMounted(async () => {
 }
 
 .employee-name {
-  font-weight: 500;
-  color: #1a202c;
+  font-weight: 600;
+  color: #111827;
   font-size: 13px;
 }
 
@@ -946,8 +960,8 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 11px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }

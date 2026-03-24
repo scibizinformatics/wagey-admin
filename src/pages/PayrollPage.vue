@@ -4,18 +4,9 @@
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
-          <div class="header-left">
-            <h1 class="page-title">Payroll</h1>
-          </div>
+          <h1 class="page-title">Payroll</h1>
           <div class="header-actions">
-            <q-btn
-              flat
-              round
-              icon="refresh"
-              size="md"
-              class="header-btn"
-              @click="fetchPayrollData"
-            />
+            <q-btn flat round icon="refresh" class="header-btn" @click="fetchPayrollData" />
             <q-btn
               unelevated
               icon="file_download"
@@ -31,43 +22,40 @@
 
       <!-- Stats Cards -->
       <div class="stats-section">
-        <div class="stats-card personal-card">
-          <div class="stats-icon-wrapper">
+        <div class="stats-card">
+          <div class="stats-icon-wrapper stats-icon-blue">
             <q-icon name="people" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ totalEmployees }}</div>
             <div class="stats-label">Total Employees</div>
+            <div class="stats-amount">{{ totalEmployees }}</div>
           </div>
         </div>
-
-        <div class="stats-card corporate-card">
-          <div class="stats-icon-wrapper">
+        <div class="stats-card">
+          <div class="stats-icon-wrapper stats-icon-amber">
             <q-icon name="attach_money" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ formatCurrency(totalGrossPay) }}</div>
             <div class="stats-label">Total Gross Pay</div>
+            <div class="stats-amount">{{ formatCurrency(totalGrossPay) }}</div>
           </div>
         </div>
-
-        <div class="stats-card business-card">
-          <div class="stats-icon-wrapper">
+        <div class="stats-card">
+          <div class="stats-icon-wrapper stats-icon-green">
             <q-icon name="account_balance_wallet" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ formatCurrency(totalNetPay) }}</div>
             <div class="stats-label">Total Net Pay</div>
+            <div class="stats-amount">{{ formatCurrency(totalNetPay) }}</div>
           </div>
         </div>
-
-        <div class="stats-card custom-card">
-          <div class="stats-icon-wrapper">
+        <div class="stats-card">
+          <div class="stats-icon-wrapper stats-icon-purple">
             <q-icon name="schedule" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ totalHours }}h</div>
             <div class="stats-label">Total Hours</div>
+            <div class="stats-amount">{{ totalHours }}h</div>
           </div>
         </div>
       </div>
@@ -161,7 +149,6 @@
             <table class="payroll-table">
               <thead>
                 <tr class="table-header-row">
-                  <th class="table-header-cell">SL No</th>
                   <th class="table-header-cell sortable" @click="sortBy('employee')">
                     Employee
                     <q-icon :name="getSortIcon('employee')" size="xs" />
@@ -193,10 +180,9 @@
                   class="table-body-row"
                   :class="{ 'highlight-row': record.net_pay > averageNetPay }"
                 >
-                  <td class="table-body-cell">{{ String(index + 1).padStart(2, '0') }}.</td>
                   <td class="table-body-cell employee-cell">
                     <div class="employee-info">
-                      <q-avatar size="32px" class="employee-avatar">
+                      <q-avatar size="34px" class="employee-avatar">
                         {{ getInitials(record.employee) }}
                       </q-avatar>
                       <div class="employee-details">
@@ -235,24 +221,34 @@
                     </div>
                   </td>
                   <td class="table-body-cell actions-cell">
-                    <div class="action-buttons">
-                      <q-btn
-                        flat
-                        round
-                        icon="visibility"
-                        size="sm"
-                        class="action-btn view-btn"
-                        @click="viewDetails(record)"
-                      />
-                      <q-btn
-                        flat
-                        round
-                        icon="description"
-                        size="sm"
-                        class="action-btn download-btn"
-                        @click="downloadPayslip(record)"
-                      />
-                    </div>
+                    <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                      <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                        <q-list dense style="min-width: 150px">
+                          <q-item
+                            clickable
+                            v-close-popup
+                            @click="viewDetails(record)"
+                            class="dropdown-item"
+                          >
+                            <q-item-section avatar
+                              ><q-icon name="visibility" size="16px"
+                            /></q-item-section>
+                            <q-item-section>View details</q-item-section>
+                          </q-item>
+                          <q-item
+                            clickable
+                            v-close-popup
+                            @click="downloadPayslip(record)"
+                            class="dropdown-item"
+                          >
+                            <q-item-section avatar
+                              ><q-icon name="description" size="16px"
+                            /></q-item-section>
+                            <q-item-section>Download payslip</q-item-section>
+                          </q-item>
+                        </q-list>
+                      </q-menu>
+                    </q-btn>
                   </td>
                 </tr>
               </tbody>
@@ -404,74 +400,84 @@
       <q-card class="detail-modal-card">
         <q-card-section class="modal-header">
           <div class="modal-title-section">
-            <q-icon name="receipt_long" class="modal-icon" />
+            <q-avatar size="44px" class="modal-avatar-icon">
+              <q-icon name="receipt_long" size="22px" />
+            </q-avatar>
             <div>
               <div class="modal-title">Payroll Details</div>
-              <div class="modal-subtitle" v-if="selectedRecord">
-                {{ selectedRecord.employee }}
-              </div>
+              <div class="modal-subtitle" v-if="selectedRecord">{{ selectedRecord.employee }}</div>
             </div>
           </div>
-          <q-btn icon="close" flat round class="modal-close-btn" @click="closeDetailModal" />
+          <q-btn icon="close" flat round dense class="modal-close-btn" @click="closeDetailModal" />
         </q-card-section>
 
         <q-separator />
 
         <q-card-section class="modal-content" v-if="selectedRecord">
-          <div class="detail-grid">
-            <div class="detail-section">
-              <h4 class="section-title">Employee Information</h4>
-              <div class="detail-item">
-                <label>Name:</label>
-                <span>{{ selectedRecord.employee }}</span>
-              </div>
-              <div class="detail-item">
-                <label>Employee ID:</label>
-                <span>{{ selectedRecord.employee_id || 'N/A' }}</span>
-              </div>
-              <div class="detail-item">
-                <label>Period:</label>
-                <span>{{ selectedRecord.period }}</span>
-              </div>
-              <div class="detail-item">
-                <label>Run:</label>
-                <span>#{{ selectedRecord.run }}</span>
+          <div class="modal-section-title">Employee information</div>
+          <div class="detail-grid-cards">
+            <div class="detail-card">
+              <div class="detail-card-label">Name</div>
+              <div class="detail-card-value">{{ selectedRecord.employee }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Employee ID</div>
+              <div class="detail-card-value">{{ selectedRecord.employee_id || 'N/A' }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Period</div>
+              <div class="detail-card-value">{{ selectedRecord.period }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Run</div>
+              <div class="detail-card-value">#{{ selectedRecord.run }}</div>
+            </div>
+          </div>
+          <div class="modal-section-title">Pay information</div>
+          <div class="detail-grid-cards">
+            <div class="detail-card">
+              <div class="detail-card-label">Gross Pay</div>
+              <div class="detail-card-value amount-green">
+                {{ formatCurrency(selectedRecord.gross_pay) }}
               </div>
             </div>
-
-            <div class="detail-section">
-              <h4 class="section-title">Pay Information</h4>
-              <div class="detail-item">
-                <label>Gross Pay:</label>
-                <span>{{ formatCurrency(selectedRecord.gross_pay) }}</span>
-              </div>
-              <div class="detail-item">
-                <label>Net Pay:</label>
-                <span>{{ formatCurrency(selectedRecord.net_pay) }}</span>
-              </div>
-              <div class="detail-item">
-                <label>Deductions:</label>
-                <span>{{ formatCurrency(selectedRecord.gross_pay - selectedRecord.net_pay) }}</span>
+            <div class="detail-card">
+              <div class="detail-card-label">Net Pay</div>
+              <div class="detail-card-value amount-blue">
+                {{ formatCurrency(selectedRecord.net_pay) }}
               </div>
             </div>
-
-            <div class="detail-section">
-              <h4 class="section-title">Hours Breakdown</h4>
-              <div class="detail-item">
-                <label>Regular Hours:</label>
-                <span>{{ selectedRecord.breakdown?.attendance?.regular_hours || 0 }}h</span>
+            <div class="detail-card detail-card-full">
+              <div class="detail-card-label">Deductions</div>
+              <div class="detail-card-value amount-red">
+                {{ formatCurrency(selectedRecord.gross_pay - selectedRecord.net_pay) }}
               </div>
-              <div class="detail-item">
-                <label>Overtime Hours:</label>
-                <span>{{ selectedRecord.breakdown?.attendance?.overtime_hours || 0 }}h</span>
+            </div>
+          </div>
+          <div class="modal-section-title">Hours breakdown</div>
+          <div class="detail-grid-cards">
+            <div class="detail-card">
+              <div class="detail-card-label">Regular</div>
+              <div class="detail-card-value">
+                {{ selectedRecord.breakdown?.attendance?.regular_hours || 0 }}h
               </div>
-              <div class="detail-item">
-                <label>Holiday Hours:</label>
-                <span>{{ selectedRecord.breakdown?.attendance?.holiday_hours || 0 }}h</span>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Overtime</div>
+              <div class="detail-card-value amount-amber">
+                {{ selectedRecord.breakdown?.attendance?.overtime_hours || 0 }}h
               </div>
-              <div class="detail-item">
-                <label>Total Hours:</label>
-                <span>{{ selectedRecord.breakdown?.attendance?.total_hours_worked || 0 }}h</span>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Holiday</div>
+              <div class="detail-card-value amount-purple">
+                {{ selectedRecord.breakdown?.attendance?.holiday_hours || 0 }}h
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Total</div>
+              <div class="detail-card-value">
+                {{ selectedRecord.breakdown?.attendance?.total_hours_worked || 0 }}h
               </div>
             </div>
           </div>
@@ -924,8 +930,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ==============================
+   BASE
+============================== */
 .payroll-dashboard {
-  background: #f8fafc;
+  background: #f4f6f9;
   min-height: 100vh;
   padding: 0;
 }
@@ -933,56 +942,18 @@ onMounted(() => {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 
-/* Loading and Error States */
-.loading-state,
-.error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 260px;
-  text-align: center;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  margin: 16px 0;
-  padding: 32px;
-}
-
-.error-icon {
-  font-size: 2.5rem;
-  margin-bottom: 12px;
-}
-
-.spinner {
-  width: 44px;
-  height: 44px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-/* Header Section */
+/* ==============================
+   HEADER
+============================== */
 .page-header {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 20px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
@@ -995,38 +966,39 @@ onMounted(() => {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
-  margin: 0 0 4px 0;
-}
-
-.page-subtitle {
-  font-size: 13px;
-  color: #64748b;
+  color: #111827;
   margin: 0;
 }
 
 .header-actions {
   display: flex;
+  gap: 10px;
   align-items: center;
-  gap: 8px;
 }
 
 .header-btn {
-  color: #64748b;
+  color: #6b7280 !important;
   width: 36px;
   height: 36px;
+  border-radius: 8px !important;
+}
+
+.header-btn:hover {
+  background: #f3f4f6 !important;
 }
 
 .export-btn {
-  background: #6366f1;
-  border-radius: 8px;
-  font-weight: 500;
-  padding: 6px 14px;
   height: 36px;
+  border-radius: 8px !important;
+  font-weight: 500;
   font-size: 13px;
+  text-transform: none;
+  padding: 0 16px;
 }
 
-/* Stats Section */
+/* ==============================
+   STATS CARDS
+============================== */
 .stats-section {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1035,88 +1007,87 @@ onMounted(() => {
 }
 
 .stats-card {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  padding: 16px 18px;
+  border: 1px solid #e8ecf0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transition: all 0.2s ease;
+  gap: 14px;
   min-width: 0;
+  transition: box-shadow 0.2s ease;
 }
 
 .stats-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-.personal-card {
-  background: linear-gradient(135deg, #fce7f3 0%, #f3e8ff 100%);
-}
-
-.corporate-card {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-}
-
-.business-card {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-}
-
-.custom-card {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
 }
 
 .stats-icon-wrapper {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
   flex-shrink: 0;
 }
 
 .stats-icon {
-  font-size: 24px;
-  color: #374151;
+  font-size: 20px;
+}
+
+.stats-icon-blue {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+.stats-icon-amber {
+  background: #fefce8;
+  color: #ca8a04;
+}
+.stats-icon-green {
+  background: #f0fdf4;
+  color: #22c55e;
+}
+.stats-icon-purple {
+  background: #f5f3ff;
+  color: #8b5cf6;
 }
 
 .stats-content {
-  flex: 1;
   min-width: 0;
 }
 
+.stats-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
 .stats-amount {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  color: #1a202c;
-  line-height: 1;
-  margin-bottom: 4px;
+  color: #111827;
+  line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.stats-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 2px;
-}
-
-/* Filters Section */
+/* ==============================
+   FILTERS SECTION
+============================== */
 .filters-section {
   margin-bottom: 16px;
 }
 
 .filters-card {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  padding: 16px 20px;
+  border: 1px solid #e8ecf0;
 }
 
 .filters-header {
@@ -1127,23 +1098,27 @@ onMounted(() => {
 }
 
 .filters-title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: #1a202c;
+  color: #111827;
   margin: 0;
 }
 
 .view-toggle {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 3px;
 }
 
 .toggle-btn {
-  border-radius: 8px;
+  border-radius: 6px !important;
   font-weight: 500;
-  height: 32px;
-  padding: 0 12px;
+  height: 28px;
+  padding: 0 10px;
   font-size: 12px;
+  text-transform: none;
 }
 
 .filters-grid {
@@ -1152,47 +1127,54 @@ onMounted(() => {
   gap: 12px;
 }
 
-.filter-input {
-  background: #f8fafc;
+.filter-input :deep(.q-field__control) {
   border-radius: 8px;
 }
 
-.filter-input .q-field__control {
-  border-radius: 8px;
-  height: 36px;
-}
-
-/* Table Section */
+/* ==============================
+   TABLE SECTION
+============================== */
 .table-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   overflow: hidden;
+  margin-bottom: 16px;
 }
 
 .table-header {
-  padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.table-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .table-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a202c;
-  margin: 0 0 4px 0;
+  color: #111827;
+  margin: 0;
 }
 
 .table-info {
-  font-size: 13px;
-  color: #64748b;
+  font-size: 12px;
+  color: #9ca3af;
 }
 
-/* Modern Table */
 .modern-table-container {
-  border: 2px solid #3b82f6;
-  border-radius: 10px;
   overflow: hidden;
-  margin: 0 16px 16px 16px;
+  margin: 0 16px 16px;
+  border: 1px solid #e8ecf0;
+  border-radius: 10px;
 }
 
 .table-wrapper {
@@ -1202,56 +1184,57 @@ onMounted(() => {
 .payroll-table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 13px;
   background: white;
-  min-width: 900px;
 }
 
 .table-header-row {
   background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
 }
 
 .table-header-cell {
-  padding: 12px 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
+  padding: 11px 16px;
   text-align: left;
-  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e8ecf0;
   white-space: nowrap;
 }
 
 .table-header-cell.sortable {
   cursor: pointer;
   user-select: none;
-  transition: background-color 0.2s ease;
 }
 
 .table-header-cell.sortable:hover {
-  background-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #374151;
 }
 
 .table-body-row {
-  border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
+  border-bottom: 1px solid #f1f3f5;
+  transition: background 0.15s;
 }
 
-.table-body-row:hover {
-  background: #f8fafc;
-}
-
-.table-body-row.highlight-row {
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.05) 0%, rgba(34, 197, 94, 0.05) 100%);
+.table-body-row:hover .table-body-cell {
+  background: #f9fafb;
 }
 
 .table-body-cell {
-  padding: 12px 10px;
-  font-size: 13px;
+  padding: 12px 16px;
   color: #374151;
-  border: none;
+  font-size: 13px;
   vertical-align: middle;
 }
 
+.highlight-row .table-body-cell {
+  background: #f0fdf4;
+}
+
+/* Employee cell */
 .employee-cell {
   min-width: 180px;
 }
@@ -1263,64 +1246,86 @@ onMounted(() => {
 }
 
 .employee-avatar {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
-  font-weight: 600;
-  width: 32px;
-  height: 32px;
-  font-size: 13px;
+  background: #e0e7ff !important;
+  color: #4338ca !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  flex-shrink: 0;
+}
+
+.employee-avatar :deep(.q-avatar__content) {
+  font-size: 12px !important;
 }
 
 .employee-details {
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .employee-name {
-  font-weight: 500;
-  color: #1a202c;
-  margin-bottom: 2px;
+  font-weight: 600;
+  color: #111827;
   font-size: 13px;
 }
 
 .employee-id {
   font-size: 11px;
-  color: #64748b;
+  color: #9ca3af;
 }
 
+/* Badges */
 .period-badge {
-  padding: 4px 10px;
-  background: #dbeafe;
-  color: #2563eb;
-  border-radius: 16px;
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
   font-size: 11px;
   font-weight: 500;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
   white-space: nowrap;
 }
 
 .run-badge {
-  padding: 4px 10px;
-  background: #dcfce7;
-  color: #16a34a;
-  border-radius: 16px;
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
   font-size: 11px;
   font-weight: 500;
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
   white-space: nowrap;
 }
 
+.hours-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  white-space: nowrap;
+}
+
+/* Amount cells */
 .amount-cell {
-  min-width: 110px;
+  min-width: 120px;
 }
 
 .amount-display {
   font-weight: 600;
-  color: #1a202c;
-  margin-bottom: 4px;
+  color: #111827;
   font-size: 13px;
+  margin-bottom: 4px;
 }
 
 .amount-progress {
-  height: 4px;
-  background: #f1f5f9;
+  height: 3px;
+  background: #f1f3f5;
   border-radius: 2px;
   overflow: hidden;
 }
@@ -1328,174 +1333,147 @@ onMounted(() => {
 .amount-bar {
   height: 100%;
   border-radius: 2px;
-  transition: width 0.5s ease;
+  transition: width 0.3s ease;
 }
 
 .gross-bar {
-  background: linear-gradient(90deg, #10b981, #22c55e);
+  background: #f59e0b;
 }
-
 .net-bar {
-  background: linear-gradient(90deg, #3b82f6, #6366f1);
+  background: #22c55e;
 }
 
-.hours-cell {
-  text-align: center;
-}
-
-.hours-badge {
-  padding: 4px 10px;
-  background: #f3e8ff;
-  color: #7c3aed;
-  border-radius: 16px;
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
+/* Actions */
 .actions-cell {
-  width: 100px;
-  min-width: 100px;
+  text-align: center;
+  width: 60px;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-  flex-wrap: nowrap;
+.action-menu-btn {
+  color: #6b7280 !important;
+  border-radius: 6px !important;
 }
 
-.action-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  border-radius: 6px;
-  flex-shrink: 0;
+.action-menu-btn:hover {
+  background: #f3f4f6 !important;
 }
 
-.view-btn {
-  background: #dbeafe;
-  color: #3b82f6;
+.action-dropdown {
+  border-radius: 8px !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
 }
 
-.view-btn:hover {
-  background: #bfdbfe;
+.dropdown-item {
+  font-size: 13px !important;
+  color: #374151 !important;
+  min-height: 36px !important;
+  padding: 0 12px !important;
 }
 
-.download-btn {
-  background: #dcfce7;
-  color: #16a34a;
+.dropdown-item:hover {
+  background: #f9fafb !important;
 }
 
-.download-btn:hover {
-  background: #bbf7d0;
-}
-
-/* Table Footer */
+/* Table footer */
 .table-footer {
-  background: #f8fafc;
-  padding: 14px 16px;
-  border-top: 2px solid #3b82f6;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 12px 16px;
+  background: #f8fafc;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 
 .footer-info {
   display: flex;
-  gap: 16px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+  color: #6b7280;
 }
 
 .total-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #ef4444;
-}
-
-.total-records {
-  font-size: 13px;
   font-weight: 600;
   color: #374151;
 }
-
+.total-records {
+  color: #6b7280;
+}
 .total-amount {
-  font-size: 13px;
-  font-weight: 600;
   color: #16a34a;
+  font-weight: 600;
 }
 
 .pagination-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
 }
 
 .pagination-btn {
-  color: #64748b;
-  padding: 4px;
-  width: 32px;
-  height: 32px;
+  color: #6b7280;
+  border-radius: 6px !important;
 }
-
-.pagination-btn:hover:not(:disabled) {
-  background: #f1f5f9;
+.pagination-btn:hover {
+  background: #f3f4f6 !important;
 }
 
 .page-info {
   font-size: 13px;
   color: #374151;
   font-weight: 500;
+  min-width: 90px;
+  text-align: center;
 }
 
-/* Cards Section */
+/* ==============================
+   CARDS VIEW
+============================== */
 .cards-section {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  padding: 16px;
+  margin-bottom: 16px;
 }
 
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
 .payroll-card {
-  background: #f8fafc;
+  background: #ffffff;
+  border: 1px solid #e8ecf0;
   border-radius: 12px;
-  padding: 20px;
-  border: 1px solid #e2e8f0;
-  transition: all 0.2s ease;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
 }
 
 .payroll-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .card-header {
   display: flex;
   align-items: center;
-  margin-bottom: 16px;
   gap: 12px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e8ecf0;
 }
 
 .employee-avatar-large {
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e0e7ff;
+  color: #4338ca;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 1.1rem;
+  font-weight: 700;
+  font-size: 14px;
   flex-shrink: 0;
 }
 
@@ -1505,70 +1483,68 @@ onMounted(() => {
 }
 
 .card-employee-name {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: #1a202c;
-  margin: 0 0 4px 0;
+  color: #111827;
+  margin: 0 0 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .card-employee-id {
-  font-size: 13px;
-  color: #64748b;
+  font-size: 11px;
+  color: #9ca3af;
   margin: 0;
 }
 
 .card-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .card-action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: #e2e8f0;
-  color: #64748b;
+  color: #6b7280 !important;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px !important;
 }
 
 .card-action-btn:hover {
-  background: #3b82f6;
-  color: white;
+  background: #f3f4f6 !important;
 }
 
 .card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  padding: 14px 16px;
 }
 
 .pay-section {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .pay-item {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  background: white;
-  border-radius: 8px;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .pay-label {
-  font-size: 13px;
-  color: #64748b;
+  font-size: 11px;
+  color: #9ca3af;
   font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .pay-value {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1a202c;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
 }
 
 .pay-value.net {
@@ -1576,93 +1552,90 @@ onMounted(() => {
 }
 
 .hours-section {
-  background: white;
-  border-radius: 8px;
-  padding: 12px;
+  margin-bottom: 12px;
 }
 
 .hours-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
 }
 
 .hours-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px;
   background: #f8fafc;
-  border-radius: 6px;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
 }
 
 .hours-label {
-  font-size: 11px;
-  color: #64748b;
-  margin-bottom: 4px;
+  font-size: 10px;
+  color: #9ca3af;
   font-weight: 500;
+  display: block;
+  margin-bottom: 3px;
+  text-transform: uppercase;
 }
-
 .hours-value {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a202c;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
 }
-
 .hours-value.overtime {
   color: #f59e0b;
 }
-
 .hours-value.holiday {
   color: #8b5cf6;
 }
-
 .hours-value.total {
   color: #3b82f6;
 }
 
 .card-footer {
-  border-top: 1px solid #e2e8f0;
-  padding-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f3f5;
 }
 
 .period-info {
   display: flex;
-  gap: 10px;
-  justify-content: center;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-/* Cards Pagination */
 .cards-pagination {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 12px 4px;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 
 .pagination-info {
   font-size: 13px;
-  color: #64748b;
+  color: #6b7280;
 }
 
-/* Modal Styles */
+/* ==============================
+   MODAL
+============================== */
 .detail-modal-card {
-  width: 100%;
-  max-width: 720px;
-  max-height: 80vh;
-  border-radius: 12px;
+  width: 560px;
+  max-width: 95vw;
+  max-height: 90vh;
+  border-radius: 14px !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  background: #f9fafb;
+  justify-content: space-between;
+  padding: 16px 20px !important;
+  background: #ffffff;
 }
 
 .modal-title-section {
@@ -1671,511 +1644,187 @@ onMounted(() => {
   gap: 12px;
 }
 
-.modal-icon {
-  font-size: 28px;
-  color: #3b82f6;
-  background: #dbeafe;
-  padding: 8px;
-  border-radius: 8px;
+.modal-avatar-icon {
+  background: #eff6ff !important;
+  color: #3b82f6 !important;
+  border-radius: 10px !important;
+  flex-shrink: 0;
 }
 
 .modal-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #111827;
-  margin: 0;
 }
-
 .modal-subtitle {
-  font-size: 13px;
+  font-size: 12px;
   color: #6b7280;
   margin-top: 2px;
 }
 
 .modal-close-btn {
-  color: #6b7280;
+  color: #9ca3af !important;
+}
+.modal-close-btn:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
 }
 
 .modal-content {
-  padding: 20px;
-  max-height: 60vh;
+  padding: 20px !important;
   overflow-y: auto;
+  flex: 1;
 }
 
-.detail-grid {
+.modal-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 16px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.modal-section-title:first-child {
+  margin-top: 0;
+}
+
+.detail-grid-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
-.detail-section {
-  background: #f9fafb;
+.detail-card {
+  background: #f8fafc;
   border-radius: 8px;
-  padding: 16px;
+  padding: 10px 14px;
+  border: 1px solid #f1f3f5;
 }
 
-.section-title {
-  font-size: 15px;
+.detail-card-full {
+  grid-column: 1 / -1;
+}
+
+.detail-card-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.detail-card-value {
+  font-size: 14px;
   font-weight: 600;
   color: #111827;
-  margin: 0 0 12px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e5e7eb;
 }
 
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #f3f4f6;
+.amount-green {
+  color: #16a34a;
 }
-
-.detail-item:last-child {
-  border-bottom: none;
+.amount-blue {
+  color: #2563eb;
 }
-
-.detail-item label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #6b7280;
+.amount-red {
+  color: #dc2626;
 }
-
-.detail-item span {
-  font-size: 13px;
-  color: #111827;
-  font-weight: 500;
+.amount-amber {
+  color: #d97706;
+}
+.amount-purple {
+  color: #7c3aed;
 }
 
 .dialog-btn {
-  padding: 7px 14px;
-  border-radius: 6px;
-  font-weight: 500;
+  border-radius: 8px !important;
   font-size: 13px;
+  text-transform: none;
 }
-
 .primary-btn {
-  background: #3b82f6;
-  color: white;
+  font-weight: 500;
 }
 
-/* No Data State */
-.no-data {
+/* Loading / error */
+.loading-state,
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
   background: white;
   border-radius: 12px;
-  padding: 48px 32px;
+  border: 1px solid #e8ecf0;
+  margin: 16px 0;
+  padding: 32px;
   text-align: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.no-data-icon {
-  font-size: 3.5rem;
-  margin-bottom: 16px;
-  opacity: 0.6;
-}
-
-.no-data h3 {
-  color: #1a202c;
-  margin: 0 0 12px 0;
-  font-size: 1.3rem;
-  font-weight: 600;
-}
-
-.no-data p {
-  color: #64748b;
-  margin: 0 0 20px 0;
-  font-size: 15px;
-}
-
-.retry-btn {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 15px;
-  transition: all 0.3s ease;
-}
-
-.retry-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
-}
-
-/* ===================================
-   RESPONSIVE BREAKPOINTS
-   =================================== */
-
-/* 1440px - Large Desktop */
-@media (min-width: 1440px) {
-  .dashboard-container {
-    padding: 20px;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
+}
 
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f4f6;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 14px;
+}
+
+/* ==============================
+   RESPONSIVE
+============================== */
+@media (max-width: 900px) {
   .stats-section {
-    gap: 16px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 14px 12px;
-  }
-
-  .action-btn {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
-/* 1024px - Desktop / Tablet Landscape */
-@media (max-width: 1024px) {
+@media (max-width: 768px) {
   .dashboard-container {
     padding: 14px;
   }
-
   .header-content {
     flex-wrap: wrap;
   }
-
   .stats-section {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    grid-template-columns: 1fr;
   }
-
-  .stats-card {
-    padding: 14px;
-  }
-
-  .stats-icon-wrapper {
-    width: 44px;
-    height: 44px;
-  }
-
-  .stats-icon {
-    font-size: 22px;
-  }
-
-  .stats-amount {
-    font-size: 22px;
-  }
-
-  .stats-label {
-    font-size: 11px;
-  }
-
   .filters-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
-
-  .table-header {
-    padding: 14px;
+  .detail-grid-cards {
+    grid-template-columns: 1fr;
   }
-
+  .detail-card-full {
+    grid-column: span 1;
+  }
   .modern-table-container {
-    margin: 0 14px 14px 14px;
+    margin: 0 10px 10px;
   }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 11px 8px;
-    font-size: 12px;
-  }
-
-  .actions-cell {
-    width: 90px;
-    min-width: 90px;
-  }
-
-  .action-buttons {
-    gap: 3px;
-  }
-
-  .action-btn {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-  }
-
-  .cards-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  }
-
-  .employee-avatar-large {
-    width: 48px;
-    height: 48px;
+  .hours-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
-/* 768px - Tablet Portrait */
-@media (max-width: 768px) {
-  .dashboard-container {
-    padding: 12px;
-  }
-
-  .page-header {
-    padding: 12px;
-    margin-bottom: 12px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .header-actions {
-    justify-content: space-between;
-  }
-
-  .page-title {
-    font-size: 18px;
-  }
-
-  .stats-section {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 12px;
-  }
-
-  .stats-card {
-    padding: 12px;
-  }
-
-  .stats-icon-wrapper {
-    width: 40px;
-    height: 40px;
-  }
-
-  .stats-icon {
-    font-size: 20px;
-  }
-
-  .stats-amount {
-    font-size: 20px;
-  }
-
-  .stats-label {
-    font-size: 10px;
-  }
-
-  .filters-section {
-    margin-bottom: 12px;
-  }
-
-  .filters-card {
-    padding: 12px;
-  }
-
-  .filters-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .filters-title {
-    font-size: 15px;
-  }
-
-  .view-toggle {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .toggle-btn {
-    flex: 1;
-  }
-
-  .filters-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .table-header {
-    padding: 12px;
-  }
-
-  .table-title {
-    font-size: 16px;
-  }
-
-  .modern-table-container {
-    margin: 0 10px 10px 10px;
-  }
-
-  .table-footer {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 12px;
-  }
-
-  .footer-info {
-    justify-content: center;
-    gap: 12px;
-  }
-
-  .pagination-controls {
-    justify-content: center;
-  }
-
-  .cards-section {
-    padding: 12px;
-  }
-
-  .cards-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .payroll-card {
-    padding: 16px;
-  }
-
-  .card-header {
-    margin-bottom: 14px;
-  }
-
-  .employee-avatar-large {
-    width: 44px;
-    height: 44px;
-  }
-
-  .card-employee-name {
-    font-size: 15px;
-  }
-
-  .cards-pagination {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .detail-modal-card {
-    max-width: 95vw;
-    margin: 12px;
-  }
-
-  .modal-header,
-  .modal-content {
-    padding: 14px;
-  }
-
-  .modal-title {
-    font-size: 17px;
-  }
-
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Small Mobile - 480px and below */
 @media (max-width: 480px) {
-  .dashboard-container {
-    padding: 10px;
-  }
-
-  .page-header {
-    padding: 10px;
-    border-radius: 10px;
-  }
-
   .page-title {
-    font-size: 16px;
-  }
-
-  .header-btn {
-    width: 32px;
-    height: 32px;
-  }
-
-  .export-btn {
-    padding: 6px 12px;
-    height: 32px;
-    font-size: 12px;
-  }
-
-  .stats-card {
-    padding: 10px;
-  }
-
-  .stats-icon-wrapper {
-    width: 36px;
-    height: 36px;
-  }
-
-  .stats-icon {
     font-size: 18px;
   }
-
   .stats-amount {
     font-size: 18px;
   }
-
-  .stats-label {
-    font-size: 9px;
-  }
-
-  .filters-card {
-    padding: 10px;
-  }
-
-  .filters-title {
-    font-size: 14px;
-  }
-
-  .toggle-btn {
-    font-size: 11px;
-    padding: 0 10px;
-  }
-
-  .table-header {
-    padding: 10px;
-  }
-
-  .table-title {
-    font-size: 15px;
-  }
-
-  .modern-table-container {
-    margin: 0 8px 8px 8px;
-  }
-
-  .action-btn {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-  }
-
-  .payroll-card {
-    padding: 14px;
-  }
-
-  .employee-avatar-large {
-    width: 40px;
-    height: 40px;
-  }
-
-  .card-employee-name {
-    font-size: 14px;
-  }
-
-  .pay-item {
-    padding: 8px 10px;
-  }
-
-  .hours-item {
-    padding: 8px;
-  }
-
-  .modal-header,
-  .modal-content {
-    padding: 12px;
-  }
-
-  .modal-title {
-    font-size: 16px;
+  .cards-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

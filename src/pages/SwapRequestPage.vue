@@ -500,6 +500,8 @@ export default {
     const selectedRequest = ref(null)
     const currentUserCompany = ref(null)
     const userHasApprovalRights = ref(true)
+    // Tracks real statuses when the backend list returns stale data
+    const correctedStatuses = ref({})
 
     const sortOptions = ['Newest', 'Oldest', 'Status']
 
@@ -605,7 +607,6 @@ export default {
 
     const fetchSwapRequests = async () => {
       loading.value = true
-      console.log('🚀 Fetching swap requests...')
 
       try {
         const token = localStorage.getItem('access_token')
@@ -613,14 +614,12 @@ export default {
 
         const companyId = getCompanyId()
         if (!companyId) {
-          console.warn('⚠️ No company ID available')
           swapRequests.value = []
           $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
           return
         }
 
         currentUserCompany.value = companyId
-        console.log(`📤 Requesting swap requests for company: ${companyId}`)
 
         const response = await api.get(
           'https://staging.wageyapp.com/organization/company-swap-requests/',
@@ -630,9 +629,6 @@ export default {
           },
         )
 
-        console.log('📦 Raw response status:', response.status)
-        console.log('📦 Raw response data:', JSON.stringify(response.data, null, 2))
-
         let rawData = []
         if (Array.isArray(response.data)) {
           rawData = response.data
@@ -640,12 +636,15 @@ export default {
           rawData = response.data.results
         } else if (Array.isArray(response.data?.data)) {
           rawData = response.data.data
-        } else {
-          console.warn('⚠️ Unexpected response shape:', typeof response.data, response.data)
         }
 
-        console.log(`✅ Fetched ${rawData.length} swap requests`)
-        swapRequests.value = rawData.map(normalizeRequest)
+        // Merge any locally-corrected statuses over the stale list data
+        // (correctedStatuses is updated when the backend returns "no longer pending")
+        const mergedData = rawData.map((r) =>
+          correctedStatuses.value[r.id] ? { ...r, status: correctedStatuses.value[r.id] } : r,
+        )
+
+        swapRequests.value = mergedData.map(normalizeRequest)
 
         $q.notify({
           type: 'positive',
@@ -653,7 +652,6 @@ export default {
           position: 'top',
         })
       } catch (error) {
-        console.error('❌ Error fetching swap requests:', error)
         swapRequests.value = []
         $q.notify({
           type: 'negative',
@@ -670,16 +668,31 @@ export default {
       }
     }
 
-    // FIX: No company param on PATCH, no admin_approved_at — server handles these
-    const updateSwapRequest = async (requestId, payload) => {
+    const getCurrentUserId = () => {
+      // Decode user_id directly from the JWT access token payload
+      try {
+        const token = localStorage.getItem('access_token')
+        if (!token) return null
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        return payload.user_id || null
+      } catch {
+        return null
+      }
+    }
+
+    const updateSwapRequest = async (requestId, status) => {
       const token = localStorage.getItem('access_token')
-      console.log(`📤 Updating swap request ${requestId}:`, payload)
-      const response = await api.patch(
+      const userId = getCurrentUserId()
+      const payload = {
+        id: requestId,
+        status,
+        approved_by: userId,
+      }
+      const response = await api.put(
         `https://staging.wageyapp.com/organization/swap-requests/${requestId}/`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } },
       )
-      console.log('✅ Update successful:', response.data)
       return response.data
     }
 
@@ -711,34 +724,15 @@ export default {
 
     const isPendingApproval = (request) => {
       if (!request) return false
-      const result = request.status === 'pending' || request.status === 'to_employee_approved'
-      console.log(`🔎 isPendingApproval [id=${request.id}] status="${request.status}" → ${result}`)
-      return result
+      return request.status === 'pending' || request.status === 'to_employee_approved'
     }
 
     const canAdminApprove = (request) => {
       if (!request) return false
-      const pending = isPendingApproval(request)
-      const employeeApproved = request.to_employee_approved === true
-      const result = pending && employeeApproved
-      console.log(
-        `🔎 canAdminApprove [id=${request.id}] isPending=${pending} to_employee_approved=${employeeApproved} → ${result}`,
-      )
-      return result
+      return isPendingApproval(request) && request.to_employee_approved === true
     }
 
     const approveRequest = async (request) => {
-      console.log(
-        '🟢 approveRequest called for:',
-        JSON.stringify({
-          id: request.id,
-          status: request.status,
-          to_employee_approved: request.to_employee_approved,
-          from: request.from_employee_name,
-          to: request.to_employee_name,
-        }),
-      )
-
       if (!getCompanyId()) {
         console.warn('⚠️ approveRequest blocked: no company selected')
         $q.notify({
@@ -769,7 +763,6 @@ export default {
         cancel: true,
         persistent: true,
       }).onOk(async () => {
-        loading.value = true
         processingId.value = request.id
 
         // Optimistically update UI immediately — backend list endpoint is known to return stale data
@@ -777,17 +770,12 @@ export default {
           const idx = swapRequests.value.findIndex((r) => r.id === id)
           if (idx !== -1) {
             swapRequests.value.splice(idx, 1, { ...swapRequests.value[idx], status })
-            console.log(`✅ Optimistic UI update: request ${id} → ${status}`)
           }
         }
         optimisticUpdate(request.id, 'approved')
 
         try {
-          console.log(
-            `📤 PATCH /organization/swap-requests/${request.id}/ → { status: "approved" }`,
-          )
-          const result = await updateSwapRequest(request.id, { status: 'approved' })
-          console.log('✅ Approve PATCH success:', JSON.stringify(result))
+          await updateSwapRequest(request.id, 'approved')
 
           $q.notify({
             type: 'positive',
@@ -797,10 +785,6 @@ export default {
 
           await fetchSwapRequests()
         } catch (error) {
-          console.error('❌ Approve PATCH failed')
-          console.error('   → HTTP status:', error.response?.status)
-          console.error('   → Response data:', JSON.stringify(error.response?.data))
-
           let errorMessage = parseErrorMessage(error)
 
           if (errorMessage.includes('do not have an assigned role')) {
@@ -808,10 +792,8 @@ export default {
           }
 
           if (isStaleDataError(errorMessage)) {
-            // PATCH failed because request was already processed — our optimistic update is correct
-            console.log(
-              `⚠️ Backend confirmed request ${request.id} already processed. Optimistic update kept.`,
-            )
+            // Backend says already processed — record the real status so refetches stay correct
+            correctedStatuses.value[request.id] = 'approved'
             $q.notify({
               type: 'positive',
               message: 'Swap request approved successfully!',
@@ -819,7 +801,7 @@ export default {
               timeout: 3000,
             })
           } else {
-            // Real error — revert the optimistic update
+            // Real error — revert the optimistic update and refetch
             optimisticUpdate(request.id, request.status)
             $q.notify({
               type: 'negative',
@@ -828,28 +810,15 @@ export default {
               position: 'top',
               timeout: 5000,
             })
+            await fetchSwapRequests()
           }
-
-          await fetchSwapRequests()
         } finally {
-          loading.value = false
           processingId.value = null
         }
       })
     }
 
     const rejectRequest = async (request) => {
-      console.log(
-        '🔴 rejectRequest called for:',
-        JSON.stringify({
-          id: request.id,
-          status: request.status,
-          to_employee_approved: request.to_employee_approved,
-          from: request.from_employee_name,
-          to: request.to_employee_name,
-        }),
-      )
-
       if (!isPendingApproval(request)) {
         console.warn('⚠️ rejectRequest blocked: isPendingApproval returned false', {
           status: request.status,
@@ -869,7 +838,6 @@ export default {
         cancel: true,
         persistent: true,
       }).onOk(async () => {
-        loading.value = true
         processingId.value = request.id
 
         // Optimistically update UI immediately — backend list endpoint is known to return stale data
@@ -877,17 +845,12 @@ export default {
           const idx = swapRequests.value.findIndex((r) => r.id === id)
           if (idx !== -1) {
             swapRequests.value.splice(idx, 1, { ...swapRequests.value[idx], status })
-            console.log(`✅ Optimistic UI update: request ${id} → ${status}`)
           }
         }
         optimisticUpdate(request.id, 'rejected')
 
         try {
-          console.log(
-            `📤 PATCH /organization/swap-requests/${request.id}/ → { status: "rejected" }`,
-          )
-          const result = await updateSwapRequest(request.id, { status: 'rejected' })
-          console.log('✅ Reject PATCH success:', JSON.stringify(result))
+          await updateSwapRequest(request.id, 'rejected')
 
           $q.notify({
             type: 'positive',
@@ -897,17 +860,11 @@ export default {
 
           await fetchSwapRequests()
         } catch (error) {
-          console.error('❌ Reject PATCH failed')
-          console.error('   → HTTP status:', error.response?.status)
-          console.error('   → Response data:', JSON.stringify(error.response?.data))
-
           const errorMessage = parseErrorMessage(error)
 
           if (isStaleDataError(errorMessage)) {
-            // PATCH failed because request was already processed — our optimistic update is correct
-            console.log(
-              `⚠️ Backend confirmed request ${request.id} already processed. Optimistic update kept.`,
-            )
+            // Backend says already processed — record the real status so refetches stay correct
+            correctedStatuses.value[request.id] = 'rejected'
             $q.notify({
               type: 'positive',
               message: 'Swap request rejected successfully',
@@ -915,7 +872,7 @@ export default {
               timeout: 3000,
             })
           } else {
-            // Real error — revert the optimistic update
+            // Real error — revert the optimistic update and refetch
             optimisticUpdate(request.id, request.status)
             $q.notify({
               type: 'negative',
@@ -923,11 +880,9 @@ export default {
               position: 'top',
               timeout: 5000,
             })
+            await fetchSwapRequests()
           }
-
-          await fetchSwapRequests()
         } finally {
-          loading.value = false
           processingId.value = null
         }
       })
@@ -999,7 +954,6 @@ export default {
     }
 
     onMounted(async () => {
-      console.log('🚀 Component mounted')
       await fetchSwapRequests()
     })
 
@@ -1043,7 +997,7 @@ export default {
 
 <style scoped>
 .swap-dashboard {
-  background: #f8fafc;
+  background: #f4f6f9;
   min-height: 100vh;
   padding: 0;
 }
@@ -1051,18 +1005,18 @@ export default {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 
 /* ===================================
    HEADER SECTION
    =================================== */
 .page-header {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 20px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
@@ -1075,8 +1029,8 @@ export default {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
-  margin: 0 0 4px 0;
+  color: #111827;
+  margin: 0;
 }
 
 .header-actions {
@@ -1087,13 +1041,15 @@ export default {
 }
 
 .header-btn {
-  width: 36px;
   height: 36px;
-  color: #374151;
+  width: 36px;
+  border-radius: 8px;
+  color: #6b7280 !important;
 }
 
 .header-btn:hover {
-  background: #f3f4f6;
+  background: #f3f4f6 !important;
+  color: #374151 !important;
 }
 
 .header-search {
@@ -1122,53 +1078,71 @@ export default {
 }
 
 .stats-card {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  padding: 16px 18px;
+  border: 1px solid #e8ecf0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transition: all 0.2s ease;
+  gap: 14px;
+  transition: box-shadow 0.2s ease;
   min-width: 0;
 }
 
 .stats-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
 }
 
 .total-card {
-  background: linear-gradient(135deg, #e9d5ff 0%, #ddd6fe 100%);
+  background: #ffffff;
 }
 
 .pending-card {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  background: #ffffff;
 }
 
 .approved-card {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  background: #ffffff;
 }
 
 .rejected-card {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  background: #ffffff;
 }
 
 .stats-icon-wrapper {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
   flex-shrink: 0;
+  font-size: 20px;
 }
 
 .stats-icon {
-  font-size: 24px;
-  color: #374151;
+  font-size: 20px;
+}
+
+.total-card .stats-icon-wrapper {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.pending-card .stats-icon-wrapper {
+  background: #fffbeb;
+  color: #f59e0b;
+}
+
+.approved-card .stats-icon-wrapper {
+  background: #f0fdf4;
+  color: #22c55e;
+}
+
+.rejected-card .stats-icon-wrapper {
+  background: #fef2f2;
+  color: #ef4444;
 }
 
 .stats-content {
@@ -1177,43 +1151,45 @@ export default {
 }
 
 .stats-amount {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
-  color: #1a202c;
-  line-height: 1;
-  margin-bottom: 4px;
+  color: #111827;
+  line-height: 1.1;
 }
 
 .stats-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
+  font-size: 12px;
+  color: #6b7280;
   margin-bottom: 2px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* ===================================
    TABLE SECTION - OPTIMIZED & COMPACT
    =================================== */
 .table-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   overflow: hidden;
 }
 
 .table-header {
-  padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .table-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a202c;
+  color: #111827;
   margin: 0;
 }
 
@@ -1250,10 +1226,8 @@ export default {
 
 /* Modern Table Container - Compact Version */
 .modern-table-container {
-  border: 2px solid #3b82f6;
-  border-radius: 10px;
   overflow: hidden;
-  margin: 0 16px 0 16px;
+  margin: 0 16px 16px 16px;
 }
 
 .swap-table {
@@ -1316,16 +1290,17 @@ export default {
 
 .table-header-row {
   background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
 }
 
 .table-header-cell {
-  padding: 10px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #374151;
-  text-align: left;
-  border: none;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
+  vertical-align: middle !important;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1333,28 +1308,31 @@ export default {
 
 .table-body-row {
   border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease;
 }
 
-.table-body-row:hover {
-  background: #f8fafc;
+.table-body-row:hover .table-body-cell {
+  background: #f9fafb;
 }
 
 .rejected-row {
-  opacity: 0.6;
+  opacity: 0.65;
+}
+
+.rejected-row .table-body-cell {
   background: #fef2f2;
 }
 
-.rejected-row:hover {
+.rejected-row:hover .table-body-cell {
   background: #fee2e2;
 }
 
 .table-body-cell {
-  padding: 8px 6px;
-  font-size: 11px;
+  font-size: 13px;
   color: #374151;
-  border: none;
-  vertical-align: middle;
+  padding: 13px 16px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
+  vertical-align: middle !important;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1368,9 +1346,9 @@ export default {
 }
 
 .employee-name {
-  font-weight: 500;
-  color: #1a202c;
-  font-size: 11px;
+  font-weight: 600;
+  color: #111827;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1385,9 +1363,9 @@ export default {
 }
 
 .employee-from {
-  font-weight: 500;
-  color: #1a202c;
-  font-size: 10px;
+  font-weight: 600;
+  color: #111827;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1401,8 +1379,8 @@ export default {
 }
 
 .employee-to {
-  font-size: 9px;
-  color: #64748b;
+  font-size: 12px;
+  color: #6b7280;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1418,14 +1396,14 @@ export default {
 
 .date-main {
   font-weight: 500;
-  color: #1a202c;
-  font-size: 11px;
+  color: #374151;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .date-sub {
-  font-size: 9px;
-  color: #64748b;
+  font-size: 11px;
+  color: #9ca3af;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1436,10 +1414,10 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-size: 9px;
-  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
   margin-bottom: 4px;
   width: fit-content;
@@ -1475,7 +1453,7 @@ export default {
 }
 
 .progress-text {
-  font-size: 8px;
+  font-size: 11px;
   margin-top: 2px;
   font-weight: 500;
   white-space: nowrap;
@@ -1491,7 +1469,7 @@ export default {
 }
 
 .status-extra-text {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -1514,60 +1492,49 @@ export default {
   min-width: 32px;
   max-width: 32px;
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Placeholder to maintain spacing for approved/rejected rows */
 .action-placeholder {
-  width: 68px; /* 32px + 4px gap + 32px for two buttons */
+  width: 68px;
   height: 32px;
 }
 
 .view-btn {
-  background: #3b82f6;
-  color: white;
+  color: #6b7280;
 }
 
 .view-btn:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 6px rgba(59, 130, 246, 0.3);
+  background: #eff6ff !important;
+  color: #3b82f6 !important;
 }
 
 .approve-btn {
-  background: #10b981;
-  color: white;
+  color: #6b7280;
 }
 
 .approve-btn:hover:not(:disabled) {
-  background: #059669;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 6px rgba(16, 185, 129, 0.3);
+  background: #f0fdf4 !important;
+  color: #16a34a !important;
 }
 
 .approve-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
-  background: #6ee7b7;
 }
 
 .reject-btn {
-  background: #ef4444;
-  color: white;
+  color: #6b7280;
 }
 
 .reject-btn:hover {
-  background: #dc2626;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 6px rgba(239, 68, 68, 0.3);
+  background: #fef2f2 !important;
+  color: #ef4444 !important;
 }
 
-/* Icon styling inside compact buttons */
+/* Icon styling inside buttons */
 .action-btn :deep(.q-icon) {
   font-size: 16px;
 }
@@ -1584,7 +1551,7 @@ export default {
 
 .footer-info {
   font-size: 13px;
-  color: #dc2626;
+  color: #6b7280;
   font-weight: 500;
 }
 

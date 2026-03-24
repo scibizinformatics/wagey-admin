@@ -1,495 +1,469 @@
 <template>
-  <q-page class="modern-page">
+  <q-page class="schedule-page">
     <!-- Header Section -->
-    <div class="page-header">
-      <div class="header-content">
-        <div class="title-section">
-          <h1 class="page-title">Schedule</h1>
-          <div class="timezone-badge">
-            <q-icon name="schedule" size="16px" />
-            <span>{{ userTimezone }}</span>
+    <div class="dashboard-container">
+      <div class="page-header">
+        <div class="header-content">
+          <div class="title-section">
+            <h1 class="page-title">Schedule</h1>
+            <div class="timezone-badge">
+              <q-icon name="schedule" size="14px" />
+              <span>{{ userTimezone }}</span>
+            </div>
           </div>
-        </div>
-        <div class="header-actions">
-          <!-- Add Employee Button -->
-          <q-btn
-            v-if="true"
-            color="primary"
-            icon="add"
-            label="Add Schedule"
-            @click="openAddModal"
-            class="add-btn"
-            unelevated
-          />
-          <!-- Search Input -->
-          <q-input
-            v-model="searchTerm"
-            placeholder="Search employees..."
-            outlined
-            dense
-            class="search-input"
-            debounce="300"
-            @update:model-value="filterEmployees"
-          >
-            <template #prepend>
-              <q-icon name="search" size="20px" />
-            </template>
-          </q-input>
-        </div>
-      </div>
-    </div>
-    <!-- Summary Cards Section -->
-    <div class="summary-section">
-      <div class="summary-grid">
-        <div class="summary-card card-purple">
-          <div class="card-icon">
-            <q-icon name="groups" size="32px" />
-          </div>
-          <div class="card-content">
-            <div class="card-value">{{ activeEmployees }}</div>
-            <div class="card-label">Total Employees</div>
-          </div>
-        </div>
-        <div class="summary-card card-yellow">
-          <div class="card-icon">
-            <q-icon name="event" size="32px" />
-          </div>
-          <div class="card-content">
-            <div class="card-value">{{ totalShifts }}</div>
-            <div class="card-label">Active</div>
-          </div>
-        </div>
-        <div class="summary-card card-pink">
-          <div class="card-icon">
-            <q-icon name="schedule" size="32px" />
-          </div>
-          <div class="card-content">
-            <div class="card-value">{{ positionsCount }}</div>
-            <div class="card-label">Positions Filled</div>
+          <div class="header-actions">
+            <q-input
+              v-model="searchTerm"
+              placeholder="Search employees..."
+              outlined
+              dense
+              class="header-search"
+              debounce="300"
+              @update:model-value="filterEmployees"
+            >
+              <template #prepend>
+                <q-icon name="search" class="search-icon" />
+              </template>
+            </q-input>
+            <q-btn
+              color="primary"
+              icon="add"
+              label="Add Schedule"
+              @click="openAddModal"
+              class="add-btn"
+              unelevated
+              no-caps
+            />
           </div>
         </div>
       </div>
-    </div>
-    <!-- Filter and Controls Section -->
-    <div class="controls-section">
-      <h2 class="section-title">Schedule Overview</h2>
-      <div class="controls-row">
-        <div class="filter-group">
-          <q-select
-            ref="siteFilterRef"
-            v-model="filters.site"
-            :options="siteFilterOptions"
-            option-value="value"
-            option-label="label"
-            label="Filter by Site"
-            outlined
-            dense
-            class="filter-select"
-            clearable
-            emit-value
-            map-options
-            @update:model-value="applyFilters"
-            @popup-show="pinDropdown(siteFilterRef)"
-            popup-content-class="filter-dropdown-popup"
-          />
-          <q-select
-            ref="employeeFilterRef"
-            v-model="filters.employee"
-            :options="[{ label: 'All Employees', value: null }, ...userOptions]"
-            option-value="value"
-            option-label="label"
-            label="Employee"
-            outlined
-            dense
-            class="filter-select"
-            clearable
-            emit-value
-            map-options
-            @update:model-value="applyFilters"
-            @popup-show="pinDropdown(employeeFilterRef)"
-            popup-content-class="filter-dropdown-popup"
-          />
-        </div>
-        <div class="week-nav">
-          <q-btn flat round icon="chevron_left" @click="prevWeek" class="nav-btn" size="sm" />
-          <div class="week-display">
-            {{ selectedWeek.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
-            –
-            {{
-              selectedWeek.end.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })
-            }}
+      <!-- Summary Cards Section -->
+      <div class="stats-section">
+        <div class="stats-card">
+          <div class="stats-icon-wrapper stats-icon-blue">
+            <q-icon name="groups" />
           </div>
-          <q-btn flat round icon="chevron_right" @click="nextWeek" class="nav-btn" size="sm" />
+          <div class="stats-content">
+            <div class="stats-label">Total Employees</div>
+            <div class="stats-amount">{{ activeEmployees }}</div>
+          </div>
         </div>
-        <q-select
-          v-model="viewMode"
-          :options="[
-            { label: 'Table View', value: 'table' },
-            { label: 'Card View', value: 'cards' },
-          ]"
-          outlined
-          dense
-          emit-value
-          map-options
-          class="view-select"
-          label="Sort by"
-        />
+        <div class="stats-card">
+          <div class="stats-icon-wrapper stats-icon-green">
+            <q-icon name="event" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-label">Active Schedules</div>
+            <div class="stats-amount">{{ totalShifts }}</div>
+          </div>
+        </div>
+        <div class="stats-card">
+          <div class="stats-icon-wrapper stats-icon-purple">
+            <q-icon name="work" />
+          </div>
+          <div class="stats-content">
+            <div class="stats-label">Positions Filled</div>
+            <div class="stats-amount">{{ positionsCount }}</div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="content-section">
-      <div class="table-view">
-        <div class="table-wrapper">
-          <table class="schedule-table">
-            <thead>
-              <tr>
-                <th class="employee-col">Employee</th>
-                <th v-for="(day, i) in days" :key="i" class="day-col">
-                  {{ day }}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="user in filteredUsers" :key="user.id" class="table-row">
-                <td class="employee-cell">
-                  <div class="employee-info">
-                    <q-avatar
-                      size="32px"
-                      class="employee-avatar"
-                      :style="{ backgroundColor: getAvatarColor(user.name) }"
-                    >
-                      <span class="avatar-text">{{ getInitials(user.name) }}</span>
-                    </q-avatar>
-                    <span class="employee-name">{{ user.name }}</span>
-                  </div>
-                </td>
-                <td v-for="(day, dayIdx) in days" :key="dayIdx" class="schedule-cell">
-                  <div class="shifts-wrapper">
-                    <!-- Existing Shifts (merged when dual-shift) -->
-                    <div
-                      v-for="element in getMergedShifts(user.id, dayIdx)"
-                      :key="element.id"
-                      class="shift-badge"
-                      :class="{
-                        'shift-badge-dayoff': isDayOff(element),
-                        'shift-badge-leave': element.isLeave,
-                        'shift-badge-merged': element.isMerged,
-                      }"
-                    >
-                      <!-- Leave Display -->
-                      <template v-if="element.isLeave">
-                        <div class="leave-content">
-                          <q-icon name="beach_access" size="15px" class="leave-icon" />
-                          <div class="leave-label">{{ element.leaveTypeName }}</div>
-                        </div>
-                        <div class="shift-actions">
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="close"
-                            size="xs"
-                            class="action-btn delete-btn"
-                            @click.stop="confirmDelete('leave', element)"
-                          >
-                            <q-tooltip>Cancel Leave</q-tooltip>
-                          </q-btn>
-                        </div>
-                      </template>
-                      <!-- Day Off Display -->
-                      <template v-else-if="isDayOff(element)">
-                        <div class="dayoff-content">
-                          <q-icon name="event_busy" size="18px" class="dayoff-icon" />
-                          <div class="dayoff-label">Day Off</div>
-                        </div>
-                        <div class="shift-actions">
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="swap_horiz"
-                            size="xs"
-                            class="action-btn reassign-btn"
-                            @click="openReassignModal(element)"
-                          >
-                            <q-tooltip>Reassign Day Off</q-tooltip>
-                          </q-btn>
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="close"
-                            size="xs"
-                            class="action-btn delete-btn"
-                            @click.stop="confirmDelete('single', element.id)"
-                          >
-                            <q-tooltip>Remove Day Off</q-tooltip>
-                          </q-btn>
-                        </div>
-                      </template>
-                      <!-- Merged Dual-Shift Display -->
-                      <template v-else-if="element.isMerged">
-                        <!-- Each shift on its own compact line -->
-                        <template v-for="(sub, si) in element.shifts" :key="sub.id">
-                          <div class="shift-time">
-                            {{ formatTimeWithTimezone(sub.startTime) }} - {{ sub.endTime }}
-                          </div>
-                          <div class="shift-site" v-if="getSiteName(sub.site)">
-                            <q-icon name="location_on" size="10px" />
-                            {{ getSiteName(sub.site) }}
-                          </div>
-                          <div class="shift-position">{{ getPositionName(sub.position) }}</div>
-                          <div
-                            v-if="si < element.shifts.length - 1"
-                            class="merged-shift-separator"
-                          />
-                        </template>
-                        <!-- Merged shift actions -->
-                        <div class="shift-actions">
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="swap_horiz"
-                            size="xs"
-                            class="action-btn reassign-btn"
-                            @click="openReassignModal(element)"
-                          >
-                            <q-tooltip>Update Shifts</q-tooltip>
-                          </q-btn>
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="event_busy"
-                            size="xs"
-                            class="action-btn dayoff-btn"
-                            :loading="assigningDayOffId === element.id"
-                            :disable="assigningDayOffId === element.id"
-                            @click.stop="assignDualDayOff(element)"
-                          >
-                            <q-tooltip>Assign Day Off (Both)</q-tooltip>
-                          </q-btn>
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="close"
-                            size="xs"
-                            class="action-btn delete-btn"
-                            @click.stop="confirmDelete('dual', element)"
-                          >
-                            <q-tooltip>Remove Both Shifts</q-tooltip>
-                          </q-btn>
-                        </div>
-                      </template>
-                      <!-- Regular Shift Display -->
-                      <template v-else>
-                        <div class="shift-time" v-if="element.startTime && element.endTime">
-                          {{ formatTimeWithTimezone(element.startTime) }} - {{ element.endTime }}
-                        </div>
-                        <div class="shift-site" v-if="getSiteName(element.site)">
-                          <q-icon name="location_on" size="11px" />
-                          {{ getSiteName(element.site) }}
-                        </div>
-                        <div class="shift-position">
-                          {{ getPositionName(element.position) }}
-                        </div>
-                        <div class="shift-actions">
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="swap_horiz"
-                            size="xs"
-                            class="action-btn reassign-btn"
-                            @click="openReassignModal(element)"
-                          >
-                            <q-tooltip>Update Shift</q-tooltip>
-                          </q-btn>
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="event_busy"
-                            size="xs"
-                            class="action-btn dayoff-btn"
-                            :loading="assigningDayOffId === element.id"
-                            :disable="assigningDayOffId === element.id"
-                            @click.stop="assignDayOff(element)"
-                          >
-                            <q-tooltip>Assign Day Off</q-tooltip>
-                          </q-btn>
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="close"
-                            size="xs"
-                            class="action-btn delete-btn"
-                            @click.stop="confirmDelete('single', element.id)"
-                          />
-                        </div>
-                      </template>
+      <!-- Filter and Controls Section -->
+      <div class="controls-section">
+        <div class="controls-top">
+          <h2 class="section-title">Schedule Overview</h2>
+          <div class="controls-row">
+            <div class="filter-group">
+              <q-select
+                ref="siteFilterRef"
+                v-model="filters.site"
+                :options="siteFilterOptions"
+                option-value="value"
+                option-label="label"
+                label="Filter by Site"
+                outlined
+                dense
+                class="filter-select"
+                clearable
+                emit-value
+                map-options
+                @update:model-value="applyFilters"
+                @popup-show="pinDropdown(siteFilterRef)"
+                popup-content-class="filter-dropdown-popup"
+              />
+              <q-select
+                ref="employeeFilterRef"
+                v-model="filters.employee"
+                :options="[{ label: 'All Employees', value: null }, ...userOptions]"
+                option-value="value"
+                option-label="label"
+                label="Employee"
+                outlined
+                dense
+                class="filter-select"
+                clearable
+                emit-value
+                map-options
+                @update:model-value="applyFilters"
+                @popup-show="pinDropdown(employeeFilterRef)"
+                popup-content-class="filter-dropdown-popup"
+              />
+            </div>
+            <q-select
+              v-model="viewMode"
+              :options="[
+                { label: 'Table View', value: 'table' },
+                { label: 'Card View', value: 'cards' },
+              ]"
+              outlined
+              dense
+              emit-value
+              map-options
+              class="view-select"
+              label="Sort by"
+            />
+            <div class="week-nav">
+              <q-btn flat round icon="chevron_left" @click="prevWeek" class="nav-btn" size="sm" />
+              <div class="week-display">
+                {{
+                  selectedWeek.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                }}
+                –
+                {{
+                  selectedWeek.end.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })
+                }}
+              </div>
+              <q-btn flat round icon="chevron_right" @click="nextWeek" class="nav-btn" size="sm" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="content-section">
+        <div class="table-view">
+          <div class="table-wrapper">
+            <table class="schedule-table">
+              <thead>
+                <tr>
+                  <th class="employee-col">Employee</th>
+                  <th v-for="(day, i) in days" :key="i" class="day-col">
+                    {{ day }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="user in filteredUsers" :key="user.id" class="table-row">
+                  <td class="employee-cell">
+                    <div class="employee-info">
+                      <q-avatar
+                        size="32px"
+                        class="employee-avatar"
+                        :style="{ backgroundColor: getAvatarColor(user.name) }"
+                      >
+                        <span class="avatar-text">{{ getInitials(user.name) }}</span>
+                      </q-avatar>
+                      <span class="employee-name">{{ user.name }}</span>
                     </div>
-                    <!-- Quick Action Buttons -->
-                    <div class="cell-quick-actions">
-                      <q-btn
-                        flat
-                        dense
-                        size="xs"
-                        icon="add"
-                        label="Schedule"
-                        @click="openQuickAddModal(user.id, dayIdx)"
-                        class="cell-btn cell-btn-add"
-                      />
-                      <template v-if="getShifts(user.id, dayIdx).length === 0">
-                        <q-btn-dropdown
-                          flat
-                          dense
-                          size="xs"
-                          no-icon-animation
-                          icon="beach_access"
-                          label="Leave"
-                          :loading="quickActionLoading === `${user.id}-${dayIdx}-leave`"
-                          class="cell-btn cell-btn-leave"
-                          dropdown-icon="none"
-                          fit
-                        >
-                          <q-list dense>
-                            <q-item
-                              v-for="lt in leaveTypes"
-                              :key="lt.id"
-                              clickable
-                              v-close-popup
-                              @click="quickDirectAssign(user.id, dayIdx, 'leave', lt.id)"
-                              style="min-height: 28px; padding: 4px 8px"
+                  </td>
+                  <td v-for="(day, dayIdx) in days" :key="dayIdx" class="schedule-cell">
+                    <div class="shifts-wrapper">
+                      <!-- Existing Shifts (merged when dual-shift) -->
+                      <div
+                        v-for="element in getMergedShifts(user.id, dayIdx)"
+                        :key="element.id"
+                        class="shift-badge"
+                        :class="{
+                          'shift-badge-dayoff': isDayOff(element),
+                          'shift-badge-leave': element.isLeave,
+                          'shift-badge-merged': element.isMerged,
+                        }"
+                      >
+                        <!-- Leave Display -->
+                        <template v-if="element.isLeave">
+                          <div class="leave-content">
+                            <q-icon name="beach_access" size="15px" class="leave-icon" />
+                            <div class="leave-label">{{ element.leaveTypeName }}</div>
+                          </div>
+                          <div class="shift-actions">
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="close"
+                              size="xs"
+                              class="action-btn delete-btn"
+                              @click.stop="confirmDelete('leave', element)"
                             >
-                              <q-item-section style="font-size: 11px">{{ lt.name }}</q-item-section>
-                            </q-item>
-                            <q-item
-                              v-if="leaveTypes.length === 0"
-                              style="min-height: 28px; padding: 4px 8px"
+                              <q-tooltip>Cancel Leave</q-tooltip>
+                            </q-btn>
+                          </div>
+                        </template>
+                        <!-- Day Off Display -->
+                        <template v-else-if="isDayOff(element)">
+                          <div class="dayoff-content">
+                            <q-icon name="event_busy" size="18px" class="dayoff-icon" />
+                            <div class="dayoff-label">Day Off</div>
+                          </div>
+                          <div class="shift-actions">
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="swap_horiz"
+                              size="xs"
+                              class="action-btn reassign-btn"
+                              @click="openReassignModal(element)"
                             >
-                              <q-item-section style="font-size: 11px; color: grey"
-                                >No leave types found</q-item-section
-                              >
-                            </q-item>
-                          </q-list>
-                        </q-btn-dropdown>
+                              <q-tooltip>Reassign Day Off</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="close"
+                              size="xs"
+                              class="action-btn delete-btn"
+                              @click.stop="confirmDelete('single', element.id)"
+                            >
+                              <q-tooltip>Remove Day Off</q-tooltip>
+                            </q-btn>
+                          </div>
+                        </template>
+                        <!-- Merged Dual-Shift Display -->
+                        <template v-else-if="element.isMerged">
+                          <!-- Each shift on its own compact line -->
+                          <template v-for="(sub, si) in element.shifts" :key="sub.id">
+                            <div class="shift-time">
+                              {{ formatTimeWithTimezone(sub.startTime) }} - {{ sub.endTime }}
+                            </div>
+                            <div class="shift-site" v-if="getSiteName(sub.site)">
+                              <q-icon name="location_on" size="10px" />
+                              {{ getSiteName(sub.site) }}
+                            </div>
+                            <div class="shift-position">{{ getPositionName(sub.position) }}</div>
+                            <div
+                              v-if="si < element.shifts.length - 1"
+                              class="merged-shift-separator"
+                            />
+                          </template>
+                          <!-- Merged shift actions -->
+                          <div class="shift-actions">
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="swap_horiz"
+                              size="xs"
+                              class="action-btn reassign-btn"
+                              @click="openReassignModal(element)"
+                            >
+                              <q-tooltip>Update Shifts</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="event_busy"
+                              size="xs"
+                              class="action-btn dayoff-btn"
+                              :loading="assigningDayOffId === element.id"
+                              :disable="assigningDayOffId === element.id"
+                              @click.stop="assignDualDayOff(element)"
+                            >
+                              <q-tooltip>Assign Day Off (Both)</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="close"
+                              size="xs"
+                              class="action-btn delete-btn"
+                              @click.stop="confirmDelete('dual', element)"
+                            >
+                              <q-tooltip>Remove Both Shifts</q-tooltip>
+                            </q-btn>
+                          </div>
+                        </template>
+                        <!-- Regular Shift Display -->
+                        <template v-else>
+                          <div class="shift-time" v-if="element.startTime && element.endTime">
+                            {{ formatTimeWithTimezone(element.startTime) }} - {{ element.endTime }}
+                          </div>
+                          <div class="shift-site" v-if="getSiteName(element.site)">
+                            <q-icon name="location_on" size="11px" />
+                            {{ getSiteName(element.site) }}
+                          </div>
+                          <div class="shift-position">
+                            {{ getPositionName(element.position) }}
+                          </div>
+                          <div class="shift-actions">
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="swap_horiz"
+                              size="xs"
+                              class="action-btn reassign-btn"
+                              @click="openReassignModal(element)"
+                            >
+                              <q-tooltip>Update Shift</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="event_busy"
+                              size="xs"
+                              class="action-btn dayoff-btn"
+                              :loading="assigningDayOffId === element.id"
+                              :disable="assigningDayOffId === element.id"
+                              @click.stop="assignDayOff(element)"
+                            >
+                              <q-tooltip>Assign Day Off</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="close"
+                              size="xs"
+                              class="action-btn delete-btn"
+                              @click.stop="confirmDelete('single', element.id)"
+                            />
+                          </div>
+                        </template>
+                      </div>
+                      <!-- Quick Action Buttons -->
+                      <div class="cell-quick-actions">
                         <q-btn
                           flat
                           dense
                           size="xs"
-                          icon="event_busy"
-                          label="Day Off"
-                          :loading="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
-                          :disable="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
-                          @click="quickDirectAssign(user.id, dayIdx, 'dayoff')"
-                          class="cell-btn cell-btn-dayoff"
+                          icon="add"
+                          label="Schedule"
+                          @click="openQuickAddModal(user.id, dayIdx)"
+                          class="cell-btn cell-btn-add"
                         />
-                      </template>
+                        <template v-if="getShifts(user.id, dayIdx).length === 0">
+                          <q-btn-dropdown
+                            flat
+                            dense
+                            size="xs"
+                            no-icon-animation
+                            icon="beach_access"
+                            label="Leave"
+                            :loading="quickActionLoading === `${user.id}-${dayIdx}-leave`"
+                            class="cell-btn cell-btn-leave"
+                            dropdown-icon="none"
+                            fit
+                          >
+                            <q-list dense>
+                              <q-item
+                                v-for="lt in leaveTypes"
+                                :key="lt.id"
+                                clickable
+                                v-close-popup
+                                @click="quickDirectAssign(user.id, dayIdx, 'leave', lt.id)"
+                                style="min-height: 28px; padding: 4px 8px"
+                              >
+                                <q-item-section style="font-size: 11px">{{
+                                  lt.name
+                                }}</q-item-section>
+                              </q-item>
+                              <q-item
+                                v-if="leaveTypes.length === 0"
+                                style="min-height: 28px; padding: 4px 8px"
+                              >
+                                <q-item-section style="font-size: 11px; color: grey"
+                                  >No leave types found</q-item-section
+                                >
+                              </q-item>
+                            </q-list>
+                          </q-btn-dropdown>
+                          <q-btn
+                            flat
+                            dense
+                            size="xs"
+                            icon="event_busy"
+                            label="Day Off"
+                            :loading="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
+                            :disable="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
+                            @click="quickDirectAssign(user.id, dayIdx, 'dayoff')"
+                            class="cell-btn cell-btn-dayoff"
+                          />
+                        </template>
+                      </div>
                     </div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
-    <!-- Delete Confirmation Modal -->
-    <q-dialog v-model="showDeleteModal" persistent>
-      <q-card class="modal-card" style="min-width: 320px; max-width: 420px">
-        <q-card-section class="modal-header">
-          <div class="modal-title" style="display: flex; align-items: center; gap: 8px">
-            <q-icon name="warning" color="negative" size="22px" />
-            Delete Schedule
-          </div>
-        </q-card-section>
-        <q-card-section class="modal-body">
-          <p style="margin: 0; font-size: 15px; color: #374151">
-            Are you sure you want to delete this schedule? This action cannot be undone.
-          </p>
-        </q-card-section>
-        <q-card-actions align="right" class="modal-actions" style="padding: 12px 16px; gap: 8px">
-          <q-btn flat label="No, Keep It" class="cancel-btn" @click="showDeleteModal = false" />
-          <q-btn
-            unelevated
-            color="negative"
-            label="Yes, Delete"
-            class="submit-btn"
-            @click="confirmDeleteAction"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-    <!-- Add Schedule Modal -->
+      <!-- Delete Confirmation Modal -->
+      <q-dialog v-model="showDeleteModal" persistent>
+        <q-card class="modal-card" style="min-width: 320px; max-width: 420px">
+          <q-card-section class="modal-header">
+            <div class="modal-title" style="display: flex; align-items: center; gap: 8px">
+              <q-icon name="warning" color="negative" size="22px" />
+              Delete Schedule
+            </div>
+          </q-card-section>
+          <q-card-section class="modal-body">
+            <p style="margin: 0; font-size: 15px; color: #374151">
+              Are you sure you want to delete this schedule? This action cannot be undone.
+            </p>
+          </q-card-section>
+          <q-card-actions align="right" class="modal-actions" style="padding: 12px 16px; gap: 8px">
+            <q-btn flat label="No, Keep It" class="cancel-btn" @click="showDeleteModal = false" />
+            <q-btn
+              unelevated
+              color="negative"
+              label="Yes, Delete"
+              class="submit-btn"
+              @click="confirmDeleteAction"
+            />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+      <!-- Add Schedule Modal -->
 
-    <q-dialog v-model="showAddModal" persistent>
-      <q-card class="modal-card">
-        <q-card-section class="modal-header">
-          <div class="modal-title">Add New Schedule</div>
-          <q-btn flat round dense icon="close" @click="closeAddModal" />
-        </q-card-section>
-        <q-card-section class="modal-body">
-          <q-form @submit="addSchedule" class="schedule-form">
-            <!-- Schedule Type Selection -->
-            <q-select
-              v-model="newSchedule.scheduleType"
-              :options="[
-                { label: 'One-Time Schedule', value: 'one-time' },
-                { label: 'Recurring Schedule', value: 'recurring' },
-              ]"
-              option-value="value"
-              option-label="label"
-              label="Schedule Type"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-            >
-              <template #hint>
-                Choose whether this is a single schedule or repeats weekly
-              </template>
-            </q-select>
-            <!-- Employee Selection -->
-            <!-- Multi-select for recurring, single-select for one-time -->
-            <q-select
-              v-if="newSchedule.scheduleType === 'recurring'"
-              ref="multiEmployeeSelectRef"
-              v-model="newSchedule.userIds"
-              :options="filteredEmployeeOptions"
-              option-value="value"
-              option-label="label"
-              label="Select Employees"
-              outlined
-              emit-value
-              map-options
-              multiple
-              use-chips
-              use-input
-              input-debounce="0"
-              @filter="filterEmployeeOptions"
-              @update:model-value="() => multiEmployeeSelectRef?.updateInputValue('')"
-              class="form-field full-width"
-              :rules="[(val) => (val && val.length > 0) || 'At least one employee is required']"
-              :loading="loadingEmployees"
-            >
-              <template #no-option>
-                <q-item>
-                  <q-item-section class="text-grey"> No employees found </q-item-section>
-                </q-item>
-              </template>
-            </q-select>
-            <!-- One-Time: Employee + Multi-date picker + Shift rows -->
-            <div v-else>
-              <!-- Employee -->
+      <q-dialog v-model="showAddModal" persistent>
+        <q-card class="modal-card">
+          <q-card-section class="modal-header">
+            <div class="modal-title">Add New Schedule</div>
+            <q-btn flat round dense icon="close" @click="closeAddModal" />
+          </q-card-section>
+          <q-card-section class="modal-body">
+            <q-form @submit="addSchedule" class="schedule-form">
+              <!-- Schedule Type Selection -->
               <q-select
-                ref="singleEmployeeSelectRef"
+                v-model="newSchedule.scheduleType"
+                :options="[
+                  { label: 'One-Time Schedule', value: 'one-time' },
+                  { label: 'Recurring Schedule', value: 'recurring' },
+                ]"
+                option-value="value"
+                option-label="label"
+                label="Schedule Type"
+                outlined
+                emit-value
+                map-options
+                class="form-field full-width"
+              >
+                <template #hint>
+                  Choose whether this is a single schedule or repeats weekly
+                </template>
+              </q-select>
+              <!-- Employee Selection -->
+              <!-- Multi-select for recurring, single-select for one-time -->
+              <q-select
+                v-if="newSchedule.scheduleType === 'recurring'"
+                ref="multiEmployeeSelectRef"
                 v-model="newSchedule.userIds"
                 :options="filteredEmployeeOptions"
                 option-value="value"
@@ -503,102 +477,406 @@
                 use-input
                 input-debounce="0"
                 @filter="filterEmployeeOptions"
-                @update:model-value="() => singleEmployeeSelectRef?.updateInputValue('')"
-                class="form-field full-width q-mb-md"
+                @update:model-value="() => multiEmployeeSelectRef?.updateInputValue('')"
+                class="form-field full-width"
                 :rules="[(val) => (val && val.length > 0) || 'At least one employee is required']"
                 :loading="loadingEmployees"
               >
                 <template #no-option>
                   <q-item>
-                    <q-item-section class="text-grey">No employees found</q-item-section>
+                    <q-item-section class="text-grey"> No employees found </q-item-section>
                   </q-item>
                 </template>
               </q-select>
-              <!-- Multi-date picker -->
-              <div class="recurring-calendar-preview">
+              <!-- One-Time: Employee + Multi-date picker + Shift rows -->
+              <div v-else>
+                <!-- Employee -->
+                <q-select
+                  ref="singleEmployeeSelectRef"
+                  v-model="newSchedule.userIds"
+                  :options="filteredEmployeeOptions"
+                  option-value="value"
+                  option-label="label"
+                  label="Select Employees"
+                  outlined
+                  emit-value
+                  map-options
+                  multiple
+                  use-chips
+                  use-input
+                  input-debounce="0"
+                  @filter="filterEmployeeOptions"
+                  @update:model-value="() => singleEmployeeSelectRef?.updateInputValue('')"
+                  class="form-field full-width q-mb-md"
+                  :rules="[(val) => (val && val.length > 0) || 'At least one employee is required']"
+                  :loading="loadingEmployees"
+                >
+                  <template #no-option>
+                    <q-item>
+                      <q-item-section class="text-grey">No employees found</q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
+                <!-- Multi-date picker -->
+                <div class="recurring-calendar-preview">
+                  <div class="calendar-preview-header">
+                    <q-icon name="event_note" size="16px" color="primary" />
+                    <span class="calendar-preview-title">Select Date(s)</span>
+                    <q-badge
+                      :color="(newSchedule.selectedDates || []).length ? 'primary' : 'grey'"
+                      :label="
+                        (newSchedule.selectedDates || []).length
+                          ? `${newSchedule.selectedDates.length} selected`
+                          : 'None selected'
+                      "
+                    />
+                  </div>
+                  <div class="calendar-preview-legend">
+                    <span class="legend-dot legend-dot-active"></span>
+                    <span class="legend-text">Click dates to select or deselect</span>
+                  </div>
+                  <q-date
+                    v-model="newSchedule.selectedDates"
+                    multiple
+                    mask="YYYY-MM-DD"
+                    :options="
+                      (date) => {
+                        const n = new Date()
+                        return (
+                          date >=
+                          `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+                        )
+                      }
+                    "
+                    :events="newSchedule.selectedDates || []"
+                    event-color="primary"
+                    minimal
+                    class="recurring-calendar"
+                  />
+                  <div
+                    v-if="(newSchedule.selectedDates || []).length > 0"
+                    class="calendar-weekdays-summary"
+                  >
+                    <span class="weekdays-label">Selected:</span>
+                    <q-chip
+                      v-for="date in (newSchedule.selectedDates || []).slice().sort()"
+                      :key="date"
+                      dense
+                      color="primary"
+                      text-color="white"
+                      size="sm"
+                      removable
+                      @remove="
+                        newSchedule.selectedDates = (newSchedule.selectedDates || []).filter(
+                          (d) => d !== date,
+                        )
+                      "
+                      >{{ date }}</q-chip
+                    >
+                  </div>
+                  <div
+                    v-else
+                    class="calendar-weekdays-summary"
+                    style="color: #ef4444; font-size: 12px"
+                  >
+                    <q-icon name="info" size="14px" color="negative" />
+                    Please select at least one date
+                  </div>
+                </div>
+                <!-- Shift rows (like Quick Add) -->
+                <div
+                  v-for="(shift, index) in newSchedule.oneTimeShifts"
+                  :key="index"
+                  class="shift-row"
+                >
+                  <div class="shift-row-header">
+                    <span class="row-label">
+                      <q-icon name="schedule" size="16px" />
+                      Shift {{ index + 1 }}
+                    </span>
+                    <q-btn
+                      v-if="newSchedule.oneTimeShifts.length > 1"
+                      flat
+                      dense
+                      round
+                      icon="close"
+                      size="sm"
+                      @click="newSchedule.oneTimeShifts.splice(index, 1)"
+                      class="remove-btn"
+                    />
+                  </div>
+                  <div class="shift-fields">
+                    <q-select
+                      v-model="shift.site"
+                      :options="siteOptions"
+                      option-value="value"
+                      option-label="label"
+                      label="Select Site"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      class="form-field"
+                      :rules="[(val) => !!val || 'Site is required']"
+                    />
+                    <q-select
+                      v-model="shift.shiftType"
+                      :options="shiftTypeOptions"
+                      option-value="value"
+                      option-label="label"
+                      label="Shift Type"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      class="form-field"
+                      :rules="[(val) => !!val || 'Shift type is required']"
+                    />
+                  </div>
+                </div>
+                <q-btn
+                  flat
+                  icon="add"
+                  label="Add Another Shift"
+                  @click="newSchedule.oneTimeShifts.push({ site: null, shiftType: null })"
+                  color="primary"
+                  size="sm"
+                  class="add-row-btn q-mb-sm"
+                />
+              </div>
+              <!-- For Recurring: Date Range Selection -->
+              <div v-if="newSchedule.scheduleType === 'recurring'" class="form-row">
+                <q-input
+                  v-model="newSchedule.recurringStartDate"
+                  label="Start Date"
+                  outlined
+                  class="form-field"
+                  :rules="[(val) => !!val || 'Start date is required']"
+                  readonly
+                >
+                  <template #append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                        <q-date
+                          v-model="newSchedule.recurringStartDate"
+                          mask="YYYY-MM-DD"
+                          :options="
+                            (date) => {
+                              const n = new Date()
+                              return (
+                                date >=
+                                `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+                              )
+                            }
+                          "
+                        >
+                          <div class="row items-center justify-end">
+                            <q-btn v-close-popup label="Close" color="primary" flat />
+                          </div>
+                        </q-date>
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
+                <q-input
+                  v-model="newSchedule.recurringEndDate"
+                  label="End Date"
+                  outlined
+                  class="form-field"
+                  :rules="[(val) => !!val || 'End date is required']"
+                  readonly
+                >
+                  <template #append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                        <q-date
+                          v-model="newSchedule.recurringEndDate"
+                          mask="YYYY-MM-DD"
+                          :options="
+                            (date) => {
+                              const n = new Date()
+                              const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+                              return date >= (newSchedule.recurringStartDate || today)
+                            }
+                          "
+                        >
+                          <div class="row items-center justify-end">
+                            <q-btn v-close-popup label="Close" color="primary" flat />
+                          </div>
+                        </q-date>
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
+              </div>
+              <!-- Recurring Template Selection -->
+              <q-select
+                v-if="newSchedule.scheduleType === 'recurring'"
+                v-model="newSchedule.recurringSchedule"
+                :options="recurringScheduleOptions"
+                option-value="value"
+                option-label="label"
+                label="Use Recurring Template"
+                outlined
+                emit-value
+                map-options
+                class="form-field full-width"
+                clearable
+                @update:model-value="onRecurringTemplateChange"
+              >
+                <template #hint> Select a template to auto-fill schedule details </template>
+              </q-select>
+              <!-- Recurring Calendar Preview -->
+              <div
+                v-if="
+                  newSchedule.scheduleType === 'recurring' &&
+                  newSchedule.recurringSchedule &&
+                  recurringCalendarDates.length > 0
+                "
+                class="recurring-calendar-preview"
+              >
                 <div class="calendar-preview-header">
                   <q-icon name="event_note" size="16px" color="primary" />
-                  <span class="calendar-preview-title">Select Date(s)</span>
-                  <q-badge
-                    :color="(newSchedule.selectedDates || []).length ? 'primary' : 'grey'"
-                    :label="
-                      (newSchedule.selectedDates || []).length
-                        ? `${newSchedule.selectedDates.length} selected`
-                        : 'None selected'
-                    "
-                  />
+                  <span class="calendar-preview-title">Schedule Preview</span>
+                  <q-badge color="primary" :label="`${recurringCalendarDates.length} days`" />
                 </div>
                 <div class="calendar-preview-legend">
                   <span class="legend-dot legend-dot-active"></span>
-                  <span class="legend-text">Click dates to select or deselect</span>
+                  <span class="legend-text">Scheduled working days</span>
                 </div>
                 <q-date
-                  v-model="newSchedule.selectedDates"
+                  v-model="recurringCalendarDates"
                   multiple
-                  mask="YYYY-MM-DD"
-                  :options="
-                    (date) => {
-                      const n = new Date()
-                      return (
-                        date >=
-                        `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-                      )
-                    }
-                  "
-                  :events="newSchedule.selectedDates || []"
-                  event-color="primary"
+                  mask="YYYY/MM/DD"
                   minimal
+                  readonly
+                  no-unset
+                  :default-year-month="recurringCalendarDefaultMonth"
                   class="recurring-calendar"
                 />
-                <div
-                  v-if="(newSchedule.selectedDates || []).length > 0"
-                  class="calendar-weekdays-summary"
-                >
-                  <span class="weekdays-label">Selected:</span>
+                <div class="calendar-weekdays-summary">
+                  <span class="weekdays-label">Active on:</span>
                   <q-chip
-                    v-for="date in (newSchedule.selectedDates || []).slice().sort()"
-                    :key="date"
+                    v-for="day in recurringActiveWeekdays"
+                    :key="day"
                     dense
                     color="primary"
                     text-color="white"
                     size="sm"
-                    removable
-                    @remove="
-                      newSchedule.selectedDates = (newSchedule.selectedDates || []).filter(
-                        (d) => d !== date,
-                      )
-                    "
-                    >{{ date }}</q-chip
+                    >{{ day }}</q-chip
                   >
                 </div>
-                <div
-                  v-else
-                  class="calendar-weekdays-summary"
-                  style="color: #ef4444; font-size: 12px"
-                >
-                  <q-icon name="info" size="14px" color="negative" />
-                  Please select at least one date
-                </div>
               </div>
-              <!-- Shift rows (like Quick Add) -->
-              <div
-                v-for="(shift, index) in newSchedule.oneTimeShifts"
-                :key="index"
-                class="shift-row"
+              <!-- Site & Department (recurring only) -->
+              <div v-if="newSchedule.scheduleType === 'recurring'" class="form-row">
+                <q-select
+                  v-model="newSchedule.site"
+                  :options="siteOptions"
+                  option-value="value"
+                  option-label="label"
+                  label="Select Site"
+                  outlined
+                  emit-value
+                  map-options
+                  class="form-field"
+                  :rules="[(val) => !!val || 'Site is required']"
+                />
+                <q-select
+                  v-model="newSchedule.department"
+                  :options="departmentOptions"
+                  option-value="value"
+                  option-label="label"
+                  label="Department"
+                  outlined
+                  emit-value
+                  map-options
+                  class="form-field"
+                  clearable
+                />
+              </div>
+              <!-- Repeat Interval (for recurring) -->
+              <q-input
+                v-if="newSchedule.scheduleType === 'recurring'"
+                v-model.number="newSchedule.repeatInterval"
+                label="Repeat Every (weeks)"
+                type="number"
+                outlined
+                min="1"
+                class="form-field full-width"
               >
+                <template #hint> 1 = every week, 2 = every other week, etc. </template>
+              </q-input>
+              <!-- Rotating Schedule Options -->
+              <q-checkbox
+                v-if="newSchedule.scheduleType === 'recurring'"
+                v-model="newSchedule.isRotating"
+                label="This is a rotating schedule"
+                class="full-width"
+              />
+              <!-- Conflict Warning -->
+              <q-banner v-if="addConflictWarning" class="warning-banner">
+                <template #avatar>
+                  <q-icon name="warning" />
+                </template>
+                <strong>Schedule Conflict Detected!</strong><br />
+                This employee already has a schedule on the selected date/time.
+              </q-banner>
+              <!-- Actions -->
+              <div class="modal-actions">
+                <q-btn flat label="Cancel" @click="closeAddModal" class="cancel-btn" />
+                <q-btn
+                  type="submit"
+                  color="primary"
+                  :label="
+                    newSchedule.scheduleType === 'recurring'
+                      ? 'Create Recurring Schedule'
+                      : 'Add Schedule'
+                  "
+                  unelevated
+                  class="submit-btn"
+                  :loading="isCheckingConflict"
+                />
+              </div>
+            </q-form>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
+      <!-- Edit Schedule Modal -->
+      <!-- Quick Add Modal - Multiple Shifts Same Day -->
+      <q-dialog v-model="showQuickAddModal" persistent>
+        <q-card class="modal-card" style="max-width: 500px">
+          <q-card-section class="modal-header">
+            <div class="modal-title">Quick Add Shifts</div>
+            <q-btn flat round dense icon="close" @click="closeQuickAddModal" />
+          </q-card-section>
+          <q-card-section class="modal-body">
+            <!-- Employee and Day Info -->
+            <div class="quick-info">
+              <div class="info-item">
+                <q-icon name="person" size="20px" />
+                <span>{{ getEmployeeName(quickAdd.userId) }}</span>
+              </div>
+              <div class="info-item">
+                <q-icon name="today" size="20px" />
+                <span>{{ days[quickAdd.day] }}</span>
+              </div>
+            </div>
+            <q-form @submit="quickAddSchedule" class="schedule-form">
+              <!-- Multiple Shift Rows -->
+              <div v-for="(shift, index) in quickAdd.shifts" :key="index" class="shift-row">
                 <div class="shift-row-header">
                   <span class="row-label">
                     <q-icon name="schedule" size="16px" />
                     Shift {{ index + 1 }}
                   </span>
                   <q-btn
-                    v-if="newSchedule.oneTimeShifts.length > 1"
+                    v-if="quickAdd.shifts.length > 1"
                     flat
                     dense
                     round
                     icon="close"
                     size="sm"
-                    @click="newSchedule.oneTimeShifts.splice(index, 1)"
+                    @click="removeShiftRow(index)"
                     class="remove-btn"
                   />
                 </div>
@@ -628,506 +906,235 @@
                     map-options
                     class="form-field"
                     :rules="[(val) => !!val || 'Shift type is required']"
-                  />
+                  >
+                    <template #hint>
+                      {{
+                        shift.shiftType
+                          ? getShiftTypeDetails(shift.shiftType)
+                          : 'Select a shift type'
+                      }}
+                    </template>
+                  </q-select>
                 </div>
               </div>
+              <!-- Add Another Shift Button -->
               <q-btn
                 flat
                 icon="add"
                 label="Add Another Shift"
-                @click="newSchedule.oneTimeShifts.push({ site: null, shiftType: null })"
+                @click="addShiftRow"
+                class="add-row-btn"
                 color="primary"
                 size="sm"
-                class="add-row-btn q-mb-sm"
               />
-            </div>
-            <!-- For Recurring: Date Range Selection -->
-            <div v-if="newSchedule.scheduleType === 'recurring'" class="form-row">
-              <q-input
-                v-model="newSchedule.recurringStartDate"
-                label="Start Date"
-                outlined
-                class="form-field"
-                :rules="[(val) => !!val || 'Start date is required']"
-                readonly
-              >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-date
-                        v-model="newSchedule.recurringStartDate"
-                        mask="YYYY-MM-DD"
-                        :options="
-                          (date) => {
-                            const n = new Date()
-                            return (
-                              date >=
-                              `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-                            )
-                          }
-                        "
-                      >
-                        <div class="row items-center justify-end">
-                          <q-btn v-close-popup label="Close" color="primary" flat />
-                        </div>
-                      </q-date>
-                    </q-popup-proxy>
-                  </q-icon>
+              <!-- Info Banner -->
+              <q-banner class="info-banner" dense>
+                <template #avatar>
+                  <q-icon name="info" color="primary" />
                 </template>
-              </q-input>
-              <q-input
-                v-model="newSchedule.recurringEndDate"
-                label="End Date"
-                outlined
-                class="form-field"
-                :rules="[(val) => !!val || 'End date is required']"
-                readonly
-              >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-date
-                        v-model="newSchedule.recurringEndDate"
-                        mask="YYYY-MM-DD"
-                        :options="
-                          (date) => {
-                            const n = new Date()
-                            const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-                            return date >= (newSchedule.recurringStartDate || today)
-                          }
-                        "
-                      >
-                        <div class="row items-center justify-end">
-                          <q-btn v-close-popup label="Close" color="primary" flat />
-                        </div>
-                      </q-date>
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
-            </div>
-            <!-- Recurring Template Selection -->
-            <q-select
-              v-if="newSchedule.scheduleType === 'recurring'"
-              v-model="newSchedule.recurringSchedule"
-              :options="recurringScheduleOptions"
-              option-value="value"
-              option-label="label"
-              label="Use Recurring Template"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-              clearable
-              @update:model-value="onRecurringTemplateChange"
-            >
-              <template #hint> Select a template to auto-fill schedule details </template>
-            </q-select>
-            <!-- Recurring Calendar Preview -->
-            <div
-              v-if="
-                newSchedule.scheduleType === 'recurring' &&
-                newSchedule.recurringSchedule &&
-                recurringCalendarDates.length > 0
-              "
-              class="recurring-calendar-preview"
-            >
-              <div class="calendar-preview-header">
-                <q-icon name="event_note" size="16px" color="primary" />
-                <span class="calendar-preview-title">Schedule Preview</span>
-                <q-badge color="primary" :label="`${recurringCalendarDates.length} days`" />
-              </div>
-              <div class="calendar-preview-legend">
-                <span class="legend-dot legend-dot-active"></span>
-                <span class="legend-text">Scheduled working days</span>
-              </div>
-              <q-date
-                v-model="recurringCalendarDates"
-                multiple
-                mask="YYYY/MM/DD"
-                minimal
-                readonly
-                no-unset
-                :default-year-month="recurringCalendarDefaultMonth"
-                class="recurring-calendar"
-              />
-              <div class="calendar-weekdays-summary">
-                <span class="weekdays-label">Active on:</span>
-                <q-chip
-                  v-for="day in recurringActiveWeekdays"
-                  :key="day"
-                  dense
-                  color="primary"
-                  text-color="white"
-                  size="sm"
-                  >{{ day }}</q-chip
-                >
-              </div>
-            </div>
-            <!-- Site & Department (recurring only) -->
-            <div v-if="newSchedule.scheduleType === 'recurring'" class="form-row">
-              <q-select
-                v-model="newSchedule.site"
-                :options="siteOptions"
-                option-value="value"
-                option-label="label"
-                label="Select Site"
-                outlined
-                emit-value
-                map-options
-                class="form-field"
-                :rules="[(val) => !!val || 'Site is required']"
-              />
-              <q-select
-                v-model="newSchedule.department"
-                :options="departmentOptions"
-                option-value="value"
-                option-label="label"
-                label="Department"
-                outlined
-                emit-value
-                map-options
-                class="form-field"
-                clearable
-              />
-            </div>
-            <!-- Repeat Interval (for recurring) -->
-            <q-input
-              v-if="newSchedule.scheduleType === 'recurring'"
-              v-model.number="newSchedule.repeatInterval"
-              label="Repeat Every (weeks)"
-              type="number"
-              outlined
-              min="1"
-              class="form-field full-width"
-            >
-              <template #hint> 1 = every week, 2 = every other week, etc. </template>
-            </q-input>
-            <!-- Rotating Schedule Options -->
-            <q-checkbox
-              v-if="newSchedule.scheduleType === 'recurring'"
-              v-model="newSchedule.isRotating"
-              label="This is a rotating schedule"
-              class="full-width"
-            />
-            <!-- Conflict Warning -->
-            <q-banner v-if="addConflictWarning" class="warning-banner">
-              <template #avatar>
-                <q-icon name="warning" />
-              </template>
-              <strong>Schedule Conflict Detected!</strong><br />
-              This employee already has a schedule on the selected date/time.
-            </q-banner>
-            <!-- Actions -->
-            <div class="modal-actions">
-              <q-btn flat label="Cancel" @click="closeAddModal" class="cancel-btn" />
-              <q-btn
-                type="submit"
-                color="primary"
-                :label="
-                  newSchedule.scheduleType === 'recurring'
-                    ? 'Create Recurring Schedule'
-                    : 'Add Schedule'
-                "
-                unelevated
-                class="submit-btn"
-                :loading="isCheckingConflict"
-              />
-            </div>
-          </q-form>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
-    <!-- Edit Schedule Modal -->
-    <!-- Quick Add Modal - Multiple Shifts Same Day -->
-    <q-dialog v-model="showQuickAddModal" persistent>
-      <q-card class="modal-card" style="max-width: 500px">
-        <q-card-section class="modal-header">
-          <div class="modal-title">Quick Add Shifts</div>
-          <q-btn flat round dense icon="close" @click="closeQuickAddModal" />
-        </q-card-section>
-        <q-card-section class="modal-body">
-          <!-- Employee and Day Info -->
-          <div class="quick-info">
-            <div class="info-item">
-              <q-icon name="person" size="20px" />
-              <span>{{ getEmployeeName(quickAdd.userId) }}</span>
-            </div>
-            <div class="info-item">
-              <q-icon name="today" size="20px" />
-              <span>{{ days[quickAdd.day] }}</span>
-            </div>
-          </div>
-          <q-form @submit="quickAddSchedule" class="schedule-form">
-            <!-- Multiple Shift Rows -->
-            <div v-for="(shift, index) in quickAdd.shifts" :key="index" class="shift-row">
-              <div class="shift-row-header">
-                <span class="row-label">
-                  <q-icon name="schedule" size="16px" />
-                  Shift {{ index + 1 }}
+                <span style="font-size: 12px">
+                  Adding {{ quickAdd.shifts.length }} shift{{
+                    quickAdd.shifts.length > 1 ? 's' : ''
+                  }}
+                  for <strong>{{ days[quickAdd.day] }}</strong>
                 </span>
+              </q-banner>
+              <div class="modal-actions">
+                <q-btn flat label="Cancel" @click="closeQuickAddModal" class="cancel-btn" />
                 <q-btn
-                  v-if="quickAdd.shifts.length > 1"
-                  flat
-                  dense
-                  round
-                  icon="close"
-                  size="sm"
-                  @click="removeShiftRow(index)"
-                  class="remove-btn"
+                  type="submit"
+                  color="primary"
+                  :label="`Add ${quickAdd.shifts.length} Shift${quickAdd.shifts.length > 1 ? 's' : ''}`"
+                  unelevated
+                  class="submit-btn"
+                  :loading="isAddingShift"
                 />
               </div>
-              <div class="shift-fields">
-                <q-select
-                  v-model="shift.site"
-                  :options="siteOptions"
-                  option-value="value"
-                  option-label="label"
-                  label="Select Site"
-                  outlined
-                  dense
-                  emit-value
-                  map-options
-                  class="form-field"
-                  :rules="[(val) => !!val || 'Site is required']"
-                />
-                <q-select
-                  v-model="shift.shiftType"
-                  :options="shiftTypeOptions"
-                  option-value="value"
-                  option-label="label"
-                  label="Shift Type"
-                  outlined
-                  dense
-                  emit-value
-                  map-options
-                  class="form-field"
-                  :rules="[(val) => !!val || 'Shift type is required']"
-                >
-                  <template #hint>
-                    {{
-                      shift.shiftType ? getShiftTypeDetails(shift.shiftType) : 'Select a shift type'
-                    }}
-                  </template>
-                </q-select>
+            </q-form>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
+      <!-- Update Shift Assignment Modal -->
+      <q-dialog v-model="showReassignModal" persistent>
+        <q-card class="modal-card" style="max-width: 520px">
+          <q-card-section class="modal-header">
+            <div class="modal-title">
+              {{ reassignData.isDualShift ? 'Update Dual Shift' : 'Update Shift Assignment' }}
+            </div>
+            <q-btn flat round dense icon="close" @click="closeReassignModal" />
+          </q-card-section>
+          <q-card-section class="modal-body">
+            <!-- Employee and Day Info -->
+            <div class="quick-info">
+              <div class="info-item">
+                <q-icon name="person" size="20px" />
+                <span>{{ getEmployeeName(reassignData.currentEmployee) }}</span>
+              </div>
+              <div class="info-item">
+                <q-icon name="event" size="20px" />
+                <span>{{ reassignData.date }}</span>
               </div>
             </div>
-            <!-- Add Another Shift Button -->
-            <q-btn
-              flat
-              icon="add"
-              label="Add Another Shift"
-              @click="addShiftRow"
-              class="add-row-btn"
-              color="primary"
-              size="sm"
-            />
-            <!-- Info Banner -->
-            <q-banner class="info-banner" dense>
-              <template #avatar>
-                <q-icon name="info" color="primary" />
+            <q-form @submit.prevent="reassignShift" class="schedule-form">
+              <!-- ── SINGLE SHIFT ── -->
+              <template v-if="!reassignData.isDualShift">
+                <div class="shift-row">
+                  <div class="shift-row-header">
+                    <span class="row-label"><q-icon name="edit" size="16px" /> Shift Details</span>
+                  </div>
+                  <div class="shift-fields">
+                    <q-select
+                      v-model="reassignData.siteId"
+                      :options="siteOptions"
+                      option-value="value"
+                      option-label="label"
+                      label="Select Site"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      class="form-field"
+                      :rules="[(val) => !!val || 'Site is required']"
+                    />
+                    <q-select
+                      v-model="reassignData.shiftTypeId"
+                      :options="positionOptions"
+                      option-value="value"
+                      option-label="label"
+                      label="Shift Type"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      class="form-field"
+                      :rules="[(val) => !!val || 'Shift type is required']"
+                    >
+                      <template #hint>{{
+                        reassignData.shiftTypeId
+                          ? getPositionName(reassignData.shiftTypeId)
+                          : 'Select a shift type'
+                      }}</template>
+                    </q-select>
+                    <q-select
+                      v-model="reassignData.departmentId"
+                      :options="departmentOptions"
+                      option-value="value"
+                      option-label="label"
+                      label="Department (Optional)"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      clearable
+                      class="form-field"
+                    />
+                  </div>
+                </div>
               </template>
-              <span style="font-size: 12px">
-                Adding {{ quickAdd.shifts.length }} shift{{
-                  quickAdd.shifts.length > 1 ? 's' : ''
-                }}
-                for <strong>{{ days[quickAdd.day] }}</strong>
-              </span>
-            </q-banner>
-            <div class="modal-actions">
-              <q-btn flat label="Cancel" @click="closeQuickAddModal" class="cancel-btn" />
-              <q-btn
-                type="submit"
-                color="primary"
-                :label="`Add ${quickAdd.shifts.length} Shift${quickAdd.shifts.length > 1 ? 's' : ''}`"
-                unelevated
-                class="submit-btn"
-                :loading="isAddingShift"
-              />
-            </div>
-          </q-form>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
-    <!-- Update Shift Assignment Modal -->
-    <q-dialog v-model="showReassignModal" persistent>
-      <q-card class="modal-card" style="max-width: 520px">
-        <q-card-section class="modal-header">
-          <div class="modal-title">
-            {{ reassignData.isDualShift ? 'Update Dual Shift' : 'Update Shift Assignment' }}
-          </div>
-          <q-btn flat round dense icon="close" @click="closeReassignModal" />
-        </q-card-section>
-        <q-card-section class="modal-body">
-          <!-- Employee and Day Info -->
-          <div class="quick-info">
-            <div class="info-item">
-              <q-icon name="person" size="20px" />
-              <span>{{ getEmployeeName(reassignData.currentEmployee) }}</span>
-            </div>
-            <div class="info-item">
-              <q-icon name="event" size="20px" />
-              <span>{{ reassignData.date }}</span>
-            </div>
-          </div>
-          <q-form @submit.prevent="reassignShift" class="schedule-form">
-            <!-- ── SINGLE SHIFT ── -->
-            <template v-if="!reassignData.isDualShift">
-              <div class="shift-row">
-                <div class="shift-row-header">
-                  <span class="row-label"><q-icon name="edit" size="16px" /> Shift Details</span>
-                </div>
-                <div class="shift-fields">
-                  <q-select
-                    v-model="reassignData.siteId"
-                    :options="siteOptions"
-                    option-value="value"
-                    option-label="label"
-                    label="Select Site"
-                    outlined
-                    dense
-                    emit-value
-                    map-options
-                    class="form-field"
-                    :rules="[(val) => !!val || 'Site is required']"
-                  />
-                  <q-select
-                    v-model="reassignData.shiftTypeId"
-                    :options="positionOptions"
-                    option-value="value"
-                    option-label="label"
-                    label="Shift Type"
-                    outlined
-                    dense
-                    emit-value
-                    map-options
-                    class="form-field"
-                    :rules="[(val) => !!val || 'Shift type is required']"
-                  >
-                    <template #hint>{{
-                      reassignData.shiftTypeId
-                        ? getPositionName(reassignData.shiftTypeId)
-                        : 'Select a shift type'
-                    }}</template>
-                  </q-select>
-                  <q-select
-                    v-model="reassignData.departmentId"
-                    :options="departmentOptions"
-                    option-value="value"
-                    option-label="label"
-                    label="Department (Optional)"
-                    outlined
-                    dense
-                    emit-value
-                    map-options
-                    clearable
-                    class="form-field"
-                  />
-                </div>
-              </div>
-            </template>
 
-            <!-- ── DUAL SHIFT ── -->
-            <template v-else>
-              <div
-                v-for="(sub, idx) in reassignData.dualShifts"
-                :key="sub.assignmentId"
-                class="shift-row"
-                style="margin-bottom: 12px"
-              >
-                <div class="shift-row-header">
-                  <span class="row-label">
-                    <q-icon name="edit" size="16px" />
-                    Shift {{ idx + 1 }}
-                    <span style="font-size: 10px; color: #6b7280; margin-left: 4px">
-                      {{ sub.startTime }} - {{ sub.endTime }}
+              <!-- ── DUAL SHIFT ── -->
+              <template v-else>
+                <div
+                  v-for="(sub, idx) in reassignData.dualShifts"
+                  :key="sub.assignmentId"
+                  class="shift-row"
+                  style="margin-bottom: 12px"
+                >
+                  <div class="shift-row-header">
+                    <span class="row-label">
+                      <q-icon name="edit" size="16px" />
+                      Shift {{ idx + 1 }}
+                      <span style="font-size: 10px; color: #6b7280; margin-left: 4px">
+                        {{ sub.startTime }} - {{ sub.endTime }}
+                      </span>
                     </span>
-                  </span>
+                  </div>
+                  <div class="shift-fields">
+                    <q-select
+                      v-model="sub.siteId"
+                      :options="siteOptions"
+                      option-value="value"
+                      option-label="label"
+                      :label="`Site (Shift ${idx + 1})`"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      class="form-field"
+                      :rules="[(val) => !!val || 'Site is required']"
+                    />
+                    <q-select
+                      v-model="sub.shiftTypeId"
+                      :options="positionOptions"
+                      option-value="value"
+                      option-label="label"
+                      :label="`Shift Type (Shift ${idx + 1})`"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      class="form-field"
+                      :rules="[(val) => !!val || 'Shift type is required']"
+                    >
+                      <template #hint>{{
+                        sub.shiftTypeId ? getPositionName(sub.shiftTypeId) : 'Select a shift type'
+                      }}</template>
+                    </q-select>
+                    <q-select
+                      v-model="sub.departmentId"
+                      :options="departmentOptions"
+                      option-value="value"
+                      option-label="label"
+                      :label="`Department (Shift ${idx + 1}, Optional)`"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      clearable
+                      class="form-field"
+                    />
+                  </div>
                 </div>
-                <div class="shift-fields">
-                  <q-select
-                    v-model="sub.siteId"
-                    :options="siteOptions"
-                    option-value="value"
-                    option-label="label"
-                    :label="`Site (Shift ${idx + 1})`"
-                    outlined
-                    dense
-                    emit-value
-                    map-options
-                    class="form-field"
-                    :rules="[(val) => !!val || 'Site is required']"
-                  />
-                  <q-select
-                    v-model="sub.shiftTypeId"
-                    :options="positionOptions"
-                    option-value="value"
-                    option-label="label"
-                    :label="`Shift Type (Shift ${idx + 1})`"
-                    outlined
-                    dense
-                    emit-value
-                    map-options
-                    class="form-field"
-                    :rules="[(val) => !!val || 'Shift type is required']"
-                  >
-                    <template #hint>{{
-                      sub.shiftTypeId ? getPositionName(sub.shiftTypeId) : 'Select a shift type'
-                    }}</template>
-                  </q-select>
-                  <q-select
-                    v-model="sub.departmentId"
-                    :options="departmentOptions"
-                    option-value="value"
-                    option-label="label"
-                    :label="`Department (Shift ${idx + 1}, Optional)`"
-                    outlined
-                    dense
-                    emit-value
-                    map-options
-                    clearable
-                    class="form-field"
-                  />
-                </div>
-              </div>
-            </template>
+              </template>
 
-            <!-- Info Banner -->
-            <q-banner class="info-banner" dense>
-              <template #avatar><q-icon name="info" color="primary" /></template>
-              <span style="font-size: 12px">
-                Updating {{ reassignData.isDualShift ? 'dual shift' : 'shift' }} for
-                <strong>{{ getEmployeeName(reassignData.currentEmployee) }}</strong>
-              </span>
-            </q-banner>
-            <div class="modal-actions">
-              <q-btn
-                flat
-                label="CANCEL"
-                @click="closeReassignModal"
-                class="cancel-btn"
-                :disable="isReassigning"
-              />
-              <q-btn
-                type="submit"
-                color="primary"
-                :label="reassignData.isDualShift ? 'UPDATE BOTH SHIFTS' : 'UPDATE SHIFT'"
-                unelevated
-                class="submit-btn"
-                :loading="isReassigning"
-                :disable="
-                  reassignData.isDualShift
-                    ? reassignData.dualShifts.some((s) => !s.siteId || !s.shiftTypeId)
-                    : !reassignData.siteId ||
-                      !reassignData.shiftTypeId ||
-                      !reassignData.assignmentId
-                "
-              />
-            </div>
-          </q-form>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
+              <!-- Info Banner -->
+              <q-banner class="info-banner" dense>
+                <template #avatar><q-icon name="info" color="primary" /></template>
+                <span style="font-size: 12px">
+                  Updating {{ reassignData.isDualShift ? 'dual shift' : 'shift' }} for
+                  <strong>{{ getEmployeeName(reassignData.currentEmployee) }}</strong>
+                </span>
+              </q-banner>
+              <div class="modal-actions">
+                <q-btn
+                  flat
+                  label="CANCEL"
+                  @click="closeReassignModal"
+                  class="cancel-btn"
+                  :disable="isReassigning"
+                />
+                <q-btn
+                  type="submit"
+                  color="primary"
+                  :label="reassignData.isDualShift ? 'UPDATE BOTH SHIFTS' : 'UPDATE SHIFT'"
+                  unelevated
+                  class="submit-btn"
+                  :loading="isReassigning"
+                  :disable="
+                    reassignData.isDualShift
+                      ? reassignData.dualShifts.some((s) => !s.siteId || !s.shiftTypeId)
+                      : !reassignData.siteId ||
+                        !reassignData.shiftTypeId ||
+                        !reassignData.assignmentId
+                  "
+                />
+              </div>
+            </q-form>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
+    </div>
+    <!-- /dashboard-container -->
   </q-page>
 </template>
 <script setup>
@@ -3786,275 +3793,199 @@ const applyFilters = () => {
 const filterEmployees = () => {}
 </script>
 <style scoped lang="scss">
-.recurring-badge {
-  font-size: 10px;
-  margin-left: 4px;
-}
-.warning-banner {
-  margin-top: 14px;
-  background-color: #fff3cd;
-  border: 1px solid #ffc107;
-  padding: 12px;
-  border-radius: 8px;
-}
-.info-banner {
-  margin-top: 14px;
-  background-color: #e3f2fd;
-  border: 1px solid #2196f3;
-  padding: 12px;
-  border-radius: 8px;
-}
-.quick-info {
-  display: flex;
-  gap: 14px;
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #f5f5f5;
-  border-radius: 8px;
-}
-.info-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-.quick-action-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  padding: 10px 12px;
-  background: #fff8f0;
-  border: 1px solid #ffe0b2;
-  border-radius: 8px;
-}
-.quick-dayoff-btn {
-  flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 600;
-  height: 38px;
-}
-.leave-type-select {
-  flex: 1;
-  min-width: 0;
-}
-/* Cell quick action buttons */
-.cell-quick-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-top: 4px;
-}
-.cell-quick-actions-mobile {
-  flex-direction: row;
-  flex-wrap: wrap;
-}
-.cell-btn {
-  font-size: 10px !important;
-  font-weight: 500;
-  border-radius: 5px;
-  padding: 2px 6px !important;
-  justify-content: flex-start;
-  min-height: 24px !important;
-  height: 24px !important;
-}
-.cell-btn :deep(.q-btn__content) {
-  gap: 3px;
-}
-.cell-btn-add {
-  color: #1565c0;
-  background: #deeeff;
-  border: 2px solid #90caf9;
-  box-shadow: 0 1px 3px rgba(21, 101, 192, 0.15);
-}
-.cell-btn-add:hover {
-  background: #c5e0fb !important;
-  border-color: #64b5f6 !important;
-  box-shadow: 0 2px 6px rgba(21, 101, 192, 0.25) !important;
-}
-.cell-btn-leave {
-  color: #6a1b9a;
-  background: #f0e6fb;
-  border: 2px solid #ce93d8;
-  box-shadow: 0 1px 3px rgba(106, 27, 154, 0.15);
-}
-.cell-btn-leave:hover {
-  background: #e1bee7 !important;
-  border-color: #ba68c8 !important;
-  box-shadow: 0 2px 6px rgba(106, 27, 154, 0.25) !important;
-}
-.cell-btn-leave :deep(.q-btn-dropdown__arrow) {
-  display: none;
-}
-.cell-btn-leave :deep(.q-menu) {
-  min-width: unset !important;
-  width: 100% !important;
-}
-.cell-btn-dayoff {
-  color: #c84b00;
-  background: #ffeadb;
-  border: 2px solid #ffb74d;
-  box-shadow: 0 1px 3px rgba(200, 75, 0, 0.15);
-}
-.cell-btn-dayoff:hover {
-  background: #ffd5b0 !important;
-  border-color: #ffa726 !important;
-  box-shadow: 0 2px 6px rgba(200, 75, 0, 0.25) !important;
-}
-.modern-page {
-  background: #f5f5f5;
+/* ==============================
+   PAGE ROOT
+============================== */
+.schedule-page {
+  background: #f4f6f9;
   min-height: 100vh;
-  padding: 16px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  padding: 0;
 }
-/* Header Section */
+
+.dashboard-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* ==============================
+   HEADER
+============================== */
 .page-header {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 20px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
 }
+
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
 }
+
 .title-section {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
+
 .page-title {
   font-size: 20px;
-  font-weight: 700;
-  color: #1a202c;
+  font-weight: 600;
+  color: #111827;
   margin: 0;
 }
+
 .timezone-badge {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: #f0f9ff;
+  gap: 5px;
+  padding: 4px 10px;
+  background: #eff6ff;
   border: 1px solid #bfdbfe;
-  border-radius: 16px;
+  border-radius: 20px;
   font-size: 11px;
-  color: #1e40af;
   font-weight: 500;
+  color: #1d4ed8;
+  white-space: nowrap;
 }
+
 .timezone-badge .q-icon {
+  font-size: 13px;
   color: #3b82f6;
-  font-size: 14px;
 }
+
 .header-actions {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
-.search-input {
-  width: 260px;
-  background: white;
+
+.header-search {
+  min-width: 220px;
+  max-width: 280px;
 }
-.add-btn {
-  background: #2563eb;
-  color: white;
-  height: 36px;
-  padding: 0 16px;
+
+.header-search :deep(.q-field__control) {
   border-radius: 8px;
+  height: 36px;
+}
+
+.search-icon {
+  color: #9ca3af;
+}
+
+.add-btn {
+  height: 36px;
+  border-radius: 8px !important;
   font-weight: 500;
-  text-transform: none;
   font-size: 13px;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
 }
-.add-btn:hover {
-  background: #1d4ed8;
-}
-/* Summary Cards */
-.summary-section {
-  margin-bottom: 16px;
-}
-.summary-grid {
+
+/* ==============================
+   STATS CARDS
+============================== */
+.stats-section {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
+  margin-bottom: 16px;
 }
-.summary-card {
-  background: white;
+
+.stats-card {
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 16px 18px;
+  border: 1px solid #e8ecf0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transition: transform 0.2s;
+  gap: 14px;
   min-width: 0;
+  transition: box-shadow 0.2s ease;
 }
-.summary-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+.stats-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
 }
-.card-purple {
-  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
-}
-.card-purple .card-icon {
-  background: rgba(109, 40, 217, 0.15);
-  color: #6d28d9;
-}
-.card-yellow {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-}
-.card-yellow .card-icon {
-  background: rgba(217, 119, 6, 0.15);
-  color: #d97706;
-}
-.card-pink {
-  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
-}
-.card-pink .card-icon {
-  background: rgba(219, 39, 119, 0.15);
-  color: #db2777;
-}
-.card-icon {
-  width: 52px;
-  height: 52px;
+
+.stats-icon-wrapper {
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  font-size: 20px;
 }
-.card-icon .q-icon {
-  font-size: 28px;
+
+.stats-icon-blue {
+  background: #eff6ff;
+  color: #3b82f6;
 }
-.card-content {
-  flex: 1;
+.stats-icon-green {
+  background: #f0fdf4;
+  color: #22c55e;
+}
+.stats-icon-purple {
+  background: #f5f3ff;
+  color: #8b5cf6;
+}
+
+.stats-content {
   min-width: 0;
 }
-.card-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1f2937;
-  line-height: 1;
-  margin-bottom: 4px;
-}
-.card-label {
-  font-size: 13px;
+
+.stats-label {
+  font-size: 12px;
   color: #6b7280;
   font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
 }
-/* Controls Section */
+
+.stats-amount {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+}
+
+/* ==============================
+   CONTROLS / SCHEDULE OVERVIEW
+============================== */
 .controls-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 16px 20px;
   margin-bottom: 16px;
+  border: 1px solid #e8ecf0;
 }
+
+.controls-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .section-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 14px 0;
+  color: #111827;
+  margin: 0;
 }
+
 .controls-row {
   display: flex;
   justify-content: space-between;
@@ -4062,30 +3993,39 @@ const filterEmployees = () => {}
   gap: 12px;
   flex-wrap: wrap;
 }
+
 .filter-group {
   display: flex;
   gap: 10px;
   flex: 1;
+  flex-wrap: wrap;
 }
+
 .filter-select {
   min-width: 160px;
 }
+
 .week-nav {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 6px 12px;
-  background: #f9fafb;
+  background: #f8fafc;
   border-radius: 8px;
+  border: 1px solid #e8ecf0;
 }
+
 .nav-btn {
-  color: #6b7280;
-  width: 32px;
-  height: 32px;
+  color: #6b7280 !important;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px !important;
 }
+
 .nav-btn:hover {
-  background: #e5e7eb;
+  background: #f3f4f6 !important;
 }
+
 .week-display {
   font-size: 13px;
   font-weight: 600;
@@ -4093,100 +4033,129 @@ const filterEmployees = () => {}
   min-width: 160px;
   text-align: center;
 }
+
 .view-select {
   min-width: 140px;
 }
-/* Content Section */
+
+/* ==============================
+   CONTENT / TABLE SECTION
+============================== */
 .content-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
   overflow: hidden;
+  border: 1px solid #e8ecf0;
 }
-/* Table View */
+
 .table-wrapper {
   overflow-x: auto;
-  border: 2px solid #3b82f6;
+  border: 1px solid #e8ecf0;
   border-radius: 10px;
 }
+
 .schedule-table {
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
   background: white;
 }
+
 .schedule-table thead {
-  background: #f9fafb;
+  background: #f8fafc;
 }
+
 .schedule-table th {
-  padding: 8px 4px;
+  padding: 10px 8px;
   text-align: left;
   font-weight: 600;
-  color: #374151;
-  font-size: 13px;
-  border-bottom: 1px solid #e5e7eb;
+  color: #6b7280;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e8ecf0;
   white-space: nowrap;
 }
+
 .employee-col {
-  width: 130px;
+  width: 140px;
   min-width: 0;
 }
+
 .day-col {
   width: auto;
   min-width: 0;
   text-align: center !important;
 }
+
 .table-row {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #f1f3f5;
   transition: background 0.15s;
 }
+
 .table-row:hover {
   background: #f9fafb;
 }
+
 .employee-cell {
-  padding: 8px 4px;
+  padding: 10px 8px;
 }
+
 .employee-info {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
+
 .employee-avatar {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50% !important;
 }
+
 .avatar-text {
   color: white;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
 }
+
 .employee-name {
-  font-weight: 500;
-  color: #1f2937;
-  font-size: 11px;
+  font-weight: 600;
+  color: #111827;
+  font-size: 12px;
   word-break: break-word;
 }
+
 .schedule-cell {
   padding: 6px 4px;
   vertical-align: top;
 }
+
 .shifts-wrapper {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-height: 0;
 }
+
+/* ==============================
+   SHIFT BADGES
+============================== */
 .shift-badge {
-  background: #dbeafe;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 6px;
   padding: 5px 6px;
   position: relative;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
+
 .shift-badge:hover {
-  background: #bfdbfe;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #dbeafe;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
 }
+
 .shift-time {
   font-size: 11px;
   font-weight: 600;
@@ -4196,6 +4165,7 @@ const filterEmployees = () => {}
   white-space: normal;
   word-break: break-word;
 }
+
 .shift-position {
   font-size: 10px;
   color: #3b82f6;
@@ -4203,6 +4173,7 @@ const filterEmployees = () => {}
   white-space: normal;
   word-break: break-word;
 }
+
 .shift-site {
   font-size: 10px;
   color: #6b7280;
@@ -4213,43 +4184,54 @@ const filterEmployees = () => {}
   white-space: normal;
   word-break: break-word;
 }
-/* Day Off Shift Styles */
+
+/* Day off */
 .shift-badge-dayoff {
-  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important;
-  padding: 8px 12px;
+  background: #fff7ed !important;
+  border: 1px solid #fed7aa !important;
+  padding: 8px 10px;
 }
+
 .shift-badge-dayoff:hover {
-  background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%) !important;
-  box-shadow: 0 3px 8px rgba(255, 152, 0, 0.3);
-  border-color: #f57c00 !important;
+  background: #ffedd5 !important;
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.15);
 }
-/* Leave badge */
-/* Merged / dual-shift badge */
+
+/* Leave */
+.shift-badge-leave {
+  background: #fdf4ff;
+  border: 1px solid #e9d5ff;
+  border-left: 3px solid #9c27b0;
+}
+
+/* Merged dual-shift */
 .shift-badge-merged {
   border-left: 3px solid #7c3aed;
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-left: 3px solid #7c3aed;
   padding: 5px 7px;
 }
+
 .merged-shift-separator {
   border-top: 1px dashed #c4b5fd;
   margin: 3px 0;
 }
+
 .shift-badge-merged .shift-time {
   font-size: 11px;
   white-space: normal;
   word-break: break-all;
   line-height: 1.3;
 }
-.shift-badge-merged .shift-site {
-  font-size: 10px;
-  white-space: normal;
-  word-break: break-word;
-}
+
+.shift-badge-merged .shift-site,
 .shift-badge-merged .shift-position {
   font-size: 10px;
   white-space: normal;
   word-break: break-word;
 }
+
 .merged-shift-label {
   display: flex;
   align-items: center;
@@ -4261,6 +4243,7 @@ const filterEmployees = () => {}
   letter-spacing: 0.5px;
   margin-bottom: 4px;
 }
+
 .merged-icon {
   color: #7c3aed;
 }
@@ -4274,27 +4257,26 @@ const filterEmployees = () => {}
   margin: 4px 0;
   opacity: 0.3;
 }
-.shift-badge-leave {
-  background: linear-gradient(135deg, #f3e5f5, #ede7f6);
-  border: 1.5px solid #ce93d8;
-  border-left: 4px solid #9c27b0;
-}
+
 .leave-content {
   display: flex;
   align-items: center;
   gap: 5px;
   margin-bottom: 2px;
 }
+
 .leave-icon {
   color: #7b1fa2;
   flex-shrink: 0;
 }
+
 .leave-label {
   font-size: 11px;
   font-weight: 600;
   color: #6a1b9a;
   line-height: 1.2;
 }
+
 .dayoff-content {
   display: flex;
   align-items: center;
@@ -4303,83 +4285,163 @@ const filterEmployees = () => {}
   padding: 4px 0;
   width: 100%;
 }
+
 .dayoff-icon {
-  color: #f57c00;
+  color: #f97316;
   flex-shrink: 0;
 }
+
 .dayoff-label {
   font-weight: 700;
-  font-size: 13px;
-  color: #e65100;
+  font-size: 12px;
+  color: #ea580c;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
 .shift-badge-dayoff .shift-position {
   color: #6b7280;
   font-weight: 600;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
 }
+
 .dayoff-text {
   color: #6b7280 !important;
   font-weight: 600 !important;
   text-align: center;
 }
+
+/* ==============================
+   SHIFT ACTIONS (hover overlay)
+============================== */
 .shift-actions {
   display: none;
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 5px;
+  right: 5px;
   gap: 3px;
   background: white;
-  padding: 4px;
+  padding: 3px;
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e8ecf0;
 }
+
 .shift-badge:hover .shift-actions {
   display: flex;
 }
+
 .action-btn {
-  width: 26px;
-  height: 26px;
-  min-height: 26px;
-  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border-radius: 4px !important;
 }
+
 .view-btn {
-  background: #dbeafe;
+  background: #eff6ff;
   color: #2563eb;
 }
 .view-btn:hover {
-  background: #bfdbfe;
+  background: #dbeafe !important;
 }
 .edit-btn {
-  background: #fef3c7;
-  color: #d97706;
+  background: #fefce8;
+  color: #ca8a04;
 }
 .edit-btn:hover {
-  background: #fde68a;
+  background: #fef9c3 !important;
 }
 .reassign-btn {
-  background: #ddd6fe;
+  background: #f5f3ff;
   color: #7c3aed;
 }
 .reassign-btn:hover {
-  background: #c4b5fd;
+  background: #ede9fe !important;
 }
 .dayoff-btn {
-  background: #fef3c7;
-  color: #d97706;
+  background: #fefce8;
+  color: #ca8a04;
 }
 .dayoff-btn:hover {
-  background: #fde68a;
+  background: #fef9c3 !important;
 }
 .delete-btn {
-  background: #fee2e2;
+  background: #fef2f2;
   color: #dc2626;
 }
 .delete-btn:hover {
-  background: #fecaca;
+  background: #fee2e2 !important;
 }
+
+/* ==============================
+   CELL QUICK ACTIONS
+============================== */
+.cell-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.cell-quick-actions-mobile {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.cell-btn {
+  font-size: 10px !important;
+  font-weight: 500;
+  border-radius: 5px;
+  padding: 2px 6px !important;
+  justify-content: flex-start;
+  min-height: 22px !important;
+  height: 22px !important;
+}
+
+.cell-btn :deep(.q-btn__content) {
+  gap: 3px;
+}
+
+.cell-btn-add {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+.cell-btn-add:hover {
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+}
+
+.cell-btn-leave {
+  color: #7c3aed;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+}
+.cell-btn-leave:hover {
+  background: #ede9fe !important;
+  border-color: #c4b5fd !important;
+}
+
+.cell-btn-leave :deep(.q-btn-dropdown__arrow) {
+  display: none;
+}
+.cell-btn-leave :deep(.q-menu) {
+  min-width: unset !important;
+  width: 100% !important;
+}
+
+.cell-btn-dayoff {
+  color: #ea580c;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+}
+.cell-btn-dayoff:hover {
+  background: #ffedd5 !important;
+  border-color: #fdba74 !important;
+}
+
 .add-shift-btn {
   color: #6b7280;
   font-size: 11px;
@@ -4387,32 +4449,39 @@ const filterEmployees = () => {}
   border: 1px dashed #d1d5db;
   border-radius: 6px;
   width: 100%;
-  min-height: 32px;
+  min-height: 30px;
 }
 .add-shift-btn:hover {
   color: #2563eb;
-  border-color: #2563eb;
-  background: #f0f9ff;
+  border-color: #93c5fd;
+  background: #eff6ff;
 }
-/* Cards View */
+
+/* ==============================
+   CARDS VIEW
+============================== */
 .cards-view {
   padding: 16px;
 }
+
 .employee-cards {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
+
 .employee-card {
   background: white;
-  border: 2px solid #3b82f6;
+  border: 1px solid #e8ecf0;
   border-radius: 12px;
   overflow: hidden;
 }
+
 .card-header {
-  background: #f9fafb;
-  padding: 16px;
-  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e8ecf0;
 }
+
 .employee-details {
   display: flex;
   flex-direction: column;
@@ -4422,58 +4491,72 @@ const filterEmployees = () => {}
   font-size: 12px;
   color: #6b7280;
 }
+
 .schedule-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 1px;
-  background: #e5e7eb;
+  background: #e8ecf0;
 }
+
 .day-column {
   background: white;
 }
+
 .day-header {
-  background: #f9fafb;
-  padding: 10px;
-  font-size: 12px;
+  background: #f8fafc;
+  padding: 8px 10px;
+  font-size: 11px;
   font-weight: 600;
-  color: #374151;
+  color: #6b7280;
   text-align: center;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e8ecf0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
+
 .day-content {
   padding: 10px;
-  min-height: 90px;
+  min-height: 80px;
 }
+
 .empty-slot {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 70px;
+  min-height: 60px;
 }
+
 .shift-items {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+
 .shift-card {
-  background: #dbeafe;
-  border-radius: 8px;
-  padding: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
+
 .shift-card:hover {
-  background: #bfdbfe;
+  background: #dbeafe;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
 }
+
 .shift-card-dayoff {
-  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important;
+  background: #fff7ed !important;
+  border-color: #fed7aa !important;
 }
 .shift-card-dayoff:hover {
-  background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%) !important;
-  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+  background: #ffedd5 !important;
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.15);
 }
+
 .dayoff-content-mobile {
   display: flex;
   align-items: center;
@@ -4481,112 +4564,173 @@ const filterEmployees = () => {}
   gap: 6px;
 }
 .dayoff-content-mobile .dayoff-icon {
-  color: #f57c00;
+  color: #f97316;
 }
 .dayoff-content-mobile .dayoff-label {
   font-weight: 700;
   font-size: 12px;
-  color: #e65100;
+  color: #ea580c;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-/* Modal Styles */
+
+/* ==============================
+   MODALS
+============================== */
 .modal-card {
-  border-radius: 16px !important;
-  width: 480px !important;
-  min-width: 480px !important;
-  max-width: 480px !important;
-  overflow: visible;
+  border-radius: 14px !important;
+  width: 500px !important;
+  min-width: 500px !important;
+  max-width: 95vw !important;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0 !important;
 }
+
 .modal-header {
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-bottom: 1px solid #e8ecf0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  border-radius: 16px 16px 0 0;
+  padding: 16px 20px;
 }
+
 .modal-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 }
+
 .modal-body {
-  padding: 16px;
+  padding: 20px;
   overflow-y: auto;
-  overflow-x: hidden;
   max-height: 70vh;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  width: 100%;
-  box-sizing: border-box;
-  flex-shrink: 0;
 }
+
 .modal-body::-webkit-scrollbar {
   display: none;
 }
+
 .schedule-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+
 .form-field {
   width: 100%;
 }
 .full-width {
   grid-column: 1 / -1;
 }
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
-}
-.cancel-btn {
-  color: #6b7280;
-  padding: 6px 14px;
-}
-.submit-btn {
-  background: #2563eb;
-  color: white;
-  padding: 6px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-}
-.submit-btn:hover {
-  background: #1d4ed8;
-}
-/* ===================================
-   RESPONSIVE BREAKPOINTS
-   =================================== */
-/* Filter dropdowns - fixed position, always drops downward */
-.filter-dropdown-popup {
-  position: fixed !important;
-  max-height: 280px !important;
-  overflow-y: auto !important;
-  z-index: 9999 !important;
-  transform: none !important;
+  border-top: 1px solid #f1f3f5;
 }
 
-/* Recurring Calendar Preview */
+.cancel-btn {
+  color: #6b7280;
+}
+
+.submit-btn {
+  background: #3b82f6;
+  color: white;
+  padding: 6px 16px;
+  border-radius: 8px !important;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.submit-btn:hover {
+  background: #2563eb;
+}
+
+/* ==============================
+   MISC / INLINE MODAL HELPERS
+============================== */
+.warning-banner {
+  margin-top: 14px;
+  background-color: #fffbeb;
+  border: 1px solid #fcd34d;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.info-banner {
+  margin-top: 14px;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.quick-info {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e8ecf0;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.quick-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+}
+
+.quick-dayoff-btn {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  height: 36px;
+}
+.leave-type-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.recurring-badge {
+  font-size: 10px;
+  margin-left: 4px;
+}
+
 .recurring-calendar-preview {
-  background: linear-gradient(135deg, #f0f4ff 0%, #f8f0ff 100%);
-  border: 1.5px solid #c7d2fe;
-  border-radius: 12px;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 10px;
   padding: 14px;
   margin-bottom: 16px;
 }
+
 .calendar-preview-header {
   display: flex;
   align-items: center;
@@ -4599,6 +4743,7 @@ const filterEmployees = () => {}
   color: #4338ca;
   flex: 1;
 }
+
 .calendar-preview-legend {
   display: flex;
   align-items: center;
@@ -4618,13 +4763,15 @@ const filterEmployees = () => {}
   font-size: 11px;
   color: #6b7280;
 }
+
 .recurring-calendar {
   width: 100% !important;
   max-width: 100% !important;
-  border-radius: 10px;
+  border-radius: 8px;
   box-shadow: none !important;
   border: 1px solid #e0e7ff;
 }
+
 .recurring-calendar :deep(.q-date__calendar-item--active) {
   background: #6366f1 !important;
   border-radius: 50%;
@@ -4632,6 +4779,7 @@ const filterEmployees = () => {}
 .recurring-calendar :deep(.q-date__event) {
   background: #6366f1 !important;
 }
+
 .calendar-weekdays-summary {
   display: flex;
   flex-wrap: wrap;
@@ -4641,305 +4789,109 @@ const filterEmployees = () => {}
   padding-top: 10px;
   border-top: 1px solid #e0e7ff;
 }
+
 .weekdays-label {
   font-size: 11px;
   color: #6b7280;
   font-weight: 500;
 }
 
-/* 1440px - Large Desktop */
-/* 1440px - Large Desktop */
+/* Filter dropdown popup */
+.filter-dropdown-popup {
+  position: fixed !important;
+  max-height: 280px !important;
+  overflow-y: auto !important;
+  z-index: 9999 !important;
+  transform: none !important;
+}
+
+/* ==============================
+   RESPONSIVE
+============================== */
 @media (min-width: 1440px) {
-  .modern-page {
-    padding: 24px;
-  }
-  .summary-grid {
-    gap: 20px;
-  }
-  .card-value {
-    font-size: 32px;
+  .stats-amount {
+    font-size: 30px;
   }
   .schedule-table th,
   .employee-cell,
   .schedule-cell {
-    padding: 16px 14px;
-  }
-  .shift-badge {
-    padding: 12px;
+    padding: 14px 10px;
   }
   .employee-col {
-    width: 200px;
-    min-width: 200px;
+    width: 180px;
   }
   .day-col {
-    min-width: 140px;
-  }
-  .header-content {
-    gap: 20px;
-  }
-  .search-input {
-    min-width: 280px;
-  }
-}
-/* 1024px - Desktop / Tablet Landscape */
-@media (max-width: 1024px) {
-  .modern-page {
-    padding: 14px;
-  }
-  .header-content {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .title-section {
-    width: 100%;
-  }
-  .header-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-  .search-input {
-    flex: 1;
-    min-width: 180px;
-  }
-  .summary-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-  }
-  .summary-card {
-    padding: 14px;
-  }
-  .card-value {
-    font-size: 26px;
-  }
-  .card-label {
-    font-size: 12px;
-  }
-  .controls-row {
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .filter-group {
-    flex-wrap: wrap;
-  }
-  .filter-select {
-    flex: 1;
-    min-width: 140px;
-  }
-  .week-nav {
-    width: 100%;
-    justify-content: center;
-  }
-  .view-select {
-    width: 100%;
-  }
-  .table-wrapper {
-    overflow-x: auto;
-  }
-  .schedule-table {
-    width: 100%;
-    table-layout: fixed;
-    min-width: unset;
-  }
-  .employee-col {
-    width: 120px;
-    min-width: 120px;
-  }
-  .day-col {
-    width: auto;
-    min-width: unset;
-  }
-  .schedule-table th {
-    padding: 8px 4px;
-    font-size: 11px;
-  }
-  .employee-cell {
-    padding: 8px 4px;
-  }
-  .schedule-cell {
-    padding: 6px 4px;
-  }
-  .shift-badge {
-    padding: 6px 5px;
-  }
-  .shift-time {
-    font-size: 10px;
-  }
-  .shift-position,
-  .shift-site {
-    font-size: 9px;
-  }
-  .action-btn {
-    width: 20px;
-    height: 20px;
-    min-height: 20px;
-  }
-  .cell-btn {
-    font-size: 9px !important;
-    padding: 2px 3px !important;
-    height: 22px !important;
-    min-height: 22px !important;
-  }
-  .employee-name {
-    font-size: 11px;
-    word-break: break-word;
-  }
-  .employee-avatar {
-    width: 28px;
-    height: 28px;
-    flex-shrink: 0;
-  }
-  .modal-card {
-    max-width: 90vw;
-    min-width: unset !important;
-    width: 90vw !important;
-  }
-}
-/* 768px - Tablet Portrait */
-@media (max-width: 768px) {
-  .modern-page {
-    padding: 12px;
-  }
-  .page-header {
-    padding: 12px;
-    margin-bottom: 12px;
-  }
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-  .title-section {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .page-title {
-    font-size: 18px;
-  }
-  .timezone-badge {
-    font-size: 10px;
-    padding: 4px 10px;
-  }
-  .header-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px;
-    width: 100%;
-  }
-  .add-btn {
-    flex-shrink: 0;
-  }
-  .search-input {
-    flex: 1;
-    min-width: 160px;
-  }
-  .summary-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-  }
-  .summary-card {
-    padding: 12px;
-  }
-  .card-icon {
-    width: 44px;
-    height: 44px;
-  }
-  .card-value {
-    font-size: 22px;
-  }
-  .card-label {
-    font-size: 11px;
-  }
-  .controls-section {
-    padding: 12px;
-    margin-bottom: 12px;
-  }
-  .section-title {
-    font-size: 16px;
-    margin-bottom: 10px;
-  }
-  .controls-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .filter-group {
-    flex-direction: row;
-    width: 100%;
-    gap: 8px;
-  }
-  .filter-select {
-    flex: 1;
-  }
-  .view-select {
-    width: 100%;
-  }
-  .week-nav {
-    width: 100%;
-    justify-content: center;
-  }
-  .week-display {
-    min-width: 140px;
-    font-size: 12px;
-  }
-  .table-wrapper {
-    border-radius: 8px;
-    overflow-x: auto;
-  }
-  .schedule-table {
-    min-width: 640px;
-  }
-  .employee-col {
-    width: 130px;
     min-width: 130px;
   }
-  .day-col {
-    min-width: 88px;
+  .header-search {
+    max-width: 340px;
   }
-  .schedule-table th {
-    padding: 10px 6px;
-    font-size: 11px;
-  }
-  .employee-cell,
-  .schedule-cell {
-    padding: 8px 6px;
-  }
-  .shift-badge {
-    padding: 6px 8px;
-  }
-  .cell-btn {
-    font-size: 9px !important;
-    padding: 2px 4px !important;
-  }
-  .modal-card {
-    max-width: 95vw;
-    min-width: unset !important;
-    width: calc(95vw - 24px) !important;
-    margin: 12px;
-  }
-  .modal-header,
-  .modal-body {
+}
+
+@media (max-width: 1024px) {
+  .dashboard-container {
     padding: 14px;
   }
-  .modal-title {
-    font-size: 17px;
+  .header-content {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .title-section {
+    width: 100%;
+  }
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .header-search {
+    max-width: 100%;
+    flex: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 12px;
+  }
+  .stats-section {
+    grid-template-columns: 1fr;
+  }
+  .header-actions {
+    flex-direction: column;
+  }
+  .header-search,
+  .add-btn {
+    width: 100%;
+    max-width: 100%;
+  }
+  .controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filter-group {
+    flex-direction: column;
+  }
+  .week-nav {
+    justify-content: center;
+  }
+  .modal-card {
+    min-width: unset !important;
+    max-width: calc(100vw - 20px) !important;
   }
   .form-row {
     grid-template-columns: 1fr;
-    gap: 10px;
   }
-  .modal-actions {
-    flex-direction: column-reverse;
-    gap: 8px;
+  .full-width {
+    grid-column: span 1;
   }
-  .cancel-btn,
-  .submit-btn {
-    width: 100%;
-    justify-content: center;
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 18px;
   }
-  .quick-info {
-    flex-direction: column;
-    gap: 10px;
+  .stats-amount {
+    font-size: 22px;
   }
 }
 </style>

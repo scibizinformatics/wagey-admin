@@ -228,13 +228,12 @@
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">SL No</q-th>
                     <q-th class="table-header-cell">Employee</q-th>
                     <q-th class="table-header-cell">Type</q-th>
                     <q-th class="table-header-cell">Period</q-th>
                     <q-th class="table-header-cell">Reason</q-th>
                     <q-th class="table-header-cell">Status</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
+                    <q-th class="table-header-cell table-header-actions">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
@@ -242,9 +241,6 @@
                     class="table-body-row"
                     :class="{ 'rejected-row': props.row.status === 'rejected' }"
                   >
-                    <q-td class="table-body-cell"
-                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                    >
                     <q-td class="table-body-cell employee-name-cell">
                       <div class="employee-info">
                         <q-avatar size="32px" color="primary" text-color="white">
@@ -372,13 +368,12 @@
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">SL No</q-th>
                     <q-th class="table-header-cell">Employee</q-th>
                     <q-th class="table-header-cell">Type</q-th>
                     <q-th class="table-header-cell">Period</q-th>
                     <q-th class="table-header-cell">Reason</q-th>
                     <q-th class="table-header-cell">Status</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
+                    <q-th class="table-header-cell table-header-actions">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
@@ -386,9 +381,6 @@
                     class="table-body-row"
                     :class="{ 'rejected-row': props.row.status === 'rejected' }"
                   >
-                    <q-td class="table-body-cell"
-                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                    >
                     <q-td class="table-body-cell employee-name-cell">
                       <div class="employee-info">
                         <q-avatar size="32px" color="primary" text-color="white">
@@ -498,19 +490,17 @@
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">ID</q-th>
                     <q-th class="table-header-cell">Employee</q-th>
                     <q-th class="table-header-cell">Requested Amount</q-th>
                     <q-th class="table-header-cell">Request Date</q-th>
                     <q-th class="table-header-cell">Status</q-th>
                     <q-th class="table-header-cell">Repayment</q-th>
                     <q-th class="table-header-cell">Repaid</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
+                    <q-th class="table-header-cell table-header-actions">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
                   <q-tr class="table-body-row">
-                    <q-td class="table-body-cell">{{ String(props.row.id).padStart(2, '0') }}</q-td>
                     <q-td class="table-body-cell employee-name-cell">
                       <div class="employee-info">
                         <q-avatar
@@ -1657,8 +1647,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ==============================
+   BASE
+============================== */
 .request-dashboard {
-  background: #f8fafc;
+  background: #f4f6f9;
   min-height: 100vh;
   padding: 0;
 }
@@ -1666,18 +1659,18 @@ onMounted(() => {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 
-/* ===================================
+/* ==============================
    HEADER
-   =================================== */
+============================== */
 .page-header {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 20px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
@@ -1690,25 +1683,32 @@ onMounted(() => {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
-  margin: 0 0 4px 0;
+  color: #111827;
+  margin: 0;
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .refresh-btn {
   height: 36px;
+  width: 36px;
   border-radius: 8px;
+  color: #6b7280 !important;
+}
+
+.refresh-btn:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
 }
 
 .header-search {
-  min-width: 180px;
-  max-width: 250px;
+  min-width: 200px;
+  max-width: 260px;
   flex: 1;
 }
 
@@ -1721,9 +1721,9 @@ onMounted(() => {
   color: #9ca3af;
 }
 
-/* ===================================
-   STATS
-   =================================== */
+/* ==============================
+   STATS CARDS
+============================== */
 .stats-section {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1732,86 +1732,108 @@ onMounted(() => {
 }
 
 .stats-card {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  padding: 16px 18px;
+  border: 1px solid #e8ecf0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transition: all 0.2s ease;
+  gap: 14px;
   min-width: 0;
+  transition: box-shadow 0.2s ease;
 }
 
 .stats-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-.total-card {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-}
-.overtime-total-card {
-  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
-}
-.pending-card {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-}
-.approved-card {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-}
-.rejected-card {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
 }
 
 .stats-icon-wrapper {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
   flex-shrink: 0;
+  font-size: 20px;
 }
 
-.stats-icon {
-  font-size: 24px;
-  color: #374151;
+/* Icon color variants - matching EmployeesPage palette */
+.leave-icon-bg,
+.stats-icon-wrapper:has(.q-icon[name='event_note']) {
+  background: #eff6ff;
+  color: #3b82f6;
 }
+
+.overtime-icon-bg {
+  background: #faf5ff;
+  color: #8b5cf6;
+}
+
+.stats-card .stats-icon-wrapper {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.total-card .stats-icon-wrapper {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.overtime-total-card .stats-icon-wrapper {
+  background: #faf5ff;
+  color: #8b5cf6;
+}
+
+.pending-card .stats-icon-wrapper {
+  background: #fffbeb;
+  color: #f59e0b;
+}
+
+.approved-card .stats-icon-wrapper {
+  background: #f0fdf4;
+  color: #22c55e;
+}
+
+.rejected-card .stats-icon-wrapper {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
 .stats-content {
-  flex: 1;
   min-width: 0;
 }
-.stats-amount {
-  font-size: 26px;
-  font-weight: 700;
-  color: #1a202c;
-  line-height: 1;
-  margin-bottom: 4px;
-}
+
 .stats-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
+  font-size: 12px;
+  color: #6b7280;
   margin-bottom: 2px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-/* ===================================
+.stats-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+}
+
+/* ==============================
    TABS - pill style
-   =================================== */
+============================== */
 .tabs-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   padding: 10px 14px;
 }
 
 .tab-pills {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -1819,89 +1841,93 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 7px 14px;
   border-radius: 20px;
-  border: 1.5px solid #e2e8f0;
-  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
   color: #6b7280;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
+  transition: all 0.15s ease;
   outline: none;
 }
 
 .tab-pill:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: #f3f4f6;
+  border-color: #d1d5db;
   color: #374151;
 }
 
 .tab-pill.active {
   background: #3b82f6;
   border-color: #3b82f6;
-  color: white;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .tab-pill-icon {
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .tab-badge {
   background: #ef4444;
-  color: white;
-  font-size: 11px;
+  color: #ffffff;
+  font-size: 10px;
   font-weight: 700;
   border-radius: 10px;
-  padding: 1px 6px;
-  min-width: 18px;
+  padding: 1px 5px;
+  min-width: 17px;
   text-align: center;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .tab-pill.active .tab-badge {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .tab-panels {
   background: transparent;
 }
+
 .tab-panel-content {
   padding: 0;
 }
 
-/* ===================================
-   TABLE SECTION  (EmployeesPage style)
-   =================================== */
+/* ==============================
+   TABLE SECTION
+============================== */
 .table-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   overflow: hidden;
 }
 
 .table-header {
-  padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
   flex-wrap: wrap;
+  gap: 10px;
+}
+
+.table-title-section {
+  min-width: 0;
 }
 
 .table-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a202c;
+  color: #111827;
   margin: 0;
 }
 
 .table-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -1910,169 +1936,177 @@ onMounted(() => {
   min-width: 160px;
 }
 
-/* Blue-bordered container — matches EmployeesPage */
 .modern-table-container {
-  border: 2px solid #3b82f6;
-  border-radius: 10px;
   overflow: hidden;
   margin: 0 16px 16px 16px;
 }
 
 .request-table,
 .cash-advance-table {
-  background: white;
-  border-radius: 10px;
-  overflow: hidden;
+  background: #ffffff;
   width: 100%;
 }
 
+/* Table header */
 .table-header-row {
   background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
 }
 
 .table-header-cell {
-  padding: 12px 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  text-align: left;
-  border: none;
-  white-space: nowrap;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
+  vertical-align: middle !important;
 }
 
+.table-header-actions {
+  text-align: center !important;
+}
+
+/* Table body */
 .table-body-row {
-  border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease;
 }
 
-.table-body-row:hover {
-  background: #f8fafc;
+.table-body-row:hover .table-body-cell {
+  background: #f9fafb;
 }
 
 .rejected-row {
-  opacity: 0.6;
+  opacity: 0.65;
+}
+
+.rejected-row .table-body-cell {
   background: #fef2f2;
 }
 
-.rejected-row:hover {
+.rejected-row:hover .table-body-cell {
   background: #fee2e2;
 }
 
 .table-body-cell {
-  padding: 12px 10px;
   font-size: 13px;
   color: #374151;
-  border: none;
-  vertical-align: middle;
+  padding: 13px 16px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
+  vertical-align: middle !important;
 }
 
-/* ===================================
+/* ==============================
    EMPLOYEE INFO
-   =================================== */
+============================== */
 .employee-info {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
+.employee-name-cell {
+  min-width: 180px;
+}
+
 .employee-details {
   display: flex;
   flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
 .employee-name {
-  font-weight: 500;
-  color: #1a202c;
+  font-weight: 600;
+  color: #111827;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .employee-dept {
   font-size: 11px;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
-/* ===================================
+/* ==============================
    STATUS & TYPE BADGES
-   =================================== */
+============================== */
 .status-badge {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 11px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .status-pending {
-  background: #fef3c7;
+  background: #fffbeb;
   color: #92400e;
 }
+
 .status-approved {
-  background: #dcfce7;
+  background: #f0fdf4;
   color: #16a34a;
 }
+
 .status-rejected {
-  background: #fee2e2;
+  background: #fef2f2;
   color: #dc2626;
 }
+
 .status-default {
   background: #f3f4f6;
-  color: #374151;
+  color: #6b7280;
 }
 
 .type-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 6px;
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 5px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
-.type-badge.leave {
-  background: #ede9fe;
-  color: #5b21b6;
-}
-.type-badge.overtime {
-  background: #fef3c7;
-  color: #92400e;
-}
-.type-badge.timeoff {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-.type-badge.schedule {
-  background: #d1fae5;
-  color: #065f46;
-}
 
 .repayment-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 6px;
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 5px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
+  border: 1px solid #e5e7eb;
 }
+
 .repayment-manual {
-  background: #fef3c7;
+  background: #fffbeb;
   color: #92400e;
+  border-color: #fde68a;
 }
+
 .repayment-automatic {
-  background: #d1fae5;
+  background: #f0fdf4;
   color: #065f46;
+  border-color: #bbf7d0;
 }
+
 .repayment-default {
   background: #f3f4f6;
   color: #6b7280;
 }
 
-/* ===================================
+/* ==============================
    DATE / REASON / AMOUNT CELLS
-   =================================== */
+============================== */
 .date-range {
   display: flex;
   align-items: center;
@@ -2085,10 +2119,12 @@ onMounted(() => {
   color: #374151;
   font-weight: 500;
 }
+
 .date-separator {
   color: #9ca3af;
   font-size: 10px;
 }
+
 .duration {
   font-size: 11px;
   color: #9ca3af;
@@ -2103,39 +2139,47 @@ onMounted(() => {
   font-size: 12px;
   color: #6b7280;
 }
+
 .reason-cell {
   max-width: 220px;
 }
+
 .dates-cell {
   min-width: 170px;
 }
 
 .amount-value {
   font-weight: 600;
-  color: #1a202c;
+  color: #111827;
 }
+
 .amount-value.approved {
   color: #065f46;
 }
+
 .no-data {
   color: #9ca3af;
   font-size: 12px;
 }
+
 .amount-highlight {
   font-weight: 700;
   font-size: 15px;
-  color: #1a202c;
+  color: #111827;
 }
+
 .amount-highlight.approved {
   color: #065f46;
 }
 
-/* ===================================
-   ACTION BUTTONS  (EmployeesPage style)
-   =================================== */
+/* ==============================
+   ACTION BUTTONS
+============================== */
 .actions-cell {
+  text-align: center !important;
   width: 120px;
   min-width: 120px;
+  vertical-align: middle !important;
 }
 
 .action-buttons {
@@ -2143,7 +2187,6 @@ onMounted(() => {
   gap: 4px;
   justify-content: center;
   align-items: center;
-  flex-wrap: nowrap;
 }
 
 .action-btn {
@@ -2151,45 +2194,49 @@ onMounted(() => {
   height: 32px;
   min-width: 32px;
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
 .view-btn {
-  background: #dbeafe;
+  background: #eff6ff;
   color: #3b82f6;
 }
+
 .view-btn:hover {
-  background: #bfdbfe;
+  background: #dbeafe;
 }
 
 .approve-btn {
-  background: #dcfce7;
+  background: #f0fdf4;
   color: #16a34a;
 }
+
 .approve-btn:hover {
-  background: #bbf7d0;
+  background: #dcfce7;
 }
 
 .reject-btn {
   background: #fef2f2;
-  color: #ef4444;
+  color: #dc2626;
 }
+
 .reject-btn:hover {
   background: #fee2e2;
 }
 
 .edit-btn {
-  background: #fef3c7;
+  background: #fffbeb;
   color: #d97706;
 }
+
 .edit-btn:hover {
-  background: #fde68a;
+  background: #fef3c7;
 }
 
-/* ===================================
+/* ==============================
    LOADING & EMPTY STATE
-   =================================== */
+============================== */
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -2211,37 +2258,44 @@ onMounted(() => {
   justify-content: center;
   padding: 60px 20px;
   gap: 8px;
+  text-align: center;
+}
+
+.empty-icon {
+  color: #d1d5db;
+  margin-bottom: 6px;
 }
 
 .empty-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #374151;
 }
+
 .empty-subtitle {
   font-size: 13px;
   color: #9ca3af;
 }
 
-/* ===================================
-   MODAL  (EmployeesPage style)
-   =================================== */
+/* ==============================
+   MODAL - SHARED
+============================== */
 .modal-card {
   width: 600px;
   max-width: 95vw;
   max-height: 90vh;
-  border-radius: 12px !important;
+  border-radius: 14px !important;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .modal-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  background: #f9fafb;
-  flex-shrink: 0;
+  justify-content: space-between;
+  padding: 16px 20px !important;
+  background: #ffffff;
 }
 
 .modal-title-section {
@@ -2255,43 +2309,50 @@ onMounted(() => {
 }
 
 .modal-icon {
-  font-size: 28px;
+  font-size: 24px;
   color: #3b82f6;
-  background: #dbeafe;
+  background: #eff6ff;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .modal-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #111827;
-  margin: 0;
 }
+
 .modal-subtitle {
-  font-size: 13px;
+  font-size: 12px;
   color: #6b7280;
   margin-top: 2px;
 }
 
 .modal-close-btn {
-  color: #6b7280;
+  color: #9ca3af !important;
+  flex-shrink: 0;
 }
+
 .modal-close-btn:hover {
-  background: #f3f4f6;
+  background: #f3f4f6 !important;
+  color: #374151 !important;
 }
 
 .modal-content {
-  flex: 1;
+  padding: 20px !important;
   overflow-y: auto;
-  padding: 20px 24px;
+  flex: 1;
 }
 
 .modal-footer {
-  padding: 16px 24px;
-  background: #f8fafc;
+  padding: 14px 20px;
+  background: #f9fafb;
+  border-top: 1px solid #f1f3f5;
 }
 
+/* ==============================
+   DETAIL SECTIONS
+============================== */
 .detail-sections {
   display: flex;
   flex-direction: column;
@@ -2300,18 +2361,20 @@ onMounted(() => {
 
 .detail-section {
   background: #f8fafc;
-  border-radius: 10px;
-  padding: 16px 20px;
-  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 18px;
+  border: 1px solid #f1f3f5;
 }
 
 .section-title {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   color: #6b7280;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .detail-grid {
@@ -2323,12 +2386,13 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 9px 0;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .detail-row:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .detail-label {
@@ -2339,8 +2403,8 @@ onMounted(() => {
 
 .detail-value {
   font-size: 13px;
-  color: #1a202c;
-  font-weight: 600;
+  color: #111827;
+  font-weight: 500;
   text-align: right;
   display: flex;
   align-items: center;
@@ -2350,7 +2414,7 @@ onMounted(() => {
 .reason-content,
 .message-content,
 .admin-response {
-  font-size: 14px;
+  font-size: 13px;
   color: #374151;
   line-height: 1.6;
   padding: 4px 0;
@@ -2365,147 +2429,47 @@ onMounted(() => {
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 14px;
 }
 
 .col-span-2 {
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 .info-content {
   margin-bottom: 8px;
 }
+
 .info-label {
   font-size: 12px;
   font-weight: 600;
   color: #6b7280;
   margin-bottom: 4px;
 }
+
 .info-text {
   font-size: 13px;
   color: #374151;
   line-height: 1.5;
 }
 
-/* ===================================
+/* ==============================
    RESPONSIVE
-   =================================== */
-
-/* ── 1440px — large desktop ── */
-@media (min-width: 1440px) {
-  .dashboard-container {
-    max-width: 1400px;
-    padding: 20px 24px;
-  }
-
-  .stats-section {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 20px;
-  }
-
-  .stats-card {
-    padding: 20px;
-  }
-
-  .stats-amount {
-    font-size: 28px;
-  }
-
-  .stats-icon-wrapper {
-    width: 52px;
-    height: 52px;
-  }
-
-  .stats-icon {
-    font-size: 26px;
-  }
-
-  .page-header {
-    padding: 20px 24px;
-    margin-bottom: 20px;
-  }
-
-  .page-title {
-    font-size: 24px;
-  }
-
-  .tabs-section {
-    padding: 12px 18px;
-    margin-bottom: 20px;
-  }
-
-  .tab-pill {
-    padding: 10px 20px;
-    font-size: 14px;
-  }
-
-  .table-title {
-    font-size: 18px;
-  }
-
-  .table-header {
-    padding: 18px 20px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 14px 12px;
-    font-size: 14px;
-  }
-
-  .modern-table-container {
-    margin: 0 20px 20px 20px;
-  }
-}
-
-/* ── 1024px — laptop / small desktop ── */
+============================== */
 @media (max-width: 1024px) {
-  .dashboard-container {
-    padding: 14px;
-  }
-
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .stats-card {
-    padding: 14px;
   }
 
   .stats-amount {
     font-size: 24px;
-  }
-
-  .stats-icon-wrapper {
-    width: 44px;
-    height: 44px;
-  }
-
-  .stats-icon {
-    font-size: 22px;
-  }
-
-  .page-title {
-    font-size: 18px;
-  }
-
-  .tabs-section {
-    padding: 8px 12px;
-    margin-bottom: 14px;
-  }
-
-  .tab-pill {
-    padding: 7px 14px;
-    font-size: 13px;
   }
 
   .modern-table-container {
@@ -2514,11 +2478,7 @@ onMounted(() => {
 
   .table-header-cell,
   .table-body-cell {
-    padding: 10px 8px;
-    font-size: 12px;
-  }
-
-  .employee-name {
+    padding: 10px 10px !important;
     font-size: 12px;
   }
 
@@ -2527,31 +2487,25 @@ onMounted(() => {
   }
 
   .modal-card {
-    min-width: 520px;
+    min-width: unset;
     max-width: 680px;
   }
 }
 
-/* ── 768px — tablet ── */
 @media (max-width: 768px) {
   .dashboard-container {
-    padding: 10px;
+    padding: 14px;
   }
 
-  /* Header */
   .page-header {
     padding: 12px 14px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
 
   .header-content {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
-  }
-
-  .page-title {
-    font-size: 17px;
   }
 
   .header-actions {
@@ -2567,66 +2521,40 @@ onMounted(() => {
     min-width: 0;
   }
 
-  /* Stats: 2 columns on tablet */
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
 
   .stats-card {
-    padding: 16px;
+    padding: 14px;
   }
 
   .stats-amount {
-    font-size: 24px;
-  }
-
-  .stats-label {
-    font-size: 13px;
-  }
-
-  .stats-icon-wrapper {
-    width: 44px;
-    height: 44px;
-  }
-
-  .stats-icon {
     font-size: 22px;
   }
 
-  /* Tabs */
   .tabs-section {
     padding: 8px 10px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
 
   .tab-pills {
-    gap: 6px;
+    gap: 5px;
   }
 
   .tab-pill {
-    padding: 7px 12px;
+    padding: 7px 11px;
     font-size: 12px;
-    gap: 5px;
     flex: 1;
     justify-content: center;
   }
 
-  .tab-pill-icon {
-    font-size: 14px;
-  }
-
-  /* Table header */
   .table-header {
     flex-direction: column;
     align-items: stretch;
-    padding: 12px 14px;
     gap: 10px;
-  }
-
-  .table-title {
-    font-size: 15px;
   }
 
   .table-actions {
@@ -2638,12 +2566,10 @@ onMounted(() => {
     min-width: unset;
   }
 
-  /* Table scroll */
   .modern-table-container {
     margin: 0 10px 10px 10px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    border-radius: 8px;
   }
 
   .request-table {
@@ -2654,17 +2580,10 @@ onMounted(() => {
     min-width: 750px;
   }
 
-  .table-header-cell,
-  .table-body-cell {
-    padding: 10px 8px;
-    font-size: 12px;
-  }
-
   .employee-dept {
     display: none;
   }
 
-  /* Modals */
   .modal-card {
     margin: 10px;
     min-width: unset;
@@ -2673,12 +2592,8 @@ onMounted(() => {
     width: 100%;
   }
 
-  .modal-header {
-    padding: 14px 16px;
-  }
-
   .modal-content {
-    padding: 12px 14px;
+    padding: 14px !important;
   }
 
   .modal-footer {
@@ -2714,47 +2629,26 @@ onMounted(() => {
   }
 }
 
-/* ── 480px — mobile ── */
 @media (max-width: 480px) {
   .dashboard-container {
-    padding: 8px;
+    padding: 10px;
   }
 
   .page-title {
-    font-size: 16px;
+    font-size: 18px;
   }
 
-  /* Stats: 2 col on small mobile */
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
     gap: 6px;
   }
 
   .stats-card {
-    padding: 14px;
+    padding: 12px;
   }
 
   .stats-amount {
-    font-size: 22px;
-  }
-
-  .stats-label {
-    font-size: 12px;
-  }
-
-  .stats-icon-wrapper {
-    width: 40px;
-    height: 40px;
-  }
-
-  .stats-icon {
     font-size: 20px;
-  }
-
-  /* Tabs: compact on mobile */
-  .tab-pill {
-    padding: 6px 10px;
-    font-size: 11px;
   }
 
   .tab-pill span:not(.tab-badge) {
@@ -2765,13 +2659,10 @@ onMounted(() => {
     font-size: 16px;
   }
 
-  .tab-badge {
-    font-size: 10px;
-    padding: 1px 4px;
-  }
-
-  .table-title {
-    font-size: 14px;
+  .table-header-cell,
+  .table-body-cell {
+    padding: 10px 10px !important;
+    font-size: 12px;
   }
 
   .modal-title {

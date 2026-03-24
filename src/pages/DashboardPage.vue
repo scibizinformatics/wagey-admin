@@ -262,14 +262,14 @@ export default {
 <style scoped>
 /* ── Base ── */
 .dashboard-page {
-  background: #f5f6fa;
+  background: #f4f6f9;
   min-height: 100vh;
   padding: 0;
 }
 .dashboard-inner {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 20px 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -283,16 +283,16 @@ export default {
 }
 .stat-tile {
   background: #fff;
-  border-radius: 10px;
-  border: 1px solid #e8eaf0;
-  padding: 14px 12px;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  padding: 16px 18px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   transition: box-shadow 0.2s;
 }
 .stat-tile:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
 }
 
 /* Colour accents per tile */
@@ -322,25 +322,27 @@ export default {
 }
 
 .tile-icon-wrap {
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 .tile-count {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
-  color: #1a1d23;
-  line-height: 1;
+  color: #111827;
+  line-height: 1.1;
 }
 .tile-label {
-  font-size: 11px;
+  font-size: 12px;
   color: #6b7280;
   font-weight: 500;
   margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* ── Layout ── */
@@ -362,9 +364,9 @@ export default {
 
 /* ── Panel ── */
 .panel {
-  background: #fff;
-  border-radius: 10px;
-  border: 1px solid #e8eaf0;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
   overflow: hidden;
 }
 .panel--flex {
@@ -375,8 +377,8 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1px solid #f0f1f5;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
 }
 .panel-icon {
   color: #1a73e8;
@@ -385,9 +387,9 @@ export default {
   color: #d32f2f;
 }
 .panel-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a1d23;
+  color: #111827;
 }
 
 /* ── CT Table (Connecteam-style) ── */
@@ -403,14 +405,14 @@ export default {
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #e8eaf0;
+  padding: 11px 16px;
+  border-bottom: 1px solid #e8ecf0;
 }
 .ct-table :deep(td) {
   font-size: 13px;
   color: #374151;
-  padding: 10px 12px;
-  border-bottom: 1px solid #f5f6fa;
+  padding: 13px 16px;
+  border-bottom: 1px solid #f1f3f5;
 }
 .ct-table :deep(tr:last-child td) {
   border-bottom: none;
@@ -446,7 +448,7 @@ export default {
   justify-content: center;
   padding: 32px 16px;
   background: #fafafa;
-  border-top: 1px solid #f0f1f5;
+  border-top: 1px solid #f1f3f5;
   gap: 8px;
 }
 .chart-placeholder-label {
@@ -457,14 +459,14 @@ export default {
 /* ── Alert list ── */
 .alert-list {
   padding: 8px 0;
-  border-top: 1px solid #f0f1f5;
+  border-top: 1px solid #f1f3f5;
 }
 .alert-item {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   padding: 9px 16px;
-  border-bottom: 1px solid #f5f6fa;
+  border-bottom: 1px solid #f1f3f5;
 }
 .alert-item:last-child {
   border-bottom: none;
@@ -492,7 +494,7 @@ export default {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-bottom: 1px solid #f5f6fa;
+  border-bottom: 1px solid #f1f3f5;
 }
 .activity-row:last-child {
   border-bottom: none;
@@ -511,7 +513,7 @@ export default {
 .activity-user {
   font-size: 13px;
   font-weight: 600;
-  color: #1a1d23;
+  color: #111827;
 }
 .activity-time {
   font-size: 11px;
@@ -546,7 +548,7 @@ export default {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 16px;
-  border-bottom: 1px solid #f5f6fa;
+  border-bottom: 1px solid #f1f3f5;
 }
 .notif-item:last-child {
   border-bottom: none;
@@ -571,7 +573,7 @@ export default {
   gap: 10px;
   padding: 10px 16px;
   font-size: 12px;
-  border-bottom: 1px solid #f5f6fa;
+  border-bottom: 1px solid #f1f3f5;
 }
 .fraud-item:last-child {
   border-bottom: none;
