@@ -140,9 +140,9 @@
             <q-select
               dense
               outlined
-              label="Filter by Site"
-              v-model="filters.site"
-              :options="siteOptions"
+              label="Filter by Cost Center"
+              v-model="filters.cost_center"
+              :options="costCenterOptions"
               :loading="filtersLoading"
               class="site-filter-dropdown"
               clearable
@@ -154,7 +154,7 @@
               style="min-width: 180px"
             >
               <template v-slot:prepend>
-                <q-icon name="location_on" />
+                <q-icon name="account_balance_wallet" />
               </template>
             </q-select>
           </div>
@@ -983,7 +983,7 @@ const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0'
 const filters = ref({
   date_from: today,
   date_to: today,
-  site: '',
+  cost_center: '',
 })
 
 // Date range handling
@@ -1457,11 +1457,11 @@ async function fetchAttendanceData(params = {}) {
   try {
     const { year, month } = getYearMonth()
 
-    // Build URL with site filter if present
+    // Build URL with cost center filter if present
     let url = `https://staging.wageyapp.com/attendance/company/${companyId.value}/${year}/${month}/`
 
-    if (filters.value.site) {
-      url += `?site=${filters.value.site}`
+    if (filters.value.cost_center) {
+      url += `?cost_center=${filters.value.cost_center}`
     }
 
     console.log('🔍 Fetching attendance with URL:', url)
@@ -2210,7 +2210,7 @@ function clearAllFilters() {
   filters.value = {
     date_from: today,
     date_to: today,
-    site: '',
+    cost_center: '',
   }
   dateRange.value = today
   currentDate.value = today
