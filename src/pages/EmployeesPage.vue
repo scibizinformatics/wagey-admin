@@ -887,17 +887,33 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
-import { useAuthStore } from 'src/boot/auth'
-import axios from 'axios'
 import { useQuasar } from 'quasar'
+import { useEmployees } from 'src/composables/useEmployees'
+import { useRolesAndPositions } from 'src/composables/useRolesAndPositions'
+import { useOrganization } from 'src/composables/useOrganization'
 
 const $q = useQuasar()
-const authStore = useAuthStore()
-const employees = ref([])
+
+// ─── Composables ──────────────────────────────────────────────────────────────
+const {
+  employees,
+  loading,
+  saving: savingEmployee,
+  fetchEmployees: fetchEmployeesList,
+  fetchEmployee,
+  addEmployee: addEmployeeApi,
+  updateEmployee,
+  updateUser,
+  terminateEmployee: terminateEmployeeApi,
+  restoreEmployee: restoreEmployeeApi,
+} = useEmployees()
+
+const { userRoles, fetchUserRoles } = useRolesAndPositions()
+const { sites: rawSites, fetchSites: fetchSitesApi } = useOrganization()
+
+// ─── Local UI state ───────────────────────────────────────────────────────────
 const filteredEmployees = ref([])
 const searchTerm = ref('')
-const loading = ref(false)
-
 const sortBy = ref('A-Z')
 const sites = ref([])
 const selectedSite = ref(null)
@@ -911,7 +927,6 @@ const showRestoreDialog = ref(false)
 const selectedEmployee = ref({})
 const employeeToTerminate = ref({})
 const employeeToRestore = ref({})
-const savingEmployee = ref(false)
 const terminating = ref(false)
 const restoring = ref(false)
 
@@ -919,7 +934,7 @@ const restoring = ref(false)
 const addStep = ref(1)
 const viewTab = ref('user')
 
-//avatar
+// Avatar
 const avatarFile = ref(null)
 const avatarPreview = ref(null)
 const editAvatarFile = ref(null)
@@ -966,8 +981,7 @@ const editForm = ref({
 
 // Options for dropdowns
 const civilStatusOptions = ref(['Single', 'Married', 'Divorced', 'Widowed', 'Separated'])
-
-const roleOptions = ref([])
+const roleOptions = computed(() => userRoles.value)
 const timezoneOptions = ref([
   'UTC',
   'America/New_York',
@@ -991,7 +1005,7 @@ const columns = ref([
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ])
 
-// --- Computed ---
+// ─── Computed ─────────────────────────────────────────────────────────────────
 const employeeStats = computed(() => {
   const total = employees.value.length
   const active = employees.value.filter((emp) => getStatus(emp) === 'Active').length
@@ -999,7 +1013,7 @@ const employeeStats = computed(() => {
   return { total, active, terminated }
 })
 
-// --- Helper Functions ---
+// ─── Helper Functions ─────────────────────────────────────────────────────────
 
 const getFullName = (employee) => {
   if (!employee) return 'N/A'
@@ -1022,23 +1036,14 @@ const getRole = (employee) => {
   return 'N/A'
 }
 
-const getPhoneNumber = (employee) => {
-  return employee?.phone_number || 'N/A'
-}
+const getPhoneNumber = (employee) => employee?.phone_number || 'N/A'
 
-const getCivilStatus = (employee) => {
-  return employee?.civil_status || 'N/A'
-}
+const getCivilStatus = (employee) => employee?.civil_status || 'N/A'
 
 const getStatus = (employee) => {
   if (!employee) return 'N/A'
-  // Check for status field first
-  if (employee.status && employee.status.toLowerCase() === 'terminated') {
-    return 'Terminated'
-  }
-  // Check is_active field
+  if (employee.status && employee.status.toLowerCase() === 'terminated') return 'Terminated'
   if (employee.is_active === false) return 'Terminated'
-  // Default to Active
   return 'Active'
 }
 
@@ -1062,11 +1067,7 @@ const getInitials = (name) =>
 const formatDate = (dateString) => {
   if (!dateString) return null
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 const formatDateTime = (dateString) => {
@@ -1081,297 +1082,84 @@ const formatDateTime = (dateString) => {
   })
 }
 
-// Utility function for PH phone number formatting
 function formatPhilippinePhone(number) {
   if (!number) return ''
-
-  let cleaned = number.replace(/\D/g, '') // remove non-digits
-
-  // If number starts with '0' (ex: 09123456789) → convert to +63 format
-  if (cleaned.startsWith('0')) {
-    cleaned = '+63' + cleaned.slice(1)
-  }
-  // If number starts with '9' (ex: 9123456789) → add +63
-  else if (cleaned.startsWith('9')) {
-    cleaned = '+63' + cleaned
-  }
-  // If already starts with '63' (ex: 639123456789) → add '+'
-  else if (cleaned.startsWith('63')) {
-    cleaned = '+' + cleaned
-  }
-
-  // Validate correct PH mobile number format
+  let cleaned = number.replace(/\D/g, '')
+  if (cleaned.startsWith('0')) cleaned = '+63' + cleaned.slice(1)
+  else if (cleaned.startsWith('9')) cleaned = '+63' + cleaned
+  else if (cleaned.startsWith('63')) cleaned = '+' + cleaned
   const valid = /^\+639\d{9}$/.test(cleaned)
   return valid ? cleaned : ''
 }
 
-// --- API Calls ---
+// ─── Data fetching ────────────────────────────────────────────────────────────
+
 const fetchEmployees = async () => {
   try {
-    const token = localStorage.getItem('access_token')
-    let storedCompany = localStorage.getItem('selectedCompany')
-    let companyId = null
+    // fetchEmployees from composable fetches the list; then enrich each with phone_number
+    const list = await fetchEmployeesList()
 
-    try {
-      const parsed = JSON.parse(storedCompany)
-      companyId = parsed?.id || parsed
-    } catch {
-      companyId = storedCompany
-    }
-
-    if (!token || !companyId) {
-      $q.notify({
-        type: 'negative',
-        message: 'Missing token or company ID.',
-        position: 'top',
-      })
-      return
-    }
-
-    loading.value = true
-
-    const response = await axios.get(
-      `https://staging.wageyapp.com/user/companies/${companyId}/employees/`,
-
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-
-    console.log('=== EMPLOYEES FETCHED ===')
-    console.log('Sample employee data:', response.data[0])
-    console.log('Sample employee picture_url:', response.data[0]?.user?.picture_url)
-    console.log('Total employees:', response.data.length)
-
-    const list = response.data || []
-
-    // Fetch full details for all employees in parallel to get phone_number
     const detailed = await Promise.all(
-      list.map(
-        (emp) =>
-          axios
-            .get(`https://staging.wageyapp.com/user/companies/${companyId}/employees/${emp.id}/`, {
-              headers: { Authorization: `Bearer ${token}` },
-            })
-            .then((r) => ({ ...emp, phone_number: r.data.phone_number || '' }))
-            .catch(() => emp), // fall back to original row if detail fetch fails
+      list.map((emp) =>
+        fetchEmployee(emp.id)
+          .then((r) => ({ ...emp, phone_number: r.phone_number || '' }))
+          .catch(() => emp),
       ),
     )
 
     employees.value = detailed
-    filteredEmployees.value = employees.value
+    filteredEmployees.value = detailed
     sortEmployees()
-  } catch (error) {
-    console.error('Error fetching employees:', error)
+  } catch (err) {
     $q.notify({
       type: 'negative',
-      message: 'Failed to fetch employees',
+      message: err.response?.data?.detail ?? 'Failed to fetch employees',
       position: 'top',
     })
-  } finally {
-    loading.value = false
   }
 }
 
 const fetchRoles = async () => {
   try {
-    const token = localStorage.getItem('access_token')
-    if (!token) return
-
-    const response = await axios.get('https://staging.wageyapp.com/user/user-roles/', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    roleOptions.value = response.data
-  } catch (error) {
-    console.error('Error fetching roles:', error)
-    roleOptions.value = [
-      { id: 1, name: 'Admin' },
-      { id: 2, name: 'Manager' },
-      { id: 3, name: 'Employee' },
-      { id: 4, name: 'HR' },
-    ]
+    await fetchUserRoles()
+  } catch {
+    // silent fallback — roleOptions stays empty
   }
 }
 
 const fetchSites = async () => {
   try {
-    const token = localStorage.getItem('access_token')
-    let storedCompany = localStorage.getItem('selectedCompany')
-    let companyId = null
-
-    try {
-      const parsed = JSON.parse(storedCompany)
-      companyId = parsed?.id || parsed
-    } catch {
-      companyId = storedCompany
-    }
-
-    console.log('=== FETCHING SITES DEBUG ===')
-    console.log('Token exists:', !!token)
-    console.log('Company ID:', companyId)
-
-    if (!token || !companyId) {
-      console.warn('Missing token or company ID for fetching sites')
-      sites.value = [{ label: 'All Sites', value: null }]
-      return
-    }
-
-    console.log(
-      'Making request to:',
-      `https://staging.wageyapp.com/organization/sites/?company=${companyId}`,
-    )
-
-    const response = await axios.get(
-      `https://staging.wageyapp.com/organization/sites/?company=${companyId}`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-
-    console.log('Sites API Response:', response.data)
-
-    // Handle different response structures
-    let sitesData = []
-    if (Array.isArray(response.data)) {
-      sitesData = response.data
-    } else if (response.data?.results) {
-      sitesData = response.data.results
-    } else if (response.data?.data) {
-      sitesData = response.data.data
-    }
-
-    console.log('Processed sites data:', sitesData)
-
-    // Format sites for dropdown
+    await fetchSitesApi()
     sites.value = [
       { label: 'All Sites', value: null },
-      ...sitesData.map((site) => ({
+      ...rawSites.value.map((site) => ({
         label: site.name || site.site_name || `Site ${site.id}`,
         value: site.id,
       })),
     ]
-
-    console.log('Formatted sites for dropdown:', sites.value)
-
-    if (sites.value.length === 1) {
-      console.warn('⚠️ No sites found - only "All Sites" option available')
-    } else {
-      console.log(`✅ Loaded ${sites.value.length - 1} sites`)
-    }
-  } catch (error) {
-    console.error('=== ERROR FETCHING SITES ===')
-    console.error('Error message:', error.message)
-    console.error('Error response:', error.response?.data)
-    console.error('Error status:', error.response?.status)
-
-    // Fallback
+  } catch (err) {
     sites.value = [{ label: 'All Sites', value: null }]
-
     $q.notify({
       type: 'warning',
-      message: error.response?.data?.detail || 'Could not load sites. Showing all employees.',
+      message: err.response?.data?.detail ?? 'Could not load sites. Showing all employees.',
       position: 'top',
     })
   }
 }
 
-// Fetch full employee details
 const fetchEmployeeDetails = async (employeeId) => {
   try {
-    const token = localStorage.getItem('access_token')
-    let storedCompany = localStorage.getItem('selectedCompany')
-    let companyId = null
-
-    try {
-      const parsed = JSON.parse(storedCompany)
-      companyId = parsed?.id || parsed
-    } catch {
-      companyId = storedCompany
-    }
-
-    if (!token || !companyId) {
-      $q.notify({ type: 'negative', message: 'Missing token or company ID.', position: 'top' })
-      return null
-    }
-
-    const response = await axios.get(
-      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${employeeId}/`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-
-    return response.data
-  } catch (error) {
-    console.error('❌ Error fetching employee details:', error)
+    return await fetchEmployee(employeeId)
+  } catch (err) {
     $q.notify({ type: 'negative', message: 'Failed to fetch employee details', position: 'top' })
     return null
   }
 }
 
-// -----------------------------
-// Add Employee - UPDATED VERSION WITH SEPARATE AVATAR UPLOAD
-// -----------------------------
+// ─── Add Employee ─────────────────────────────────────────────────────────────
+
 async function addEmployee() {
-  let token = null
-  let user = null
-  let userId = null
-  let companyId = null
-
   try {
-    // ✅ SAFE TOKEN RETRIEVAL
-    token = authStore.token || localStorage.getItem('access_token')
-
-    // ✅ SAFE USER RETRIEVAL
-    user = authStore.user
-    if (!user) {
-      const storedUser = localStorage.getItem('user')
-      if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
-        try {
-          user = JSON.parse(storedUser)
-        } catch (e) {
-          console.warn('Failed to parse user from localStorage:', e)
-          user = null
-        }
-      }
-    }
-
-    // ✅ SAFE USER ID RETRIEVAL
-    userId = user?.id || user?.uuid
-
-    if (!userId) {
-      const storedUserId = localStorage.getItem('user_id')
-      if (storedUserId && storedUserId !== 'undefined' && storedUserId !== 'null') {
-        try {
-          userId = JSON.parse(storedUserId)
-        } catch (e) {
-          userId = parseInt(storedUserId) || null
-        }
-      }
-    }
-
-    // ✅ SAFE COMPANY ID RETRIEVAL
-    let storedCompany = localStorage.getItem('selectedCompany')
-    if (storedCompany && storedCompany !== 'undefined' && storedCompany !== 'null') {
-      try {
-        const parsed = JSON.parse(storedCompany)
-        companyId = parsed?.id || parsed?.companyId || parsed
-      } catch (e) {
-        companyId = parseInt(storedCompany) || null
-      }
-    }
-
-    // ✅ VALIDATION CHECKS
-    if (!token) {
-      return $q.notify({
-        type: 'negative',
-        message: 'Missing authentication token. Please log in again.',
-        position: 'top',
-      })
-    }
-
-    if (!companyId) {
-      return $q.notify({
-        type: 'negative',
-        message: 'No company selected. Please select a company first.',
-        position: 'top',
-      })
-    }
-
     const formattedPhone = formatPhilippinePhone(addForm.value.phone_number)
     const formattedEmergency = formatPhilippinePhone(addForm.value.emergency_contact)
 
@@ -1383,9 +1171,6 @@ async function addEmployee() {
       })
     }
 
-    savingEmployee.value = true
-
-    // ✅ BUILD PAYLOAD WITHOUT PICTURE
     const payload = {
       username: addForm.value.user.username,
       email: addForm.value.user.email,
@@ -1404,69 +1189,32 @@ async function addEmployee() {
       last_date_updated: new Date().toISOString(),
       user_role: addForm.value.user_role?.id ? parseInt(addForm.value.user_role.id) : null,
       status: 'active',
-      companies: [{ company_id: parseInt(companyId) }],
     }
 
-    // ✅ Clean up empty values
+    // Remove empty values
     Object.keys(payload).forEach((key) => {
       if (payload[key] === '' || payload[key] === undefined || payload[key] === null) {
         delete payload[key]
       }
     })
 
-    console.log('📤 Final payload being sent:', JSON.stringify(payload, null, 2))
+    const newEmployee = await addEmployeeApi(payload)
 
-    // ✅ CREATE THE EMPLOYEE FIRST
-    const response = await axios.post(`https://staging.wageyapp.com/user/employees/`, payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    })
-
-    const newEmployee = response.data
-    console.log('✅ Employee created:', newEmployee)
-
-    // ⭐ NOW UPLOAD AVATAR IF ONE WAS SELECTED ⭐
+    // Upload avatar if selected
     if (avatarFile.value && newEmployee.user?.id) {
       try {
         uploadingAvatar.value = true
-        console.log('🖼️ Starting avatar upload for user ID:', newEmployee.user.id)
-
         const formData = new FormData()
         formData.append('picture', avatarFile.value)
-
-        const avatarResponse = await axios.patch(
-          `https://staging.wageyapp.com/user/users/${newEmployee.user.id}/`,
-          formData,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'multipart/form-data',
-            },
-          },
-        )
-
-        console.log('✅ Avatar uploaded successfully:', avatarResponse.data)
-        console.log(
-          '📸 Picture URL:',
-          avatarResponse.data.picture_url || avatarResponse.data.picture,
-        )
-
-        // ⭐ Refresh employees to show the new picture ⭐
+        await updateUser(newEmployee.user.id, formData)
         await fetchEmployees()
-
         $q.notify({
           type: 'positive',
           message: 'Employee and profile picture added successfully!',
           position: 'top',
         })
-      } catch (avatarError) {
-        console.error('⚠️ Error uploading avatar:', avatarError)
-
-        // Still refresh to show the employee without picture
+      } catch {
         await fetchEmployees()
-
         $q.notify({
           type: 'warning',
           message: 'Employee created but profile picture upload failed',
@@ -1477,21 +1225,12 @@ async function addEmployee() {
       }
     } else {
       await fetchEmployees()
-
-      $q.notify({
-        type: 'positive',
-        message: 'Employee added successfully!',
-        position: 'top',
-      })
+      $q.notify({ type: 'positive', message: 'Employee added successfully!', position: 'top' })
     }
 
     resetAddForm()
     showAddModal.value = false
   } catch (error) {
-    console.error('❌ Error adding employee:', error)
-    console.error('📋 Error response data:', error.response?.data)
-    console.error('📋 Error response status:', error.response?.status)
-
     $q.notify({
       type: 'negative',
       message:
@@ -1505,38 +1244,13 @@ async function addEmployee() {
       position: 'top',
       timeout: 5000,
     })
-  } finally {
-    savingEmployee.value = false
-    uploadingAvatar.value = false
   }
 }
 
-// -----------------------------
-// Save Employee (Edit) - UPDATED VERSION WITH SEPARATE AVATAR UPLOAD
-// -----------------------------
+// ─── Save Employee (Edit) ─────────────────────────────────────────────────────
+
 const saveEmployee = async () => {
   try {
-    savingEmployee.value = true
-    const token = localStorage.getItem('access_token')
-
-    let storedCompany = localStorage.getItem('selectedCompany')
-    let companyId = null
-
-    try {
-      const parsed = JSON.parse(storedCompany)
-      companyId = parsed?.id || parsed
-    } catch {
-      companyId = storedCompany
-    }
-
-    if (!token || !companyId) {
-      return $q.notify({
-        type: 'negative',
-        message: 'Missing token or company ID.',
-        position: 'top',
-      })
-    }
-
     const formattedPhone = formatPhilippinePhone(editForm.value.phone_number)
     const formattedEmergency = formatPhilippinePhone(editForm.value.emergency_contact)
 
@@ -1566,64 +1280,34 @@ const saveEmployee = async () => {
       timezone: editForm.value.timezone,
     }
 
-    const response = await axios.patch(
-      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${selectedEmployee.value.id}/`,
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
+    const updatedEmployee = await updateEmployee(selectedEmployee.value.id, payload)
 
-    const updatedEmployee = response.data
-    console.log('✅ Employee updated:', updatedEmployee)
-
-    // ⭐ NOW UPLOAD AVATAR IF A NEW ONE WAS SELECTED ⭐
+    // Upload avatar if a new one was selected
     if (editAvatarFile.value && updatedEmployee.user?.id) {
       try {
         uploadingAvatar.value = true
-        console.log('🖼️ Starting avatar upload for user ID:', updatedEmployee.user.id)
-
         const formData = new FormData()
         formData.append('picture', editAvatarFile.value)
+        await updateUser(updatedEmployee.user.id, formData)
 
-        const avatarResponse = await axios.patch(
-          `https://staging.wageyapp.com/user/users/${updatedEmployee.user.id}/`,
-          formData,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'multipart/form-data',
-            },
-          },
-        )
-
-        console.log('✅ Avatar uploaded successfully:', avatarResponse.data)
-        console.log(
-          '📸 Picture URL:',
-          avatarResponse.data.picture_url || avatarResponse.data.picture,
-        )
-
-        // ⭐ Refresh employees to show the updated picture ⭐
         await fetchEmployees()
-      } catch (avatarError) {
-        console.error('⚠️ Error uploading avatar:', avatarError)
+      } catch {
         $q.notify({
           type: 'warning',
           message: 'Employee updated but profile picture upload failed',
           position: 'top',
         })
-
-        // Still update local state even if avatar failed
         const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
         if (index !== -1) employees.value[index] = updatedEmployee
-        filteredEmployees.value = employees.value
+        filteredEmployees.value = [...employees.value]
         sortEmployees()
       } finally {
         uploadingAvatar.value = false
       }
     } else {
-      // If no new avatar, just update local employee data
       const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
       if (index !== -1) employees.value[index] = updatedEmployee
-      filteredEmployees.value = employees.value
+      filteredEmployees.value = [...employees.value]
       sortEmployees()
     }
 
@@ -1635,27 +1319,17 @@ const saveEmployee = async () => {
 
     showEditModal.value = false
   } catch (error) {
-    console.error('❌ Error updating employee:', error)
     $q.notify({
       type: 'negative',
-      message: error.response?.data?.detail || 'Failed to update employee',
+      message: error.response?.data?.detail ?? 'Failed to update employee',
       position: 'top',
     })
-  } finally {
-    savingEmployee.value = false
-    uploadingAvatar.value = false
   }
 }
 
-// ⭐ UPDATED resetAddForm() FUNCTION ⭐
 const resetAddForm = () => {
   addForm.value = {
-    user: {
-      username: '',
-      email: '',
-      first_name: '',
-      last_name: '',
-    },
+    user: { username: '', email: '', first_name: '', last_name: '' },
     password: '',
     user_role: null,
     civil_status: '',
@@ -1667,25 +1341,16 @@ const resetAddForm = () => {
     timezone: '',
   }
   confirmPassword.value = ''
-  // ⭐ CLEAR AVATAR STATE ⭐
   avatarFile.value = null
   avatarPreview.value = null
 }
 
-// ⭐ UPDATED cancelEdit() FUNCTION ⭐
 const cancelEdit = () => {
   showEditModal.value = false
-  // ⭐ CLEAR AVATAR STATE ⭐
   editAvatarFile.value = null
   editAvatarPreview.value = null
   editForm.value = {
-    user: {
-      id: 0,
-      username: '',
-      email: '',
-      first_name: '',
-      last_name: '',
-    },
+    user: { id: 0, username: '', email: '', first_name: '', last_name: '' },
     user_role: null,
     civil_status: '',
     address: '',
@@ -1700,50 +1365,14 @@ const cancelEdit = () => {
 const terminateEmployee = async () => {
   try {
     terminating.value = true
-    const token = localStorage.getItem('access_token')
-    let storedCompany = localStorage.getItem('selectedCompany')
-    let companyId = null
+    const payload = { companies: [{ employment_status: 'terminated' }] }
+    const response = await terminateEmployeeApi(employeeToTerminate.value.id, payload)
 
-    try {
-      const parsed = JSON.parse(storedCompany)
-      companyId = parsed?.id || parsed
-    } catch {
-      companyId = storedCompany
-    }
-
-    if (!token || !companyId) {
-      $q.notify({ type: 'negative', message: 'Missing token or company ID.', position: 'top' })
-      return
-    }
-
-    // Use the correct payload structure based on the API documentation
-    const payload = {
-      companies: [
-        {
-          company_id: parseInt(companyId),
-          employment_status: 'terminated',
-        },
-      ],
-    }
-
-    const response = await axios.patch(
-      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${employeeToTerminate.value.id}/`,
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-
-    // Update the employee in the local list immediately
     const employeeIndex = employees.value.findIndex((e) => e.id === employeeToTerminate.value.id)
     if (employeeIndex !== -1) {
-      // Update the employee with the response data
-      employees.value[employeeIndex] = {
-        ...response.data,
-        is_active: false,
-        status: 'terminated',
-      }
+      employees.value[employeeIndex] = { ...response, is_active: false, status: 'terminated' }
     }
 
-    // Update filtered list as well
     filteredEmployees.value = [...employees.value]
     sortEmployees()
 
@@ -1755,13 +1384,11 @@ const terminateEmployee = async () => {
     showTerminateDialog.value = false
     employeeToTerminate.value = {}
   } catch (error) {
-    console.error('Error terminating employee:', error)
-    console.error('Error details:', error.response?.data)
     $q.notify({
       type: 'negative',
       message:
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
+        error.response?.data?.detail ??
+        error.response?.data?.message ??
         'Failed to terminate employee',
       position: 'top',
     })
@@ -1773,56 +1400,16 @@ const terminateEmployee = async () => {
 const restoreEmployee = async () => {
   try {
     restoring.value = true
-    const token = localStorage.getItem('access_token')
-    let storedCompany = localStorage.getItem('selectedCompany')
-    let companyId = null
-
-    try {
-      const parsed = JSON.parse(storedCompany)
-      companyId = parsed?.id || parsed
-    } catch {
-      companyId = storedCompany
-    }
-
-    if (!token || !companyId) {
-      $q.notify({
-        type: 'negative',
-        message: 'Missing token or company ID.',
-        position: 'top',
-      })
-      return
-    }
-
-    // ✅ match the structure used in terminateEmployee()
     const payload = {
-      companies: [
-        {
-          company_id: parseInt(companyId),
-          employment_status: 'active', // 🔑 this is the key change
-        },
-      ],
-      is_active: true, // for safety
+      companies: [{ employment_status: 'active' }],
+      is_active: true,
       status: 'active',
     }
+    const response = await restoreEmployeeApi(employeeToRestore.value.id, payload)
 
-    console.log('Restoring employee with payload:', payload)
-
-    const response = await axios.patch(
-      `https://staging.wageyapp.com/user/companies/${companyId}/employees/${employeeToRestore.value.id}/`,
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-
-    console.log('Restore response:', response.data)
-
-    // ✅ Update employee locally
     const employeeIndex = employees.value.findIndex((e) => e.id === employeeToRestore.value.id)
     if (employeeIndex !== -1) {
-      employees.value[employeeIndex] = {
-        ...response.data,
-        is_active: true,
-        status: 'active',
-      }
+      employees.value[employeeIndex] = { ...response, is_active: true, status: 'active' }
     }
 
     filteredEmployees.value = [...employees.value]
@@ -1837,13 +1424,11 @@ const restoreEmployee = async () => {
     showRestoreDialog.value = false
     employeeToRestore.value = {}
   } catch (error) {
-    console.error('Error restoring employee:', error)
-    console.error('Error details:', error.response?.data)
     $q.notify({
       type: 'negative',
       message:
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
+        error.response?.data?.detail ??
+        error.response?.data?.message ??
         'Failed to restore employee',
       position: 'top',
     })
@@ -2111,10 +1696,9 @@ watch(sortBy, () => {
   sortEmployees()
 })
 
-onMounted(() => {
-  fetchEmployees()
-  fetchRoles()
-  fetchSites()
+onMounted(async () => {
+  await Promise.all([fetchRoles(), fetchSites()])
+  await fetchEmployees()
 })
 </script>
 

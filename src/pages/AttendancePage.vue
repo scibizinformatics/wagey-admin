@@ -929,17 +929,37 @@
 <script setup>
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
-import { api } from 'src/boot/axios'
+import { useAttendance } from 'src/composables/useAttendance'
+import { useEmployees } from 'src/composables/useEmployees'
+import { useOrganization } from 'src/composables/useOrganization'
 
 const $q = useQuasar()
 
-// Template refs
+// ─── Composables ──────────────────────────────────────────────────────────────
+const {
+  attendanceData,
+  loading,
+  fetchAttendance,
+  fetchEmployeeSchedule: fetchScheduleFromComposable,
+  logAttendance,
+  updateAttendance: updateAttendanceApi,
+  batchDeleteAttendance,
+  exportSelectedAttendance,
+  exportAllAttendance,
+} = useAttendance()
+
+const { employees, fetchEmployees } = useEmployees()
+const {
+  sites: rawSites,
+  costCenters: rawCostCenters,
+  fetchSites: fetchSitesApi,
+  fetchCostCenters: fetchCostCentersApi,
+} = useOrganization()
+
+// ─── Template refs ────────────────────────────────────────────────────────────
 const employeeSelectRef = ref(null)
 
-// Reactive data
-const attendanceData = ref([])
-const employees = ref([])
-const loading = ref(false)
+// ─── Local UI state ───────────────────────────────────────────────────────────
 const filtersLoading = ref(false)
 const selected = ref([])
 const selectAll = ref(false)
@@ -956,8 +976,8 @@ const selfieDialogTitle = ref('')
 const showInlineEditDialog = ref(false)
 const inlineEdit = ref({
   record: null,
-  field: '', // 'time_in' or 'time_out'
-  value: '', // HH:MM format
+  field: '',
+  value: '',
   date: '',
   employeeName: '',
   saving: false,
@@ -977,7 +997,7 @@ const costCenterInlineEdit = ref({
 const updating = ref(false)
 const creating = ref(false)
 
-// State for schedule data
+// Schedule state
 const employeeSchedule = ref(null)
 const loadingSchedule = ref(false)
 const scheduleError = ref(null)
@@ -1001,16 +1021,103 @@ const filters = ref({
   cost_center: '',
 })
 
-// Date range handling
 const dateRange = ref(today)
 const currentDate = ref(today)
+const tempDateRange = ref({ from: '', to: '' })
 
-const tempDateRange = ref({
-  from: '',
-  to: '',
+// Filter options — built from composable refs
+const siteOptions = ref([])
+const costCenterOptions = ref([])
+const employeeOptions = ref([])
+const employeeSearch = ref('')
+
+// Edit form
+const editingRecord = ref(null)
+
+// Add form
+const newRecord = ref({
+  employee: '',
+  site_id: '',
+  cost_center_id: '',
+  date: '',
+  time_in: '',
+  time_out: '',
+  source: 'admin',
 })
 
-// ================= DATE NAVIGATION =================
+const isAdmin = ref(false)
+const userData = JSON.parse(localStorage.getItem('user') || '{}')
+if (userData.role === 'admin') isAdmin.value = true
+
+// ─── Computed ─────────────────────────────────────────────────────────────────
+const stats = computed(() => {
+  const data = attendanceData.value
+  const total = data.length
+  const app = data.filter((item) => item.source === 'app').length
+  const terminal = data.filter((item) => item.source === 'terminal').length
+  const system = data.filter((item) => item.source === 'system').length
+  return [
+    { label: 'Total Records', count: total },
+    { label: 'App', count: app },
+    { label: 'Terminal', count: terminal },
+    { label: 'System', count: system },
+  ]
+})
+
+const filteredAttendanceRows = computed(() => {
+  if (!employeeSearch.value || !employeeSearch.value.trim()) return attendanceData.value
+  const term = employeeSearch.value.trim().toLowerCase()
+  return attendanceData.value.filter((row) =>
+    getEmployeeName(row.employee).toLowerCase().includes(term),
+  )
+})
+
+const totalPages = computed(() => {
+  return Math.ceil(pagination.value.rowsNumber / pagination.value.rowsPerPage) || 1
+})
+
+// ─── Table columns ────────────────────────────────────────────────────────────
+const columns = [
+  { name: 'select', label: '', align: 'center', field: 'id', sortable: false },
+  { name: 'employee', label: 'Employee', align: 'left', field: 'employee', sortable: true },
+  { name: 'date', label: 'Date', align: 'center', field: 'date', sortable: true },
+  { name: 'site', label: 'Site', align: 'left', field: 'site', sortable: true },
+  { name: 'work_type', label: 'Work Type', align: 'left', field: 'work_type', sortable: true },
+  {
+    name: 'cost_center',
+    label: 'Cost Center',
+    align: 'left',
+    field: 'cost_center',
+    sortable: false,
+  },
+  { name: 'time_in', label: 'Time In', align: 'center', field: 'time_in', sortable: true },
+  {
+    name: 'time_in_photo',
+    label: 'Photo',
+    align: 'center',
+    field: 'time_in_selfie',
+    sortable: false,
+  },
+  { name: 'time_in_source', label: 'In Source', align: 'center', field: 'source', sortable: false },
+  { name: 'time_out', label: 'Time Out', align: 'center', field: 'time_out', sortable: true },
+  {
+    name: 'time_out_photo',
+    label: 'Photo',
+    align: 'center',
+    field: 'time_out_selfie',
+    sortable: false,
+  },
+  {
+    name: 'time_out_source',
+    label: 'Out Source',
+    align: 'center',
+    field: 'source',
+    sortable: false,
+  },
+  { name: 'actions', label: 'Actions', align: 'center', field: 'actions', sortable: false },
+]
+
+// ─── Date navigation ──────────────────────────────────────────────────────────
 function goToPreviousDay() {
   const date = new Date(currentDate.value)
   date.setDate(date.getDate() - 1)
@@ -1045,236 +1152,40 @@ function onDateNavChange(val) {
   fetchAttendanceData()
 }
 
-// Edit form
-const editingRecord = ref(null)
-
-// Add form
-const newRecord = ref({
-  employee: '',
-  site_id: '',
-  cost_center_id: '',
-  date: '',
-  time_in: '',
-  time_out: '',
-  source: 'admin',
-})
-
-// Filter options
-const siteOptions = ref([])
-const costCenterOptions = ref([])
-const employeeOptions = ref([])
-const employeeSearch = ref('')
-
-// Get company ID
-const getCompanyId = () => {
-  const possibleKeys = ['selectCompany', 'selectedCompany', 'company_id', 'companyId']
-
-  for (const key of possibleKeys) {
-    const value = localStorage.getItem(key)
-    if (value) {
-      console.log(`✅ Found company ID in localStorage.${key}:`, value)
-      return value
-    }
-  }
-
-  console.warn('⚠️ No company ID found in localStorage')
-  return null
-}
-
-const companyId = ref(getCompanyId())
-
-// Computed
-const stats = computed(() => {
-  const data = attendanceData.value
-  const total = data.length
-  const app = data.filter((item) => item.source === 'app').length
-  const terminal = data.filter((item) => item.source === 'terminal').length
-  const manual = data.filter((item) => item.source === 'manual').length
-  const system = data.filter((item) => item.source === 'system').length
-
-  return [
-    { label: 'Total Records', count: total },
-    { label: 'App', count: app },
-    { label: 'Terminal', count: terminal },
-    { label: 'System', count: system },
-  ]
-})
-
-const filteredAttendanceRows = computed(() => {
-  if (!employeeSearch.value || !employeeSearch.value.trim()) return attendanceData.value
-  const term = employeeSearch.value.trim().toLowerCase()
-  return attendanceData.value.filter((row) =>
-    getEmployeeName(row.employee).toLowerCase().includes(term),
-  )
-})
-
-const totalPages = computed(() => {
-  return Math.ceil(pagination.value.rowsNumber / pagination.value.rowsPerPage) || 1
-})
-
-const isAdmin = ref(false)
-const userData = JSON.parse(localStorage.getItem('user') || '{}')
-if (userData.role === 'admin') {
-  isAdmin.value = true
-}
-
-// ================= TABLE COLUMNS =================
-const columns = [
-  {
-    name: 'select',
-    label: '',
-    align: 'center',
-    field: 'id',
-    sortable: false,
-  },
-  {
-    name: 'employee',
-    label: 'Employee',
-    align: 'left',
-    field: 'employee',
-    sortable: true,
-  },
-  {
-    name: 'date',
-    label: 'Date',
-    align: 'center',
-    field: 'date',
-    sortable: true,
-  },
-  {
-    name: 'site',
-    label: 'Site',
-    align: 'left',
-    field: 'site',
-    sortable: true,
-  },
-  {
-    name: 'work_type',
-    label: 'Work Type',
-    align: 'left',
-    field: 'work_type',
-    sortable: true,
-  },
-  {
-    name: 'cost_center',
-    label: 'Cost Center',
-    align: 'left',
-    field: 'cost_center',
-    sortable: false,
-  },
-  {
-    name: 'time_in',
-    label: 'Time In',
-    align: 'center',
-    field: 'time_in',
-    sortable: true,
-  },
-  {
-    name: 'time_in_photo',
-    label: 'Photo',
-    align: 'center',
-    field: 'time_in_selfie',
-    sortable: false,
-  },
-  {
-    name: 'time_in_source',
-    label: 'In Source',
-    align: 'center',
-    field: 'source',
-    sortable: false,
-  },
-  {
-    name: 'time_out',
-    label: 'Time Out',
-    align: 'center',
-    field: 'time_out',
-    sortable: true,
-  },
-  {
-    name: 'time_out_photo',
-    label: 'Photo',
-    align: 'center',
-    field: 'time_out_selfie',
-    sortable: false,
-  },
-  {
-    name: 'time_out_source',
-    label: 'Out Source',
-    align: 'center',
-    field: 'source',
-    sortable: false,
-  },
-  {
-    name: 'actions',
-    label: 'Actions',
-    align: 'center',
-    field: 'actions',
-    sortable: false,
-  },
-]
-
-// ================= SELFIE VIEWER FUNCTION =================
+// ─── Selfie viewer ────────────────────────────────────────────────────────────
 function viewSelfie(imageUrl, title) {
   selectedSelfie.value = imageUrl
   selfieDialogTitle.value = `${title} Selfie`
   showSelfieDialog.value = true
 }
 
-// ================= SCHEDULE MANAGEMENT SECTION =================
+// ─── Schedule ─────────────────────────────────────────────────────────────────
 async function fetchEmployeeSchedule(employeeId, date) {
-  if (!companyId.value || !employeeId || !date) {
-    console.warn('⚠️ Missing required params for schedule fetch:', {
-      companyId: companyId.value,
-      employeeId,
-      date,
-    })
-    return
-  }
+  if (!employeeId || !date) return
 
   loadingSchedule.value = true
   scheduleError.value = null
   employeeSchedule.value = null
 
   try {
-    console.log('🔍 Fetching schedule for:', { companyId: companyId.value, date })
-
-    const response = await api.get(
-      `https://staging.wageyapp.com/organization/scheduled/${companyId.value}/${date}/`,
-    )
-
-    console.log('✅ Schedule API Response:', response.data)
-
-    let schedules = []
-    if (Array.isArray(response.data)) {
-      schedules = response.data
-    } else if (response.data.data && Array.isArray(response.data.data)) {
-      schedules = response.data.data
-    } else if (response.data.schedules && Array.isArray(response.data.schedules)) {
-      schedules = response.data.schedules
-    }
-
-    const employeeScheduleData = schedules.find((schedule) => schedule.employee_id === employeeId)
-
-    if (employeeScheduleData) {
+    const scheduleData = await fetchScheduleFromComposable(employeeId, date)
+    if (scheduleData) {
       employeeSchedule.value = {
-        employee_id: employeeScheduleData.employee_id,
-        employee_name: employeeScheduleData.employee_name,
-        position: employeeScheduleData.position_name,
-        site: employeeScheduleData.site_name,
-        date: employeeScheduleData.schedule_date,
-        shift_start: formatScheduleTime(employeeScheduleData.start_time),
-        shift_end: formatScheduleTime(employeeScheduleData.end_time),
-        status: employeeScheduleData.status,
+        employee_id: scheduleData.employee_id,
+        employee_name: scheduleData.employee_name,
+        position: scheduleData.position_name,
+        site: scheduleData.site_name,
+        date: scheduleData.schedule_date,
+        shift_start: formatScheduleTime(scheduleData.start_time),
+        shift_end: formatScheduleTime(scheduleData.end_time),
+        status: scheduleData.status,
       }
-      console.log('✅ Employee schedule found:', employeeSchedule.value)
     } else {
-      console.log('ℹ️ No schedule found for employee:', employeeId)
       employeeSchedule.value = null
     }
   } catch (error) {
-    console.error('❌ Error fetching employee schedule:', error)
     scheduleError.value =
-      error.response?.data?.message || error.response?.data?.detail || 'Failed to load schedule'
+      error.response?.data?.message ?? error.response?.data?.detail ?? 'Failed to load schedule'
     employeeSchedule.value = null
   } finally {
     loadingSchedule.value = false
@@ -1282,11 +1193,8 @@ async function fetchEmployeeSchedule(employeeId, date) {
 }
 
 function onEmployeeSelected(employeeId) {
-  console.log('👤 Employee selected:', employeeId)
   employeeSchedule.value = null
   scheduleError.value = null
-
-  // Only fetch schedule if we have a valid date — prevents 400 errors
   const date = newRecord.value.date
   if (employeeId && date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     fetchEmployeeSchedule(employeeId, date)
@@ -1295,7 +1203,6 @@ function onEmployeeSelected(employeeId) {
 
 function onAddDialogDateChange(val) {
   if (!val || !/^\d{4}-\d{2}-\d{2}$/.test(val)) return
-  // Re-fetch schedule when date changes and employee is already selected
   if (newRecord.value.employee) {
     fetchEmployeeSchedule(newRecord.value.employee, val)
   }
@@ -1306,294 +1213,73 @@ function onEmployeeDropdownClick() {
     newRecord.value.employee = ''
     employeeSchedule.value = null
     scheduleError.value = null
-    // Reset input and reload full employee list
     nextTick(() => {
       employeeSelectRef.value?.updateInputValue('', true)
     })
   }
 }
 
-function formatScheduleTime(timeString) {
-  if (!timeString) return '-'
-  try {
-    // Handle plain time strings like "08:00:00" or "08:00"
-    const timeOnlyRegex = /^(\d{1,2}):(\d{2})(:\d{2})?$/
-    if (timeOnlyRegex.test(timeString)) {
-      const [hours, minutes] = timeString.split(':').map(Number)
-      const date = new Date(1970, 0, 1, hours, minutes)
-      return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      })
-    }
-    // Handle full ISO datetime strings
-    const date = new Date(timeString)
-    if (isNaN(date.getTime())) return timeString
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    })
-  } catch {
-    return timeString
-  }
-}
-
-function formatDate(dateString) {
-  if (!dateString) return '-'
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
-  } catch {
-    return dateString
-  }
-}
-
-function getStatusColor(status) {
-  const statusColors = {
-    active: 'positive',
-    completed: 'info',
-    cancelled: 'negative',
-    pending: 'warning',
-  }
-  return statusColors[status?.toLowerCase()] || 'grey'
-}
-
-function isOvernightShift() {
-  if (!newRecord.value.time_in || !newRecord.value.time_out) return false
-  const [inH, inM] = newRecord.value.time_in.split(':').map(Number)
-  const [outH, outM] = newRecord.value.time_out.split(':').map(Number)
-  return outH * 60 + outM < inH * 60 + inM
-}
-
-function getTimeOutDate() {
-  if (!newRecord.value.date) return ''
-  const next = new Date(newRecord.value.date)
-  next.setDate(next.getDate() + 1)
-  return next.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-function calculateWorkingHours() {
-  if (!newRecord.value.time_in || !newRecord.value.time_out) return '0h 0m'
-
-  const [inHours, inMinutes] = newRecord.value.time_in.split(':').map(Number)
-  const [outHours, outMinutes] = newRecord.value.time_out.split(':').map(Number)
-
-  const inDate = new Date(0, 0, 0, inHours, inMinutes)
-  let outDate = new Date(0, 0, 0, outHours, outMinutes)
-
-  let diff = (outDate - inDate) / 1000 / 60
-
-  // Auto-detect overnight shift: if time out < time in, add 24 hours
-  if (diff < 0) {
-    diff += 24 * 60
-  }
-
-  const hours = Math.floor(diff / 60)
-  const minutes = Math.floor(diff % 60)
-
-  return `${hours}h ${minutes}m`
-}
-
-function getEmployeePhoto(employee) {
-  if (!employee) return null
-
-  // If employee is an object, check for photo/image fields
-  if (typeof employee === 'object') {
-    return (
-      employee.photo ||
-      employee.image ||
-      employee.profile_picture ||
-      employee.profile_photo ||
-      employee.avatar ||
-      employee.picture ||
-      null
-    )
-  }
-  function debugAttendanceData() {
-    console.log('=== ATTENDANCE DEBUG INFO ===')
-    console.log('Total records in attendanceData:', attendanceData.value.length)
-    console.log('Active filters:', filters.value)
-    console.log('Sample record:', attendanceData.value[0])
-    console.log('Employees loaded:', employees.value.length)
-    console.log('Company ID:', companyId.value)
-    console.log('===========================')
-  }
-  // If employee is ID, find in employees array
-  const foundEmployee = employees.value.find((emp) => emp.id === employee || emp.uuid === employee)
-
-  return foundEmployee
-    ? foundEmployee.photo ||
-        foundEmployee.image ||
-        foundEmployee.profile_picture ||
-        foundEmployee.profile_photo ||
-        foundEmployee.avatar ||
-        foundEmployee.picture ||
-        null
-    : null
-}
-
-function viewEmployeePhoto(employee) {
-  if (!employee) return
-
-  selectedEmployeeName.value = getEmployeeName(employee)
-  selectedEmployeePhoto.value = getEmployeePhoto(employee)
-  showEmployeePhotoDialog.value = true
-}
+// ─── Data fetching ────────────────────────────────────────────────────────────
 function getYearMonth() {
-  let baseDate = filters.value.date_from ? new Date(filters.value.date_from) : new Date()
-
+  const baseDate = filters.value.date_from ? new Date(filters.value.date_from) : new Date()
   const year = baseDate.getFullYear()
   const month = String(baseDate.getMonth() + 1).padStart(2, '0')
-
   return { year, month }
 }
 
-// ================= API FUNCTIONS =================
 async function fetchAttendanceData(params = {}) {
-  if (!companyId.value) {
-    showErrorNotification('Company ID not found. Please log in again.')
-    return
-  }
-
-  loading.value = true
-
   try {
     const { year, month } = getYearMonth()
-
-    // Build URL with cost center filter if present
-    let url = `https://staging.wageyapp.com/attendance/company/${companyId.value}/${year}/${month}/`
-
-    if (filters.value.cost_center) {
-      url += `?cost_center=${filters.value.cost_center}`
+    const extraParams = {
+      page: pagination.value.page,
+      limit: pagination.value.rowsPerPage,
+      ...(filters.value.cost_center ? { cost_center: filters.value.cost_center } : {}),
+      ...params,
     }
 
-    console.log('🔍 Fetching attendance with URL:', url)
+    const data = await fetchAttendance(year, month, extraParams)
 
-    const response = await api.get(url, {
-      params: {
-        page: pagination.value.page,
-        limit: pagination.value.rowsPerPage,
-        ...params,
-      },
-    })
-
-    // Extract data from response
-    let data = Array.isArray(response.data) ? response.data : response.data.data
-    data = data || []
-
-    console.log(`📊 Raw data received: ${data.length} records`)
-
-    // Apply client-side filters
-    let filteredData = [...data] // Create a copy
-
-    // Filter by date range if set
+    // Client-side date range filter
+    let filtered = [...data]
     if (filters.value.date_from && filters.value.date_to) {
-      filteredData = filteredData.filter((record) => {
+      filtered = filtered.filter((record) => {
         const recordDate = new Date(record.date)
-        const fromDate = new Date(filters.value.date_from)
-        const toDate = new Date(filters.value.date_to)
-        return recordDate >= fromDate && recordDate <= toDate
+        return (
+          recordDate >= new Date(filters.value.date_from) &&
+          recordDate <= new Date(filters.value.date_to)
+        )
       })
-      console.log(`🔍 After date range filter: ${filteredData.length} records`)
     }
 
-    attendanceData.value = filteredData
-    pagination.value.rowsNumber = filteredData.length
+    attendanceData.value = filtered
+    pagination.value.rowsNumber = filtered.length
 
-    console.log(`✅ Final displayed records: ${attendanceData.value.length}`)
-
-    // Show message if no data after filtering
-    if (filteredData.length === 0 && data.length > 0) {
+    if (filtered.length === 0 && data.length > 0) {
       showErrorNotification('No records match the current filters. Try adjusting your filters.')
-    } else if (filteredData.length === 0) {
+    } else if (filtered.length === 0) {
       showErrorNotification('No attendance records found for this period.')
     }
   } catch (error) {
-    console.error('❌ Error fetching attendance:', error)
-    console.error('📍 Error details:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status,
-    })
-
-    let errorMessage = 'Failed to load attendance data'
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message
-    } else if (error.response?.data?.detail) {
-      errorMessage = error.response.data.detail
-    }
-
-    showErrorNotification(errorMessage)
+    showErrorNotification(
+      error.response?.data?.detail ??
+        error.response?.data?.message ??
+        'Failed to load attendance data',
+    )
     attendanceData.value = []
-  } finally {
-    loading.value = false
   }
 }
-async function filterByEmployeeId(employeeId) {
-  filters.value.employee = employeeId
-  pagination.value.page = 1
-  await fetchAttendanceData()
-}
+
 async function fetchSites() {
-  if (!companyId.value) {
-    console.error('❌ Company ID is missing:', companyId.value)
-    showErrorNotification('Company ID not found. Please log in again.')
-    return
-  }
-
-  console.log('🔍 Fetching sites for company:', companyId.value)
   filtersLoading.value = true
-
   try {
-    const response = await api.get('https://staging.wageyapp.com/organization/sites/', {
-      params: { company: companyId.value },
-    })
-
-    console.log('✅ Sites API Response:', response.data)
-
-    // Handle response structure
-    const data = response.data.data || response.data || []
-
-    console.log('📊 Processed sites data:', data)
-
-    // Map sites to options format
-    siteOptions.value = Array.isArray(data)
-      ? data.map((site) => ({
-          label: site.name || site.site_name || site.title || `Site ${site.id}`,
-          value: site.id || site.site_id || site.uuid,
-          site: site,
-        }))
-      : []
-
-    console.log('✅ Site options ready:', siteOptions.value)
-
-    if (siteOptions.value.length === 0) {
-      console.warn('⚠️ No sites found for company:', companyId.value)
-    }
+    await fetchSitesApi()
+    siteOptions.value = rawSites.value.map((site) => ({
+      label: site.name || site.site_name || site.title || `Site ${site.id}`,
+      value: site.id || site.site_id || site.uuid,
+      site,
+    }))
   } catch (error) {
-    console.error('❌ Error fetching sites:', error)
-    console.error('Error response:', error.response)
-
-    let errorMessage = 'Failed to load sites'
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message
-    } else if (error.response?.data?.detail) {
-      errorMessage = error.response.data.detail
-    }
-
-    showErrorNotification(errorMessage)
+    showErrorNotification(error.response?.data?.detail ?? 'Failed to load sites')
     siteOptions.value = []
   } finally {
     filtersLoading.value = false
@@ -1601,116 +1287,68 @@ async function fetchSites() {
 }
 
 async function fetchCostCenters() {
-  if (!companyId.value) return
-
   try {
-    const response = await api.get('https://staging.wageyapp.com/payroll/cost-centers/', {
-      params: { company: companyId.value },
-    })
-
-    const data = response.data.data || response.data || []
-
-    costCenterOptions.value = Array.isArray(data)
-      ? data.map((cc) => ({
-          label: cc.name || `Cost Center ${cc.id}`,
-          value: cc.id,
-          costCenter: cc,
-        }))
-      : []
-
-    console.log('✅ Cost center options ready:', costCenterOptions.value)
-  } catch (error) {
-    console.error('❌ Error fetching cost centers:', error)
+    await fetchCostCentersApi()
+    costCenterOptions.value = rawCostCenters.value.map((cc) => ({
+      label: cc.name || `Cost Center ${cc.id}`,
+      value: cc.id,
+      costCenter: cc,
+    }))
+  } catch {
     costCenterOptions.value = []
   }
 }
 
 async function fetchEmployeeDetails() {
-  if (!companyId.value) {
-    console.error('❌ Company ID is missing:', companyId.value)
-    showErrorNotification('Company ID not found. Please log in again.')
-    return
-  }
-
-  console.log('🔍 Fetching employees for company:', companyId.value)
   filtersLoading.value = true
-
   try {
-    const response = await api.get(
-      `https://staging.wageyapp.com/user/companies/${companyId.value}/employees/`,
-    )
-    console.log('✅ Employees API Response:', response.data)
-
-    let data = []
-    if (Array.isArray(response.data)) {
-      data = response.data
-    } else if (response.data.data) {
-      data = Array.isArray(response.data.data) ? response.data.data : []
-    } else if (response.data.results) {
-      data = Array.isArray(response.data.results) ? response.data.results : []
-    } else if (response.data.employees) {
-      data = Array.isArray(response.data.employees) ? response.data.employees : []
-    }
-
-    console.log('📊 Processed employees data:', data)
-    employees.value = data
-
+    await fetchEmployees()
     employeeOptions.value = employees.value
-      .map((emp) => {
-        const name = getEmployeeName(emp)
-        return {
-          label: name || 'Unknown Employee',
-          value: emp.uuid || emp.id,
-          employee: emp,
-        }
-      })
+      .map((emp) => ({
+        label: getEmployeeName(emp) || 'Unknown Employee',
+        value: emp.uuid || emp.id,
+        employee: emp,
+      }))
       .filter((opt) => opt.label !== 'Unknown Employee')
 
-    console.log('✅ Employee options ready:', employeeOptions.value)
-
     if (employeeOptions.value.length === 0) {
-      console.warn('⚠️ No employees found for this company')
       showErrorNotification('No employees found. Please add employees first.')
     }
   } catch (error) {
-    console.error('❌ Error fetching employees:', error)
-    console.error('Error details:', error.response?.data)
-    showErrorNotification(
-      error.response?.data?.message || error.response?.data?.detail || 'Failed to load employees',
-    )
-    employees.value = []
+    showErrorNotification(error.response?.data?.detail ?? 'Failed to load employees')
     employeeOptions.value = []
   } finally {
     filtersLoading.value = false
   }
 }
-// ================= NEW SINGLE SUBMIT FUNCTION FOR BOTH TIME IN AND TIME OUT =================
-async function submitAttendance() {
-  if (!companyId.value) {
-    showErrorNotification('Company ID not found. Please log in again.')
-    return
-  }
 
+async function filterByEmployeeId(employeeId) {
+  filters.value.employee = employeeId
+  pagination.value.page = 1
+  await fetchAttendanceData()
+}
+
+async function filterByEmployee(employeeId) {
+  filters.value.employee = employeeId
+  pagination.value.page = 1
+  await fetchAttendanceData()
+}
+
+// ─── Submit attendance (add) ──────────────────────────────────────────────────
+async function submitAttendance() {
   if (!newRecord.value.employee) {
     showErrorNotification('Please select an employee')
     return
   }
-
   if (!newRecord.value.time_in || !newRecord.value.time_out) {
     showErrorNotification('Please enter both time in and time out')
     return
   }
 
-  // Build timestamps — auto-detect overnight/graveyard shift
   const timeIn = new Date(`${newRecord.value.date}T${newRecord.value.time_in}:00`)
   let timeOut = new Date(`${newRecord.value.date}T${newRecord.value.time_out}:00`)
+  if (timeOut <= timeIn) timeOut.setDate(timeOut.getDate() + 1)
 
-  // If time out is earlier than time in, the shift crosses midnight — add 1 day
-  if (timeOut <= timeIn) {
-    timeOut.setDate(timeOut.getDate() + 1)
-  }
-
-  // Check for schedule if needed
   if (newRecord.value.date && !employeeSchedule.value && !loadingSchedule.value) {
     try {
       await $q.dialog({
@@ -1728,106 +1366,64 @@ async function submitAttendance() {
   creating.value = true
 
   try {
-    const selectedEmployee = employees.value.find(
+    const selectedEmp = employees.value.find(
       (emp) => emp.id === newRecord.value.employee || emp.uuid === newRecord.value.employee,
     )
 
-    if (!selectedEmployee) {
+    if (!selectedEmp) {
       showErrorNotification('Employee not found.')
-      creating.value = false
       return
     }
 
-    const employeeUUID = selectedEmployee.uuid || selectedEmployee.id
+    const employeeUUID = selectedEmp.uuid || selectedEmp.id
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
     if (!employeeUUID || !uuidRegex.test(employeeUUID)) {
       showErrorNotification('Invalid employee ID format.')
-      creating.value = false
       return
     }
 
-    // ✅ Use the adjusted timeOut for timestamp
-    const timeInTimestamp = timeIn.toISOString()
-    const timeOutTimestamp = timeOut.toISOString()
-
-    console.log('📤 Sending Time In data:', {
+    // Time In
+    await logAttendance({
       source: 'manual',
+      time_in_source: 'manual',
       employee_id: employeeUUID,
-      timestamp: timeInTimestamp,
+      timestamp: timeIn.toISOString(),
+      ...(newRecord.value.site_id && { site_id: newRecord.value.site_id }),
+      ...(newRecord.value.cost_center_id != null && {
+        cost_center: newRecord.value.cost_center_id,
+      }),
     })
 
-    // First API call - Time In
-    const timeInResponse = await api.post(
-      `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
-      {
-        source: 'manual',
-        time_in_source: 'manual',
-        employee_id: employeeUUID,
-        timestamp: timeInTimestamp,
-        ...(newRecord.value.site_id && { site_id: newRecord.value.site_id }),
-        ...(newRecord.value.cost_center_id != null && {
-          cost_center: newRecord.value.cost_center_id,
-        }),
-      },
-    )
-
-    console.log('✅ Time In recorded:', timeInResponse.data)
-
-    // Small delay to ensure proper sequencing
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    console.log('📤 Sending Time Out data:', {
+    // Time Out
+    await logAttendance({
       source: 'manual',
+      time_out_source: 'manual',
       employee_id: employeeUUID,
-      timestamp: timeOutTimestamp,
+      timestamp: timeOut.toISOString(),
+      ...(newRecord.value.site_id && { site_id: newRecord.value.site_id }),
+      ...(newRecord.value.cost_center_id != null && {
+        cost_center: newRecord.value.cost_center_id,
+      }),
     })
 
-    // Second API call - Time Out
-    const timeOutResponse = await api.post(
-      `https://staging.wageyapp.com/attendance/log/${companyId.value}/`,
-      {
-        source: 'manual',
-        time_out_source: 'manual',
-        employee_id: employeeUUID,
-        timestamp: timeOutTimestamp,
-        ...(newRecord.value.site_id && { site_id: newRecord.value.site_id }),
-        ...(newRecord.value.cost_center_id != null && {
-          cost_center: newRecord.value.cost_center_id,
-        }),
-      },
-    )
-
-    console.log('✅ Time Out recorded:', timeOutResponse.data)
-
     showSuccessNotification(`Attendance completed! Total hours: ${calculateWorkingHours()}`)
-
     closeAddDialog()
     await fetchAttendanceData()
   } catch (error) {
-    console.error('❌ Error recording attendance:', error)
-    let errorMessage = 'Failed to record attendance'
-
-    if (error.response?.data) {
-      const data = error.response.data
-      if (typeof data === 'string') {
-        errorMessage = data
-      } else if (data.reason) {
-        errorMessage = data.reason
-      } else if (data.detail) {
-        errorMessage = data.detail
-      } else if (data.message) {
-        errorMessage = data.message
-      }
-    }
-
-    showErrorNotification(errorMessage)
+    const data = error.response?.data
+    const msg =
+      typeof data === 'string'
+        ? data
+        : (data?.reason ?? data?.detail ?? data?.message ?? 'Failed to record attendance')
+    showErrorNotification(msg)
   } finally {
     creating.value = false
   }
 }
 
-// ================= INLINE TIME EDIT =================
+// ─── Inline time edit ─────────────────────────────────────────────────────────
 function openInlineEdit(row, field) {
   const currentValue = field === 'time_in' ? row.time_in : row.time_out
   inlineEdit.value = {
@@ -1855,26 +1451,17 @@ function closeInlineEdit() {
 
 async function saveInlineEdit() {
   if (!inlineEdit.value.value || !inlineEdit.value.record) return
-  if (!companyId.value) {
-    showErrorNotification('Company ID not found.')
-    return
-  }
 
   inlineEdit.value.saving = true
-
   try {
     const record = inlineEdit.value.record
     const field = inlineEdit.value.field
     const date = record.date
-
-    // Build the updated timestamp
     let newTimestamp = new Date(`${date}T${inlineEdit.value.value}:00`).toISOString()
 
-    // Get existing timestamps to keep the other field intact
     const existingTimeIn = field === 'time_in' ? newTimestamp : record.time_in
     const existingTimeOut = field === 'time_out' ? newTimestamp : record.time_out
 
-    // Handle overnight: if time_out < time_in, push time_out to next day
     let timeOutTimestamp = existingTimeOut
     if (existingTimeIn && existingTimeOut) {
       const tIn = new Date(existingTimeIn)
@@ -1885,36 +1472,27 @@ async function saveInlineEdit() {
       }
     }
 
-    const payload = {
+    await updateAttendanceApi(record.id, {
       time_in: existingTimeIn,
       time_out: timeOutTimestamp,
       source: record.source || 'admin',
-    }
-
-    console.log(`📤 Inline updating ${field}:`, payload)
-
-    await api.put(
-      `https://staging.wageyapp.com/attendance/log-update/${companyId.value}/${record.id}/`,
-      payload,
-    )
+    })
 
     showSuccessNotification(`${field === 'time_in' ? 'Time In' : 'Time Out'} updated successfully`)
     closeInlineEdit()
     await fetchAttendanceData()
   } catch (error) {
-    console.error('❌ Inline edit error:', error)
     const data = error.response?.data
     const msg =
-      typeof data === 'string' ? data : data?.detail || data?.message || 'Failed to update'
+      typeof data === 'string' ? data : (data?.detail ?? data?.message ?? 'Failed to update')
     showErrorNotification(msg)
   } finally {
     inlineEdit.value.saving = false
   }
 }
 
-// ================= INLINE COST CENTER EDIT =================
+// ─── Inline cost center edit ──────────────────────────────────────────────────
 function openCostCenterInlineEdit(row) {
-  // cost_center may be an object {id, name} or a plain string/id
   const rawCc = row.cost_center
   let resolvedId = null
   if (rawCc) {
@@ -1948,59 +1526,41 @@ function closeCostCenterInlineEdit() {
 
 async function saveCostCenterInlineEdit() {
   if (!costCenterInlineEdit.value.record) return
-  if (!companyId.value) {
-    showErrorNotification('Company ID not found.')
-    return
-  }
 
   costCenterInlineEdit.value.saving = true
-
   try {
     const record = costCenterInlineEdit.value.record
-
-    const payload = {
+    await updateAttendanceApi(record.id, {
       time_in: record.time_in || null,
       time_out: record.time_out || null,
       time_in_source: record.time_in_source || record.source || 'admin',
       time_out_source: record.time_out_source || record.source || 'admin',
       source: record.source || 'admin',
       cost_center: costCenterInlineEdit.value.value ?? null,
-    }
-
-    console.log('📤 Inline updating cost center:', payload)
-
-    await api.put(
-      `https://staging.wageyapp.com/attendance/log-update/${companyId.value}/${record.id}/`,
-      payload,
-    )
+    })
 
     showSuccessNotification('Cost center updated successfully')
     closeCostCenterInlineEdit()
     await fetchAttendanceData()
   } catch (error) {
-    console.error('❌ Cost center inline edit error:', error)
     const data = error.response?.data
     const msg =
       typeof data === 'string'
         ? data
-        : data?.detail || data?.message || 'Failed to update cost center'
+        : (data?.detail ?? data?.message ?? 'Failed to update cost center')
     showErrorNotification(msg)
   } finally {
     costCenterInlineEdit.value.saving = false
   }
 }
 
+// ─── Update attendance (edit dialog) ─────────────────────────────────────────
 async function updateAttendance() {
   if (!editingRecord.value) return
-  if (!companyId.value) {
-    showErrorNotification('Company ID not found. Please log in again.')
-    return
-  }
 
   updating.value = true
-
   try {
-    const selectedEmployee = employees.value.find(
+    const selectedEmp = employees.value.find(
       (emp) =>
         emp.id === editingRecord.value.employee ||
         emp.uuid === editingRecord.value.employee ||
@@ -2009,25 +1569,22 @@ async function updateAttendance() {
             emp.uuid === editingRecord.value.employee.uuid)),
     )
 
-    if (!selectedEmployee) {
+    if (!selectedEmp) {
       showErrorNotification('Employee not found.')
-      updating.value = false
       return
     }
 
-    // Construct timestamps using the ORIGINAL date (date field is readonly)
-    // Only time_in and time_out are being updated
     let timeInTimestamp = null
     let timeOutTimestamp = null
 
     if (editingRecord.value.time_in) {
-      const timeInDate = new Date(`${editingRecord.value.date}T${editingRecord.value.time_in}:00`)
-      timeInTimestamp = timeInDate.toISOString()
+      timeInTimestamp = new Date(
+        `${editingRecord.value.date}T${editingRecord.value.time_in}:00`,
+      ).toISOString()
     }
 
     if (editingRecord.value.time_out) {
       let timeOutDate = new Date(`${editingRecord.value.date}T${editingRecord.value.time_out}:00`)
-      // Auto-detect overnight: if time out < time in, shift crosses midnight
       if (
         editingRecord.value.time_in &&
         timeOutDate <= new Date(`${editingRecord.value.date}T${editingRecord.value.time_in}:00`)
@@ -2037,8 +1594,7 @@ async function updateAttendance() {
       timeOutTimestamp = timeOutDate.toISOString()
     }
 
-    // Only send time_in, time_out, source, cost_center - date is NOT included in update
-    const attendanceData = {
+    await updateAttendanceApi(editingRecord.value.id, {
       time_in: timeInTimestamp,
       time_out: timeOutTimestamp,
       time_in_source: editingRecord.value.time_in_source || editingRecord.value.source || 'admin',
@@ -2047,77 +1603,40 @@ async function updateAttendance() {
       ...(editingRecord.value.cost_center_id != null && {
         cost_center: editingRecord.value.cost_center_id,
       }),
-    }
-
-    console.log('📤 Sending Update data:', attendanceData)
-    console.log(
-      '🔗 Update URL:',
-      `https://staging.wageyapp.com/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
-    )
-
-    // Try the exact endpoint from your API docs
-    const response = await api.put(
-      `https://staging.wageyapp.com/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
-      attendanceData,
-    )
-
-    console.log('✅ Attendance updated:', response.data)
+    })
 
     showSuccessNotification('Attendance updated successfully')
     showEditDialog.value = false
     await fetchAttendanceData()
   } catch (error) {
-    console.error('❌ Error updating attendance:', error)
-    console.error(
-      '📍 Failed endpoint:',
-      `/attendance/log-update/${companyId.value}/${editingRecord.value.id}/`,
-    )
-    console.error('📊 Error response:', error.response)
-
-    let errorMessage = 'Failed to update attendance'
-
-    // Check if it's a 404 error
-    if (error.response?.status === 404) {
-      errorMessage = 'Update endpoint not found. Please check the API documentation.'
-      console.error('💡 Suggestion: Verify the correct endpoint path with your backend team')
-    } else if (error.response?.data) {
-      const data = error.response.data
-      if (typeof data === 'string') {
-        errorMessage = data
-      } else if (data.detail) {
-        errorMessage = data.detail
-      } else if (data.message) {
-        errorMessage = data.message
-      }
-    }
-
-    showErrorNotification(errorMessage)
+    const data = error.response?.data
+    let msg = 'Failed to update attendance'
+    if (error.response?.status === 404)
+      msg = 'Update endpoint not found. Please check the API documentation.'
+    else if (typeof data === 'string') msg = data
+    else if (data?.detail) msg = data.detail
+    else if (data?.message) msg = data.message
+    showErrorNotification(msg)
   } finally {
     updating.value = false
   }
 }
 
+// ─── Batch delete ─────────────────────────────────────────────────────────────
 async function batchDelete(records) {
   try {
     const ids = records.map((r) => r.id)
-    await api.post(`https://staging.wageyapp.com/attendance/batch-delete/`, { ids })
-
+    await batchDeleteAttendance(ids)
     showSuccessNotification(`${records.length} records deleted successfully`)
     selected.value = []
     await fetchAttendanceData()
-  } catch (error) {
-    console.error('Error batch deleting:', error)
+  } catch {
     showErrorNotification('Failed to delete records')
   }
 }
-async function filterByEmployee(employeeId) {
-  filters.value.employee = employeeId
-  pagination.value.page = 1
-  await fetchAttendanceData()
-}
-// ================= DIALOG HANDLERS =================
+
+// ─── Dialog handlers ──────────────────────────────────────────────────────────
 function openAddDialog() {
-  // Date is always auto-filled from the active calendar filter (currentDate)
   newRecord.value = {
     employee: '',
     site_id: '',
@@ -2127,15 +1646,12 @@ function openAddDialog() {
     time_out: '',
     source: 'admin',
   }
-
   employeeSchedule.value = null
   scheduleError.value = null
   loadingSchedule.value = false
-
   showAddDialog.value = true
 }
 
-// Keep newRecord.date in sync if the calendar filter changes while dialog is open
 watch(currentDate, (newDate) => {
   if (showAddDialog.value && newDate) {
     newRecord.value.date = newDate
@@ -2147,7 +1663,6 @@ watch(currentDate, (newDate) => {
 
 function closeAddDialog() {
   showAddDialog.value = false
-
   newRecord.value = {
     employee: '',
     site_id: '',
@@ -2157,13 +1672,12 @@ function closeAddDialog() {
     time_out: '',
     source: 'admin',
   }
-
   employeeSchedule.value = null
   scheduleError.value = null
   loadingSchedule.value = false
 }
+
 function editAttendance(record) {
-  // Match cost_center — may be object {id, name} or a plain string/name
   let resolvedCostCenterId = null
   const rawCc = record.cost_center
   if (rawCc) {
@@ -2181,15 +1695,10 @@ function editAttendance(record) {
     cost_center_id: resolvedCostCenterId,
   }
 
-  if (editingRecord.value.time_in) {
+  if (editingRecord.value.time_in)
     editingRecord.value.time_in = formatTimeForInput(editingRecord.value.time_in)
-  }
-
-  if (editingRecord.value.time_out) {
+  if (editingRecord.value.time_out)
     editingRecord.value.time_out = formatTimeForInput(editingRecord.value.time_out)
-  }
-
-  console.log('✏️ Editing record:', editingRecord.value)
 
   showEditDialog.value = true
 }
@@ -2220,13 +1729,9 @@ function viewDetails(record) {
   })
 }
 
-// ================= FILTERS =================
+// ─── Filters ──────────────────────────────────────────────────────────────────
 function clearAllFilters() {
-  filters.value = {
-    date_from: today,
-    date_to: today,
-    cost_center: '',
-  }
+  filters.value = { date_from: today, date_to: today, cost_center: '' }
   dateRange.value = today
   currentDate.value = today
   pagination.value.page = 1
@@ -2259,11 +1764,7 @@ function filterEmployees(val, update) {
             const empSiteId = emp.site_id || emp.siteId || emp.site
             return empSiteId && Number(empSiteId) === Number(newRecord.value.site_id)
           })
-          .map((emp) => ({
-            label: getEmployeeName(emp),
-            value: emp.id || emp.uuid,
-            employee: emp,
-          }))
+          .map((emp) => ({ label: getEmployeeName(emp), value: emp.id || emp.uuid, employee: emp }))
       } else {
         employeeOptions.value = employees.value.map((emp) => ({
           label: getEmployeeName(emp),
@@ -2277,7 +1778,7 @@ function filterEmployees(val, update) {
 
   update(() => {
     const needle = val.toLowerCase()
-    const baseEmployees =
+    const base =
       !isAdmin.value && newRecord.value.site_id
         ? employees.value.filter((emp) => {
             const empSiteId = emp.site_id || emp.siteId || emp.site
@@ -2285,23 +1786,15 @@ function filterEmployees(val, update) {
           })
         : employees.value
 
-    employeeOptions.value = baseEmployees
-      .map((emp) => ({
-        label: getEmployeeName(emp),
-        value: emp.id || emp.uuid,
-        employee: emp,
-      }))
+    employeeOptions.value = base
+      .map((emp) => ({ label: getEmployeeName(emp), value: emp.id || emp.uuid, employee: emp }))
       .filter((emp) => emp.label.toLowerCase().indexOf(needle) > -1)
   })
 }
 
-// ================= TABLE FUNCTIONS =================
+// ─── Table functions ──────────────────────────────────────────────────────────
 function toggleSelectAll(val) {
-  if (val) {
-    selected.value = [...attendanceData.value]
-  } else {
-    selected.value = []
-  }
+  selected.value = val ? [...attendanceData.value] : []
 }
 
 function previousPage() {
@@ -2318,17 +1811,12 @@ function nextPage() {
   }
 }
 
-// ================= EXPORT FUNCTIONS =================
+// ─── Export ───────────────────────────────────────────────────────────────────
 async function exportSelected() {
   if (selected.value.length === 0) return
-
   try {
-    const response = await api.post('/attendance/export/', {
-      ids: selected.value.map((r) => r.id),
-      format: 'csv',
-    })
-
-    downloadFile(response.data, 'selected_attendance.csv')
+    const response = await exportSelectedAttendance(selected.value.map((r) => r.id))
+    downloadFile(response, 'selected_attendance.csv')
     showSuccessNotification('Export completed')
   } catch {
     showErrorNotification('Export failed')
@@ -2337,11 +1825,8 @@ async function exportSelected() {
 
 async function exportAll() {
   try {
-    const response = await api.get('/attendance/export/', {
-      params: { ...filters.value, format: 'csv' },
-    })
-
-    downloadFile(response.data, 'all_attendance.csv')
+    const response = await exportAllAttendance(filters.value)
+    downloadFile(response, 'all_attendance.csv')
     showSuccessNotification('Export completed')
   } catch {
     showErrorNotification('Export failed')
@@ -2358,27 +1843,19 @@ function downloadFile(data, filename) {
   window.URL.revokeObjectURL(url)
 }
 
-// ================= HELPERS =================
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function getSiteName(site) {
   if (!site) return ''
-  let name = ''
-  if (typeof site === 'object') {
-    name = site.name || site.site_name || site.title || ''
-  } else {
-    name = String(site)
-  }
-  // Strip anything in parentheses and clean up extra whitespace
+  let name =
+    typeof site === 'object' ? site.name || site.site_name || site.title || '' : String(site)
   name = name.replace(/\s*\(.*?\)\s*/g, '').trim()
-  // Return only the first part before a dash
   const dashIndex = name.indexOf('-')
   return dashIndex !== -1 ? name.substring(0, dashIndex).trim() : name
 }
 
 function getCostCenterName(costCenter) {
   if (!costCenter) return ''
-  if (typeof costCenter === 'object') {
-    return costCenter.name || costCenter.cost_center_name || ''
-  }
+  if (typeof costCenter === 'object') return costCenter.name || costCenter.cost_center_name || ''
   return String(costCenter)
 }
 
@@ -2386,29 +1863,20 @@ function getEmployeeName(employee) {
   if (!employee) return 'Unknown Employee'
 
   if (typeof employee === 'number' || typeof employee === 'string') {
-    const foundEmployee = employees.value.find(
+    const found = employees.value.find(
       (emp) => emp.id === employee || emp.id === parseInt(employee),
     )
-    if (foundEmployee) {
-      const firstName = foundEmployee.first_name || foundEmployee.firstName || ''
-      const lastName = foundEmployee.last_name || foundEmployee.lastName || ''
-      const fullName = `${firstName} ${lastName}`.trim()
-      return (
-        fullName ||
-        foundEmployee.name ||
-        foundEmployee.username ||
-        foundEmployee.email ||
-        'Unknown Employee'
-      )
+    if (found) {
+      const fullName =
+        `${found.first_name || found.firstName || ''} ${found.last_name || found.lastName || ''}`.trim()
+      return fullName || found.name || found.username || found.email || 'Unknown Employee'
     }
     return `Employee #${employee}`
   }
 
   if (typeof employee === 'object') {
-    const firstName = employee.first_name || employee.firstName || employee.firstname || ''
-    const lastName = employee.last_name || employee.lastName || employee.lastname || ''
-    const fullName = `${firstName} ${lastName}`.trim()
-
+    const fullName =
+      `${employee.first_name || employee.firstName || employee.firstname || ''} ${employee.last_name || employee.lastName || employee.lastname || ''}`.trim()
     return (
       fullName ||
       employee.name ||
@@ -2421,6 +1889,38 @@ function getEmployeeName(employee) {
   }
 
   return 'Unknown Employee'
+}
+
+function getEmployeePhoto(employee) {
+  if (!employee) return null
+  if (typeof employee === 'object') {
+    return (
+      employee.photo ||
+      employee.image ||
+      employee.profile_picture ||
+      employee.profile_photo ||
+      employee.avatar ||
+      employee.picture ||
+      null
+    )
+  }
+  const found = employees.value.find((emp) => emp.id === employee || emp.uuid === employee)
+  return found
+    ? found.photo ||
+        found.image ||
+        found.profile_picture ||
+        found.profile_photo ||
+        found.avatar ||
+        found.picture ||
+        null
+    : null
+}
+
+function viewEmployeePhoto(employee) {
+  if (!employee) return
+  selectedEmployeeName.value = getEmployeeName(employee)
+  selectedEmployeePhoto.value = getEmployeePhoto(employee)
+  showEmployeePhotoDialog.value = true
 }
 
 function getSourceClass(source) {
@@ -2452,6 +1952,16 @@ function getEmploymentStatusClass(status) {
   }
 }
 
+function getStatusColor(status) {
+  const statusColors = {
+    active: 'positive',
+    completed: 'info',
+    cancelled: 'negative',
+    pending: 'warning',
+  }
+  return statusColors[status?.toLowerCase()] || 'grey'
+}
+
 function formatSource(source) {
   if (!source) return '-'
   return source.replace('_', ' ').toUpperCase()
@@ -2460,8 +1970,7 @@ function formatSource(source) {
 function formatTime(dateTimeString) {
   if (!dateTimeString) return '-'
   try {
-    const date = new Date(dateTimeString)
-    return date.toLocaleTimeString('en-US', {
+    return new Date(dateTimeString).toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
@@ -2474,18 +1983,49 @@ function formatTime(dateTimeString) {
 function formatTimeForInput(dateTimeString) {
   if (!dateTimeString) return ''
   try {
-    const date = new Date(dateTimeString)
-    return date.toTimeString().slice(0, 5)
+    return new Date(dateTimeString).toTimeString().slice(0, 5)
   } catch {
     return ''
+  }
+}
+
+function formatScheduleTime(timeString) {
+  if (!timeString) return '-'
+  try {
+    if (/^(\d{1,2}):(\d{2})(:\d{2})?$/.test(timeString)) {
+      const [hours, minutes] = timeString.split(':').map(Number)
+      return new Date(1970, 0, 1, hours, minutes).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    }
+    const date = new Date(timeString)
+    if (isNaN(date.getTime())) return timeString
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+  } catch {
+    return timeString
+  }
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '-'
+  try {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  } catch {
+    return dateString
   }
 }
 
 function formatDateTime(dateTimeString) {
   if (!dateTimeString) return '-'
   try {
-    const date = new Date(dateTimeString)
-    return date.toLocaleString('en-US', {
+    return new Date(dateTimeString).toLocaleString('en-US', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -2498,26 +2038,44 @@ function formatDateTime(dateTimeString) {
   }
 }
 
-// ================= NOTIFICATIONS =================
-function showSuccessNotification(message) {
-  $q.notify({
-    type: 'positive',
-    message,
-    position: 'top',
-    timeout: 3000,
+function isOvernightShift() {
+  if (!newRecord.value.time_in || !newRecord.value.time_out) return false
+  const [inH, inM] = newRecord.value.time_in.split(':').map(Number)
+  const [outH, outM] = newRecord.value.time_out.split(':').map(Number)
+  return outH * 60 + outM < inH * 60 + inM
+}
+
+function getTimeOutDate() {
+  if (!newRecord.value.date) return ''
+  const next = new Date(newRecord.value.date)
+  next.setDate(next.getDate() + 1)
+  return next.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   })
+}
+
+function calculateWorkingHours() {
+  if (!newRecord.value.time_in || !newRecord.value.time_out) return '0h 0m'
+  const [inHours, inMinutes] = newRecord.value.time_in.split(':').map(Number)
+  const [outHours, outMinutes] = newRecord.value.time_out.split(':').map(Number)
+  let diff = outHours * 60 + outMinutes - (inHours * 60 + inMinutes)
+  if (diff < 0) diff += 24 * 60
+  return `${Math.floor(diff / 60)}h ${diff % 60}m`
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+function showSuccessNotification(message) {
+  $q.notify({ type: 'positive', message, position: 'top', timeout: 3000 })
 }
 
 function showErrorNotification(message) {
-  $q.notify({
-    type: 'negative',
-    message,
-    position: 'top',
-    timeout: 5000,
-  })
+  $q.notify({ type: 'negative', message, position: 'top', timeout: 5000 })
 }
 
-// ================= WATCHERS =================
+// ─── Watchers ─────────────────────────────────────────────────────────────────
 watch(
   filters,
   () => {
@@ -2530,40 +2088,21 @@ watch(
 watch(
   () => newRecord.value.date,
   (newDate) => {
-    console.log('📅 Date changed:', newDate)
     employeeSchedule.value = null
     scheduleError.value = null
-
     if (newRecord.value.employee && newDate) {
       fetchEmployeeSchedule(newRecord.value.employee, newDate)
     }
   },
 )
 
-// ================= LIFECYCLE =================
+// ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  console.log('🚀 Component mounted, initializing...')
-  console.log('📋 Company ID:', companyId.value)
-  console.log('👤 Is Admin:', isAdmin.value)
-  console.log('👤 User Data:', userData)
-
   try {
-    // Always fetch sites for the company
-    console.log('🏢 Fetching sites for company:', companyId.value)
-    await fetchSites()
-
-    console.log('💰 Fetching cost centers...')
-    await fetchCostCenters()
-
-    console.log('👥 Fetching employees...')
-    await fetchEmployeeDetails()
-
-    console.log('📊 Fetching attendance data...')
+    await Promise.all([fetchSites(), fetchCostCenters(), fetchEmployeeDetails()])
     await fetchAttendanceData()
-
-    console.log('✅ All data loaded successfully')
   } catch (error) {
-    console.error('❌ Error during initialization:', error)
+    showErrorNotification('Error during initialization')
   }
 })
 </script>
