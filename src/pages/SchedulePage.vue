@@ -3129,25 +3129,6 @@ const quickAssignDayOff = async () => {
     $q.notify({ type: 'negative', message: 'Employee and day are required.' })
     return
   }
-  const dayOffShiftType = shiftTypes.value.find((st) => {
-    const name = (st.name || '').toLowerCase()
-    return (
-      name.includes('day off') ||
-      name.includes('dayoff') ||
-      name.includes('rest day') ||
-      name.includes('off day') ||
-      name === 'off'
-    )
-  })
-  if (!dayOffShiftType) {
-    $q.notify({
-      type: 'warning',
-      message: 'No "Day Off" shift type found.',
-      caption: 'Please create a shift type named "Day Off" in your settings.',
-      timeout: 5000,
-    })
-    return
-  }
   if (siteOptions.value.length === 0) {
     $q.notify({ type: 'negative', message: 'No sites available to assign day off.' })
     return
@@ -3172,20 +3153,56 @@ const quickAssignDayOff = async () => {
     const month = String(targetDate.getMonth() + 1).padStart(2, '0')
     const dayOfMonth = String(targetDate.getDate()).padStart(2, '0')
     const dateStr = `${year}-${month}-${dayOfMonth}`
-    const payload = {
-      company_id: companyId,
-      employee_ids: [userId],
-      schedules: [
-        {
-          date: dateStr,
-          site_id: parseInt(siteOptions.value[0].value),
-          shift_type_id: parseInt(dayOffShiftType.id),
-        },
-      ],
+    const siteId = parseInt(siteOptions.value[0].value)
+    const placeholderShiftTypeId = parseInt(shiftTypes.value[0]?.id)
+    if (!placeholderShiftTypeId) {
+      $q.notify({ type: 'negative', message: 'No shift types available to create assignment.' })
+      return
     }
-    await axios.post('https://staging.wageyapp.com/organization/assignments/assign/', payload, {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    // Step 1: Create a regular assignment to get an assignment_id (shift_type_id is a required placeholder)
+    const assignRes = await axios.post(
+      'https://staging.wageyapp.com/organization/assignments/assign/',
+      {
+        company_id: companyId,
+        employee_ids: [userId],
+        schedules: [{ date: dateStr, site_id: siteId, shift_type_id: placeholderShiftTypeId }],
+      },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+    )
+    // Step 2: Look up the newly created assignment_id for this employee + date
+    const schedulesRes = await axios.get(
+      `https://staging.wageyapp.com/organization/schedules/company/monthly/?company=${companyId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    console.log(
+      '📦 monthly response sample:',
+      JSON.stringify((schedulesRes.data || []).slice(0, 1), null, 2),
+    )
+    const allEmployees = schedulesRes.data || []
+    const employeeData = allEmployees.find(
+      (e) =>
+        e.employee?.id === userId || e.id === userId || String(e.employee?.id) === String(userId),
+    )
+    console.log(
+      '👤 employeeData found:',
+      JSON.stringify(employeeData?.schedules?.slice(0, 2), null, 2),
+    )
+    const newSchedule = (employeeData?.schedules || []).find((s) => {
+      const d = s.date || s.schedule_date || ''
+      return d.startsWith(dateStr) || d === dateStr
     })
+    console.log('📅 newSchedule found:', JSON.stringify(newSchedule, null, 2))
+    const assignmentId =
+      newSchedule?.employee_assignment_id || newSchedule?.assignment_id || newSchedule?.id
+    if (!assignmentId)
+      throw new Error('Could not find assignment_id for ' + dateStr + ' after assign/')
+    console.log('✅ Found assignment_id for day off:', assignmentId)
+    // Step 3: Mark the assignment as day off
+    await axios.patch(
+      'https://staging.wageyapp.com/organization/assignments/assign-off/',
+      { assignment_id: parseInt(assignmentId), site_id: siteId },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+    )
     $q.notify({
       type: 'positive',
       message: 'Day off assigned!',
@@ -3210,25 +3227,6 @@ const quickAssignDayOff = async () => {
   }
 }
 const assignDayOff = async (element) => {
-  const dayOffShiftType = shiftTypes.value.find((st) => {
-    const name = st.name?.toLowerCase() || ''
-    return (
-      name.includes('day off') ||
-      name.includes('dayoff') ||
-      name.includes('rest day') ||
-      name.includes('off day') ||
-      name === 'off'
-    )
-  })
-  if (!dayOffShiftType) {
-    $q.notify({
-      type: 'warning',
-      message: 'No "Day Off" shift type found.',
-      caption: 'Please create a shift type named "Day Off" in your settings.',
-      timeout: 5000,
-    })
-    return
-  }
   if (!element.assignmentId) {
     $q.notify({
       type: 'negative',
@@ -3240,21 +3238,23 @@ const assignDayOff = async (element) => {
   assigningDayOffId.value = element.id
   const token = localStorage.getItem('access_token')
   try {
-    // Use the shift's original site_id — the API requires it to match the assignment's site
     const payload = {
       assignment_id: parseInt(element.assignmentId),
-      shift_type_id: parseInt(dayOffShiftType.id),
       site_id: parseInt(element.site),
     }
     if (element.department) {
       payload.department_id = parseInt(element.department)
     }
-    await axios.patch('https://staging.wageyapp.com/organization/assignments/reassign/', payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    await axios.patch(
+      'https://staging.wageyapp.com/organization/assignments/assign-off/',
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       },
-    })
+    )
     const employeeName = getEmployeeName(element.userId)
     $q.notify({
       type: 'positive',
@@ -3268,9 +3268,7 @@ const assignDayOff = async (element) => {
     if (idx !== -1) {
       shifts.value[idx] = {
         ...shifts.value[idx],
-        shiftTypeId: dayOffShiftType.id,
-        shiftTypeName: dayOffShiftType.name,
-        position: dayOffShiftType.name, // isDayOff() checks this field
+        position: 'Day Off', // isDayOff() checks this field
         startTime: null,
         endTime: null,
       }
@@ -3300,25 +3298,6 @@ const assignDayOff = async (element) => {
 }
 // Assign day off to BOTH shifts in a merged/dual shift
 const assignDualDayOff = async (mergedElement) => {
-  const dayOffShiftType = shiftTypes.value.find((st) => {
-    const name = st.name?.toLowerCase() || ''
-    return (
-      name.includes('day off') ||
-      name.includes('dayoff') ||
-      name.includes('rest day') ||
-      name.includes('off day') ||
-      name === 'off'
-    )
-  })
-  if (!dayOffShiftType) {
-    $q.notify({
-      type: 'warning',
-      message: 'No "Day Off" shift type found.',
-      caption: 'Please create a shift type named "Day Off" in your settings.',
-      timeout: 5000,
-    })
-    return
-  }
   const missing = mergedElement.shifts.find((s) => !s.assignmentId)
   if (missing) {
     $q.notify({
@@ -3331,44 +3310,20 @@ const assignDualDayOff = async (mergedElement) => {
   assigningDayOffId.value = mergedElement.id
   const token = localStorage.getItem('access_token')
   try {
-    // Get company ID from localStorage
-    let rawCompanyId = localStorage.getItem('selectedCompany')
-    let companyId
-    try {
-      const parsed = JSON.parse(rawCompanyId)
-      companyId = parsed?.id || parsed
-    } catch {
-      companyId = rawCompanyId
-    }
-    companyId = parseInt(companyId)
-
-    // Step 1: Cancel all existing shifts — cancel/ only needs assignmentId in the URL,
-    // no site_id required, so it works regardless of which company the assignment belongs to.
+    // Call assign-off/ directly on each existing assignment
     await Promise.all(
-      mergedElement.shifts.map((s) =>
-        axios.patch(
-          `https://staging.wageyapp.com/organization/assignments/${s.assignmentId}/cancel/`,
-          { status: 'cancelled' },
-          { headers: { Authorization: `Bearer ${token}` } },
-        ),
-      ),
-    )
-
-    // Step 2: Re-assign each as day off via assign/ — creates fresh assignments under the
-    // correct company, avoiding the DoesNotExist error that reassign/ throws for cross-company assignments.
-    await axios.post(
-      'https://staging.wageyapp.com/organization/assignments/assign/',
-      {
-        company_id: companyId,
-        employee_ids: [mergedElement.userId],
-        schedules: mergedElement.shifts.map((s) => ({
-          date: s.date,
+      mergedElement.shifts.map((s) => {
+        const payload = {
+          assignment_id: parseInt(s.assignmentId),
           site_id: parseInt(s.site),
-          shift_type_id: parseInt(dayOffShiftType.id),
-          ...(s.department ? { department_id: parseInt(s.department) } : {}),
-        })),
-      },
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+        }
+        if (s.department) payload.department_id = parseInt(s.department)
+        return axios.patch(
+          'https://staging.wageyapp.com/organization/assignments/assign-off/',
+          payload,
+          { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+        )
+      }),
     )
 
     const employeeName = getEmployeeName(mergedElement.userId)
@@ -3487,7 +3442,7 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
         timeout: 3000,
       })
     } else {
-      // Day off — uses the existing assignments endpoint
+      // Day off — Step 1: create a regular assignment, Step 2: mark it as day off
       let rawCompanyId = localStorage.getItem('selectedCompany')
       let companyId
       try {
@@ -3497,38 +3452,60 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
         companyId = rawCompanyId
       }
       companyId = parseInt(companyId)
-      const keywords = ['day off', 'dayoff', 'rest day', 'off day']
-      const matchedShiftType = shiftTypes.value.find((st) => {
-        const name = (st.name || '').toLowerCase()
-        return keywords.some((kw) => name.includes(kw)) || name === 'off'
-      })
-      if (!matchedShiftType) {
-        $q.notify({
-          type: 'warning',
-          message: 'No "Day Off" shift type found.',
-          caption: 'Please create a matching shift type in your settings.',
-          timeout: 5000,
-        })
-        return
-      }
       if (siteOptions.value.length === 0) {
         $q.notify({ type: 'negative', message: 'No sites available.' })
         return
       }
-      const payload = {
-        company_id: companyId,
-        employee_ids: [userId],
-        schedules: [
-          {
-            date: dateStr,
-            site_id: parseInt(siteOptions.value[0].value),
-            shift_type_id: parseInt(matchedShiftType.id),
-          },
-        ],
+      const siteId = parseInt(siteOptions.value[0].value)
+      const placeholderShiftTypeId = parseInt(shiftTypes.value[0]?.id)
+      if (!placeholderShiftTypeId) {
+        $q.notify({ type: 'negative', message: 'No shift types available to create assignment.' })
+        return
       }
-      await axios.post('https://staging.wageyapp.com/organization/assignments/assign/', payload, {
-        headers,
+      // Step 1: Create a regular assignment to get an assignment_id (shift_type_id is a required placeholder)
+      const assignRes = await axios.post(
+        'https://staging.wageyapp.com/organization/assignments/assign/',
+        {
+          company_id: companyId,
+          employee_ids: [userId],
+          schedules: [{ date: dateStr, site_id: siteId, shift_type_id: placeholderShiftTypeId }],
+        },
+        { headers },
+      )
+      // Step 2: Look up the newly created assignment_id for this employee + date
+      const schedulesRes = await axios.get(
+        `https://staging.wageyapp.com/organization/schedules/company/monthly/?company=${companyId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      console.log(
+        '📦 monthly response sample:',
+        JSON.stringify((schedulesRes.data || []).slice(0, 1), null, 2),
+      )
+      const allEmployees2 = schedulesRes.data || []
+      const employeeData2 = allEmployees2.find(
+        (e) =>
+          e.employee?.id === userId || e.id === userId || String(e.employee?.id) === String(userId),
+      )
+      console.log(
+        '👤 employeeData found:',
+        JSON.stringify(employeeData2?.schedules?.slice(0, 2), null, 2),
+      )
+      const newSchedule2 = (employeeData2?.schedules || []).find((s) => {
+        const d = s.date || s.schedule_date || ''
+        return d.startsWith(dateStr) || d === dateStr
       })
+      console.log('📅 newSchedule found:', JSON.stringify(newSchedule2, null, 2))
+      const assignmentId =
+        newSchedule2?.employee_assignment_id || newSchedule2?.assignment_id || newSchedule2?.id
+      if (!assignmentId)
+        throw new Error('Could not find assignment_id for ' + dateStr + ' after assign/')
+      console.log('✅ Found assignment_id for day off:', assignmentId)
+      // Step 3: Mark the assignment as day off
+      await axios.patch(
+        'https://staging.wageyapp.com/organization/assignments/assign-off/',
+        { assignment_id: parseInt(assignmentId), site_id: siteId },
+        { headers },
+      )
       $q.notify({
         type: 'positive',
         message: 'Day off assigned!',
