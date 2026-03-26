@@ -38,7 +38,7 @@
             <q-icon name="mail" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ invitations.length }}</div>
+            <div class="stats-amount">{{ invites.length }}</div>
             <div class="stats-label">Total Invitations</div>
           </div>
         </div>
@@ -71,14 +71,7 @@
             <h2 class="table-title">Invitation Overview</h2>
           </div>
           <div class="table-actions">
-            <q-btn
-              flat
-              dense
-              round
-              icon="refresh"
-              @click="fetchInvitations"
-              :loading="loadingTable"
-            >
+            <q-btn flat dense round icon="refresh" @click="loadInvitations" :loading="loading">
               <q-tooltip>Refresh</q-tooltip>
             </q-btn>
           </div>
@@ -91,7 +84,7 @@
             :columns="columns"
             row-key="id"
             flat
-            :loading="loadingTable"
+            :loading="loading"
             no-data-label="No invitations found"
             class="loan-table"
             hide-pagination
@@ -232,7 +225,7 @@
                 label="Send Invitation"
                 type="submit"
                 color="primary"
-                :loading="sending"
+                :loading="saving"
                 :disable="!isFormValid"
               />
             </div>
@@ -350,34 +343,33 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
-import axios from 'axios'
+import { useInvites } from '../composables/useInvites'
 
 const $q = useQuasar()
 
-// Modal and UI state
+// ─── Composable ───────────────────────────────────────────────────────────────
+const { invites, loading, saving, fetchInvites, sendInvite, fetchUserRoles } = useInvites()
+
+// ─── UI state ─────────────────────────────────────────────────────────────────
 const showInviteModal = ref(false)
 const showViewModal = ref(false)
 const showSuccessDialog = ref(false)
 const sentToEmail = ref('')
-const loadingTable = ref(false)
 const searchTerm = ref('')
+const selectedInvitation = ref(null)
 
-// Form data
+// ─── Roles state (local to this page) ────────────────────────────────────────
+const userRoleOptions = ref([])
+const loadingRoles = ref(false)
+
+// ─── Form ─────────────────────────────────────────────────────────────────────
 const invitationForm = ref({
   email: '',
   user_role: null,
 })
 
-const sending = ref(false)
-const loadingRoles = ref(false)
-
-// Options
-const userRoleOptions = ref([])
-
-// Table data
-const invitations = ref([])
+// ─── Table ────────────────────────────────────────────────────────────────────
 const filteredInvitations = ref([])
-const selectedInvitation = ref(null)
 
 const columns = ref([
   { name: 'sl_no', label: 'SL No', field: 'id', align: 'left' },
@@ -391,7 +383,7 @@ const columns = ref([
   { name: 'expires_at', label: 'Expires', field: 'expires_at', align: 'left' },
 ])
 
-// Computed properties
+// ─── Computed ─────────────────────────────────────────────────────────────────
 const isFormValid = computed(() => {
   return (
     invitationForm.value.email &&
@@ -400,49 +392,22 @@ const isFormValid = computed(() => {
   )
 })
 
-const unusedInvitationsCount = computed(() => {
-  return invitations.value.filter((inv) => !inv.is_used).length
-})
+const unusedInvitationsCount = computed(() => invites.value.filter((inv) => !inv.is_used).length)
+const usedInvitationsCount = computed(() => invites.value.filter((inv) => inv.is_used).length)
 
-const usedInvitationsCount = computed(() => {
-  return invitations.value.filter((inv) => inv.is_used).length
-})
-
-// Helper functions
-function parseSelectedCompany(raw) {
-  if (!raw && raw !== 0) return null
-  try {
-    const parsed = JSON.parse(raw)
-    if (typeof parsed === 'number' && Number.isFinite(parsed)) return parsed
-    if (typeof parsed === 'string' && parsed.trim() !== '') {
-      const n = Number(parsed)
-      if (!isNaN(n) && n > 0) return n
-    }
-    if (typeof parsed === 'object' && parsed !== null) {
-      return parsed.id || parsed.company_id || parsed.value || null
-    }
-  } catch {
-    const n = Number(raw)
-    if (!isNaN(n) && n > 0) return n
-  }
-  return null
-}
-
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 const getInitials = (email) => {
   if (!email) return '?'
   const parts = email.split('@')[0].split('.')
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase()
-  }
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
   return email.substring(0, 2).toUpperCase()
 }
 
 const getStatusClass = (status) => {
   if (!status) return 'status-default'
-  const statusLower = status.toLowerCase()
-  if (statusLower === 'accepted' || statusLower === 'active') return 'status-active'
-  if (statusLower === 'declined' || statusLower === 'expired' || statusLower === 'cancelled')
-    return 'status-terminated'
+  const s = status.toLowerCase()
+  if (s === 'accepted' || s === 'active') return 'status-active'
+  if (s === 'declined' || s === 'expired' || s === 'cancelled') return 'status-terminated'
   return 'status-default'
 }
 
@@ -454,66 +419,20 @@ const getRoleLabel = (roleValue) => {
 
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
-// Fetch invitations
-const fetchInvitations = async () => {
+// ─── Data loading ─────────────────────────────────────────────────────────────
+const loadInvitations = async () => {
   try {
-    loadingTable.value = true
-    const token = localStorage.getItem('access_token')
-    const selectedCompanyRaw = localStorage.getItem('selectedCompany')
-
-    console.log('📋 selectedCompanyRaw:', selectedCompanyRaw)
-
-    if (!token) {
-      throw new Error('No authentication token found')
-    }
-
-    const companyId = parseSelectedCompany(selectedCompanyRaw)
-    console.log('🏢 companyId parsed:', companyId)
-
-    if (!companyId) {
-      console.warn('⚠️ No valid company selected')
-      $q.notify({
-        type: 'warning',
-        message: 'No company selected. Please select a company first.',
-        position: 'top',
-      })
-      invitations.value = []
-      filteredInvitations.value = []
-      return
-    }
-
-    const response = await axios.get('https://staging.wageyapp.com/user/invite-list/', {
-      params: { company: companyId, company_id: companyId },
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    })
-
-    console.log('📨 invite-list response:', response.data)
-
-    let allInvitations = []
-    if (Array.isArray(response.data)) {
-      allInvitations = response.data
-    } else if (response.data?.results && Array.isArray(response.data.results)) {
-      allInvitations = response.data.results
-    } else if (response.data?.data && Array.isArray(response.data.data)) {
-      allInvitations = response.data.data
-    } else if (response.data?.invitations && Array.isArray(response.data.invitations)) {
-      allInvitations = response.data.invitations
-    } else {
-      console.warn('⚠️ Unexpected response shape:', response.data)
-    }
-
-    console.log('✅ Invitations loaded:', allInvitations.length)
-    invitations.value = allInvitations
-    filteredInvitations.value = allInvitations
+    await fetchInvites()
+    filteredInvitations.value = invites.value
   } catch (error) {
-    console.error('❌ Error fetching invitations:', error)
-    invitations.value = []
     filteredInvitations.value = []
-
     $q.notify({
       type: 'negative',
       message:
@@ -522,69 +441,25 @@ const fetchInvitations = async () => {
         'Failed to load invitations',
       position: 'top',
     })
-  } finally {
-    loadingTable.value = false
   }
 }
 
-// Fetch user roles
-const fetchUserRoles = async () => {
+const loadUserRoles = async () => {
   try {
     loadingRoles.value = true
+    const rolesRaw = await fetchUserRoles()
 
-    const token = localStorage.getItem('access_token')
-    const selectedCompanyRaw = localStorage.getItem('selectedCompany')
-
-    if (!token) {
-      throw new Error('Missing authentication token')
-    }
-
-    const companyId = parseSelectedCompany(selectedCompanyRaw)
-    if (!companyId) {
-      console.warn('⚠️ No valid company selected for roles')
-      userRoleOptions.value = []
-      return
-    }
-
-    const response = await axios.get(
-      `https://staging.wageyapp.com/user/user-roles/?company=${companyId}`,
-      {
-        params: { company: companyId },
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-
-    let rolesArray = []
-    if (Array.isArray(response.data)) {
-      rolesArray = response.data
-    } else if (response.data?.results && Array.isArray(response.data.results)) {
-      rolesArray = response.data.results
-    } else if (response.data?.data && Array.isArray(response.data.data)) {
-      rolesArray = response.data.data
-    } else if (response.data?.roles && Array.isArray(response.data.roles)) {
-      rolesArray = response.data.roles
-    }
-
-    const filtered = rolesArray.filter((r) => {
-      if (r.company || r.company_id) {
-        return Number(r.company || r.company_id) === Number(companyId)
-      }
-      return true
-    })
-
-    userRoleOptions.value = filtered
-      .map((r) => {
-        const label = r.name || r.role_name || r.title || `Role ${r.id}`
-        const value = Number(r.id) || Number(r.role_id) || null
-        return { label, value }
-      })
+    userRoleOptions.value = rolesRaw
+      .map((r) => ({
+        label: r.name || r.role_name || r.title || `Role ${r.id}`,
+        value: Number(r.id) || Number(r.role_id) || null,
+      }))
       .filter((o) => o.value !== null)
 
     if (!invitationForm.value.user_role && userRoleOptions.value.length > 0) {
       invitationForm.value.user_role = userRoleOptions.value[0].value
     }
   } catch (error) {
-    console.error('❌ ERROR FETCHING ROLES:', error)
     userRoleOptions.value = []
     $q.notify({
       type: 'negative',
@@ -598,15 +473,14 @@ const fetchUserRoles = async () => {
   }
 }
 
-// Filter invitations
+// ─── Search / filter ──────────────────────────────────────────────────────────
 const filterInvitations = () => {
   if (!searchTerm.value.trim()) {
-    filteredInvitations.value = invitations.value
+    filteredInvitations.value = invites.value
     return
   }
-
   const term = searchTerm.value.toLowerCase()
-  filteredInvitations.value = invitations.value.filter(
+  filteredInvitations.value = invites.value.filter(
     (inv) =>
       inv.email?.toLowerCase().includes(term) ||
       inv.company?.toLowerCase().includes(term) ||
@@ -616,17 +490,17 @@ const filterInvitations = () => {
   )
 }
 
-// Modal methods
-const closeModal = () => {
-  showInviteModal.value = false
-  resetForm()
-}
-
+// ─── Modal / form helpers ─────────────────────────────────────────────────────
 const resetForm = () => {
   invitationForm.value = {
     email: '',
     user_role: userRoleOptions.value.length > 0 ? userRoleOptions.value[0].value : null,
   }
+}
+
+const closeModal = () => {
+  showInviteModal.value = false
+  resetForm()
 }
 
 const sendAnother = () => {
@@ -635,80 +509,45 @@ const sendAnother = () => {
   showInviteModal.value = true
 }
 
-// Action handlers
 const viewInvitation = (invitation) => {
   selectedInvitation.value = invitation
   showViewModal.value = true
 }
 
-// Send invitation
+// ─── Send invitation ──────────────────────────────────────────────────────────
 const sendInvitation = async () => {
   if (!isFormValid.value) return
 
   try {
-    sending.value = true
-
-    const token = localStorage.getItem('access_token')
-    const selectedCompany = localStorage.getItem('selectedCompany')
-
-    if (!token) {
-      $q.notify({
-        type: 'negative',
-        message: 'Missing authentication. Please log in again.',
-        position: 'top',
-      })
-      return
-    }
-
-    const companyId = parseSelectedCompany(selectedCompany)
-    if (!companyId) {
-      $q.notify({
-        type: 'negative',
-        message: 'No company selected. Please select a company first.',
-        position: 'top',
-      })
-      return
-    }
-
-    const invitationData = {
+    const payload = {
       emails: [invitationForm.value.email.trim()],
       user_role: Number(invitationForm.value.user_role),
-      company_id: companyId,
     }
 
-    await axios.post('https://staging.wageyapp.com/user/invite/', invitationData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    })
+    await sendInvite(payload)
 
     sentToEmail.value = invitationForm.value.email
     showInviteModal.value = false
     showSuccessDialog.value = true
-
-    await fetchInvitations()
 
     $q.notify({
       type: 'positive',
       message: `Invitation sent successfully to ${invitationForm.value.email}`,
       position: 'top',
     })
+
+    await loadInvitations()
   } catch (error) {
-    console.error('❌ Error sending invitation:', error)
-    let errorMessage = 'Failed to send invitation'
-    if (error?.response?.data?.message) errorMessage = error.response.data.message
-    else if (error?.response?.data?.detail) errorMessage = error.response.data.detail
+    const errorMessage =
+      error?.response?.data?.message || error?.response?.data?.detail || 'Failed to send invitation'
     $q.notify({ type: 'negative', message: errorMessage, position: 'top', timeout: 10000 })
-  } finally {
-    sending.value = false
   }
 }
 
-// Load initial data
+// ─── Init ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  await fetchUserRoles()
-  await fetchInvitations()
+  await loadUserRoles()
+  await loadInvitations()
 })
 </script>
 
@@ -729,51 +568,38 @@ onMounted(async () => {
 .page-header {
   background: #ffffff;
   border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
-  border: 1px solid #e8ecf0;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .page-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
   color: #111827;
   margin: 0;
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .add-employee-btn {
-  height: 36px;
-  border-radius: 8px;
-  font-weight: 500;
-  text-transform: none;
-  white-space: nowrap;
-  padding: 0 16px;
-  font-size: 13px;
+  min-width: 160px;
 }
 
 .header-search {
-  min-width: 180px;
-  max-width: 250px;
-  flex: 1;
-}
-
-.header-search .q-field__control {
-  border-radius: 8px;
-  height: 36px;
+  min-width: 240px;
+  max-width: 320px;
 }
 
 .search-icon {
@@ -783,94 +609,74 @@ onMounted(async () => {
 .stats-section {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .stats-card {
   background: #ffffff;
   border-radius: 12px;
-  padding: 16px 18px;
-  border: 1px solid #e8ecf0;
+  padding: 20px;
   display: flex;
   align-items: center;
-  gap: 14px;
-  transition: box-shadow 0.2s ease;
-  min-width: 0;
-}
-
-.stats-card:hover {
-  transform: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
-}
-
-.personal-card {
-  background: #ffffff;
-}
-
-.corporate-card {
-  background: #ffffff;
-}
-
-.business-card {
-  background: #ffffff;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .stats-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 20px;
-}
-
-.stats-icon {
-  font-size: 20px;
 }
 
 .personal-card .stats-icon-wrapper {
-  background: #eff6ff;
-  color: #3b82f6;
+  background: #dbeafe;
 }
 
 .corporate-card .stats-icon-wrapper {
-  background: #fffbeb;
-  color: #f59e0b;
+  background: #fef3c7;
 }
 
 .business-card .stats-icon-wrapper {
-  background: #f0fdf4;
-  color: #22c55e;
+  background: #dcfce7;
 }
 
-.stats-content {
-  flex: 1;
-  min-width: 0;
+.personal-card .stats-icon {
+  color: #3b82f6;
+  font-size: 24px;
+}
+
+.corporate-card .stats-icon {
+  color: #f59e0b;
+  font-size: 24px;
+}
+
+.business-card .stats-icon {
+  color: #22c55e;
+  font-size: 24px;
 }
 
 .stats-amount {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: #111827;
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .stats-label {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
-  margin-bottom: 2px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  margin-top: 4px;
 }
 
 .table-section {
   background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e8ecf0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
@@ -879,60 +685,46 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #f1f3f5;
-  flex-wrap: wrap;
-  gap: 10px;
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .table-title {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   color: #111827;
   margin: 0;
 }
 
 .modern-table-container {
-  overflow: hidden;
-  margin: 0 16px 16px 16px;
+  padding: 0;
 }
 
 .loan-table {
-  background: white;
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius: 0;
 }
 
 .table-header-row {
-  background: #f8fafc;
+  background: #f9fafb;
 }
 
 .table-header-cell {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  color: #6b7280 !important;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 11px 16px !important;
-  border-bottom: 1px solid #e8ecf0 !important;
-  vertical-align: middle !important;
-  white-space: nowrap;
+  padding: 12px 16px;
 }
 
-.table-body-row {
-  border-bottom: 1px solid #f1f5f9;
-  transition: background 0.15s ease;
-}
-
-.table-body-row:hover .table-body-cell {
+.table-body-row:hover {
   background: #f9fafb;
 }
 
 .table-body-cell {
+  padding: 14px 16px;
   font-size: 13px;
   color: #374151;
-  padding: 13px 16px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
-  vertical-align: middle !important;
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .employee-info {
@@ -942,7 +734,7 @@ onMounted(async () => {
 }
 
 .employee-name {
-  font-weight: 600;
+  font-weight: 500;
   color: #111827;
   font-size: 13px;
 }

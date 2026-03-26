@@ -1297,10 +1297,12 @@ const fetchLeaveRequests = async () => {
     const companyId = selectedCompany.value
     if (!companyId) throw new Error('No company selected')
 
-    const res = await axios.get(`https://staging.wageyapp.com/attendance/leave-list/`, {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { company_id: companyId },
-    })
+    const res = await axios.get(
+      `https://staging.wageyapp.com/attendance/leave-list/?company_id=${companyId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
 
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
     leaveList.value = data.map((item) => ({
@@ -1575,7 +1577,12 @@ const fetchCaRequests = async () => {
   loading.value = true
   try {
     const config = getAuthConfig()
-    const res = await api.get('https://staging.wageyapp.com/cash_advance/admin/', config)
+    const res = await api.get(
+      `https://staging.wageyapp.com/cash_advance/admin/?company_id=${selectedCompany.value}`,
+      {
+        headers: config.headers,
+      },
+    )
     let data = Array.isArray(res.data) ? res.data : res.data.results || []
     caRequests.value = data.map((req) => ({
       ...req,

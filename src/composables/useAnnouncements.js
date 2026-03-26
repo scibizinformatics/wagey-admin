@@ -38,7 +38,7 @@ export function useAnnouncements() {
   async function createAnnouncement(payload) {
     saving.value = true
     try {
-      const response = await api.post(`${BASE}/communication/announcements/`, payload, {
+      const response = await api.post(`${BASE}/communication/announcements/create/`, payload, {
         headers: authHeaders(),
       })
       return response.data
