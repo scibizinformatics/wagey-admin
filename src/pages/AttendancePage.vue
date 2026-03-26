@@ -197,6 +197,7 @@
                             :src="props.row.time_in_selfie"
                             alt="Time In"
                             class="mobile-selfie-img"
+                            loading="lazy"
                             @click="viewSelfie(props.row.time_in_selfie, 'Time In')"
                           />
                         </div>
@@ -206,6 +207,7 @@
                             :src="props.row.time_out_selfie"
                             alt="Time Out"
                             class="mobile-selfie-img"
+                            loading="lazy"
                             @click="viewSelfie(props.row.time_out_selfie, 'Time Out')"
                           />
                         </div>
@@ -270,6 +272,7 @@
                           :src="getEmployeePhoto(props.row.employee)"
                           alt="Employee Photo"
                           class="avatar-image"
+                          loading="lazy"
                         />
                         <span v-else class="avatar-initials">
                           {{ getEmployeeName(props.row.employee).charAt(0) }}
@@ -349,6 +352,7 @@
                         :src="props.row.time_in_selfie"
                         alt="Time In Selfie"
                         class="selfie-thumbnail"
+                        loading="lazy"
                         @click="viewSelfie(props.row.time_in_selfie, 'Time In')"
                       />
                       <span v-else class="no-photo">-</span>
@@ -381,6 +385,7 @@
                         :src="props.row.time_out_selfie"
                         alt="Time Out Selfie"
                         class="selfie-thumbnail"
+                        loading="lazy"
                         @click="viewSelfie(props.row.time_out_selfie, 'Time Out')"
                       />
                       <span v-else class="no-photo">-</span>
@@ -940,6 +945,7 @@ const {
   attendanceData,
   loading,
   fetchAttendance,
+  fetchAttendanceByDate,
   fetchEmployeeSchedule: fetchScheduleFromComposable,
   logAttendance,
   updateAttendance: updateAttendanceApi,
@@ -1229,7 +1235,6 @@ function getYearMonth() {
 
 async function fetchAttendanceData(params = {}) {
   try {
-    const { year, month } = getYearMonth()
     const extraParams = {
       page: pagination.value.page,
       limit: pagination.value.rowsPerPage,
@@ -1237,19 +1242,9 @@ async function fetchAttendanceData(params = {}) {
       ...params,
     }
 
-    const data = await fetchAttendance(year, month, extraParams)
+    const data = await fetchAttendanceByDate(currentDate.value, extraParams)
 
-    // Client-side date range filter
-    let filtered = [...data]
-    if (filters.value.date_from && filters.value.date_to) {
-      filtered = filtered.filter((record) => {
-        const recordDate = new Date(record.date)
-        return (
-          recordDate >= new Date(filters.value.date_from) &&
-          recordDate <= new Date(filters.value.date_to)
-        )
-      })
-    }
+    const filtered = [...data]
 
     attendanceData.value = filtered
     pagination.value.rowsNumber = filtered.length

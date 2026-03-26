@@ -15,18 +15,43 @@ export function useAttendance() {
   // ─── Fetch ────────────────────────────────────────────────────────────────
 
   /**
-   * Fetch attendance records for a given year/month.
+   * Fetch attendance records for a given year/month, optionally filtered by a specific date.
    * @param {string} year
    * @param {string} month
-   * @param {object} [params] - Extra query params (cost_center, page, limit …)
+   * @param {object} [params] - Extra query params (date, cost_center, page, limit …)
+   * @param {string} [params.date] - Optional date filter e.g. '2026-03-27'
    */
   async function fetchAttendance(year, month, params = {}) {
     if (!companyId.value) throw new Error('Company ID not found')
 
     loading.value = true
     try {
-      let url = `${BASE}/attendance/company/${companyId.value}/${year}/${month}/`
+      const url = `${BASE}/attendance/company/${companyId.value}/${year}/${month}/`
       const response = await api.get(url, { params })
+
+      const data = Array.isArray(response.data) ? response.data : (response.data.data ?? [])
+
+      attendanceData.value = data
+      return data
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Fetch attendance records for a specific date. Faster than fetching a full month.
+   * @param {string} date - YYYY-MM-DD e.g. '2026-03-27'
+   * @param {object} [params] - Extra query params (cost_center, page, limit …)
+   */
+  async function fetchAttendanceByDate(date, params = {}) {
+    if (!companyId.value) throw new Error('Company ID not found')
+    if (!date) throw new Error('Date is required')
+
+    const [year, month] = date.split('-')
+    loading.value = true
+    try {
+      const url = `${BASE}/attendance/company/${companyId.value}/${year}/${month}/`
+      const response = await api.get(url, { params: { date, ...params } })
 
       const data = Array.isArray(response.data) ? response.data : (response.data.data ?? [])
 
@@ -123,6 +148,7 @@ export function useAttendance() {
     updating,
     // methods
     fetchAttendance,
+    fetchAttendanceByDate,
     fetchEmployeeSchedule,
     logAttendance,
     updateAttendance,
