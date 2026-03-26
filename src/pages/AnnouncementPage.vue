@@ -372,8 +372,8 @@
           <q-btn
             :label="editingAnnouncement ? 'Update' : 'Create'"
             color="primary"
-            :loading="submitting"
-            :disable="submitting"
+            :loading="saving"
+            :disable="saving"
             @click="saveAnnouncement"
           />
         </q-card-section>
@@ -410,449 +410,330 @@
         <q-separator />
         <q-card-section class="form-actions">
           <q-btn label="Cancel" flat color="grey-7" @click="showDeleteDialog = false" />
-          <q-btn label="Delete" color="negative" :loading="deleting" @click="deleteAnnouncement" />
+          <q-btn label="Delete" color="negative" :loading="deleting" @click="confirmDeleteAction" />
         </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>
 </template>
 
-<script>
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from 'boot/axios'
 import { useQuasar } from 'quasar'
+import { useAnnouncements } from '../composables/useAnnouncements'
 import 'src/css/app.scss'
 
-export default {
-  name: 'AnnouncementPage',
-  setup() {
-    const $q = useQuasar()
+const $q = useQuasar()
 
-    // Reactive state
-    const announcements = ref([])
-    const loading = ref(false)
-    const submitting = ref(false)
-    const deleting = ref(false)
-    const showDialog = ref(false)
-    const showDeleteDialog = ref(false)
-    const editingAnnouncement = ref(null)
-    const announcementToDelete = ref(null)
-    const searchQuery = ref('')
-    const typeFilter = ref(null)
+// ─── Composable ───────────────────────────────────────────────────────────────
+const {
+  announcements,
+  loading,
+  saving,
+  fetchAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+} = useAnnouncements()
 
-    const columns = []
+// ─── UI state ─────────────────────────────────────────────────────────────────
+const showDialog = ref(false)
+const showDeleteDialog = ref(false)
+const editingAnnouncement = ref(null)
+const announcementToDelete = ref(null)
+const searchQuery = ref('')
+const typeFilter = ref(null)
+const deleting = ref(false)
 
-    // Type options
-    const typeOptions = [
-      { label: 'General', value: 'general' },
-      { label: 'Urgent', value: 'urgent' },
-      { label: 'Maintenance', value: 'maintenance' },
-      { label: 'Policy', value: 'policy' },
-    ]
+const columns = []
 
-    const typeSelectOptions = [
-      { label: 'General', value: 'general' },
-      { label: 'Urgent', value: 'urgent' },
-      { label: 'Maintenance', value: 'maintenance' },
-      { label: 'Policy', value: 'policy' },
-    ]
+// ─── Type options ─────────────────────────────────────────────────────────────
+const typeOptions = [
+  { label: 'General', value: 'general' },
+  { label: 'Urgent', value: 'urgent' },
+  { label: 'Maintenance', value: 'maintenance' },
+  { label: 'Policy', value: 'policy' },
+]
 
-    // Form data
-    const formData = ref({
-      title: '',
-      message: '',
-      announcement_type: 'general',
-      is_active: true,
-      start_at: '',
-      end_at: '',
-      target_everyone: true,
-      target_positions: [],
-      target_users: [],
-      target_roles: [],
-    })
+const typeSelectOptions = [...typeOptions]
 
-    // Dropdown data
-    const positions = ref([])
-    const users = ref([])
-    const roles = ref([])
-    const loadingPositions = ref(false)
-    const loadingUsers = ref(false)
-    const loadingRoles = ref(false)
+// ─── Form ─────────────────────────────────────────────────────────────────────
+const formData = ref({
+  title: '',
+  message: '',
+  announcement_type: 'general',
+  is_active: true,
+  start_at: '',
+  end_at: '',
+  target_everyone: true,
+  target_positions: [],
+  target_users: [],
+  target_roles: [],
+})
 
-    // Computed counts
-    const activeCount = computed(() => announcements.value.filter((a) => a.is_active).length)
-    const scheduledCount = computed(() => {
-      const now = new Date()
-      return announcements.value.filter((a) => a.start_at && new Date(a.start_at) > now).length
-    })
-    const urgentCount = computed(
-      () => announcements.value.filter((a) => a.announcement_type === 'urgent').length,
+// ─── Dropdown data (local — not in composable) ────────────────────────────────
+const positions = ref([])
+const users = ref([])
+const roles = ref([])
+const loadingPositions = ref(false)
+const loadingUsers = ref(false)
+const loadingRoles = ref(false)
+
+// ─── Computed ─────────────────────────────────────────────────────────────────
+const activeCount = computed(() => announcements.value.filter((a) => a.is_active).length)
+const scheduledCount = computed(() => {
+  const now = new Date()
+  return announcements.value.filter((a) => a.start_at && new Date(a.start_at) > now).length
+})
+const urgentCount = computed(
+  () => announcements.value.filter((a) => a.announcement_type === 'urgent').length,
+)
+
+const filteredAnnouncements = computed(() => {
+  let filtered = announcements.value
+
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    filtered = filtered.filter(
+      (a) => a.title.toLowerCase().includes(query) || a.message.toLowerCase().includes(query),
     )
+  }
 
-    // Name getters
-    const getRoleName = (roleId) => {
-      const role = roles.value.find((r) => r.value === roleId)
-      return role ? role.label : `Role #${roleId}`
-    }
+  if (typeFilter.value) {
+    filtered = filtered.filter((a) => a.announcement_type === typeFilter.value)
+  }
 
-    const getPositionName = (posId) => {
-      const pos = positions.value.find((p) => p.value === posId)
-      return pos ? pos.label : `Position #${posId}`
-    }
+  return filtered
+})
 
-    const getUserName = (userId) => {
-      const user = users.value.find((u) => u.id === userId)
-      return user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : `User #${userId}`
-    }
-
-    // Computed filters
-    const filteredAnnouncements = computed(() => {
-      let filtered = announcements.value
-
-      if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase()
-        filtered = filtered.filter(
-          (a) => a.title.toLowerCase().includes(query) || a.message.toLowerCase().includes(query),
-        )
-      }
-
-      if (typeFilter.value) {
-        filtered = filtered.filter((a) => a.announcement_type === typeFilter.value)
-      }
-
-      return filtered
-    })
-
-    const getTypeBadgeClass = (type) => {
-      const classes = {
-        general: 'type-general',
-        urgent: 'type-urgent',
-        maintenance: 'type-maintenance',
-        policy: 'type-policy',
-      }
-      return classes[type] || 'type-general'
-    }
-
-    const formatDate = (dateStr) => {
-      if (!dateStr) return ''
-      const date = new Date(dateStr)
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    }
-
-    // Fetch positions
-    const fetchPositions = async () => {
-      loadingPositions.value = true
-      try {
-        const token = localStorage.getItem('access_token')
-        const selectedCompany = localStorage.getItem('selectedCompany')
-        const res = await api.get('/user/positions/', {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { company: selectedCompany },
-        })
-        positions.value = (res.data.results || res.data).map((p) => ({
-          label: p.name || p.title || p.position_name,
-          value: p.id,
-        }))
-      } catch (error) {
-        console.error('Failed to fetch positions:', error)
-        $q.notify({ type: 'warning', message: 'Failed to load positions', position: 'top' })
-      } finally {
-        loadingPositions.value = false
-      }
-    }
-
-    // Fetch users
-    const fetchUsers = async () => {
-      try {
-        const token = localStorage.getItem('access_token')
-        let storedCompany = localStorage.getItem('selectedCompany')
-        let companyId = null
-        try {
-          const parsed = JSON.parse(storedCompany)
-          companyId = parsed?.id || parsed
-        } catch {
-          companyId = storedCompany
-        }
-        if (!token || !companyId) return
-        loadingUsers.value = true
-        const response = await api.get(`/user/companies/${companyId}/employees/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        users.value = (response.data || []).map((u) => {
-          const fullName =
-            u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || `User #${u.id}`
-          return { id: u.id, label: fullName, value: u.id, full_name: fullName }
-        })
-      } catch (error) {
-        console.error('Error fetching users:', error)
-        $q.notify({ type: 'negative', message: 'Failed to fetch users', position: 'top' })
-      } finally {
-        loadingUsers.value = false
-      }
-    }
-
-    // Fetch roles
-    const fetchRoles = async () => {
-      loadingRoles.value = true
-      try {
-        const token = localStorage.getItem('access_token')
-        const selectedCompany = localStorage.getItem('selectedCompany')
-        const res = await api.get('/user/user-roles/', {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { company: selectedCompany },
-        })
-        roles.value = (res.data.results || res.data).map((r) => ({
-          label: r.name || r.role_name || r.title,
-          value: r.id,
-        }))
-      } catch (error) {
-        console.error('Failed to fetch roles:', error)
-        $q.notify({ type: 'warning', message: 'Failed to load roles', position: 'top' })
-      } finally {
-        loadingRoles.value = false
-      }
-    }
-
-    // Fetch announcements
-    const fetchAnnouncements = async () => {
-      loading.value = true
-      try {
-        const token = localStorage.getItem('access_token')
-        const selectedCompany = localStorage.getItem('selectedCompany')
-        if (!token || !selectedCompany) {
-          $q.notify({
-            type: 'warning',
-            message: 'Please login and select a company first.',
-            position: 'top',
-          })
-          return
-        }
-        const res = await api.get('/communication/announcements/', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const data = Array.isArray(res.data) ? res.data : res.data.results || res.data.data || []
-        announcements.value = data.filter((a) => String(a.company) === String(selectedCompany))
-      } catch (error) {
-        console.error('Fetch error:', error)
-        $q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || error.message || 'Failed to load announcements',
-          position: 'top',
-        })
-      } finally {
-        loading.value = false
-      }
-    }
-
-    // Save announcement
-    const saveAnnouncement = async () => {
-      submitting.value = true
-      try {
-        const token = localStorage.getItem('access_token')
-        const storedCompany = localStorage.getItem('selectedCompany')
-        if (!token || !storedCompany) {
-          $q.notify({
-            type: 'warning',
-            message: 'Authentication or company missing.',
-            position: 'top',
-          })
-          submitting.value = false
-          return
-        }
-        let companyId = storedCompany
-        try {
-          const parsed = JSON.parse(storedCompany)
-          companyId = parsed?.id || parsed
-        } catch {
-          /* comment */
-        }
-
-        const targetEveryone = formData.value.target_everyone ?? true
-        const payload = {
-          title: formData.value.title,
-          message: formData.value.message,
-          announcement_type:
-            typeof formData.value.announcement_type === 'object'
-              ? formData.value.announcement_type.value
-              : formData.value.announcement_type || 'general',
-          is_active: formData.value.is_active ?? true,
-          target_everyone: targetEveryone,
-          company: parseInt(companyId),
-        }
-
-        // Only include schedule fields if they have values
-        if (formData.value.start_at) {
-          payload.start_at = new Date(formData.value.start_at).toISOString()
-        }
-        if (formData.value.end_at) {
-          payload.end_at = new Date(formData.value.end_at).toISOString()
-        }
-
-        // Only include targeting arrays if not sending to everyone
-        if (!targetEveryone) {
-          payload.target_users = formData.value.target_users.map((u) =>
-            typeof u === 'object' ? u.id : u,
-          )
-          payload.target_roles = formData.value.target_roles.map((r) =>
-            typeof r === 'object' ? r.id : r,
-          )
-          payload.target_positions = formData.value.target_positions.map((p) =>
-            typeof p === 'object' ? p.id : p,
-          )
-        }
-
-        console.log('Sending payload:', JSON.stringify(payload, null, 2))
-
-        const url = editingAnnouncement.value
-          ? `/communication/announcements/${editingAnnouncement.value.id}/`
-          : '/communication/announcements/create/'
-        const method = editingAnnouncement.value ? 'put' : 'post'
-
-        await api[method](url, payload, { headers: { Authorization: `Bearer ${token}` } })
-
-        $q.notify({
-          type: 'positive',
-          message: editingAnnouncement.value
-            ? 'Announcement updated successfully'
-            : 'Announcement created successfully',
-          position: 'top',
-        })
-
-        await fetchAnnouncements()
-        showDialog.value = false
-      } catch (error) {
-        console.error('Save error:', error)
-        const data = error.response?.data
-        let errMsg = 'Failed to save announcement'
-        if (data && typeof data === 'object') {
-          // Django REST returns field errors as { field: ["msg"] } or { detail: "msg" }
-          const first = Object.values(data)[0]
-          errMsg = Array.isArray(first) ? first[0] : data.detail || data.message || errMsg
-        } else if (typeof data === 'string' && !data.startsWith('<')) {
-          errMsg = data
-        }
-        $q.notify({ type: 'negative', message: errMsg, position: 'top' })
-      } finally {
-        submitting.value = false
-      }
-    }
-
-    const confirmDelete = (announcement) => {
-      announcementToDelete.value = announcement
-      showDeleteDialog.value = true
-    }
-
-    const deleteAnnouncement = async () => {
-      deleting.value = true
-      try {
-        const token = localStorage.getItem('access_token')
-        await api.delete(`/communication/announcements/${announcementToDelete.value.id}/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        $q.notify({
-          type: 'positive',
-          message: 'Announcement deleted successfully',
-          position: 'top',
-        })
-        await fetchAnnouncements()
-        showDeleteDialog.value = false
-      } catch (error) {
-        console.error('Delete error:', error)
-        $q.notify({
-          type: 'negative',
-          message:
-            error.response?.data?.message || error.message || 'Failed to delete announcement',
-          position: 'top',
-        })
-      } finally {
-        deleting.value = false
-      }
-    }
-
-    const openCreateDialog = () => {
-      editingAnnouncement.value = null
-      submitting.value = false
-      formData.value = {
-        title: '',
-        message: '',
-        announcement_type: 'general',
-        is_active: true,
-        start_at: '',
-        end_at: '',
-        target_everyone: true,
-        target_positions: [],
-        target_users: [],
-        target_roles: [],
-      }
-      fetchPositions()
-      fetchUsers()
-      fetchRoles()
-      showDialog.value = true
-    }
-
-    const editAnnouncement = (a) => {
-      editingAnnouncement.value = a
-      formData.value = { ...a }
-      fetchPositions()
-      fetchUsers()
-      fetchRoles()
-      showDialog.value = true
-    }
-
-    const closeDialog = () => {
-      showDialog.value = false
-      submitting.value = false
-    }
-
-    onMounted(fetchAnnouncements)
-
-    return {
-      announcements,
-      loading,
-      submitting,
-      deleting,
-      showDialog,
-      showDeleteDialog,
-      editingAnnouncement,
-      announcementToDelete,
-      searchQuery,
-      typeFilter,
-      typeOptions,
-      typeSelectOptions,
-      formData,
-      positions,
-      users,
-      roles,
-      loadingPositions,
-      loadingUsers,
-      loadingRoles,
-      activeCount,
-      scheduledCount,
-      urgentCount,
-      filteredAnnouncements,
-      columns,
-      getTypeBadgeClass,
-      formatDate,
-      fetchAnnouncements,
-      fetchPositions,
-      fetchUsers,
-      fetchRoles,
-      openCreateDialog,
-      editAnnouncement,
-      closeDialog,
-      saveAnnouncement,
-      confirmDelete,
-      deleteAnnouncement,
-      getRoleName,
-      getPositionName,
-      getUserName,
-    }
-  },
+// ─── Name resolvers ───────────────────────────────────────────────────────────
+const getRoleName = (roleId) => {
+  const role = roles.value.find((r) => r.value === roleId)
+  return role ? role.label : `Role #${roleId}`
 }
+
+const getPositionName = (posId) => {
+  const pos = positions.value.find((p) => p.value === posId)
+  return pos ? pos.label : `Position #${posId}`
+}
+
+const getUserName = (userId) => {
+  const user = users.value.find((u) => u.id === userId)
+  return user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : `User #${userId}`
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const getTypeBadgeClass = (type) => {
+  const classes = {
+    general: 'type-general',
+    urgent: 'type-urgent',
+    maintenance: 'type-maintenance',
+    policy: 'type-policy',
+  }
+  return classes[type] || 'type-general'
+}
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+// ─── Dropdown loaders (page-local, no composable for these) ──────────────────
+const fetchPositions = async () => {
+  loadingPositions.value = true
+  try {
+    const token = localStorage.getItem('access_token')
+    const selectedCompany = localStorage.getItem('selectedCompany')
+    const res = await api.get('/user/positions/', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { company: selectedCompany },
+    })
+    positions.value = (res.data.results || res.data).map((p) => ({
+      label: p.name || p.title || p.position_name,
+      value: p.id,
+    }))
+  } catch (error) {
+    console.error('Failed to fetch positions:', error)
+    $q.notify({ type: 'warning', message: 'Failed to load positions', position: 'top' })
+  } finally {
+    loadingPositions.value = false
+  }
+}
+
+const fetchUsers = async () => {
+  loadingUsers.value = true
+  try {
+    const token = localStorage.getItem('access_token')
+    let storedCompany = localStorage.getItem('selectedCompany')
+    let companyId = null
+    try {
+      const parsed = JSON.parse(storedCompany)
+      companyId = parsed?.id || parsed
+    } catch {
+      companyId = storedCompany
+    }
+    if (!token || !companyId) return
+    const response = await api.get(`/user/companies/${companyId}/employees/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    users.value = (response.data || []).map((u) => {
+      const fullName =
+        u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || `User #${u.id}`
+      return { id: u.id, label: fullName, value: u.id, full_name: fullName }
+    })
+  } catch (error) {
+    console.error('Error fetching users:', error)
+    $q.notify({ type: 'negative', message: 'Failed to fetch users', position: 'top' })
+  } finally {
+    loadingUsers.value = false
+  }
+}
+
+const fetchRoles = async () => {
+  loadingRoles.value = true
+  try {
+    const token = localStorage.getItem('access_token')
+    const selectedCompany = localStorage.getItem('selectedCompany')
+    const res = await api.get('/user/user-roles/', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { company: selectedCompany },
+    })
+    roles.value = (res.data.results || res.data).map((r) => ({
+      label: r.name || r.role_name || r.title,
+      value: r.id,
+    }))
+  } catch (error) {
+    console.error('Failed to fetch roles:', error)
+    $q.notify({ type: 'warning', message: 'Failed to load roles', position: 'top' })
+  } finally {
+    loadingRoles.value = false
+  }
+}
+
+// ─── Dialog helpers ───────────────────────────────────────────────────────────
+const openCreateDialog = () => {
+  editingAnnouncement.value = null
+  formData.value = {
+    title: '',
+    message: '',
+    announcement_type: 'general',
+    is_active: true,
+    start_at: '',
+    end_at: '',
+    target_everyone: true,
+    target_positions: [],
+    target_users: [],
+    target_roles: [],
+  }
+  fetchPositions()
+  fetchUsers()
+  fetchRoles()
+  showDialog.value = true
+}
+
+const editAnnouncement = (a) => {
+  editingAnnouncement.value = a
+  formData.value = { ...a }
+  fetchPositions()
+  fetchUsers()
+  fetchRoles()
+  showDialog.value = true
+}
+
+const closeDialog = () => {
+  showDialog.value = false
+}
+
+const confirmDelete = (announcement) => {
+  announcementToDelete.value = announcement
+  showDeleteDialog.value = true
+}
+
+// ─── Save (create or update) ──────────────────────────────────────────────────
+const saveAnnouncement = async () => {
+  try {
+    const targetEveryone = formData.value.target_everyone ?? true
+    const payload = {
+      title: formData.value.title,
+      message: formData.value.message,
+      announcement_type:
+        typeof formData.value.announcement_type === 'object'
+          ? formData.value.announcement_type.value
+          : formData.value.announcement_type || 'general',
+      is_active: formData.value.is_active ?? true,
+      target_everyone: targetEveryone,
+    }
+
+    if (formData.value.start_at) {
+      payload.start_at = new Date(formData.value.start_at).toISOString()
+    }
+    if (formData.value.end_at) {
+      payload.end_at = new Date(formData.value.end_at).toISOString()
+    }
+
+    if (!targetEveryone) {
+      payload.target_users = formData.value.target_users.map((u) =>
+        typeof u === 'object' ? u.id : u,
+      )
+      payload.target_roles = formData.value.target_roles.map((r) =>
+        typeof r === 'object' ? r.id : r,
+      )
+      payload.target_positions = formData.value.target_positions.map((p) =>
+        typeof p === 'object' ? p.id : p,
+      )
+    }
+
+    if (editingAnnouncement.value) {
+      await updateAnnouncement(editingAnnouncement.value.id, payload)
+      $q.notify({ type: 'positive', message: 'Announcement updated successfully', position: 'top' })
+    } else {
+      await createAnnouncement(payload)
+      $q.notify({ type: 'positive', message: 'Announcement created successfully', position: 'top' })
+    }
+
+    await fetchAnnouncements()
+    showDialog.value = false
+  } catch (error) {
+    console.error('Save error:', error)
+    const data = error.response?.data
+    let errMsg = 'Failed to save announcement'
+    if (data && typeof data === 'object') {
+      const first = Object.values(data)[0]
+      errMsg = Array.isArray(first) ? first[0] : data.detail || data.message || errMsg
+    } else if (typeof data === 'string' && !data.startsWith('<')) {
+      errMsg = data
+    }
+    $q.notify({ type: 'negative', message: errMsg, position: 'top' })
+  }
+}
+
+// ─── Delete ───────────────────────────────────────────────────────────────────
+const confirmDeleteAction = async () => {
+  deleting.value = true
+  try {
+    await deleteAnnouncement(announcementToDelete.value.id)
+    $q.notify({ type: 'positive', message: 'Announcement deleted successfully', position: 'top' })
+    await fetchAnnouncements()
+    showDeleteDialog.value = false
+  } catch (error) {
+    console.error('Delete error:', error)
+    $q.notify({
+      type: 'negative',
+      message: error.response?.data?.message || error.message || 'Failed to delete announcement',
+      position: 'top',
+    })
+  } finally {
+    deleting.value = false
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+onMounted(fetchAnnouncements)
 </script>
 
 <style scoped>
@@ -868,163 +749,126 @@ export default {
   padding: 20px;
 }
 
-/* Header */
 .page-header {
   background: #ffffff;
   border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
-  border: 1px solid #e8ecf0;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-top: 16px;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .page-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
   color: #111827;
   margin: 0;
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .add-announcement-btn {
-  height: 36px;
-  border-radius: 8px;
-  font-weight: 500;
-  text-transform: none;
-  white-space: nowrap;
-  padding: 0 16px;
-  font-size: 13px;
+  min-width: 170px;
 }
 
 .header-search {
-  min-width: 180px;
-  max-width: 250px;
-  flex: 1;
+  min-width: 240px;
+  max-width: 320px;
 }
 
 .search-icon {
   color: #9ca3af;
 }
 
-.type-select {
-  min-width: 180px;
-}
-
 /* Stats */
 .stats-section {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .stats-card {
   background: #ffffff;
   border-radius: 12px;
-  padding: 16px 18px;
-  border: 1px solid #e8ecf0;
+  padding: 18px;
   display: flex;
   align-items: center;
   gap: 14px;
-  transition: box-shadow 0.2s ease;
-  min-width: 0;
-}
-
-.stats-card:hover {
-  transform: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
-}
-
-.total-card {
-  background: #ffffff;
-}
-
-.active-card {
-  background: #ffffff;
-}
-
-.scheduled-card {
-  background: #ffffff;
-}
-
-.urgent-card {
-  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .stats-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 20px;
-}
-
-.stats-icon {
-  font-size: 20px;
 }
 
 .total-card .stats-icon-wrapper {
-  background: #eff6ff;
-  color: #3b82f6;
+  background: #dbeafe;
 }
-
 .active-card .stats-icon-wrapper {
-  background: #f0fdf4;
-  color: #22c55e;
+  background: #dcfce7;
 }
-
 .scheduled-card .stats-icon-wrapper {
-  background: #fffbeb;
-  color: #f59e0b;
+  background: #fef3c7;
 }
-
 .urgent-card .stats-icon-wrapper {
-  background: #fef2f2;
-  color: #ef4444;
+  background: #fee2e2;
 }
 
-.stats-content {
-  flex: 1;
-  min-width: 0;
+.total-card .stats-icon {
+  color: #3b82f6;
+  font-size: 22px;
+}
+.active-card .stats-icon {
+  color: #22c55e;
+  font-size: 22px;
+}
+.scheduled-card .stats-icon {
+  color: #f59e0b;
+  font-size: 22px;
+}
+.urgent-card .stats-icon {
+  color: #ef4444;
+  font-size: 22px;
 }
 
 .stats-amount {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: #111827;
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .stats-label {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
-  margin-bottom: 2px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  margin-top: 4px;
 }
 
-/* Table Section */
+/* Table section */
 .table-section {
   background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e8ecf0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  margin-bottom: 20px;
 }
 
 .table-header {
@@ -1032,122 +876,104 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #f1f3f5;
-  flex-wrap: wrap;
-  gap: 10px;
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .table-title {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   color: #111827;
   margin: 0;
 }
 
+.type-select {
+  min-width: 180px;
+}
+
 .loading-wrapper {
   display: flex;
   justify-content: center;
-  padding: 80px 0;
+  padding: 60px 0;
 }
 
 .empty-state {
-  padding: 80px 40px;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 20px;
+  gap: 10px;
 }
 
 .empty-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #424242;
-  margin: 16px 0 8px;
+  color: #374151;
 }
 
 .empty-subtitle {
   font-size: 14px;
-  color: #666;
+  color: #9ca3af;
 }
 
 .modern-table-container {
-  overflow: hidden;
-  margin: 0 16px 16px 16px;
+  padding: 0 0 8px;
 }
 
 .announcement-table {
-  background: white;
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius: 0;
 }
 
 .table-header-row {
-  background: #f8fafc;
+  background: #f9fafb;
 }
 
 .table-header-cell {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  color: #6b7280 !important;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 11px 16px !important;
-  border-bottom: 1px solid #e8ecf0 !important;
-  vertical-align: middle !important;
-  white-space: nowrap;
+  padding: 12px 16px;
 }
 
-/* Column widths */
-.col-title {
-  width: 15%;
-  min-width: 120px;
-}
-.col-type {
-  width: 12%;
-  min-width: 100px;
-}
-.col-message {
-  width: 28%;
-  min-width: 160px;
-}
-.col-target {
-  width: 18%;
-  min-width: 120px;
-}
-.col-schedule {
-  width: 17%;
-  min-width: 140px;
-}
-.col-status {
-  width: 10%;
-  min-width: 90px;
-  text-align: center;
-}
-
-.table-body-row {
-  border-bottom: 1px solid #f1f5f9;
-  transition: background 0.15s ease;
-}
-
-.table-body-row:hover .table-body-cell {
+.table-body-row:hover {
   background: #f9fafb;
 }
 
 .urgent-row {
-  border-left: 3px solid #dc2626;
+  border-left: 3px solid #ef4444;
 }
 
 .table-body-cell {
+  padding: 12px 16px;
   font-size: 13px;
   color: #374151;
-  padding: 13px 16px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
-  vertical-align: middle !important;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
 }
 
+/* Column widths */
+.col-title {
+  min-width: 160px;
+}
+.col-type {
+  min-width: 110px;
+}
+.col-message {
+  min-width: 200px;
+}
+.col-target {
+  min-width: 160px;
+}
+.col-schedule {
+  min-width: 140px;
+}
 .col-status {
-  text-align: center;
+  min-width: 90px;
 }
 
-.title-cell .announcement-title-text {
-  font-weight: 600;
+.announcement-title-text {
+  font-weight: 500;
   color: #111827;
 }
 
@@ -1157,17 +983,17 @@ export default {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  max-width: 260px;
   color: #6b7280;
   font-size: 12px;
-  max-width: 100%;
 }
 
 .target-everyone {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #374151;
+  color: #6b7280;
 }
 
 .target-chips {
@@ -1179,110 +1005,82 @@ export default {
 .schedule-info {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .time-item {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
+  gap: 4px;
+  font-size: 12px;
   color: #6b7280;
 }
 
 .no-schedule {
-  color: #9ca3af;
+  color: #d1d5db;
 }
 
-/* Type Badges */
+/* Badges */
 .type-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  border-radius: 16px;
+  padding: 3px 10px;
+  border-radius: 20px;
   font-size: 11px;
   font-weight: 600;
   text-transform: capitalize;
-  white-space: nowrap;
 }
 
 .type-general {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #e0f2fe;
+  color: #0369a1;
 }
-
 .type-urgent {
   background: #fee2e2;
   color: #dc2626;
 }
-
 .type-maintenance {
   background: #fef3c7;
   color: #d97706;
 }
-
 .type-policy {
   background: #f3e8ff;
   color: #7c3aed;
 }
 
-/* Status Badges */
 .status-badge {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 11px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 500;
-  white-space: nowrap;
 }
 
 .status-active {
   background: #dcfce7;
   color: #16a34a;
 }
-
 .status-inactive {
   background: #f3f4f6;
-  color: #374151;
+  color: #6b7280;
 }
 
-/* Actions */
-.actions-cell {
-  width: 90px;
-  min-width: 90px;
-}
-
+/* Action buttons */
 .action-buttons {
   display: flex;
   gap: 4px;
-  justify-content: center;
-  align-items: center;
-}
-
-.action-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
 }
 
 .edit-btn {
-  background: #dbeafe;
   color: #3b82f6;
 }
-
 .edit-btn:hover {
-  background: #bfdbfe;
+  background: #dbeafe;
 }
-
 .delete-btn {
-  background: #fee2e2;
   color: #ef4444;
 }
-
 .delete-btn:hover {
   background: #fecaca;
 }
@@ -1410,183 +1208,143 @@ export default {
 
 /* ── Responsive ─────────────────────────────────────────── */
 
-/* 1024px – small desktop / large tablet landscape */
 @media (max-width: 1024px) {
   .dashboard-container {
     padding: 14px 16px;
   }
-
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
-
   .stats-card {
     padding: 14px;
   }
-
   .stats-amount {
     font-size: 22px;
   }
-
   .stats-icon-wrapper {
     width: 42px;
     height: 42px;
   }
-
   .header-search {
     min-width: 160px;
     max-width: 200px;
   }
-
   .type-select {
     min-width: 160px;
   }
-
   .modern-table-container {
     overflow-x: auto;
   }
-
   .announcement-table {
     min-width: 700px;
   }
-
   .message-cell .message-preview {
     max-width: 180px;
   }
-
   .dialog-modal {
     width: 580px;
   }
 }
 
-/* 768px – tablet portrait */
 @media (max-width: 768px) {
   .dashboard-container {
     padding: 10px 12px;
   }
-
-  /* Header */
   .page-header {
     padding: 14px;
     margin-top: 10px;
     margin-bottom: 12px;
   }
-
   .header-content {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
-
   .page-title {
     font-size: 18px;
   }
-
   .header-actions {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 8px;
   }
-
   .add-announcement-btn {
     flex: 1 1 auto;
     min-width: 140px;
   }
-
   .header-search {
     flex: 2 1 160px;
     min-width: 140px;
     max-width: 100%;
   }
-
-  /* Stats */
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
     margin-bottom: 12px;
   }
-
   .stats-card {
     padding: 12px;
     gap: 10px;
   }
-
   .stats-icon-wrapper {
     width: 38px;
     height: 38px;
   }
-
   .stats-icon {
     font-size: 20px;
   }
-
   .stats-amount {
     font-size: 20px;
   }
-
   .stats-label {
     font-size: 11px;
   }
-
-  /* Table */
   .table-header {
     padding: 12px;
     flex-wrap: wrap;
     gap: 10px;
   }
-
   .table-title {
     font-size: 15px;
   }
-
   .type-select {
     width: 100%;
     min-width: unset;
   }
-
   .modern-table-container {
     margin: 0 8px 8px 8px;
     overflow-x: auto;
     border-radius: 8px;
   }
-
   .announcement-table {
     min-width: 640px;
   }
-
   .table-header-cell,
   .table-body-cell {
     padding: 10px 8px;
     font-size: 12px;
   }
-
   .message-cell .message-preview {
     max-width: 140px;
     font-size: 11px;
   }
-
-  /* Modal */
   .dialog-modal {
     width: 95vw;
     max-width: 95vw;
   }
-
   .form-grid {
     grid-template-columns: 1fr;
     gap: 10px;
   }
-
   .col-span-2 {
     grid-column: span 1;
   }
-
   .toggle-row {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 12px;
   }
-
   .modal-card {
     margin: 8px;
     max-width: calc(100vw - 16px);
