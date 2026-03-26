@@ -485,17 +485,22 @@
 <script>
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useQuasar } from 'quasar'
-import { api } from 'src/boot/axios'
+import { useSwapRequests } from 'src/composables/useSwapRequests'
 
 export default {
   name: 'SwapRequests',
   setup() {
     const $q = useQuasar()
-    const loading = ref(false)
+    const {
+      swapRequests,
+      loading,
+      fetchSwapRequests: fetchFromComposable,
+      updateSwapRequest: updateFromComposable,
+    } = useSwapRequests()
+
     const processingId = ref(null)
     const search = ref('')
     const sortBy = ref('Newest')
-    const swapRequests = ref([])
     const viewDialog = ref(false)
     const selectedRequest = ref(null)
     const currentUserCompany = ref(null)
@@ -606,37 +611,17 @@ export default {
     })
 
     const fetchSwapRequests = async () => {
-      loading.value = true
+      const companyId = getCompanyId()
+      if (!companyId) {
+        swapRequests.value = []
+        $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+        return
+      }
+
+      currentUserCompany.value = companyId
 
       try {
-        const token = localStorage.getItem('access_token')
-        if (!token) throw new Error('No authentication token found')
-
-        const companyId = getCompanyId()
-        if (!companyId) {
-          swapRequests.value = []
-          $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
-          return
-        }
-
-        currentUserCompany.value = companyId
-
-        const response = await api.get(
-          'https://staging.wageyapp.com/organization/company-swap-requests/',
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            params: { company: companyId },
-          },
-        )
-
-        let rawData = []
-        if (Array.isArray(response.data)) {
-          rawData = response.data
-        } else if (Array.isArray(response.data?.results)) {
-          rawData = response.data.results
-        } else if (Array.isArray(response.data?.data)) {
-          rawData = response.data.data
-        }
+        const rawData = await fetchFromComposable({ company: companyId })
 
         // Merge any locally-corrected statuses over the stale list data
         // (correctedStatuses is updated when the backend returns "no longer pending")
@@ -663,8 +648,6 @@ export default {
           position: 'top',
           timeout: 5000,
         })
-      } finally {
-        loading.value = false
       }
     }
 
@@ -681,19 +664,12 @@ export default {
     }
 
     const updateSwapRequest = async (requestId, status) => {
-      const token = localStorage.getItem('access_token')
       const userId = getCurrentUserId()
-      const payload = {
+      return updateFromComposable(requestId, {
         id: requestId,
         status,
         approved_by: userId,
-      }
-      const response = await api.put(
-        `https://staging.wageyapp.com/organization/swap-requests/${requestId}/`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      return response.data
+      })
     }
 
     const parseErrorMessage = (error) => {
