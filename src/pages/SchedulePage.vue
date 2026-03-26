@@ -238,9 +238,9 @@
                             <div class="shift-time">
                               {{ formatTimeWithTimezone(sub.startTime) }} - {{ sub.endTime }}
                             </div>
-                            <div class="shift-site" v-if="getSiteName(sub.site)">
+                            <div class="shift-site" v-if="getSiteName(sub.site, sub)">
                               <q-icon name="location_on" size="10px" />
-                              {{ getSiteName(sub.site) }}
+                              {{ getSiteName(sub.site, sub) }}
                             </div>
                             <div class="shift-position">{{ getPositionName(sub.position) }}</div>
                             <div
@@ -292,9 +292,9 @@
                           <div class="shift-time" v-if="element.startTime && element.endTime">
                             {{ formatTimeWithTimezone(element.startTime) }} - {{ element.endTime }}
                           </div>
-                          <div class="shift-site" v-if="getSiteName(element.site)">
+                          <div class="shift-site" v-if="getSiteName(element.site, element)">
                             <q-icon name="location_on" size="11px" />
-                            {{ getSiteName(element.site) }}
+                            {{ getSiteName(element.site, element) }}
                           </div>
                           <div class="shift-position">
                             {{ getPositionName(element.position) }}
@@ -975,7 +975,7 @@
                 <span>{{ reassignData.date }}</span>
               </div>
             </div>
-            <q-form @submit.prevent="reassignShift" class="schedule-form">
+            <q-form @submit.prevent="handleReassignShift" class="schedule-form">
               <!-- ── SINGLE SHIFT ── -->
               <template v-if="!reassignData.isDualShift">
                 <div class="shift-row">
@@ -1151,7 +1151,7 @@ const { companyId } = useCompany()
 const {
   schedules,
   loading: scheduleLoading,
-  fetchMonthlySchedules,
+  fetchScheduleByDateRange,
   assignShift,
   reassignShift: reassignShiftApi,
   cancelAssignment,
@@ -1196,7 +1196,8 @@ const quickActionLoading = ref(null)
 const leaveTypes = ref([])
 const addConflictWarning = ref(false)
 
-const newSchedule = ref({
+// ─── Fresh schedule factory (single source of truth) ─────────────────────────
+const _freshSchedule = () => ({
   userId: null,
   userIds: [],
   selectedDate: null,
@@ -1216,6 +1217,8 @@ const newSchedule = ref({
   recurringStartDate: null,
   recurringEndDate: null,
 })
+
+const newSchedule = ref(_freshSchedule())
 
 const weekdayOptions = [
   { label: 'Monday', value: 'monday' },
@@ -1313,8 +1316,10 @@ const validateEndTime = (val, start = null) => {
 const getPositionName = (positionId) =>
   shiftTypes.value.find((p) => p.id === positionId)?.name || positionId
 
-const getSiteName = (siteId) => {
+const getSiteName = (siteId, shift = null) => {
   if (!siteId) return null
+  // Use pre-resolved name stored on the shift object when available (comes direct from API)
+  if (shift?.siteName) return shift.siteName
   const id = typeof siteId === 'number' ? siteId : parseInt(siteId)
   return sites.value.find((s) => s.id === id)?.name || null
 }
@@ -1688,26 +1693,64 @@ const fetchData = async () => {
       return
     }
     const ws = selectedWeek.value.start
-    const year = ws.getFullYear()
-    const month = String(ws.getMonth() + 1).padStart(2, '0')
-    const rawData = await fetchMonthlySchedules({ year, month })
+    const weekEnd = selectedWeek.value.end
+
+    const fmt = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+    // Fetch only the week's date range instead of the full month(s)
+    const fetchResults = [await fetchScheduleByDateRange(fmt(ws), fmt(weekEnd))]
+
+    // Merge all fetched months into one flat employee list, de-duping by employee id
+    const mergeEmployeeData = (results) => {
+      const map = new Map()
+      results.forEach((rawResult) => {
+        const list = Array.isArray(rawResult)
+          ? rawResult
+          : Array.isArray(rawResult?.results)
+            ? rawResult.results
+            : Array.isArray(rawResult?.data)
+              ? rawResult.data
+              : rawResult
+                ? [rawResult]
+                : []
+        list.forEach((empData) => {
+          const empId = empData.employee?.id || empData.id
+          if (!empId) return
+          if (map.has(empId)) {
+            // Merge schedules arrays
+            const existing = map.get(empId)
+            const newSchedules =
+              empData.schedules || empData.schedule || empData.schedule_list || []
+            const existingSchedules = existing.schedules || []
+            existing.schedules = [...existingSchedules, ...newSchedules]
+          } else {
+            map.set(empId, {
+              ...empData,
+              schedules: [
+                ...(empData.schedules || empData.schedule || empData.schedule_list || []),
+              ],
+            })
+          }
+        })
+      })
+      return Array.from(map.values())
+    }
+
+    const rawData = fetchResults[0]
+    const employeesData = mergeEmployeeData(fetchResults)
     users.value = employees.value.map((emp) => ({
       id: emp.id,
       name: emp.full_name || emp.name || `Employee ${emp.id}`,
       email: emp.email || '',
     }))
     shifts.value = []
-    const employeesData = Array.isArray(rawData)
-      ? rawData
-      : Array.isArray(rawData?.results)
-        ? rawData.results
-        : Array.isArray(rawData?.data)
-          ? rawData.data
-          : rawData
-            ? [rawData]
-            : []
+    // employeesData is already built by mergeEmployeeData above
     const weekStartStr = `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
     const weekStartLocal = new Date(weekStartStr + 'T00:00:00')
+    const weekEndLocal = new Date(weekStartLocal)
+    weekEndLocal.setDate(weekEndLocal.getDate() + 6)
+
     employeesData.forEach((empData) => {
       const employee =
         empData.employee && typeof empData.employee === 'object'
@@ -1716,6 +1759,7 @@ const fetchData = async () => {
             ? empData
             : null
       if (!employee?.id) return
+
       const scheduleList = empData.schedules || empData.schedule || empData.schedule_list || []
       const parsedSchedules =
         typeof scheduleList === 'string'
@@ -1728,61 +1772,78 @@ const fetchData = async () => {
             })()
           : scheduleList
       if (!Array.isArray(parsedSchedules) || parsedSchedules.length === 0) return
+
       parsedSchedules.forEach((schedule, sIndex) => {
         if (!schedule.date) return
         const scheduleDateStr = schedule.date.substring(0, 10)
+        const scheduleDate = new Date(scheduleDateStr + 'T00:00:00')
+
+        // Filter to current week only
         const daysDiff = Math.round(
-          (new Date(scheduleDateStr + 'T00:00:00').getTime() - weekStartLocal.getTime()) /
-            (1000 * 60 * 60 * 24),
+          (scheduleDate.getTime() - weekStartLocal.getTime()) / (1000 * 60 * 60 * 24),
         )
         if (daysDiff < 0 || daysDiff >= 7) return
+
+        // Day-off detection: use is_off flag directly (reliable) plus name/status fallbacks
         const isDayOffShift =
-          schedule.shift_type_name?.toLowerCase().includes('day off') ||
-          schedule.status === 'day_off' ||
+          schedule.is_off === true ||
           schedule.is_day_off === true ||
-          schedule.is_off === true
+          schedule.status === 'day_off' ||
+          schedule.shift_type_name?.toLowerCase().includes('day off')
+
         const startTime = isDayOffShift
           ? null
           : schedule.actual_start_time?.substring(0, 5) ||
             schedule.start_time?.substring(0, 5) ||
-            '09:00'
+            null
+
         const endTime = isDayOffShift
           ? null
-          : schedule.actual_end_time?.substring(0, 5) ||
-            schedule.end_time?.substring(0, 5) ||
-            '17:00'
-        let shiftTypeId = null
-        let shiftTypeName = isDayOffShift ? 'Day Off' : 'Shift'
-        if (!isDayOffShift) {
+          : schedule.actual_end_time?.substring(0, 5) || schedule.end_time?.substring(0, 5) || null
+
+        // Resolve shift type: prefer direct shift_type id from API, then match by time,
+        // then fall back gracefully (never force shiftTypes[0] which gives wrong label).
+        let shiftTypeId = schedule.shift_type || null
+        let shiftTypeName = isDayOffShift ? 'Day Off' : schedule.shift_type_name || null
+
+        if (!isDayOffShift && !shiftTypeName && startTime) {
           const match =
             shiftTypes.value.find((st) => {
               const stStart = st.default_start_time?.substring(0, 5)
               const stEnd = st.default_end_time?.substring(0, 5)
               return stStart === startTime && stEnd === endTime
             }) ||
-            shiftTypes.value.find((st) => st.default_start_time?.substring(0, 5) === startTime) ||
-            shiftTypes.value[0]
+            shiftTypes.value.find((st) => st.default_start_time?.substring(0, 5) === startTime)
           if (match) {
-            shiftTypeId = match.id
+            shiftTypeId = shiftTypeId || match.id
             shiftTypeName = match.name
           }
         }
+
+        // If we still have a shiftTypeId but no name, resolve from local list
+        if (shiftTypeId && !shiftTypeName) {
+          shiftTypeName = shiftTypes.value.find((st) => st.id === shiftTypeId)?.name || null
+        }
+
+        // Use site_name directly from the API response — no local lookup needed
         const resolvedAssignmentId =
           schedule.employee_assignment_id || schedule.assignment_id || null
+
         shifts.value.push({
-          id: schedule.id ? `${schedule.id}-${sIndex}` : `temp-${Date.now()}-${sIndex}`,
+          id: `${schedule.id}-${sIndex}`,
           assignmentId: resolvedAssignmentId,
           userId: employee.id,
           day: daysDiff,
           startTime,
           endTime,
-          position: shiftTypeName,
+          position: shiftTypeName || (startTime ? `${startTime}–${endTime}` : 'Shift'),
           shiftTypeId,
           site: schedule.site || null,
+          siteName: schedule.site_name || null,
           department: schedule.department || null,
-          status: schedule.status || 'draft',
-          date: schedule.date,
-          is_off: schedule.is_off || false,
+          status: schedule.status || 'active',
+          date: scheduleDateStr,
+          is_off: isDayOffShift,
         })
       })
     })
@@ -1805,44 +1866,35 @@ const onRecurringTemplateChange = (templateId) => {
   if (!templateId) {
     newSchedule.value.startTime = ''
     newSchedule.value.endTime = ''
+    newSchedule.value.weekdays = []
     return
   }
   const template = recurringSchedules.value.find((r) => r.id === templateId)
   if (!template) return
+  console.log('[RecurringTemplate]', JSON.stringify(template, null, 2))
+
   if (template.start_time) newSchedule.value.startTime = template.start_time.substring(0, 5)
   if (template.end_time) newSchedule.value.endTime = template.end_time.substring(0, 5)
   if (template.shift_type) newSchedule.value.position = template.shift_type
-  if (template.weekdays) newSchedule.value.weekdays = parseWeekdays(template.weekdays)
   if (template.is_rotating !== undefined) newSchedule.value.isRotating = template.is_rotating
   if (template.site) newSchedule.value.site = template.site
   if (template.department) newSchedule.value.department = template.department
   if (template.start_date) newSchedule.value.recurringStartDate = template.start_date
   if (template.end_date) newSchedule.value.recurringEndDate = template.end_date
+
+  // Extract weekdays — from template.weekdays string/array, or from template.rules[].weekday
+  if (template.weekdays) {
+    newSchedule.value.weekdays = parseWeekdays(template.weekdays)
+  } else if (Array.isArray(template.rules) && template.rules.length) {
+    newSchedule.value.weekdays = [
+      ...new Set(template.rules.map((r) => r.weekday?.toLowerCase()).filter(Boolean)),
+    ]
+  }
+
   $q.notify({ type: 'info', message: 'Template loaded successfully', timeout: 3000 })
 }
 
 // ─── Modal handlers ───────────────────────────────────────────────────────────
-
-const _freshSchedule = () => ({
-  userId: null,
-  userIds: [],
-  selectedDate: null,
-  selectedDates: [],
-  oneTimeShifts: [{ site: null, shiftType: null }],
-  startTime: '',
-  endTime: '',
-  position: null,
-  site: null,
-  department: null,
-  recurringSchedule: null,
-  scheduleType: 'one-time',
-  isRotating: false,
-  rotationShifts: [],
-  weekdays: [],
-  repeatInterval: 1,
-  recurringStartDate: null,
-  recurringEndDate: null,
-})
 
 const openAddModal = () => {
   newSchedule.value = _freshSchedule()
@@ -1954,10 +2006,25 @@ const confirmDeleteAction = async () => {
 
 // ─── CRUD actions ─────────────────────────────────────────────────────────────
 
+// ─── Helper: safely extract a raw primitive ID from a q-select value ─────────
+// q-select with emit-value should always give us the primitive, but if the
+// option object leaks through (e.g. emit-value is missing on a dynamic render)
+// parseInt(object) → NaN which the API rejects with a 400. This guard matches
+// the same pattern already used in quickAddSchedule.
+const resolveId = (val) => {
+  if (val === null || val === undefined) return null
+  const raw = typeof val === 'object' ? val?.value : val
+  const n = parseInt(raw)
+  return isNaN(n) ? null : n
+}
+
 const addSchedule = async () => {
   const n = newSchedule.value
+
+  // ── Basic validations ──────────────────────────────────────────────────────
   if (!n.userIds?.length)
     return $q.notify({ type: 'negative', message: 'Please select at least one employee.' })
+
   if (n.scheduleType === 'one-time') {
     if (!n.selectedDates?.length)
       return $q.notify({ type: 'negative', message: 'Please select at least one date.' })
@@ -1967,6 +2034,7 @@ const addSchedule = async () => {
         message: 'Please fill in site and shift type for all shifts.',
       })
   }
+
   if (n.scheduleType === 'recurring') {
     if (!n.recurringStartDate)
       return $q.notify({ type: 'negative', message: 'Please select a start date.' })
@@ -1974,47 +2042,102 @@ const addSchedule = async () => {
       return $q.notify({ type: 'negative', message: 'Please select an end date.' })
     if (!n.recurringSchedule)
       return $q.notify({ type: 'negative', message: 'Please select a recurring template.' })
-    if (!n.site) return $q.notify({ type: 'negative', message: 'Please select a site.' })
   }
+
   isCheckingConflict.value = true
   addConflictWarning.value = false
+
   try {
     const cId = normalizeCompanyId()
+
     if (n.scheduleType === 'recurring') {
-      await assignShift({
+      // Build one recurring entry per rule so every weekday defined in the
+      // template is sent with its own shift_type / shift_template.
+      // Collapsing all rules into a single object (old behaviour) sent only
+      // one weekday — and the wrong one (start-date's weekday, not the template's).
+      const template = recurringSchedules.value.find((r) => r.id === resolveId(n.recurringSchedule))
+      const rules = Array.isArray(template?.rules) && template.rules.length ? template.rules : []
+
+      const recurringEntries = rules.map((rule) => {
+        const entry = {
+          recurring_id: resolveId(n.recurringSchedule),
+          weekday: rule.weekday,
+          start_date: n.recurringStartDate,
+          end_date: n.recurringEndDate,
+        }
+        const ruleShiftType = resolveId(rule.shift_type)
+        const ruleShiftTemplate = resolveId(rule.shift_template)
+        if (ruleShiftType) entry.shift_type = ruleShiftType
+        else if (ruleShiftTemplate) entry.shift_template = ruleShiftTemplate
+        if (n.startTime || rule.start_time) entry.start_time = n.startTime || rule.start_time
+        if (n.endTime || rule.end_time) entry.end_time = n.endTime || rule.end_time
+        return entry
+      })
+
+      const payload = {
         company_id: cId,
         employee_ids: n.userIds,
-        recurring: [
-          {
-            recurring_id: parseInt(n.recurringSchedule),
-            start_date: n.recurringStartDate,
-            end_date: n.recurringEndDate,
-            site_id: parseInt(n.site),
-            ...(n.department ? { department_id: parseInt(n.department) } : {}),
-          },
-        ],
-      })
+        recurring: recurringEntries,
+      }
+
+      console.log('[addSchedule] recurring payload:', JSON.stringify(payload, null, 2))
+      await assignShift(payload)
     } else {
+      // ── FIX: use resolveId() so the value is always a clean integer, ────────
+      // even if q-select emits an option object instead of the raw primitive.
+      // This mirrors the same guard used in quickAddSchedule.
       const schedulePayloads = n.selectedDates.flatMap((dateStr) =>
-        n.oneTimeShifts.map((shift) => ({
-          date: dateStr,
-          site_id: parseInt(shift.site),
-          shift_type_id: parseInt(shift.shiftType),
-        })),
+        n.oneTimeShifts.map((shift) => {
+          const siteId = resolveId(shift.site)
+          const shiftTypeId = resolveId(shift.shiftType)
+          return {
+            date: dateStr,
+            site_id: siteId,
+            shift_type_id: shiftTypeId,
+          }
+        }),
       )
-      await assignShift({ company_id: cId, employee_ids: n.userIds, schedules: schedulePayloads })
+
+      const payload = {
+        company_id: cId,
+        employee_ids: n.userIds,
+        schedules: schedulePayloads,
+      }
+
+      console.log('[addSchedule] one-time payload:', JSON.stringify(payload, null, 2))
+      await assignShift(payload)
     }
+
     showAddModal.value = false
     newSchedule.value = _freshSchedule()
+
+    // Auto-navigate to the week that contains the schedule's start date so the
+    // user immediately sees the newly created shifts in the table.
+    if (n.recurringStartDate || n.selectedDates?.[0]) {
+      const targetDate = new Date((n.recurringStartDate || n.selectedDates[0]) + 'T00:00:00')
+      selectedWeek.value = getWeekRange(targetDate)
+    }
+
+    // Wait for the backend to finish writing the new assignments, then refresh.
+    // 1200 ms gives the server time to generate schedule rows for all rules.
+    await new Promise((r) => setTimeout(r, 1200))
+    await fetchData()
+    fetchLeaves()
+
+    // Tell the user where to find the new schedules — recurring ones may land
+    // on a future week depending on the start_date and weekday rules.
+    const scheduleLabel = n.scheduleType === 'recurring' ? 'Recurring schedule' : 'Schedule'
+    const startHint =
+      n.scheduleType === 'recurring' && n.recurringStartDate
+        ? ` Starting ${n.recurringStartDate}.`
+        : ''
     $q.notify({
       type: 'positive',
-      message: `${n.scheduleType === 'recurring' ? 'Recurring schedule' : 'Schedule'} created successfully!`,
+      message: `${scheduleLabel} created successfully!`,
+      caption: `Navigate to the correct week to see the new shifts.${startHint}`,
       icon: 'check_circle',
+      timeout: 5000,
     })
-    setTimeout(async () => {
-      await fetchData()
-      fetchLeaves()
-    }, 500)
   } catch (error) {
     handleScheduleError(error)
   } finally {

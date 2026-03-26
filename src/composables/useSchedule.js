@@ -21,7 +21,7 @@ export function useSchedule() {
 
   /**
    * Fetch company monthly schedule.
-   * @param {object} [params] - Extra query params e.g. { year, month }
+   * @param {object} [params] - Extra query params e.g. { start_date: '2026-03-01', end_date: '2026-03-15' }
    */
   async function fetchMonthlySchedules(params = {}) {
     loading.value = true
@@ -38,10 +38,32 @@ export function useSchedule() {
     }
   }
 
+  /**
+   * Fetch schedules for a specific date range. Faster than fetching a full month.
+   * @param {string} startDate - YYYY-MM-DD e.g. '2026-03-24'
+   * @param {string} endDate   - YYYY-MM-DD e.g. '2026-03-30'
+   * @param {object} [params]  - Extra query params
+   */
+  async function fetchScheduleByDateRange(startDate, endDate, params = {}) {
+    loading.value = true
+    try {
+      const response = await axios.get(`${BASE}/organization/schedules/company/monthly/`, {
+        params: { company: companyId.value, start_date: startDate, end_date: endDate, ...params },
+        headers: authHeaders(),
+      })
+      const data = response.data.data ?? response.data ?? []
+      schedules.value = Array.isArray(data) ? data : []
+      return schedules.value
+    } finally {
+      loading.value = false
+    }
+  }
+
   // ─── Assignments ──────────────────────────────────────────────────────────
 
   /**
-   * Assign a shift to one or more employees.
+   * Assign a one-time shift to one or more employees.
+   * Payload: { company_id, employee_ids, schedules: [{ date, site_id, shift_type_id }] }
    * @param {object} payload
    */
   async function assignShift(payload) {
@@ -97,13 +119,12 @@ export function useSchedule() {
   async function assignDayOff(payload) {
     saving.value = true
     try {
-      console.log('assignDayOff payload:', JSON.stringify(payload, null, 2))
       const response = await axios.patch(`${BASE}/organization/assignments/assign-off/`, payload, {
         headers: authHeaders(),
       })
       return response.data
     } catch (error) {
-      console.error('assignDayOff 400 response:', JSON.stringify(error.response?.data, null, 2))
+      console.error('assignDayOff error:', error.response?.data)
       throw error
     } finally {
       saving.value = false
@@ -114,15 +135,21 @@ export function useSchedule() {
 
   /**
    * Apply leave on behalf of an employee (admin action).
-   * @param {object} payload
+   * Status is always set to 'approved' since this is an admin-initiated action.
+   * @param {object} payload - { employee_id, leave_type, start_date, end_date, hours, reason, company_id }
    */
   async function applyLeaveForEmployee(payload) {
     saving.value = true
     try {
-      const response = await axios.post(`${BASE}/attendance/leave/apply-for-employee/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await axios.post(
+        `${BASE}/attendance/leave/apply-for-employee/`,
+        { ...payload, status: 'approved' },
+        { headers: authHeaders() },
+      )
       return response.data
+    } catch (error) {
+      console.error('applyLeaveForEmployee error:', error.response?.data)
+      throw error
     } finally {
       saving.value = false
     }
@@ -156,6 +183,7 @@ export function useSchedule() {
     saving,
     // methods
     fetchMonthlySchedules,
+    fetchScheduleByDateRange,
     assignShift,
     reassignShift,
     cancelAssignment,
