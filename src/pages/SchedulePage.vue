@@ -517,11 +517,13 @@
                     </q-item>
                   </template>
                 </q-select>
-                <!-- Multi-date picker -->
-                <div class="recurring-calendar-preview">
-                  <div class="calendar-preview-header">
-                    <q-icon name="event_note" size="16px" color="primary" />
-                    <span class="calendar-preview-title">Select Date(s)</span>
+                <!-- Multi-date picker (dual-month) -->
+                <div class="one-time-calendar-section">
+                  <div class="one-time-calendar-header">
+                    <div style="display: flex; align-items: center; gap: 6px">
+                      <q-icon name="event_note" size="16px" color="primary" />
+                      <span class="calendar-preview-title">Select Date(s)</span>
+                    </div>
                     <q-badge
                       :color="(newSchedule.selectedDates || []).length ? 'primary' : 'grey'"
                       :label="
@@ -531,28 +533,92 @@
                       "
                     />
                   </div>
-                  <div class="calendar-preview-legend">
+                  <div class="legend-row">
                     <span class="legend-dot legend-dot-active"></span>
                     <span class="legend-text">Click dates to select or deselect</span>
                   </div>
-                  <q-date
-                    v-model="newSchedule.selectedDates"
-                    multiple
-                    mask="YYYY-MM-DD"
-                    :options="
-                      (date) => {
-                        const n = new Date()
-                        return (
-                          date >=
-                          `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-                        )
-                      }
-                    "
-                    :events="newSchedule.selectedDates || []"
-                    event-color="primary"
-                    minimal
-                    class="recurring-calendar"
-                  />
+                  <!-- Dual calendar for one-time -->
+                  <div class="dual-calendar-panel dual-calendar-panel--inline">
+                    <div class="dual-calendar-grid">
+                      <!-- Left -->
+                      <div class="mini-calendar">
+                        <div class="mini-calendar-header">
+                          <q-btn
+                            flat
+                            round
+                            dense
+                            icon="chevron_left"
+                            size="sm"
+                            @click="oneTimePrevMonth"
+                            class="cal-nav-btn"
+                          />
+                          <span class="mini-calendar-title">{{
+                            calendarMonthLabel(oneTimeLeftYear, oneTimeLeftMonth)
+                          }}</span>
+                          <div style="width: 32px" />
+                        </div>
+                        <div class="mini-calendar-weekdays">
+                          <span v-for="d in ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']" :key="d">{{
+                            d
+                          }}</span>
+                        </div>
+                        <div class="mini-calendar-days">
+                          <span
+                            v-for="(cell, i) in oneTimeLeftCells"
+                            :key="'ol' + i"
+                            class="cal-day"
+                            :class="getOneTimeDayCellClass(cell, oneTimeLeftYear, oneTimeLeftMonth)"
+                            @click="
+                              cell.day
+                                ? toggleOneTimeDate(cell.day, oneTimeLeftYear, oneTimeLeftMonth)
+                                : null
+                            "
+                            >{{ cell.day || '' }}</span
+                          >
+                        </div>
+                      </div>
+                      <!-- Right -->
+                      <div class="mini-calendar">
+                        <div class="mini-calendar-header">
+                          <div style="width: 32px" />
+                          <span class="mini-calendar-title">{{
+                            calendarMonthLabel(oneTimeRightYear, oneTimeRightMonth)
+                          }}</span>
+                          <q-btn
+                            flat
+                            round
+                            dense
+                            icon="chevron_right"
+                            size="sm"
+                            @click="oneTimeNextMonth"
+                            class="cal-nav-btn"
+                          />
+                        </div>
+                        <div class="mini-calendar-weekdays">
+                          <span v-for="d in ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']" :key="d">{{
+                            d
+                          }}</span>
+                        </div>
+                        <div class="mini-calendar-days">
+                          <span
+                            v-for="(cell, i) in oneTimeRightCells"
+                            :key="'or' + i"
+                            class="cal-day"
+                            :class="
+                              getOneTimeDayCellClass(cell, oneTimeRightYear, oneTimeRightMonth)
+                            "
+                            @click="
+                              cell.day
+                                ? toggleOneTimeDate(cell.day, oneTimeRightYear, oneTimeRightMonth)
+                                : null
+                            "
+                            >{{ cell.day || '' }}</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Selected chips -->
                   <div
                     v-if="(newSchedule.selectedDates || []).length > 0"
                     class="calendar-weekdays-summary"
@@ -571,7 +637,7 @@
                           (d) => d !== date,
                         )
                       "
-                      >{{ date }}</q-chip
+                      >{{ formatDisplayDate(date) }}</q-chip
                     >
                   </div>
                   <div
@@ -605,8 +671,61 @@
                       class="remove-btn"
                     />
                   </div>
-                  <div class="shift-fields">
+                  <div
+                    class="shift-fields"
+                    style="display: flex; flex-direction: column; gap: 12px"
+                  >
+                    <!-- 1. Shift Template -->
                     <q-select
+                      v-model="shift.shiftTemplate"
+                      :options="shiftTemplateOptions"
+                      option-value="value"
+                      option-label="label"
+                      label="Shift Template"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      clearable
+                      class="form-field full-width"
+                      @update:model-value="
+                        (val) => {
+                          if (val) {
+                            shift.shiftType = null
+                            shift.site = null
+                          }
+                        }
+                      "
+                    />
+                    <!-- 2. Shift Type -->
+                    <q-select
+                      v-model="shift.shiftType"
+                      :options="shiftTypeOptions"
+                      option-value="value"
+                      option-label="label"
+                      label="Shift Type"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      clearable
+                      class="form-field"
+                      :class="{ 'full-width': !shift.shiftType }"
+                      :rules="[
+                        () =>
+                          !!shift.shiftType ||
+                          !!shift.shiftTemplate ||
+                          'Select a shift type or template',
+                      ]"
+                      @update:model-value="
+                        (val) => {
+                          if (val) shift.shiftTemplate = null
+                        }
+                      "
+                    />
+                    <!-- 3. Site — only shown when shift type is selected (not template) -->
+                    <q-select
+                      v-if="shift.shiftType && !shift.shiftTemplate"
                       v-model="shift.site"
                       :options="siteOptions"
                       option-value="value"
@@ -619,38 +738,17 @@
                       class="form-field"
                       :rules="[(val) => !!val || 'Site is required']"
                     />
-                    <q-select
-                      v-model="shift.shiftType"
-                      :options="shiftTypeOptions"
-                      option-value="value"
-                      option-label="label"
-                      label="Shift Type"
-                      outlined
-                      dense
-                      emit-value
-                      map-options
-                      class="form-field"
-                      :rules="[(val) => !!val || 'Shift type is required']"
-                    />
                   </div>
                 </div>
-                <q-btn
-                  flat
-                  icon="add"
-                  label="Add Another Shift"
-                  @click="newSchedule.oneTimeShifts.push({ site: null, shiftType: null })"
-                  color="primary"
-                  size="sm"
-                  class="add-row-btn q-mb-sm"
-                />
               </div>
-              <!-- For Recurring: Date Range Selection -->
+              <!-- For Recurring: Date Range Inputs -->
               <div v-if="newSchedule.scheduleType === 'recurring'" class="form-row">
                 <q-input
                   v-model="newSchedule.recurringStartDate"
                   label="Start Date"
                   outlined
                   class="form-field"
+                  placeholder="YYYY-MM-DD"
                   :rules="[(val) => !!val || 'Start date is required']"
                   readonly
                 >
@@ -683,6 +781,7 @@
                   label="End Date"
                   outlined
                   class="form-field"
+                  placeholder="YYYY-MM-DD"
                   :rules="[(val) => !!val || 'End date is required']"
                   readonly
                 >
@@ -733,27 +832,85 @@
                   newSchedule.recurringSchedule &&
                   recurringCalendarDates.length > 0
                 "
-                class="recurring-calendar-preview"
+                class="one-time-calendar-section"
               >
-                <div class="calendar-preview-header">
-                  <q-icon name="event_note" size="16px" color="primary" />
-                  <span class="calendar-preview-title">Schedule Preview</span>
+                <div class="one-time-calendar-header">
+                  <div style="display: flex; align-items: center; gap: 6px">
+                    <q-icon name="event_note" size="16px" color="primary" />
+                    <span class="calendar-preview-title">Schedule Preview</span>
+                  </div>
                   <q-badge color="primary" :label="`${recurringCalendarDates.length} days`" />
                 </div>
-                <div class="calendar-preview-legend">
+                <div class="legend-row">
                   <span class="legend-dot legend-dot-active"></span>
                   <span class="legend-text">Scheduled working days</span>
                 </div>
-                <q-date
-                  v-model="recurringCalendarDates"
-                  multiple
-                  mask="YYYY/MM/DD"
-                  minimal
-                  readonly
-                  no-unset
-                  :default-year-month="recurringCalendarDefaultMonth"
-                  class="recurring-calendar"
-                />
+                <div class="dual-calendar-panel dual-calendar-panel--inline">
+                  <div class="dual-calendar-grid">
+                    <div class="mini-calendar">
+                      <div class="mini-calendar-header">
+                        <q-btn
+                          flat
+                          round
+                          dense
+                          icon="chevron_left"
+                          size="sm"
+                          @click="previewPrevMonth"
+                          class="cal-nav-btn"
+                        />
+                        <span class="mini-calendar-title">{{
+                          calendarMonthLabel(previewLeftYear, previewLeftMonth)
+                        }}</span>
+                        <div style="width: 32px" />
+                      </div>
+                      <div class="mini-calendar-weekdays">
+                        <span v-for="d in ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']" :key="d">{{
+                          d
+                        }}</span>
+                      </div>
+                      <div class="mini-calendar-days">
+                        <span
+                          v-for="(cell, i) in previewLeftCells"
+                          :key="'pl' + i"
+                          class="cal-day"
+                          :class="getPreviewDayCellClass(cell, previewLeftYear, previewLeftMonth)"
+                          >{{ cell.day || '' }}</span
+                        >
+                      </div>
+                    </div>
+                    <div class="mini-calendar">
+                      <div class="mini-calendar-header">
+                        <div style="width: 32px" />
+                        <span class="mini-calendar-title">{{
+                          calendarMonthLabel(previewRightYear, previewRightMonth)
+                        }}</span>
+                        <q-btn
+                          flat
+                          round
+                          dense
+                          icon="chevron_right"
+                          size="sm"
+                          @click="previewNextMonth"
+                          class="cal-nav-btn"
+                        />
+                      </div>
+                      <div class="mini-calendar-weekdays">
+                        <span v-for="d in ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']" :key="d">{{
+                          d
+                        }}</span>
+                      </div>
+                      <div class="mini-calendar-days">
+                        <span
+                          v-for="(cell, i) in previewRightCells"
+                          :key="'pr' + i"
+                          class="cal-day"
+                          :class="getPreviewDayCellClass(cell, previewRightYear, previewRightMonth)"
+                          >{{ cell.day || '' }}</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div class="calendar-weekdays-summary">
                   <span class="weekdays-label">Active on:</span>
                   <q-chip
@@ -770,18 +927,6 @@
               <!-- Site & Department (recurring only) -->
               <div v-if="newSchedule.scheduleType === 'recurring'" class="form-row">
                 <q-select
-                  v-model="newSchedule.site"
-                  :options="siteOptions"
-                  option-value="value"
-                  option-label="label"
-                  label="Select Site"
-                  outlined
-                  emit-value
-                  map-options
-                  class="form-field"
-                  :rules="[(val) => !!val || 'Site is required']"
-                />
-                <q-select
                   v-model="newSchedule.department"
                   :options="departmentOptions"
                   option-value="value"
@@ -790,7 +935,7 @@
                   outlined
                   emit-value
                   map-options
-                  class="form-field"
+                  class="form-field full-width"
                   clearable
                 />
               </div>
@@ -1159,6 +1304,7 @@ const {
   applyLeaveForEmployee,
   fetchLeaveTypes: fetchLeaveTypesApi,
   deleteLeave: deleteLeaveApi,
+  fetchShiftTemplates: fetchShiftTemplatesApi,
 } = useSchedule()
 const {
   sites,
@@ -1194,6 +1340,7 @@ const isAddingShift = ref(false)
 const assigningDayOffId = ref(null)
 const quickActionLoading = ref(null)
 const leaveTypes = ref([])
+const shiftTemplates = ref([])
 const addConflictWarning = ref(false)
 
 // ─── Fresh schedule factory (single source of truth) ─────────────────────────
@@ -1202,7 +1349,7 @@ const _freshSchedule = () => ({
   userIds: [],
   selectedDate: null,
   selectedDates: [],
-  oneTimeShifts: [{ site: null, shiftType: null }],
+  oneTimeShifts: [{ site: null, shiftType: null, shiftTemplate: null }],
   startTime: '',
   endTime: '',
   position: null,
@@ -1252,6 +1399,236 @@ const siteFilterRef = ref(null)
 const employeeFilterRef = ref(null)
 const filteredEmployeeOptions = ref([])
 const recurringCalendarModel = ref(null)
+
+// ─── Dual-month date range picker ─────────────────────────────────────────────
+const dateRangePickerOpen = ref(false)
+const dateRangeSelecting = ref('start') // 'start' | 'end'
+const _today = new Date()
+const calLeftMonth = ref(_today.getMonth())
+const calLeftYear = ref(_today.getFullYear())
+const calRightMonth = computed(() => (calLeftMonth.value + 1) % 12)
+const calRightYear = computed(() =>
+  calLeftMonth.value === 11 ? calLeftYear.value + 1 : calLeftYear.value,
+)
+
+const _MONTH_NAMES = [
+  'JANUARY',
+  'FEBRUARY',
+  'MARCH',
+  'APRIL',
+  'MAY',
+  'JUNE',
+  'JULY',
+  'AUGUST',
+  'SEPTEMBER',
+  'OCTOBER',
+  'NOVEMBER',
+  'DECEMBER',
+]
+
+const calendarMonthLabel = (year, month) => `${_MONTH_NAMES[month]} ${year}`
+
+const buildCalendarCells = (year, month) => {
+  const firstDay = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells = []
+  for (let i = 0; i < firstDay; i++) cells.push({ day: null })
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d })
+  return cells
+}
+
+const leftCalendarCells = computed(() => buildCalendarCells(calLeftYear.value, calLeftMonth.value))
+const rightCalendarCells = computed(() =>
+  buildCalendarCells(calRightYear.value, calRightMonth.value),
+)
+
+const _toDateStr = (year, month, day) =>
+  `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+const getDayCellClass = (cell, year, month) => {
+  if (!cell.day) return 'cal-day--empty'
+  const dateStr = _toDateStr(year, month, cell.day)
+  const todayStr = _toDateStr(_today.getFullYear(), _today.getMonth(), _today.getDate())
+  const start = newSchedule.value.recurringStartDate
+  const end = newSchedule.value.recurringEndDate
+  const isPast = dateStr < todayStr
+  const isStart = dateStr === start
+  const isEnd = dateStr === end
+  const inRange = start && end && dateStr > start && dateStr < end
+  return {
+    'cal-day--past': isPast,
+    'cal-day--selected': isStart || isEnd,
+    'cal-day--range': inRange,
+    'cal-day--start': isStart,
+    'cal-day--end': isEnd,
+    'cal-day--disabled': isPast,
+  }
+}
+
+const openDateRangePicker = (which) => {
+  dateRangeSelecting.value = which
+  dateRangePickerOpen.value = true
+}
+
+const selectCalendarDay = (day, year, month) => {
+  const dateStr = _toDateStr(year, month, day)
+  const todayStr = _toDateStr(_today.getFullYear(), _today.getMonth(), _today.getDate())
+  if (dateStr < todayStr) return
+  if (dateRangeSelecting.value === 'start') {
+    newSchedule.value.recurringStartDate = dateStr
+    if (newSchedule.value.recurringEndDate && newSchedule.value.recurringEndDate < dateStr) {
+      newSchedule.value.recurringEndDate = null
+    }
+    dateRangeSelecting.value = 'end'
+  } else {
+    if (dateStr < (newSchedule.value.recurringStartDate || todayStr)) {
+      newSchedule.value.recurringStartDate = dateStr
+      newSchedule.value.recurringEndDate = null
+      dateRangeSelecting.value = 'end'
+    } else {
+      newSchedule.value.recurringEndDate = dateStr
+      dateRangePickerOpen.value = false
+    }
+  }
+}
+
+const calendarPrevMonth = () => {
+  if (calLeftMonth.value === 0) {
+    calLeftMonth.value = 11
+    calLeftYear.value--
+  } else calLeftMonth.value--
+}
+const calendarNextMonth = () => {
+  if (calLeftMonth.value === 11) {
+    calLeftMonth.value = 0
+    calLeftYear.value++
+  } else calLeftMonth.value++
+}
+
+const formatDisplayDate = (dateStr) => {
+  if (!dateStr) return ''
+  const [y, m, d] = dateStr.split('-')
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
+  return `${String(d).padStart(2, '0')} ${months[parseInt(m) - 1]} ${y}`
+}
+
+// ─── One-time dual-month multi-select calendar ────────────────────────────────
+const oneTimeLeftMonth = ref(_today.getMonth())
+const oneTimeLeftYear = ref(_today.getFullYear())
+const oneTimeRightMonth = computed(() => (oneTimeLeftMonth.value + 1) % 12)
+const oneTimeRightYear = computed(() =>
+  oneTimeLeftMonth.value === 11 ? oneTimeLeftYear.value + 1 : oneTimeLeftYear.value,
+)
+
+const oneTimeLeftCells = computed(() =>
+  buildCalendarCells(oneTimeLeftYear.value, oneTimeLeftMonth.value),
+)
+const oneTimeRightCells = computed(() =>
+  buildCalendarCells(oneTimeRightYear.value, oneTimeRightMonth.value),
+)
+
+const oneTimePrevMonth = () => {
+  if (oneTimeLeftMonth.value === 0) {
+    oneTimeLeftMonth.value = 11
+    oneTimeLeftYear.value--
+  } else oneTimeLeftMonth.value--
+}
+const oneTimeNextMonth = () => {
+  if (oneTimeLeftMonth.value === 11) {
+    oneTimeLeftMonth.value = 0
+    oneTimeLeftYear.value++
+  } else oneTimeLeftMonth.value++
+}
+
+const getOneTimeDayCellClass = (cell, year, month) => {
+  if (!cell.day) return 'cal-day--empty'
+  const dateStr = _toDateStr(year, month, cell.day)
+  const todayStr = _toDateStr(_today.getFullYear(), _today.getMonth(), _today.getDate())
+  const isPast = dateStr < todayStr
+  const isSelected = (newSchedule.value.selectedDates || []).includes(dateStr)
+  return {
+    'cal-day--past': isPast,
+    'cal-day--disabled': isPast,
+    'cal-day--selected': isSelected,
+    'cal-day--multi': isSelected,
+  }
+}
+
+const toggleOneTimeDate = (day, year, month) => {
+  const dateStr = _toDateStr(year, month, day)
+  const todayStr = _toDateStr(_today.getFullYear(), _today.getMonth(), _today.getDate())
+  if (dateStr < todayStr) return
+  const current = newSchedule.value.selectedDates || []
+  if (current.includes(dateStr)) {
+    newSchedule.value.selectedDates = current.filter((d) => d !== dateStr)
+  } else {
+    newSchedule.value.selectedDates = [...current, dateStr]
+  }
+}
+
+// ─── Recurring schedule preview calendar ──────────────────────────────────────
+const previewLeftMonth = ref(_today.getMonth())
+const previewLeftYear = ref(_today.getFullYear())
+const previewRightMonth = computed(() => (previewLeftMonth.value + 1) % 12)
+const previewRightYear = computed(() =>
+  previewLeftMonth.value === 11 ? previewLeftYear.value + 1 : previewLeftYear.value,
+)
+
+const previewLeftCells = computed(() =>
+  buildCalendarCells(previewLeftYear.value, previewLeftMonth.value),
+)
+const previewRightCells = computed(() =>
+  buildCalendarCells(previewRightYear.value, previewRightMonth.value),
+)
+
+const previewPrevMonth = () => {
+  if (previewLeftMonth.value === 0) {
+    previewLeftMonth.value = 11
+    previewLeftYear.value--
+  } else previewLeftMonth.value--
+}
+const previewNextMonth = () => {
+  if (previewLeftMonth.value === 11) {
+    previewLeftMonth.value = 0
+    previewLeftYear.value++
+  } else previewLeftMonth.value++
+}
+
+// recurringCalendarDates uses YYYY/MM/DD format — convert for lookup
+const getPreviewDayCellClass = (cell, year, month) => {
+  if (!cell.day) return 'cal-day--empty'
+  const dateStr = `${year}/${String(month + 1).padStart(2, '0')}/${String(cell.day).padStart(2, '0')}`
+  const isScheduled = recurringCalendarDates.value.includes(dateStr)
+  return {
+    'cal-day--multi': isScheduled,
+    'cal-day--preview-readonly': true,
+  }
+}
+
+// Sync preview left month to start date when template is selected
+watch(
+  () => newSchedule.value.recurringStartDate,
+  (val) => {
+    if (val) {
+      const [y, m] = val.split('-')
+      previewLeftMonth.value = parseInt(m) - 1
+      previewLeftYear.value = parseInt(y)
+    }
+  },
+)
 
 // ─── Week helpers ─────────────────────────────────────────────────────────────
 
@@ -1399,6 +1776,10 @@ const positionOptions = computed(() =>
 
 const shiftTypeOptions = computed(() =>
   shiftTypes.value.map((st) => ({ label: st.name, value: st.id })),
+)
+
+const shiftTemplateOptions = computed(() =>
+  shiftTemplates.value.map((t) => ({ label: t.name, value: t.id })),
 )
 
 const recurringScheduleOptions = computed(() =>
@@ -1636,6 +2017,10 @@ const fetchSitesAndDepartments = async () => {
 
 const fetchLeaveTypes = async () => {
   leaveTypes.value = await fetchLeaveTypesApi()
+}
+
+const fetchShiftTemplatesList = async () => {
+  shiftTemplates.value = await fetchShiftTemplatesApi()
 }
 
 const fetchLeaves = () => {
@@ -1900,6 +2285,7 @@ const openAddModal = () => {
   newSchedule.value = _freshSchedule()
   addConflictWarning.value = false
   fetchEmployees()
+  fetchShiftTemplatesList()
   showAddModal.value = true
 }
 const closeAddModal = () => (showAddModal.value = false)
@@ -2028,11 +2414,18 @@ const addSchedule = async () => {
   if (n.scheduleType === 'one-time') {
     if (!n.selectedDates?.length)
       return $q.notify({ type: 'negative', message: 'Please select at least one date.' })
-    if (!n.oneTimeShifts?.length || n.oneTimeShifts.some((s) => !s.site || !s.shiftType))
-      return $q.notify({
-        type: 'negative',
-        message: 'Please fill in site and shift type for all shifts.',
-      })
+    for (const s of n.oneTimeShifts) {
+      if (!s.shiftTemplate && !s.shiftType)
+        return $q.notify({
+          type: 'negative',
+          message: 'Please select a shift template or shift type for all shifts.',
+        })
+      if (!s.shiftTemplate && s.shiftType && !s.site)
+        return $q.notify({
+          type: 'negative',
+          message: 'Please select a site for all shift type shifts.',
+        })
+    }
   }
 
   if (n.scheduleType === 'recurring') {
@@ -2088,13 +2481,17 @@ const addSchedule = async () => {
       // This mirrors the same guard used in quickAddSchedule.
       const schedulePayloads = n.selectedDates.flatMap((dateStr) =>
         n.oneTimeShifts.map((shift) => {
-          const siteId = resolveId(shift.site)
+          const templateId = resolveId(shift.shiftTemplate)
           const shiftTypeId = resolveId(shift.shiftType)
-          return {
-            date: dateStr,
-            site_id: siteId,
-            shift_type_id: shiftTypeId,
+          const siteId = resolveId(shift.site)
+          const entry = { date: dateStr }
+          if (templateId) {
+            entry.shift_template_id = templateId
+          } else {
+            entry.site_id = siteId
+            entry.shift_type_id = shiftTypeId
           }
+          return entry
         }),
       )
 
@@ -2540,6 +2937,7 @@ onMounted(async () => {
   await fetchSitesAndDepartments()
   await fetchEmployees()
   await fetchLeaveTypes()
+  await fetchShiftTemplatesList()
   await fetchData()
   fetchLeaves()
 })
@@ -3547,6 +3945,222 @@ onMounted(async () => {
   font-size: 11px;
   color: #6b7280;
   font-weight: 500;
+}
+
+/* ==============================
+   DUAL-MONTH DATE RANGE PICKER
+============================== */
+.date-range-section {
+  margin-bottom: 12px;
+}
+
+.date-range-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.date-range-input-box {
+  position: relative;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 40px 10px 14px;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.2s;
+  min-height: 62px;
+}
+
+.date-range-input-box:hover {
+  border-color: #1a3a5c;
+}
+
+.date-range-input-box--active {
+  border-color: #1a3a5c;
+  border-width: 2px;
+}
+
+.date-range-input-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1a3a5c;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.date-range-input-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a3a5c;
+}
+
+.date-range-input-placeholder {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.date-range-input-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+}
+
+.dual-calendar-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.dual-calendar-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mini-calendar {
+  min-width: 0;
+}
+
+.mini-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mini-calendar-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1a3a5c;
+  letter-spacing: 0.03em;
+  text-align: center;
+  flex: 1;
+}
+
+.cal-nav-btn {
+  color: #6b7280 !important;
+}
+
+.mini-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  margin-bottom: 2px;
+}
+
+.mini-calendar-weekdays span {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 2px 0;
+}
+
+.mini-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.cal-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  font-size: 11px;
+  color: #1a3a5c;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  user-select: none;
+}
+
+.cal-day:not(.cal-day--empty):not(.cal-day--disabled):hover {
+  background: #e8edf5;
+}
+
+.cal-day--empty {
+  cursor: default;
+}
+
+.cal-day--disabled {
+  color: #d1d5db;
+  cursor: not-allowed;
+}
+
+.cal-day--range {
+  background: #e8edf5;
+  border-radius: 0;
+  color: #1a3a5c;
+}
+
+.cal-day--selected {
+  background: #1a3a5c !important;
+  color: #fff !important;
+  border-radius: 50% !important;
+  font-weight: 700;
+}
+
+.cal-day--start {
+  border-radius: 50% 0 0 50%;
+}
+
+.cal-day--end {
+  border-radius: 0 50% 50% 0;
+}
+
+.cal-day--start.cal-day--end {
+  border-radius: 50%;
+}
+
+.cal-day--multi {
+  background: #1a3a5c !important;
+  color: #fff !important;
+  border-radius: 50% !important;
+  font-weight: 700;
+}
+
+/* One-time calendar section */
+.one-time-calendar-section {
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 16px;
+}
+
+.one-time-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.dual-calendar-panel--inline {
+  box-shadow: none;
+  border: 1px solid #e0e7ff;
+  padding: 8px;
+}
+
+.cal-day--preview-readonly {
+  cursor: default;
+}
+.cal-day--preview-readonly:hover {
+  background: transparent !important;
 }
 
 /* Filter dropdown popup */
