@@ -180,6 +180,15 @@ const handleLogin = async () => {
     localStorage.setItem('account_uuid', accountUuid)
     localStorage.setItem('user_id', userId)
     localStorage.setItem('company_id', companyId)
+    localStorage.setItem('username', formData.value.username)
+
+    // Cache the display name so MainLayout can show it instantly on mount
+    const displayName =
+      firstCompany.user?.full_name ||
+      `${firstCompany.user?.first_name || ''} ${firstCompany.user?.last_name || ''}`.trim() ||
+      firstCompany.user?.username ||
+      formData.value.username
+    localStorage.setItem('cached_username', displayName)
 
     authStore.setAuth(access, {
       uuid: accountUuid,

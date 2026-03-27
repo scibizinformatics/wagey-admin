@@ -34,10 +34,121 @@
         <!-- Right side -->
         <div class="row items-center q-gutter-sm q-ml-md">
           <span class="text-body2 email-text" style="color: #000000">
-            drake.carcellar16@gmail.com
+            {{ currentUsername }}
           </span>
-          <q-avatar size="32px">
-            <q-icon name="person" />
+          <q-btn flat round dense color="grey-7" class="notification-btn" ref="notifBtn">
+            <q-icon name="notifications" size="22px" />
+            <q-badge color="red" floating rounded :label="unreadCount" v-if="unreadCount > 0" />
+            <q-tooltip>Notifications</q-tooltip>
+
+            <q-menu
+              v-model="notifModal"
+              anchor="bottom right"
+              self="top right"
+              :offset="[0, 8]"
+              class="notif-menu"
+              transition-show="jump-down"
+              transition-hide="jump-up"
+            >
+              <q-card class="notif-card">
+                <!-- Header -->
+                <q-card-section class="notif-header row items-center justify-between q-pb-sm">
+                  <div class="row items-center q-gutter-sm">
+                    <q-icon name="notifications" size="20px" color="primary" />
+                    <span class="notif-title">Notifications</span>
+                    <q-badge color="red" rounded :label="unreadCount" v-if="unreadCount > 0" />
+                  </div>
+                  <div class="row items-center q-gutter-xs">
+                    <q-btn
+                      flat
+                      dense
+                      size="sm"
+                      label="Mark all read"
+                      color="primary"
+                      @click="markAllRead"
+                      v-if="unreadCount > 0"
+                    />
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      icon="refresh"
+                      color="grey-6"
+                      @click="fetchNotifications"
+                      :loading="loadingNotifs"
+                    />
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      icon="close"
+                      color="grey-6"
+                      @click="notifModal = false"
+                    />
+                  </div>
+                </q-card-section>
+
+                <q-separator />
+
+                <!-- Notification List -->
+                <q-scroll-area style="height: 380px; width: 380px; max-width: 95vw">
+                  <!-- Loading state -->
+                  <div
+                    v-if="loadingNotifs"
+                    class="column items-center justify-center q-py-xl text-grey-5"
+                  >
+                    <q-spinner color="primary" size="32px" class="q-mb-sm" />
+                    <span class="text-body2">Loading notifications...</span>
+                  </div>
+
+                  <q-list separator v-else>
+                    <q-item
+                      v-for="notif in notifications"
+                      :key="notif.id"
+                      clickable
+                      class="notif-item"
+                      :class="{ 'notif-unread': !notif.read }"
+                      @click="markRead(notif)"
+                    >
+                      <q-item-section avatar>
+                        <q-avatar :color="notif.color" text-color="white" size="38px">
+                          <q-icon :name="notif.icon" size="18px" />
+                        </q-avatar>
+                      </q-item-section>
+                      <q-item-section>
+                        <q-item-label class="notif-item-title">{{ notif.title }}</q-item-label>
+                        <q-item-label caption class="notif-item-body">{{
+                          notif.message
+                        }}</q-item-label>
+                        <q-item-label caption class="notif-item-time">
+                          <q-icon name="schedule" size="11px" class="q-mr-xs" />{{ notif.time }}
+                        </q-item-label>
+                      </q-item-section>
+                      <q-item-section side top v-if="!notif.read">
+                        <q-badge
+                          color="blue-5"
+                          rounded
+                          style="width: 8px; height: 8px; min-width: unset; padding: 0"
+                        />
+                      </q-item-section>
+                    </q-item>
+
+                    <!-- Empty state -->
+                    <div
+                      v-if="notifications.length === 0"
+                      class="column items-center justify-center q-py-xl text-grey-5"
+                    >
+                      <q-icon name="notifications_none" size="48px" class="q-mb-sm" />
+                      <span class="text-body2">No notifications yet</span>
+                    </div>
+                  </q-list>
+                </q-scroll-area>
+              </q-card>
+            </q-menu>
+          </q-btn>
+          <q-avatar size="36px" class="user-avatar" :style="{ background: avatarColor }">
+            <span class="avatar-initials">{{ avatarInitials }}</span>
+            <q-tooltip>{{ currentUsername }}</q-tooltip>
           </q-avatar>
         </div>
       </div>
@@ -56,7 +167,7 @@
       :breakpoint="768"
     >
       <!-- Background image layer -->
-      <div class="drawer-bg" :style="{ backgroundImage: `url(${terrainBg})` }"></div>
+      <div class="drawer-bg" :style="{ backgroundImage: `url(${terrainBgUrl})` }"></div>
 
       <!-- Sidebar Header -->
       <div class="sidebar-header q-pa-lg" :class="{ 'sidebar-header-mini': isMini }">
@@ -80,7 +191,7 @@
             tag="router-link"
             :to="link.to"
             class="nav-item"
-            :class="{ 'nav-item-active': $route.path === link.to, 'nav-item-mini': isMini }"
+            :class="{ 'nav-item-active': route.path === link.to, 'nav-item-mini': isMini }"
           >
             <q-item-section avatar class="nav-icon">
               <q-icon :name="link.icon" size="20px" />
@@ -157,126 +268,357 @@
   </q-layout>
 </template>
 
-<script>
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import wageyLogo from 'src/assets/wagey_icon(White).png'
 import terrainBg from 'src/assets/terrain.svg'
 
-export default {
-  name: 'MainLayout',
-  data() {
-    return {
-      leftDrawerOpen: true,
-      isMini: false, // ← controls collapsed/expanded state
-      selectedCompany: null,
-      companyOptions: [],
-      logo: wageyLogo,
-      terrainBg: terrainBg,
-      loadingCompanies: false,
-      links: [
-        { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
-        { label: 'Employees', icon: 'groups', to: '/employees' },
-        { label: 'Attendance', icon: 'event_available', to: '/attendance' },
-        { label: 'Schedule', icon: 'calendar_month', to: '/schedule' },
-        { label: 'Payroll', icon: 'paid', to: '/payroll' },
-        { label: 'Requests', icon: 'mark_email_unread', to: '/requests' },
-        { label: 'Swap Requests', icon: 'swap_horiz', to: '/swap-requests' },
-        { label: 'Invite', icon: 'email', to: '/invite' },
-        { label: 'Announcement', icon: 'announcement', to: '/announcements' },
-        { label: 'Admin Settings', icon: 'settings', to: '/admin-settings' },
-      ],
-    }
-  },
+// ─── Composables ──────────────────────────────────────────────────────────────
+import { useOrganization } from 'src/composables/useOrganization'
+import { useRequests } from 'src/composables/useRequests'
+import { useSwapRequests } from 'src/composables/useSwapRequests'
+import { useAnnouncements } from 'src/composables/useAnnouncements'
+import { useAttendance } from 'src/composables/useAttendance'
 
-  computed: {
-    drawerWidth() {
-      if (this.$q.screen.width < 640) return 260
-      if (this.$q.screen.width < 768) return 268
-      if (this.$q.screen.width < 1024) return 244
-      if (this.$q.screen.width < 1280) return 260
-      if (this.$q.screen.width < 1440) return 268
-      return 276
-    },
-  },
+const $q = useQuasar()
+const router = useRouter()
+const route = useRoute()
 
-  async mounted() {
-    await this.fetchCompanies()
-    this.loadSavedCompany()
-  },
+// ─── Composable instances ─────────────────────────────────────────────────────
+const { fetchCompanies: fetchCompaniesFromOrg } = useOrganization()
+const { fetchLeaveRequests } = useRequests()
+const { fetchSwapRequests } = useSwapRequests()
+const { fetchAnnouncements } = useAnnouncements()
+const { fetchAttendanceByDate } = useAttendance()
 
-  methods: {
-    async fetchCompanies() {
-      this.loadingCompanies = true
-      try {
-        const token = localStorage.getItem('access_token')
-        const res = await api.get('https://staging.wageyapp.com/organization/companies/', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+// ─── Static assets ────────────────────────────────────────────────────────────
+const logo = wageyLogo
+const terrainBgUrl = terrainBg
 
-        let companiesData = []
-        if (Array.isArray(res.data)) companiesData = res.data
-        else if (res.data && Array.isArray(res.data.data)) companiesData = res.data.data
-        else if (res.data && Array.isArray(res.data.results)) companiesData = res.data.results
-        else if (res.data && typeof res.data === 'object') companiesData = [res.data]
+// ─── Nav links ────────────────────────────────────────────────────────────────
+const links = [
+  { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
+  { label: 'Employees', icon: 'groups', to: '/employees' },
+  { label: 'Attendance', icon: 'event_available', to: '/attendance' },
+  { label: 'Schedule', icon: 'calendar_month', to: '/schedule' },
+  { label: 'Payroll', icon: 'paid', to: '/payroll' },
+  { label: 'Requests', icon: 'mark_email_unread', to: '/requests' },
+  { label: 'Swap Requests', icon: 'swap_horiz', to: '/swap-requests' },
+  { label: 'Invite', icon: 'email', to: '/invite' },
+  { label: 'Announcement', icon: 'announcement', to: '/announcements' },
+  { label: 'Admin Settings', icon: 'settings', to: '/admin-settings' },
+]
 
-        if (!Array.isArray(companiesData) || companiesData.length === 0) {
-          this.$q.notify({
-            type: 'warning',
-            message: 'No companies found for your account',
-            position: 'top',
-          })
-          return
-        }
+// ─── UI state ─────────────────────────────────────────────────────────────────
+const leftDrawerOpen = ref(true)
+const isMini = ref(false)
+const notifModal = ref(false)
 
-        this.companyOptions = companiesData.map((company) => ({
-          siteId: String(company.id),
-          siteName: company.name || `Company ${company.id}`,
-        }))
-      } catch (err) {
-        this.$q.notify({
-          type: 'negative',
-          message: err.response?.data?.message || 'Failed to load companies',
-          position: 'top',
-        })
-      } finally {
-        this.loadingCompanies = false
-      }
-    },
+// ─── Company state ────────────────────────────────────────────────────────────
+const selectedCompany = ref(null)
+const companyOptions = ref([])
+const loadingCompanies = ref(false)
 
-    onCompanyChange(siteId) {
-      this.setSelectedCompany(siteId)
-      this.$root.$emit('company-changed', siteId)
-      window.location.reload()
-    },
+// ─── User state ───────────────────────────────────────────────────────────────
+const currentUsername = ref('')
 
-    setSelectedCompany(siteId) {
-      this.selectedCompany = String(siteId)
-      localStorage.setItem('selectedCompany', String(siteId))
-    },
+// ─── Notification state ───────────────────────────────────────────────────────
+const notifications = ref([])
+const loadingNotifs = ref(false)
 
-    loadSavedCompany() {
-      const saved = localStorage.getItem('selectedCompany')
-      if (saved) {
-        const match = this.companyOptions.find((opt) => String(opt.siteId) === String(saved))
-        if (match) {
-          this.selectedCompany = String(match.siteId)
-          return
-        }
-      }
-      if (this.companyOptions.length > 0) {
-        this.setSelectedCompany(this.companyOptions[0].siteId)
-      }
-    },
+// ─── Computed ─────────────────────────────────────────────────────────────────
+const unreadCount = computed(() => notifications.value.filter((n) => !n.read).length)
 
-    logout() {
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('selectedCompany')
-      this.$router.push({ name: 'login' }).then(() => {
-        window.location.reload()
-      })
-    },
-  },
+const avatarInitials = computed(() => {
+  const name = currentUsername.value
+  if (!name) return '?'
+  if (name.includes('@')) return name.slice(0, 2).toUpperCase()
+  const parts = name.trim().split(' ').filter(Boolean)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+})
+
+const avatarColor = computed(() => {
+  const name = currentUsername.value || '?'
+  const colors = [
+    '#667eea',
+    '#764ba2',
+    '#f093fb',
+    '#4facfe',
+    '#43e97b',
+    '#fa709a',
+    '#fee140',
+    '#30cfd0',
+    '#a18cd1',
+    '#fda085',
+    '#84fab0',
+    '#f6d365',
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return colors[Math.abs(hash) % colors.length]
+})
+
+const drawerWidth = computed(() => {
+  const w = $q.screen.width
+  if (w < 640) return 260
+  if (w < 768) return 268
+  if (w < 1024) return 244
+  if (w < 1280) return 260
+  if (w < 1440) return 268
+  return 276
+})
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function timeAgo(dateStr) {
+  if (!dateStr) return ''
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins} min${mins > 1 ? 's' : ''} ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} hour${hrs > 1 ? 's' : ''} ago`
+  const days = Math.floor(hrs / 24)
+  return `${days} day${days > 1 ? 's' : ''} ago`
 }
+
+// ─── Companies ────────────────────────────────────────────────────────────────
+async function fetchCompanies() {
+  loadingCompanies.value = true
+  try {
+    // useOrganization's fetchCompanies already handles auth headers
+    const companiesData = await fetchCompaniesFromOrg()
+
+    if (!Array.isArray(companiesData) || companiesData.length === 0) {
+      $q.notify({
+        type: 'warning',
+        message: 'No companies found for your account',
+        position: 'top',
+      })
+      return
+    }
+
+    companyOptions.value = companiesData.map((company) => ({
+      siteId: String(company.id),
+      siteName: company.name || `Company ${company.id}`,
+    }))
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err.response?.data?.message || 'Failed to load companies',
+      position: 'top',
+    })
+  } finally {
+    loadingCompanies.value = false
+  }
+}
+
+function setSelectedCompany(siteId) {
+  selectedCompany.value = String(siteId)
+  localStorage.setItem('selectedCompany', String(siteId))
+}
+
+function loadSavedCompany() {
+  const saved = localStorage.getItem('selectedCompany')
+  if (saved) {
+    const match = companyOptions.value.find((opt) => String(opt.siteId) === String(saved))
+    if (match) {
+      selectedCompany.value = String(match.siteId)
+      return
+    }
+  }
+  if (companyOptions.value.length > 0) {
+    setSelectedCompany(companyOptions.value[0].siteId)
+  }
+}
+
+function onCompanyChange(siteId) {
+  setSelectedCompany(siteId)
+  window.location.reload()
+}
+
+// ─── Current user ─────────────────────────────────────────────────────────────
+async function loadCurrentUser() {
+  // Show cached value instantly while fetching fresh data
+  const cached = localStorage.getItem('cached_username')
+  if (cached) currentUsername.value = cached
+
+  try {
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+
+    // Decode JWT to get user_id
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    const userId = payload?.user_id
+    if (!userId) return
+
+    const response = await api.get(`https://staging.wageyapp.com/user/users/${userId}/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = response.data?.data ?? response.data ?? {}
+    const name =
+      data?.username ||
+      data?.email ||
+      `${data?.first_name || ''} ${data?.last_name || ''}`.trim() ||
+      data?.name ||
+      ''
+    if (name) {
+      currentUsername.value = name
+      localStorage.setItem('cached_username', name)
+    }
+  } catch {
+    // Keep cached value if API call fails
+  }
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+async function fetchNotifications() {
+  loadingNotifs.value = true
+  const notifs = []
+  const companyId = localStorage.getItem('selectedCompany')
+
+  try {
+    // ── Leave requests ────────────────────────────────────────────────────
+    const leaves = await fetchLeaveRequests().catch(() => [])
+    leaves
+      .filter((l) => l.status === 'pending')
+      .slice(0, 5)
+      .forEach((l) => {
+        const emp = l.employee_name || l.employee?.full_name || l.employee?.name || 'An employee'
+        notifs.push({
+          id: `leave-${l.id}`,
+          title: 'Leave Request',
+          message: `${emp} requested ${l.leave_type || 'leave'} from ${l.start_date || ''} to ${l.end_date || ''}.`,
+          time: timeAgo(l.created_at || l.date_filed),
+          icon: 'event_busy',
+          color: 'orange',
+          read: false,
+        })
+      })
+  } catch {
+    /* silent */
+  }
+
+  try {
+    // ── Swap requests ─────────────────────────────────────────────────────
+    const swaps = await fetchSwapRequests({ company: companyId }).catch(() => [])
+    swaps
+      .filter((s) => s.status === 'pending')
+      .slice(0, 5)
+      .forEach((s) => {
+        const requester = s.requester_name || s.requester?.full_name || 'An employee'
+        const target = s.target_name || s.target?.full_name || 'another employee'
+        notifs.push({
+          id: `swap-${s.id}`,
+          title: 'Shift Swap Request',
+          message: `${requester} requested a shift swap with ${target}.`,
+          time: timeAgo(s.created_at || s.date_filed),
+          icon: 'swap_horiz',
+          color: 'blue',
+          read: false,
+        })
+      })
+  } catch {
+    /* silent */
+  }
+
+  try {
+    // ── Announcements ──────────────────────────────────────────────────────
+    const announcements = await fetchAnnouncements().catch(() => [])
+    announcements.slice(0, 3).forEach((a) => {
+      notifs.push({
+        id: `ann-${a.id}`,
+        title: 'Announcement',
+        message: a.title || a.message || 'New announcement posted.',
+        time: timeAgo(a.created_at || a.date_posted),
+        icon: 'campaign',
+        color: 'purple',
+        read: false,
+      })
+    })
+  } catch {
+    /* silent */
+  }
+
+  try {
+    // ── Attendance — today's late / no time-out ────────────────────────────
+    const today = new Date().toISOString().slice(0, 10)
+    const records = await fetchAttendanceByDate(today).catch(() => [])
+
+    records.forEach((r) => {
+      const emp = r.employee_name || r.employee?.full_name || r.employee?.name || 'An employee'
+
+      if (r.is_late || r.status === 'late') {
+        notifs.push({
+          id: `att-late-${r.id}`,
+          title: 'Late Attendance',
+          message: `${emp} clocked in late at ${r.time_in || r.clock_in || 'unknown time'}.`,
+          time: timeAgo(r.time_in || r.date || today),
+          icon: 'schedule',
+          color: 'red',
+          read: false,
+        })
+      }
+
+      if (r.status === 'absent' || r.status === 'no_show') {
+        notifs.push({
+          id: `att-absent-${r.id}`,
+          title: 'Absent',
+          message: `${emp} has no attendance record for today.`,
+          time: timeAgo(today),
+          icon: 'person_off',
+          color: 'deep-orange',
+          read: false,
+        })
+      }
+
+      const hourNow = new Date().getHours()
+      if (r.time_in && !r.time_out && !r.clock_out && hourNow >= 18) {
+        notifs.push({
+          id: `att-noout-${r.id}`,
+          title: 'Missing Time-Out',
+          message: `${emp} has not clocked out yet today.`,
+          time: timeAgo(r.time_in || today),
+          icon: 'login',
+          color: 'amber-9',
+          read: false,
+        })
+      }
+    })
+  } catch {
+    /* silent */
+  }
+
+  notifications.value = notifs
+  loadingNotifs.value = false
+}
+
+function markRead(notif) {
+  notif.read = true
+}
+
+function markAllRead() {
+  notifications.value.forEach((n) => (n.read = true))
+}
+
+// ─── Logout ───────────────────────────────────────────────────────────────────
+function logout() {
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('selectedCompany')
+  localStorage.removeItem('username')
+  router.push({ name: 'login' }).then(() => window.location.reload())
+}
+
+// ─── Lifecycle ────────────────────────────────────────────────────────────────
+onMounted(async () => {
+  await fetchCompanies()
+  loadSavedCompany()
+  loadCurrentUser()
+  await fetchNotifications()
+})
 </script>
 
 <style>
@@ -505,7 +847,9 @@ export default {
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  flex: 1;
+  /* Show ~3 tabs (each tab ~140px + 8px gap); scroll left to reveal the rest */
+  max-width: 50%;
+  flex-shrink: 0;
 }
 .company-tabs-wrapper::-webkit-scrollbar {
   display: none;
@@ -586,9 +930,6 @@ export default {
   .nav-icon :deep(.q-icon) {
     font-size: 17px;
   }
-  .email-text {
-    display: none;
-  }
   .header-bar {
     padding: 8px 12px;
   }
@@ -622,9 +963,6 @@ export default {
   }
   .nav-icon {
     min-width: 33px;
-  }
-  .email-text {
-    display: none;
   }
 }
 
@@ -760,5 +1098,69 @@ export default {
   .sidebar-logo {
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
+}
+
+/* ── Notification Modal ── */
+.notif-menu {
+  border-radius: 14px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14) !important;
+  overflow: hidden;
+}
+
+.notif-card {
+  width: 380px;
+  max-width: 95vw;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.notif-header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.notif-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.notif-item {
+  padding: 12px 16px;
+  transition: background 0.15s ease;
+}
+
+.notif-item:hover {
+  background: #f1f5f9;
+}
+
+.notif-unread {
+  background: #eff6ff;
+}
+
+.notif-unread:hover {
+  background: #dbeafe;
+}
+
+.notif-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.notif-item-body {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.notif-item-time {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
 }
 </style>
