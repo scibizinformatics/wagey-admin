@@ -1,5 +1,8 @@
 <template>
   <div class="dashboard-page">
+    <!-- Global loading overlay -->
+    <q-inner-loading :showing="pageLoading" color="primary" />
+
     <div class="dashboard-inner">
       <!-- Top Stats Row -->
       <div class="stats-row">
@@ -8,7 +11,10 @@
             <q-icon :name="stat.icon" size="22px" />
           </div>
           <div class="tile-body">
-            <div class="tile-count">{{ stat.count }}</div>
+            <div class="tile-count">
+              <q-skeleton v-if="pageLoading" type="text" width="40px" />
+              <template v-else>{{ stat.count }}</template>
+            </div>
             <div class="tile-label">{{ stat.label }}</div>
           </div>
         </div>
@@ -26,7 +32,16 @@
                 <span class="panel-title">Current Payroll Status</span>
               </div>
             </div>
+            <div v-if="!payrollLoading && !payrollRows.length" class="empty-panel-state">
+              <div
+                class="eps-shimmer"
+                v-for="n in 4"
+                :key="n"
+                :style="{ width: n % 2 === 0 ? '60%' : '80%', animationDelay: `${n * 0.12}s` }"
+              />
+            </div>
             <q-table
+              v-else
               :rows="payrollRows"
               :columns="payrollColumns"
               row-key="id"
@@ -34,6 +49,8 @@
               dense
               hide-pagination
               :rows-per-page-options="[0]"
+              :loading="payrollLoading"
+              no-data-label="No payroll data found"
               class="ct-table"
             >
               <template v-slot:header="props">
@@ -48,7 +65,9 @@
                   <span
                     :class="[
                       'ct-status',
-                      props.value === 'Released' ? 'ct-status--green' : 'ct-status--amber',
+                      props.value?.toLowerCase() === 'released'
+                        ? 'ct-status--green'
+                        : 'ct-status--amber',
                     ]"
                   >
                     {{ props.value }}
@@ -59,14 +78,14 @@
           </div>
 
           <!-- Charts Row -->
-          <div class="two-col-row">
+          <div class="two-col-row" style="flex: 1; min-height: 0">
             <div class="panel panel--flex">
               <div class="panel-head">
                 <span class="panel-title">Payroll History</span>
               </div>
               <div class="chart-placeholder">
                 <q-icon name="show_chart" size="48px" color="grey-4" />
-                <div class="chart-placeholder-label">Payroll History Chart</div>
+                <div class="chart-placeholder-label">No payroll history available</div>
               </div>
             </div>
 
@@ -75,10 +94,27 @@
                 <span class="panel-title">Smart Attendance</span>
               </div>
               <div class="alert-list">
-                <div v-for="(alert, index) in attendanceAlerts" :key="index" class="alert-item">
-                  <div class="alert-dot"></div>
-                  <span class="alert-text">{{ alert }}</span>
-                </div>
+                <template v-if="attendanceLoading">
+                  <div v-for="n in 4" :key="n" class="alert-item">
+                    <q-skeleton type="circle" size="5px" />
+                    <q-skeleton type="text" style="flex: 1" />
+                  </div>
+                </template>
+                <template v-else>
+                  <div v-if="!attendanceAlerts.length" class="alert-item">
+                    <div class="alert-dot" style="background: #9ca3af"></div>
+                    <span class="alert-text">No attendance anomalies detected today</span>
+                  </div>
+                  <div
+                    v-for="(alert, index) in attendanceAlerts"
+                    v-else
+                    :key="index"
+                    class="alert-item"
+                  >
+                    <div class="alert-dot"></div>
+                    <span class="alert-text">{{ alert }}</span>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -89,16 +125,35 @@
               <span class="panel-title">Recent Activity</span>
             </div>
             <div class="activity-list">
-              <div v-for="activity in recentActivities" :key="activity.id" class="activity-row">
-                <q-avatar size="36px" class="activity-avatar">
-                  {{ activity.user.charAt(0) }}
-                </q-avatar>
-                <div class="activity-info">
-                  <div class="activity-user">{{ activity.user }}</div>
-                  <div class="activity-time">{{ activity.time }}</div>
+              <template v-if="attendanceLoading || requestsLoading">
+                <div v-for="n in 3" :key="n" class="activity-row">
+                  <q-skeleton type="QAvatar" size="36px" />
+                  <div class="activity-info">
+                    <q-skeleton type="text" width="120px" />
+                    <q-skeleton type="text" width="80px" />
+                  </div>
                 </div>
-                <div class="activity-status-badge">{{ activity.status }}</div>
-                <div class="activity-details">{{ activity.details }}</div>
+              </template>
+              <template v-else-if="recentActivities.length">
+                <div v-for="activity in recentActivities" :key="activity.id" class="activity-row">
+                  <q-avatar size="36px" class="activity-avatar">
+                    {{ activity.initial }}
+                  </q-avatar>
+                  <div class="activity-info">
+                    <div class="activity-user">{{ activity.user }}</div>
+                    <div class="activity-time">{{ activity.time }}</div>
+                  </div>
+                  <div class="activity-status-badge">{{ activity.status }}</div>
+                  <div class="activity-details">{{ activity.details }}</div>
+                </div>
+              </template>
+              <div v-else class="empty-panel-state">
+                <div
+                  class="eps-shimmer"
+                  v-for="n in 3"
+                  :key="n"
+                  :style="{ width: n % 2 === 0 ? '50%' : '70%', animationDelay: `${n * 0.13}s` }"
+                />
               </div>
             </div>
           </div>
@@ -111,34 +166,103 @@
             <div class="panel-head">
               <q-icon name="notifications" size="16px" class="panel-icon" />
               <span class="panel-title">Notifications</span>
-              <q-badge color="negative" :label="notifications.length" class="q-ml-auto" />
+              <q-badge
+                v-if="pendingNotifCount > 0"
+                color="negative"
+                :label="pendingNotifCount"
+                class="q-ml-auto"
+              />
             </div>
             <div class="notif-list">
-              <div v-for="(note, i) in notifications" :key="i" class="notif-item">
+              <template v-if="requestsLoading">
+                <div v-for="n in 3" :key="n" class="notif-item">
+                  <q-skeleton type="circle" size="7px" />
+                  <q-skeleton type="text" style="flex: 1" />
+                </div>
+              </template>
+              <div v-for="(note, i) in notifications" v-else :key="i" class="notif-item">
                 <q-icon name="circle" size="7px" color="primary" class="notif-dot" />
                 <span class="notif-text">{{ note }}</span>
+              </div>
+              <div v-if="!requestsLoading && !notifications.length" class="empty-panel-state">
+                <div
+                  class="eps-shimmer"
+                  v-for="n in 3"
+                  :key="n"
+                  :style="{ width: n % 2 === 0 ? '58%' : '72%', animationDelay: `${n * 0.14}s` }"
+                />
               </div>
             </div>
           </div>
 
-          <!-- Fraud Alerts -->
+          <!-- Announcements -->
           <div class="panel">
             <div class="panel-head">
-              <q-icon name="security" size="16px" class="panel-icon panel-icon--red" />
-              <span class="panel-title">Device / Fraud Alerts</span>
+              <q-icon name="campaign" size="16px" class="panel-icon" />
+              <span class="panel-title">Announcements</span>
             </div>
-            <div class="fraud-list">
-              <div class="fraud-item fraud-item--critical">
-                <q-icon name="error" size="16px" />
-                <span>Date / Time - Critical Message</span>
+            <div class="notif-list">
+              <template v-if="announcementsLoading">
+                <div v-for="n in 3" :key="n" class="notif-item">
+                  <q-skeleton type="circle" size="7px" />
+                  <q-skeleton type="text" style="flex: 1" />
+                </div>
+              </template>
+              <template v-else-if="announcements.length">
+                <div v-for="(item, i) in announcements.slice(0, 5)" :key="i" class="notif-item">
+                  <q-icon name="circle" size="7px" color="orange" class="notif-dot" />
+                  <span class="notif-text">{{
+                    item.title ?? item.message ?? item.content ?? item
+                  }}</span>
+                </div>
+              </template>
+              <div v-else class="empty-panel-state">
+                <div
+                  class="eps-shimmer"
+                  v-for="n in 3"
+                  :key="n"
+                  :style="{ width: n % 2 === 0 ? '62%' : '78%', animationDelay: `${n * 0.11}s` }"
+                />
               </div>
-              <div class="fraud-item fraud-item--warning">
-                <q-icon name="warning" size="16px" />
-                <span>Date / Time - Warning Message</span>
-              </div>
-              <div class="fraud-item fraud-item--info">
-                <q-icon name="info" size="16px" />
-                <span>Date / Time - Info Message</span>
+            </div>
+          </div>
+
+          <!-- Swap Requests -->
+          <div class="panel">
+            <div class="panel-head">
+              <q-icon name="swap_horiz" size="16px" class="panel-icon panel-icon--amber" />
+              <span class="panel-title">Pending Swaps</span>
+              <q-badge
+                v-if="pendingSwaps.length"
+                color="warning"
+                :label="pendingSwaps.length"
+                class="q-ml-auto"
+              />
+            </div>
+            <div class="notif-list">
+              <template v-if="swapLoading">
+                <div v-for="n in 2" :key="n" class="notif-item">
+                  <q-skeleton type="circle" size="7px" />
+                  <q-skeleton type="text" style="flex: 1" />
+                </div>
+              </template>
+              <template v-else-if="pendingSwaps.length">
+                <div v-for="(swap, i) in pendingSwaps.slice(0, 4)" :key="i" class="notif-item">
+                  <q-icon name="circle" size="7px" color="warning" class="notif-dot" />
+                  <span class="notif-text">
+                    {{ swap.requester_name ?? swap.employee_name ?? 'Employee' }}
+                    wants to swap with
+                    {{ swap.requested_name ?? swap.target_name ?? 'teammate' }}
+                  </span>
+                </div>
+              </template>
+              <div v-else class="empty-panel-state">
+                <div
+                  class="eps-shimmer"
+                  v-for="n in 2"
+                  :key="n"
+                  :style="{ width: n % 2 === 0 ? '55%' : '70%', animationDelay: `${n * 0.16}s` }"
+                />
               </div>
             </div>
           </div>
@@ -148,138 +272,448 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'PayrollDashboard',
-  data() {
-    return {
-      payrollColumns: [
-        { name: 'group', label: 'Group Name', field: 'group', align: 'left' },
-        { name: 'cycle', label: 'Cycle', field: 'cycle', align: 'left' },
-        { name: 'type', label: 'Type', field: 'type', align: 'left' },
-        { name: 'start', label: 'Start', field: 'start', align: 'left' },
-        { name: 'end', label: 'End', field: 'end', align: 'left' },
-        { name: 'employees', label: 'No. of Employees', field: 'employees', align: 'center' },
-        { name: 'status', label: 'Status', field: 'status', align: 'center' },
-        { name: 'date', label: 'Date Released', field: 'date', align: 'left' },
-        { name: 'amount', label: 'Total Amount', field: 'amount', align: 'right' },
-      ],
-      payrollRows: [
-        {
-          id: 1,
-          group: 'Weekly',
-          cycle: 'Weekly',
-          type: 'Regular',
-          start: 'Jul 7, 2025',
-          end: 'Jul 13, 2025',
-          employees: 1,
-          status: 'Released',
-          date: 'Jul 14, 2025',
-          amount: '10,000.00',
-        },
-        {
-          id: 2,
-          group: 'Bi-Weekly',
-          cycle: 'Bi-Weekly',
-          type: 'Regular',
-          start: 'Jul 1, 2025',
-          end: 'Jul 14, 2025',
-          employees: 60,
-          status: 'Pending',
-          date: '-',
-          amount: '60,000.00',
-        },
-        {
-          id: 3,
-          group: 'Bi-Weekly',
-          cycle: 'Bi-Weekly',
-          type: 'Contract',
-          start: 'Jul 1, 2025',
-          end: 'Jul 15, 2025',
-          employees: 3,
-          status: 'Pending',
-          date: '-',
-          amount: '25,000.00',
-        },
-      ],
-      recentActivities: [
-        {
-          id: 1,
-          user: 'Kevin Santos',
-          time: 'Jul 16, 08:12 AM',
-          status: 'Clocked-In',
-          details: 'Verified via GPS and Selfie',
-        },
-        {
-          id: 2,
-          user: 'HR Admin (Jane D.)',
-          time: 'Jul 16, 08:10 AM',
-          status: 'Paid Leave Approved',
-          details: 'Maria Villanueva',
-        },
-        {
-          id: 3,
-          user: 'Joseph Tan',
-          time: 'Jul 16, 08:08 AM',
-          status: 'Clocked-In',
-          details: 'Working',
-        },
-        {
-          id: 4,
-          user: 'Maria Villanueva',
-          time: 'Jul 16, 08:27 PM',
-          status: 'Paid Leave Request',
-          details: '1-day VL for July 5 submitted',
-        },
-      ],
-      statsCards: [
-        { icon: 'people', count: 64, label: 'Active' },
-        { icon: 'person_off', count: 1, label: 'Paid Leave' },
-        { icon: 'schedule', count: 60, label: 'Clocked In' },
-        { icon: 'person_remove', count: 1, label: 'Absent' },
-        { icon: 'access_time', count: 2, label: 'Time Off' },
-        { icon: 'request_page', count: 6, label: 'Requests' },
-      ],
-      attendanceAlerts: [
-        '3 employees clocked in outside workplace location',
-        '1 employee used on-smartphone device',
-        '2 employees clocked in late today (past shift start time)',
-        '1 employee forgot to clock out yesterday',
-        'Proxy detected: 2 devices logged in from same IP',
-        '3 employees have exceeded late clock-in this week',
-        '1 selfie upload failed on Android',
-      ],
-      notifications: [
-        '2 employees marked for receive for 22 employees',
-        '2 leave requests still pending approval',
-        'Company cut off ends in 2 days',
-      ],
-    }
-  },
+<script setup>
+import { ref, computed, onMounted, watchEffect } from 'vue'
+import { useEmployees } from 'src/composables/useEmployees'
+import { useAttendance } from 'src/composables/useAttendance'
+import { usePayroll } from 'src/composables/usePayroll'
+import { useRequests } from 'src/composables/useRequests'
+import { useAnnouncements } from 'src/composables/useAnnouncements'
+import { useSwapRequests } from 'src/composables/useSwapRequests'
+import { useCompany } from 'src/composables/useCompany'
+
+// ─── Composables ─────────────────────────────────────────────────────────────
+const { companyId } = useCompany()
+
+const { employees, loading: employeesLoading, fetchEmployees } = useEmployees()
+
+const { attendanceData, loading: attendanceLoading, fetchAttendanceByDate } = useAttendance()
+
+const { payslips, loading: payrollLoading, fetchPayslips } = usePayroll()
+
+const {
+  leaveRequests,
+  overtimeRequests,
+  cashAdvanceRequests,
+  loading: requestsLoading,
+  fetchLeaveRequests,
+  fetchOvertimeRequests,
+  fetchCashAdvanceRequests,
+} = useRequests()
+
+const { announcements, loading: announcementsLoading, fetchAnnouncements } = useAnnouncements()
+
+const { swapRequests, loading: swapLoading, fetchSwapRequests } = useSwapRequests()
+
+// ─── Page-level loading (true until the first critical batch resolves) ────────
+const pageLoading = ref(true)
+
+// ─── Resolve company ID (handles both plain string and JSON object in storage) ─
+function resolvedCompanyId() {
+  if (companyId.value && typeof companyId.value !== 'object') return companyId.value
+  try {
+    const stored = localStorage.getItem('selectedCompany')
+    if (!stored) return companyId.value
+    const parsed = JSON.parse(stored)
+    return parsed?.id ?? parsed
+  } catch {
+    return companyId.value
+  }
 }
+
+// ─── Payroll table columns ────────────────────────────────────────────────────
+const payrollColumns = [
+  { name: 'group', label: 'Group Name', field: 'group', align: 'left' },
+  { name: 'cycle', label: 'Cycle', field: 'cycle', align: 'left' },
+  { name: 'type', label: 'Type', field: 'type', align: 'left' },
+  { name: 'start', label: 'Start', field: 'start', align: 'left' },
+  { name: 'end', label: 'End', field: 'end', align: 'left' },
+  { name: 'employees', label: 'No. of Employees', field: 'employees', align: 'center' },
+  { name: 'status', label: 'Status', field: 'status', align: 'center' },
+  { name: 'date', label: 'Date Released', field: 'date', align: 'left' },
+  { name: 'amount', label: 'Total Amount', field: 'amount', align: 'right' },
+]
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function fmtDate(str) {
+  if (!str) return '-'
+  const d = new Date(str)
+  return isNaN(d)
+    ? str
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function fmtTime(str) {
+  if (!str) return ''
+  const d = new Date(str)
+  return isNaN(d)
+    ? str
+    : d.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+}
+
+function fmtCurrency(val) {
+  if (val == null) return '-'
+  return Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function getEmployeeName(record) {
+  if (!record) return ''
+  if (record.full_name) return record.full_name
+  if (record.name) return record.name
+  const u = record.user ?? record.employee ?? record
+  if (u.full_name) return u.full_name
+  if (u.name) return u.name
+  const first = u.first_name ?? u.firstname ?? ''
+  const last = u.last_name ?? u.lastname ?? ''
+  const full = `${first} ${last}`.trim()
+  if (full) return full
+  return u.email ?? u.username ?? ''
+}
+
+// ─── Stats cards ──────────────────────────────────────────────────────────────
+
+// Debug watcher — remove once ID shapes are confirmed
+watchEffect(() => {
+  if (employees.value.length && attendanceData.value.length) {
+    const emp = employees.value[0]
+    const att = attendanceData.value[0]
+    console.debug('[Dashboard] employee ID fields:', {
+      id: emp?.id,
+      employee_id: emp?.employee_id,
+      user: emp?.user?.id,
+    })
+    console.debug('[Dashboard] attendance ID fields:', {
+      employee_id: att?.employee_id,
+      employee: att?.employee,
+      user_id: att?.user_id,
+      user: att?.user?.id ?? att?.user,
+    })
+  }
+})
+
+const statsCards = computed(() => {
+  const todayStr = today()
+
+  const activeEmps = employees.value.filter(
+    (e) => (e.status ?? 'active').toLowerCase() === 'active',
+  )
+  const onLeaveEmps = employees.value.filter((e) => {
+    const s = (e.status ?? '').toLowerCase()
+    return s === 'on_leave' || s === 'paid_leave' || s === 'leave'
+  })
+
+  const todayAtt = attendanceData.value.filter((a) => {
+    const d = a.date ?? a.attendance_date ?? a.time_in ?? a.clock_in ?? ''
+    return String(d).startsWith(todayStr)
+  })
+  const clockedIn = todayAtt.filter((a) => {
+    const hasIn = a.time_in ?? a.clock_in ?? a.check_in
+    const hasOut = a.time_out ?? a.clock_out ?? a.check_out
+    return hasIn && !hasOut
+  })
+
+  // Build a Set of all employee IDs found in today's attendance
+  // covering every field shape the API might return
+  const attendedIds = new Set(
+    todayAtt.flatMap((a) => {
+      const ids = []
+      if (a.employee_id != null) ids.push(String(a.employee_id))
+      if (a.employee != null) ids.push(String(a.employee))
+      if (a.user_id != null) ids.push(String(a.user_id))
+      if (a.user?.id != null) ids.push(String(a.user.id))
+      if (a.employee?.id != null) ids.push(String(a.employee.id))
+      return ids
+    }),
+  )
+
+  const absent = activeEmps.filter((e) => {
+    const empIds = [e.id, e.employee_id, e.user?.id, e.user_id].filter((v) => v != null).map(String)
+    // Employee is absent only if NONE of their IDs appear in today's attendance
+    return empIds.length > 0 && !empIds.some((id) => attendedIds.has(id))
+  })
+
+  const pendingLeave = leaveRequests.value.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'pending',
+  )
+  const pendingOT = overtimeRequests.value.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'pending',
+  )
+  const pendingCA = cashAdvanceRequests.value.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'pending',
+  )
+  const totalRequests = pendingLeave.length + pendingOT.length + pendingCA.length
+
+  return [
+    { icon: 'people', count: activeEmps.length, label: 'Active' },
+    { icon: 'person_off', count: onLeaveEmps.length, label: 'Paid Leave' },
+    { icon: 'schedule', count: clockedIn.length, label: 'Clocked In' },
+    { icon: 'person_remove', count: absent.length, label: 'Absent' },
+    { icon: 'access_time', count: pendingLeave.length, label: 'Time Off' },
+    { icon: 'request_page', count: totalRequests, label: 'Requests' },
+  ]
+})
+
+// ─── Payroll rows ─────────────────────────────────────────────────────────────
+const payrollRows = computed(() => {
+  const list = Array.isArray(payslips.value)
+    ? payslips.value
+    : Array.isArray(payslips.value?.data)
+      ? payslips.value.data
+      : Array.isArray(payslips.value?.results)
+        ? payslips.value.results
+        : []
+  return list.slice(0, 10).map((p, i) => ({
+    id: p.id ?? i,
+    group: p.payroll_group?.name ?? p.group_name ?? p.group ?? '-',
+    cycle: p.payroll_cycle?.name ?? p.cycle ?? '-',
+    type: p.payroll_type?.name ?? p.type ?? '-',
+    start: fmtDate(p.start_date ?? p.period_start),
+    end: fmtDate(p.end_date ?? p.period_end),
+    employees: p.employee_count ?? p.employees ?? '-',
+    status: p.status ?? '-',
+    date: fmtDate(p.date_released ?? p.released_at),
+    amount: fmtCurrency(p.total_amount ?? p.net_pay ?? p.gross_pay),
+  }))
+})
+
+// ─── Smart Attendance alerts ──────────────────────────────────────────────────
+const attendanceAlerts = computed(() => {
+  const alerts = []
+  const todayStr = today() // YYYY-MM-DD
+
+  // Normalise a record's date to YYYY-MM-DD regardless of whether the API
+  // returns a bare date ("2026-03-27"), a datetime ("2026-03-27T09:44:00Z"),
+  // or a full ISO timestamp in time_in/clock_in.
+  function recordDate(a) {
+    const raw = a.date ?? a.attendance_date ?? a.time_in ?? a.clock_in ?? a.check_in ?? ''
+    if (!raw) return ''
+    // If it already looks like YYYY-MM-DD (10 chars), use it directly
+    if (/^\d{4}-\d{2}-\d{2}/.test(String(raw))) return String(raw).slice(0, 10)
+    // Try parsing as a Date object
+    const d = new Date(raw)
+    return isNaN(d) ? '' : d.toISOString().slice(0, 10)
+  }
+
+  const todayAtt = attendanceData.value.filter((a) => recordDate(a) === todayStr)
+
+  const outsideLocation = todayAtt.filter(
+    (a) =>
+      a.is_outside_location || a.location_status === 'outside' || a.geofence_status === 'outside',
+  )
+  if (outsideLocation.length)
+    alerts.push(
+      `${outsideLocation.length} employee${outsideLocation.length > 1 ? 's' : ''} clocked in outside workplace location`,
+    )
+
+  const mobileDevice = todayAtt.filter(
+    (a) => a.device_type === 'mobile' || a.source === 'mobile' || a.source === 'smartphone',
+  )
+  if (mobileDevice.length)
+    alerts.push(
+      `${mobileDevice.length} employee${mobileDevice.length > 1 ? 's' : ''} used on-smartphone device`,
+    )
+
+  const lateClockIn = todayAtt.filter((a) => a.is_late || (a.late_minutes ?? 0) > 0)
+  if (lateClockIn.length)
+    alerts.push(
+      `${lateClockIn.length} employee${lateClockIn.length > 1 ? 's' : ''} clocked in late today`,
+    )
+
+  const forgotClockOut = attendanceData.value.filter((a) => {
+    const hasIn = a.time_in ?? a.clock_in ?? a.check_in
+    const hasOut = a.time_out ?? a.clock_out ?? a.check_out
+    // Previous days only (not today)
+    return recordDate(a) !== todayStr && recordDate(a) !== '' && hasIn && !hasOut
+  })
+  if (forgotClockOut.length)
+    alerts.push(
+      `${forgotClockOut.length} employee${forgotClockOut.length > 1 ? 's' : ''} forgot to clock out yesterday`,
+    )
+
+  const proxyDetected = todayAtt.filter(
+    (a) => a.is_proxy || a.fraud_flag === 'proxy' || a.is_flagged,
+  )
+  if (proxyDetected.length)
+    alerts.push(
+      `Proxy detected: ${proxyDetected.length} device${proxyDetected.length > 1 ? 's' : ''} logged from same IP`,
+    )
+
+  // Always show the total clocked-in count as a summary line
+  if (todayAtt.length > 0)
+    alerts.unshift(
+      `${todayAtt.length} employee${todayAtt.length > 1 ? 's' : ''} have attendance records today`,
+    )
+
+  if (!alerts.length) alerts.push('No attendance data or anomalies detected today')
+  return alerts
+})
+
+// ─── Recent Activity ──────────────────────────────────────────────────────────
+const recentActivities = computed(() => {
+  const activities = []
+  const todayStr = today()
+
+  attendanceData.value
+    .filter((a) => {
+      const d = a.date ?? a.attendance_date ?? a.time_in ?? a.clock_in ?? ''
+      return String(d).startsWith(todayStr) && (a.time_in ?? a.clock_in ?? a.check_in)
+    })
+    .slice(0, 6)
+    .forEach((a) => {
+      const name =
+        (getEmployeeName(a.employee ?? a.user ?? a) || a.employee_name || a.full_name) ?? null
+      if (!name) return
+      activities.push({
+        id: `att-${a.id}`,
+        user: name,
+        initial: name.charAt(0).toUpperCase(),
+        time: fmtTime(a.time_in ?? a.clock_in ?? a.check_in),
+        status: (a.time_out ?? a.clock_out ?? a.check_out) ? 'Clocked-Out' : 'Clocked-In',
+        details: a.location_name ?? a.site_name ?? a.source ?? a.cost_center_name ?? '',
+      })
+    })
+
+  leaveRequests.value.slice(0, 4).forEach((r) => {
+    const nameCandidate =
+      r.employee_name || r.full_name || getEmployeeName(r.employee ?? r.user ?? r) || null
+    const name = nameCandidate && nameCandidate !== 'Unknown' ? nameCandidate : null
+    if (!name) return
+    activities.push({
+      id: `leave-${r.id}`,
+      user: name,
+      initial: name.charAt(0).toUpperCase(),
+      time: fmtTime(r.created_at ?? r.applied_at ?? r.date_applied ?? r.start_date),
+      status:
+        r.status === 'approved'
+          ? 'Leave Approved'
+          : r.status === 'pending'
+            ? 'Leave Request'
+            : `Leave ${r.status ?? ''}`.trim(),
+      details: r.leave_type?.name ?? r.leave_type ?? r.type ?? '',
+    })
+  })
+
+  return activities
+    .filter((a) => a.user)
+    .sort((a, b) => new Date(b.time) - new Date(a.time))
+    .slice(0, 6)
+})
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+const pendingSwaps = computed(() =>
+  swapRequests.value.filter((s) => (s.status ?? '').toLowerCase() === 'pending'),
+)
+
+const pendingNotifCount = computed(() => {
+  const pendingLeave = leaveRequests.value.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'pending',
+  )
+  const pendingOT = overtimeRequests.value.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'pending',
+  )
+  const pendingCA = cashAdvanceRequests.value.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'pending',
+  )
+  return pendingLeave.length + pendingOT.length + pendingCA.length
+})
+
+const notifications = computed(() => {
+  const notes = []
+  const pendingLeave = leaveRequests.value.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'pending',
+  )
+  const pendingOT = overtimeRequests.value.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'pending',
+  )
+  const pendingCA = cashAdvanceRequests.value.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'pending',
+  )
+
+  if (pendingLeave.length)
+    notes.push(
+      `${pendingLeave.length} leave request${pendingLeave.length > 1 ? 's' : ''} pending approval`,
+    )
+  if (pendingOT.length)
+    notes.push(
+      `${pendingOT.length} overtime request${pendingOT.length > 1 ? 's' : ''} pending approval`,
+    )
+  if (pendingCA.length)
+    notes.push(
+      `${pendingCA.length} cash advance request${pendingCA.length > 1 ? 's' : ''} pending approval`,
+    )
+  if (!notes.length) notes.push('No pending notifications')
+  return notes
+})
+
+// ─── Bootstrap ────────────────────────────────────────────────────────────────
+onMounted(async () => {
+  const cid = resolvedCompanyId()
+  console.debug('[Dashboard] resolved company ID:', cid)
+
+  await Promise.allSettled([
+    fetchEmployees(),
+    fetchAttendanceByDate(today()),
+    fetchLeaveRequests(),
+    fetchOvertimeRequests(),
+    // Pass cid if available; usePayroll will use /payroll/admin/{cid}/payslips/
+    // If cid is null it falls back to the base /payroll/ endpoint
+    fetchPayslips(cid),
+    ...(cid ? [fetchCashAdvanceRequests(cid)] : []),
+    fetchAnnouncements(),
+    fetchSwapRequests({ company: cid }),
+  ])
+
+  // If payslips came back empty and we have a cid, also try without it
+  // (some backends return data only from the non-admin endpoint for this role)
+  if (!Array.isArray(payslips.value) || payslips.value.length === 0) {
+    console.debug('[Dashboard] payslips empty, retrying without company ID')
+    await fetchPayslips(null)
+  }
+
+  console.debug(
+    '[Dashboard] payslips value type:',
+    typeof payslips.value,
+    Array.isArray(payslips.value) ? `array(${payslips.value.length})` : payslips.value,
+  )
+
+  pageLoading.value = false
+})
 </script>
 
 <style scoped>
 /* ── Base ── */
 .dashboard-page {
   background: #f4f6f9;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   padding: 0;
 }
 .dashboard-inner {
+  height: 100vh;
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  box-sizing: border-box;
 }
 
 /* ── Top Stats Row ── */
 .stats-row {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
+  gap: 12px;
+  flex-shrink: 0;
 }
 .stat-tile {
   background: #fff;
@@ -331,16 +765,16 @@ export default {
   flex-shrink: 0;
 }
 .tile-count {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: #111827;
   line-height: 1.1;
 }
 .tile-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
   font-weight: 500;
-  margin-top: 2px;
+  margin-top: 1px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -348,18 +782,24 @@ export default {
 /* ── Layout ── */
 .main-grid {
   display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 16px;
+  grid-template-columns: 1fr 290px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 .col-main {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 .col-side {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ── Panel ── */
@@ -368,17 +808,21 @@ export default {
   border-radius: 12px;
   border: 1px solid #e8ecf0;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .panel--flex {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 .panel-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 20px;
+  padding: 14px 20px;
   border-bottom: 1px solid #f1f3f5;
+  flex-shrink: 0;
 }
 .panel-icon {
   color: #1a73e8;
@@ -386,13 +830,16 @@ export default {
 .panel-icon--red {
   color: #d32f2f;
 }
+.panel-icon--amber {
+  color: #f59e0b;
+}
 .panel-title {
   font-size: 15px;
   font-weight: 600;
   color: #111827;
 }
 
-/* ── CT Table (Connecteam-style) ── */
+/* ── CT Table ── */
 .ct-table {
   background: transparent;
 }
@@ -405,13 +852,13 @@ export default {
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  padding: 11px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid #e8ecf0;
 }
 .ct-table :deep(td) {
   font-size: 13px;
   color: #374151;
-  padding: 13px 16px;
+  padding: 11px 16px;
   border-bottom: 1px solid #f1f3f5;
 }
 .ct-table :deep(tr:last-child td) {
@@ -420,9 +867,9 @@ export default {
 .ct-status {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
   font-weight: 600;
 }
 .ct-status--green {
@@ -438,7 +885,9 @@ export default {
 .two-col-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 .chart-placeholder {
   flex: 1;
@@ -446,34 +895,37 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
+  padding: 12px;
   background: #fafafa;
   border-top: 1px solid #f1f3f5;
-  gap: 8px;
+  gap: 4px;
+  min-height: 0;
 }
 .chart-placeholder-label {
-  font-size: 13px;
+  font-size: 11px;
   color: #9ca3af;
 }
 
 /* ── Alert list ── */
 .alert-list {
-  padding: 8px 0;
+  padding: 2px 0;
   border-top: 1px solid #f1f3f5;
+  overflow-y: auto;
+  flex: 1;
 }
 .alert-item {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 9px 16px;
+  padding: 8px 16px;
   border-bottom: 1px solid #f1f3f5;
 }
 .alert-item:last-child {
   border-bottom: none;
 }
 .alert-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: #f59e0b;
   margin-top: 5px;
@@ -482,7 +934,7 @@ export default {
 .alert-text {
   font-size: 12px;
   color: #4b5563;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 /* ── Activity list ── */
@@ -493,7 +945,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid #f1f3f5;
 }
 .activity-row:last-child {
@@ -503,7 +955,7 @@ export default {
   background: linear-gradient(135deg, #1a73e8, #6c63ff);
   color: #fff;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 12px;
   flex-shrink: 0;
 }
 .activity-info {
@@ -521,27 +973,27 @@ export default {
   margin-top: 1px;
 }
 .activity-status-badge {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #1a73e8;
   background: #e8f4ff;
-  padding: 3px 8px;
-  border-radius: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
   white-space: nowrap;
   flex-shrink: 0;
 }
 .activity-details {
-  font-size: 11px;
+  font-size: 10px;
   color: #6b7280;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 140px;
+  max-width: 120px;
 }
 
 /* ── Notifications ── */
 .notif-list {
-  padding: 4px 0;
+  padding: 2px 0;
 }
 .notif-item {
   display: flex;
@@ -554,47 +1006,49 @@ export default {
   border-bottom: none;
 }
 .notif-dot {
-  margin-top: 4px;
+  margin-top: 3px;
   flex-shrink: 0;
 }
 .notif-text {
   font-size: 12px;
   color: #374151;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
-/* ── Fraud Alerts ── */
-.fraud-list {
-  padding: 4px 0;
+/* ── Empty panel state (no-data placeholder keeps container height) ── */
+@keyframes eps-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scaleX(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scaleX(1.015);
+  }
 }
-.fraud-item {
+.empty-panel-state {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  padding: 10px 16px;
+  padding: 18px 20px;
+  min-height: 100px;
+}
+.eps-shimmer {
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e8ecf0 0%, #d1d9e0 50%, #e8ecf0 100%);
+  background-size: 200% 100%;
+  animation: eps-pulse 1.6s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+/* ── Empty state ── */
+.empty-activity {
+  padding: 20px 16px;
   font-size: 12px;
-  border-bottom: 1px solid #f1f3f5;
-}
-.fraud-item:last-child {
-  border-bottom: none;
-}
-.fraud-item--critical {
-  color: #c62828;
-}
-.fraud-item--critical .q-icon {
-  color: #c62828;
-}
-.fraud-item--warning {
-  color: #e65100;
-}
-.fraud-item--warning .q-icon {
-  color: #e65100;
-}
-.fraud-item--info {
-  color: #2e7d32;
-}
-.fraud-item--info .q-icon {
-  color: #2e7d32;
+  color: #9ca3af;
+  text-align: center;
 }
 
 /* ── Responsive ── */
