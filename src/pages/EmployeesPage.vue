@@ -233,20 +233,21 @@
 
             <!-- Empty state -->
             <template v-slot:no-data>
-              <div class="empty-state">
+              <div
+                class="empty-state"
+                style="
+                  width: 100%;
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: center;
+                  padding: 56px 20px;
+                  text-align: center;
+                "
+              >
                 <q-icon name="group_off" size="48px" class="empty-state-icon" />
                 <div class="empty-state-title">No employees found</div>
-                <div class="empty-state-sub">
-                  Try adjusting your search or filters, or add your first employee.
-                </div>
-                <q-btn
-                  unelevated
-                  color="primary"
-                  icon="add"
-                  label="Add Employee"
-                  class="empty-state-btn"
-                  @click="openAddModal"
-                />
+                <div class="empty-state-sub">Try adjusting your search or filters.</div>
               </div>
             </template>
           </q-table>
@@ -1028,10 +1029,11 @@ const getEmail = (employee) => employee?.user?.email || 'N/A'
 
 const getRole = (employee) => {
   if (!employee) return 'N/A'
-  if (employee.user_role_name) return employee.user_role_name
-  if (employee.user_role?.name) return employee.user_role.name
+  if (employee.user_role_name) return String(employee.user_role_name)
+  if (employee.user_role?.name) return String(employee.user_role.name)
   if (employee.companies && employee.companies.length > 0) {
-    return employee.companies[0].user_role || 'N/A'
+    const role = employee.companies[0].user_role
+    return role ? String(role) : 'N/A'
   }
   return 'N/A'
 }
@@ -1536,11 +1538,11 @@ const filterEmployees = () => {
     const term = searchTerm.value.toLowerCase()
     filtered = filtered.filter((emp) => {
       return (
-        getFullName(emp).toLowerCase().includes(term) ||
-        getEmail(emp).toLowerCase().includes(term) ||
-        getPhoneNumber(emp).toLowerCase().includes(term) ||
-        getRole(emp).toLowerCase().includes(term) ||
-        getStatus(emp).toLowerCase().includes(term)
+        (getFullName(emp) || '').toLowerCase().includes(term) ||
+        (getEmail(emp) || '').toLowerCase().includes(term) ||
+        (getPhoneNumber(emp) || '').toLowerCase().includes(term) ||
+        (getRole(emp) || '').toLowerCase().includes(term) ||
+        (getStatus(emp) || '').toLowerCase().includes(term)
       )
     })
   }
@@ -2128,6 +2130,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  width: 100%;
   padding: 56px 20px;
   text-align: center;
 }
