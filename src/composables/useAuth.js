@@ -19,7 +19,7 @@ export function useAuth() {
   async function login(credentials) {
     loading.value = true
     try {
-      const response = await api.post(`${BASE}/user/login/`, credentials)
+      const response = await api.post(`${BASE}/api/employee/login/`, credentials)
       return response.data
     } finally {
       loading.value = false
@@ -34,6 +34,18 @@ export function useAuth() {
    */
   async function fetchUserCompanies(token) {
     const response = await api.get(`${BASE}/organization/companies/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return response.data.data ?? response.data ?? []
+  }
+
+  /**
+   * Fetch companies linked to the currently authenticated user.
+   * Used during login to resolve company/account context.
+   * @param {string} token – JWT access token returned from login
+   */
+  async function fetchCurrentUserCompanies(token) {
+    const response = await api.get(`${BASE}/user/current-user-companies/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     return response.data.data ?? response.data ?? []
@@ -69,6 +81,7 @@ export function useAuth() {
     // methods
     login,
     fetchUserCompanies,
+    fetchCurrentUserCompanies,
     fetchPositions,
     fetchUserRoles,
   }

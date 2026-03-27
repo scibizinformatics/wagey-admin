@@ -72,7 +72,7 @@
               class="submit-btn"
               unelevated
               no-caps
-              :loading="isSubmitting"
+              :loading="loading"
               :disable="!isFormValid"
             >
               SIGN IN
@@ -100,15 +100,16 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { api } from 'boot/axios'
 import { useAuthStore } from 'boot/auth'
+import { useAuth } from 'src/composables/useAuth'
 
 const router = useRouter()
 const route = useRoute()
 const $q = useQuasar()
 const authStore = useAuthStore()
 
-const isSubmitting = ref(false)
+const { loading, login, fetchCurrentUserCompanies } = useAuth()
+
 const showPassword = ref(false)
 
 const formData = ref({
@@ -141,21 +142,15 @@ const showSuccessNotification = (message) => {
 
 const handleLogin = async () => {
   if (!isFormValid.value) return
-  isSubmitting.value = true
 
   try {
-    const loginPayload = {
+    const loginData = await login({
       username: formData.value.username,
       password: formData.value.password,
-    }
-    const loginResponse = await api.post(
-      'https://staging.wageyapp.com/api/employee/login/',
-      loginPayload,
-    )
+    })
 
-    console.log('Login response:', loginResponse.data)
+    const { access, refresh } = loginData
 
-    const { access, refresh } = loginResponse.data
     if (!access) {
       showErrorNotification('Login succeeded but no access token received.')
       return
@@ -165,16 +160,7 @@ const handleLogin = async () => {
     localStorage.setItem('access_token', access)
     localStorage.setItem('refresh_token', refresh)
 
-    const companiesResponse = await api.get(
-      'https://staging.wageyapp.com/user/current-user-companies/',
-      {
-        headers: { Authorization: `Bearer ${access}` },
-      },
-    )
-
-    console.log('Companies response:', companiesResponse.data)
-
-    const companiesData = companiesResponse.data
+    const companiesData = await fetchCurrentUserCompanies(access)
 
     if (!companiesData || companiesData.length === 0) {
       showErrorNotification('No company associated with this account.')
@@ -182,17 +168,12 @@ const handleLogin = async () => {
     }
 
     const firstCompany = companiesData[0]
-    console.log('First company:', firstCompany)
-
     const companyId = firstCompany.company?.id || firstCompany.id
     const accountUuid = firstCompany.id
     const userId = firstCompany.user?.id
 
-    console.log('Extracted values:', { companyId, accountUuid, userId })
-
     if (!accountUuid) {
       showErrorNotification('Failed to get account UUID after login.')
-      console.error('Missing accountUuid. firstCompany data:', firstCompany)
       return
     }
 
@@ -213,15 +194,12 @@ const handleLogin = async () => {
   } catch (error) {
     console.error('Login error:', error)
     if (error.response) {
-      console.error('Error response data:', error.response.data)
       const errorMessage =
         error.response.data?.detail || error.response.data?.message || 'Invalid login credentials.'
       showErrorNotification(errorMessage)
     } else {
       showErrorNotification('Login failed. Please try again.')
     }
-  } finally {
-    isSubmitting.value = false
   }
 }
 
