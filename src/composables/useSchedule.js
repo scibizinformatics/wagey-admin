@@ -176,6 +176,18 @@ export function useSchedule() {
     return response.data
   }
 
+  /**
+   * Fetch shift type templates for the company.
+   * GET /organization/shift-type-templates-list/
+   */
+  async function fetchShiftTemplates() {
+    const response = await axios.get(
+      `${BASE}/organization/shift-type-templates-list/?company=${companyId.value}`,
+      { headers: authHeaders() },
+    )
+    return response.data.data ?? response.data ?? []
+  }
+
   return {
     // state
     schedules,
@@ -191,5 +203,6 @@ export function useSchedule() {
     applyLeaveForEmployee,
     fetchLeaveTypes,
     deleteLeave,
+    fetchShiftTemplates,
   }
 }

@@ -17,13 +17,29 @@ export function useAnnouncements() {
     return token ? { Authorization: `Bearer ${token}` } : {}
   }
 
+  // ─── Company ID helper ────────────────────────────────────────────────────
+  function resolvedCompanyId() {
+    // If composable value is a plain scalar, use it directly
+    if (companyId.value && typeof companyId.value !== 'object') return companyId.value
+
+    // Fall back to localStorage (handles cases where company is stored as JSON object)
+    const stored = localStorage.getItem('selectedCompany')
+    if (!stored) return companyId.value
+    try {
+      const parsed = JSON.parse(stored)
+      return parsed?.id ?? parsed
+    } catch {
+      return stored
+    }
+  }
+
   // ─── Read ─────────────────────────────────────────────────────────────────
 
   async function fetchAnnouncements(params = {}) {
     loading.value = true
     try {
       const response = await api.get(`${BASE}/communication/announcements/`, {
-        params: { company: companyId.value, ...params },
+        params: { company: resolvedCompanyId(), ...params },
         headers: authHeaders(),
       })
       announcements.value = response.data.data ?? response.data ?? []
