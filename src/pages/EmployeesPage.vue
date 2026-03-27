@@ -6,6 +6,14 @@
         <div class="header-content">
           <h1 class="page-title">Employees</h1>
           <div class="header-actions">
+            <q-btn
+              color="primary"
+              label="Add Employee"
+              icon="add"
+              class="add-employee-btn"
+              unelevated
+              @click="openAddModal"
+            />
             <q-input
               v-model="searchTerm"
               placeholder="Search employees..."
@@ -18,14 +26,6 @@
                 <q-icon name="search" class="search-icon" />
               </template>
             </q-input>
-            <q-btn
-              color="primary"
-              label="Add Employee"
-              icon="add"
-              class="add-employee-btn"
-              unelevated
-              @click="openAddModal"
-            />
           </div>
         </div>
       </div>
@@ -1031,9 +1031,9 @@ const getRole = (employee) => {
   if (!employee) return 'N/A'
   if (employee.user_role_name) return String(employee.user_role_name)
   if (employee.user_role?.name) return String(employee.user_role.name)
-  if (employee.companies && employee.companies.length > 0) {
+  if (employee.companies?.length > 0) {
     const role = employee.companies[0].user_role
-    return role ? String(role) : 'N/A'
+    return role?.name ? String(role.name) : 'N/A'
   }
   return 'N/A'
 }
@@ -1044,8 +1044,10 @@ const getCivilStatus = (employee) => employee?.civil_status || 'N/A'
 
 const getStatus = (employee) => {
   if (!employee) return 'N/A'
-  if (employee.status && employee.status.toLowerCase() === 'terminated') return 'Terminated'
+  if (employee.status?.toLowerCase() === 'terminated') return 'Terminated'
   if (employee.is_active === false) return 'Terminated'
+  const empStatus = employee.companies?.[0]?.employment_status
+  if (empStatus?.toLowerCase() === 'terminated') return 'Terminated'
   return 'Active'
 }
 
@@ -1367,7 +1369,10 @@ const cancelEdit = () => {
 const terminateEmployee = async () => {
   try {
     terminating.value = true
-    const payload = { companies: [{ employment_status: 'terminated' }] }
+    const companyId = employeeToTerminate.value.companies?.[0]?.company_id
+    const payload = {
+      companies: [{ company_id: companyId, employment_status: 'terminated' }],
+    }
     const response = await terminateEmployeeApi(employeeToTerminate.value.id, payload)
 
     const employeeIndex = employees.value.findIndex((e) => e.id === employeeToTerminate.value.id)
@@ -1402,8 +1407,9 @@ const terminateEmployee = async () => {
 const restoreEmployee = async () => {
   try {
     restoring.value = true
+    const companyId = employeeToRestore.value.companies?.[0]?.company_id
     const payload = {
-      companies: [{ employment_status: 'active' }],
+      companies: [{ company_id: companyId, employment_status: 'active' }],
       is_active: true,
       status: 'active',
     }
@@ -1625,28 +1631,33 @@ const viewEmployee = async (emp) => {
   // fetch full details then show
   const detailed = await fetchEmployeeDetails(emp.id)
   if (detailed) {
-    selectedEmployee.value = detailed
+    // Merge local employee state so status/is_active always reflects latest local changes
+    const localEmp = employees.value.find((e) => e.id === emp.id)
+    selectedEmployee.value = {
+      ...detailed,
+      is_active: localEmp?.is_active ?? detailed.is_active,
+      status: localEmp?.status ?? detailed.status,
+      companies: localEmp?.companies ?? detailed.companies,
+    }
     viewTab.value = 'user'
     showViewModal.value = true
   }
 }
 
 const editEmployee = async (emp) => {
-  // fetch full details then populate edit form
   const detailed = await fetchEmployeeDetails(emp.id)
   if (!detailed) return
 
   selectedEmployee.value = detailed
 
-  // Match the role object correctly
+  const roleNameFromCompany = detailed.companies?.[0]?.user_role?.name || ''
   const matchingRole =
     roleOptions.value.find(
       (role) =>
         role.name?.toLowerCase() ===
-        (detailed.user_role_name || detailed.user_role?.name || '').toLowerCase(),
+        (detailed.user_role_name || detailed.user_role?.name || roleNameFromCompany).toLowerCase(),
     ) || null
 
-  // Fill the form with the employee's existing data
   editForm.value = {
     user: {
       id: detailed.user?.id || 0,
