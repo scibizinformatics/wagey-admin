@@ -12,6 +12,15 @@
             </div>
           </div>
           <div class="header-actions">
+            <q-btn
+              color="primary"
+              icon="add"
+              label="Add Schedule"
+              @click="openAddModal"
+              class="add-btn"
+              unelevated
+              no-caps
+            />
             <q-input
               v-model="searchTerm"
               placeholder="Search employees..."
@@ -25,15 +34,6 @@
                 <q-icon name="search" class="search-icon" />
               </template>
             </q-input>
-            <q-btn
-              color="primary"
-              icon="add"
-              label="Add Schedule"
-              @click="openAddModal"
-              class="add-btn"
-              unelevated
-              no-caps
-            />
           </div>
         </div>
       </div>
@@ -1662,6 +1662,26 @@ const prevWeek = async () => {
   await fetchData()
   fetchLeaves()
 }
+// ─── Next month prefetch ───────────────────────────────────────────────────────
+
+const fetchNextMonthSchedule = async () => {
+  const now = new Date()
+  // First day of next month
+  const start = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  // Last day of next month
+  const end = new Date(now.getFullYear(), now.getMonth() + 2, 0)
+
+  const fmt = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  try {
+    const result = await fetchScheduleByDateRange(fmt(start), fmt(end))
+    console.log('Next month schedules fetched:', result)
+    return result
+  } catch (error) {
+    console.error('Failed to fetch next month schedule:', error)
+  }
+}
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -2939,6 +2959,7 @@ onMounted(async () => {
   await fetchLeaveTypes()
   await fetchShiftTemplatesList()
   await fetchData()
+  fetchNextMonthSchedule()
   fetchLeaves()
 })
 </script>
