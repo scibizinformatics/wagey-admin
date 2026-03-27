@@ -77,48 +77,6 @@
             </q-table>
           </div>
 
-          <!-- Charts Row -->
-          <div class="two-col-row" style="flex: 1; min-height: 0">
-            <div class="panel panel--flex">
-              <div class="panel-head">
-                <span class="panel-title">Payroll History</span>
-              </div>
-              <div class="chart-placeholder">
-                <q-icon name="show_chart" size="48px" color="grey-4" />
-                <div class="chart-placeholder-label">No payroll history available</div>
-              </div>
-            </div>
-
-            <div class="panel panel--flex">
-              <div class="panel-head">
-                <span class="panel-title">Smart Attendance</span>
-              </div>
-              <div class="alert-list">
-                <template v-if="attendanceLoading">
-                  <div v-for="n in 4" :key="n" class="alert-item">
-                    <q-skeleton type="circle" size="5px" />
-                    <q-skeleton type="text" style="flex: 1" />
-                  </div>
-                </template>
-                <template v-else>
-                  <div v-if="!attendanceAlerts.length" class="alert-item">
-                    <div class="alert-dot" style="background: #9ca3af"></div>
-                    <span class="alert-text">No attendance anomalies detected today</span>
-                  </div>
-                  <div
-                    v-for="(alert, index) in attendanceAlerts"
-                    v-else
-                    :key="index"
-                    class="alert-item"
-                  >
-                    <div class="alert-dot"></div>
-                    <span class="alert-text">{{ alert }}</span>
-                  </div>
-                </template>
-              </div>
-            </div>
-          </div>
-
           <!-- Recent Activity -->
           <div class="panel">
             <div class="panel-head">
