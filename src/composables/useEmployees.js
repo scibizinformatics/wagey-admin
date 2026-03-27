@@ -1,8 +1,7 @@
 import { ref } from 'vue'
-import axios from 'axios'
+import { api } from 'src/boot/axios'
 import { useCompany } from './useCompany'
-
-const BASE = 'https://staging.wageyapp.com'
+import { BASE, authHeaders } from './utils/http'
 
 export function useEmployees() {
   const { companyId } = useCompany()
@@ -19,10 +18,9 @@ export function useEmployees() {
 
     loading.value = true
     try {
-      const response = await axios.get(`${BASE}/user/companies/${companyId.value}/employees/`, {
+      const response = await api.get(`${BASE}/user/companies/${companyId.value}/employees/`, {
         headers: authHeaders(),
       })
-
       const data = normaliseList(response.data)
       employees.value = data
       return data
@@ -33,7 +31,7 @@ export function useEmployees() {
 
   /** Fetch a single employee's full profile. */
   async function fetchEmployee(employeeId) {
-    const response = await axios.get(
+    const response = await api.get(
       `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
       { headers: authHeaders() },
     )
@@ -49,7 +47,7 @@ export function useEmployees() {
   async function addEmployee(payload) {
     saving.value = true
     try {
-      const response = await axios.post(`${BASE}/user/employees/`, payload, {
+      const response = await api.post(`${BASE}/user/employees/`, payload, {
         headers: authHeaders(),
       })
       return response.data
@@ -64,7 +62,7 @@ export function useEmployees() {
    * @param {object} payload
    */
   async function updateUser(userId, payload) {
-    const response = await axios.patch(`${BASE}/user/users/${userId}/`, payload, {
+    const response = await api.patch(`${BASE}/user/users/${userId}/`, payload, {
       headers: authHeaders(),
     })
     return response.data
@@ -80,7 +78,7 @@ export function useEmployees() {
   async function updateEmployee(employeeId, payload) {
     saving.value = true
     try {
-      const response = await axios.patch(
+      const response = await api.patch(
         `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
         payload,
         { headers: authHeaders() },
@@ -95,7 +93,7 @@ export function useEmployees() {
 
   /** Terminate an employee. */
   async function terminateEmployee(employeeId, payload = {}) {
-    const response = await axios.patch(
+    const response = await api.patch(
       `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
       { status: 'terminated', ...payload },
       { headers: authHeaders() },
@@ -105,7 +103,7 @@ export function useEmployees() {
 
   /** Restore a terminated employee. */
   async function restoreEmployee(employeeId, payload = {}) {
-    const response = await axios.patch(
+    const response = await api.patch(
       `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
       { status: 'active', ...payload },
       { headers: authHeaders() },
@@ -114,11 +112,6 @@ export function useEmployees() {
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
-
-  function authHeaders() {
-    const token = localStorage.getItem('token') || localStorage.getItem('access_token')
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }
 
   function normaliseList(raw) {
     if (Array.isArray(raw)) return raw

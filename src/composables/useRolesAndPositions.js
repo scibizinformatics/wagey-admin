@@ -1,8 +1,7 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useCompany } from './useCompany'
-
-const BASE = 'https://staging.wageyapp.com'
+import { BASE, authHeaders } from './utils/http'
 
 export function useRolesAndPositions() {
   const { companyId } = useCompany()
@@ -11,12 +10,6 @@ export function useRolesAndPositions() {
   const positions = ref([])
   const loading = ref(false)
   const saving = ref(false)
-
-  // ─── Auth helper ──────────────────────────────────────────────────────────
-  function authHeaders() {
-    const token = localStorage.getItem('token') || localStorage.getItem('access_token')
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }
 
   // ─── User Roles ───────────────────────────────────────────────────────────
 

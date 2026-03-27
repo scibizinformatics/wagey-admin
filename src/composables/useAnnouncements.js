@@ -1,8 +1,7 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useCompany } from './useCompany'
-
-const BASE = 'https://staging.wageyapp.com'
+import { BASE, authHeaders } from './utils/http'
 
 export function useAnnouncements() {
   const { companyId } = useCompany()
@@ -11,18 +10,10 @@ export function useAnnouncements() {
   const loading = ref(false)
   const saving = ref(false)
 
-  // ─── Auth helper ──────────────────────────────────────────────────────────
-  function authHeaders() {
-    const token = localStorage.getItem('token') || localStorage.getItem('access_token')
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }
-
   // ─── Company ID helper ────────────────────────────────────────────────────
   function resolvedCompanyId() {
-    // If composable value is a plain scalar, use it directly
     if (companyId.value && typeof companyId.value !== 'object') return companyId.value
 
-    // Fall back to localStorage (handles cases where company is stored as JSON object)
     const stored = localStorage.getItem('selectedCompany')
     if (!stored) return companyId.value
     try {

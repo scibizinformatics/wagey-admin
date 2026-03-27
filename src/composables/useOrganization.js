@@ -1,9 +1,7 @@
 import { ref } from 'vue'
-import axios from 'axios'
 import { api } from 'src/boot/axios'
 import { useCompany } from './useCompany'
-
-const BASE = 'https://staging.wageyapp.com'
+import { BASE, authHeaders } from './utils/http'
 
 export function useOrganization() {
   const { companyId } = useCompany()
@@ -16,12 +14,6 @@ export function useOrganization() {
   const loading = ref(false)
   const saving = ref(false)
 
-  // ─── Auth helper ──────────────────────────────────────────────────────────
-  function authHeaders() {
-    const token = localStorage.getItem('token') || localStorage.getItem('access_token')
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }
-
   // ─── Sites ────────────────────────────────────────────────────────────────
 
   async function fetchSites() {
@@ -29,6 +21,7 @@ export function useOrganization() {
     try {
       const response = await api.get(`${BASE}/organization/sites/`, {
         params: { company: companyId.value },
+        headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
       sites.value = Array.isArray(data) ? data : []
@@ -76,6 +69,7 @@ export function useOrganization() {
     try {
       const response = await api.get(`${BASE}/organization/departments/`, {
         params: { company: companyId.value },
+        headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
       departments.value = Array.isArray(data) ? data : []
@@ -117,14 +111,15 @@ export function useOrganization() {
   }
 
   // ─── Shift Types ──────────────────────────────────────────────────────────
+  // Previously used raw axios — now unified to api instance.
 
   async function fetchShiftTypes() {
     loading.value = true
     try {
-      const response = await axios.get(
-        `${BASE}/organization/shift-types/?company=${companyId.value}`,
-        { headers: authHeaders() },
-      )
+      const response = await api.get(`${BASE}/organization/shift-types/`, {
+        params: { company: companyId.value },
+        headers: authHeaders(),
+      })
       const data = response.data.data ?? response.data ?? []
       shiftTypes.value = Array.isArray(data) ? data : []
       return shiftTypes.value
@@ -165,14 +160,15 @@ export function useOrganization() {
   }
 
   // ─── Recurring Schedules ──────────────────────────────────────────────────
+  // Previously used raw axios — now unified to api instance.
 
   async function fetchRecurringSchedules() {
     loading.value = true
     try {
-      const response = await axios.get(
-        `${BASE}/organization/recurring-schedules/?company=${companyId.value}`,
-        { headers: authHeaders() },
-      )
+      const response = await api.get(`${BASE}/organization/recurring-schedules/`, {
+        params: { company: companyId.value },
+        headers: authHeaders(),
+      })
       const data = response.data.data ?? response.data ?? []
       recurringSchedules.value = Array.isArray(data) ? data : []
       return recurringSchedules.value
@@ -188,6 +184,7 @@ export function useOrganization() {
     try {
       const response = await api.get(`${BASE}/payroll/cost-centers/`, {
         params: { company: companyId.value },
+        headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
       costCenters.value = Array.isArray(data) ? data : []
@@ -200,9 +197,8 @@ export function useOrganization() {
   // ─── Companies ────────────────────────────────────────────────────────────
 
   async function fetchCompanies() {
-    const token = localStorage.getItem('token') || localStorage.getItem('access_token')
     const response = await api.get(`${BASE}/organization/companies/`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(),
     })
     return response.data.data ?? response.data ?? []
   }
@@ -214,15 +210,15 @@ export function useOrganization() {
     return response.data
   }
 
-  async function updateCompany(companyId, payload) {
-    const response = await api.put(`${BASE}/organization/companies/${companyId}/`, payload, {
+  async function updateCompany(id, payload) {
+    const response = await api.put(`${BASE}/organization/companies/${id}/`, payload, {
       headers: authHeaders(),
     })
     return response.data
   }
 
-  async function deleteCompany(companyId) {
-    const response = await api.delete(`${BASE}/organization/companies/${companyId}/`, {
+  async function deleteCompany(id) {
+    const response = await api.delete(`${BASE}/organization/companies/${id}/`, {
       headers: authHeaders(),
     })
     return response.data

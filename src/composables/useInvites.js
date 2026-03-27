@@ -1,28 +1,25 @@
 import { ref } from 'vue'
-import axios from 'axios'
+import { api } from 'src/boot/axios'
 import { useCompany } from './useCompany'
-
-const BASE = 'https://staging.wageyapp.com'
+import { useRolesAndPositions } from './useRolesAndPositions'
+import { BASE, authHeaders } from './utils/http'
 
 export function useInvites() {
   const { companyId } = useCompany()
+  // fetchUserRoles is already defined in useRolesAndPositions — reuse it here
+  // instead of duplicating the implementation.
+  const { fetchUserRoles } = useRolesAndPositions()
 
   const invites = ref([])
   const loading = ref(false)
   const saving = ref(false)
-
-  // ─── Auth helper ──────────────────────────────────────────────────────────
-  function authHeaders() {
-    const token = localStorage.getItem('token') || localStorage.getItem('access_token')
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }
 
   // ─── Read ─────────────────────────────────────────────────────────────────
 
   async function fetchInvites() {
     loading.value = true
     try {
-      const response = await axios.get(`${BASE}/user/invite-list/`, {
+      const response = await api.get(`${BASE}/user/invite-list/`, {
         params: { company: companyId.value },
         headers: authHeaders(),
       })
@@ -42,23 +39,13 @@ export function useInvites() {
   async function sendInvite(invitationData) {
     saving.value = true
     try {
-      const response = await axios.post(`${BASE}/user/invite/`, invitationData, {
+      const response = await api.post(`${BASE}/user/invite/`, invitationData, {
         headers: authHeaders(),
       })
       return response.data
     } finally {
       saving.value = false
     }
-  }
-
-  // ─── User roles (needed by invite form) ──────────────────────────────────
-
-  async function fetchUserRoles() {
-    const response = await axios.get(`${BASE}/user/user-roles/`, {
-      params: { company: companyId.value },
-      headers: authHeaders(),
-    })
-    return response.data.data ?? response.data ?? []
   }
 
   return {
