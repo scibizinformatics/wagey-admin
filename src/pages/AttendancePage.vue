@@ -83,48 +83,47 @@
         <div class="filters-card">
           <div class="filters-header">
             <h3 class="filters-title">Filter Records</h3>
-            <q-btn
-              flat
-              dense
-              icon="clear_all"
-              label="Clear All"
-              @click="clearAllFilters"
-              class="clear-btn"
-              size="sm"
-            />
-          </div>
-
-          <div class="filters-grid">
-            <!-- Date Navigation -->
-            <div class="date-nav-wrapper">
+            <div class="filters-header-actions">
+              <!-- Date Navigation -->
+              <div class="date-nav-wrapper">
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="chevron_left"
+                  class="date-nav-btn"
+                  @click="goToPreviousDay"
+                />
+                <q-input
+                  dense
+                  outlined
+                  v-model="currentDate"
+                  type="date"
+                  class="filter-input date-nav-input"
+                  @update:model-value="onDateNavChange"
+                >
+                  <template v-slot:prepend>
+                    <q-icon name="event" />
+                  </template>
+                </q-input>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="chevron_right"
+                  class="date-nav-btn"
+                  @click="goToNextDay"
+                  :disable="currentDate >= today"
+                />
+              </div>
               <q-btn
                 flat
-                round
                 dense
-                icon="chevron_left"
-                class="date-nav-btn"
-                @click="goToPreviousDay"
-              />
-              <q-input
-                dense
-                outlined
-                v-model="currentDate"
-                type="date"
-                class="filter-input date-nav-input"
-                @update:model-value="onDateNavChange"
-              >
-                <template v-slot:prepend>
-                  <q-icon name="event" />
-                </template>
-              </q-input>
-              <q-btn
-                flat
-                round
-                dense
-                icon="chevron_right"
-                class="date-nav-btn"
-                @click="goToNextDay"
-                :disable="currentDate >= today"
+                icon="clear_all"
+                label="Clear All"
+                @click="clearAllFilters"
+                class="clear-btn"
+                size="sm"
               />
             </div>
           </div>
@@ -2687,6 +2686,12 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 14px;
+}
+
+.filters-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .filters-title {
