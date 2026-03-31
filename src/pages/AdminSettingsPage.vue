@@ -4,22 +4,7 @@
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
-          <div class="header-left">
-            <h1 class="page-title">Admin Settings</h1>
-          </div>
-          <div class="header-actions">
-            <q-input
-              v-model="searchQuery"
-              placeholder="Search settings..."
-              class="header-search"
-              dense
-              outlined
-            >
-              <template v-slot:prepend>
-                <q-icon name="search" class="search-icon" />
-              </template>
-            </q-input>
-          </div>
+          <h1 class="page-title">Admin Settings</h1>
         </div>
       </div>
 
@@ -106,38 +91,45 @@
                     <q-td class="table-body-cell">{{ props.row.address || 'N/A' }}</q-td>
                     <q-td class="table-body-cell">{{ props.row.contact || 'N/A' }}</q-td>
                     <q-td class="table-body-cell actions-cell">
-                      <div class="action-buttons">
-                        <q-btn
-                          flat
-                          round
-                          icon="visibility"
-                          size="sm"
-                          class="action-btn view-btn"
-                          @click="viewCompany(props.row)"
-                        >
-                          <q-tooltip>View Details</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="edit"
-                          size="sm"
-                          class="action-btn edit-btn"
-                          @click="editCompany(props.row)"
-                        >
-                          <q-tooltip>Edit Company</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="delete"
-                          size="sm"
-                          class="action-btn delete-btn"
-                          @click="deleteCompany(props.row)"
-                        >
-                          <q-tooltip>Delete Company</q-tooltip>
-                        </q-btn>
-                      </div>
+                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                          <q-list dense style="min-width: 150px">
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="viewCompany(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="visibility" size="16px"
+                              /></q-item-section>
+                              <q-item-section>View Details</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="editCompany(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="edit" size="16px"
+                              /></q-item-section>
+                              <q-item-section>Edit Company</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item dropdown-item-danger"
+                              @click="deleteCompany(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="delete" size="16px" color="negative"
+                              /></q-item-section>
+                              <q-item-section>Delete</q-item-section>
+                            </q-item>
+                          </q-list>
+                        </q-menu>
+                      </q-btn>
                     </q-td>
                   </q-tr>
                 </template>
@@ -217,38 +209,45 @@
                       </div>
                     </q-td>
                     <q-td class="table-body-cell actions-cell">
-                      <div class="action-buttons">
-                        <q-btn
-                          flat
-                          round
-                          icon="visibility"
-                          size="sm"
-                          class="action-btn view-btn"
-                          @click="viewSite(props.row)"
-                        >
-                          <q-tooltip>View Details</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="edit"
-                          size="sm"
-                          class="action-btn edit-btn"
-                          @click="editSite(props.row)"
-                        >
-                          <q-tooltip>Edit Site</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="delete"
-                          size="sm"
-                          class="action-btn delete-btn"
-                          @click="deleteSite(props.row)"
-                        >
-                          <q-tooltip>Delete Site</q-tooltip>
-                        </q-btn>
-                      </div>
+                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                          <q-list dense style="min-width: 150px">
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="viewSite(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="visibility" size="16px"
+                              /></q-item-section>
+                              <q-item-section>View Details</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="editSite(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="edit" size="16px"
+                              /></q-item-section>
+                              <q-item-section>Edit Site</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item dropdown-item-danger"
+                              @click="deleteSite(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="delete" size="16px" color="negative"
+                              /></q-item-section>
+                              <q-item-section>Delete</q-item-section>
+                            </q-item>
+                          </q-list>
+                        </q-menu>
+                      </q-btn>
                     </q-td>
                   </q-tr>
                 </template>
@@ -328,38 +327,45 @@
                       </div>
                     </q-td>
                     <q-td class="table-body-cell actions-cell">
-                      <div class="action-buttons">
-                        <q-btn
-                          flat
-                          round
-                          icon="visibility"
-                          size="sm"
-                          class="action-btn view-btn"
-                          @click="viewRole(props.row)"
-                        >
-                          <q-tooltip>View Details</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="edit"
-                          size="sm"
-                          class="action-btn edit-btn"
-                          @click="editRole(props.row)"
-                        >
-                          <q-tooltip>Edit Role</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="delete"
-                          size="sm"
-                          class="action-btn delete-btn"
-                          @click="deleteRole(props.row)"
-                        >
-                          <q-tooltip>Delete Role</q-tooltip>
-                        </q-btn>
-                      </div>
+                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                          <q-list dense style="min-width: 150px">
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="viewRole(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="visibility" size="16px"
+                              /></q-item-section>
+                              <q-item-section>View Details</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="editRole(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="edit" size="16px"
+                              /></q-item-section>
+                              <q-item-section>Edit Role</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item dropdown-item-danger"
+                              @click="deleteRole(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="delete" size="16px" color="negative"
+                              /></q-item-section>
+                              <q-item-section>Delete</q-item-section>
+                            </q-item>
+                          </q-list>
+                        </q-menu>
+                      </q-btn>
                     </q-td>
                   </q-tr>
                 </template>
@@ -457,38 +463,45 @@
                           />
                         </q-td>
                         <q-td class="table-body-cell actions-cell">
-                          <div class="action-buttons">
-                            <q-btn
-                              flat
-                              round
-                              icon="visibility"
-                              size="sm"
-                              class="action-btn view-btn"
-                              @click="viewShift(props.row)"
-                            >
-                              <q-tooltip>View Details</q-tooltip>
-                            </q-btn>
-                            <q-btn
-                              flat
-                              round
-                              icon="edit"
-                              size="sm"
-                              class="action-btn edit-btn"
-                              @click="editShift(props.row)"
-                            >
-                              <q-tooltip>Edit Shift</q-tooltip>
-                            </q-btn>
-                            <q-btn
-                              flat
-                              round
-                              icon="delete"
-                              size="sm"
-                              class="action-btn delete-btn"
-                              @click="deleteShift(props.row)"
-                            >
-                              <q-tooltip>Delete Shift</q-tooltip>
-                            </q-btn>
-                          </div>
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 150px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="viewShift(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="visibility" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>View Details</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="editShift(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="edit" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Edit Shift</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item dropdown-item-danger"
+                                  @click="deleteShift(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="delete" size="16px" color="negative"
+                                  /></q-item-section>
+                                  <q-item-section>Delete</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
                         </q-td>
                       </q-tr>
                     </template>
@@ -560,28 +573,34 @@
                           props.row.repeat_interval || 'N/A'
                         }}</q-td>
                         <q-td class="table-body-cell actions-cell">
-                          <div class="action-buttons">
-                            <q-btn
-                              flat
-                              round
-                              icon="edit"
-                              size="sm"
-                              class="action-btn edit-btn"
-                              @click="editRecurring(props.row)"
-                            >
-                              <q-tooltip>Edit</q-tooltip>
-                            </q-btn>
-                            <q-btn
-                              flat
-                              round
-                              icon="delete"
-                              size="sm"
-                              class="action-btn delete-btn"
-                              @click="deleteRecurring(props.row)"
-                            >
-                              <q-tooltip>Delete</q-tooltip>
-                            </q-btn>
-                          </div>
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 150px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="editRecurring(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="edit" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Edit</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item dropdown-item-danger"
+                                  @click="deleteRecurring(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="delete" size="16px" color="negative"
+                                  /></q-item-section>
+                                  <q-item-section>Delete</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
                         </q-td>
                       </q-tr>
                     </template>
@@ -643,38 +662,45 @@
                     <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
                     <q-td class="table-body-cell">{{ formatDate(props.row.date_created) }}</q-td>
                     <q-td class="table-body-cell actions-cell">
-                      <div class="action-buttons">
-                        <q-btn
-                          flat
-                          round
-                          icon="visibility"
-                          size="sm"
-                          class="action-btn view-btn"
-                          @click="viewDepartment(props.row)"
-                        >
-                          <q-tooltip>View Details</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="edit"
-                          size="sm"
-                          class="action-btn edit-btn"
-                          @click="editDepartment(props.row)"
-                        >
-                          <q-tooltip>Edit Department</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="delete"
-                          size="sm"
-                          class="action-btn delete-btn"
-                          @click="deleteDepartment(props.row)"
-                        >
-                          <q-tooltip>Delete Department</q-tooltip>
-                        </q-btn>
-                      </div>
+                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                          <q-list dense style="min-width: 150px">
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="viewDepartment(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="visibility" size="16px"
+                              /></q-item-section>
+                              <q-item-section>View Details</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="editDepartment(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="edit" size="16px"
+                              /></q-item-section>
+                              <q-item-section>Edit Department</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item dropdown-item-danger"
+                              @click="deleteDepartment(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="delete" size="16px" color="negative"
+                              /></q-item-section>
+                              <q-item-section>Delete</q-item-section>
+                            </q-item>
+                          </q-list>
+                        </q-menu>
+                      </q-btn>
                     </q-td>
                   </q-tr>
                 </template>
@@ -736,38 +762,45 @@
                     <q-td class="table-body-cell">{{ props.row.department_name || 'N/A' }}</q-td>
                     <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
                     <q-td class="table-body-cell actions-cell">
-                      <div class="action-buttons">
-                        <q-btn
-                          flat
-                          round
-                          icon="visibility"
-                          size="sm"
-                          class="action-btn view-btn"
-                          @click="viewPosition(props.row)"
-                        >
-                          <q-tooltip>View Details</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="edit"
-                          size="sm"
-                          class="action-btn edit-btn"
-                          @click="editPosition(props.row)"
-                        >
-                          <q-tooltip>Edit Position</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="delete"
-                          size="sm"
-                          class="action-btn delete-btn"
-                          @click="deletePosition(props.row)"
-                        >
-                          <q-tooltip>Delete Position</q-tooltip>
-                        </q-btn>
-                      </div>
+                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                          <q-list dense style="min-width: 150px">
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="viewPosition(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="visibility" size="16px"
+                              /></q-item-section>
+                              <q-item-section>View Details</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="editPosition(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="edit" size="16px"
+                              /></q-item-section>
+                              <q-item-section>Edit Position</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item dropdown-item-danger"
+                              @click="deletePosition(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="delete" size="16px" color="negative"
+                              /></q-item-section>
+                              <q-item-section>Delete</q-item-section>
+                            </q-item>
+                          </q-list>
+                        </q-menu>
+                      </q-btn>
                     </q-td>
                   </q-tr>
                 </template>
@@ -842,49 +875,57 @@
                     </q-td>
                     <q-td class="table-body-cell">{{ formatDate(props.row.date_created) }}</q-td>
                     <q-td class="table-body-cell actions-cell">
-                      <div class="action-buttons">
-                        <q-btn
-                          flat
-                          round
-                          icon="visibility"
-                          size="sm"
-                          class="action-btn view-btn"
-                          @click="viewContract(props.row)"
-                        >
-                          <q-tooltip>View Details</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="edit"
-                          size="sm"
-                          class="action-btn edit-btn"
-                          @click="editContract(props.row)"
-                        >
-                          <q-tooltip>Edit Contract</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          v-if="props.row.pdf_url"
-                          flat
-                          round
-                          icon="picture_as_pdf"
-                          size="sm"
-                          class="action-btn pdf-btn"
-                          @click="viewContractPDF(props.row)"
-                        >
-                          <q-tooltip>View PDF</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          flat
-                          round
-                          icon="delete"
-                          size="sm"
-                          class="action-btn delete-btn"
-                          @click="deleteContract(props.row)"
-                        >
-                          <q-tooltip>Delete Contract</q-tooltip>
-                        </q-btn>
-                      </div>
+                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                          <q-list dense style="min-width: 150px">
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="viewContract(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="visibility" size="16px"
+                              /></q-item-section>
+                              <q-item-section>View Details</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="editContract(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="edit" size="16px"
+                              /></q-item-section>
+                              <q-item-section>Edit Contract</q-item-section>
+                            </q-item>
+                            <q-item
+                              v-if="props.row.pdf_url"
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="viewContractPDF(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="picture_as_pdf" size="16px" color="red-7"
+                              /></q-item-section>
+                              <q-item-section>View PDF</q-item-section>
+                            </q-item>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item dropdown-item-danger"
+                              @click="deleteContract(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="delete" size="16px" color="negative"
+                              /></q-item-section>
+                              <q-item-section>Delete</q-item-section>
+                            </q-item>
+                          </q-list>
+                        </q-menu>
+                      </q-btn>
                     </q-td>
                   </q-tr>
                 </template>
@@ -963,35 +1004,45 @@
                         >
                         <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
                         <q-td class="table-body-cell actions-cell">
-                          <div class="action-buttons">
-                            <q-btn
-                              flat
-                              round
-                              icon="visibility"
-                              size="sm"
-                              class="action-btn view-btn"
-                              @click="viewAllowanceType(props.row)"
-                              ><q-tooltip>View</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="edit"
-                              size="sm"
-                              class="action-btn edit-btn"
-                              @click="editAllowanceType(props.row)"
-                              ><q-tooltip>Edit</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="delete"
-                              size="sm"
-                              class="action-btn delete-btn"
-                              @click="deleteAllowanceType(props.row)"
-                              ><q-tooltip>Delete</q-tooltip></q-btn
-                            >
-                          </div>
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 150px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="viewAllowanceType(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="visibility" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>View Details</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="editAllowanceType(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="edit" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Edit</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item dropdown-item-danger"
+                                  @click="deleteAllowanceType(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="delete" size="16px" color="negative"
+                                  /></q-item-section>
+                                  <q-item-section>Delete</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
                         </q-td>
                       </q-tr>
                     </template>
@@ -1050,35 +1101,45 @@
                           ><span class="item-name">{{ props.row.rate || 'N/A' }}</span></q-td
                         >
                         <q-td class="table-body-cell actions-cell">
-                          <div class="action-buttons">
-                            <q-btn
-                              flat
-                              round
-                              icon="visibility"
-                              size="sm"
-                              class="action-btn view-btn"
-                              @click="viewTaxBracket(props.row)"
-                              ><q-tooltip>View</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="edit"
-                              size="sm"
-                              class="action-btn edit-btn"
-                              @click="editTaxBracket(props.row)"
-                              ><q-tooltip>Edit</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="delete"
-                              size="sm"
-                              class="action-btn delete-btn"
-                              @click="deleteTaxBracket(props.row)"
-                              ><q-tooltip>Delete</q-tooltip></q-btn
-                            >
-                          </div>
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 150px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="viewTaxBracket(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="visibility" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>View Details</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="editTaxBracket(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="edit" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Edit</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item dropdown-item-danger"
+                                  @click="deleteTaxBracket(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="delete" size="16px" color="negative"
+                                  /></q-item-section>
+                                  <q-item-section>Delete</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
                         </q-td>
                       </q-tr>
                     </template>
@@ -1137,35 +1198,45 @@
                         <q-td class="table-body-cell">{{ formatDate(props.row.start_date) }}</q-td>
                         <q-td class="table-body-cell">{{ formatDate(props.row.end_date) }}</q-td>
                         <q-td class="table-body-cell actions-cell">
-                          <div class="action-buttons">
-                            <q-btn
-                              flat
-                              round
-                              icon="visibility"
-                              size="sm"
-                              class="action-btn view-btn"
-                              @click="viewCutoffPeriod(props.row)"
-                              ><q-tooltip>View</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="edit"
-                              size="sm"
-                              class="action-btn edit-btn"
-                              @click="editCutoffPeriod(props.row)"
-                              ><q-tooltip>Edit</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="delete"
-                              size="sm"
-                              class="action-btn delete-btn"
-                              @click="deleteCutoffPeriod(props.row)"
-                              ><q-tooltip>Delete</q-tooltip></q-btn
-                            >
-                          </div>
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 150px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="viewCutoffPeriod(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="visibility" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>View Details</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="editCutoffPeriod(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="edit" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Edit</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item dropdown-item-danger"
+                                  @click="deleteCutoffPeriod(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="delete" size="16px" color="negative"
+                                  /></q-item-section>
+                                  <q-item-section>Delete</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
                         </q-td>
                       </q-tr>
                     </template>
@@ -1222,35 +1293,45 @@
                         >
                         <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
                         <q-td class="table-body-cell actions-cell">
-                          <div class="action-buttons">
-                            <q-btn
-                              flat
-                              round
-                              icon="visibility"
-                              size="sm"
-                              class="action-btn view-btn"
-                              @click="viewPayrollGroup(props.row)"
-                              ><q-tooltip>View</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="edit"
-                              size="sm"
-                              class="action-btn edit-btn"
-                              @click="editPayrollGroup(props.row)"
-                              ><q-tooltip>Edit</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="delete"
-                              size="sm"
-                              class="action-btn delete-btn"
-                              @click="deletePayrollGroup(props.row)"
-                              ><q-tooltip>Delete</q-tooltip></q-btn
-                            >
-                          </div>
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 150px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="viewPayrollGroup(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="visibility" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>View Details</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="editPayrollGroup(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="edit" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Edit</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item dropdown-item-danger"
+                                  @click="deletePayrollGroup(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="delete" size="16px" color="negative"
+                                  /></q-item-section>
+                                  <q-item-section>Delete</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
                         </q-td>
                       </q-tr>
                     </template>
@@ -1307,35 +1388,45 @@
                         >
                         <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
                         <q-td class="table-body-cell actions-cell">
-                          <div class="action-buttons">
-                            <q-btn
-                              flat
-                              round
-                              icon="visibility"
-                              size="sm"
-                              class="action-btn view-btn"
-                              @click="viewLaborRule(props.row)"
-                              ><q-tooltip>View</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="edit"
-                              size="sm"
-                              class="action-btn edit-btn"
-                              @click="editLaborRule(props.row)"
-                              ><q-tooltip>Edit</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="delete"
-                              size="sm"
-                              class="action-btn delete-btn"
-                              @click="deleteLaborRule(props.row)"
-                              ><q-tooltip>Delete</q-tooltip></q-btn
-                            >
-                          </div>
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 150px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="viewLaborRule(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="visibility" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>View Details</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="editLaborRule(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="edit" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Edit</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item dropdown-item-danger"
+                                  @click="deleteLaborRule(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="delete" size="16px" color="negative"
+                                  /></q-item-section>
+                                  <q-item-section>Delete</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
                         </q-td>
                       </q-tr>
                     </template>
@@ -1392,35 +1483,45 @@
                         >
                         <q-td class="table-body-cell">{{ props.row.base_pay || 'N/A' }}</q-td>
                         <q-td class="table-body-cell actions-cell">
-                          <div class="action-buttons">
-                            <q-btn
-                              flat
-                              round
-                              icon="visibility"
-                              size="sm"
-                              class="action-btn view-btn"
-                              @click="viewPayStructure(props.row)"
-                              ><q-tooltip>View</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="edit"
-                              size="sm"
-                              class="action-btn edit-btn"
-                              @click="editPayStructure(props.row)"
-                              ><q-tooltip>Edit</q-tooltip></q-btn
-                            >
-                            <q-btn
-                              flat
-                              round
-                              icon="delete"
-                              size="sm"
-                              class="action-btn delete-btn"
-                              @click="deletePayStructure(props.row)"
-                              ><q-tooltip>Delete</q-tooltip></q-btn
-                            >
-                          </div>
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 150px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="viewPayStructure(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="visibility" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>View Details</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="editPayStructure(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="edit" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Edit</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item dropdown-item-danger"
+                                  @click="deletePayStructure(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="delete" size="16px" color="negative"
+                                  /></q-item-section>
+                                  <q-item-section>Delete</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
                         </q-td>
                       </q-tr>
                     </template>
@@ -1435,7 +1536,7 @@
 
     <!-- ===================== COMPANY DIALOG ===================== -->
     <q-dialog v-model="companyDialog" persistent>
-      <q-card style="min-width: 460px; max-width: 520px">
+      <q-card style="min-width: 460px; max-width: 520px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">{{ editingCompany ? 'Edit Company' : 'Add Company' }}</div>
           <q-space />
@@ -1539,7 +1640,7 @@
     <!-- ===================== SITE DIALOG ===================== -->
     <!-- ===================== SITE DIALOG ===================== -->
     <q-dialog v-model="siteDialog" persistent>
-      <q-card style="min-width: 560px; max-width: 620px; border-radius: 12px">
+      <q-card style="min-width: 560px; max-width: 620px; border-radius: 16px">
         <!-- Header -->
         <q-card-section class="dialog-header row items-center q-pb-sm">
           <div class="row items-center gap-sm">
@@ -1681,7 +1782,7 @@
             :label="editingSite ? 'Update Site' : 'Save Site'"
             :loading="savingSite"
             @click="saveSite"
-            style="border-radius: 8px; min-width: 110px"
+            style="border-radius: 16px; min-width: 110px"
           />
         </q-card-actions>
       </q-card>
@@ -1689,7 +1790,7 @@
 
     <!-- ===================== ROLE DIALOG ===================== -->
     <q-dialog v-model="roleDialog" persistent>
-      <q-card style="min-width: 500px; max-width: 560px">
+      <q-card style="min-width: 500px; max-width: 560px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">{{ editingRole ? 'Edit Role' : 'Add Role' }}</div>
           <q-space />
@@ -1721,7 +1822,7 @@
 
     <!-- ===================== SHIFT DIALOG ===================== -->
     <q-dialog v-model="shiftDialog" persistent>
-      <q-card style="min-width: 420px">
+      <q-card style="min-width: 420px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">{{ editingShift ? 'Edit Shift' : 'Add Shift' }}</div>
           <q-space />
@@ -1771,7 +1872,7 @@
 
     <!-- ===================== RECURRING SCHEDULE DIALOG ===================== -->
     <q-dialog v-model="recurringDialog" persistent>
-      <q-card style="min-width: 480px">
+      <q-card style="min-width: 480px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingRecurring ? 'Edit Recurring Schedule' : 'Add Recurring Schedule' }}
@@ -1821,28 +1922,6 @@
             </div>
           </div>
 
-          <!-- Date Range -->
-          <div class="row q-col-gutter-md q-mb-md">
-            <div class="col-6">
-              <q-input
-                v-model="recurringForm.start_date"
-                label="Start Date *"
-                type="date"
-                outlined
-                dense
-              />
-            </div>
-            <div class="col-6">
-              <q-input
-                v-model="recurringForm.end_date"
-                label="End Date *"
-                type="date"
-                outlined
-                dense
-              />
-            </div>
-          </div>
-
           <!-- Weekdays -->
           <q-select
             v-model="recurringForm.weekdays"
@@ -1883,7 +1962,7 @@
 
     <!-- ===================== DEPARTMENT DIALOG ===================== -->
     <q-dialog v-model="departmentDialog" persistent>
-      <q-card style="min-width: 380px">
+      <q-card style="min-width: 380px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">{{ editingDepartment ? 'Edit Department' : 'Add Department' }}</div>
           <q-space />
@@ -1906,7 +1985,7 @@
 
     <!-- ===================== POSITION DIALOG ===================== -->
     <q-dialog v-model="positionDialog" persistent>
-      <q-card style="min-width: 380px">
+      <q-card style="min-width: 380px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">{{ editingPosition ? 'Edit Position' : 'Add Position' }}</div>
           <q-space />
@@ -1943,7 +2022,7 @@
 
     <!-- ===================== CONTRACT DIALOG ===================== -->
     <q-dialog v-model="contractDialog" persistent>
-      <q-card style="min-width: 520px">
+      <q-card style="min-width: 520px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">{{ editingContract ? 'Edit Contract' : 'Add Contract' }}</div>
           <q-space />
@@ -2059,7 +2138,7 @@
 
     <!-- ===================== CONTRACT VIEW DIALOG ===================== -->
     <q-dialog v-model="contractViewDialog">
-      <q-card style="min-width: 480px" v-if="selectedContract">
+      <q-card style="min-width: 480px; border-radius: 16px" v-if="selectedContract">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">Contract Details</div>
           <q-space />
@@ -2117,7 +2196,7 @@
 
     <!-- ===================== ALLOWANCE TYPE DIALOG ===================== -->
     <q-dialog v-model="allowanceTypeDialog" persistent>
-      <q-card style="min-width: 380px">
+      <q-card style="min-width: 380px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingAllowanceType ? 'Edit Allowance Type' : 'Add Allowance Type' }}
@@ -2143,7 +2222,7 @@
 
     <!-- ===================== TAX BRACKET DIALOG ===================== -->
     <q-dialog v-model="taxBracketDialog" persistent>
-      <q-card style="min-width: 400px">
+      <q-card style="min-width: 400px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingTaxBracket ? 'Edit Tax Bracket' : 'Add Tax Bracket' }}
@@ -2198,7 +2277,7 @@
 
     <!-- ===================== CUTOFF PERIOD DIALOG ===================== -->
     <q-dialog v-model="cutoffPeriodDialog" persistent>
-      <q-card style="min-width: 420px">
+      <q-card style="min-width: 420px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingCutoffPeriod ? 'Edit Cutoff Period' : 'Add Cutoff Period' }}
@@ -2246,7 +2325,7 @@
 
     <!-- ===================== PAYROLL GROUP DIALOG ===================== -->
     <q-dialog v-model="payrollGroupDialog" persistent>
-      <q-card style="min-width: 380px">
+      <q-card style="min-width: 380px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingPayrollGroup ? 'Edit Payroll Group' : 'Add Payroll Group' }}
@@ -2285,7 +2364,7 @@
 
     <!-- ===================== LABOR RULE DIALOG ===================== -->
     <q-dialog v-model="laborRuleDialog" persistent>
-      <q-card style="min-width: 420px">
+      <q-card style="min-width: 420px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">{{ editingLaborRule ? 'Edit Labor Rule' : 'Add Labor Rule' }}</div>
           <q-space />
@@ -2333,7 +2412,7 @@
 
     <!-- ===================== PAY STRUCTURE DIALOG ===================== -->
     <q-dialog v-model="payStructureDialog" persistent>
-      <q-card style="min-width: 440px">
+      <q-card style="min-width: 440px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingPayStructure ? 'Edit Pay Structure' : 'Add Pay Structure' }}
@@ -2406,3092 +2485,533 @@
   </q-page>
 </template>
 
-<script>
-import { api } from 'src/boot/axios'
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useQuasar } from 'quasar'
 
-export default {
-  name: 'AdminSettingsPage',
-  data() {
-    return {
-      activeTab: 'companies',
-      searchQuery: '',
+import { useAdminCompanies } from 'src/composables/admin/useAdminCompanies'
+import { useAdminSites } from 'src/composables/admin/useAdminSites'
+import { useAdminRoles } from 'src/composables/admin/useAdminRoles'
+import { useAdminShifts } from 'src/composables/admin/useAdminShifts'
+import { useAdminDepartments } from 'src/composables/admin/useAdminDepartments'
+import { useAdminPositions } from 'src/composables/admin/useAdminPositions'
+import { useAdminContracts } from 'src/composables/admin/useAdminContracts'
+import {
+  useAdminAllowanceTypes,
+  useAdminTaxBrackets,
+  useAdminCutoffPeriods,
+  useAdminPayrollGroups,
+  useAdminLaborRules,
+  useAdminPayStructures,
+} from 'src/composables/admin/useAdminPayroll'
 
-      // Companies
-      companies: [],
-      loadingCompanies: false,
-      companyDialog: false,
-      editingCompany: false,
-      savingCompany: false,
-      companyForm: {
-        id: null,
-        name: '',
-        logo: '',
-      },
-      companyColumns: [
-        { name: 'name', label: 'Company Name', field: 'name', align: 'left', sortable: true },
-        { name: 'logo', label: 'Logo', field: 'logo', align: 'center' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
-      logoUploadMethod: 'url',
-      logoFile: null,
-      logoPreview: null,
+// ─── Shared Quasar instance ───────────────────────────────────────────────
+const $q = useQuasar()
 
-      // Sites
-      sites: [],
-      loadingSites: false,
-      siteDialog: false,
-      editingSite: false,
-      savingSite: false,
-      siteForm: {
-        id: null,
-        name: '',
-        brand_name: '',
-        otp_secret: '',
-        location: '',
-        latitude: '',
-        longitude: '',
-        radius_meters: 100,
-        ownership_type: 'owned',
-        is_active: true,
-        requires_otp: false,
-        allow_manual_attendance: true,
-        allow_service_charge: true,
-        multiply_nd_by_holiday: false,
-        extended_shift_days: '',
-        company: null,
-        business_type: null,
-      },
-      siteColumns: [
-        { name: 'name', label: 'Site Name', field: 'name', align: 'left', sortable: true },
-        { name: 'location', label: 'Location', field: 'location', align: 'left' },
-        { name: 'ownership_type', label: 'Ownership', field: 'ownership_type', align: 'left' },
-        { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
+// ─── Page state ───────────────────────────────────────────────────────────
+const activeTab = ref('companies')
+const shiftSubTab = ref('one-time')
+const payslipSubTab = ref('allowance-types')
+const searchQuery = ref('')
 
-      // Departments
-      ownershipOptions: ['owned', 'leased', 'partnership'],
-      departments: [],
-      loadingDepartments: false,
-      departmentDialog: false,
-      editingDepartment: false,
-      savingDepartment: false,
-      departmentForm: {
-        id: null,
-        name: '',
-        company: null,
-      },
-      departmentColumns: [
-        { name: 'name', label: 'Department Name', field: 'name', align: 'left', sortable: true },
-        { name: 'date_created', label: 'Date Created', field: 'date_created', align: 'left' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
-      // Roles
-      roles: [],
-      loadingRoles: false,
-      roleDialog: false,
-      editingRole: false,
-      savingRole: false,
-      roleForm: {
-        id: null,
-        name: '',
-        company: null,
-        can_view_dashboard: false,
-        can_manage_employees: false,
-        can_view_attendance: false,
-        can_edit_attendance: false,
-        can_view_payroll: false,
-        can_release_payroll: false,
-        can_approve_requests: false,
-        can_manage_schedules: false,
-        can_access_admin_settings: false,
-        can_access_web_admin: false,
-        can_access_manager_app: false,
-        can_view_salary: false,
-      },
-      roleColumns: [
-        { name: 'name', label: 'Role Name', field: 'name', align: 'left', sortable: true },
-        { name: 'permissions', label: 'Permissions', field: 'permissions', align: 'left' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
-      permissionFields: [
-        { key: 'can_view_dashboard', label: 'View Dashboard' },
-        { key: 'can_manage_employees', label: 'Manage Employees' },
-        { key: 'can_view_attendance', label: 'View Attendance' },
-        { key: 'can_edit_attendance', label: 'Edit Attendance' },
-        { key: 'can_view_payroll', label: 'View Payroll' },
-        { key: 'can_release_payroll', label: 'Release Payroll' },
-        { key: 'can_approve_requests', label: 'Approve Requests' },
-        { key: 'can_manage_schedules', label: 'Manage Schedules' },
-        { key: 'can_access_admin_settings', label: 'Admin Settings' },
-        { key: 'can_access_web_admin', label: 'Web Admin' },
-        { key: 'can_access_manager_app', label: 'Manager App' },
-        { key: 'can_view_salary', label: 'View Salary' },
-      ],
-      // Shifts
-      shiftSubTab: 'one-time',
-      shifts: [],
-      loadingShifts: false,
-      shiftDialog: false,
-      editingShift: false,
-      savingShift: false,
-      shiftForm: {
-        id: null,
-        name: '',
-        company: null,
-        description: '',
-        default_start_time: '',
-        default_end_time: '',
-        is_graveyard: false,
-        apply_night_differential: false,
-        is_off: false,
-        is_extended: false,
-      },
-      shiftColumns: [
-        { name: 'name', label: 'Shift Name', field: 'name', align: 'left', sortable: true },
-        { name: 'description', label: 'Description', field: 'description', align: 'left' },
-        { name: 'times', label: 'Time', align: 'left' },
-        { name: 'is_graveyard', label: 'Type', field: 'is_graveyard', align: 'center' },
-        {
-          name: 'apply_night_differential',
-          label: 'Night Diff',
-          field: 'apply_night_differential',
-          align: 'center',
-        },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
+// ─── Composables ──────────────────────────────────────────────────────────
 
-      // Recurring Schedules
-      recurringSchedules: [],
-      loadingRecurring: false,
-      recurringDialog: false,
-      editingRecurring: false,
-      savingRecurring: false,
-      recurringForm: {
-        id: null,
-        name: '',
-        shift_type: null,
-        shift_type_2: null,
-        start_date: '',
-        end_date: '',
-        start_time: '',
-        end_time: '',
-        weekdays: [],
-        repeat_interval: 1,
-      },
-      weekdayOptions: [
-        { label: 'Monday', value: 'Mon' },
-        { label: 'Tuesday', value: 'Tue' },
-        { label: 'Wednesday', value: 'Wed' },
-        { label: 'Thursday', value: 'Thu' },
-        { label: 'Friday', value: 'Fri' },
-        { label: 'Saturday', value: 'Sat' },
-        { label: 'Sunday', value: 'Sun' },
-      ],
-      recurringColumns: [
-        { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
-        { name: 'shift_type', label: 'Primary Shift', field: 'shift_type', align: 'left' },
-        { name: 'shift_type_2', label: 'Secondary Shift', field: 'shift_type_2', align: 'left' },
-        { name: 'date_range', label: 'Date Range', align: 'left' },
-        { name: 'time', label: 'Time', align: 'left' },
-        { name: 'weekdays', label: 'Weekdays', field: 'weekdays', align: 'left' },
-        {
-          name: 'repeat_interval',
-          label: 'Repeat Interval',
-          field: 'repeat_interval',
-          align: 'center',
-        },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
+// Companies
+const {
+  companies,
+  loading: loadingCompanies,
+  saving: savingCompany,
+  dialog: companyDialog,
+  editing: editingCompany,
+  form: companyForm,
+  logoUploadMethod,
+  logoFile,
+  logoPreview,
+  fetchCompanies,
+  openDialog: openCompanyDialog,
+  openEditDialog: editCompany,
+  onLogoFileSelected,
+  clearLogoFile,
+  clearLogoUrl,
+  onFileRejected,
+  handleImageError,
+  saveCompany,
+  deleteCompany,
+} = useAdminCompanies()
 
-      // Positions
-      positions: [],
-      loadingPositions: false,
-      positionDialog: false,
-      editingPosition: false,
-      savingPosition: false,
-      positionForm: {
-        id: null,
-        name: '',
-        description: '',
-      },
-      positionColumns: [
-        { name: 'name', label: 'Position Name', field: 'name', align: 'left' },
-        { name: 'description', label: 'Description', field: 'description', align: 'left' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
+// Sites
+const {
+  sites,
+  loading: loadingSites,
+  saving: savingSite,
+  dialog: siteDialog,
+  editing: editingSite,
+  form: siteForm,
+  fetchSites,
+  openDialog: openSiteDialog,
+  openEditDialog: editSite,
+  saveSite,
+  deleteSite,
+} = useAdminSites()
 
-      // Contracts
-      contracts: [],
-      loadingContracts: false,
-      contractDialog: false,
-      contractViewDialog: false,
-      editingContract: false,
-      savingContract: false,
-      selectedContract: null,
-      employees: [],
-      contractTypes: [],
-      contractForm: {
-        id: null,
-        employee_id: null,
-        company_id: null,
-        contract_type_id: null,
-        site_id: null,
-        pay_structure: {
-          position_id: null,
-          pay_type: 'monthly',
-          rate: '',
-          currency: 'PHP',
-          effective_from: '',
-          effective_to: null,
-        },
-      },
+// Roles
+const {
+  roles,
+  loading: loadingRoles,
+  saving: savingRole,
+  dialog: roleDialog,
+  editing: editingRole,
+  form: roleForm,
+  permissionFields,
+  getActivePermissions,
+  fetchRoles,
+  openDialog: openRoleDialog,
+  openEditDialog: editRole,
+  saveRole,
+  deleteRole,
+} = useAdminRoles()
 
-      shiftTypes: [],
-      loadingShiftTypes: false,
-      contractColumns: [
-        {
-          name: 'employee',
-          label: 'Employee',
-          field: 'employee_name',
-          align: 'left',
-          sortable: true,
-        },
-        {
-          name: 'contract_type',
-          label: 'Contract Type',
-          field: 'contract_type_name',
-          align: 'left',
-        },
-        { name: 'company', label: 'Company', field: 'company_name', align: 'left' },
-        { name: 'status', label: 'Status', field: 'is_acknowledged', align: 'center' },
-        { name: 'date_created', label: 'Date Created', field: 'date_created', align: 'left' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
+// Shifts + Recurring
+const {
+  shifts,
+  shiftTypes,
+  recurringSchedules,
+  loading: loadingShifts,
+  saving: savingShift,
+  loadingRecurring,
+  savingRecurring,
+  shiftDialog,
+  editingShift,
+  shiftForm,
+  recurringDialog,
+  editingRecurring,
+  recurringForm,
+  weekdayOptions,
+  formatTime,
+  formatWeekdays,
+  fetchShifts,
+  openShiftDialog,
+  openEditShiftDialog: editShift,
+  saveShift,
+  deleteShift,
+  fetchRecurringSchedules,
+  openRecurringDialog,
+  openEditRecurringDialog: editRecurring,
+  saveRecurringSchedule,
+  deleteRecurring,
+} = useAdminShifts()
 
-      // Payslips
-      payslipSubTab: 'allowance-types',
-      // Pay Structures
-      payStructures: [],
-      loadingPayStructures: false,
-      payStructureDialog: false,
-      editingPayStructure: false,
-      savingPayStructure: false,
-      payStructureForm: {
-        id: null,
-        position: null,
-        pay_type: 'monthly',
-        rate: 0,
-        currency: 'PHP',
-        effective_from: '',
-        effective_to: null,
-      },
-      payStructureColumns: [
-        {
-          name: 'position',
-          label: 'Position',
-          field: 'position_name',
-          align: 'left',
-          sortable: true,
-        },
-        { name: 'pay_type', label: 'Pay Type', field: 'pay_type', align: 'left' },
-        { name: 'rate', label: 'Rate', field: 'rate', align: 'right' },
-        {
-          name: 'effective_from',
-          label: 'Effective From',
-          field: 'effective_from',
-          align: 'left',
-        },
-        { name: 'effective_to', label: 'Effective To', field: 'effective_to', align: 'left' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
-      payTypeOptions: ['monthly', 'daily', 'hourly'],
+// Departments
+const {
+  departments,
+  loading: loadingDepartments,
+  saving: savingDepartment,
+  dialog: departmentDialog,
+  editing: editingDepartment,
+  form: departmentForm,
+  fetchDepartments,
+  openDialog: openDepartmentDialog,
+  openEditDialog: editDepartment,
+  saveDepartment,
+  deleteDepartment,
+} = useAdminDepartments()
 
-      // Allowance Types
-      allowanceTypes: [],
-      loadingAllowanceTypes: false,
-      allowanceTypeDialog: false,
-      editingAllowanceType: false,
-      savingAllowanceType: false,
-      allowanceTypeForm: {
-        id: null,
-        company: null,
-        name: '',
-      },
-      allowanceTypeColumns: [
-        { name: 'name', label: 'Allowance Name', field: 'name', align: 'left', sortable: true },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
+// Positions
+const {
+  positions,
+  loading: loadingPositions,
+  saving: savingPosition,
+  dialog: positionDialog,
+  editing: editingPosition,
+  form: positionForm,
+  getPositionName,
+  fetchPositions,
+  openDialog: openPositionDialog,
+  openEditDialog: editPosition,
+  savePosition,
+  deletePosition,
+} = useAdminPositions()
 
-      // Tax Brackets
-      taxBrackets: [],
-      loadingTaxBrackets: false,
-      taxBracketDialog: false,
-      editingTaxBracket: false,
-      savingTaxBracket: false,
-      taxBracketForm: {
-        id: null,
-        company: null,
-        name: '',
-        min_amount: 0,
-        max_amount: null,
-        rate: 0,
-      },
-      taxBracketColumns: [
-        { name: 'name', label: 'Bracket Name', field: 'name', align: 'left', sortable: true },
-        { name: 'min_amount', label: 'Min Amount', field: 'min_amount', align: 'right' },
-        { name: 'max_amount', label: 'Max Amount', field: 'max_amount', align: 'right' },
-        { name: 'rate', label: 'Rate', field: 'rate', align: 'right' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
+// Contracts
+const {
+  contracts,
+  contractTypes,
+  loading: loadingContracts,
+  saving: savingContract,
+  dialog: contractDialog,
+  viewDialog: contractViewDialog,
+  editing: editingContract,
+  selectedContract,
+  form: contractForm,
+  payTypeOptions,
+  fetchContracts,
+  fetchContractTypes,
+  openDialog: _openContractDialog,
+  openEditDialog: _editContract,
+  viewContract,
+  viewContractPDF,
+  saveContract,
+  deleteContract,
+} = useAdminContracts()
 
-      // Cutoff Periods
-      cutoffPeriods: [],
-      loadingCutoffPeriods: false,
-      cutoffPeriodDialog: false,
-      editingCutoffPeriod: false,
-      savingCutoffPeriod: false,
-      cutoffPeriodForm: {
-        id: null,
-        company: null,
-        name: '',
-        start_date: '',
-        end_date: '',
-        is_active: true,
-      },
-      cutoffPeriodColumns: [
-        { name: 'name', label: 'Period Name', field: 'name', align: 'left', sortable: true },
-        { name: 'start_date', label: 'Start Date', field: 'start_date', align: 'left' },
-        { name: 'end_date', label: 'End Date', field: 'end_date', align: 'left' },
-        { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
-
-      // Payroll Groups
-      payrollGroups: [],
-      loadingPayrollGroups: false,
-      payrollGroupDialog: false,
-      editingPayrollGroup: false,
-      savingPayrollGroup: false,
-      payrollGroupForm: {
-        id: null,
-        company: null,
-        name: '',
-        description: '',
-      },
-      payrollGroupColumns: [
-        { name: 'name', label: 'Group Name', field: 'name', align: 'left', sortable: true },
-        { name: 'description', label: 'Description', field: 'description', align: 'left' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
-
-      // Labor Rules
-      laborRules: [],
-      loadingLaborRules: false,
-      laborRuleDialog: false,
-      editingLaborRule: false,
-      savingLaborRule: false,
-      laborRuleForm: {
-        id: null,
-        company: null,
-        name: '',
-        description: '',
-        multiplier: 1.0,
-        is_active: true,
-      },
-      laborRuleColumns: [
-        { name: 'name', label: 'Rule Name', field: 'name', align: 'left', sortable: true },
-        { name: 'description', label: 'Description', field: 'description', align: 'left' },
-        { name: 'multiplier', label: 'Multiplier', field: 'multiplier', align: 'right' },
-        { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
-        { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-      ],
-    }
-  },
-
-  async mounted() {
-    console.log('🚀 [MOUNTED] Component mounting...')
-    console.log('🚀 [MOUNTED] LocalStorage contents:', {
-      selectedCompany: localStorage.getItem('selectedCompany'),
-      access_token: localStorage.getItem('access_token') ? '***EXISTS***' : 'NOT FOUND',
+// Local employees list (shared by contracts)
+const employees = ref([])
+async function fetchEmployees() {
+  // Contracts composable delegates employee fetching back to here since
+  // employees are also used elsewhere on the page.
+  try {
+    const { api } = await import('src/boot/axios')
+    const { authHeaders, BASE } = await import('src/composables/utils/http')
+    const { useCompany } = await import('src/composables/useCompany')
+    const { companyId } = useCompany()
+    if (!companyId.value) return
+    const res = await api.get(`${BASE}/user/employees/`, {
+      params: { company: companyId.value },
+      headers: authHeaders(),
     })
-
-    console.log('📊 [MOUNTED] Fetching companies...')
-    await this.fetchCompanies()
-    console.log('✅ [MOUNTED] Companies fetched:', this.companies.length)
-
-    const companyId = this.getCompanyId()
-    console.log('🏢 [MOUNTED] Selected company ID:', companyId)
-
-    if (companyId) {
-      console.log('✅ [MOUNTED] Valid company ID found, fetching all data...')
-
-      try {
-        // ✅ STEP 1: Fetch positions FIRST (required for pay structures)
-        console.log('📍 [MOUNTED] Fetching positions...')
-        await this.fetchPositions()
-        console.log('✅ [MOUNTED] Positions fetched:', this.positions.length)
-
-        // ✅ STEP 2: Fetch departments (might be needed by other features)
-        console.log('🏢 [MOUNTED] Fetching departments...')
-        await this.fetchDepartments()
-        console.log('✅ [MOUNTED] Departments fetched:', this.departments.length)
-
-        // ✅ STEP 3: Fetch contract types (needed for contracts)
-        console.log('📄 [MOUNTED] Fetching contract types...')
-        await this.fetchContractTypes()
-        console.log('✅ [MOUNTED] Contract types fetched:', this.contractTypes.length)
-
-        // ✅ STEP 4: Fetch employees (needed for contracts)
-        console.log('👥 [MOUNTED] Fetching employees...')
-        await this.fetchEmployees()
-        console.log('✅ [MOUNTED] Employees fetched:', this.employees.length)
-
-        // ✅ STEP 5: Fetch shift types (needed for schedules)
-        console.log('⏰ [MOUNTED] Fetching shift types...')
-        await this.fetchShiftTypes()
-        console.log('✅ [MOUNTED] Shift types fetched:', this.shiftTypes.length)
-
-        // ✅ STEP 6: Now fetch everything else in parallel
-        console.log('🔄 [MOUNTED] Fetching remaining data in parallel...')
-        await Promise.all([
-          this.fetchSites(),
-          this.fetchRoles(),
-          this.fetchShifts(),
-          this.fetchRecurringSchedules(),
-          this.fetchAllowanceTypes(),
-          this.fetchTaxBrackets(),
-          this.fetchCutoffPeriods(),
-          this.fetchPayrollGroups(),
-          this.fetchLaborRules(),
-          this.fetchPayStructures(), // Now positions are already loaded
-          this.fetchContracts(),
-        ])
-
-        console.log('✅ [MOUNTED] All data fetched successfully')
-        console.log('📊 [MOUNTED] Final data counts:', {
-          companies: this.companies.length,
-          sites: this.sites.length,
-          roles: this.roles.length,
-          positions: this.positions.length,
-          departments: this.departments.length,
-          shifts: this.shifts.length,
-          contracts: this.contracts.length,
-          contractTypes: this.contractTypes.length,
-          employees: this.employees.length,
-          shiftTypes: this.shiftTypes.length,
-          allowanceTypes: this.allowanceTypes.length,
-          taxBrackets: this.taxBrackets.length,
-          cutoffPeriods: this.cutoffPeriods.length,
-          payrollGroups: this.payrollGroups.length,
-          laborRules: this.laborRules.length,
-          payStructures: this.payStructures.length,
-        })
-      } catch (error) {
-        console.error('❌ [MOUNTED] Error fetching data:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: 'Failed to load some data. Please refresh the page.',
-          position: 'top',
-          timeout: 5000,
-        })
-      }
-    } else {
-      console.warn('⚠️ [MOUNTED] No company selected')
-      this.$q.notify({
-        type: 'info',
-        message: 'Please select a company to view data',
-        position: 'top',
-      })
-    }
-
-    console.log('🏁 [MOUNTED] Component mounted successfully')
-  },
-
-  computed: {
-    filteredCompanies() {
-      if (!this.searchQuery) return this.companies
-      const q = this.searchQuery.toLowerCase()
-      return this.companies.filter(
-        (c) =>
-          (c.name || '').toLowerCase().includes(q) ||
-          (c.address || '').toLowerCase().includes(q) ||
-          (c.contact || '').toLowerCase().includes(q),
-      )
-    },
-    filteredSites() {
-      if (!this.searchQuery) return this.sites
-      const q = this.searchQuery.toLowerCase()
-      return this.sites.filter(
-        (s) =>
-          (s.name || '').toLowerCase().includes(q) ||
-          (s.address || '').toLowerCase().includes(q) ||
-          (s.ownership_type || '').toLowerCase().includes(q),
-      )
-    },
-    filteredRoles() {
-      if (!this.searchQuery) return this.roles
-      const q = this.searchQuery.toLowerCase()
-      return this.roles.filter((r) => (r.name || '').toLowerCase().includes(q))
-    },
-    filteredShifts() {
-      if (!this.searchQuery) return this.shifts
-      const q = this.searchQuery.toLowerCase()
-      return this.shifts.filter(
-        (s) =>
-          (s.name || '').toLowerCase().includes(q) ||
-          (s.description || '').toLowerCase().includes(q),
-      )
-    },
-    filteredDepartments() {
-      if (!this.searchQuery) return this.departments
-      const q = this.searchQuery.toLowerCase()
-      return this.departments.filter((d) => (d.name || '').toLowerCase().includes(q))
-    },
-    filteredPositions() {
-      if (!this.searchQuery) return this.positions
-      const q = this.searchQuery.toLowerCase()
-      return this.positions.filter(
-        (p) =>
-          (p.name || '').toLowerCase().includes(q) ||
-          (p.description || '').toLowerCase().includes(q),
-      )
-    },
-    filteredContracts() {
-      if (!this.searchQuery) return this.contracts
-      const q = this.searchQuery.toLowerCase()
-      return this.contracts.filter(
-        (c) =>
-          (c.employee_name || '').toLowerCase().includes(q) ||
-          (c.contract_type_name || '').toLowerCase().includes(q) ||
-          (c.company_name || '').toLowerCase().includes(q),
-      )
-    },
-  },
-
-  methods: {
-    // ==================== HELPER METHODS ====================
-    getCompanyId() {
-      const selectedCompanyRaw = localStorage.getItem('selectedCompany')
-
-      if (!selectedCompanyRaw) {
-        console.warn('⚠️ No company selected in localStorage')
-        return null
-      }
-
-      try {
-        const parsed = JSON.parse(selectedCompanyRaw)
-        let companyId = parsed?.id || parsed?.company_id || parsed?.value
-
-        if (typeof companyId === 'object' && companyId !== null) {
-          companyId = companyId.id || companyId.company_id
-        }
-
-        if (companyId) {
-          companyId = parseInt(companyId)
-          if (!isNaN(companyId) && companyId > 0) {
-            console.log('✓ Extracted company ID:', companyId)
-            return companyId
-          }
-        }
-      } catch {
-        console.log('Failed to parse JSON, trying as direct value')
-      }
-
-      const directId = parseInt(selectedCompanyRaw)
-      if (!isNaN(directId) && directId > 0) {
-        console.log('✓ Direct company ID:', directId)
-        return directId
-      }
-
-      console.error('❌ Could not extract valid company ID from:', selectedCompanyRaw)
-      return null
-    },
-    getSiteName(siteId) {
-      const site = this.sites.find((s) => s.id === siteId)
-      return site ? site.name : 'N/A'
-    },
-
-    getDepartmentName(deptId) {
-      const dept = this.departments.find((d) => d.id === deptId)
-      return dept ? dept.name : 'N/A'
-    },
-
-    getShiftTypeName(shiftId) {
-      const shift = this.shiftTypes.find((s) => s.id === shiftId)
-      return shift ? shift.name : 'N/A'
-    },
-    validateCompanySelection() {
-      const companyId = this.getCompanyId()
-
-      if (!companyId) {
-        this.$q.notify({
-          type: 'warning',
-          message: 'Please select a company first',
-          position: 'top',
-          timeout: 3000,
-          actions: [
-            {
-              label: 'Dismiss',
-              color: 'white',
-            },
-          ],
-        })
-        return false
-      }
-
-      return companyId
-    },
-
-    getAuthHeaders() {
-      const token = localStorage.getItem('access_token')
-      return { Authorization: `Bearer ${token}` }
-    },
-
-    getActivePermissions(role) {
-      // GET returns { id, name, permissions: ["can_view_dashboard", ...] }
-      if (!Array.isArray(role.permissions)) return []
-      const labelMap = {
-        can_view_dashboard: 'View Dashboard',
-        can_manage_employees: 'Manage Employees',
-        can_view_attendance: 'View Attendance',
-        can_edit_attendance: 'Edit Attendance',
-        can_view_payroll: 'View Payroll',
-        can_release_payroll: 'Release Payroll',
-        can_approve_requests: 'Approve Requests',
-        can_manage_schedules: 'Manage Schedules',
-        can_access_admin_settings: 'Admin Settings',
-        can_access_web_admin: 'Web Admin',
-        can_access_manager_app: 'Manager App',
-        can_view_salary: 'View Salary',
-      }
-      return role.permissions.map((p) => labelMap[p] || p)
-    },
-
-    formatDate(date) {
-      if (!date) return 'N/A'
-      return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-    },
-
-    formatWeekdays(weekdays) {
-      if (!weekdays) return 'N/A'
-      let days = weekdays
-      if (typeof days === 'string') {
-        const trimmed = days.trim()
-        if (trimmed.startsWith('[')) {
-          try {
-            days = JSON.parse(trimmed)
-          } catch (e) {
-            days = trimmed.split(',')
-          }
-        } else {
-          days = trimmed.split(',')
-        }
-      }
-      if (!Array.isArray(days) || days.length === 0) return 'N/A'
-      const map = {
-        monday: 'Mon',
-        tuesday: 'Tue',
-        wednesday: 'Wed',
-        thursday: 'Thu',
-        friday: 'Fri',
-        saturday: 'Sat',
-        sunday: 'Sun',
-        mon: 'Mon',
-        tue: 'Tue',
-        wed: 'Wed',
-        thu: 'Thu',
-        fri: 'Fri',
-        sat: 'Sat',
-        sun: 'Sun',
-      }
-      return days.map((d) => map[d.trim().toLowerCase()] || d.trim()).join(', ')
-    },
-
-    formatAmount(amount) {
-      if (!amount && amount !== 0) return '0.00'
-      return parseFloat(amount).toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    },
-
-    // ==================== COMPANIES ====================
-    async fetchCompanies() {
-      this.loadingCompanies = true
-      try {
-        const response = await api.get('https://staging.wageyapp.com/organization/companies/', {
-          headers: this.getAuthHeaders(),
-        })
-        this.companies = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching companies:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to load companies',
-          position: 'top',
-        })
-      } finally {
-        this.loadingCompanies = false
-      }
-    },
-
-    openCompanyDialog() {
-      this.editingCompany = false
-      this.companyForm = {
-        id: null,
-        name: '',
-        address: '',
-        contact: '',
-        logo: '',
-      }
-      this.logoUploadMethod = 'url'
-      this.logoFile = null
-      this.logoPreview = null
-      this.companyDialog = true
-    },
-
-    editCompany(company) {
-      this.editingCompany = true
-      this.companyForm = { ...company }
-      this.logoUploadMethod = 'url'
-      this.logoFile = null
-      this.logoPreview = company.logo || null
-      this.companyDialog = true
-    },
-
-    onLogoFileSelected(file) {
-      if (file) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          this.logoPreview = e.target.result
-        }
-        reader.readAsDataURL(file)
-      } else {
-        this.logoPreview = null
-      }
-    },
-
-    clearLogoFile() {
-      this.logoFile = null
-      this.logoPreview = null
-      this.companyForm.logo = ''
-    },
-
-    clearLogoUrl() {
-      this.companyForm.logo = ''
-      this.logoPreview = null
-    },
-
-    onFileRejected(rejectedEntries) {
-      this.$q.notify({
-        type: 'negative',
-        message: `File rejected: ${rejectedEntries[0].failedPropValidation}`,
-        position: 'top',
-      })
-    },
-
-    handleImageError() {
-      this.logoPreview = null
-      this.$q.notify({
-        type: 'warning',
-        message: 'Failed to load image preview',
-        position: 'top',
-      })
-    },
-
-    async saveCompany() {
-      if (!this.companyForm.name.trim()) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Company name is required',
-          position: 'top',
-        })
-        return
-      }
-
-      this.savingCompany = true
-      try {
-        const formData = new FormData()
-        formData.append('name', this.companyForm.name)
-        if (this.companyForm.address) formData.append('address', this.companyForm.address)
-        if (this.companyForm.contact) formData.append('contact', this.companyForm.contact)
-
-        if (this.logoUploadMethod === 'file' && this.logoFile) {
-          formData.append('logo', this.logoFile)
-        } else if (this.logoUploadMethod === 'url' && this.companyForm.logo) {
-          formData.append('logo', this.companyForm.logo)
-        } else if (!this.editingCompany) {
-          formData.append('logo', '')
-        }
-
-        const headers = {
-          ...this.getAuthHeaders(),
-          'Content-Type': 'multipart/form-data',
-        }
-
-        if (this.editingCompany) {
-          await api.put(
-            `https://staging.wageyapp.com/organization/companies/${this.companyForm.id}/`,
-            formData,
-            { headers },
-          )
-          this.$q.notify({ type: 'positive', message: 'Company updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/organization/companies/create/', formData, {
-            headers,
-          })
-          this.$q.notify({ type: 'positive', message: 'Company created successfully' })
-        }
-
-        this.companyDialog = false
-        this.clearLogoFile()
-        await this.fetchCompanies()
-      } catch (error) {
-        console.error('Error saving company:', error)
-        let errorMessage = 'Failed to save company'
-
-        if (error.response?.data) {
-          const errorData = error.response.data
-          if (errorData.logo && Array.isArray(errorData.logo)) {
-            errorMessage = errorData.logo.join(', ')
-          } else if (errorData.message) {
-            errorMessage = errorData.message
-          }
-        }
-
-        this.$q.notify({
-          type: 'negative',
-          message: errorMessage,
-          position: 'top',
-          timeout: 5000,
-        })
-      } finally {
-        this.savingCompany = false
-      }
-    },
-
-    async deleteCompany(company) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${company.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(`https://staging.wageyapp.com/organization/companies/${company.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
-            this.$q.notify({ type: 'positive', message: 'Company deleted successfully' })
-            await this.fetchCompanies()
-          } catch (error) {
-            console.error('Error deleting company:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete company' })
-          }
-        })
-    },
-
-    async fetchSites() {
-      this.loadingSites = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.sites = []
-          return
-        }
-
-        const response = await api.get('https://staging.wageyapp.com/organization/sites/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-
-        this.sites = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching sites:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to load sites',
-          position: 'top',
-        })
-      } finally {
-        this.loadingSites = false
-      }
-    },
-
-    openSiteDialog() {
-      this.editingSite = false
-      this.siteForm = {
-        id: null,
-        name: '',
-        brand_name: '',
-        otp_secret: '',
-        location: '',
-        latitude: '',
-        longitude: '',
-        radius_meters: 100,
-        ownership_type: 'owned',
-        is_active: true,
-        requires_otp: false,
-        allow_manual_attendance: true,
-        allow_service_charge: true,
-        multiply_nd_by_holiday: false,
-        extended_shift_days: '',
-        company: this.getCompanyId(),
-        business_type: null,
-      }
-      this.siteDialog = true
-    },
-
-    editSite(site) {
-      this.editingSite = true
-      this.siteForm = {
-        ...site,
-        requires_otp: site.requires_otp ?? false,
-        allow_manual_attendance: site.allow_manual_attendance ?? true,
-        allow_service_charge: site.allow_service_charge ?? true,
-        multiply_nd_by_holiday: site.multiply_nd_by_holiday ?? false,
-      }
-      this.siteDialog = true
-    },
-
-    async saveSite() {
-      // Validation
-      if (!this.siteForm.name.trim()) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Site name is required',
-          position: 'top',
-        })
-        return
-      }
-
-      if (!this.siteForm.location.trim()) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Location is required',
-          position: 'top',
-        })
-        return
-      }
-
-      if (!this.siteForm.latitude || !this.siteForm.longitude) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Latitude and longitude are required',
-          position: 'top',
-        })
-        return
-      }
-
-      this.savingSite = true
-      try {
-        const formatCoordinate = (value, decimals = 5) => {
-          const num = Number(value)
-          if (isNaN(num)) return '0.00000'
-          return num.toFixed(decimals).padStart(decimals + 4, '0')
-        }
-
-        const payload = {
-          name: this.siteForm.name.trim(),
-          brand_name: this.siteForm.brand_name?.trim() || '',
-          otp_secret: this.siteForm.otp_secret?.trim() || '',
-          location: this.siteForm.location.trim(),
-          latitude: formatCoordinate(this.siteForm.latitude),
-          longitude: formatCoordinate(this.siteForm.longitude),
-          radius_meters: parseInt(this.siteForm.radius_meters) || 100,
-          ownership_type: this.siteForm.ownership_type || 'owned',
-          is_active: Boolean(this.siteForm.is_active),
-          requires_otp: Boolean(this.siteForm.requires_otp),
-          allow_manual_attendance: Boolean(this.siteForm.allow_manual_attendance),
-          allow_service_charge: Boolean(this.siteForm.allow_service_charge),
-          multiply_nd_by_holiday: Boolean(this.siteForm.multiply_nd_by_holiday),
-          extended_shift_days: this.siteForm.extended_shift_days || '',
-          company: this.getCompanyId(),
-        }
-
-        if (this.siteForm.business_type) {
-          payload.business_type = this.siteForm.business_type
-        }
-
-        if (this.editingSite) {
-          await api.put(
-            `https://staging.wageyapp.com/organization/sites/${this.siteForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({
-            type: 'positive',
-            message: 'Site updated successfully',
-            position: 'top',
-          })
-        } else {
-          await api.post('https://staging.wageyapp.com/organization/sites/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({
-            type: 'positive',
-            message: 'Site created successfully',
-            position: 'top',
-          })
-        }
-
-        this.siteDialog = false
-        await this.fetchSites()
-      } catch (error) {
-        console.error('Error saving site:', error)
-
-        let errorMessage = 'Failed to save site'
-
-        if (error.response?.data) {
-          const errorData = error.response.data
-
-          if (typeof errorData === 'object') {
-            const firstError = Object.values(errorData)[0]
-            errorMessage = Array.isArray(firstError) ? firstError[0] : firstError
-          } else if (errorData.message) {
-            errorMessage = errorData.message
-          } else if (typeof errorData === 'string') {
-            errorMessage = errorData
-          }
-        }
-
-        this.$q.notify({
-          type: 'negative',
-          message: errorMessage,
-          position: 'top',
-          timeout: 3000,
-        })
-      } finally {
-        this.savingSite = false
-      }
-    },
-
-    async deleteSite(site) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${site.name}"?`,
-          cancel: true,
-          persistent: true,
-          ok: {
-            color: 'negative',
-            label: 'Delete',
-          },
-          cancel: {
-            color: 'grey',
-            flat: true,
-          },
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(`https://staging.wageyapp.com/organization/sites/${site.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
-
-            this.$q.notify({
-              type: 'positive',
-              message: 'Site deleted successfully',
-              position: 'top',
-            })
-
-            await this.fetchSites()
-          } catch (error) {
-            console.error('Error deleting site:', error)
-
-            let errorMessage = 'Failed to delete site'
-            if (error.response?.data?.message) {
-              errorMessage = error.response.data.message
-            }
-
-            this.$q.notify({
-              type: 'negative',
-              message: errorMessage,
-              position: 'top',
-            })
-          }
-        })
-    },
-
-    // ==================== DEPARTMENTS ====================
-    async fetchDepartments() {
-      this.loadingDepartments = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.departments = []
-          return
-        }
-
-        const response = await api.get('https://staging.wageyapp.com/organization/departments/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-
-        this.departments = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching departments:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to load departments',
-          position: 'top',
-        })
-      } finally {
-        this.loadingDepartments = false
-      }
-    },
-
-    openDepartmentDialog() {
-      const companyId = this.validateCompanySelection()
-      if (!companyId) return
-
-      this.editingDepartment = false
-      this.departmentForm = {
-        id: null,
-        name: '',
-        company: companyId,
-      }
-      this.departmentDialog = true
-    },
-
-    editDepartment(department) {
-      this.editingDepartment = true
-      this.departmentForm = {
-        id: department.id,
-        name: department.name,
-        company: department.company || this.getCompanyId(),
-      }
-      this.departmentDialog = true
-    },
-
-    async saveDepartment() {
-      if (!this.departmentForm.name.trim()) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Department name is required',
-          position: 'top',
-        })
-        return
-      }
-
-      const companyId = this.departmentForm.company || this.getCompanyId()
-      if (!companyId) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Company ID is required',
-          position: 'top',
-        })
-        return
-      }
-
-      this.savingDepartment = true
-      try {
-        const payload = {
-          name: this.departmentForm.name.trim(),
-          company: companyId,
-        }
-
-        if (this.editingDepartment) {
-          await api.put(
-            `https://staging.wageyapp.com/organization/departments/${this.departmentForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Department updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/organization/departments/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Department created successfully' })
-        }
-
-        this.departmentDialog = false
-        await this.fetchDepartments()
-      } catch (error) {
-        console.error('Error saving department:', error)
-        console.error('Error response:', error.response?.data)
-
-        // Handle array or string error messages
-        let errorMessage = 'Failed to save department'
-        if (error.response?.data) {
-          if (Array.isArray(error.response.data)) {
-            errorMessage = error.response.data[0] // Get first error from array
-          } else if (error.response.data.message) {
-            errorMessage = error.response.data.message
-          } else if (error.response.data.error) {
-            errorMessage = error.response.data.error
-          }
-        }
-
-        this.$q.notify({
-          type: 'negative',
-          message: errorMessage,
-          position: 'top',
-        })
-      } finally {
-        this.savingDepartment = false
-      }
-    },
-
-    async deleteDepartment(department) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${department.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(
-              `https://staging.wageyapp.com/organization/departments/${department.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
-            this.$q.notify({ type: 'positive', message: 'Department deleted successfully' })
-            await this.fetchDepartments()
-          } catch (error) {
-            console.error('Error deleting department:', error)
-            this.$q.notify({
-              type: 'negative',
-              message: error.response?.data?.message || 'Failed to delete department',
-              position: 'top',
-            })
-          }
-        })
-    },
-
-    // ==================== ROLES ====================
-    async fetchRoles() {
-      this.loadingRoles = true
-
-      try {
-        const companyId = this.getCompanyId()
-
-        if (!companyId) {
-          this.roles = []
-          return
-        }
-
-        const response = await api.get('https://staging.wageyapp.com/user/user-roles/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-
-        let rolesData = []
-        if (response.data.data) {
-          rolesData = response.data.data
-        } else if (response.data.results) {
-          rolesData = response.data.results
-        } else if (Array.isArray(response.data)) {
-          rolesData = response.data
-        }
-
-        this.roles = rolesData
-      } catch (error) {
-        console.error('Error fetching roles:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to load roles',
-          position: 'top',
-        })
-        this.roles = []
-      } finally {
-        this.loadingRoles = false
-      }
-    },
-
-    openRoleDialog() {
-      const companyId = this.validateCompanySelection()
-      if (!companyId) return
-
-      this.editingRole = false
-      this.roleForm = {
-        id: null,
-        name: '',
-        company: companyId,
-        can_view_dashboard: false,
-        can_manage_employees: false,
-        can_view_attendance: false,
-        can_edit_attendance: false,
-        can_view_payroll: false,
-        can_release_payroll: false,
-        can_approve_requests: false,
-        can_manage_schedules: false,
-        can_access_admin_settings: false,
-        can_access_web_admin: false,
-        can_access_manager_app: false,
-        can_view_salary: false,
-      }
-      this.roleDialog = true
-    },
-
-    editRole(role) {
-      // Debug: log the raw role object to confirm the ID field name
-      console.log('🔍 Raw role object:', JSON.stringify(role, null, 2))
-
-      // Resolve ID — backend might use 'id', 'role_id', or nested field
-      const roleId = role.id ?? role.role_id ?? role.pk ?? null
-
-      if (!roleId) {
-        console.error('❌ Could not resolve role ID from object:', role)
-        this.$q.notify({
-          type: 'negative',
-          message: 'Role ID is missing. Check console for raw role data.',
-          position: 'top',
-        })
-        return
-      }
-
-      this.editingRole = true
-
-      const perms = Array.isArray(role.permissions) ? role.permissions : []
-
-      this.roleForm = {
-        id: roleId,
-        name: role.name || '',
-        company: role.company ?? role.company_id ?? this.getCompanyId(),
-        can_view_dashboard: perms.includes('can_view_dashboard'),
-        can_manage_employees: perms.includes('can_manage_employees'),
-        can_view_attendance: perms.includes('can_view_attendance'),
-        can_edit_attendance: perms.includes('can_edit_attendance'),
-        can_view_payroll: perms.includes('can_view_payroll'),
-        can_release_payroll: perms.includes('can_release_payroll'),
-        can_approve_requests: perms.includes('can_approve_requests'),
-        can_manage_schedules: perms.includes('can_manage_schedules'),
-        can_access_admin_settings: perms.includes('can_access_admin_settings'),
-        can_access_web_admin: perms.includes('can_access_web_admin'),
-        can_access_manager_app: perms.includes('can_access_manager_app'),
-        can_view_salary: perms.includes('can_view_salary'),
-      }
-
-      console.log('✅ roleForm.id set to:', this.roleForm.id)
-      this.roleDialog = true
-    },
-
-    async saveRole() {
-      if (!this.roleForm.name.trim()) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Role name is required',
-          position: 'top',
-        })
-        return
-      }
-
-      const companyId = this.roleForm.company || this.validateCompanySelection()
-      if (!companyId) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Company ID is missing',
-          position: 'top',
-        })
-        return
-      }
-
-      if (this.editingRole && !this.roleForm.id) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Cannot update: Role ID is missing.',
-          position: 'top',
-        })
-        return
-      }
-
-      this.savingRole = true
-
-      try {
-        // Build permissions as array of strings — matches backend GET response format
-        const permissions = this.permissionFields
-          .filter((perm) => Boolean(this.roleForm[perm.key]))
-          .map((perm) => perm.key)
-
-        if (this.editingRole) {
-          // PATCH — only name + permissions in body, company as query param
-          const payload = {
-            name: this.roleForm.name.trim(),
-            permissions,
-          }
-
-          await api.patch(
-            `https://staging.wageyapp.com/user/user-roles/${this.roleForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-              params: { company: parseInt(companyId) },
-            },
-          )
-
-          this.$q.notify({
-            type: 'positive',
-            message: 'Role updated successfully',
-            position: 'top',
-          })
-        } else {
-          // POST — company goes in the body for creation
-          const payload = {
-            name: this.roleForm.name.trim(),
-            company: parseInt(companyId),
-            permissions,
-          }
-
-          await api.post('https://staging.wageyapp.com/user/user-roles/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-
-          this.$q.notify({
-            type: 'positive',
-            message: 'Role created successfully',
-            position: 'top',
-          })
-        }
-
-        this.roleDialog = false
-        await this.fetchRoles()
-      } catch (error) {
-        console.error('❌ Error saving role:', error)
-        console.error('❌ Response data:', error.response?.data)
-
-        const backendMsg =
-          error.response?.data?.detail ||
-          error.response?.data?.message ||
-          error.response?.data?.non_field_errors?.[0] ||
-          (typeof error.response?.data === 'string' ? error.response.data : null) ||
-          `Request failed (${error.response?.status})`
-
-        this.$q.notify({
-          type: 'negative',
-          message: backendMsg,
-          position: 'top',
-          timeout: 6000,
-        })
-      } finally {
-        this.savingRole = false
-      }
-    },
-
-    async deleteRole(role) {
-      console.log('Attempting to delete role:', role.id) // Add this
-
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${role.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            const url = `https://staging.wageyapp.com/user/user-roles/${role.id}/`
-            console.log('DELETE URL:', url) // Add this
-
-            await api.delete(url, {
-              headers: this.getAuthHeaders(),
-            })
-            this.$q.notify({ type: 'positive', message: 'Role deleted successfully' })
-            await this.fetchRoles()
-          } catch (error) {
-            console.error('Error deleting role:', error)
-            console.log('Response data:', error.response?.data) // Add this
-
-            const message =
-              error.response?.status === 404
-                ? 'Role not found. It may have been already deleted.'
-                : error.response?.data?.message || 'Failed to delete role'
-
-            this.$q.notify({ type: 'negative', message })
-            await this.fetchRoles() // Refresh list even on error
-          }
-        })
-    },
-    // ==================== SHIFTS ====================
-    async fetchShifts() {
-      this.loadingShifts = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.shifts = []
-          return
-        }
-
-        const response = await api.get('https://staging.wageyapp.com/organization/shift-types/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-
-        this.shifts = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching shifts:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to load shifts',
-          position: 'top',
-        })
-      } finally {
-        this.loadingShifts = false
-      }
-    },
-
-    openShiftDialog() {
-      const companyId = this.validateCompanySelection()
-      if (!companyId) return
-
-      this.editingShift = false
-      this.shiftForm = {
-        id: null,
-        name: '',
-        company: companyId,
-        description: '',
-        default_start_time: '',
-        default_end_time: '',
-        is_graveyard: false,
-        apply_night_differential: false,
-        is_off: false,
-        is_extended: false,
-      }
-      this.shiftDialog = true
-    },
-
-    editShift(shift) {
-      this.editingShift = true
-      this.shiftForm = {
-        id: shift.id,
-        name: shift.name,
-        company: shift.company || this.getCompanyId(),
-        description: shift.description || '',
-        default_start_time: this.extractTime(shift.default_start_time),
-        default_end_time: this.extractTime(shift.default_end_time),
-        is_graveyard: shift.is_graveyard || false,
-        apply_night_differential: shift.apply_night_differential || false,
-        is_off: shift.is_off || false,
-        is_extended: shift.is_extended || false,
-      }
-      this.shiftDialog = true
-    },
-
-    async saveShift() {
-      if (
-        !this.shiftForm.name.trim() ||
-        !this.shiftForm.default_start_time ||
-        !this.shiftForm.default_end_time
-      ) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Please fill all required fields',
-          position: 'top',
-        })
-        return
-      }
-
-      const companyId = this.shiftForm.company || this.getCompanyId()
-      if (!companyId) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Company ID is required',
-          position: 'top',
-        })
-        return
-      }
-
-      this.savingShift = true
-      try {
-        // Format times to HH:MM:SS format
-        const formatTimeToAPI = (timeString) => {
-          const [hours, minutes] = timeString.split(':')
-          return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:00`
-        }
-
-        const payload = {
-          name: this.shiftForm.name.trim(),
-          company: parseInt(companyId),
-          description: this.shiftForm.description || '',
-          default_start_time: formatTimeToAPI(this.shiftForm.default_start_time),
-          default_end_time: formatTimeToAPI(this.shiftForm.default_end_time),
-          is_graveyard: Boolean(this.shiftForm.is_graveyard),
-          apply_night_differential: Boolean(this.shiftForm.apply_night_differential),
-          is_off: Boolean(this.shiftForm.is_off),
-          is_extended: Boolean(this.shiftForm.is_extended),
-        }
-
-        console.log('Payload being sent:', payload)
-
-        if (this.editingShift) {
-          await api.put(
-            `https://staging.wageyapp.com/organization/shift-types/${this.shiftForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Shift updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/organization/shift-types/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Shift created successfully' })
-        }
-
-        this.shiftDialog = false
-        await this.fetchShifts()
-      } catch (error) {
-        console.error('Error saving shift:', error)
-        console.error('Error response:', error.response?.data)
-
-        let errorMessage = 'Failed to save shift'
-        if (error.response?.data) {
-          if (typeof error.response.data === 'object') {
-            const errors = []
-            for (const [field, messages] of Object.entries(error.response.data)) {
-              if (Array.isArray(messages)) {
-                errors.push(`${field}: ${messages.join(', ')}`)
-              } else {
-                errors.push(`${field}: ${messages}`)
-              }
-            }
-            if (errors.length > 0) {
-              errorMessage = errors.join(' | ')
-            }
-          } else if (Array.isArray(error.response.data)) {
-            errorMessage = error.response.data[0]
-          } else if (error.response.data.message) {
-            errorMessage = error.response.data.message
-          } else if (error.response.data.error) {
-            errorMessage = error.response.data.error
-          }
-        }
-
-        this.$q.notify({
-          type: 'negative',
-          message: errorMessage,
-          position: 'top',
-          timeout: 5000,
-        })
-      } finally {
-        this.savingShift = false
-      }
-    },
-
-    async deleteShift(shift) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${shift.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(`https://staging.wageyapp.com/organization/shift-types/${shift.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
-            this.$q.notify({ type: 'positive', message: 'Shift deleted successfully' })
-            await this.fetchShifts()
-          } catch (error) {
-            console.error('Error deleting shift:', error)
-            this.$q.notify({
-              type: 'negative',
-              message: error.response?.data?.message || 'Failed to delete shift',
-              position: 'top',
-            })
-          }
-        })
-    },
-
-    // ==================== RECURRING SCHEDULES ====================
-    async fetchRecurringSchedules() {
-      this.loadingRecurring = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.recurringSchedules = []
-          return
-        }
-        const response = await api.get(
-          'https://staging.wageyapp.com/organization/recurring-schedules/',
-          {
-            params: { company: companyId },
-            headers: this.getAuthHeaders(),
-          },
-        )
-        this.recurringSchedules = (response.data.data || response.data || []).map((schedule) => {
-          const shiftType = this.shiftTypes.find(
-            (st) => st.id === (schedule.shift_type_id || schedule.shift_type),
-          )
-          return {
-            ...schedule,
-            shift_type_name: schedule.shift_type_name || shiftType?.name || null,
-          }
-        })
-      } catch (error) {
-        console.error('Error fetching recurring schedules:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to load recurring schedules',
-          position: 'top',
-        })
-      } finally {
-        this.loadingRecurring = false
-      }
-    },
-
-    openRecurringDialog() {
-      const companyId = this.validateCompanySelection()
-      if (!companyId) return
-      this.editingRecurring = false
-      this.recurringForm = {
-        id: null,
-        name: '',
-        shift_type: null,
-        shift_type_2: null,
-        start_date: '',
-        end_date: '',
-        start_time: '',
-        end_time: '',
-        weekdays: [],
-        repeat_interval: 1,
-      }
-      this.recurringDialog = true
-    },
-
-    editRecurring(row) {
-      this.editingRecurring = true
-      this.recurringForm = {
-        id: row.id,
-        name: row.name,
-        shift_type: row.shift_type,
-        shift_type_2: row.shift_type_2 || null,
-        start_date: row.start_date,
-        end_date: row.end_date,
-        start_time: this.extractTime(row.start_time),
-        end_time: this.extractTime(row.end_time),
-        weekdays: (() => {
-          if (!row.weekdays) return []
-          let days = row.weekdays
-          if (typeof days === 'string') {
-            const t = days.trim()
-            if (t.startsWith('[')) {
-              try {
-                days = JSON.parse(t)
-              } catch (e) {
-                days = t.split(',')
-              }
-            } else {
-              days = t.split(',')
-            }
-          }
-          const map = {
-            monday: 'Mon',
-            tuesday: 'Tue',
-            wednesday: 'Wed',
-            thursday: 'Thu',
-            friday: 'Fri',
-            saturday: 'Sat',
-            sunday: 'Sun',
-            mon: 'Mon',
-            tue: 'Tue',
-            wed: 'Wed',
-            thu: 'Thu',
-            fri: 'Fri',
-            sat: 'Sat',
-            sun: 'Sun',
-          }
-          return Array.isArray(days) ? days.map((d) => map[d.trim().toLowerCase()] || d.trim()) : []
-        })(),
-        repeat_interval: row.repeat_interval,
-      }
-      this.recurringDialog = true
-    },
-
-    async saveRecurringSchedule() {
-      if (!this.recurringForm.name?.trim()) {
-        this.$q.notify({ type: 'warning', message: 'Schedule name is required', position: 'top' })
-        return
-      }
-      if (!this.recurringForm.shift_type) {
-        this.$q.notify({
-          type: 'warning',
-          message: 'Primary shift type is required',
-          position: 'top',
-        })
-        return
-      }
-      if (!this.recurringForm.start_date || !this.recurringForm.end_date) {
-        this.$q.notify({
-          type: 'warning',
-          message: 'Start and end dates are required',
-          position: 'top',
-        })
-        return
-      }
-
-      const getShiftTimes = (shiftTypeId) => {
-        const shift = this.shiftTypes.find((s) => s.id === shiftTypeId)
-        return {
-          start_time: shift?.default_start_time || '00:00:00',
-          end_time: shift?.default_end_time || '00:00:00',
-        }
-      }
-
-      const weekdays = Array.isArray(this.recurringForm.weekdays)
-        ? this.recurringForm.weekdays.join(',')
-        : this.recurringForm.weekdays
-
-      const basePayload = {
-        company: parseInt(this.getCompanyId()),
-        start_date: this.recurringForm.start_date,
-        end_date: this.recurringForm.end_date,
-        weekdays,
-        repeat_interval: parseInt(this.recurringForm.repeat_interval) || 1,
-      }
-
-      const primaryTimes = getShiftTimes(this.recurringForm.shift_type)
-      const primaryPayload = {
-        ...basePayload,
-        name: this.recurringForm.name.trim(),
-        shift_type: parseInt(this.recurringForm.shift_type),
-        start_time: primaryTimes.start_time,
-        end_time: primaryTimes.end_time,
-      }
-
-      const isSplitShift = !!this.recurringForm.shift_type_2
-      const secondaryPayload = isSplitShift
-        ? (() => {
-            const secondaryTimes = getShiftTimes(this.recurringForm.shift_type_2)
-            const secondaryShift = this.shiftTypes.find(
-              (s) => s.id === this.recurringForm.shift_type_2,
-            )
-            return {
-              ...basePayload,
-              name: `${this.recurringForm.name.trim()} (Split - ${secondaryShift?.name || 'Secondary'})`,
-              shift_type: parseInt(this.recurringForm.shift_type_2),
-              start_time: secondaryTimes.start_time,
-              end_time: secondaryTimes.end_time,
-            }
-          })()
-        : null
-
-      this.savingRecurring = true
-      try {
-        if (this.editingRecurring) {
-          await api.put(
-            `https://staging.wageyapp.com/organization/recurring-schedules/${this.recurringForm.id}/`,
-            primaryPayload,
-            { headers: this.getAuthHeaders() },
-          )
-          if (isSplitShift) {
-            await api.post(
-              'https://staging.wageyapp.com/organization/recurring-schedules/',
-              secondaryPayload,
-              { headers: this.getAuthHeaders() },
-            )
-          }
-          this.$q.notify({ type: 'positive', message: 'Recurring schedule updated successfully' })
-        } else {
-          await api.post(
-            'https://staging.wageyapp.com/organization/recurring-schedules/',
-            primaryPayload,
-            { headers: this.getAuthHeaders() },
-          )
-          if (isSplitShift) {
-            await api.post(
-              'https://staging.wageyapp.com/organization/recurring-schedules/',
-              secondaryPayload,
-              { headers: this.getAuthHeaders() },
-            )
-          }
-          this.$q.notify({
-            type: 'positive',
-            message: isSplitShift
-              ? 'Split shift schedules created successfully'
-              : 'Recurring schedule created successfully',
-          })
-        }
-        this.recurringDialog = false
-        await this.fetchRecurringSchedules()
-      } catch (error) {
-        console.error('Error saving recurring schedule:', error)
-        let errorMessage = 'Failed to save recurring schedule'
-        if (error.response?.data && typeof error.response.data === 'object') {
-          const errors = Object.entries(error.response.data).map(
-            ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`,
-          )
-          if (errors.length) errorMessage = errors.join(' | ')
-        } else if (error.response?.data?.message) {
-          errorMessage = error.response.data.message
-        }
-        this.$q.notify({ type: 'negative', message: errorMessage, position: 'top', timeout: 5000 })
-      } finally {
-        this.savingRecurring = false
-      }
-    },
-
-    async deleteRecurring(schedule) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${schedule.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(
-              `https://staging.wageyapp.com/organization/recurring-schedules/${schedule.id}/`,
-              { headers: this.getAuthHeaders() },
-            )
-            this.$q.notify({ type: 'positive', message: 'Recurring schedule deleted successfully' })
-            await this.fetchRecurringSchedules()
-          } catch (error) {
-            console.error('Error deleting recurring schedule:', error)
-            this.$q.notify({
-              type: 'negative',
-              message: error.response?.data?.message || 'Failed to delete recurring schedule',
-            })
-          }
-        })
-    },
-
-    formatTime(timeString) {
-      if (!timeString) return 'N/A'
-      try {
-        // Handle HH:MM:SS format
-        const [hours, minutes] = timeString.split(':')
-        const hour = parseInt(hours)
-        const min = parseInt(minutes)
-        const period = hour >= 12 ? 'PM' : 'AM'
-        const displayHour = hour % 12 || 12
-        return `${String(displayHour).padStart(2, '0')}:${String(min).padStart(2, '0')} ${period}`
-      } catch {
-        return timeString
-      }
-    },
-
-    extractTime(timeString) {
-      if (!timeString) return ''
-      try {
-        // Handle HH:MM:SS format - just take first two parts
-        const parts = timeString.split(':')
-        return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`
-      } catch {
-        return ''
-      }
-    },
-    // ==================== POSITIONS ====================
-    async fetchPositions() {
-      this.loadingPositions = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.positions = []
-          return
-        }
-
-        const response = await api.get('https://staging.wageyapp.com/user/positions/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-
-        this.positions = (response.data || []).map((pos) => {
-          const dept = this.departments.find((d) => d.id === (pos.department_id || pos.department))
-          return {
-            ...pos,
-            department_name: pos.department_name || dept?.name || null,
-          }
-        })
-      } catch (error) {
-        console.error('Error fetching positions:', error)
-      } finally {
-        this.loadingPositions = false
-      }
-    },
-
-    openPositionDialog() {
-      this.editingPosition = false
-      this.positionForm = {
-        id: null,
-        name: '',
-        description: '',
-        company: this.getCompanyId(),
-      }
-      this.positionDialog = true
-    },
-
-    editPosition(position) {
-      this.editingPosition = true
-      this.positionForm = {
-        id: position.id,
-        name: position.name,
-        description: position.description || '',
-        company: position.company || this.getCompanyId(),
-      }
-      this.positionDialog = true
-    },
-
-    async savePosition() {
-      if (!this.positionForm.name.trim()) {
-        this.$q.notify({ type: 'negative', message: 'Position name is required' })
-        return
-      }
-
-      this.savingPosition = true
-      try {
-        const payload = {
-          name: this.positionForm.name,
-          description: this.positionForm.description || '',
-          company: this.getCompanyId(),
-        }
-
-        if (this.editingPosition) {
-          await api.put(
-            `https://staging.wageyapp.com/user/positions/${this.positionForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Position updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/user/positions/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Position created successfully' })
-        }
-
-        this.positionDialog = false
-        await this.fetchPositions()
-      } catch (error) {
-        console.error('Error saving position:', error)
-        this.$q.notify({ type: 'negative', message: 'Failed to save position' })
-      } finally {
-        this.savingPosition = false
-      }
-    },
-
-    async deletePosition(position) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${position.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(`https://staging.wageyapp.com/user/positions/${position.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
-            this.$q.notify({ type: 'positive', message: 'Position deleted successfully' })
-            await this.fetchPositions()
-          } catch (error) {
-            console.error('Error deleting position:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete position' })
-          }
-        })
-    },
-
-    // ==================== CONTRACTS ====================
-    async fetchContracts() {
-      this.loadingContracts = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.contracts = []
-          return
-        }
-
-        // Note: You may need to check what the LIST endpoint is
-        // The provided endpoint is for CREATE only
-        const response = await api.get('https://staging.wageyapp.com/user/contracts/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-
-        this.contracts = (response.data.data || response.data || []).map((contract) => {
-          const employee = this.employees.find((e) => e.id === contract.employee_id)
-          const contractType = this.contractTypes.find((t) => t.id === contract.contract_type_id)
-          const company = this.companies.find(
-            (c) => c.id === (contract.company_id || contract.company),
-          )
-          return {
-            ...contract,
-            employee_name:
-              contract.employee_name ||
-              (employee
-                ? `${employee.user?.first_name || ''} ${employee.user?.last_name || ''}`.trim()
-                : null),
-            contract_type_name: contract.contract_type_name || contractType?.name || null,
-            company_name: contract.company_name || company?.name || null,
-          }
-        })
-      } catch (error) {
-        console.error('Error fetching contracts:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: 'Failed to load contracts',
-          position: 'top',
-        })
-      } finally {
-        this.loadingContracts = false
-      }
-    },
-
-    async fetchShiftTypes() {
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) return
-        const response = await api.get(
-          `https://staging.wageyapp.com/organization/shift-types/?company=${companyId}`,
-          { headers: this.getAuthHeaders() },
-        )
-        this.shiftTypes = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching shift types:', error)
-      }
-    },
-
-    async fetchEmployees() {
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) return
-
-        const response = await api.get('https://staging.wageyapp.com/user/employees/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-
-        this.employees = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching employees:', error)
-      }
-    },
-
-    async fetchContractTypes() {
-      try {
-        const response = await api.get('https://staging.wageyapp.com/contracts/contract-types/', {
-          headers: this.getAuthHeaders(),
-        })
-
-        this.contractTypes = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching contract types:', error)
-      }
-    },
-
-    async openContractDialog() {
-      const companyId = this.validateCompanySelection()
-      if (!companyId) return
-
-      await Promise.all([this.fetchEmployees(), this.fetchContractTypes()])
-
-      this.editingContract = false
-      this.contractForm = {
-        id: null,
-        employee_id: null,
-        company_id: companyId,
-        contract_type_id: null,
-        site_id: null,
-        pay_structure: {
-          position_id: null,
-          pay_type: 'monthly',
-          rate: '',
-          currency: 'PHP',
-          effective_from: '',
-          effective_to: null,
-        },
-      }
-      this.contractDialog = true
-    },
-
-    async editContract(contract) {
-      await Promise.all([this.fetchEmployees(), this.fetchContractTypes()])
-
-      this.editingContract = true
-      this.contractForm = {
-        id: contract.id,
-        employee_id: contract.employee_company || null,
-        company_id: contract.employee_company || this.getCompanyId(),
-        contract_type_id: contract.contract_type_name || null,
-        site_id: null,
-        pay_structure: {
-          position_id: null,
-          pay_type: 'monthly',
-          rate: '',
-          currency: 'PHP',
-          effective_from: '',
-          effective_to: null,
-        },
-      }
-      this.contractDialog = true
-    },
-
-    async saveContract() {
-      if (
-        !this.contractForm.employee_id ||
-        !this.contractForm.contract_type_id ||
-        !this.contractForm.pay_structure?.position_id
-      ) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Please fill all required fields (Employee, Contract Type, Position)',
-          position: 'top',
-        })
-        return
-      }
-
-      if (!this.contractForm.pay_structure?.rate) {
-        this.$q.notify({
-          type: 'negative',
-          message: 'Pay rate is required',
-          position: 'top',
-        })
-        return
-      }
-
-      this.savingContract = true
-      try {
-        const payload = {
-          employee_id: this.contractForm.employee_id,
-          company_id: this.contractForm.company_id || this.getCompanyId(),
-          contract_type_id: this.contractForm.contract_type_id,
-          site_id: this.contractForm.site_id || null,
-          pay_structure: {
-            position_id: this.contractForm.pay_structure.position_id,
-            pay_type: this.contractForm.pay_structure.pay_type || 'monthly',
-            rate: String(this.contractForm.pay_structure.rate),
-            currency: this.contractForm.pay_structure.currency || 'PHP',
-            effective_from: this.contractForm.pay_structure.effective_from || null,
-            effective_to: this.contractForm.pay_structure.effective_to || null,
-          },
-        }
-
-        if (this.editingContract) {
-          await api.patch(
-            `https://staging.wageyapp.com/contracts/employee-contracts/${this.contractForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Contract updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/contracts/employee-contracts/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Contract created successfully' })
-        }
-
-        this.contractDialog = false
-        await this.fetchContracts()
-      } catch (error) {
-        console.error('Error saving contract:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to save contract',
-          position: 'top',
-        })
-      } finally {
-        this.savingContract = false
-      }
-    },
-
-    viewContract(contract) {
-      this.selectedContract = contract
-      this.contractViewDialog = true
-    },
-
-    viewContractPDF(contract) {
-      if (contract.pdf_url) {
-        window.open(contract.pdf_url, '_blank')
-      }
-    },
-
-    async deleteContract(contract) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete this contract for "${contract.employee_name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(
-              `https://staging.wageyapp.com/contracts/employee-contracts/${contract.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
-            this.$q.notify({ type: 'positive', message: 'Contract deleted successfully' })
-            await this.fetchContracts()
-          } catch (error) {
-            console.error('Error deleting contract:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete contract' })
-          }
-        })
-    },
-
-    // ==================== ALLOWANCE TYPES ====================
-    async fetchAllowanceTypes() {
-      this.loadingAllowanceTypes = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.allowanceTypes = []
-          return
-        }
-
-        const response = await api.get(
-          'https://staging.wageyapp.com/payroll/admin/allowance-types/',
-          {
-            params: { company: companyId },
-            headers: this.getAuthHeaders(),
-          },
-        )
-        this.allowanceTypes = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching allowance types:', error)
-      } finally {
-        this.loadingAllowanceTypes = false
-      }
-    },
-
-    openAllowanceTypeDialog() {
-      this.editingAllowanceType = false
-      this.allowanceTypeForm = {
-        id: null,
-        company: this.getCompanyId(),
-        name: '',
-      }
-      this.allowanceTypeDialog = true
-    },
-
-    editAllowanceType(item) {
-      this.editingAllowanceType = true
-      this.allowanceTypeForm = { ...item }
-      this.allowanceTypeDialog = true
-    },
-
-    async saveAllowanceType() {
-      if (!this.allowanceTypeForm.name.trim()) {
-        this.$q.notify({ type: 'negative', message: 'Name is required' })
-        return
-      }
-
-      this.savingAllowanceType = true
-      try {
-        const payload = {
-          company: this.allowanceTypeForm.company || this.getCompanyId(),
-          name: this.allowanceTypeForm.name,
-        }
-
-        if (this.editingAllowanceType) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/allowance-types/${this.allowanceTypeForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Allowance type updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/allowance-types/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Allowance type created successfully' })
-        }
-
-        this.allowanceTypeDialog = false
-        await this.fetchAllowanceTypes()
-      } catch (error) {
-        console.error('Error saving allowance type:', error)
-        this.$q.notify({ type: 'negative', message: 'Failed to save allowance type' })
-      } finally {
-        this.savingAllowanceType = false
-      }
-    },
-
-    async deleteAllowanceType(item) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${item.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(
-              `https://staging.wageyapp.com/payroll/admin/allowance-types/${item.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
-            this.$q.notify({ type: 'positive', message: 'Allowance type deleted successfully' })
-            await this.fetchAllowanceTypes()
-          } catch (error) {
-            console.error('Error deleting allowance type:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete allowance type' })
-          }
-        })
-    },
-
-    // ==================== TAX BRACKETS ====================
-    async fetchTaxBrackets() {
-      this.loadingTaxBrackets = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.taxBrackets = []
-          return
-        }
-
-        const response = await api.get('https://staging.wageyapp.com/payroll/admin/tax-brackets/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-        this.taxBrackets = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching tax brackets:', error)
-      } finally {
-        this.loadingTaxBrackets = false
-      }
-    },
-
-    openTaxBracketDialog() {
-      this.editingTaxBracket = false
-      this.taxBracketForm = {
-        id: null,
-        company: this.getCompanyId(),
-        name: '',
-        min_amount: 0,
-        max_amount: null,
-        rate: 0,
-      }
-      this.taxBracketDialog = true
-    },
-
-    editTaxBracket(item) {
-      this.editingTaxBracket = true
-      this.taxBracketForm = { ...item }
-      this.taxBracketDialog = true
-    },
-
-    async saveTaxBracket() {
-      if (!this.taxBracketForm.name.trim()) {
-        this.$q.notify({ type: 'negative', message: 'Bracket name is required' })
-        return
-      }
-
-      this.savingTaxBracket = true
-      try {
-        const payload = {
-          company: this.taxBracketForm.company || this.getCompanyId(),
-          name: this.taxBracketForm.name,
-          min_amount: this.taxBracketForm.min_amount,
-          max_amount: this.taxBracketForm.max_amount || null,
-          rate: this.taxBracketForm.rate,
-        }
-
-        if (this.editingTaxBracket) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/tax-brackets/${this.taxBracketForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Tax bracket updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/tax-brackets/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Tax bracket created successfully' })
-        }
-
-        this.taxBracketDialog = false
-        await this.fetchTaxBrackets()
-      } catch (error) {
-        console.error('Error saving tax bracket:', error)
-        this.$q.notify({ type: 'negative', message: 'Failed to save tax bracket' })
-      } finally {
-        this.savingTaxBracket = false
-      }
-    },
-
-    async deleteTaxBracket(item) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${item.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(
-              `https://staging.wageyapp.com/payroll/admin/tax-brackets/${item.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
-            this.$q.notify({ type: 'positive', message: 'Tax bracket deleted successfully' })
-            await this.fetchTaxBrackets()
-          } catch (error) {
-            console.error('Error deleting tax bracket:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete tax bracket' })
-          }
-        })
-    },
-
-    // ==================== CUTOFF PERIODS ====================
-    async fetchCutoffPeriods() {
-      this.loadingCutoffPeriods = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.cutoffPeriods = []
-          return
-        }
-
-        const response = await api.get(
-          'https://staging.wageyapp.com/payroll/admin/cutoff-periods/',
-          {
-            params: { company: companyId },
-            headers: this.getAuthHeaders(),
-          },
-        )
-        this.cutoffPeriods = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching cutoff periods:', error)
-      } finally {
-        this.loadingCutoffPeriods = false
-      }
-    },
-
-    openCutoffPeriodDialog() {
-      this.editingCutoffPeriod = false
-      this.cutoffPeriodForm = {
-        id: null,
-        company: this.getCompanyId(),
-        name: '',
-        start_date: '',
-        end_date: '',
-        is_active: true,
-      }
-      this.cutoffPeriodDialog = true
-    },
-
-    editCutoffPeriod(item) {
-      this.editingCutoffPeriod = true
-      this.cutoffPeriodForm = { ...item }
-      this.cutoffPeriodDialog = true
-    },
-
-    async saveCutoffPeriod() {
-      if (
-        !this.cutoffPeriodForm.name.trim() ||
-        !this.cutoffPeriodForm.start_date ||
-        !this.cutoffPeriodForm.end_date
-      ) {
-        this.$q.notify({ type: 'negative', message: 'Please fill all required fields' })
-        return
-      }
-
-      this.savingCutoffPeriod = true
-      try {
-        const payload = {
-          company: this.cutoffPeriodForm.company || this.getCompanyId(),
-          name: this.cutoffPeriodForm.name,
-          start_date: this.cutoffPeriodForm.start_date,
-          end_date: this.cutoffPeriodForm.end_date,
-          is_active: this.cutoffPeriodForm.is_active,
-        }
-
-        if (this.editingCutoffPeriod) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/cutoff-periods/${this.cutoffPeriodForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Cutoff period updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/cutoff-periods/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Cutoff period created successfully' })
-        }
-
-        this.cutoffPeriodDialog = false
-        await this.fetchCutoffPeriods()
-      } catch (error) {
-        console.error('Error saving cutoff period:', error)
-        this.$q.notify({ type: 'negative', message: 'Failed to save cutoff period' })
-      } finally {
-        this.savingCutoffPeriod = false
-      }
-    },
-
-    async deleteCutoffPeriod(item) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${item.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(
-              `https://staging.wageyapp.com/payroll/admin/cutoff-periods/${item.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
-            this.$q.notify({ type: 'positive', message: 'Cutoff period deleted successfully' })
-            await this.fetchCutoffPeriods()
-          } catch (error) {
-            console.error('Error deleting cutoff period:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete cutoff period' })
-          }
-        })
-    },
-
-    // ==================== PAYROLL GROUPS ====================
-    async fetchPayrollGroups() {
-      this.loadingPayrollGroups = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.payrollGroups = []
-          return
-        }
-
-        const response = await api.get(
-          'https://staging.wageyapp.com/payroll/admin/payroll-groups/',
-          {
-            params: { company: companyId },
-            headers: this.getAuthHeaders(),
-          },
-        )
-        this.payrollGroups = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching payroll groups:', error)
-      } finally {
-        this.loadingPayrollGroups = false
-      }
-    },
-
-    openPayrollGroupDialog() {
-      this.editingPayrollGroup = false
-      this.payrollGroupForm = {
-        id: null,
-        company: this.getCompanyId(),
-        name: '',
-        description: '',
-      }
-      this.payrollGroupDialog = true
-    },
-
-    editPayrollGroup(item) {
-      this.editingPayrollGroup = true
-      this.payrollGroupForm = { ...item }
-      this.payrollGroupDialog = true
-    },
-
-    async savePayrollGroup() {
-      if (!this.payrollGroupForm.name.trim()) {
-        this.$q.notify({ type: 'negative', message: 'Group name is required' })
-        return
-      }
-
-      this.savingPayrollGroup = true
-      try {
-        const payload = {
-          company: this.payrollGroupForm.company || this.getCompanyId(),
-          name: this.payrollGroupForm.name,
-          description: this.payrollGroupForm.description,
-        }
-
-        if (this.editingPayrollGroup) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/payroll-groups/${this.payrollGroupForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Payroll group updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/payroll-groups/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Payroll group created successfully' })
-        }
-
-        this.payrollGroupDialog = false
-        await this.fetchPayrollGroups()
-      } catch (error) {
-        console.error('Error saving payroll group:', error)
-        this.$q.notify({ type: 'negative', message: 'Failed to save payroll group' })
-      } finally {
-        this.savingPayrollGroup = false
-      }
-    },
-
-    async deletePayrollGroup(item) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${item.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(
-              `https://staging.wageyapp.com/payroll/admin/payroll-groups/${item.id}/`,
-              {
-                headers: this.getAuthHeaders(),
-              },
-            )
-            this.$q.notify({ type: 'positive', message: 'Payroll group deleted successfully' })
-            await this.fetchPayrollGroups()
-          } catch (error) {
-            console.error('Error deleting payroll group:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete payroll group' })
-          }
-        })
-    },
-
-    // ==================== LABOR RULES ====================
-    async fetchLaborRules() {
-      this.loadingLaborRules = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.laborRules = []
-          return
-        }
-
-        const response = await api.get('https://staging.wageyapp.com/payroll/admin/labor-rules/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-        this.laborRules = response.data.data || response.data || []
-      } catch (error) {
-        console.error('Error fetching labor rules:', error)
-      } finally {
-        this.loadingLaborRules = false
-      }
-    },
-
-    openLaborRuleDialog() {
-      this.editingLaborRule = false
-      this.laborRuleForm = {
-        id: null,
-        company: this.getCompanyId(),
-        name: '',
-        description: '',
-        multiplier: 1.0,
-        is_active: true,
-      }
-      this.laborRuleDialog = true
-    },
-
-    editLaborRule(item) {
-      this.editingLaborRule = true
-      this.laborRuleForm = { ...item }
-      this.laborRuleDialog = true
-    },
-
-    async saveLaborRule() {
-      if (!this.laborRuleForm.name.trim() || !this.laborRuleForm.multiplier) {
-        this.$q.notify({ type: 'negative', message: 'Please fill all required fields' })
-        return
-      }
-
-      this.savingLaborRule = true
-      try {
-        const payload = {
-          company: this.laborRuleForm.company || this.getCompanyId(),
-          name: this.laborRuleForm.name,
-          description: this.laborRuleForm.description,
-          multiplier: this.laborRuleForm.multiplier,
-          is_active: this.laborRuleForm.is_active,
-        }
-
-        if (this.editingLaborRule) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/admin/labor-rules/${this.laborRuleForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Labor rule updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/payroll/admin/labor-rules/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Labor rule created successfully' })
-        }
-
-        this.laborRuleDialog = false
-        await this.fetchLaborRules()
-      } catch (error) {
-        console.error('Error saving labor rule:', error)
-        this.$q.notify({ type: 'negative', message: 'Failed to save labor rule' })
-      } finally {
-        this.savingLaborRule = false
-      }
-    },
-
-    async deleteLaborRule(item) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: `Are you sure you want to delete "${item.name}"?`,
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(`https://staging.wageyapp.com/payroll/admin/labor-rules/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
-            this.$q.notify({ type: 'positive', message: 'Labor rule deleted successfully' })
-            await this.fetchLaborRules()
-          } catch (error) {
-            console.error('Error deleting labor rule:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete labor rule' })
-          }
-        })
-    },
-
-    // ==================== PAY STRUCTURES ====================
-    async fetchPayStructures() {
-      this.loadingPayStructures = true
-      try {
-        const companyId = this.getCompanyId()
-        if (!companyId) {
-          this.payStructures = []
-          return
-        }
-
-        const response = await api.get('https://staging.wageyapp.com/payroll/pay-structures/', {
-          params: { company: companyId },
-          headers: this.getAuthHeaders(),
-        })
-
-        const structures = response.data.data || response.data || []
-
-        // Map the pay structures to include position names
-        this.payStructures = structures.map((structure) => {
-          const positionName = this.getPositionName(structure.position)
-
-          return {
-            ...structure,
-            position_name: positionName,
-          }
-        })
-      } catch (error) {
-        console.error('Error fetching pay structures:', error)
-      } finally {
-        this.loadingPayStructures = false
-      }
-    },
-
-    getPositionName(positionId) {
-      const position = this.positions.find((p) => p.id === positionId)
-      return position ? position.name : 'N/A'
-    },
-
-    openPayStructureDialog() {
-      this.editingPayStructure = false
-      this.payStructureForm = {
-        id: null,
-        position: null,
-        pay_type: 'monthly',
-        rate: 0,
-        currency: 'PHP',
-        effective_from: '',
-        effective_to: null,
-      }
-      this.payStructureDialog = true
-    },
-
-    editPayStructure(item) {
-      this.editingPayStructure = true
-      this.payStructureForm = {
-        id: item.id,
-        position: item.position,
-        pay_type: item.pay_type,
-        rate: item.rate,
-        currency: item.currency,
-        effective_from: item.effective_from,
-        effective_to: item.effective_to || null,
-      }
-      this.payStructureDialog = true
-    },
-
-    async savePayStructure() {
-      if (
-        !this.payStructureForm.position ||
-        !this.payStructureForm.pay_type ||
-        !this.payStructureForm.rate ||
-        !this.payStructureForm.currency ||
-        !this.payStructureForm.effective_from
-      ) {
-        this.$q.notify({ type: 'negative', message: 'Please fill all required fields' })
-        return
-      }
-
-      this.savingPayStructure = true
-      try {
-        const payload = {
-          company_id: this.getCompanyId(), // ← CHANGED from 'company' to 'company_id'
-          position: this.payStructureForm.position,
-          pay_type: this.payStructureForm.pay_type,
-          rate: this.payStructureForm.rate.toString(),
-          currency: this.payStructureForm.currency,
-          effective_from: this.payStructureForm.effective_from,
-          effective_to: this.payStructureForm.effective_to || null,
-        }
-
-        console.log('💾 Saving pay structure with payload:', payload)
-
-        if (this.editingPayStructure) {
-          await api.put(
-            `https://staging.wageyapp.com/payroll/pay-structures/${this.payStructureForm.id}/`,
-            payload,
-            {
-              headers: this.getAuthHeaders(),
-            },
-          )
-          this.$q.notify({ type: 'positive', message: 'Pay structure updated successfully' })
-        } else {
-          await api.post('https://staging.wageyapp.com/payroll/pay-structures/', payload, {
-            headers: this.getAuthHeaders(),
-          })
-          this.$q.notify({ type: 'positive', message: 'Pay structure created successfully' })
-        }
-
-        this.payStructureDialog = false
-        await this.fetchPayStructures()
-      } catch (error) {
-        console.error('❌ Error saving pay structure:', error)
-        console.error('❌ Error response data:', error.response?.data)
-
-        // Display detailed error message
-        let errorMessage = 'Failed to save pay structure'
-
-        if (error.response?.data) {
-          const errorData = error.response.data
-
-          // Check for field-specific errors
-          if (typeof errorData === 'object') {
-            const errors = []
-            for (const [field, messages] of Object.entries(errorData)) {
-              if (Array.isArray(messages)) {
-                errors.push(`${field}: ${messages.join(', ')}`)
-              } else {
-                errors.push(`${field}: ${messages}`)
-              }
-            }
-            if (errors.length > 0) {
-              errorMessage = errors.join(' | ')
-            }
-          } else if (typeof errorData === 'string') {
-            errorMessage = errorData
-          } else if (errorData.message) {
-            errorMessage = errorData.message
-          }
-        }
-
-        this.$q.notify({
-          type: 'negative',
-          message: errorMessage,
-          position: 'top',
-          timeout: 5000,
-        })
-      } finally {
-        this.savingPayStructure = false
-      }
-    },
-
-    async deletePayStructure(item) {
-      this.$q
-        .dialog({
-          title: 'Confirm Delete',
-          message: 'Are you sure you want to delete this pay structure?',
-          cancel: true,
-          persistent: true,
-        })
-        .onOk(async () => {
-          try {
-            await api.delete(`https://staging.wageyapp.com/payroll/pay-structures/${item.id}/`, {
-              headers: this.getAuthHeaders(),
-            })
-            this.$q.notify({ type: 'positive', message: 'Pay structure deleted successfully' })
-            await this.fetchPayStructures()
-          } catch (error) {
-            console.error('Error deleting pay structure:', error)
-            this.$q.notify({ type: 'negative', message: 'Failed to delete pay structure' })
-          }
-        })
-    },
-
-    // ==================== VIEW METHODS ====================
-    viewCompany(company) {
-      this.editCompany(company)
-    },
-    viewSite(site) {
-      this.editSite(site)
-    },
-    viewRole(role) {
-      this.editRole(role)
-    },
-    viewShift(shift) {
-      this.editShift(shift)
-    },
-    viewDepartment(department) {
-      this.editDepartment(department)
-    },
-    viewPosition(position) {
-      this.editPosition(position)
-    },
-    viewAllowanceType(item) {
-      this.editAllowanceType(item)
-    },
-    viewTaxBracket(item) {
-      this.editTaxBracket(item)
-    },
-    viewCutoffPeriod(item) {
-      this.editCutoffPeriod(item)
-    },
-    viewPayrollGroup(item) {
-      this.editPayrollGroup(item)
-    },
-    viewLaborRule(item) {
-      this.editLaborRule(item)
-    },
-    viewPayStructure(item) {
-      this.editPayStructure(item)
-    },
-  },
+    employees.value = res.data.data ?? res.data ?? []
+  } catch (e) {
+    console.error('Error fetching employees:', e)
+  }
 }
+
+// Wrap contract dialog openers to pre-load employees + contract types
+async function openContractDialog() {
+  await Promise.all([fetchEmployees(), fetchContractTypes()])
+  _openContractDialog()
+}
+async function editContract(contract) {
+  await Promise.all([fetchEmployees(), fetchContractTypes()])
+  _editContract(contract)
+}
+
+// Allowance Types
+const {
+  allowanceTypes,
+  loadingAllowanceTypes,
+  savingAllowanceType,
+  allowanceTypeDialog,
+  editingAllowanceType,
+  allowanceTypeForm,
+  fetchAllowanceTypes,
+  openAllowanceTypeDialog,
+  editAllowanceType,
+  saveAllowanceType,
+  deleteAllowanceType,
+} = useAdminAllowanceTypes()
+
+// Tax Brackets
+const {
+  taxBrackets,
+  loadingTaxBrackets,
+  savingTaxBracket,
+  taxBracketDialog,
+  editingTaxBracket,
+  taxBracketForm,
+  fetchTaxBrackets,
+  openTaxBracketDialog,
+  editTaxBracket,
+  saveTaxBracket,
+  deleteTaxBracket,
+} = useAdminTaxBrackets()
+
+// Cutoff Periods
+const {
+  cutoffPeriods,
+  loadingCutoffPeriods,
+  savingCutoffPeriod,
+  cutoffPeriodDialog,
+  editingCutoffPeriod,
+  cutoffPeriodForm,
+  fetchCutoffPeriods,
+  openCutoffPeriodDialog,
+  editCutoffPeriod,
+  saveCutoffPeriod,
+  deleteCutoffPeriod,
+} = useAdminCutoffPeriods()
+
+// Payroll Groups
+const {
+  payrollGroups,
+  loadingPayrollGroups,
+  savingPayrollGroup,
+  payrollGroupDialog,
+  editingPayrollGroup,
+  payrollGroupForm,
+  fetchPayrollGroups,
+  openPayrollGroupDialog,
+  editPayrollGroup,
+  savePayrollGroup,
+  deletePayrollGroup,
+} = useAdminPayrollGroups()
+
+// Labor Rules
+const {
+  laborRules,
+  loadingLaborRules,
+  savingLaborRule,
+  laborRuleDialog,
+  editingLaborRule,
+  laborRuleForm,
+  fetchLaborRules,
+  openLaborRuleDialog,
+  editLaborRule,
+  saveLaborRule,
+  deleteLaborRule,
+} = useAdminLaborRules()
+
+// Pay Structures
+const {
+  payStructures,
+  loading: loadingPayStructures,
+  saving: savingPayStructure,
+  dialog: payStructureDialog,
+  editing: editingPayStructure,
+  form: payStructureForm,
+  fetchPayStructures,
+  openPayStructureDialog,
+  editPayStructure,
+  savePayStructure,
+  deletePayStructure,
+} = useAdminPayStructures()
+
+// ─── view* aliases (view → opens edit dialog) ─────────────────────────────
+const viewCompany = (r) => editCompany(r)
+const viewSite = (r) => editSite(r)
+const viewRole = (r) => editRole(r)
+const viewShift = (r) => editShift(r)
+const viewDepartment = (r) => editDepartment(r)
+const viewPosition = (r) => editPosition(r)
+const viewAllowanceType = (r) => editAllowanceType(r)
+const viewTaxBracket = (r) => editTaxBracket(r)
+const viewCutoffPeriod = (r) => editCutoffPeriod(r)
+const viewPayrollGroup = (r) => editPayrollGroup(r)
+const viewLaborRule = (r) => editLaborRule(r)
+const viewPayStructure = (r) => editPayStructure(r)
+
+// ─── Utility helpers ──────────────────────────────────────────────────────
+function formatDate(date) {
+  if (!date) return 'N/A'
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function formatAmount(amount) {
+  if (!amount && amount !== 0) return '0.00'
+  return parseFloat(amount).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function getSiteName(siteId) {
+  const s = sites.value.find((x) => x.id === siteId)
+  return s ? s.name : 'N/A'
+}
+
+function getDepartmentName(deptId) {
+  const d = departments.value.find((x) => x.id === deptId)
+  return d ? d.name : 'N/A'
+}
+
+function getShiftTypeName(shiftId) {
+  const s = shiftTypes.value.find((x) => x.id === shiftId)
+  return s ? s.name : 'N/A'
+}
+
+// ─── Table column definitions ─────────────────────────────────────────────
+const ownershipOptions = ['owned', 'leased', 'partnership']
+
+const companyColumns = [
+  { name: 'name', label: 'Company Name', field: 'name', align: 'left', sortable: true },
+  { name: 'logo', label: 'Logo', field: 'logo', align: 'center' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const siteColumns = [
+  { name: 'name', label: 'Site Name', field: 'name', align: 'left', sortable: true },
+  { name: 'location', label: 'Location', field: 'location', align: 'left' },
+  { name: 'ownership_type', label: 'Ownership', field: 'ownership_type', align: 'left' },
+  { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const roleColumns = [
+  { name: 'name', label: 'Role Name', field: 'name', align: 'left', sortable: true },
+  { name: 'permissions', label: 'Permissions', field: 'permissions', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const shiftColumns = [
+  { name: 'name', label: 'Shift Name', field: 'name', align: 'left', sortable: true },
+  { name: 'description', label: 'Description', field: 'description', align: 'left' },
+  { name: 'times', label: 'Time', align: 'left' },
+  { name: 'is_graveyard', label: 'Type', field: 'is_graveyard', align: 'center' },
+  {
+    name: 'apply_night_differential',
+    label: 'Night Diff',
+    field: 'apply_night_differential',
+    align: 'center',
+  },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const recurringColumns = [
+  { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
+  { name: 'shift_type', label: 'Primary Shift', field: 'shift_type', align: 'left' },
+  { name: 'shift_type_2', label: 'Secondary Shift', field: 'shift_type_2', align: 'left' },
+  { name: 'weekdays', label: 'Weekdays', field: 'weekdays', align: 'left' },
+  { name: 'repeat_interval', label: 'Repeat Interval', field: 'repeat_interval', align: 'center' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const departmentColumns = [
+  { name: 'name', label: 'Department Name', field: 'name', align: 'left', sortable: true },
+  { name: 'date_created', label: 'Date Created', field: 'date_created', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const positionColumns = [
+  { name: 'name', label: 'Position Name', field: 'name', align: 'left' },
+  { name: 'description', label: 'Description', field: 'description', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const contractColumns = [
+  { name: 'employee', label: 'Employee', field: 'employee_name', align: 'left', sortable: true },
+  { name: 'contract_type', label: 'Contract Type', field: 'contract_type_name', align: 'left' },
+  { name: 'company', label: 'Company', field: 'company_name', align: 'left' },
+  { name: 'status', label: 'Status', field: 'is_acknowledged', align: 'center' },
+  { name: 'date_created', label: 'Date Created', field: 'date_created', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const allowanceTypeColumns = [
+  { name: 'name', label: 'Allowance Name', field: 'name', align: 'left', sortable: true },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const taxBracketColumns = [
+  { name: 'name', label: 'Bracket Name', field: 'name', align: 'left', sortable: true },
+  { name: 'min_amount', label: 'Min Amount', field: 'min_amount', align: 'right' },
+  { name: 'max_amount', label: 'Max Amount', field: 'max_amount', align: 'right' },
+  { name: 'rate', label: 'Rate', field: 'rate', align: 'right' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const cutoffPeriodColumns = [
+  { name: 'name', label: 'Period Name', field: 'name', align: 'left', sortable: true },
+  { name: 'start_date', label: 'Start Date', field: 'start_date', align: 'left' },
+  { name: 'end_date', label: 'End Date', field: 'end_date', align: 'left' },
+  { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const payrollGroupColumns = [
+  { name: 'name', label: 'Group Name', field: 'name', align: 'left', sortable: true },
+  { name: 'description', label: 'Description', field: 'description', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const laborRuleColumns = [
+  { name: 'name', label: 'Rule Name', field: 'name', align: 'left', sortable: true },
+  { name: 'description', label: 'Description', field: 'description', align: 'left' },
+  { name: 'multiplier', label: 'Multiplier', field: 'multiplier', align: 'right' },
+  { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const payStructureColumns = [
+  { name: 'position', label: 'Position', field: 'position_name', align: 'left', sortable: true },
+  { name: 'pay_type', label: 'Pay Type', field: 'pay_type', align: 'left' },
+  { name: 'rate', label: 'Rate', field: 'rate', align: 'right' },
+  { name: 'effective_from', label: 'Effective From', field: 'effective_from', align: 'left' },
+  { name: 'effective_to', label: 'Effective To', field: 'effective_to', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+
+// ─── Computed search filters ───────────────────────────────────────────────
+const filteredCompanies = computed(() => {
+  if (!searchQuery.value) return companies.value
+  const q = searchQuery.value.toLowerCase()
+  return companies.value.filter(
+    (c) =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.address || '').toLowerCase().includes(q) ||
+      (c.contact || '').toLowerCase().includes(q),
+  )
+})
+const filteredSites = computed(() => {
+  if (!searchQuery.value) return sites.value
+  const q = searchQuery.value.toLowerCase()
+  return sites.value.filter(
+    (s) =>
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.address || '').toLowerCase().includes(q) ||
+      (s.ownership_type || '').toLowerCase().includes(q),
+  )
+})
+const filteredRoles = computed(() => {
+  if (!searchQuery.value) return roles.value
+  const q = searchQuery.value.toLowerCase()
+  return roles.value.filter((r) => (r.name || '').toLowerCase().includes(q))
+})
+const filteredShifts = computed(() => {
+  if (!searchQuery.value) return shifts.value
+  const q = searchQuery.value.toLowerCase()
+  return shifts.value.filter(
+    (s) =>
+      (s.name || '').toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q),
+  )
+})
+const filteredDepartments = computed(() => {
+  if (!searchQuery.value) return departments.value
+  const q = searchQuery.value.toLowerCase()
+  return departments.value.filter((d) => (d.name || '').toLowerCase().includes(q))
+})
+const filteredPositions = computed(() => {
+  if (!searchQuery.value) return positions.value
+  const q = searchQuery.value.toLowerCase()
+  return positions.value.filter(
+    (p) =>
+      (p.name || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q),
+  )
+})
+const filteredContracts = computed(() => {
+  if (!searchQuery.value) return contracts.value
+  const q = searchQuery.value.toLowerCase()
+  return contracts.value.filter(
+    (c) =>
+      (c.employee_name || '').toLowerCase().includes(q) ||
+      (c.contract_type_name || '').toLowerCase().includes(q) ||
+      (c.company_name || '').toLowerCase().includes(q),
+  )
+})
+
+// ─── onMounted ────────────────────────────────────────────────────────────
+onMounted(async () => {
+  await fetchCompanies()
+
+  // Fetch sequential deps first, then parallel
+  try {
+    await fetchPositions()
+    await fetchDepartments()
+    await fetchContractTypes()
+    await fetchEmployees()
+    await fetchShifts()
+
+    await Promise.all([
+      fetchSites(),
+      fetchRoles(),
+      fetchRecurringSchedules(),
+      fetchAllowanceTypes(),
+      fetchTaxBrackets(),
+      fetchCutoffPeriods(),
+      fetchPayrollGroups(),
+      fetchLaborRules(),
+      fetchPayStructures(positions.value),
+      fetchContracts(employees.value, companies.value),
+    ])
+  } catch (error) {
+    console.error('Error fetching data:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load some data. Please refresh the page.',
+      position: 'top',
+      timeout: 5000,
+    })
+  }
+})
 </script>
 
 <style scoped>
@@ -5499,7 +3019,7 @@ export default {
    BASE LAYOUT
    ============================================ */
 .admin-dashboard {
-  background: #f8fafc;
+  background: #f4f6f9;
   min-height: 100vh;
   padding: 0;
 }
@@ -5507,18 +3027,18 @@ export default {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 
 /* ============================================
    PAGE HEADER — matches EmployeesPage exactly
    ============================================ */
 .page-header {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 20px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
@@ -5535,21 +3055,20 @@ export default {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
+  color: #111827;
   margin: 0;
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .header-search {
-  min-width: 180px;
-  max-width: 280px;
-  flex: 1;
+  min-width: 200px;
+  max-width: 260px;
 }
 
 .header-search :deep(.q-field__control) {
@@ -5620,7 +3139,7 @@ export default {
 .tabs-wrapper {
   background: white;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   margin-bottom: 16px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -5629,7 +3148,7 @@ export default {
 .subtabs-wrapper {
   background: white;
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   margin-bottom: 16px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -5659,14 +3178,14 @@ export default {
 .table-section {
   background: white;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8ecf0;
   overflow: hidden;
   margin-bottom: 0;
 }
 
 .table-header {
-  padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -5678,9 +3197,9 @@ export default {
 }
 
 .table-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a202c;
+  color: #111827;
   margin: 0 0 2px 0;
 }
 
@@ -5711,55 +3230,47 @@ export default {
    TABLE STYLES — matches EmployeesPage exactly
    ============================================ */
 .modern-table-container {
-  border: 2px solid #3b82f6;
-  border-radius: 10px;
-  overflow: hidden;
-  margin: 0 16px 16px 16px;
+  overflow-x: auto;
 }
 
 .settings-table {
-  background: white;
-  border-radius: 10px;
-  overflow: hidden;
+  width: 100%;
+  min-width: 700px;
 }
 
 .table-header-row {
   background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
 }
 
 .table-header-cell {
-  padding: 12px 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  text-align: left;
-  border: none;
-  white-space: nowrap;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.05em;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
 }
 
 .table-body-row {
-  border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease;
 }
 
-.table-body-row:hover {
-  background: #f8fafc;
+.table-body-row:hover .table-body-cell {
+  background: #f9fafb;
 }
 
 .table-body-cell {
-  padding: 12px 10px;
   font-size: 13px;
   color: #374151;
-  border: none;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle;
 }
 
 .item-name {
-  font-weight: 500;
-  color: #1a202c;
+  font-weight: 600;
+  color: #111827;
   font-size: 13px;
 }
 
@@ -5777,7 +3288,7 @@ export default {
 }
 
 .status-active {
-  background: #dcfce7;
+  background: #f0fdf4;
   color: #16a34a;
 }
 
@@ -5826,10 +3337,46 @@ export default {
    ACTION BUTTONS — matches EmployeesPage exactly
    ============================================ */
 .actions-cell {
-  width: 100px;
-  min-width: 100px;
+  text-align: center !important;
+  width: 60px;
 }
 
+.action-menu-btn {
+  color: #6b7280 !important;
+  border-radius: 6px !important;
+}
+
+.action-menu-btn:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.action-dropdown {
+  border-radius: 8px !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dropdown-item {
+  font-size: 13px !important;
+  color: #374151 !important;
+  min-height: 36px !important;
+  padding: 0 12px !important;
+}
+
+.dropdown-item:hover {
+  background: #f9fafb !important;
+}
+
+.dropdown-item-danger {
+  color: #dc2626 !important;
+}
+
+.dropdown-item-danger:hover {
+  background: #fef2f2 !important;
+}
+
+/* Legacy icon-button actions (kept for backward compat) */
 .action-buttons {
   display: flex;
   gap: 4px;
@@ -6049,5 +3596,32 @@ export default {
     height: 28px;
     min-width: 28px;
   }
+}
+/* ============================================
+   DIALOG / MODAL CARDS — consistent border radius
+   ============================================ */
+.q-dialog .q-card {
+  border-radius: 16px !important;
+  overflow: hidden;
+}
+
+.q-dialog .q-card .q-card-section:first-child {
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.q-dialog .q-card .q-card-section {
+  padding: 16px 24px;
+}
+
+.q-dialog .q-card .q-card-actions {
+  padding: 12px 24px 20px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.q-dialog .q-card .text-h6 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
 }
 </style>
