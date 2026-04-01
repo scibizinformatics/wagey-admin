@@ -3,6 +3,45 @@ import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { BASE, authHeaders } from '../utils/http'
 
+// ─── Helper: get the current user's UUID for owner_ids ──────────────────────
+// At login, fetchCurrentUserCompanies() returns records shaped as:
+//   { id, user: { id, uuid, ... }, company: { id, ... } }
+// LoginPage stores firstCompany.user?.id as `user_id` in localStorage.
+// We re-fetch /user/current-user-companies/ to get the user uuid from the
+// first record, then cache it for the session.
+let _cachedUserUuid = null
+const token = localStorage.getItem('token') || localStorage.getItem('access_token')
+fetch('https://staging.wageyapp.com/user/current-user-companies/', {
+  headers: { Authorization: `Bearer ${token}` },
+})
+  .then((r) => r.json())
+  .then((d) => console.log(JSON.stringify(d, null, 2)))
+async function fetchCurrentUserUuid() {
+  if (_cachedUserUuid) return _cachedUserUuid
+  try {
+    const token = localStorage.getItem('token') || localStorage.getItem('access_token')
+    if (!token) return null
+    const headers = { Authorization: `Bearer ${token}` }
+    const res = await fetch(`${BASE}/user/current-user-companies/`, { headers })
+    if (res.ok) {
+      const json = await res.json()
+      const records = json?.data ?? json ?? []
+      const first = Array.isArray(records) ? records[0] : null
+      if (first) {
+        // Prefer user.uuid, fall back to user.id (the numeric PK stored as user_id)
+        const uuid = first?.user?.uuid ?? first?.user?.id ?? null
+        if (uuid) {
+          _cachedUserUuid = String(uuid)
+          return _cachedUserUuid
+        }
+      }
+    }
+  } catch {
+    // ignore network errors
+  }
+  return null
+}
+
 export function useAdminCompanies() {
   const $q = useQuasar()
 
@@ -16,9 +55,8 @@ export function useAdminCompanies() {
   const form = ref({
     id: null,
     name: '',
-    address: '',
-    contact: '',
     logo: '',
+    owner_ids: [],
   })
 
   // Logo upload helpers
@@ -50,18 +88,41 @@ export function useAdminCompanies() {
 
   // ─── Dialog helpers ────────────────────────────────────────────────────────
 
-  function openDialog() {
+  async function openDialog() {
     editing.value = false
-    form.value = { id: null, name: '', address: '', contact: '', logo: '' }
+    const userId = await fetchCurrentUserUuid()
+    form.value = {
+      id: null,
+      name: '',
+      logo: '',
+      owner_ids: userId ? [userId] : [],
+    }
     logoUploadMethod.value = 'url'
     logoFile.value = null
     logoPreview.value = null
     dialog.value = true
   }
 
-  function openEditDialog(company) {
+  async function openEditDialog(company) {
     editing.value = true
-    form.value = { ...company }
+    // The GET response doesn't return owner_ids, so we must preserve the
+    // current user as an owner to satisfy the PUT permission check.
+    const userId = await fetchCurrentUserUuid()
+    const existingOwners = company.owner_ids ?? []
+    const ownerIds =
+      userId && !existingOwners.includes(userId)
+        ? [...existingOwners, userId]
+        : existingOwners.length > 0
+          ? existingOwners
+          : userId
+            ? [userId]
+            : []
+    form.value = {
+      id: company.id,
+      name: company.name ?? '',
+      logo: company.logo ?? '',
+      owner_ids: ownerIds,
+    }
     logoUploadMethod.value = 'url'
     logoFile.value = null
     logoPreview.value = company.logo || null
@@ -114,20 +175,24 @@ export function useAdminCompanies() {
 
     saving.value = true
     try {
+      // The API requires multipart/form-data (logo must be a file field).
+      // owner_ids must be appended as individual entries for Django to parse the list.
       const formData = new FormData()
-      formData.append('name', form.value.name)
-      if (form.value.address) formData.append('address', form.value.address)
-      if (form.value.contact) formData.append('contact', form.value.contact)
+      formData.append('name', form.value.name.trim())
 
+      // Logo: file takes priority, then URL, then omit
       if (logoUploadMethod.value === 'file' && logoFile.value) {
         formData.append('logo', logoFile.value)
       } else if (logoUploadMethod.value === 'url' && form.value.logo) {
         formData.append('logo', form.value.logo)
-      } else if (!editing.value) {
-        formData.append('logo', '')
       }
 
-      const headers = { ...authHeaders(), 'Content-Type': 'multipart/form-data' }
+      // Append each owner UUID as a separate entry so Django sees a list
+      const ownerIds = form.value.owner_ids ?? []
+      ownerIds.forEach((id) => formData.append('owner_ids', id))
+
+      // Let the browser set Content-Type with the correct multipart boundary
+      const headers = { ...authHeaders() }
 
       if (editing.value) {
         await api.put(`${BASE}/organization/companies/${form.value.id}/`, formData, { headers })
@@ -146,11 +211,27 @@ export function useAdminCompanies() {
       if (error.response?.data) {
         const d = error.response.data
         if (d.logo && Array.isArray(d.logo)) errorMessage = d.logo.join(', ')
+        else if (d.name && Array.isArray(d.name)) errorMessage = d.name.join(', ')
         else if (d.message) errorMessage = d.message
+        else if (typeof d === 'string') errorMessage = d
       }
       $q.notify({ type: 'negative', message: errorMessage, position: 'top', timeout: 5000 })
     } finally {
       saving.value = false
+    }
+  }
+
+  // ─── Partial update (PATCH) ────────────────────────────────────────────────
+
+  async function patchCompany(id, fields) {
+    try {
+      await api.patch(`${BASE}/organization/companies/${id}/`, fields, {
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      })
+      await fetchCompanies()
+    } catch (error) {
+      console.error('Error patching company:', error)
+      $q.notify({ type: 'negative', message: 'Failed to update company', position: 'top' })
     }
   }
 
@@ -195,6 +276,7 @@ export function useAdminCompanies() {
     onFileRejected,
     handleImageError,
     saveCompany,
+    patchCompany,
     deleteCompany,
   }
 }

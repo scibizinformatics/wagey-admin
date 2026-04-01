@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
-import { useCompany } from '../useCompany'
+import { useCompany } from '../page/useCompany'
 import { BASE, authHeaders } from '../utils/http'
 
 export const PERMISSION_FIELDS = [
