@@ -95,7 +95,7 @@
               dense
               outlined
               clearable
-              @update:model-value="filterBySite"
+              @update:model-value="filterEmployees"
             >
               <template v-slot:prepend>
                 <q-icon name="location_on" />
@@ -117,9 +117,29 @@
             hide-pagination
             :rows-per-page-options="[0]"
           >
-            <!-- Loading skeleton -->
+            <!-- Skeleton rows while loading -->
             <template v-slot:loading>
-              <q-inner-loading showing color="primary" />
+              <q-tr v-for="i in 5" :key="i" class="table-body-row skeleton-row">
+                <q-td class="table-body-cell employee-name-cell">
+                  <div class="employee-info">
+                    <div class="skeleton-avatar"></div>
+                    <div class="employee-name-block">
+                      <div class="skeleton-line skeleton-name"></div>
+                      <div class="skeleton-line skeleton-email"></div>
+                    </div>
+                  </div>
+                </q-td>
+                <q-td class="table-body-cell"><div class="skeleton-line skeleton-role"></div></q-td>
+                <q-td class="table-body-cell"
+                  ><div class="skeleton-line skeleton-phone"></div
+                ></q-td>
+                <q-td class="table-body-cell"
+                  ><div class="skeleton-line skeleton-status"></div
+                ></q-td>
+                <q-td class="table-body-cell actions-cell"
+                  ><div class="skeleton-line skeleton-action"></div
+                ></q-td>
+              </q-tr>
             </template>
 
             <template v-slot:header="props">
@@ -231,20 +251,9 @@
               </q-tr>
             </template>
 
-            <!-- Empty state -->
+            <!-- Empty state (only shown when not loading) -->
             <template v-slot:no-data>
-              <div
-                class="empty-state"
-                style="
-                  width: 100%;
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  justify-content: center;
-                  padding: 56px 20px;
-                  text-align: center;
-                "
-              >
+              <div v-if="!loading" class="empty-state">
                 <q-icon name="group_off" size="48px" class="empty-state-icon" />
                 <div class="empty-state-title">No employees found</div>
                 <div class="empty-state-sub">Try adjusting your search or filters.</div>
@@ -1609,10 +1618,7 @@ const filterEmployees = () => {
 
   // Filter by selected site
   if (selectedSite.value !== null) {
-    console.log('🔍 Filtering by site:', selectedSite.value)
-
     filtered = filtered.filter((emp) => {
-      // Check multiple possible locations for site_id in the employee object
       const empSiteId =
         emp.site_id ||
         emp.site?.id ||
@@ -1620,17 +1626,12 @@ const filterEmployees = () => {
         emp.companies?.[0]?.site?.id ||
         emp.user_site?.id
 
-      console.log(`Employee ${getFullName(emp)} (ID: ${emp.id}) site:`, empSiteId)
-
-      // Type-safe comparison (handles both string and number IDs)
       const employeeSite = typeof empSiteId === 'number' ? empSiteId : parseInt(empSiteId)
       const filterSite =
         typeof selectedSite.value === 'number' ? selectedSite.value : parseInt(selectedSite.value)
 
       return employeeSite === filterSite
     })
-
-    console.log('Filtered employees count:', filtered.length)
   }
 
   filteredEmployees.value = filtered
@@ -2603,5 +2604,68 @@ onMounted(async () => {
   .modal-title {
     font-size: 15px;
   }
+}
+
+/* ==============================
+   SKELETON LOADING
+============================== */
+@keyframes shimmer {
+  0% {
+    background-position: -600px 0;
+  }
+  100% {
+    background-position: 600px 0;
+  }
+}
+
+.skeleton-row {
+  pointer-events: none;
+}
+
+.skeleton-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: linear-gradient(90deg, #e8ecf0 25%, #f4f6f9 50%, #e8ecf0 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+.skeleton-line {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e8ecf0 25%, #f4f6f9 50%, #e8ecf0 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+.skeleton-name {
+  height: 13px;
+  width: 120px;
+  margin-bottom: 6px;
+}
+.skeleton-email {
+  height: 11px;
+  width: 160px;
+}
+.skeleton-role {
+  height: 22px;
+  width: 80px;
+  border-radius: 20px;
+}
+.skeleton-phone {
+  height: 13px;
+  width: 110px;
+}
+.skeleton-status {
+  height: 22px;
+  width: 70px;
+  border-radius: 20px;
+}
+.skeleton-action {
+  height: 24px;
+  width: 24px;
+  border-radius: 50%;
+  margin: 0 auto;
 }
 </style>
