@@ -1613,76 +1613,32 @@
           <div class="form-section-label">Location Details</div>
           <div class="row q-col-gutter-md q-mb-sm">
             <div class="col-12">
-              <q-input v-model="siteForm.location" label="Location / Address *" outlined dense>
+              <q-input
+                v-model="siteForm.location"
+                label="Location / Address *"
+                outlined
+                dense
+                :loading="mapSearchLoading"
+                @update:model-value="onLocationInput"
+              >
                 <template v-slot:prepend><q-icon name="map" size="18px" /></template>
+                <template v-slot:hint>Type an address to auto-pin on the map</template>
               </q-input>
             </div>
             <!-- Hidden lat/lng — bound to form but not shown in UI -->
             <input type="hidden" v-model="siteForm.latitude" />
             <input type="hidden" v-model="siteForm.longitude" />
 
-            <!-- Map Picker -->
-            <div class="col-12">
+            <!-- Map Picker (auto-shows when location is geocoded) -->
+            <div class="col-12" v-show="showSiteMap">
               <div class="map-picker-wrapper">
-                <div class="map-picker-toggle-row">
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    :icon="showSiteMap ? 'expand_less' : 'map'"
-                    :label="showSiteMap ? 'Hide Map' : 'Pick on Map'"
-                    color="primary"
-                    size="sm"
-                    class="map-toggle-btn"
-                    @click="toggleSiteMap"
-                  />
-                  <span v-if="siteForm.latitude && siteForm.longitude" class="map-coords-hint">
+                <div v-if="siteForm.latitude && siteForm.longitude" class="map-picker-toggle-row">
+                  <span class="map-coords-hint">
                     📍 {{ Number(siteForm.latitude).toFixed(6) }},
                     {{ Number(siteForm.longitude).toFixed(6) }}
                   </span>
                 </div>
-                <div v-show="showSiteMap" class="site-map-wrapper">
-                  <!-- Search bar overlaid on the map -->
-                  <div class="map-search-bar">
-                    <q-input
-                      v-model="mapSearchQuery"
-                      placeholder="Search location..."
-                      dense
-                      outlined
-                      bg-color="white"
-                      class="map-search-input"
-                      @keyup.enter="searchMapLocation"
-                      :loading="mapSearchLoading"
-                    >
-                      <template v-slot:prepend>
-                        <q-icon name="search" size="18px" color="grey-6" />
-                      </template>
-                      <template v-slot:append>
-                        <q-btn
-                          v-if="mapSearchQuery"
-                          flat
-                          round
-                          dense
-                          icon="close"
-                          size="sm"
-                          color="grey-6"
-                          @click="clearMapSearch"
-                        />
-                      </template>
-                    </q-input>
-                    <!-- Search Results Dropdown -->
-                    <div v-if="mapSearchResults.length" class="map-search-results">
-                      <div
-                        v-for="(result, index) in mapSearchResults"
-                        :key="index"
-                        class="map-search-result-item"
-                        @click="selectMapSearchResult(result)"
-                      >
-                        <q-icon name="place" size="16px" color="primary" class="q-mr-xs" />
-                        <span>{{ result.display_name }}</span>
-                      </div>
-                    </div>
-                  </div>
+                <div class="site-map-wrapper">
                   <div ref="siteMapContainer" class="site-map-container" />
                 </div>
               </div>
@@ -2559,9 +2515,8 @@ let leafletMap = null
 let leafletMarker = null
 let leafletLoaded = false
 
-const mapSearchQuery = ref('')
-const mapSearchResults = ref([])
 const mapSearchLoading = ref(false)
+let locationDebounceTimer = null
 
 async function loadLeaflet() {
   if (leafletLoaded) return
@@ -2643,70 +2598,58 @@ async function initSiteMap() {
   setTimeout(() => leafletMap && leafletMap.invalidateSize(), 300)
 }
 
-async function toggleSiteMap() {
-  showSiteMap.value = !showSiteMap.value
-  if (showSiteMap.value) {
-    await initSiteMap()
-  }
-}
+function onLocationInput(value) {
+  clearTimeout(locationDebounceTimer)
+  if (!value || value.trim().length < 3) return
+  locationDebounceTimer = setTimeout(async () => {
+    mapSearchLoading.value = true
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}&limit=1`,
+        { headers: { 'Accept-Language': 'en' } },
+      )
+      const data = await res.json()
+      if (!data.length) return
+      const result = data[0]
+      const lat = parseFloat(result.lat)
+      const lng = parseFloat(result.lon)
+      siteForm.value.latitude = lat.toFixed(7)
+      siteForm.value.longitude = lng.toFixed(7)
 
-function clearMapSearch() {
-  mapSearchQuery.value = ''
-  mapSearchResults.value = []
-}
+      // Auto-show the map on first geocode result
+      if (!showSiteMap.value) {
+        showSiteMap.value = true
+        await initSiteMap()
+      }
 
-async function searchMapLocation() {
-  if (!mapSearchQuery.value.trim()) return
-  mapSearchLoading.value = true
-  mapSearchResults.value = []
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(mapSearchQuery.value)}&limit=5`,
-      { headers: { 'Accept-Language': 'en' } },
-    )
-    const data = await res.json()
-    mapSearchResults.value = data
-  } catch (e) {
-    console.error('Geocode error:', e)
-  } finally {
-    mapSearchLoading.value = false
-  }
-}
-
-function selectMapSearchResult(result) {
-  const lat = parseFloat(result.lat)
-  const lng = parseFloat(result.lon)
-  mapSearchQuery.value = result.display_name
-  mapSearchResults.value = []
-
-  // Pan map to result
-  if (leafletMap) {
-    leafletMap.setView([lat, lng], 16)
-  }
-
-  // Place/move marker
-  siteForm.value.latitude = lat.toFixed(7)
-  siteForm.value.longitude = lng.toFixed(7)
-
-  if (leafletMarker) {
-    leafletMarker.setLatLng([lat, lng])
-  } else {
-    leafletMarker = window.L.marker([lat, lng], { draggable: true }).addTo(leafletMap)
-    leafletMarker.on('dragend', (e) => {
-      const pos = e.target.getLatLng()
-      siteForm.value.latitude = pos.lat.toFixed(7)
-      siteForm.value.longitude = pos.lng.toFixed(7)
-    })
-  }
-  leafletMarker.bindPopup(`📍 ${result.display_name}`).openPopup()
+      if (leafletMap) {
+        leafletMap.setView([lat, lng], 16)
+        if (leafletMarker) {
+          leafletMarker.setLatLng([lat, lng])
+        } else {
+          leafletMarker = window.L.marker([lat, lng], { draggable: true }).addTo(leafletMap)
+          leafletMarker.on('dragend', (e) => {
+            const pos = e.target.getLatLng()
+            siteForm.value.latitude = pos.lat.toFixed(7)
+            siteForm.value.longitude = pos.lng.toFixed(7)
+          })
+        }
+        leafletMarker.bindPopup(`📍 ${result.display_name}`).openPopup()
+      }
+    } catch (e) {
+      console.error('Geocode error:', e)
+    } finally {
+      mapSearchLoading.value = false
+    }
+  }, 600)
 }
 
 // Reset map state when dialog closes
 watch(siteDialog, (val) => {
   if (!val) {
     showSiteMap.value = false
-    mapSearchQuery.value = ''
-    mapSearchResults.value = []
+    clearTimeout(locationDebounceTimer)
+    mapSearchLoading.value = false
     if (leafletMap) {
       leafletMap.remove()
       leafletMap = null
@@ -3793,52 +3736,6 @@ onMounted(async () => {
 .site-map-wrapper {
   position: relative;
   width: 100%;
-}
-
-.map-search-bar {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 40px);
-  max-width: 420px;
-  z-index: 1001;
-}
-
-.map-search-input {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-}
-
-.map-search-results {
-  background: white;
-  border-radius: 8px;
-  margin-top: 4px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.map-search-result-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 10px 12px;
-  font-size: 13px;
-  color: #334155;
-  cursor: pointer;
-  border-bottom: 1px solid #f1f5f9;
-  transition: background 0.15s;
-}
-
-.map-search-result-item:last-child {
-  border-bottom: none;
-}
-
-.map-search-result-item:hover {
-  background: #f0f9ff;
-  color: #0369a1;
 }
 
 .site-map-container {
