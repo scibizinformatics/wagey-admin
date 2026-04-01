@@ -64,19 +64,13 @@
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">SL No</q-th>
                     <q-th class="table-header-cell">Logo</q-th>
                     <q-th class="table-header-cell">Company Name</q-th>
-                    <q-th class="table-header-cell">Address</q-th>
-                    <q-th class="table-header-cell">Contact</q-th>
                     <q-th class="table-header-cell">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
                   <q-tr class="table-body-row">
-                    <q-td class="table-body-cell"
-                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                    >
                     <q-td class="table-body-cell">
                       <q-avatar size="36px" v-if="props.row.logo">
                         <img :src="props.row.logo" />
@@ -88,8 +82,6 @@
                     <q-td class="table-body-cell">
                       <span class="item-name">{{ props.row.name || 'N/A' }}</span>
                     </q-td>
-                    <q-td class="table-body-cell">{{ props.row.address || 'N/A' }}</q-td>
-                    <q-td class="table-body-cell">{{ props.row.contact || 'N/A' }}</q-td>
                     <q-td class="table-body-cell actions-cell">
                       <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                         <q-menu anchor="bottom right" self="top right" class="action-dropdown">
@@ -171,7 +163,6 @@
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">SL No</q-th>
                     <q-th class="table-header-cell">Site Name</q-th>
                     <q-th class="table-header-cell">Address</q-th>
                     <q-th class="table-header-cell">Ownership</q-th>
@@ -181,13 +172,10 @@
                 </template>
                 <template v-slot:body="props">
                   <q-tr class="table-body-row">
-                    <q-td class="table-body-cell"
-                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                    >
                     <q-td class="table-body-cell">
                       <span class="item-name">{{ props.row.name || 'N/A' }}</span>
                     </q-td>
-                    <q-td class="table-body-cell">{{ props.row.address || 'N/A' }}</q-td>
+                    <q-td class="table-body-cell">{{ props.row.location || 'N/A' }}</q-td>
                     <q-td class="table-body-cell">
                       <div
                         :class="[
@@ -289,7 +277,6 @@
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">SL No</q-th>
                     <q-th class="table-header-cell">Role Name</q-th>
                     <q-th class="table-header-cell">Permissions</q-th>
                     <q-th class="table-header-cell">Actions</q-th>
@@ -297,9 +284,6 @@
                 </template>
                 <template v-slot:body="props">
                   <q-tr class="table-body-row">
-                    <q-td class="table-body-cell"
-                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                    >
                     <q-td class="table-body-cell">
                       <span class="item-name">{{ props.row.name || 'N/A' }}</span>
                     </q-td>
@@ -425,7 +409,6 @@
                   >
                     <template v-slot:header>
                       <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">SL No</q-th>
                         <q-th class="table-header-cell">Shift Name</q-th>
                         <q-th class="table-header-cell">Time</q-th>
                         <q-th class="table-header-cell">Type</q-th>
@@ -435,9 +418,6 @@
                     </template>
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
-                        <q-td class="table-body-cell"
-                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                        >
                         <q-td class="table-body-cell">
                           <span class="item-name">{{ props.row.name || 'N/A' }}</span>
                         </q-td>
@@ -543,7 +523,6 @@
                   >
                     <template v-slot:header>
                       <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">SL No</q-th>
                         <q-th class="table-header-cell">Name</q-th>
                         <q-th class="table-header-cell">Primary Shift</q-th>
                         <q-th class="table-header-cell">Secondary Shift</q-th>
@@ -554,9 +533,6 @@
                     </template>
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
-                        <q-td class="table-body-cell"
-                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                        >
                         <q-td class="table-body-cell">
                           <span class="item-name">{{ props.row.name || 'N/A' }}</span>
                         </q-td>
@@ -644,7 +620,6 @@
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">SL No</q-th>
                     <q-th class="table-header-cell">Department Name</q-th>
                     <q-th class="table-header-cell">Description</q-th>
                     <q-th class="table-header-cell">Date Created</q-th>
@@ -653,9 +628,6 @@
                 </template>
                 <template v-slot:body="props">
                   <q-tr class="table-body-row">
-                    <q-td class="table-body-cell"
-                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                    >
                     <q-td class="table-body-cell">
                       <span class="item-name">{{ props.row.name || 'N/A' }}</span>
                     </q-td>
@@ -742,7 +714,6 @@
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">SL No</q-th>
                     <q-th class="table-header-cell">Position Title</q-th>
                     <q-th class="table-header-cell">Department</q-th>
                     <q-th class="table-header-cell">Description</q-th>
@@ -751,9 +722,6 @@
                 </template>
                 <template v-slot:body="props">
                   <q-tr class="table-body-row">
-                    <q-td class="table-body-cell"
-                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                    >
                     <q-td class="table-body-cell">
                       <span class="item-name">{{
                         props.row.title || props.row.name || 'N/A'
@@ -842,7 +810,6 @@
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">SL No</q-th>
                     <q-th class="table-header-cell">Employee</q-th>
                     <q-th class="table-header-cell">Contract Type</q-th>
                     <q-th class="table-header-cell">Status</q-th>
@@ -852,9 +819,6 @@
                 </template>
                 <template v-slot:body="props">
                   <q-tr class="table-body-row">
-                    <q-td class="table-body-cell"
-                      >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                    >
                     <q-td class="table-body-cell">
                       <span class="item-name">{{ props.row.employee_name || 'N/A' }}</span>
                     </q-td>
@@ -988,7 +952,6 @@
                   >
                     <template v-slot:header>
                       <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">SL No</q-th>
                         <q-th class="table-header-cell">Name</q-th>
                         <q-th class="table-header-cell">Description</q-th>
                         <q-th class="table-header-cell">Actions</q-th>
@@ -996,9 +959,6 @@
                     </template>
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
-                        <q-td class="table-body-cell"
-                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                        >
                         <q-td class="table-body-cell"
                           ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
@@ -1083,7 +1043,6 @@
                   >
                     <template v-slot:header>
                       <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">SL No</q-th>
                         <q-th class="table-header-cell">Min Income</q-th>
                         <q-th class="table-header-cell">Max Income</q-th>
                         <q-th class="table-header-cell">Rate</q-th>
@@ -1092,9 +1051,6 @@
                     </template>
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
-                        <q-td class="table-body-cell"
-                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                        >
                         <q-td class="table-body-cell">{{ props.row.min_income || 'N/A' }}</q-td>
                         <q-td class="table-body-cell">{{ props.row.max_income || 'N/A' }}</q-td>
                         <q-td class="table-body-cell"
@@ -1180,7 +1136,6 @@
                   >
                     <template v-slot:header>
                       <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">SL No</q-th>
                         <q-th class="table-header-cell">Name</q-th>
                         <q-th class="table-header-cell">Start Date</q-th>
                         <q-th class="table-header-cell">End Date</q-th>
@@ -1189,9 +1144,6 @@
                     </template>
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
-                        <q-td class="table-body-cell"
-                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                        >
                         <q-td class="table-body-cell"
                           ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
@@ -1277,7 +1229,6 @@
                   >
                     <template v-slot:header>
                       <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">SL No</q-th>
                         <q-th class="table-header-cell">Group Name</q-th>
                         <q-th class="table-header-cell">Description</q-th>
                         <q-th class="table-header-cell">Actions</q-th>
@@ -1285,9 +1236,6 @@
                     </template>
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
-                        <q-td class="table-body-cell"
-                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                        >
                         <q-td class="table-body-cell"
                           ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
@@ -1372,7 +1320,6 @@
                   >
                     <template v-slot:header>
                       <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">SL No</q-th>
                         <q-th class="table-header-cell">Rule Name</q-th>
                         <q-th class="table-header-cell">Description</q-th>
                         <q-th class="table-header-cell">Actions</q-th>
@@ -1380,9 +1327,6 @@
                     </template>
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
-                        <q-td class="table-body-cell"
-                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                        >
                         <q-td class="table-body-cell"
                           ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
@@ -1467,7 +1411,6 @@
                   >
                     <template v-slot:header>
                       <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">SL No</q-th>
                         <q-th class="table-header-cell">Structure Name</q-th>
                         <q-th class="table-header-cell">Base Pay</q-th>
                         <q-th class="table-header-cell">Actions</q-th>
@@ -1475,9 +1418,6 @@
                     </template>
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
-                        <q-td class="table-body-cell"
-                          >{{ String(props.rowIndex + 1).padStart(2, '0') }}.</q-td
-                        >
                         <q-td class="table-body-cell"
                           ><span class="item-name">{{ props.row.name || 'N/A' }}</span></q-td
                         >
@@ -1545,8 +1485,6 @@
 
         <q-card-section class="q-pt-md q-gutter-md">
           <q-input v-model="companyForm.name" label="Company Name *" outlined dense />
-          <q-input v-model="companyForm.address" label="Address" outlined dense />
-          <q-input v-model="companyForm.contact" label="Contact" outlined dense />
 
           <!-- Logo Section -->
           <div>
@@ -1679,15 +1617,75 @@
                 <template v-slot:prepend><q-icon name="map" size="18px" /></template>
               </q-input>
             </div>
-            <div class="col-6">
-              <q-input v-model="siteForm.latitude" label="Latitude *" outlined dense>
-                <template v-slot:prepend><q-icon name="my_location" size="18px" /></template>
-              </q-input>
-            </div>
-            <div class="col-6">
-              <q-input v-model="siteForm.longitude" label="Longitude *" outlined dense>
-                <template v-slot:prepend><q-icon name="my_location" size="18px" /></template>
-              </q-input>
+            <!-- Hidden lat/lng — bound to form but not shown in UI -->
+            <input type="hidden" v-model="siteForm.latitude" />
+            <input type="hidden" v-model="siteForm.longitude" />
+
+            <!-- Map Picker -->
+            <div class="col-12">
+              <div class="map-picker-wrapper">
+                <div class="map-picker-toggle-row">
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    :icon="showSiteMap ? 'expand_less' : 'map'"
+                    :label="showSiteMap ? 'Hide Map' : 'Pick on Map'"
+                    color="primary"
+                    size="sm"
+                    class="map-toggle-btn"
+                    @click="toggleSiteMap"
+                  />
+                  <span v-if="siteForm.latitude && siteForm.longitude" class="map-coords-hint">
+                    📍 {{ Number(siteForm.latitude).toFixed(6) }},
+                    {{ Number(siteForm.longitude).toFixed(6) }}
+                  </span>
+                </div>
+                <div v-show="showSiteMap" class="site-map-wrapper">
+                  <!-- Search bar overlaid on the map -->
+                  <div class="map-search-bar">
+                    <q-input
+                      v-model="mapSearchQuery"
+                      placeholder="Search location..."
+                      dense
+                      outlined
+                      bg-color="white"
+                      class="map-search-input"
+                      @keyup.enter="searchMapLocation"
+                      :loading="mapSearchLoading"
+                    >
+                      <template v-slot:prepend>
+                        <q-icon name="search" size="18px" color="grey-6" />
+                      </template>
+                      <template v-slot:append>
+                        <q-btn
+                          v-if="mapSearchQuery"
+                          flat
+                          round
+                          dense
+                          icon="close"
+                          size="sm"
+                          color="grey-6"
+                          @click="clearMapSearch"
+                        />
+                      </template>
+                    </q-input>
+                    <!-- Search Results Dropdown -->
+                    <div v-if="mapSearchResults.length" class="map-search-results">
+                      <div
+                        v-for="(result, index) in mapSearchResults"
+                        :key="index"
+                        class="map-search-result-item"
+                        @click="selectMapSearchResult(result)"
+                      >
+                        <q-icon name="place" size="16px" color="primary" class="q-mr-xs" />
+                        <span>{{ result.display_name }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div ref="siteMapContainer" class="site-map-container" />
+                </div>
+              </div>
             </div>
             <div class="col-6">
               <q-input
@@ -2486,7 +2484,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
 
 import { useAdminCompanies } from 'src/composables/admin/useAdminCompanies'
@@ -2553,6 +2551,169 @@ const {
   saveSite,
   deleteSite,
 } = useAdminSites()
+
+// ─── Leaflet Map Picker (Sites) ────────────────────────────────────────────
+const showSiteMap = ref(false)
+const siteMapContainer = ref(null)
+let leafletMap = null
+let leafletMarker = null
+let leafletLoaded = false
+
+const mapSearchQuery = ref('')
+const mapSearchResults = ref([])
+const mapSearchLoading = ref(false)
+
+async function loadLeaflet() {
+  if (leafletLoaded) return
+  // Inject Leaflet CSS
+  if (!document.getElementById('leaflet-css')) {
+    const link = document.createElement('link')
+    link.id = 'leaflet-css'
+    link.rel = 'stylesheet'
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+    document.head.appendChild(link)
+  }
+  // Inject Leaflet JS
+  if (!window.L) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+      script.onload = resolve
+      script.onerror = reject
+      document.head.appendChild(script)
+    })
+  }
+  leafletLoaded = true
+}
+
+async function initSiteMap() {
+  await loadLeaflet()
+  await nextTick()
+  if (!siteMapContainer.value) return
+
+  // Destroy previous instance
+  if (leafletMap) {
+    leafletMap.remove()
+    leafletMap = null
+    leafletMarker = null
+  }
+
+  // Default center: Philippines (or existing coords)
+  const lat = parseFloat(siteForm.value?.latitude) || 14.5995
+  const lng = parseFloat(siteForm.value?.longitude) || 120.9842
+
+  leafletMap = window.L.map(siteMapContainer.value).setView([lat, lng], 13)
+
+  window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(leafletMap)
+
+  // If existing coords, place marker
+  if (siteForm.value?.latitude && siteForm.value?.longitude) {
+    leafletMarker = window.L.marker([lat, lng], { draggable: true }).addTo(leafletMap)
+    leafletMarker.bindPopup('📍 Site Location').openPopup()
+    leafletMarker.on('dragend', (e) => {
+      const pos = e.target.getLatLng()
+      siteForm.value.latitude = pos.lat.toFixed(7)
+      siteForm.value.longitude = pos.lng.toFixed(7)
+    })
+  }
+
+  // Click to set/move marker
+  leafletMap.on('click', (e) => {
+    const { lat: clickLat, lng: clickLng } = e.latlng
+    siteForm.value.latitude = clickLat.toFixed(7)
+    siteForm.value.longitude = clickLng.toFixed(7)
+    if (leafletMarker) {
+      leafletMarker.setLatLng([clickLat, clickLng])
+    } else {
+      leafletMarker = window.L.marker([clickLat, clickLng], { draggable: true }).addTo(leafletMap)
+      leafletMarker.bindPopup('📍 Site Location').openPopup()
+      leafletMarker.on('dragend', (ev) => {
+        const pos = ev.target.getLatLng()
+        siteForm.value.latitude = pos.lat.toFixed(7)
+        siteForm.value.longitude = pos.lng.toFixed(7)
+      })
+    }
+    leafletMarker.bindPopup(`📍 ${clickLat.toFixed(5)}, ${clickLng.toFixed(5)}`).openPopup()
+  })
+
+  // Fix tile rendering after map becomes visible
+  setTimeout(() => leafletMap && leafletMap.invalidateSize(), 300)
+}
+
+async function toggleSiteMap() {
+  showSiteMap.value = !showSiteMap.value
+  if (showSiteMap.value) {
+    await initSiteMap()
+  }
+}
+
+function clearMapSearch() {
+  mapSearchQuery.value = ''
+  mapSearchResults.value = []
+}
+
+async function searchMapLocation() {
+  if (!mapSearchQuery.value.trim()) return
+  mapSearchLoading.value = true
+  mapSearchResults.value = []
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(mapSearchQuery.value)}&limit=5`,
+      { headers: { 'Accept-Language': 'en' } },
+    )
+    const data = await res.json()
+    mapSearchResults.value = data
+  } catch (e) {
+    console.error('Geocode error:', e)
+  } finally {
+    mapSearchLoading.value = false
+  }
+}
+
+function selectMapSearchResult(result) {
+  const lat = parseFloat(result.lat)
+  const lng = parseFloat(result.lon)
+  mapSearchQuery.value = result.display_name
+  mapSearchResults.value = []
+
+  // Pan map to result
+  if (leafletMap) {
+    leafletMap.setView([lat, lng], 16)
+  }
+
+  // Place/move marker
+  siteForm.value.latitude = lat.toFixed(7)
+  siteForm.value.longitude = lng.toFixed(7)
+
+  if (leafletMarker) {
+    leafletMarker.setLatLng([lat, lng])
+  } else {
+    leafletMarker = window.L.marker([lat, lng], { draggable: true }).addTo(leafletMap)
+    leafletMarker.on('dragend', (e) => {
+      const pos = e.target.getLatLng()
+      siteForm.value.latitude = pos.lat.toFixed(7)
+      siteForm.value.longitude = pos.lng.toFixed(7)
+    })
+  }
+  leafletMarker.bindPopup(`📍 ${result.display_name}`).openPopup()
+}
+
+// Reset map state when dialog closes
+watch(siteDialog, (val) => {
+  if (!val) {
+    showSiteMap.value = false
+    mapSearchQuery.value = ''
+    mapSearchResults.value = []
+    if (leafletMap) {
+      leafletMap.remove()
+      leafletMap = null
+      leafletMarker = null
+    }
+  }
+})
 
 // Roles
 const {
@@ -3250,6 +3411,7 @@ onMounted(async () => {
   letter-spacing: 0.05em;
   padding: 11px 16px !important;
   border-bottom: 1px solid #e8ecf0 !important;
+  text-align: left !important;
 }
 
 .table-body-row {
@@ -3266,6 +3428,7 @@ onMounted(async () => {
   padding: 12px 16px !important;
   border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle;
+  text-align: left !important;
 }
 
 .item-name {
@@ -3598,8 +3761,103 @@ onMounted(async () => {
   }
 }
 /* ============================================
-   DIALOG / MODAL CARDS — consistent border radius
+   SITE MAP PICKER
    ============================================ */
+.map-picker-wrapper {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.map-picker-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.map-toggle-btn {
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.map-coords-hint {
+  font-size: 11px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.site-map-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.map-search-bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 40px);
+  max-width: 420px;
+  z-index: 1001;
+}
+
+.map-search-input {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.map-search-results {
+  background: white;
+  border-radius: 8px;
+  margin-top: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.map-search-result-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.15s;
+}
+
+.map-search-result-item:last-child {
+  border-bottom: none;
+}
+
+.map-search-result-item:hover {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.site-map-container {
+  height: 300px;
+  width: 100%;
+  z-index: 0;
+}
+
+/* Ensure Leaflet popups render above q-dialog overlay */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 1000 !important;
+}
+
+.q-dialog__inner .leaflet-container {
+  z-index: 0;
+}
+
 .q-dialog .q-card {
   border-radius: 16px !important;
   overflow: hidden;
