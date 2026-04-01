@@ -26,6 +26,9 @@ module.exports = function (ctx) {
         node: 'node20',
         favicon: 'favicon.ico',
       },
+      chainWebpack(chain) {
+        chain.resolve.alias.set('@', require('path').resolve(__dirname, 'src'))
+      },
       // webpackTranspile: false,
       // webpackTranspileDependencies: [],
     },
