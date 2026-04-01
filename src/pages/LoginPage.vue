@@ -101,7 +101,7 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'boot/auth'
-import { useAuth } from 'src/composables/useAuth'
+import { useAuth } from '@/composables/page/useAuth'
 
 const router = useRouter()
 const route = useRoute()

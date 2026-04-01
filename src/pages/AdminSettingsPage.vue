@@ -2487,13 +2487,13 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
 
-import { useAdminCompanies } from 'src/composables/admin/useAdminCompanies'
-import { useAdminSites } from 'src/composables/admin/useAdminSites'
-import { useAdminRoles } from 'src/composables/admin/useAdminRoles'
-import { useAdminShifts } from 'src/composables/admin/useAdminShifts'
-import { useAdminDepartments } from 'src/composables/admin/useAdminDepartments'
-import { useAdminPositions } from 'src/composables/admin/useAdminPositions'
-import { useAdminContracts } from 'src/composables/admin/useAdminContracts'
+import { useAdminCompanies } from '@/composables/admin/useAdminCompanies'
+import { useAdminSites } from '@/composables/admin/useAdminSites'
+import { useAdminRoles } from '@/composables/admin/useAdminRoles'
+import { useAdminShifts } from '@/composables/admin/useAdminShifts'
+import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
+import { useAdminPositions } from '@/composables/admin/useAdminPositions'
+import { useAdminContracts } from '@/composables/admin/useAdminContracts'
 import {
   useAdminAllowanceTypes,
   useAdminTaxBrackets,
@@ -2822,8 +2822,8 @@ async function fetchEmployees() {
   // employees are also used elsewhere on the page.
   try {
     const { api } = await import('src/boot/axios')
-    const { authHeaders, BASE } = await import('src/composables/utils/http')
-    const { useCompany } = await import('src/composables/useCompany')
+    const { authHeaders, BASE } = await import('@/composables/utils/http')
+    const { useCompany } = await import('@/composables/page/useCompany')
     const { companyId } = useCompany()
     if (!companyId.value) return
     const res = await api.get(`${BASE}/user/employees/`, {

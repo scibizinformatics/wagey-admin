@@ -232,13 +232,14 @@
 
 <script setup>
 import { ref, computed, onMounted, watchEffect } from 'vue'
-import { useEmployees } from 'src/composables/useEmployees'
-import { useAttendance } from 'src/composables/useAttendance'
-import { usePayroll } from 'src/composables/usePayroll'
-import { useRequests } from 'src/composables/useRequests'
-import { useAnnouncements } from 'src/composables/useAnnouncements'
-import { useSwapRequests } from 'src/composables/useSwapRequests'
-import { useCompany } from 'src/composables/useCompany'
+import { useEmployees } from '@/composables/page/useEmployees'
+import { useAttendance } from '@/composables/page/useAttendance'
+import { usePayroll } from '@/composables/page/usePayroll'
+import { useRequests } from '@/composables/page/useRequests'
+import { useAnnouncements } from '@/composables/page/useAnnouncements'
+import { useSwapRequests } from '@/composables/page/useSwapRequests'
+import { useCompany } from '@/composables/page/useCompany'
+import { useNotifications } from 'src/composables/useNotifications'
 
 // ─── Composables ─────────────────────────────────────────────────────────────
 const { companyId } = useCompany()
@@ -248,6 +249,8 @@ const { employees, loading: employeesLoading, fetchEmployees } = useEmployees()
 const { attendanceData, loading: attendanceLoading, fetchAttendanceByDate } = useAttendance()
 
 const { payslips, loading: payrollLoading, fetchPayslips } = usePayroll()
+
+const { onDataUpdate } = useNotifications()
 
 const {
   leaveRequests,
@@ -616,6 +619,11 @@ const notifications = computed(() => {
 onMounted(async () => {
   const cid = resolvedCompanyId()
   console.debug('[Dashboard] resolved company ID:', cid)
+
+  onDataUpdate('attendance', () => fetchAttendanceByDate(today()))
+  onDataUpdate('leave', () => fetchLeaveRequests())
+  onDataUpdate('overtime', () => fetchOvertimeRequests())
+  onDataUpdate('swap_request', () => fetchSwapRequests({ company: cid }))
 
   await Promise.allSettled([
     fetchEmployees(),

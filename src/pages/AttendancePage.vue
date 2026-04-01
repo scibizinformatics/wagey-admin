@@ -933,9 +933,9 @@
 <script setup>
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
-import { useAttendance } from 'src/composables/useAttendance'
-import { useEmployees } from 'src/composables/useEmployees'
-import { useOrganization } from 'src/composables/useOrganization'
+import { useAttendance } from '@/composables/page/useAttendance'
+import { useEmployees } from '@/composables/page/useEmployees'
+import { useOrganization } from '@/composables/page/useOrganization'
 
 const $q = useQuasar()
 

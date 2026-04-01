@@ -485,7 +485,7 @@
 <script>
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useQuasar } from 'quasar'
-import { useSwapRequests } from 'src/composables/useSwapRequests'
+import { useSwapRequests } from '@/composables/page/useSwapRequests'
 
 export default {
   name: 'SwapRequests',

@@ -1286,10 +1286,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
-import { useCompany } from 'src/composables/useCompany'
-import { useSchedule } from 'src/composables/useSchedule'
-import { useOrganization } from 'src/composables/useOrganization'
-import { useEmployees } from 'src/composables/useEmployees'
+import { useCompany } from '@/composables/page/useCompany'
+import { useSchedule } from '@/composables/page/useSchedule'
+import { useOrganization } from '@/composables/page/useOrganization'
+import { useEmployees } from '@/composables/page/useEmployees'
 
 const $q = useQuasar()
 const { companyId } = useCompany()

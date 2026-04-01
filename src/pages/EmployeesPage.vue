@@ -265,7 +265,16 @@
             </q-avatar>
             <div>
               <div class="modal-title">Add New Employee</div>
-              <div class="modal-subtitle" id="add-step-label">Step 1 of 3 — User information</div>
+              <div class="modal-subtitle" id="add-step-label">
+                Step {{ addStep }} of 3 —
+                {{
+                  addStep === 1
+                    ? 'User & personal information'
+                    : addStep === 2
+                      ? 'Employment information'
+                      : 'Review & confirm'
+                }}
+              </div>
             </div>
           </div>
           <q-btn icon="close" flat round dense class="modal-close-btn" @click="cancelAdd" />
@@ -350,6 +359,7 @@
                     dense
                     :rules="[(val) => !!val || 'First name is required']"
                   />
+                  <q-input v-model="addForm.user.middle_name" label="Middle Name" outlined dense />
                   <q-input
                     v-model="addForm.user.last_name"
                     label="Last Name *"
@@ -420,47 +430,8 @@
               </div>
             </div>
 
-            <!-- Step 2: Personal Info -->
+            <!-- Step 2: Employment Info -->
             <div v-show="addStep === 2">
-              <div class="form-section">
-                <div class="section-title">Personal information</div>
-                <div class="form-grid">
-                  <q-select
-                    v-model="addForm.civil_status"
-                    :options="civilStatusOptions"
-                    label="Civil Status"
-                    outlined
-                    dense
-                  />
-                  <q-input v-model="addForm.birthday" label="Birthday" type="date" outlined dense />
-                  <q-input
-                    v-model="addForm.phone_number"
-                    label="Phone Number"
-                    outlined
-                    dense
-                    mask="###########"
-                  />
-                  <q-input
-                    v-model="addForm.emergency_contact"
-                    label="Emergency Contact"
-                    outlined
-                    dense
-                  />
-                  <q-input
-                    v-model="addForm.address"
-                    label="Address"
-                    outlined
-                    dense
-                    type="textarea"
-                    rows="2"
-                    class="col-span-2"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- Step 3: Employment Info -->
-            <div v-show="addStep === 3">
               <div class="form-section">
                 <div class="section-title">Employment information</div>
                 <div class="form-grid">
@@ -484,6 +455,61 @@
                     use-input
                     @filter="filterTimezones"
                   />
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3: Review & Confirm -->
+            <div v-show="addStep === 3">
+              <div class="form-section">
+                <div class="section-title">Review & Confirm</div>
+                <div class="detail-grid-cards">
+                  <div class="detail-card">
+                    <div class="detail-card-label">Username</div>
+                    <div class="detail-card-value">{{ addForm.user.username || '—' }}</div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="detail-card-label">Email</div>
+                    <div class="detail-card-value">{{ addForm.user.email || '—' }}</div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="detail-card-label">Full Name</div>
+                    <div class="detail-card-value">
+                      {{
+                        [addForm.user.first_name, addForm.user.middle_name, addForm.user.last_name]
+                          .filter(Boolean)
+                          .join(' ') || '—'
+                      }}
+                    </div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="detail-card-label">Role</div>
+                    <div class="detail-card-value">{{ addForm.user_role?.name || '—' }}</div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="detail-card-label">Civil Status</div>
+                    <div class="detail-card-value">{{ addForm.civil_status || '—' }}</div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="detail-card-label">Birthday</div>
+                    <div class="detail-card-value">{{ addForm.birthday || '—' }}</div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="detail-card-label">Phone Number</div>
+                    <div class="detail-card-value">{{ addForm.phone_number || '—' }}</div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="detail-card-label">Bank Account</div>
+                    <div class="detail-card-value">{{ addForm.bank_acct || '—' }}</div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="detail-card-label">Timezone</div>
+                    <div class="detail-card-value">{{ addForm.timezone || '—' }}</div>
+                  </div>
+                  <div class="detail-card detail-card-full">
+                    <div class="detail-card-label">Address</div>
+                    <div class="detail-card-value">{{ addForm.address || '—' }}</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -744,6 +770,7 @@
                   dense
                   :rules="[(val) => !!val || 'First name is required']"
                 />
+                <q-input v-model="editForm.user.middle_name" label="Middle Name" outlined dense />
                 <q-input
                   v-model="editForm.user.last_name"
                   label="Last Name *"
@@ -889,9 +916,9 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
-import { useEmployees } from 'src/composables/useEmployees'
-import { useRolesAndPositions } from 'src/composables/useRolesAndPositions'
-import { useOrganization } from 'src/composables/useOrganization'
+import { useEmployees } from '@/composables/page/useEmployees'
+import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
+import { useOrganization } from '@/composables/page/useOrganization'
 
 const $q = useQuasar()
 
@@ -905,6 +932,7 @@ const {
   addEmployee: addEmployeeApi,
   updateEmployee,
   updateUser,
+  uploadEmployeeAvatar,
   terminateEmployee: terminateEmployeeApi,
   restoreEmployee: restoreEmployeeApi,
 } = useEmployees()
@@ -949,6 +977,7 @@ const addForm = ref({
     username: '',
     email: '',
     first_name: '',
+    middle_name: '',
     last_name: '',
   },
   password: '',
@@ -1205,13 +1234,24 @@ async function addEmployee() {
     const newEmployee = await addEmployeeApi(payload)
 
     // Upload avatar if selected
-    if (avatarFile.value && newEmployee.user?.id) {
+    if (avatarFile.value && newEmployee.id) {
       try {
         uploadingAvatar.value = true
-        const formData = new FormData()
-        formData.append('picture', avatarFile.value)
-        await updateUser(newEmployee.user.id, formData)
+        // ✅ Pass employee ID (not user.id) to match the correct endpoint
+        const uploadResponse = await uploadEmployeeAvatar(newEmployee.id, avatarFile.value)
+
         await fetchEmployees()
+
+        // Manually patch picture_url from upload response so table reflects immediately
+        const picture_url = uploadResponse?.user?.picture_url || uploadResponse?.picture_url || null
+        if (picture_url) {
+          const index = employees.value.findIndex((emp) => emp.id === newEmployee.id)
+          if (index !== -1 && employees.value[index].user) {
+            employees.value[index].user.picture_url = picture_url
+            filteredEmployees.value = [...employees.value]
+          }
+        }
+
         $q.notify({
           type: 'positive',
           message: 'Employee and profile picture added successfully!',
@@ -1272,6 +1312,7 @@ const saveEmployee = async () => {
         username: editForm.value.user.username,
         email: editForm.value.user.email,
         first_name: editForm.value.user.first_name,
+        middle_name: editForm.value.user.middle_name || '',
         last_name: editForm.value.user.last_name,
       },
       user_role_id: editForm.value.user_role?.id,
@@ -1287,14 +1328,26 @@ const saveEmployee = async () => {
     const updatedEmployee = await updateEmployee(selectedEmployee.value.id, payload)
 
     // Upload avatar if a new one was selected
-    if (editAvatarFile.value && updatedEmployee.user?.id) {
+    if (editAvatarFile.value && selectedEmployee.value.id) {
       try {
         uploadingAvatar.value = true
-        const formData = new FormData()
-        formData.append('picture', editAvatarFile.value)
-        await updateUser(updatedEmployee.user.id, formData)
+        // ✅ Pass employee ID (not user.id) to match the correct endpoint
+        const uploadResponse = await uploadEmployeeAvatar(
+          selectedEmployee.value.id,
+          editAvatarFile.value,
+        )
 
         await fetchEmployees()
+
+        // Manually patch picture_url from upload response so table reflects immediately
+        const picture_url = uploadResponse?.user?.picture_url || uploadResponse?.picture_url || null
+        if (picture_url) {
+          const index = employees.value.findIndex((emp) => emp.id === selectedEmployee.value.id)
+          if (index !== -1 && employees.value[index].user) {
+            employees.value[index].user.picture_url = picture_url
+            filteredEmployees.value = [...employees.value]
+          }
+        }
       } catch {
         $q.notify({
           type: 'warning',
@@ -1317,7 +1370,8 @@ const saveEmployee = async () => {
 
     $q.notify({
       type: 'positive',
-      message: `Employee ${getFullName(updatedEmployee)} updated successfully.`,
+      // ✅ Use selectedEmployee for reliable name (updatedEmployee may return incomplete data)
+      message: `Employee ${getFullName(selectedEmployee.value)} updated successfully.`,
       position: 'top',
     })
 
@@ -1333,7 +1387,7 @@ const saveEmployee = async () => {
 
 const resetAddForm = () => {
   addForm.value = {
-    user: { username: '', email: '', first_name: '', last_name: '' },
+    user: { username: '', email: '', first_name: '', middle_name: '', last_name: '' },
     password: '',
     user_role: null,
     civil_status: '',

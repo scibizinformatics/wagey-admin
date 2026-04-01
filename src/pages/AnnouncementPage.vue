@@ -272,6 +272,7 @@
                     v-model="formData.target_everyone"
                     label="Send to Everyone"
                     color="primary"
+                    @update:model-value="onTargetEveryoneToggle"
                   />
                 </div>
               </div>
@@ -421,7 +422,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { api } from 'boot/axios'
 import { useQuasar } from 'quasar'
-import { useAnnouncements } from '../composables/useAnnouncements'
+import { useAnnouncements } from '@/composables/page/useAnnouncements'
 import 'src/css/app.scss'
 
 const $q = useQuasar()
@@ -630,23 +631,34 @@ const openCreateDialog = () => {
     target_users: [],
     target_roles: [],
   }
-  fetchPositions()
-  fetchUsers()
-  fetchRoles()
+  // Don't pre-load targeting data — target_everyone is true by default,
+  // so the targeting section is hidden. Load only when the user toggles it.
   showDialog.value = true
 }
 
 const editAnnouncement = (a) => {
   editingAnnouncement.value = a
   formData.value = { ...a }
-  fetchPositions()
-  fetchUsers()
-  fetchRoles()
+  // Only fetch targeting data if this announcement targets specific people
+  if (!a.target_everyone) {
+    fetchPositions()
+    fetchUsers()
+    fetchRoles()
+  }
   showDialog.value = true
 }
 
 const closeDialog = () => {
   showDialog.value = false
+}
+
+// Load targeting dropdowns only when the user actually needs them
+const onTargetEveryoneToggle = (val) => {
+  if (!val) {
+    fetchPositions()
+    fetchUsers()
+    fetchRoles()
+  }
 }
 
 const confirmDelete = (announcement) => {
@@ -655,6 +667,17 @@ const confirmDelete = (announcement) => {
 }
 
 // ─── Save (create or update) ──────────────────────────────────────────────────
+const getCompanyId = () => {
+  const stored = localStorage.getItem('selectedCompany')
+  if (!stored) return null
+  try {
+    const parsed = JSON.parse(stored)
+    return parsed?.id ?? parsed
+  } catch {
+    return stored
+  }
+}
+
 const saveAnnouncement = async () => {
   try {
     const targetEveryone = formData.value.target_everyone ?? true
@@ -667,6 +690,7 @@ const saveAnnouncement = async () => {
           : formData.value.announcement_type || 'general',
       is_active: formData.value.is_active ?? true,
       target_everyone: targetEveryone,
+      company: getCompanyId(),
     }
 
     if (formData.value.start_at) {
