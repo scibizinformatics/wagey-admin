@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine as build-stage
+FROM node:20-alpine as build-stage
 
 # Set working directory
 WORKDIR /app
@@ -17,7 +17,7 @@ RUN npm ci
 RUN npx quasar build
 
 # Runtime stage - serve the built SPA on port 8000
-FROM node:18-alpine as production-stage
+FROM node:20-alpine as production-stage
 
 WORKDIR /app
 
