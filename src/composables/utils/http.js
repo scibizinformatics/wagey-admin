@@ -1,13 +1,29 @@
-// src/composables/utils/http.js
-// Shared HTTP helpers used across all composables.
+// src/utils/http.js
+// NOTE: Prefer importing { api } from 'boot/axios' directly in your components.
+// This file exists only for legacy compatibility. Do not use BASE or authHeaders
+// for new code — the axios interceptor in boot/axios.js handles auth automatically.
 
-export const BASE = 'https://staging.wageyapp.com'
+import { api } from 'boot/axios'
+
+export { api }
 
 /**
- * Returns an Authorization header object using the stored JWT token.
- * Falls back to checking both 'token' and 'access_token' keys.
+ * @deprecated Use `api` from 'boot/axios' instead.
+ * Kept only for components not yet migrated to the axios instance.
  */
 export function authHeaders() {
-  const token = localStorage.getItem('token') || localStorage.getItem('access_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  const token = localStorage.getItem('access_token')
+  if (!token) {
+    console.warn('[authHeaders] No auth token found in localStorage.')
+    return {}
+  }
+  return { Authorization: `Bearer ${token}` }
 }
+
+/**
+ * @deprecated Use `api` from 'boot/axios' instead.
+ */
+export const BASE =
+  process.env.NODE_ENV === 'production'
+    ? process.env.API_BASE_URL || 'https://staging.wageyapp.com'
+    : ''
