@@ -1,16 +1,17 @@
 // src/boot/axios.js
 import { boot } from 'quasar/wrappers'
 import axios from 'axios'
-import { useAuthStore } from 'boot/auth'
+import { useAuthStore } from 'src/boot/auth'
 
-// Empty baseURL in both dev and production
-// Dev: proxy in quasar.config.js handles forwarding /api to staging.wageyapp.com
-// Production: nginx/server handles forwarding /api to backend
-const baseURL = ''
+// Dev:  empty string → Quasar proxy handles /api → https://staging.wageyapp.com
+// Prod: full origin  → requests go directly to the API server
+const baseURL =
+  process.env.NODE_ENV === 'production'
+    ? process.env.API_BASE_URL || 'https://staging.wageyapp.com'
+    : ''
 
 const api = axios.create({ baseURL })
 
-// Add interceptor to automatically include token
 api.interceptors.request.use((config) => {
   const authStore = useAuthStore()
   if (authStore.token) {
@@ -18,6 +19,18 @@ api.interceptors.request.use((config) => {
   }
   return config
 })
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const authStore = useAuthStore()
+      authStore.clearToken()
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  },
+)
 
 export default boot(({ app }) => {
   app.config.globalProperties.$axios = axios
