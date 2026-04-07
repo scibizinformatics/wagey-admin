@@ -5,14 +5,14 @@
   "productName": "Wagey Web Admin",
   "author": "Drake2209 <drake.carcellar16@gmail.com>",
   "private": true,
-  "@quasar/app-webpack": "^3.15.1",
+  "type": "module",
   "scripts": {
     "lint": "eslint -c ./eslint.config.js \"./src*/**/*.{js,cjs,mjs,vue}\"",
     "format": "prettier --write \"**/*.{js,vue,scss,html,md,json}\" --ignore-path .gitignore",
     "test": "echo \"No test specified\" && exit 0",
     "dev": "quasar dev",
     "build": "quasar build",
-    "start": "node server.js",
+    "start": "node --trace-deprecation node_modules/.bin/webpack serve",
     "serve:prod": "npm run build && node server.js",
     "postinstall": "quasar prepare"
   },
