@@ -3,8 +3,7 @@
 
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
-
-const BASE = 'https://staging.wageyapp.com'
+import { BASE } from 'src/composables/utils/http'
 
 export function useAuth() {
   const loading = ref(false)

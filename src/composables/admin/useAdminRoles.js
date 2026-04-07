@@ -1,8 +1,8 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
-import { useCompany } from '../page/useCompany'
-import { BASE, authHeaders } from '../utils/http'
+import { useCompany } from 'src/composables/page/useCompany'
+import { BASE, authHeaders } from 'src/composables/utils/http'
 
 export const PERMISSION_FIELDS = [
   { key: 'can_view_dashboard', label: 'View Dashboard' },

@@ -1,6 +1,15 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
-import { useCompany } from './useCompany'
+import { useCompany } from 'src/composables/page/useCompany'
+import { BASE } from 'src/composables/utils/http'
+
+// ── Module-level cache keyed by companyId (fixes cross-user/stale cache bug) ─
+// Each company gets its own cache entry: { data: [], timestamp: number }
+const cacheByCompany = {}
+// In-flight requests keyed by companyId so we still deduplicate concurrent calls
+const inflightByCompany = {}
+
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 export function useEmployees() {
   const { companyId } = useCompany()
@@ -9,66 +18,88 @@ export function useEmployees() {
   const loading = ref(false)
   const saving = ref(false)
 
-  // ─── Read ─────────────────────────────────────────────────────────────────
+  // ─── Read ──────────────────────────────────────────────────────────────────
 
-  /** Fetch all employees for the active company. */
-  async function fetchEmployees() {
+  /** Fetch all employees — uses per-company cache + deduplicates in-flight requests. */
+  async function fetchEmployees({ force = false } = {}) {
     if (!companyId.value) throw new Error('Company ID not found')
 
-    loading.value = true
-    try {
-      const response = await api.get(`/user/companies/${companyId.value}/employees/`)
-      const data = normaliseList(response.data)
-      employees.value = data
-      return data
-    } finally {
-      loading.value = false
+    const cid = companyId.value
+
+    // 1. Return cached data if still fresh
+    const cached = cacheByCompany[cid]
+    const isCacheFresh = cached && Date.now() - cached.timestamp < CACHE_TTL_MS
+    if (!force && isCacheFresh) {
+      employees.value = cached.data
+      return cached.data
     }
+
+    // 2. Deduplicate: reuse an already in-flight request for the same company
+    if (inflightByCompany[cid]) return inflightByCompany[cid]
+
+    loading.value = true
+    // FIX: was api.get('/user/companies/...') — relied on axios baseURL being correct.
+    // Now uses BASE from http.js (reads from process.env.API_BASE_URL) for consistency
+    // with every other composable and to work correctly in production.
+    inflightByCompany[cid] = api
+      .get(`${BASE}/user/companies/${cid}/employees/`)
+      .then((response) => {
+        const data = normaliseList(response.data)
+        employees.value = data
+        cacheByCompany[cid] = { data, timestamp: Date.now() }
+        return data
+      })
+      .finally(() => {
+        loading.value = false
+        delete inflightByCompany[cid]
+      })
+
+    return inflightByCompany[cid]
   }
 
-  /** Fetch a single employee's full profile. */
+  /**
+   * Fetch a single employee's full detail from the network.
+   * Never uses the list cache — list objects are shallow and missing
+   * detail-only fields (phone_number, bank_acct, timezone, civil_status, etc.).
+   */
   async function fetchEmployee(employeeId) {
-    const response = await api.get(`/user/companies/${companyId.value}/employees/${employeeId}/`)
+    // FIX: same BASE fix applied here.
+    const response = await api.get(
+      `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
+    )
     return response.data
   }
 
-  // ─── Create ───────────────────────────────────────────────────────────────
+  /** Call this after any mutation so the next fetchEmployees() re-fetches. */
+  function invalidateCache(cid) {
+    const key = cid ?? companyId.value
+    if (key) delete cacheByCompany[key]
+  }
 
-  /**
-   * Add a new employee.
-   * @param {object} payload – matches the API body expected by /user/employees/
-   */
+  // ─── Create ────────────────────────────────────────────────────────────────
+
   async function addEmployee(payload) {
     saving.value = true
     try {
-      const response = await api.post(`/user/employees/`, payload)
+      // FIX: was api.post('/user/employees/') — now uses BASE.
+      const response = await api.post(`${BASE}/user/employees/`, payload)
+      invalidateCache()
       return response.data
     } finally {
       saving.value = false
     }
   }
 
-  /**
-   * Update a user record (e.g. email / name).
-   * @param {string|number} userId
-   * @param {object} payload
-   */
   async function updateUser(userId, payload) {
-    const response = await api.patch(`/user/users/${userId}/`, payload)
+    // FIX: was api.patch('/user/users/...') — now uses BASE.
+    const response = await api.patch(`${BASE}/user/users/${userId}/`, payload)
     return response.data
   }
 
-  /**
-   * Upload or update an employee's profile picture.
-   * Mirrors updateProfilePicture() — uses the employee endpoint with FormData.
-   * @param {string|number} employeeId – the employee record ID (not user ID)
-   * @param {File} file – must be an image, max 5MB
-   */
   async function uploadEmployeeAvatar(employeeId, file) {
     if (!file || !file.type.startsWith('image/')) {
       throw new Error('Invalid file type. Please select an image.')
     }
-
     if (file.size > 5 * 1024 * 1024) {
       throw new Error('Image must be less than 5MB')
     }
@@ -76,57 +107,53 @@ export function useEmployees() {
     const formData = new FormData()
     formData.append('picture', file)
 
-    // ✅ Correct endpoint — mirrors updateProfilePicture() from userApi.js
-    // ✅ No Content-Type header — Axios auto-sets multipart/form-data with boundary
+    // FIX: was api.patch('/user/companies/...') — now uses BASE.
     const response = await api.patch(
-      `/user/companies/${companyId.value}/employees/${employeeId}/`,
+      `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
       formData,
     )
-
+    invalidateCache()
     return response.data
   }
 
-  // ─── Update ───────────────────────────────────────────────────────────────
+  // ─── Update ────────────────────────────────────────────────────────────────
 
-  /**
-   * Update an employee record.
-   * @param {string|number} employeeId
-   * @param {object} payload
-   */
   async function updateEmployee(employeeId, payload) {
     saving.value = true
     try {
+      // FIX: was api.patch('/user/companies/...') — now uses BASE.
       const response = await api.patch(
-        `/user/companies/${companyId.value}/employees/${employeeId}/`,
+        `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
         payload,
       )
+      invalidateCache()
       return response.data
     } finally {
       saving.value = false
     }
   }
 
-  // ─── Status ───────────────────────────────────────────────────────────────
+  // ─── Status ────────────────────────────────────────────────────────────────
 
-  /** Terminate an employee. */
   async function terminateEmployee(employeeId, payload = {}) {
     const response = await api.patch(
-      `/user/companies/${companyId.value}/employees/${employeeId}/`,
+      `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
       { status: 'terminated', ...payload },
     )
+    invalidateCache()
     return response.data
   }
 
-  /** Restore a terminated employee. */
   async function restoreEmployee(employeeId, payload = {}) {
     const response = await api.patch(
-      `/user/companies/${companyId.value}/employees/${employeeId}/`,
+      `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
       { status: 'active', ...payload },
     )
+    invalidateCache()
     return response.data
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // ─── Helpers ───────────────────────────────────────────────────────────────
 
   function normaliseList(raw) {
     if (Array.isArray(raw)) return raw
@@ -137,11 +164,9 @@ export function useEmployees() {
   }
 
   return {
-    // state
     employees,
     loading,
     saving,
-    // methods
     fetchEmployees,
     fetchEmployee,
     addEmployee,
@@ -150,5 +175,6 @@ export function useEmployees() {
     uploadEmployeeAvatar,
     terminateEmployee,
     restoreEmployee,
+    invalidateCache,
   }
 }

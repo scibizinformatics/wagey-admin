@@ -1,8 +1,7 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
-import { useCompany } from './useCompany'
-
-const BASE = 'https://staging.wageyapp.com'
+import { useCompany } from 'src/composables/page/useCompany'
+import { BASE } from 'src/composables/utils/http'
 
 export function useAttendance() {
   const { companyId } = useCompany()
@@ -128,13 +127,16 @@ export function useAttendance() {
 
   // ─── Export ───────────────────────────────────────────────────────────────
 
+  // FIX: bare paths '/attendance/export/' replaced with full BASE prefix
+  // so these resolve correctly in production (no dev proxy available).
+
   async function exportSelectedAttendance(ids) {
-    const response = await api.post('/attendance/export/', { ids, format: 'csv' })
+    const response = await api.post(`${BASE}/attendance/export/`, { ids, format: 'csv' })
     return response.data
   }
 
   async function exportAllAttendance(filters) {
-    const response = await api.get('/attendance/export/', {
+    const response = await api.get(`${BASE}/attendance/export/`, {
       params: { ...filters, format: 'csv' },
     })
     return response.data

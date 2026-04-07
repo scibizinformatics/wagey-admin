@@ -1,8 +1,8 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
-import { useCompany } from './useCompany'
-import { useRolesAndPositions } from './useRolesAndPositions'
-import { BASE, authHeaders } from '../utils/http'
+import { useCompany } from 'src/composables/page/useCompany'
+import { useRolesAndPositions } from 'src/composables/page/useRolesAndPositions.js'
+import { BASE, authHeaders } from 'src/composables/utils/http.js'
 
 export function useInvites() {
   const { companyId } = useCompany()

@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
-import { useCompany } from './useCompany'
-import { BASE, authHeaders } from '../utils/http'
+import { useCompany } from 'src/composables/page/useCompany'
+import { BASE, authHeaders } from 'src/composables/utils/http'
 
 export function useAnnouncements() {
   const { companyId } = useCompany()

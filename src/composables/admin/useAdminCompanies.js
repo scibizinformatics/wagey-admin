@@ -1,14 +1,8 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
-import { BASE, authHeaders } from '../utils/http'
+import { BASE, authHeaders } from '@/composables/utils/http'
 
-// ─── Helper: get the current user's UUID for owner_ids ──────────────────────
-// At login, fetchCurrentUserCompanies() returns records shaped as:
-//   { id, user: { id, uuid, ... }, company: { id, ... } }
-// LoginPage stores firstCompany.user?.id as `user_id` in localStorage.
-// We re-fetch /user/current-user-companies/ to get the user uuid from the
-// first record, then cache it for the session.
 let _cachedUserUuid = null
 const token = localStorage.getItem('token') || localStorage.getItem('access_token')
 fetch('https://staging.wageyapp.com/user/current-user-companies/', {

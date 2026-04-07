@@ -83,7 +83,7 @@ export function useWebSocket(urlOrBuilder, options = {}) {
           const data = JSON.parse(event.data)
           log('Message received:', data)
           onMessage?.(data)
-        } catch (e) {
+        } catch {
           log('Failed to parse message:', event.data)
           onMessage?.(event.data)
         }

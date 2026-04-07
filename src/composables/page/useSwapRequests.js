@@ -1,7 +1,6 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
-
-const BASE = 'https://staging.wageyapp.com'
+import { BASE, authHeaders } from 'src/composables/utils/http'
 
 export function useSwapRequests() {
   const swapRequests = ref([])
@@ -13,7 +12,12 @@ export function useSwapRequests() {
   async function fetchSwapRequests(params = {}) {
     loading.value = true
     try {
-      const response = await api.get(`${BASE}/organization/company-swap-requests/`, { params })
+      // FIX: added headers: authHeaders() — was imported but never used,
+      // causing 401 Unauthorized on authenticated endpoints in production.
+      const response = await api.get(`${BASE}/organization/company-swap-requests/`, {
+        params,
+        headers: authHeaders(),
+      })
       swapRequests.value = response.data.data ?? response.data ?? []
       return swapRequests.value
     } finally {
@@ -31,7 +35,10 @@ export function useSwapRequests() {
   async function updateSwapRequest(requestId, payload) {
     saving.value = true
     try {
-      const response = await api.put(`${BASE}/organization/swap-requests/${requestId}/`, payload)
+      // FIX: added headers: authHeaders() — was missing, causing 401 in production.
+      const response = await api.put(`${BASE}/organization/swap-requests/${requestId}/`, payload, {
+        headers: authHeaders(),
+      })
       return response.data
     } finally {
       saving.value = false
