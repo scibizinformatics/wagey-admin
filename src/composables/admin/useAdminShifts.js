@@ -9,7 +9,8 @@ export function useAdminShifts() {
   const { companyId } = useCompany()
 
   const shifts = ref([])
-  const shiftTypes = ref([]) // alias kept for components that reference shiftTypes
+  const shiftTypes = ref([])
+  const shiftTemplates = ref([])
   const recurringSchedules = ref([])
 
   const loading = ref(false)
@@ -58,10 +59,9 @@ export function useAdminShifts() {
     return {
       id: null,
       name: '',
-      shift_type: null,
-      shift_type_2: null,
-      weekdays: [],
-      repeat_interval: 1,
+      site_id: null,
+      is_active: true,
+      rules: [{ weekday: null, shift_type_ids: [] }],
     }
   }
 
@@ -137,7 +137,8 @@ export function useAdminShifts() {
         headers: authHeaders(),
       })
       shifts.value = response.data.data ?? response.data ?? []
-      shiftTypes.value = shifts.value // keep alias in sync
+      shiftTypes.value = shifts.value
+      shiftTemplates.value = shifts.value
       return shifts.value
     } catch (error) {
       console.error('Error fetching shifts:', error)
@@ -149,6 +150,16 @@ export function useAdminShifts() {
     } finally {
       loading.value = false
     }
+  }
+
+  // ─── Fetch shift templates (reuses shift-types data) ──────────────────────
+
+  async function fetchShiftTemplates() {
+    if (shifts.value.length) {
+      shiftTemplates.value = shifts.value
+      return shiftTemplates.value
+    }
+    await fetchShifts()
   }
 
   // ─── Shift dialog helpers ──────────────────────────────────────────────────
@@ -277,13 +288,26 @@ export function useAdminShifts() {
         params: { company: companyId.value },
         headers: authHeaders(),
       })
+      console.log('[fetchRecurringSchedules] raw response:', response.data)
       recurringSchedules.value = (response.data.data ?? response.data ?? []).map((s) => {
-        const st = shiftTypes.value.find((t) => t.id === (s.shift_type_id || s.shift_type))
-        return { ...s, shift_type_name: s.shift_type_name || st?.name || null }
+        if (Array.isArray(s.rules)) return s
+
+        const weekdays = _parseWeekdayString(s.weekdays)
+        const rule = {
+          id: s.id,
+          weekday: weekdays[0] ?? null,
+          shift_type_ids: s.shift_type ? [s.shift_type] : [],
+        }
+        return { ...s, rules: [rule] }
       })
+      console.log(
+        '[fetchRecurringSchedules] mapped recurringSchedules:',
+        JSON.stringify(recurringSchedules.value, null, 2),
+      )
       return recurringSchedules.value
     } catch (error) {
-      console.error('Error fetching recurring schedules:', error)
+      console.error('[fetchRecurringSchedules] Error:', error)
+      console.error('[fetchRecurringSchedules] Error response:', error.response?.data)
       $q.notify({
         type: 'negative',
         message: error.response?.data?.message || 'Failed to load recurring schedules',
@@ -305,133 +329,120 @@ export function useAdminShifts() {
     recurringForm.value = _emptyRecurringForm()
     recurringDialog.value = true
   }
-
   function openEditRecurringDialog(row) {
+    console.log('[openEditRecurringDialog] raw row data:', JSON.stringify(row, null, 2))
     editingRecurring.value = true
-    const parseWeekdays = (wd) => {
-      if (!wd) return []
-      let days = wd
-      if (typeof days === 'string') {
-        const t = days.trim()
-        if (t.startsWith('[')) {
-          try {
-            days = JSON.parse(t)
-          } catch {
-            days = t.split(',')
-          }
-        } else {
-          days = t.split(',')
-        }
-      }
-      const map = {
-        monday: 'Mon',
-        tuesday: 'Tue',
-        wednesday: 'Wed',
-        thursday: 'Thu',
-        friday: 'Fri',
-        saturday: 'Sat',
-        sunday: 'Sun',
-        mon: 'Mon',
-        tue: 'Tue',
-        wed: 'Wed',
-        thu: 'Thu',
-        fri: 'Fri',
-        sat: 'Sat',
-        sun: 'Sun',
-      }
-      return Array.isArray(days) ? days.map((d) => map[d.trim().toLowerCase()] || d.trim()) : []
+
+    let rules
+    if (Array.isArray(row.rules) && row.rules.length) {
+      // New nested shape: rules already present
+      rules = row.rules.map((r) => ({
+        weekday: r.weekday ?? null,
+        shift_type_ids: Array.isArray(r.shift_type_ids)
+          ? r.shift_type_ids
+          : r.shift_template
+            ? [r.shift_template]
+            : [],
+      }))
+    } else {
+      const weekdays = _parseWeekdayString(row.weekdays)
+      rules = weekdays.length
+        ? weekdays.map((wd) => ({
+            weekday: wd,
+            shift_type_ids: row.shift_type ? [row.shift_type] : [],
+          }))
+        : [{ weekday: null, shift_type_ids: [] }]
     }
+
     recurringForm.value = {
       id: row.id,
       name: row.name,
-      shift_type: row.shift_type,
-      shift_type_2: row.shift_type_2 || null,
-      weekdays: parseWeekdays(row.weekdays),
-      repeat_interval: row.repeat_interval,
+      site_id: row.site_id ?? null,
+      is_active: row.is_active ?? true,
+      rules,
     }
+
+    console.log(
+      '[openEditRecurringDialog] mapped recurringForm:',
+      JSON.stringify(recurringForm.value, null, 2),
+    )
     recurringDialog.value = true
   }
 
+  // FIX: build payload from `rules` array; validate before sending
   async function saveRecurringSchedule() {
+    console.log(
+      '[saveRecurringSchedule] recurringForm state:',
+      JSON.stringify(recurringForm.value, null, 2),
+    )
+
     if (!recurringForm.value.name?.trim()) {
       $q.notify({ type: 'warning', message: 'Schedule name is required', position: 'top' })
       return
     }
-    if (!recurringForm.value.shift_type) {
-      $q.notify({ type: 'warning', message: 'Primary shift type is required', position: 'top' })
+
+    const rules = recurringForm.value.rules ?? []
+    const incomplete = rules.some((r) => !r.weekday || !r.shift_type_ids?.length)
+    if (!rules.length || incomplete) {
+      console.warn('[saveRecurringSchedule] Validation failed — incomplete rules:', rules)
+      $q.notify({
+        type: 'warning',
+        message: 'Every rule must have a weekday and at least one shift type selected',
+        position: 'top',
+      })
       return
     }
 
-    const getShiftTimes = (id) => {
-      const s = shiftTypes.value.find((x) => x.id === id)
-      return {
-        start_time: s?.default_start_time || '00:00:00',
-        end_time: s?.default_end_time || '00:00:00',
-      }
+    const weekdayFullName = {
+      Mon: 'monday',
+      Tue: 'tuesday',
+      Wed: 'wednesday',
+      Thu: 'thursday',
+      Fri: 'friday',
+      Sat: 'saturday',
+      Sun: 'sunday',
     }
 
-    const weekdays = Array.isArray(recurringForm.value.weekdays)
-      ? recurringForm.value.weekdays.join(',')
-      : recurringForm.value.weekdays
-
-    const base = {
-      company: parseInt(companyId.value),
-      weekdays,
-      repeat_interval: parseInt(recurringForm.value.repeat_interval) || 1,
-    }
-    const primaryTimes = getShiftTimes(recurringForm.value.shift_type)
-    const primaryPayload = {
-      ...base,
+    const payload = {
       name: recurringForm.value.name.trim(),
-      shift_type: parseInt(recurringForm.value.shift_type),
-      ...primaryTimes,
+      company: parseInt(companyId.value),
+      site_id: recurringForm.value.site_id ? parseInt(recurringForm.value.site_id) : null,
+      is_active: recurringForm.value.is_active ?? true,
+      rules: rules.map((r) => ({
+        weekday: weekdayFullName[r.weekday] ?? r.weekday.toLowerCase(),
+        shift_type_ids: r.shift_type_ids.map((id) => parseInt(id)),
+      })),
     }
 
-    const isSplit = !!recurringForm.value.shift_type_2
-    let secondaryPayload = null
-    if (isSplit) {
-      const t2 = getShiftTimes(recurringForm.value.shift_type_2)
-      const s2 = shiftTypes.value.find((s) => s.id === recurringForm.value.shift_type_2)
-      secondaryPayload = {
-        ...base,
-        name: `${recurringForm.value.name.trim()} (Split - ${s2?.name || 'Secondary'})`,
-        shift_type: parseInt(recurringForm.value.shift_type_2),
-        ...t2,
-      }
-    }
+    console.log('[saveRecurringSchedule] payload to send:', JSON.stringify(payload, null, 2))
 
     savingRecurring.value = true
     try {
+      let response
       if (editingRecurring.value) {
-        await api.put(
+        console.log(
+          `[saveRecurringSchedule] PUT /organization/recurring-schedules/${recurringForm.value.id}/`,
+        )
+        response = await api.put(
           `${BASE}/organization/recurring-schedules/${recurringForm.value.id}/`,
-          primaryPayload,
+          payload,
           { headers: authHeaders() },
         )
-        if (isSplit)
-          await api.post(`${BASE}/organization/recurring-schedules/`, secondaryPayload, {
-            headers: authHeaders(),
-          })
+        console.log('[saveRecurringSchedule] PUT response:', response.data)
         $q.notify({ type: 'positive', message: 'Recurring schedule updated successfully' })
       } else {
-        await api.post(`${BASE}/organization/recurring-schedules/`, primaryPayload, {
+        console.log('[saveRecurringSchedule] POST /organization/recurring-schedules/')
+        response = await api.post(`${BASE}/organization/recurring-schedules/`, payload, {
           headers: authHeaders(),
         })
-        if (isSplit)
-          await api.post(`${BASE}/organization/recurring-schedules/`, secondaryPayload, {
-            headers: authHeaders(),
-          })
-        $q.notify({
-          type: 'positive',
-          message: isSplit
-            ? 'Split shift schedules created successfully'
-            : 'Recurring schedule created successfully',
-        })
+        console.log('[saveRecurringSchedule] POST response:', response.data)
+        $q.notify({ type: 'positive', message: 'Recurring schedule created successfully' })
       }
       recurringDialog.value = false
       await fetchRecurringSchedules()
     } catch (error) {
-      console.error('Error saving recurring schedule:', error)
+      console.error('[saveRecurringSchedule] Error:', error)
+      console.error('[saveRecurringSchedule] Error response data:', error.response?.data)
       let errorMessage = 'Failed to save recurring schedule'
       if (error.response?.data && typeof error.response.data === 'object') {
         const errors = Object.entries(error.response.data).map(
@@ -468,9 +479,46 @@ export function useAdminShifts() {
     })
   }
 
+  // ─── Private helpers ───────────────────────────────────────────────────────
+
+  function _parseWeekdayString(wd) {
+    if (!wd) return []
+    let days = wd
+    if (typeof days === 'string') {
+      const t = days.trim()
+      days = t.startsWith('[')
+        ? (() => {
+            try {
+              return JSON.parse(t)
+            } catch {
+              return t.split(',')
+            }
+          })()
+        : t.split(',')
+    }
+    const map = {
+      monday: 'Mon',
+      tuesday: 'Tue',
+      wednesday: 'Wed',
+      thursday: 'Thu',
+      friday: 'Fri',
+      saturday: 'Sat',
+      sunday: 'Sun',
+      mon: 'Mon',
+      tue: 'Tue',
+      wed: 'Wed',
+      thu: 'Thu',
+      fri: 'Fri',
+      sat: 'Sat',
+      sun: 'Sun',
+    }
+    return Array.isArray(days) ? days.map((d) => map[d.trim().toLowerCase()] || d.trim()) : []
+  }
+
   return {
     shifts,
     shiftTypes,
+    shiftTemplates,
     recurringSchedules,
     loading,
     saving,
@@ -487,6 +535,7 @@ export function useAdminShifts() {
     extractTime,
     formatWeekdays,
     fetchShifts,
+    fetchShiftTemplates,
     openShiftDialog,
     openEditShiftDialog,
     saveShift,

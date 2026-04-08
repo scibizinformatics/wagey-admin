@@ -524,10 +524,8 @@
                     <template v-slot:header>
                       <q-tr class="table-header-row">
                         <q-th class="table-header-cell">Name</q-th>
-                        <q-th class="table-header-cell">Primary Shift</q-th>
-                        <q-th class="table-header-cell">Secondary Shift</q-th>
-                        <q-th class="table-header-cell">Weekdays</q-th>
-                        <q-th class="table-header-cell">Repeat Interval</q-th>
+                        <q-th class="table-header-cell">Rules</q-th>
+                        <q-th class="table-header-cell">Created</q-th>
                         <q-th class="table-header-cell">Actions</q-th>
                       </q-tr>
                     </template>
@@ -536,18 +534,30 @@
                         <q-td class="table-body-cell">
                           <span class="item-name">{{ props.row.name || 'N/A' }}</span>
                         </q-td>
-                        <q-td class="table-body-cell">{{
-                          props.row.shift_type_name || props.row.shift_type || 'N/A'
-                        }}</q-td>
-                        <q-td class="table-body-cell">{{
-                          props.row.shift_type_2_name || props.row.shift_type_2 || '—'
-                        }}</q-td>
-                        <q-td class="table-body-cell">{{
-                          formatWeekdays(props.row.weekdays)
-                        }}</q-td>
-                        <q-td class="table-body-cell">{{
-                          props.row.repeat_interval || 'N/A'
-                        }}</q-td>
+
+                        <q-td class="table-body-cell">
+                          {{ props.row.shifts_detail || props.row.shifts || 'N/A' }}
+                        </q-td>
+
+                        <q-td class="table-body-cell text-center">
+                          <div
+                            :class="[
+                              'status-badge',
+                              props.row.is_active ? 'status-active' : 'status-inactive',
+                            ]"
+                          >
+                            {{ props.row.is_active ? 'Active' : 'Inactive' }}
+                          </div>
+                        </q-td>
+
+                        <q-td class="table-body-cell">
+                          {{
+                            props.row.created_at
+                              ? new Date(props.row.created_at).toLocaleDateString()
+                              : 'N/A'
+                          }}
+                        </q-td>
+
                         <q-td class="table-body-cell actions-cell">
                           <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                             <q-menu anchor="bottom right" self="top right" class="action-dropdown">
@@ -1826,7 +1836,7 @@
 
     <!-- ===================== RECURRING SCHEDULE DIALOG ===================== -->
     <q-dialog v-model="recurringDialog" persistent>
-      <q-card style="min-width: 480px; border-radius: 16px">
+      <q-card style="min-width: 600px; max-width: 680px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingRecurring ? 'Edit Recurring Schedule' : 'Add Recurring Schedule' }}
@@ -1834,74 +1844,173 @@
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-card-section class="q-pt-md">
-          <!-- Name -->
+        <q-card-section class="q-pt-md" style="max-height: 70vh; overflow-y: auto">
+          <!-- Schedule Name -->
           <q-input
             v-model="recurringForm.name"
             label="Schedule Name *"
             outlined
             dense
-            class="q-mb-md"
+            class="q-mb-lg"
           />
 
-          <!-- Shift Types (Split Shift Support) -->
-          <div class="row q-col-gutter-md q-mb-md">
-            <div class="col-6">
+          <!-- Global fields: Site, Active -->
+          <div class="row q-col-gutter-md q-mb-lg">
+            <div class="col-8">
               <q-select
-                v-model="recurringForm.shift_type"
-                :options="shiftTypes"
+                v-model="recurringForm.site_id"
+                :options="sites"
                 option-value="id"
                 option-label="name"
                 emit-value
                 map-options
-                label="Primary Shift *"
+                label="Site"
                 outlined
                 dense
                 clearable
               />
             </div>
-            <div class="col-6">
-              <q-select
-                v-model="recurringForm.shift_type_2"
-                :options="shiftTypes"
-                option-value="id"
-                option-label="name"
-                emit-value
-                map-options
-                label="Secondary Shift (Split)"
-                outlined
-                dense
-                clearable
-              />
+            <div class="col-4 flex items-center">
+              <q-toggle v-model="recurringForm.is_active" label="Active" color="primary" />
             </div>
           </div>
 
-          <!-- Weekdays -->
-          <q-select
-            v-model="recurringForm.weekdays"
-            :options="weekdayOptions"
-            label="Weekdays *"
-            outlined
-            dense
-            multiple
-            use-chips
-            emit-value
-            map-options
-            class="q-mb-md"
-            option-value="value"
-            option-label="label"
-          />
+          <!-- Weekly Rules -->
+          <div class="row items-center q-mb-sm">
+            <div class="text-subtitle2">Weekly Rules</div>
+            <q-space />
+            <div class="text-caption text-grey-6">
+              Same day can appear multiple times for dual shifts
+            </div>
+          </div>
 
-          <!-- Repeat Interval -->
-          <q-input
-            v-model.number="recurringForm.repeat_interval"
-            label="Repeat Interval (weeks) *"
-            type="number"
-            min="1"
-            outlined
-            dense
-          />
+          <div
+            v-for="(rule, index) in recurringForm.rules"
+            :key="index"
+            class="row q-col-gutter-sm q-mb-sm items-start"
+          >
+            <!-- Row number badge -->
+            <div class="col-auto flex items-center" style="padding-top: 10px">
+              <q-chip dense size="sm" color="primary" text-color="white" class="q-ma-none">
+                {{ index + 1 }}
+              </q-chip>
+            </div>
+
+            <!-- Weekday -->
+            <div class="col-4">
+              <q-select
+                v-model="rule.weekday"
+                :options="weekdayOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                label="Weekday *"
+                outlined
+                dense
+              />
+            </div>
+
+            <!-- Shift Types (multi-select, supports dual shifts) -->
+            <div class="col">
+              <q-select
+                v-model="rule.shift_type_ids"
+                :options="shiftTypes"
+                option-value="id"
+                option-label="name"
+                emit-value
+                map-options
+                multiple
+                use-chips
+                label="Shift Type(s) *"
+                outlined
+                dense
+                :hint="
+                  rule.shift_type_ids && rule.shift_type_ids.length > 1
+                    ? `${rule.shift_type_ids.length} shifts (dual shift)`
+                    : ''
+                "
+              />
+            </div>
+
+            <!-- Remove rule button -->
+            <div class="col-auto flex items-center" style="padding-top: 6px">
+              <q-btn
+                flat
+                round
+                dense
+                icon="remove_circle_outline"
+                color="negative"
+                :disable="recurringForm.rules.length === 1"
+                @click="recurringForm.rules.splice(index, 1)"
+              >
+                <q-tooltip>Remove this rule</q-tooltip>
+              </q-btn>
+            </div>
+          </div>
+
+          <!-- Add Rule / Duplicate Day buttons -->
+          <div class="row q-gutter-sm q-mt-sm">
+            <q-btn
+              flat
+              color="primary"
+              icon="add"
+              label="Add Rule"
+              @click="recurringForm.rules.push({ weekday: null, shift_type_ids: [] })"
+            />
+            <q-btn
+              flat
+              color="secondary"
+              icon="content_copy"
+              label="Duplicate Last"
+              :disable="!recurringForm.rules.length"
+              @click="
+                () => {
+                  const last = recurringForm.rules[recurringForm.rules.length - 1]
+                  recurringForm.rules.push({
+                    weekday: last.weekday,
+                    shift_type_ids: [...(last.shift_type_ids || [])],
+                  })
+                }
+              "
+            >
+              <q-tooltip>Duplicate last rule row (useful for same-day dual shifts)</q-tooltip>
+            </q-btn>
+          </div>
+
+          <!-- Rules summary preview -->
+          <div
+            v-if="recurringForm.rules.some((r) => r.weekday && r.shift_type_ids?.length)"
+            class="q-mt-lg"
+          >
+            <div class="text-caption text-grey-7 q-mb-xs">Preview</div>
+            <div class="rules-preview-box">
+              <div
+                v-for="(rule, i) in recurringForm.rules.filter(
+                  (r) => r.weekday && r.shift_type_ids?.length,
+                )"
+                :key="i"
+                class="rules-preview-row"
+              >
+                <q-chip dense color="blue-1" text-color="blue-9" size="sm">{{
+                  rule.weekday
+                }}</q-chip>
+                <span class="q-mx-xs text-grey-6">→</span>
+                <q-chip
+                  v-for="sid in rule.shift_type_ids"
+                  :key="sid"
+                  dense
+                  color="green-1"
+                  text-color="green-9"
+                  size="sm"
+                >
+                  {{ shiftTypes.find((s) => s.id === sid)?.name || sid }}
+                </q-chip>
+              </div>
+            </div>
+          </div>
         </q-card-section>
+
         <q-card-actions align="right">
           <q-btn flat label="Cancel" v-close-popup />
           <q-btn
@@ -2678,6 +2787,7 @@ const {
 // Shifts + Recurring
 const {
   shifts,
+  shiftTemplates,
   shiftTypes,
   recurringSchedules,
   loading: loadingShifts,
@@ -2694,6 +2804,7 @@ const {
   formatTime,
   formatWeekdays,
   fetchShifts,
+  fetchShiftTemplates,
   openShiftDialog,
   openEditShiftDialog: editShift,
   saveShift,
@@ -2903,6 +3014,10 @@ function formatDate(date) {
   })
 }
 
+function getShiftTemplateName(id) {
+  return shiftTemplates.value.find((s) => s.id === id)?.name || id || 'N/A'
+}
+
 function formatAmount(amount) {
   if (!amount && amount !== 0) return '0.00'
   return parseFloat(amount).toLocaleString('en-US', {
@@ -2961,10 +3076,9 @@ const shiftColumns = [
 ]
 const recurringColumns = [
   { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
-  { name: 'shift_type', label: 'Primary Shift', field: 'shift_type', align: 'left' },
-  { name: 'shift_type_2', label: 'Secondary Shift', field: 'shift_type_2', align: 'left' },
-  { name: 'weekdays', label: 'Weekdays', field: 'weekdays', align: 'left' },
-  { name: 'repeat_interval', label: 'Repeat Interval', field: 'repeat_interval', align: 'center' },
+  { name: 'shifts', label: 'Shifts', field: 'shifts', align: 'left' },
+  { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
+  { name: 'created_at', label: 'Created', field: 'created_at', align: 'left', sortable: true },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
 const departmentColumns = [
@@ -3093,6 +3207,7 @@ onMounted(async () => {
     await fetchContractTypes()
     await fetchEmployees()
     await fetchShifts()
+    await fetchShiftTemplates()
 
     await Promise.all([
       fetchSites(),
@@ -3703,6 +3818,23 @@ onMounted(async () => {
     min-width: 28px;
   }
 }
+.rules-preview-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rules-preview-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 /* ============================================
    SITE MAP PICKER
    ============================================ */
