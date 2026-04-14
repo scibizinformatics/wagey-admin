@@ -175,6 +175,84 @@ export function useSchedule() {
     return response.data.data ?? response.data ?? []
   }
 
+  /**
+   * Assign employees to a recurring schedule by expanding the template rules
+   * into individual dated entries and posting to the existing /assign/ endpoint.
+   *
+   * @param {{
+   *   company_id: number,
+   *   employee_ids: string[],
+   *   recurring_id: number,
+   *   start_date: string,   // YYYY-MM-DD
+   *   end_date: string,     // YYYY-MM-DD
+   *   rules: Array<{ weekday: string, shift_type?: number, shift_template?: number }>
+   * }} payload
+   */
+  async function assignRecurringSchedule(payload) {
+    saving.value = true
+    try {
+      const { company_id, employee_ids, recurring_id, start_date, end_date, rules } = payload
+
+      // Map weekday names to JS getDay() values (0 = Sunday … 6 = Saturday)
+      const WEEKDAY_MAP = {
+        sunday: 0,
+        monday: 1,
+        tuesday: 2,
+        wednesday: 3,
+        thursday: 4,
+        friday: 5,
+        saturday: 6,
+      }
+
+      const start = new Date(start_date + 'T00:00:00')
+      const end = new Date(end_date + 'T00:00:00')
+
+      // Expand every rule across the full date range
+      const schedules = []
+      for (const rule of rules) {
+        const targetDay = WEEKDAY_MAP[rule.weekday?.toLowerCase()]
+        if (targetDay === undefined) continue
+
+        const cursor = new Date(start)
+        // Advance cursor to the first occurrence of this weekday on or after start
+        const diff = (targetDay - cursor.getDay() + 7) % 7
+        cursor.setDate(cursor.getDate() + diff)
+
+        while (cursor <= end) {
+          const dateStr =
+            `${cursor.getFullYear()}-` +
+            `${String(cursor.getMonth() + 1).padStart(2, '0')}-` +
+            `${String(cursor.getDate()).padStart(2, '0')}`
+
+          const entry = { date: dateStr, recurring_id }
+          if (rule.shift_type) entry.shift_type_id = rule.shift_type
+          else if (rule.shift_template) entry.shift_template_id = rule.shift_template
+
+          schedules.push(entry)
+          cursor.setDate(cursor.getDate() + 7)
+        }
+      }
+
+      if (!schedules.length) {
+        throw new Error(
+          'No dates could be generated for the selected recurring template and date range.',
+        )
+      }
+
+      const response = await api.post(
+        `${BASE}/organization/assignments/assign/`,
+        { company_id, employee_ids, schedules },
+        { headers: authHeaders() },
+      )
+      return response.data
+    } catch (error) {
+      console.error('assignRecurringSchedule error:', error.response?.data)
+      throw error
+    } finally {
+      saving.value = false
+    }
+  }
+
   return {
     // state
     schedules,
@@ -191,5 +269,6 @@ export function useSchedule() {
     fetchLeaveTypes,
     deleteLeave,
     fetchShiftTemplates,
+    assignRecurringSchedule,
   }
 }
