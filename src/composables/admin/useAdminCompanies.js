@@ -5,7 +5,7 @@ import { BASE, authHeaders } from '@/composables/utils/http'
 
 let _cachedUserUuid = null
 const token = localStorage.getItem('token') || localStorage.getItem('access_token')
-fetch('https://staging.wageyapp.com/user/current-user-companies/', {
+fetch('/user/current-user-companies/', {
   headers: { Authorization: `Bearer ${token}` },
 })
   .then((r) => r.json())
