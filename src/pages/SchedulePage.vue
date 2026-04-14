@@ -2252,7 +2252,8 @@ const closeQuickAddModal = () => {
 const addShiftRow = () => quickAdd.value.shifts.push({ site: null, shiftType: null })
 const removeShiftRow = (index) => quickAdd.value.shifts.splice(index, 1)
 
-const openReassignModal = (shift) => {
+const openReassignModal = async (shift) => {
+  await fetchSites()
   if (shift.isMerged && shift.shifts?.length > 1) {
     if (shift.shifts.find((s) => !s.assignmentId)) {
       $q.notify({
@@ -2271,6 +2272,12 @@ const openReassignModal = (shift) => {
       date: shift.shifts[0].date,
       day: shift.day,
       isDualShift: true,
+      originalShifts: shift.shifts.map((s) => ({
+        assignmentId: s.assignmentId,
+        shiftTypeId: s.shiftTypeId || null,
+        siteId: s.site || null,
+        departmentId: s.department || null,
+      })),
       dualShifts: shift.shifts.map((s) => ({
         assignmentId: s.assignmentId,
         shiftTypeId: s.shiftTypeId || null,
@@ -2320,6 +2327,7 @@ const closeReassignModal = () => {
     isDualShift: false,
     dualShifts: [],
     originalShift: null,
+    originalShifts: [],
   }
 }
 
@@ -2542,14 +2550,16 @@ const handleReassignShift = async () => {
   try {
     if (r.isDualShift) {
       await Promise.all(
-        r.dualShifts.map((s) =>
-          reassignShiftApi({
-            assignment_id: parseInt(s.assignmentId),
-            shift_type_id: parseInt(s.shiftTypeId),
-            site_id: parseInt(s.siteId),
-            ...(s.departmentId ? { department_id: parseInt(s.departmentId) } : {}),
-          }),
-        ),
+        r.dualShifts.map((s) => {
+          const original = r.originalShifts?.find((orig) => orig.assignmentId === s.assignmentId) || {}
+          const payload = { assignment_id: parseInt(s.assignmentId) }
+          if (s.siteId !== original.siteId) payload.site_id = parseInt(s.siteId)
+          if (s.shiftTypeId !== original.shiftTypeId) payload.shift_type_id = parseInt(s.shiftTypeId)
+          if (s.departmentId !== original.departmentId && s.departmentId) {
+            payload.department_id = parseInt(s.departmentId)
+          }
+          return reassignShiftApi(payload)
+        }),
       )
       $q.notify({
         type: 'positive',
@@ -2558,23 +2568,24 @@ const handleReassignShift = async () => {
         timeout: 3000,
       })
     } else {
-      if (!r.assignmentId || !r.siteId || !r.shiftTypeId) {
+      if (!r.assignmentId || !r.siteId) {
         $q.notify({
           type: 'negative',
-          message: 'Assignment ID, site, and shift type are required.',
+          message: 'Assignment ID and site are required.',
         })
         return
       }
-      await reassignShiftApi({
-        assignment_id: parseInt(r.assignmentId),
-        shift_type_id: parseInt(r.shiftTypeId),
-        site_id: parseInt(r.siteId),
-        ...(r.departmentId ? { department_id: parseInt(r.departmentId) } : {}),
-      })
+      const original = r.originalShift || {}
+      const payload = { assignment_id: parseInt(r.assignmentId) }
+      if (r.siteId !== original.site) payload.site_id = parseInt(r.siteId)
+      if (r.shiftTypeId !== original.shiftTypeId) payload.shift_type_id = parseInt(r.shiftTypeId)
+      if (r.departmentId !== original.department && r.departmentId) {
+        payload.department_id = parseInt(r.departmentId)
+      }
+      await reassignShiftApi(payload)
       $q.notify({
         type: 'positive',
         message: 'Shift updated successfully!',
-        caption: `${getEmployeeName(r.currentEmployee)}'s shift updated to ${getPositionName(r.shiftTypeId)}`,
         icon: 'check_circle',
         timeout: 3000,
       })
@@ -2582,6 +2593,7 @@ const handleReassignShift = async () => {
     closeReassignModal()
     shifts.value = []
     await new Promise((resolve) => setTimeout(resolve, 500))
+    await fetchSites()
     await fetchData()
   } catch (error) {
     console.error('❌ Reassign failed:', error)
