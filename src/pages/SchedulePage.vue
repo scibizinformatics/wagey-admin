@@ -1292,10 +1292,9 @@ import { useOrganization } from '@/composables/page/useOrganization'
 import { useEmployees } from '@/composables/page/useEmployees'
 
 const $q = useQuasar()
+// eslint-disable-next-line no-unused-vars
 const { companyId } = useCompany()
 const {
-  schedules,
-  loading: scheduleLoading,
   fetchScheduleByDateRange,
   assignShift,
   reassignShift: reassignShiftApi,
@@ -1328,7 +1327,6 @@ const viewMode = ref('table')
 const filters = ref({ site: null, employee: null })
 const searchTerm = ref('')
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const dayOptions = days.map((d, i) => ({ label: d, value: i }))
 
 const showAddModal = ref(false)
 const showQuickAddModal = ref(false)
@@ -1367,16 +1365,6 @@ const _freshSchedule = () => ({
 
 const newSchedule = ref(_freshSchedule())
 
-const weekdayOptions = [
-  { label: 'Monday', value: 'monday' },
-  { label: 'Tuesday', value: 'tuesday' },
-  { label: 'Wednesday', value: 'wednesday' },
-  { label: 'Thursday', value: 'thursday' },
-  { label: 'Friday', value: 'friday' },
-  { label: 'Saturday', value: 'saturday' },
-  { label: 'Sunday', value: 'sunday' },
-]
-
 const quickAdd = ref({ userId: null, day: null, shifts: [], leaveType: null })
 
 const reassignData = ref({
@@ -1398,15 +1386,18 @@ const multiEmployeeSelectRef = ref(null)
 const siteFilterRef = ref(null)
 const employeeFilterRef = ref(null)
 const filteredEmployeeOptions = ref([])
-const recurringCalendarModel = ref(null)
 
 // ─── Dual-month date range picker ─────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
 const dateRangePickerOpen = ref(false)
+// eslint-disable-next-line no-unused-vars
 const dateRangeSelecting = ref('start') // 'start' | 'end'
 const _today = new Date()
 const calLeftMonth = ref(_today.getMonth())
 const calLeftYear = ref(_today.getFullYear())
+// eslint-disable-next-line no-unused-vars
 const calRightMonth = computed(() => (calLeftMonth.value + 1) % 12)
+// eslint-disable-next-line no-unused-vars
 const calRightYear = computed(() =>
   calLeftMonth.value === 11 ? calLeftYear.value + 1 : calLeftYear.value,
 )
@@ -1437,73 +1428,8 @@ const buildCalendarCells = (year, month) => {
   return cells
 }
 
-const leftCalendarCells = computed(() => buildCalendarCells(calLeftYear.value, calLeftMonth.value))
-const rightCalendarCells = computed(() =>
-  buildCalendarCells(calRightYear.value, calRightMonth.value),
-)
-
 const _toDateStr = (year, month, day) =>
   `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-
-const getDayCellClass = (cell, year, month) => {
-  if (!cell.day) return 'cal-day--empty'
-  const dateStr = _toDateStr(year, month, cell.day)
-  const todayStr = _toDateStr(_today.getFullYear(), _today.getMonth(), _today.getDate())
-  const start = newSchedule.value.recurringStartDate
-  const end = newSchedule.value.recurringEndDate
-  const isPast = dateStr < todayStr
-  const isStart = dateStr === start
-  const isEnd = dateStr === end
-  const inRange = start && end && dateStr > start && dateStr < end
-  return {
-    'cal-day--past': isPast,
-    'cal-day--selected': isStart || isEnd,
-    'cal-day--range': inRange,
-    'cal-day--start': isStart,
-    'cal-day--end': isEnd,
-    'cal-day--disabled': isPast,
-  }
-}
-
-const openDateRangePicker = (which) => {
-  dateRangeSelecting.value = which
-  dateRangePickerOpen.value = true
-}
-
-const selectCalendarDay = (day, year, month) => {
-  const dateStr = _toDateStr(year, month, day)
-  const todayStr = _toDateStr(_today.getFullYear(), _today.getMonth(), _today.getDate())
-  if (dateStr < todayStr) return
-  if (dateRangeSelecting.value === 'start') {
-    newSchedule.value.recurringStartDate = dateStr
-    if (newSchedule.value.recurringEndDate && newSchedule.value.recurringEndDate < dateStr) {
-      newSchedule.value.recurringEndDate = null
-    }
-    dateRangeSelecting.value = 'end'
-  } else {
-    if (dateStr < (newSchedule.value.recurringStartDate || todayStr)) {
-      newSchedule.value.recurringStartDate = dateStr
-      newSchedule.value.recurringEndDate = null
-      dateRangeSelecting.value = 'end'
-    } else {
-      newSchedule.value.recurringEndDate = dateStr
-      dateRangePickerOpen.value = false
-    }
-  }
-}
-
-const calendarPrevMonth = () => {
-  if (calLeftMonth.value === 0) {
-    calLeftMonth.value = 11
-    calLeftYear.value--
-  } else calLeftMonth.value--
-}
-const calendarNextMonth = () => {
-  if (calLeftMonth.value === 11) {
-    calLeftMonth.value = 0
-    calLeftYear.value++
-  } else calLeftMonth.value++
-}
 
 const formatDisplayDate = (dateStr) => {
   if (!dateStr) return ''
@@ -1698,17 +1624,8 @@ const formatTimeWithTimezone = (time) => {
   return abbr ? `${time} ${abbr}` : time
 }
 
+// eslint-disable-next-line no-unused-vars
 const isValidTime = (val) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(val || '')
-const timeValidation = (val) => isValidTime(val) || 'Please use HH:MM (24h)'
-const validateEndTime = (val, start = null) => {
-  if (!isValidTime(val)) return 'Invalid time'
-  if (start && isValidTime(start)) {
-    const [sh, sm] = start.split(':').map(Number)
-    const [eh, em] = val.split(':').map(Number)
-    if (eh < sh || (eh === sh && em <= sm)) return 'End must be after start'
-  }
-  return true
-}
 
 const getPositionName = (positionId) =>
   shiftTypes.value.find((p) => p.id === positionId)?.name || positionId
@@ -1806,6 +1723,7 @@ const recurringScheduleOptions = computed(() =>
   recurringSchedules.value.map((r) => ({ label: r.name, value: r.id })),
 )
 
+// eslint-disable-next-line no-unused-vars
 const leaveTypeOptions = computed(() => {
   const leaveKeywords = [
     'day off',
@@ -1900,6 +1818,7 @@ const buildRecurringDates = (startStr, endStr, weekdays, interval) => {
   return dates
 }
 
+// eslint-disable-next-line no-unused-vars
 const recurringCalendarDefaultMonth = computed(() => {
   if (newSchedule.value.recurringStartDate) {
     const [year, month] = newSchedule.value.recurringStartDate.split('-')
@@ -1920,6 +1839,7 @@ const recurringCalendarDates = computed({
   set: () => {},
 })
 
+// eslint-disable-next-line no-unused-vars
 const recurringCalendarOptions = computed(() => {
   const dateSet = new Set(recurringCalendarDates.value)
   return (dateStr) => dateSet.has(dateStr)
@@ -1968,6 +1888,7 @@ const getMergedShifts = (employeeId, dayIdx) => {
   ]
 }
 
+// eslint-disable-next-line no-unused-vars
 const getUserShiftCount = (userId) => shifts.value.filter((s) => s.userId === userId).length
 
 const pinDropdown = (selectRef) => {
@@ -2022,17 +1943,23 @@ const normalizeCompanyId = () => {
   let raw = localStorage.getItem('selectedCompany')
   try {
     raw = JSON.parse(raw)?.id || raw
-  } catch {}
+  } catch {
+    // ignore parse errors
+  }
   return parseInt(raw)
 }
 
 const fetchSitesAndDepartments = async () => {
-  await Promise.all([
-    fetchSites(),
-    fetchDepartments(),
-    fetchShiftTypes(),
-    fetchRecurringSchedules(),
-  ])
+  try {
+    await Promise.all([
+      fetchSites(),
+      fetchDepartments(),
+      fetchShiftTypes(),
+      fetchRecurringSchedules(),
+    ])
+  } catch {
+    // handled silently
+  }
 }
 
 const fetchLeaveTypes = async () => {
@@ -2142,7 +2069,6 @@ const fetchData = async () => {
       return Array.from(map.values())
     }
 
-    const rawData = fetchResults[0]
     const employeesData = mergeEmployeeData(fetchResults)
     users.value = employees.value.map((emp) => ({
       id: emp.id,
@@ -2679,7 +2605,7 @@ const deleteShift = async (id) => {
       await fetchData()
       fetchLeaves()
     }, 1500)
-  } catch (e) {
+  } catch {
     $q.notify({ type: 'negative', message: 'Failed to cancel schedule' })
   }
 }
@@ -2688,14 +2614,14 @@ const deleteDualShift = async (mergedElement) => {
   try {
     await Promise.all(mergedElement.shifts.map((s) => cancelAssignment(s.assignmentId)))
     mergedElement.shifts.forEach((s) => {
-      shifts.value = shifts.value.filter((x) => x.id !== s.id)
+      shifts.value = shifts.value.filter((x) => s.id !== x.id)
     })
     $q.notify({ type: 'positive', message: 'Both shifts cancelled successfully' })
     setTimeout(async () => {
       await fetchData()
       fetchLeaves()
     }, 1500)
-  } catch (e) {
+  } catch {
     $q.notify({ type: 'negative', message: 'Failed to cancel shifts' })
   }
 }
@@ -2885,57 +2811,6 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
     })
   } finally {
     quickActionLoading.value = null
-  }
-}
-
-const quickAssignDayOff = async () => {
-  const { userId, day } = quickAdd.value
-  if (!userId || day === null || siteOptions.value.length === 0)
-    return $q.notify({ type: 'negative', message: 'Employee, day and a site are required.' })
-  assigningDayOffId.value = 'quick'
-  try {
-    const cId = normalizeCompanyId()
-    const { start } = selectedWeek.value
-    const targetDate = new Date(start)
-    targetDate.setDate(targetDate.getDate() + day)
-    const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`
-    const siteId = parseInt(siteOptions.value[0].value)
-    await assignDayOffApi({
-      employee_id: userId,
-      company_id: cId,
-      date: dateStr,
-      site_id: siteId,
-    })
-    $q.notify({
-      type: 'positive',
-      message: 'Day off assigned!',
-      caption: `${getEmployeeName(userId)} — ${days[day]}`,
-      icon: 'event_busy',
-      timeout: 3000,
-    })
-    closeQuickAddModal()
-    setTimeout(async () => {
-      await fetchData()
-      fetchLeaves()
-    }, 1500)
-  } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message: error.response?.data?.detail || 'Failed to assign day off.',
-      timeout: 5000,
-    })
-  } finally {
-    assigningDayOffId.value = null
-  }
-}
-
-const onLeaveTypeSelected = (shiftTypeId) => {
-  if (!shiftTypeId) return
-  const firstShift = quickAdd.value.shifts[0]
-  if (firstShift) {
-    firstShift.shiftType = shiftTypeId
-    if (!firstShift.site && siteOptions.value.length > 0)
-      firstShift.site = siteOptions.value[0].value
   }
 }
 

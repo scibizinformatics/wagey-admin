@@ -556,11 +556,6 @@ const sendAnother = () => {
   showInviteModal.value = true
 }
 
-const viewInvitation = (invitation) => {
-  selectedInvitation.value = invitation
-  showViewModal.value = true
-}
-
 // ─── Send invitation ──────────────────────────────────────────────────────────
 const sendInvitation = async () => {
   if (!isFormValid.value) return

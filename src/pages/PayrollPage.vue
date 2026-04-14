@@ -175,7 +175,7 @@
               </thead>
               <tbody>
                 <tr
-                  v-for="(record, index) in paginatedData"
+                  v-for="record in paginatedData"
                   :key="record.id"
                   class="table-body-row"
                   :class="{ 'highlight-row': record.net_pay > averageNetPay }"

@@ -943,14 +943,10 @@ const $q = useQuasar()
 const {
   attendanceData,
   loading,
-  fetchAttendance,
   fetchAttendanceByDate,
   fetchEmployeeSchedule: fetchScheduleFromComposable,
   logAttendance,
   updateAttendance: updateAttendanceApi,
-  batchDeleteAttendance,
-  exportSelectedAttendance,
-  exportAllAttendance,
 } = useAttendance()
 
 const { employees, fetchEmployees } = useEmployees()
@@ -1206,13 +1202,6 @@ function onEmployeeSelected(employeeId) {
   }
 }
 
-function onAddDialogDateChange(val) {
-  if (!val || !/^\d{4}-\d{2}-\d{2}$/.test(val)) return
-  if (newRecord.value.employee) {
-    fetchEmployeeSchedule(newRecord.value.employee, val)
-  }
-}
-
 function onEmployeeDropdownClick() {
   if (newRecord.value.employee) {
     newRecord.value.employee = ''
@@ -1225,13 +1214,6 @@ function onEmployeeDropdownClick() {
 }
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
-function getYearMonth() {
-  const baseDate = filters.value.date_from ? new Date(filters.value.date_from) : new Date()
-  const year = baseDate.getFullYear()
-  const month = String(baseDate.getMonth() + 1).padStart(2, '0')
-  return { year, month }
-}
-
 async function fetchAttendanceData(params = {}) {
   try {
     const extraParams = {
@@ -1314,18 +1296,6 @@ async function fetchEmployeeDetails() {
   } finally {
     filtersLoading.value = false
   }
-}
-
-async function filterByEmployeeId(employeeId) {
-  filters.value.employee = employeeId
-  pagination.value.page = 1
-  await fetchAttendanceData()
-}
-
-async function filterByEmployee(employeeId) {
-  filters.value.employee = employeeId
-  pagination.value.page = 1
-  await fetchAttendanceData()
 }
 
 // ─── Submit attendance (add) ──────────────────────────────────────────────────
@@ -1616,19 +1586,6 @@ async function updateAttendance() {
   }
 }
 
-// ─── Batch delete ─────────────────────────────────────────────────────────────
-async function batchDelete(records) {
-  try {
-    const ids = records.map((r) => r.id)
-    await batchDeleteAttendance(ids)
-    showSuccessNotification(`${records.length} records deleted successfully`)
-    selected.value = []
-    await fetchAttendanceData()
-  } catch {
-    showErrorNotification('Failed to delete records')
-  }
-}
-
 // ─── Dialog handlers ──────────────────────────────────────────────────────────
 function openAddDialog() {
   newRecord.value = {
@@ -1669,58 +1626,6 @@ function closeAddDialog() {
   employeeSchedule.value = null
   scheduleError.value = null
   loadingSchedule.value = false
-}
-
-function editAttendance(record) {
-  let resolvedCostCenterId = null
-  const rawCc = record.cost_center
-  if (rawCc) {
-    if (typeof rawCc === 'object') {
-      resolvedCostCenterId = rawCc.id ?? null
-    } else {
-      const match = costCenterOptions.value.find((cc) => cc.label === rawCc || cc.value === rawCc)
-      resolvedCostCenterId = match ? match.value : null
-    }
-  }
-
-  editingRecord.value = {
-    ...record,
-    employee: record.employee?.id || record.employee?.uuid || record.employee,
-    cost_center_id: resolvedCostCenterId,
-  }
-
-  if (editingRecord.value.time_in)
-    editingRecord.value.time_in = formatTimeForInput(editingRecord.value.time_in)
-  if (editingRecord.value.time_out)
-    editingRecord.value.time_out = formatTimeForInput(editingRecord.value.time_out)
-
-  showEditDialog.value = true
-}
-
-function confirmBatchDelete() {
-  $q.dialog({
-    title: 'Confirm Batch Delete',
-    message: `Are you sure you want to delete ${selected.value.length} selected records?`,
-    cancel: true,
-    persistent: true,
-  }).onOk(() => {
-    batchDelete(selected.value)
-  })
-}
-
-function viewDetails(record) {
-  $q.dialog({
-    title: 'Attendance Details',
-    message: `
-      Employee: ${getEmployeeName(record.employee)}
-      Date: ${record.date}
-      Time In: ${formatTime(record.time_in)}
-      Time Out: ${formatTime(record.time_out)}
-      Source: ${record.source?.replace('_', ' ').toUpperCase()}
-      Created: ${formatDateTime(record.created_at)}
-    `,
-    html: true,
-  })
 }
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
@@ -1786,11 +1691,6 @@ function filterEmployees(val, update) {
   })
 }
 
-// ─── Table functions ──────────────────────────────────────────────────────────
-function toggleSelectAll(val) {
-  selected.value = val ? [...attendanceData.value] : []
-}
-
 function previousPage() {
   if (pagination.value.page > 1) {
     pagination.value.page--
@@ -1803,38 +1703,6 @@ function nextPage() {
     pagination.value.page++
     fetchAttendanceData()
   }
-}
-
-// ─── Export ───────────────────────────────────────────────────────────────────
-async function exportSelected() {
-  if (selected.value.length === 0) return
-  try {
-    const response = await exportSelectedAttendance(selected.value.map((r) => r.id))
-    downloadFile(response, 'selected_attendance.csv')
-    showSuccessNotification('Export completed')
-  } catch {
-    showErrorNotification('Export failed')
-  }
-}
-
-async function exportAll() {
-  try {
-    const response = await exportAllAttendance(filters.value)
-    downloadFile(response, 'all_attendance.csv')
-    showSuccessNotification('Export completed')
-  } catch {
-    showErrorNotification('Export failed')
-  }
-}
-
-function downloadFile(data, filename) {
-  const blob = new Blob([data], { type: 'text/csv' })
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  window.URL.revokeObjectURL(url)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2016,22 +1884,6 @@ function formatDate(dateString) {
   }
 }
 
-function formatDateTime(dateTimeString) {
-  if (!dateTimeString) return '-'
-  try {
-    return new Date(dateTimeString).toLocaleString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    })
-  } catch {
-    return '-'
-  }
-}
-
 function isOvernightShift() {
   if (!newRecord.value.time_in || !newRecord.value.time_out) return false
   const [inH, inM] = newRecord.value.time_in.split(':').map(Number)
@@ -2095,7 +1947,7 @@ onMounted(async () => {
   try {
     await Promise.all([fetchSites(), fetchCostCenters(), fetchEmployeeDetails()])
     await fetchAttendanceData()
-  } catch (error) {
+  } catch {
     showErrorNotification('Error during initialization')
   }
 })

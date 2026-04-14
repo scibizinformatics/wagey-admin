@@ -636,18 +636,6 @@ const openCreateDialog = () => {
   showDialog.value = true
 }
 
-const editAnnouncement = (a) => {
-  editingAnnouncement.value = a
-  formData.value = { ...a }
-  // Only fetch targeting data if this announcement targets specific people
-  if (!a.target_everyone) {
-    fetchPositions()
-    fetchUsers()
-    fetchRoles()
-  }
-  showDialog.value = true
-}
-
 const closeDialog = () => {
   showDialog.value = false
 }
@@ -659,11 +647,6 @@ const onTargetEveryoneToggle = (val) => {
     fetchUsers()
     fetchRoles()
   }
-}
-
-const confirmDelete = (announcement) => {
-  announcementToDelete.value = announcement
-  showDeleteDialog.value = true
 }
 
 // ─── Save (create or update) ──────────────────────────────────────────────────

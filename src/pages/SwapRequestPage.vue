@@ -504,7 +504,6 @@ export default {
     const viewDialog = ref(false)
     const selectedRequest = ref(null)
     const currentUserCompany = ref(null)
-    const userHasApprovalRights = ref(true)
     // Tracks real statuses when the backend list returns stale data
     const correctedStatuses = ref({})
 

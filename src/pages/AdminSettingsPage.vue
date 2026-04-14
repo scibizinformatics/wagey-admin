@@ -2787,7 +2787,6 @@ const {
 // Shifts + Recurring
 const {
   shifts,
-  shiftTemplates,
   shiftTypes,
   recurringSchedules,
   loading: loadingShifts,
@@ -2802,7 +2801,6 @@ const {
   recurringForm,
   weekdayOptions,
   formatTime,
-  formatWeekdays,
   fetchShifts,
   fetchShiftTemplates,
   openShiftDialog,
@@ -2839,7 +2837,6 @@ const {
   dialog: positionDialog,
   editing: editingPosition,
   form: positionForm,
-  getPositionName,
   fetchPositions,
   openDialog: openPositionDialog,
   openEditDialog: editPosition,
@@ -3012,33 +3009,6 @@ function formatDate(date) {
     month: 'short',
     day: 'numeric',
   })
-}
-
-function getShiftTemplateName(id) {
-  return shiftTemplates.value.find((s) => s.id === id)?.name || id || 'N/A'
-}
-
-function formatAmount(amount) {
-  if (!amount && amount !== 0) return '0.00'
-  return parseFloat(amount).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
-function getSiteName(siteId) {
-  const s = sites.value.find((x) => x.id === siteId)
-  return s ? s.name : 'N/A'
-}
-
-function getDepartmentName(deptId) {
-  const d = departments.value.find((x) => x.id === deptId)
-  return d ? d.name : 'N/A'
-}
-
-function getShiftTypeName(shiftId) {
-  const s = shiftTypes.value.find((x) => x.id === shiftId)
-  return s ? s.name : 'N/A'
 }
 
 // ─── Table column definitions ─────────────────────────────────────────────

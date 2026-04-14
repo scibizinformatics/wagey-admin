@@ -1009,7 +1009,9 @@ const getCompanyId = () => {
     const parsed = JSON.parse(localStorage.getItem('selectedCompany'))
     const id = parsed?.id || parsed?.companyId
     if (id) return String(id)
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   // Second try: selectedCompany as a plain number/string
   const raw = localStorage.getItem('selectedCompany')
@@ -1221,10 +1223,6 @@ const formatAmount = (num) => {
 }
 
 // ===== LEAVE / OVERTIME HELPERS =====
-const getTypeLabel = (type) => {
-  const labels = { leave: 'Leave', timeoff: 'Time Off', schedule: 'Schedule', overtime: 'Overtime' }
-  return labels[type] || 'Request'
-}
 
 const getLeaveStatusClass = (request) => {
   const status = request.status
@@ -1232,15 +1230,6 @@ const getLeaveStatusClass = (request) => {
   if (status === 'approved') return 'status-approved'
   if (status === 'rejected') return 'status-rejected'
   return 'status-default'
-}
-
-const calculateDuration = (start, end) => {
-  if (!start || !end) return 'N/A'
-  const startDate = new Date(start)
-  const endDate = new Date(end)
-  const diffTime = endDate - startDate
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-  return diffDays > 1 ? `${diffDays} days` : '1 day'
 }
 
 // ===== CASH ADVANCE HELPERS =====
@@ -1350,7 +1339,7 @@ const fetchOvertimeCategories = async () => {
     })
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
     overtimeCategories.value = data.filter((c) => c.is_active)
-  } catch (e) {
+  } catch {
     // non-critical, fail silently
   }
 }

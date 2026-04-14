@@ -244,7 +244,7 @@ import { useNotifications } from 'src/composables/useNotifications'
 // ─── Composables ─────────────────────────────────────────────────────────────
 const { companyId } = useCompany()
 
-const { employees, loading: employeesLoading, fetchEmployees } = useEmployees()
+const { employees, fetchEmployees } = useEmployees()
 
 const { attendanceData, loading: attendanceLoading, fetchAttendanceByDate } = useAttendance()
 
@@ -444,78 +444,6 @@ const payrollRows = computed(() => {
     date: fmtDate(p.date_released ?? p.released_at),
     amount: fmtCurrency(p.total_amount ?? p.net_pay ?? p.gross_pay),
   }))
-})
-
-// ─── Smart Attendance alerts ──────────────────────────────────────────────────
-const attendanceAlerts = computed(() => {
-  const alerts = []
-  const todayStr = today() // YYYY-MM-DD
-
-  // Normalise a record's date to YYYY-MM-DD regardless of whether the API
-  // returns a bare date ("2026-03-27"), a datetime ("2026-03-27T09:44:00Z"),
-  // or a full ISO timestamp in time_in/clock_in.
-  function recordDate(a) {
-    const raw = a.date ?? a.attendance_date ?? a.time_in ?? a.clock_in ?? a.check_in ?? ''
-    if (!raw) return ''
-    // If it already looks like YYYY-MM-DD (10 chars), use it directly
-    if (/^\d{4}-\d{2}-\d{2}/.test(String(raw))) return String(raw).slice(0, 10)
-    // Try parsing as a Date object
-    const d = new Date(raw)
-    return isNaN(d) ? '' : d.toISOString().slice(0, 10)
-  }
-
-  const todayAtt = attendanceData.value.filter((a) => recordDate(a) === todayStr)
-
-  const outsideLocation = todayAtt.filter(
-    (a) =>
-      a.is_outside_location || a.location_status === 'outside' || a.geofence_status === 'outside',
-  )
-  if (outsideLocation.length)
-    alerts.push(
-      `${outsideLocation.length} employee${outsideLocation.length > 1 ? 's' : ''} clocked in outside workplace location`,
-    )
-
-  const mobileDevice = todayAtt.filter(
-    (a) => a.device_type === 'mobile' || a.source === 'mobile' || a.source === 'smartphone',
-  )
-  if (mobileDevice.length)
-    alerts.push(
-      `${mobileDevice.length} employee${mobileDevice.length > 1 ? 's' : ''} used on-smartphone device`,
-    )
-
-  const lateClockIn = todayAtt.filter((a) => a.is_late || (a.late_minutes ?? 0) > 0)
-  if (lateClockIn.length)
-    alerts.push(
-      `${lateClockIn.length} employee${lateClockIn.length > 1 ? 's' : ''} clocked in late today`,
-    )
-
-  const forgotClockOut = attendanceData.value.filter((a) => {
-    const hasIn = a.time_in ?? a.clock_in ?? a.check_in
-    const hasOut = a.time_out ?? a.clock_out ?? a.check_out
-    // Previous days only (not today)
-    return recordDate(a) !== todayStr && recordDate(a) !== '' && hasIn && !hasOut
-  })
-  if (forgotClockOut.length)
-    alerts.push(
-      `${forgotClockOut.length} employee${forgotClockOut.length > 1 ? 's' : ''} forgot to clock out yesterday`,
-    )
-
-  const proxyDetected = todayAtt.filter(
-    (a) => a.is_proxy || a.fraud_flag === 'proxy' || a.is_flagged,
-  )
-  if (proxyDetected.length)
-    alerts.push(
-      `Proxy detected: ${proxyDetected.length} device${proxyDetected.length > 1 ? 's' : ''} logged from same IP`,
-    )
-
-  // Always show the total clocked-in count as a summary line
-  if (todayAtt.length > 0)
-    alerts.unshift(
-      `${todayAtt.length} employee${todayAtt.length > 1 ? 's' : ''} have attendance records today`,
-    )
-
-  if (!alerts.length) alerts.push('No attendance data or anomalies detected today')
-  return alerts
 })
 
 // ─── Recent Activity ──────────────────────────────────────────────────────────

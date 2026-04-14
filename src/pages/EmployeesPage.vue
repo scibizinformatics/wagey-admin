@@ -928,6 +928,7 @@ import { useQuasar } from 'quasar'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
 import { useOrganization } from '@/composables/page/useOrganization'
+import { useCompany } from '@/composables/page/useCompany'
 
 const $q = useQuasar()
 
@@ -940,7 +941,7 @@ const {
   fetchEmployee,
   addEmployee: addEmployeeApi,
   updateEmployee,
-  updateUser,
+  //updateUser,
   uploadEmployeeAvatar,
   terminateEmployee: terminateEmployeeApi,
   restoreEmployee: restoreEmployeeApi,
@@ -948,6 +949,7 @@ const {
 
 const { userRoles, fetchUserRoles } = useRolesAndPositions()
 const { sites: rawSites, fetchSites: fetchSitesApi } = useOrganization()
+const { companyId } = useCompany()
 
 // ─── Local UI state ───────────────────────────────────────────────────────────
 const filteredEmployees = ref([])
@@ -1138,8 +1140,9 @@ function formatPhilippinePhone(number) {
 
 const fetchEmployees = async () => {
   try {
-    // fetchEmployees from composable fetches the list; then enrich each with phone_number
-    const list = await fetchEmployeesList()
+    // Force a fresh network fetch every time the page loads so the module-level
+    // cache never serves stale/empty data to a new component instance.
+    const list = await fetchEmployeesList({ force: true })
 
     const detailed = await Promise.all(
       list.map((emp) =>
@@ -1192,7 +1195,7 @@ const fetchSites = async () => {
 const fetchEmployeeDetails = async (employeeId) => {
   try {
     return await fetchEmployee(employeeId)
-  } catch (err) {
+  } catch {
     $q.notify({ type: 'negative', message: 'Failed to fetch employee details', position: 'top' })
     return null
   }
@@ -1246,7 +1249,6 @@ async function addEmployee() {
     if (avatarFile.value && newEmployee.id) {
       try {
         uploadingAvatar.value = true
-        // ✅ Pass employee ID (not user.id) to match the correct endpoint
         const uploadResponse = await uploadEmployeeAvatar(newEmployee.id, avatarFile.value)
 
         await fetchEmployees()
@@ -1340,7 +1342,6 @@ const saveEmployee = async () => {
     if (editAvatarFile.value && selectedEmployee.value.id) {
       try {
         uploadingAvatar.value = true
-        // ✅ Pass employee ID (not user.id) to match the correct endpoint
         const uploadResponse = await uploadEmployeeAvatar(
           selectedEmployee.value.id,
           editAvatarFile.value,
@@ -1379,7 +1380,6 @@ const saveEmployee = async () => {
 
     $q.notify({
       type: 'positive',
-      // ✅ Use selectedEmployee for reliable name (updatedEmployee may return incomplete data)
       message: `Employee ${getFullName(selectedEmployee.value)} updated successfully.`,
       position: 'top',
     })
@@ -1432,9 +1432,9 @@ const cancelEdit = () => {
 const terminateEmployee = async () => {
   try {
     terminating.value = true
-    const companyId = employeeToTerminate.value.companies?.[0]?.company_id
+    const cid = employeeToTerminate.value.companies?.[0]?.company_id
     const payload = {
-      companies: [{ company_id: companyId, employment_status: 'terminated' }],
+      companies: [{ company_id: cid, employment_status: 'terminated' }],
     }
     const response = await terminateEmployeeApi(employeeToTerminate.value.id, payload)
 
@@ -1470,9 +1470,9 @@ const terminateEmployee = async () => {
 const restoreEmployee = async () => {
   try {
     restoring.value = true
-    const companyId = employeeToRestore.value.companies?.[0]?.company_id
+    const cid = employeeToRestore.value.companies?.[0]?.company_id
     const payload = {
-      companies: [{ company_id: companyId, employment_status: 'active' }],
+      companies: [{ company_id: cid, employment_status: 'active' }],
       is_active: true,
       status: 'active',
     }
@@ -1512,7 +1512,6 @@ const handleAvatarSelect = (event) => {
   const file = event.target.files?.[0]
   if (!file) return
 
-  // Validate file type
   if (!file.type.startsWith('image/')) {
     $q.notify({
       type: 'negative',
@@ -1522,20 +1521,13 @@ const handleAvatarSelect = (event) => {
     return
   }
 
-  // Validate file size (5MB max)
-  const maxSize = 5 * 1024 * 1024 // 5MB in bytes
+  const maxSize = 5 * 1024 * 1024
   if (file.size > maxSize) {
-    $q.notify({
-      type: 'negative',
-      message: 'Image size must be less than 5MB',
-      position: 'top',
-    })
+    $q.notify({ type: 'negative', message: 'Image size must be less than 5MB', position: 'top' })
     return
   }
 
   avatarFile.value = file
-
-  // Create preview
   const reader = new FileReader()
   reader.onload = (e) => {
     avatarPreview.value = e.target.result
@@ -1547,7 +1539,6 @@ const handleEditAvatarSelect = (event) => {
   const file = event.target.files?.[0]
   if (!file) return
 
-  // Validate file type
   if (!file.type.startsWith('image/')) {
     $q.notify({
       type: 'negative',
@@ -1557,20 +1548,13 @@ const handleEditAvatarSelect = (event) => {
     return
   }
 
-  // Validate file size (5MB max)
-  const maxSize = 5 * 1024 * 1024 // 5MB in bytes
+  const maxSize = 5 * 1024 * 1024
   if (file.size > maxSize) {
-    $q.notify({
-      type: 'negative',
-      message: 'Image size must be less than 5MB',
-      position: 'top',
-    })
+    $q.notify({ type: 'negative', message: 'Image size must be less than 5MB', position: 'top' })
     return
   }
 
   editAvatarFile.value = file
-
-  // Create preview
   const reader = new FileReader()
   reader.onload = (e) => {
     editAvatarPreview.value = e.target.result
@@ -1581,7 +1565,6 @@ const handleEditAvatarSelect = (event) => {
 const removeAvatar = () => {
   avatarFile.value = null
   avatarPreview.value = null
-  // Clear the file input
   const input = document.querySelector('input[type="file"]')
   if (input) input.value = ''
 }
@@ -1589,20 +1572,18 @@ const removeAvatar = () => {
 const removeEditAvatar = () => {
   editAvatarFile.value = null
   editAvatarPreview.value = null
-  // Clear the file input
   const inputs = document.querySelectorAll('input[type="file"]')
   if (inputs[1]) inputs[1].value = ''
 }
 
 const handleImageError = (event) => {
-  event.target.src = '' // Clear broken image
+  event.target.src = ''
   event.target.style.display = 'none'
 }
 
 const filterEmployees = () => {
   let filtered = employees.value
 
-  // Filter by search term
   if (searchTerm.value.trim()) {
     const term = searchTerm.value.toLowerCase()
     filtered = filtered.filter((emp) => {
@@ -1616,7 +1597,6 @@ const filterEmployees = () => {
     })
   }
 
-  // Filter by selected site
   if (selectedSite.value !== null) {
     filtered = filtered.filter((emp) => {
       const empSiteId =
@@ -1635,7 +1615,7 @@ const filterEmployees = () => {
   }
 
   filteredEmployees.value = filtered
-  sortEmployees() // Apply sorting after filtering
+  sortEmployees()
 }
 
 const sortEmployees = () => {
@@ -1666,7 +1646,6 @@ const filterTimezones = (val, update) => {
     })
     return
   }
-
   update(() => {
     const needle = val.toLowerCase()
     filteredTimezoneOptions.value = timezoneOptions.value.filter(
@@ -1683,10 +1662,8 @@ const openAddModal = () => {
 }
 
 const viewEmployee = async (emp) => {
-  // fetch full details then show
   const detailed = await fetchEmployeeDetails(emp.id)
   if (detailed) {
-    // Merge local employee state so status/is_active always reflects latest local changes
     const localEmp = employees.value.find((e) => e.id === emp.id)
     selectedEmployee.value = {
       ...detailed,
@@ -1736,11 +1713,6 @@ const editEmployee = async (emp) => {
 }
 
 const confirmTerminate = (emp) => {
-  console.log('=== TERMINATE DEBUG ===')
-  console.log('Employee to terminate:', emp)
-  console.log('Current status:', getStatus(emp))
-  console.log('is_active:', emp.is_active)
-  console.log('status field:', emp.status)
   employeeToTerminate.value = emp
   showTerminateDialog.value = true
 }
@@ -1755,21 +1727,43 @@ const cancelAdd = () => {
   resetAddForm()
 }
 
-const filterBySite = () => {
-  console.log('🏢 Site filter changed to:', selectedSite.value)
-  filterEmployees()
-}
+//const filterBySite = () => {
+//filterEmployees()
+//}
 
 watch(sortBy, () => {
   sortEmployees()
 })
 
+// ─── FIX: watch companyId so fetch runs whenever it becomes available ─────────
+// This handles cases where companyId is not yet set when the component mounts
+// (e.g. after a login redirect or page refresh on a deployed server).
+let initialised = false
+watch(
+  companyId,
+  async (newId) => {
+    if (newId && !initialised) {
+      initialised = true
+      await Promise.all([fetchRoles(), fetchSites()])
+      await fetchEmployees()
+    }
+  },
+  { immediate: true }, // runs immediately if companyId is already set
+)
+
 onMounted(async () => {
-  await Promise.all([fetchRoles(), fetchSites()])
-  await fetchEmployees()
+  // If companyId was already available, the watch above already triggered the fetch.
+  // If not, we wait — the watch will fire once companyId is populated.
+  // We still call roles/sites here as a safe fallback for edge cases where
+  // the watch fires before onMounted (Vue guarantees this doesn't happen, but
+  // being defensive here costs nothing).
+  if (companyId.value && !initialised) {
+    initialised = true
+    await Promise.all([fetchRoles(), fetchSites()])
+    await fetchEmployees()
+  }
 })
 </script>
-
 <style scoped>
 /* ==============================
    BASE
