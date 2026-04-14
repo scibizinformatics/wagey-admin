@@ -10,6 +10,9 @@ COPY package.json package-lock.json ./
 # Copy project files (needed BEFORE npm ci for Quasar to detect project type)
 COPY . .
 
+# Remove old config files with CommonJS syntax
+RUN rm -f babel.config.cjs postcss.config.cjs
+
 # Install dependencies (including devDependencies needed for build)
 RUN npm ci
 
