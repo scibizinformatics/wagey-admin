@@ -24,7 +24,7 @@
           <q-tab name="shifts" label="Shifts" class="settings-tab" />
           <q-tab name="departments" label="Departments" class="settings-tab" />
           <q-tab name="positions" label="Positions" class="settings-tab" />
-          <q-tab name="contracts" label="Contracts" class="settings-tab" />
+          <q-tab name="contract-types" label="Contract Types" class="settings-tab" />
           <q-tab name="payslips" label="Payslips" class="settings-tab" />
         </q-tabs>
       </div>
@@ -370,24 +370,25 @@
               indicator-color="primary"
               align="left"
             >
-              <q-tab name="one-time" label="One-Time Schedule" class="settings-tab" />
-              <q-tab name="recurring" label="Recurring Schedule" class="settings-tab" />
+              <q-tab name="one-time" label="Time" class="settings-tab" />
+              <q-tab name="shift-types" label="Shift Template" class="settings-tab" />
+              <q-tab name="weekly-templates" label="Weekly Shift Templates" class="settings-tab" />
             </q-tabs>
           </div>
 
           <q-tab-panels v-model="shiftSubTab" animated class="transparent-panels">
-            <!-- ---- One-Time Schedule (existing) ---- -->
+            <!-- ---- Shift Type (existing) ---- -->
             <q-tab-panel name="one-time" class="q-pa-none">
               <div class="table-section">
                 <div class="table-header">
                   <div class="table-title-section">
-                    <h2 class="table-title">Shifts</h2>
-                    <p class="table-subtitle">Manage shift types and schedules</p>
+                    <h2 class="table-title">Time</h2>
+                    <p class="table-subtitle">Manage shift times and schedules</p>
                   </div>
                   <div class="table-actions">
                     <q-btn
                       color="primary"
-                      label="Add Shift"
+                      label="Add Time"
                       icon="add"
                       class="add-btn"
                       @click="openShiftDialog"
@@ -490,33 +491,33 @@
               </div>
             </q-tab-panel>
 
-            <!-- ---- Recurring Schedule ---- -->
-            <q-tab-panel name="recurring" class="q-pa-none">
+            <!-- ---- Shift Template ---- -->
+            <q-tab-panel name="shift-types" class="q-pa-none">
               <div class="table-section">
                 <div class="table-header">
                   <div class="table-title-section">
-                    <h2 class="table-title">Recurring Schedules</h2>
-                    <p class="table-subtitle">Manage recurring shift schedule templates</p>
+                    <h2 class="table-title">Shift Templates</h2>
+                    <p class="table-subtitle">Manage shift schedule templates</p>
                   </div>
                   <div class="table-actions">
                     <q-btn
                       color="primary"
-                      label="Add Recurring Schedule"
+                      label="Add Shift Template"
                       icon="add"
                       class="add-btn"
-                      @click="openRecurringDialog"
+                      @click="openShiftTypeTemplateDialog"
                     />
                   </div>
                 </div>
 
                 <div class="modern-table-container">
                   <q-table
-                    :rows="recurringSchedules"
+                    :rows="shiftTypeTemplates"
                     :columns="recurringColumns"
                     row-key="id"
-                    :loading="loadingRecurring"
+                    :loading="loadingShiftTypeTemplates"
                     flat
-                    no-data-label="No recurring schedules found"
+                    no-data-label="No shift templates found"
                     class="settings-table"
                     hide-pagination
                     :rows-per-page-options="[0]"
@@ -524,7 +525,9 @@
                     <template v-slot:header>
                       <q-tr class="table-header-row">
                         <q-th class="table-header-cell">Name</q-th>
-                        <q-th class="table-header-cell">Rules</q-th>
+                        <q-th class="table-header-cell">Shifts</q-th>
+                        <q-th class="table-header-cell">Shifts Detail</q-th>
+                        <q-th class="table-header-cell">Status</q-th>
                         <q-th class="table-header-cell">Created</q-th>
                         <q-th class="table-header-cell">Actions</q-th>
                       </q-tr>
@@ -532,11 +535,42 @@
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
                         <q-td class="table-body-cell">
-                          <span class="item-name">{{ props.row.name || 'N/A' }}</span>
+                          <span class="item-name">{{ props.row.name }}</span>
                         </q-td>
 
-                        <q-td class="table-body-cell">
-                          {{ props.row.shifts_detail || props.row.shifts || 'N/A' }}
+                        <q-td class="table-body-cell text-center">
+                          <div
+                            v-if="getShiftNames(props.row.shifts_detail).length"
+                            class="shifts-list"
+                          >
+                            <q-chip
+                              v-for="(shift, idx) in getShiftNames(props.row.shifts_detail).slice(
+                                0,
+                                2,
+                              )"
+                              :key="idx"
+                              dense
+                              size="sm"
+                              color="blue-1"
+                              text-color="blue-8"
+                              :label="shift"
+                              class="permission-chip"
+                            />
+                            <q-chip
+                              v-if="getShiftNames(props.row.shifts_detail).length > 2"
+                              dense
+                              size="sm"
+                              color="grey-3"
+                              text-color="grey-8"
+                              :label="`+${getShiftNames(props.row.shifts_detail).length - 2}`"
+                              class="permission-chip"
+                            />
+                          </div>
+                          <span v-else>N/A</span>
+                        </q-td>
+
+                        <q-td class="table-body-cell text-center">
+                          {{ getShiftCount(props.row.shifts) }} shifts
                         </q-td>
 
                         <q-td class="table-body-cell text-center">
@@ -566,7 +600,7 @@
                                   clickable
                                   v-close-popup
                                   class="dropdown-item"
-                                  @click="editRecurring(props.row)"
+                                  @click="editShiftTypeTemplate(props.row)"
                                 >
                                   <q-item-section side
                                     ><q-icon name="edit" size="16px"
@@ -577,7 +611,100 @@
                                   clickable
                                   v-close-popup
                                   class="dropdown-item dropdown-item-danger"
-                                  @click="deleteRecurring(props.row)"
+                                  @click="deleteShiftTypeTemplate(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="delete" size="16px" color="negative"
+                                  /></q-item-section>
+                                  <q-item-section>Delete</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
+                        </q-td>
+                      </q-tr>
+                    </template>
+                  </q-table>
+                </div>
+              </div>
+            </q-tab-panel>
+
+            <!-- ---- Weekly Shift Templates ---- -->
+            <q-tab-panel name="weekly-templates" class="q-pa-none">
+              <div class="table-section">
+                <div class="table-header">
+                  <div class="table-title-section">
+                    <h2 class="table-title">Weekly Shift Templates</h2>
+                    <p class="table-subtitle">Manage shift type templates for weekly scheduling</p>
+                  </div>
+                  <div class="table-actions">
+                    <q-btn
+                      color="primary"
+                      label="Add Template"
+                      icon="add"
+                      class="add-btn"
+                      @click="openWeeklyTemplateDialog"
+                    />
+                  </div>
+                </div>
+
+                <div class="modern-table-container">
+                  <q-table
+                    :rows="weeklyShiftTemplates"
+                    :columns="weeklyTemplateColumns"
+                    row-key="id"
+                    :loading="loadingWeeklyTemplates"
+                    flat
+                    no-data-label="No weekly shift templates found"
+                    class="settings-table"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
+                  >
+                    <template v-slot:header>
+                      <q-tr class="table-header-row">
+                        <q-th class="table-header-cell">Name</q-th>
+                        <q-th class="table-header-cell">Rules</q-th>
+                        <q-th class="table-header-cell">Created</q-th>
+                        <q-th class="table-header-cell">Actions</q-th>
+                      </q-tr>
+                    </template>
+                    <template v-slot:body="props">
+                      <q-tr class="table-body-row">
+                        <q-td class="table-body-cell">
+                          <span class="item-name">{{ props.row.name }}</span>
+                        </q-td>
+                        <q-td class="table-body-cell">
+                          {{
+                            Array.isArray(props.row.rules) ? props.row.rules.length + ' rules' : ''
+                          }}
+                        </q-td>
+                        <q-td class="table-body-cell">
+                          {{
+                            props.row.created_at
+                              ? new Date(props.row.created_at).toLocaleDateString()
+                              : ''
+                          }}
+                        </q-td>
+                        <q-td class="table-body-cell actions-cell">
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 150px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item"
+                                  @click="editWeeklyTemplate(props.row)"
+                                >
+                                  <q-item-section side
+                                    ><q-icon name="edit" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Edit</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  class="dropdown-item dropdown-item-danger"
+                                  @click="deleteWeeklyTemplate(props.row)"
                                 >
                                   <q-item-section side
                                     ><q-icon name="delete" size="16px" color="negative"
@@ -787,114 +914,73 @@
           </div>
         </q-tab-panel>
 
-        <!-- ===================== CONTRACTS ===================== -->
-        <q-tab-panel name="contracts" class="q-pa-none">
+        <!-- ===================== CONTRACT TYPES ===================== -->
+        <q-tab-panel name="contract-types" class="q-pa-none">
           <div class="table-section">
             <div class="table-header">
               <div class="table-title-section">
-                <h2 class="table-title">Employee Contracts</h2>
-                <p class="table-subtitle">Manage employee contracts and assignments</p>
+                <h2 class="table-title">Contract Types</h2>
+                <p class="table-subtitle">Manage contract type definitions</p>
               </div>
               <div class="table-actions">
                 <q-btn
                   color="primary"
-                  label="Create Contract"
+                  label="Add Contract Type"
                   icon="add"
                   class="add-btn"
-                  @click="openContractDialog"
+                  @click="openContractTypeDialog"
                 />
               </div>
             </div>
 
             <div class="modern-table-container">
               <q-table
-                :rows="filteredContracts"
-                :columns="contractColumns"
+                :rows="contractTypeDefinitions"
+                :columns="contractTypeColumns"
                 row-key="id"
-                :loading="loadingContracts"
+                :loading="loadingContractTypes"
                 flat
-                no-data-label="No contracts found"
+                no-data-label="No contract types found"
                 class="settings-table"
                 hide-pagination
                 :rows-per-page-options="[0]"
               >
                 <template v-slot:header>
                   <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Employee</q-th>
-                    <q-th class="table-header-cell">Contract Type</q-th>
-                    <q-th class="table-header-cell">Status</q-th>
-                    <q-th class="table-header-cell">Date Created</q-th>
+                    <q-th class="table-header-cell">Name</q-th>
+                    <q-th class="table-header-cell">Eligibilities</q-th>
                     <q-th class="table-header-cell">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
                   <q-tr class="table-body-row">
                     <q-td class="table-body-cell">
-                      <span class="item-name">{{ props.row.employee_name || 'N/A' }}</span>
+                      <span class="item-name">{{ props.row.name }}</span>
                     </q-td>
                     <q-td class="table-body-cell">
-                      <div class="ownership-badge owned-badge">
-                        {{ props.row.contract_type_name || 'N/A' }}
+                      <div class="eligibility-badges">
+                        <q-chip
+                          v-for="el in props.row.eligibilities"
+                          :key="el"
+                          size="sm"
+                          color="primary"
+                          text-color="white"
+                        >
+                          {{ getEligibilityName(el) }}
+                        </q-chip>
+                        <span v-if="!props.row.eligibilities?.length" class="text-grey">None</span>
                       </div>
                     </q-td>
-                    <q-td class="table-body-cell">
-                      <div
-                        :class="[
-                          'status-badge',
-                          props.row.is_acknowledged ? 'status-active' : 'status-pending',
-                        ]"
-                      >
-                        {{ props.row.is_acknowledged ? 'Acknowledged' : 'Pending' }}
-                      </div>
-                    </q-td>
-                    <q-td class="table-body-cell">{{ formatDate(props.row.date_created) }}</q-td>
                     <q-td class="table-body-cell actions-cell">
                       <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                         <q-menu anchor="bottom right" self="top right" class="action-dropdown">
                           <q-list dense style="min-width: 150px">
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="viewContract(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="visibility" size="16px"
-                              /></q-item-section>
-                              <q-item-section>View Details</q-item-section>
+                            <q-item clickable v-close-popup class="dropdown-item" @click="editContractType(props.row)">
+                              <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
+                              <q-item-section>Edit</q-item-section>
                             </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="editContract(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="edit" size="16px"
-                              /></q-item-section>
-                              <q-item-section>Edit Contract</q-item-section>
-                            </q-item>
-                            <q-item
-                              v-if="props.row.pdf_url"
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="viewContractPDF(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="picture_as_pdf" size="16px" color="red-7"
-                              /></q-item-section>
-                              <q-item-section>View PDF</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item dropdown-item-danger"
-                              @click="deleteContract(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="delete" size="16px" color="negative"
-                              /></q-item-section>
+                            <q-item clickable v-close-popup class="dropdown-item dropdown-item-danger" @click="deleteContractType(props.row)">
+                              <q-item-section side><q-icon name="delete" size="16px" color="negative" /></q-item-section>
                               <q-item-section>Delete</q-item-section>
                             </q-item>
                           </q-list>
@@ -906,6 +992,37 @@
               </q-table>
             </div>
           </div>
+
+          <!-- Contract Type Dialog -->
+          <q-dialog v-model="contractTypeDialog" persistent>
+            <q-card style="min-width: 400px">
+              <q-card-section class="row items-center">
+                <div class="text-h6">{{ editingContractType ? 'Edit' : 'Add' }} Contract Type</div>
+                <q-space />
+                <q-btn icon="close" flat round dense v-close-popup />
+              </q-card-section>
+
+              <q-card-section>
+                <q-input v-model="contractTypeForm.name" label="Name *" outlined dense class="q-mb-md" />
+                <q-select
+                  v-model="contractTypeForm.eligibilities"
+                  :options="eligibilityOptions"
+                  label="Eligibilities"
+                  outlined
+                  dense
+                  multiple
+                  use-chips
+                  emit-value
+                  map-options
+                />
+              </q-card-section>
+
+              <q-card-actions align="right">
+                <q-btn flat label="Cancel" v-close-popup />
+                <q-btn color="primary" label="Save" :loading="savingContractType" @click="saveContractType" />
+              </q-card-actions>
+            </q-card>
+          </q-dialog>
         </q-tab-panel>
 
         <!-- ===================== PAYSLIPS ===================== -->
@@ -1834,12 +1951,79 @@
       </q-card>
     </q-dialog>
 
+    <!-- ===================== WEEKLY SHIFT TEMPLATE DIALOG ===================== -->
+    <q-dialog v-model="weeklyTemplateDialog" persistent>
+      <q-card style="min-width: 500px; max-width: 560px; border-radius: 16px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            {{ editingWeeklyTemplate ? 'Edit Weekly Shift Template' : 'Add Weekly Shift Template' }}
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pt-md">
+          <!-- Name -->
+          <q-input
+            v-model="weeklyTemplateForm.name"
+            label="Template Name *"
+            outlined
+            dense
+            class="q-mb-md"
+          />
+
+          <!-- Weekly Rules -->
+          <div class="q-mb-md">
+            <div class="text-subtitle2 q-mb-sm">Weekly Shift Rules</div>
+            <div
+              v-for="rule in weeklyTemplateForm.rules"
+              :key="rule.weekday"
+              class="row q-col-gutter-sm q-mb-sm items-center"
+            >
+              <div class="col-3">
+                <q-chip dense color="blue-1" text-color="blue-8" :label="rule.weekday" />
+              </div>
+              <div class="col-9">
+                <q-select
+                  v-model="rule.shift_template"
+                  :options="shiftTypeTemplates"
+                  option-value="id"
+                  option-label="name"
+                  emit-value
+                  map-options
+                  label="Shift Template"
+                  outlined
+                  dense
+                  clearable
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Active -->
+          <div class="q-mb-md">
+            <q-toggle v-model="weeklyTemplateForm.is_active" label="Active" color="primary" />
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            label="Save"
+            :loading="savingWeeklyTemplate"
+            @click="saveWeeklyTemplate"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- ===================== RECURRING SCHEDULE DIALOG ===================== -->
-    <q-dialog v-model="recurringDialog" persistent>
+    <q-dialog v-model="shiftTypeTemplateDialog" persistent>
       <q-card style="min-width: 600px; max-width: 680px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
-            {{ editingRecurring ? 'Edit Recurring Schedule' : 'Add Recurring Schedule' }}
+            {{ editingShiftTypeTemplate ? 'Edit Shift Template' : 'Add Shift Template' }}
           </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
@@ -1847,18 +2031,35 @@
         <q-card-section class="q-pt-md" style="max-height: 70vh; overflow-y: auto">
           <!-- Schedule Name -->
           <q-input
-            v-model="recurringForm.name"
+            v-model="shiftTypeTemplateForm.name"
             label="Schedule Name *"
             outlined
             dense
-            class="q-mb-lg"
+            class="q-mb-md"
           />
 
-          <!-- Global fields: Site, Active -->
-          <div class="row q-col-gutter-md q-mb-lg">
+          <!-- Shift Types (multi-select) -->
+          <q-select
+            v-model="shiftTypeTemplateForm.shift_type_ids"
+            :options="shiftTypeOptions"
+            option-value="id"
+            option-label="name"
+            emit-value
+            map-options
+            multiple
+            use-chips
+            label="Shift Types *"
+            outlined
+            dense
+            class="q-mb-md"
+            hint="Select one or more shift types for this template"
+          />
+
+          <!-- Site + Active -->
+          <div class="row q-col-gutter-md q-mb-md">
             <div class="col-8">
               <q-select
-                v-model="recurringForm.site_id"
+                v-model="shiftTypeTemplateForm.site_id"
                 :options="sites"
                 option-value="id"
                 option-label="name"
@@ -1871,142 +2072,7 @@
               />
             </div>
             <div class="col-4 flex items-center">
-              <q-toggle v-model="recurringForm.is_active" label="Active" color="primary" />
-            </div>
-          </div>
-
-          <!-- Weekly Rules -->
-          <div class="row items-center q-mb-sm">
-            <div class="text-subtitle2">Weekly Rules</div>
-            <q-space />
-            <div class="text-caption text-grey-6">
-              Same day can appear multiple times for dual shifts
-            </div>
-          </div>
-
-          <div
-            v-for="(rule, index) in recurringForm.rules"
-            :key="index"
-            class="row q-col-gutter-sm q-mb-sm items-start"
-          >
-            <!-- Row number badge -->
-            <div class="col-auto flex items-center" style="padding-top: 10px">
-              <q-chip dense size="sm" color="primary" text-color="white" class="q-ma-none">
-                {{ index + 1 }}
-              </q-chip>
-            </div>
-
-            <!-- Weekday -->
-            <div class="col-4">
-              <q-select
-                v-model="rule.weekday"
-                :options="weekdayOptions"
-                option-value="value"
-                option-label="label"
-                emit-value
-                map-options
-                label="Weekday *"
-                outlined
-                dense
-              />
-            </div>
-
-            <!-- Shift Types (multi-select, supports dual shifts) -->
-            <div class="col">
-              <q-select
-                v-model="rule.shift_type_ids"
-                :options="shiftTypes"
-                option-value="id"
-                option-label="name"
-                emit-value
-                map-options
-                multiple
-                use-chips
-                label="Shift Type(s) *"
-                outlined
-                dense
-                :hint="
-                  rule.shift_type_ids && rule.shift_type_ids.length > 1
-                    ? `${rule.shift_type_ids.length} shifts (dual shift)`
-                    : ''
-                "
-              />
-            </div>
-
-            <!-- Remove rule button -->
-            <div class="col-auto flex items-center" style="padding-top: 6px">
-              <q-btn
-                flat
-                round
-                dense
-                icon="remove_circle_outline"
-                color="negative"
-                :disable="recurringForm.rules.length === 1"
-                @click="recurringForm.rules.splice(index, 1)"
-              >
-                <q-tooltip>Remove this rule</q-tooltip>
-              </q-btn>
-            </div>
-          </div>
-
-          <!-- Add Rule / Duplicate Day buttons -->
-          <div class="row q-gutter-sm q-mt-sm">
-            <q-btn
-              flat
-              color="primary"
-              icon="add"
-              label="Add Rule"
-              @click="recurringForm.rules.push({ weekday: null, shift_type_ids: [] })"
-            />
-            <q-btn
-              flat
-              color="secondary"
-              icon="content_copy"
-              label="Duplicate Last"
-              :disable="!recurringForm.rules.length"
-              @click="
-                () => {
-                  const last = recurringForm.rules[recurringForm.rules.length - 1]
-                  recurringForm.rules.push({
-                    weekday: last.weekday,
-                    shift_type_ids: [...(last.shift_type_ids || [])],
-                  })
-                }
-              "
-            >
-              <q-tooltip>Duplicate last rule row (useful for same-day dual shifts)</q-tooltip>
-            </q-btn>
-          </div>
-
-          <!-- Rules summary preview -->
-          <div
-            v-if="recurringForm.rules.some((r) => r.weekday && r.shift_type_ids?.length)"
-            class="q-mt-lg"
-          >
-            <div class="text-caption text-grey-7 q-mb-xs">Preview</div>
-            <div class="rules-preview-box">
-              <div
-                v-for="(rule, i) in recurringForm.rules.filter(
-                  (r) => r.weekday && r.shift_type_ids?.length,
-                )"
-                :key="i"
-                class="rules-preview-row"
-              >
-                <q-chip dense color="blue-1" text-color="blue-9" size="sm">{{
-                  rule.weekday
-                }}</q-chip>
-                <span class="q-mx-xs text-grey-6">→</span>
-                <q-chip
-                  v-for="sid in rule.shift_type_ids"
-                  :key="sid"
-                  dense
-                  color="green-1"
-                  text-color="green-9"
-                  size="sm"
-                >
-                  {{ shiftTypes.find((s) => s.id === sid)?.name || sid }}
-                </q-chip>
-              </div>
+              <q-toggle v-model="shiftTypeTemplateForm.is_active" label="Active" color="primary" />
             </div>
           </div>
         </q-card-section>
@@ -2015,9 +2081,9 @@
           <q-btn flat label="Cancel" v-close-popup />
           <q-btn
             color="primary"
-            :label="editingRecurring ? 'Update' : 'Save'"
-            :loading="savingRecurring"
-            @click="saveRecurringSchedule"
+            :label="editingShiftTypeTemplate ? 'Update' : 'Save'"
+            :loading="savingShiftTypeTemplate"
+            @click="saveShiftTypeTemplate"
           />
         </q-card-actions>
       </q-card>
@@ -2079,180 +2145,6 @@
             :loading="savingPosition"
             @click="savePosition"
           />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <!-- ===================== CONTRACT DIALOG ===================== -->
-    <q-dialog v-model="contractDialog" persistent>
-      <q-card style="min-width: 520px; border-radius: 16px">
-        <q-card-section class="row items-center q-pb-none">
-          <div class="text-h6">{{ editingContract ? 'Edit Contract' : 'Add Contract' }}</div>
-          <q-space />
-          <q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-        <q-card-section class="q-pt-md">
-          <q-select
-            v-model="contractForm.employee_id"
-            :options="employees.map((e) => ({ label: e.full_name || e.name, value: e.id }))"
-            label="Employee *"
-            outlined
-            dense
-            emit-value
-            map-options
-            class="q-mb-md"
-          />
-          <q-select
-            v-model="contractForm.contract_type_id"
-            :options="contractTypes.map((c) => ({ label: c.name, value: c.id }))"
-            label="Contract Type *"
-            outlined
-            dense
-            emit-value
-            map-options
-            class="q-mb-md"
-          />
-          <q-select
-            v-model="contractForm.site_id"
-            :options="sites.map((s) => ({ label: s.name, value: s.id }))"
-            label="Site"
-            outlined
-            dense
-            emit-value
-            map-options
-            clearable
-            class="q-mb-md"
-          />
-
-          <div class="text-subtitle2 q-mb-sm q-mt-md">Pay Structure</div>
-          <q-separator class="q-mb-md" />
-
-          <q-select
-            v-model="contractForm.pay_structure.position_id"
-            :options="positions.map((p) => ({ label: p.name, value: p.id }))"
-            label="Position *"
-            outlined
-            dense
-            emit-value
-            map-options
-            class="q-mb-md"
-          />
-          <q-select
-            v-model="contractForm.pay_structure.pay_type"
-            :options="payTypeOptions"
-            label="Pay Type *"
-            outlined
-            dense
-            class="q-mb-md"
-          />
-          <div class="row q-col-gutter-md q-mb-md">
-            <div class="col-8">
-              <q-input
-                v-model="contractForm.pay_structure.rate"
-                label="Rate *"
-                outlined
-                dense
-                type="number"
-                step="0.01"
-              />
-            </div>
-            <div class="col-4">
-              <q-input
-                v-model="contractForm.pay_structure.currency"
-                label="Currency"
-                outlined
-                dense
-              />
-            </div>
-          </div>
-          <div class="row q-col-gutter-md">
-            <div class="col-6">
-              <q-input
-                v-model="contractForm.pay_structure.effective_from"
-                label="Effective From *"
-                type="date"
-                outlined
-                dense
-              />
-            </div>
-            <div class="col-6">
-              <q-input
-                v-model="contractForm.pay_structure.effective_to"
-                label="Effective To"
-                type="date"
-                outlined
-                dense
-                clearable
-              />
-            </div>
-          </div>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Cancel" v-close-popup />
-          <q-btn
-            color="primary"
-            :label="editingContract ? 'Update' : 'Save'"
-            :loading="savingContract"
-            @click="saveContract"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <!-- ===================== CONTRACT VIEW DIALOG ===================== -->
-    <q-dialog v-model="contractViewDialog">
-      <q-card style="min-width: 480px; border-radius: 16px" v-if="selectedContract">
-        <q-card-section class="row items-center q-pb-none">
-          <div class="text-h6">Contract Details</div>
-          <q-space />
-          <q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-        <q-card-section>
-          <q-list>
-            <q-item
-              ><q-item-section
-                ><q-item-label caption>Employee</q-item-label
-                ><q-item-label>{{
-                  selectedContract.employee_name || 'N/A'
-                }}</q-item-label></q-item-section
-              ></q-item
-            >
-            <q-item
-              ><q-item-section
-                ><q-item-label caption>Contract Type</q-item-label
-                ><q-item-label>{{
-                  selectedContract.contract_type_name || 'N/A'
-                }}</q-item-label></q-item-section
-              ></q-item
-            >
-            <q-item
-              ><q-item-section
-                ><q-item-label caption>Company</q-item-label
-                ><q-item-label>{{
-                  selectedContract.company_name || 'N/A'
-                }}</q-item-label></q-item-section
-              ></q-item
-            >
-            <q-item
-              ><q-item-section
-                ><q-item-label caption>Status</q-item-label
-                ><q-item-label>{{
-                  selectedContract.is_acknowledged ? 'Acknowledged' : 'Pending'
-                }}</q-item-label></q-item-section
-              ></q-item
-            >
-            <q-item
-              ><q-item-section
-                ><q-item-label caption>Date Created</q-item-label
-                ><q-item-label>{{
-                  formatDate(selectedContract.date_created)
-                }}</q-item-label></q-item-section
-              ></q-item
-            >
-          </q-list>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Close" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -2558,7 +2450,7 @@ import { useAdminRoles } from '@/composables/admin/useAdminRoles'
 import { useAdminShifts } from '@/composables/admin/useAdminShifts'
 import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
 import { useAdminPositions } from '@/composables/admin/useAdminPositions'
-import { useAdminContracts } from '@/composables/admin/useAdminContracts'
+import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 import {
   useAdminAllowanceTypes,
   useAdminTaxBrackets,
@@ -2784,34 +2676,44 @@ const {
   deleteRole,
 } = useAdminRoles()
 
-// Shifts + Recurring
+// Shifts + Shift Templates + Weekly Templates
 const {
   shifts,
-  shiftTypes,
-  recurringSchedules,
+  shiftTypes: shiftTypeOptions,
+  shiftTypeTemplates,
+  weeklyShiftTemplates,
   loading: loadingShifts,
   saving: savingShift,
-  loadingRecurring,
-  savingRecurring,
+  loadingShiftTypeTemplates,
+  savingShiftTypeTemplate,
+  loadingWeeklyTemplates,
+  savingWeeklyTemplate,
   shiftDialog,
   editingShift,
   shiftForm,
-  recurringDialog,
-  editingRecurring,
-  recurringForm,
-  weekdayOptions,
+  shiftTypeTemplateDialog,
+  editingShiftTypeTemplate,
+  shiftTypeTemplateForm,
+  weeklyTemplateDialog,
+  weeklyTemplateForm,
+  editingWeeklyTemplate,
   formatTime,
   fetchShifts,
   fetchShiftTemplates,
+  fetchShiftTypeTemplates,
+  fetchWeeklyShiftTemplates,
   openShiftDialog,
   openEditShiftDialog: editShift,
   saveShift,
   deleteShift,
-  fetchRecurringSchedules,
-  openRecurringDialog,
-  openEditRecurringDialog: editRecurring,
-  saveRecurringSchedule,
-  deleteRecurring,
+  openShiftTypeTemplateDialog,
+  openEditShiftTypeTemplateDialog: editShiftTypeTemplate,
+  saveShiftTypeTemplate,
+  deleteShiftTypeTemplate,
+  openWeeklyTemplateDialog,
+  openEditWeeklyTemplateDialog: editWeeklyTemplate,
+  saveWeeklyTemplate,
+  deleteWeeklyTemplate,
 } = useAdminShifts()
 
 // Departments
@@ -2844,27 +2746,22 @@ const {
   deletePosition,
 } = useAdminPositions()
 
-// Contracts
+// Contract Types (definitions)
 const {
-  contracts,
-  contractTypes,
-  loading: loadingContracts,
-  saving: savingContract,
-  dialog: contractDialog,
-  viewDialog: contractViewDialog,
-  editing: editingContract,
-  selectedContract,
-  form: contractForm,
-  payTypeOptions,
-  fetchContracts,
-  fetchContractTypes,
-  openDialog: _openContractDialog,
-  openEditDialog: _editContract,
-  viewContract,
-  viewContractPDF,
-  saveContract,
-  deleteContract,
-} = useAdminContracts()
+  contractTypes: contractTypeDefinitions,
+  eligibilities,
+  loading: loadingContractTypes,
+  saving: savingContractType,
+  dialog: contractTypeDialog,
+  editing: editingContractType,
+  form: contractTypeForm,
+  fetchContractTypes: fetchContractTypeDefs,
+  fetchEligibilities,
+  openDialog: openContractTypeDialog,
+  editContractType,
+  saveContractType,
+  deleteContractType,
+} = useAdminContractTypes()
 
 // Local employees list (shared by contracts)
 const employees = ref([])
@@ -2885,16 +2782,6 @@ async function fetchEmployees() {
   } catch (e) {
     console.error('Error fetching employees:', e)
   }
-}
-
-// Wrap contract dialog openers to pre-load employees + contract types
-async function openContractDialog() {
-  await Promise.all([fetchEmployees(), fetchContractTypes()])
-  _openContractDialog()
-}
-async function editContract(contract) {
-  await Promise.all([fetchEmployees(), fetchContractTypes()])
-  _editContract(contract)
 }
 
 // Allowance Types
@@ -2987,6 +2874,8 @@ const {
   deletePayStructure,
 } = useAdminPayStructures()
 
+const payTypeOptions = ['monthly', 'semi-monthly', 'weekly', 'daily', 'hourly']
+
 // ─── view* aliases (view → opens edit dialog) ─────────────────────────────
 const viewCompany = (r) => editCompany(r)
 const viewSite = (r) => editSite(r)
@@ -3009,6 +2898,26 @@ function formatDate(date) {
     month: 'short',
     day: 'numeric',
   })
+}
+
+function getShiftNames(shiftsDetail) {
+  if (!shiftsDetail) return []
+  try {
+    const parsed = typeof shiftsDetail === 'string' ? JSON.parse(shiftsDetail) : shiftsDetail
+    return parsed.map((s) => s.name || s.start_time + ' - ' + s.end_time)
+  } catch {
+    return []
+  }
+}
+
+function getShiftCount(shifts) {
+  if (!shifts) return 0
+  try {
+    const parsed = typeof shifts === 'string' ? JSON.parse(shifts) : shifts
+    return parsed.length
+  } catch {
+    return 0
+  }
 }
 
 // ─── Table column definitions ─────────────────────────────────────────────
@@ -3046,8 +2955,15 @@ const shiftColumns = [
 ]
 const recurringColumns = [
   { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
-  { name: 'shifts', label: 'Shifts', field: 'shifts', align: 'left' },
+  { name: 'shifts', label: 'Shifts', field: 'shifts', align: 'center' },
+  { name: 'shifts_detail', label: 'Shifts Detail', field: 'shifts_detail', align: 'center' },
   { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
+  { name: 'created_at', label: 'Created', field: 'created_at', align: 'left', sortable: true },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
+const weeklyTemplateColumns = [
+  { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
+  { name: 'rules', label: 'Rules', field: 'rules', align: 'left' },
   { name: 'created_at', label: 'Created', field: 'created_at', align: 'left', sortable: true },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
@@ -3061,14 +2977,22 @@ const positionColumns = [
   { name: 'description', label: 'Description', field: 'description', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
-const contractColumns = [
-  { name: 'employee', label: 'Employee', field: 'employee_name', align: 'left', sortable: true },
-  { name: 'contract_type', label: 'Contract Type', field: 'contract_type_name', align: 'left' },
-  { name: 'company', label: 'Company', field: 'company_name', align: 'left' },
-  { name: 'status', label: 'Status', field: 'is_acknowledged', align: 'center' },
-  { name: 'date_created', label: 'Date Created', field: 'date_created', align: 'left' },
+
+const contractTypeColumns = [
+  { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
+  { name: 'eligibilities', label: 'Eligibilities', field: 'eligibilities', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
+
+const eligibilityOptions = computed(() =>
+  eligibilities.value.map((e) => ({ label: e.name, value: e.id }))
+)
+
+function getEligibilityName(id) {
+  const el = eligibilities.value.find((e) => e.id === id)
+  return el?.name || 'Unknown'
+}
+
 const allowanceTypeColumns = [
   { name: 'name', label: 'Allowance Name', field: 'name', align: 'left', sortable: true },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
@@ -3155,16 +3079,6 @@ const filteredPositions = computed(() => {
       (p.name || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q),
   )
 })
-const filteredContracts = computed(() => {
-  if (!searchQuery.value) return contracts.value
-  const q = searchQuery.value.toLowerCase()
-  return contracts.value.filter(
-    (c) =>
-      (c.employee_name || '').toLowerCase().includes(q) ||
-      (c.contract_type_name || '').toLowerCase().includes(q) ||
-      (c.company_name || '').toLowerCase().includes(q),
-  )
-})
 
 // ─── onMounted ────────────────────────────────────────────────────────────
 onMounted(async () => {
@@ -3174,22 +3088,23 @@ onMounted(async () => {
   try {
     await fetchPositions()
     await fetchDepartments()
-    await fetchContractTypes()
     await fetchEmployees()
     await fetchShifts()
     await fetchShiftTemplates()
+    await fetchWeeklyShiftTemplates()
 
     await Promise.all([
       fetchSites(),
       fetchRoles(),
-      fetchRecurringSchedules(),
+      fetchShiftTypeTemplates(),
       fetchAllowanceTypes(),
       fetchTaxBrackets(),
       fetchCutoffPeriods(),
       fetchPayrollGroups(),
       fetchLaborRules(),
       fetchPayStructures(positions.value),
-      fetchContracts(employees.value, companies.value),
+      fetchContractTypeDefs(),
+      fetchEligibilities(),
     ])
   } catch (error) {
     console.error('Error fetching data:', error)
@@ -3199,6 +3114,12 @@ onMounted(async () => {
       position: 'top',
       timeout: 5000,
     })
+  }
+})
+
+watch(activeTab, async (newTab) => {
+  if (newTab === 'contract-types') {
+    await Promise.all([fetchContractTypeDefs(), fetchEligibilities()])
   }
 })
 </script>

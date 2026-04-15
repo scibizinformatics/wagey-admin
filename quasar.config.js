@@ -14,12 +14,18 @@ export default defineConfig((ctx) => {
   return {
     eslint: {
       warnings: true,
-      errors: false,
+      errors: true,
     },
 
     boot: ['pinia', 'auth', 'axios'],
     css: ['app.scss'],
     extras: ['roboto-font', 'material-icons'],
+
+    babel: {
+      presets: [
+        ['@quasar/babel-preset-app', {}]
+      ]
+    },
 
     build: {
       vueRouterMode: 'history',
@@ -92,6 +98,12 @@ export default defineConfig((ctx) => {
         },
         {
           context: ['/contracts'],
+          target: apiBaseUrl,
+          changeOrigin: true,
+          secure: false,
+        },
+        {
+          context: ['/access'],
           target: apiBaseUrl,
           changeOrigin: true,
           secure: false,
