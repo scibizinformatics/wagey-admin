@@ -2549,7 +2549,7 @@ const handleReassignShift = async () => {
   const r = reassignData.value
   try {
     if (r.isDualShift) {
-      await Promise.all(
+      const results = await Promise.all(
         r.dualShifts.map((s) => {
           const original = r.originalShifts?.find((orig) => orig.assignmentId === s.assignmentId) || {}
           const payload = { assignment_id: parseInt(s.assignmentId) }
@@ -2558,15 +2558,33 @@ const handleReassignShift = async () => {
           if (s.departmentId !== original.departmentId && s.departmentId) {
             payload.department_id = parseInt(s.departmentId)
           }
-          return reassignShiftApi(payload)
+          return reassignShiftApi(payload).then((res) => ({ ...res, assignmentId: s.assignmentId }))
         }),
       )
+      results.forEach((result) => {
+        const idx = shifts.value.findIndex((s) => s.assignmentId === result.assignmentId)
+        if (idx !== -1) {
+          if (r.dualShifts.find((ds) => ds.assignmentId === result.assignmentId)) {
+            const updatedShift = r.dualShifts.find((ds) => ds.assignmentId === result.assignmentId)
+            shifts.value[idx] = {
+              ...shifts.value[idx],
+              site: updatedShift.siteId,
+              shiftTypeId: updatedShift.shiftTypeId,
+              department: updatedShift.departmentId,
+              position: positionOptions.value.find((opt) => opt.value === updatedShift.shiftTypeId)?.label || shifts.value[idx].position,
+              siteName: siteOptions.value.find((opt) => opt.value === updatedShift.siteId)?.label || shifts.value[idx].siteName,
+              is_off: false,
+            }
+          }
+        }
+      })
       $q.notify({
         type: 'positive',
         message: 'Both shifts updated successfully!',
         icon: 'check_circle',
         timeout: 3000,
       })
+      fetchData()
     } else {
       if (!r.assignmentId || !r.siteId) {
         $q.notify({
@@ -2583,18 +2601,27 @@ const handleReassignShift = async () => {
         payload.department_id = parseInt(r.departmentId)
       }
       await reassignShiftApi(payload)
+      const idx = shifts.value.findIndex((s) => s.assignmentId === r.assignmentId)
+      if (idx !== -1) {
+        shifts.value[idx] = {
+          ...shifts.value[idx],
+          site: r.siteId,
+          shiftTypeId: r.shiftTypeId,
+          department: r.departmentId,
+          position: positionOptions.value.find((opt) => opt.value === r.shiftTypeId)?.label || shifts.value[idx].position,
+          siteName: siteOptions.value.find((opt) => opt.value === r.siteId)?.label || shifts.value[idx].siteName,
+          is_off: false,
+        }
+      }
       $q.notify({
         type: 'positive',
         message: 'Shift updated successfully!',
         icon: 'check_circle',
         timeout: 3000,
       })
+      fetchData()
     }
     closeReassignModal()
-    shifts.value = []
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    await fetchSites()
-    await fetchData()
   } catch (error) {
     console.error('❌ Reassign failed:', error)
     $q.notify({

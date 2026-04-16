@@ -76,8 +76,16 @@ const lastDataEvent = ref({
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const getToken = () => sessionStorage.getItem('authToken') || localStorage.getItem('access_token')
-const getCompanyId = () =>
-  localStorage.getItem('companyId') || localStorage.getItem('selectedCompany')
+const getCompanyId = () => {
+  const stored = localStorage.getItem('companyId') || localStorage.getItem('selectedCompany')
+  if (!stored) return null
+  try {
+    const parsed = JSON.parse(stored)
+    return parsed?.id ?? parsed
+  } catch {
+    return stored
+  }
+}
 
 // ─── Icon helpers (unchanged) ──────────────────────────────────────────────────
 function getNotificationIcon(type) {
@@ -315,7 +323,7 @@ function handleOpen() {
 }
 
 function handleError(error) {
-  console.error('[Notifications] WebSocket error:', error)
+  console.warn('[Notifications] WebSocket error (expected if WS not configured):', error)
 }
 
 function handleClose() {
@@ -408,7 +416,7 @@ async function markAllAsRead() {
 }
 
 function requestRefresh() {
-  return send({ action: 'refresh' })
+  return _ws?.send({ action: 'refresh' })
 }
 
 function clearNotifications() {

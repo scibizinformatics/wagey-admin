@@ -41,6 +41,10 @@ export function useWebSocket(urlOrBuilder, options = {}) {
     if (debug) console.log('[useWebSocket]', ...args)
   }
 
+  const logError = (...args) => {
+    console.warn('[useWebSocket]', ...args)
+  }
+
   function buildUrl() {
     const path = typeof urlOrBuilder === 'function' ? urlOrBuilder() : urlOrBuilder
     if (!path) return null
@@ -90,7 +94,7 @@ export function useWebSocket(urlOrBuilder, options = {}) {
       }
 
       ws.onerror = (event) => {
-        log('WebSocket error:', event)
+        logError('WebSocket error:', event)
         lastError.value = event
         connectionState.value = CONNECTION_STATES.ERROR
         onError?.(event)
@@ -103,13 +107,17 @@ export function useWebSocket(urlOrBuilder, options = {}) {
         onClose?.(event)
 
         if (shouldReconnect && reconnectAttempts.value < maxReconnectAttempts) {
+          log('Scheduling reconnect...')
           scheduleReconnect()
         } else {
           connectionState.value = CONNECTION_STATES.DISCONNECTED
+          if (reconnectAttempts.value >= maxReconnectAttempts) {
+            log('Max reconnect attempts reached')
+          }
         }
       }
     } catch (err) {
-      log('Failed to create WebSocket:', err)
+      logError('Failed to create WebSocket:', err)
       lastError.value = err
       connectionState.value = CONNECTION_STATES.ERROR
       isConnecting.value = false
@@ -165,7 +173,7 @@ export function useWebSocket(urlOrBuilder, options = {}) {
 
   function send(data) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      log('Cannot send: WebSocket not open')
+      log('Cannot send: WebSocket not open', ws?.readyState)
       return false
     }
 
@@ -174,6 +182,11 @@ export function useWebSocket(urlOrBuilder, options = {}) {
       ws.send(payload)
       return true
     } catch (err) {
+      if (err.message?.includes('message channel closed')) {
+        log('Message channel closed, attempting reconnect')
+        reconnect()
+        return false
+      }
       log('Failed to send:', err)
       return false
     }

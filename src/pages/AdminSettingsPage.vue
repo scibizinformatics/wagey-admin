@@ -433,15 +433,8 @@
                               props.row.is_graveyard ? 'status-graveyard' : 'status-regular',
                             ]"
                           >
-                            {{ props.row.is_graveyard ? 'Graveyard' : 'Regular' }}
+                            {{ props.row.break_hours || '-' }}
                           </div>
-                        </q-td>
-                        <q-td class="table-body-cell">
-                          <q-icon
-                            :name="props.row.apply_night_differential ? 'check_circle' : 'cancel'"
-                            :color="props.row.apply_night_differential ? 'positive' : 'grey'"
-                            size="20px"
-                          />
                         </q-td>
                         <q-td class="table-body-cell actions-cell">
                           <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
@@ -975,12 +968,26 @@
                       <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                         <q-menu anchor="bottom right" self="top right" class="action-dropdown">
                           <q-list dense style="min-width: 150px">
-                            <q-item clickable v-close-popup class="dropdown-item" @click="editContractType(props.row)">
-                              <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item"
+                              @click="editContractType(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="edit" size="16px"
+                              /></q-item-section>
                               <q-item-section>Edit</q-item-section>
                             </q-item>
-                            <q-item clickable v-close-popup class="dropdown-item dropdown-item-danger" @click="deleteContractType(props.row)">
-                              <q-item-section side><q-icon name="delete" size="16px" color="negative" /></q-item-section>
+                            <q-item
+                              clickable
+                              v-close-popup
+                              class="dropdown-item dropdown-item-danger"
+                              @click="deleteContractType(props.row)"
+                            >
+                              <q-item-section side
+                                ><q-icon name="delete" size="16px" color="negative"
+                              /></q-item-section>
                               <q-item-section>Delete</q-item-section>
                             </q-item>
                           </q-list>
@@ -1003,7 +1010,13 @@
               </q-card-section>
 
               <q-card-section>
-                <q-input v-model="contractTypeForm.name" label="Name *" outlined dense class="q-mb-md" />
+                <q-input
+                  v-model="contractTypeForm.name"
+                  label="Name *"
+                  outlined
+                  dense
+                  class="q-mb-md"
+                />
                 <q-select
                   v-model="contractTypeForm.eligibilities"
                   :options="eligibilityOptions"
@@ -1019,7 +1032,12 @@
 
               <q-card-actions align="right">
                 <q-btn flat label="Cancel" v-close-popup />
-                <q-btn color="primary" label="Save" :loading="savingContractType" @click="saveContractType" />
+                <q-btn
+                  color="primary"
+                  label="Save"
+                  :loading="savingContractType"
+                  @click="saveContractType"
+                />
               </q-card-actions>
             </q-card>
           </q-dialog>
@@ -1911,6 +1929,19 @@
         </q-card-section>
         <q-card-section class="q-pt-md">
           <q-input v-model="shiftForm.name" label="Shift Name *" outlined dense class="q-mb-md" />
+          <q-select
+            v-model="shiftForm.site"
+            :options="sites"
+            option-value="id"
+            option-label="name"
+            emit-value
+            map-options
+            label="Site"
+            outlined
+            dense
+            class="q-mb-md"
+            clearable
+          />
           <q-input
             v-model="shiftForm.description"
             label="Description"
@@ -1938,6 +1969,14 @@
               />
             </div>
           </div>
+          <q-input
+            v-model="shiftForm.break_hours"
+            label="Break Hours *"
+            type="text"
+            outlined
+            dense
+            class="q-mb-md"
+          />
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Cancel" v-close-popup />
@@ -2944,13 +2983,7 @@ const shiftColumns = [
   { name: 'name', label: 'Shift Name', field: 'name', align: 'left', sortable: true },
   { name: 'description', label: 'Description', field: 'description', align: 'left' },
   { name: 'times', label: 'Time', align: 'left' },
-  { name: 'is_graveyard', label: 'Type', field: 'is_graveyard', align: 'center' },
-  {
-    name: 'apply_night_differential',
-    label: 'Night Diff',
-    field: 'apply_night_differential',
-    align: 'center',
-  },
+  { name: 'break_hours', label: 'Break Hours', field: 'break_hours', align: 'center' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
 const recurringColumns = [
@@ -2985,7 +3018,7 @@ const contractTypeColumns = [
 ]
 
 const eligibilityOptions = computed(() =>
-  eligibilities.value.map((e) => ({ label: e.name, value: e.id }))
+  eligibilities.value.map((e) => ({ label: e.name, value: e.id })),
 )
 
 function getEligibilityName(id) {

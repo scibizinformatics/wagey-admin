@@ -53,13 +53,11 @@ export function useAdminShifts() {
       id: null,
       name: '',
       company: cId,
+      site: null,
       description: '',
       default_start_time: '',
       default_end_time: '',
-      is_graveyard: false,
-      apply_night_differential: false,
-      is_off: false,
-      is_extended: false,
+      break_hours: '',
     }
   }
 
@@ -390,13 +388,11 @@ export function useAdminShifts() {
       id: shift.id,
       name: shift.name,
       company: shift.company || companyId.value,
+      site: shift.site || null,
       description: shift.description || '',
       default_start_time: extractTime(shift.default_start_time),
       default_end_time: extractTime(shift.default_end_time),
-      is_graveyard: shift.is_graveyard || false,
-      apply_night_differential: shift.apply_night_differential || false,
-      is_off: shift.is_off || false,
-      is_extended: shift.is_extended || false,
+      break_hours: shift.break_hours || '',
     }
     shiftDialog.value = true
   }
@@ -405,7 +401,8 @@ export function useAdminShifts() {
     if (
       !shiftForm.value.name.trim() ||
       !shiftForm.value.default_start_time ||
-      !shiftForm.value.default_end_time
+      !shiftForm.value.default_end_time ||
+      !shiftForm.value.break_hours
     ) {
       $q.notify({ type: 'negative', message: 'Please fill all required fields', position: 'top' })
       return
@@ -425,13 +422,11 @@ export function useAdminShifts() {
       const payload = {
         name: shiftForm.value.name.trim(),
         company: parseInt(cId),
+        site: shiftForm.value.site ? parseInt(shiftForm.value.site) : null,
         description: shiftForm.value.description || '',
         default_start_time: fmt(shiftForm.value.default_start_time),
         default_end_time: fmt(shiftForm.value.default_end_time),
-        is_graveyard: Boolean(shiftForm.value.is_graveyard),
-        apply_night_differential: Boolean(shiftForm.value.apply_night_differential),
-        is_off: Boolean(shiftForm.value.is_off),
-        is_extended: Boolean(shiftForm.value.is_extended),
+        break_hours: shiftForm.value.break_hours || '',
       }
 
       if (editingShift.value) {

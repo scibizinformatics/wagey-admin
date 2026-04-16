@@ -94,7 +94,7 @@ const server = http.createServer((req, res) => {
                 res,
                 500,
                 { 'Content-Type': 'text/plain; charset=utf-8' },
-                'index.html not found. Did you run the Quasar build?'
+                'index.html not found. Did you run the Quasar build?',
               )
             }
             const headers = { 'Content-Type': MIME['.html'] }
@@ -118,7 +118,6 @@ const server = http.createServer((req, res) => {
 })
 
 server.listen(PORT, '0.0.0.0', () => {
-  // eslint-disable-next-line no-console
+   
   console.log(`Serving ${DIST_DIR} on http://0.0.0.0:${PORT}`)
 })
-
