@@ -8,23 +8,15 @@ export function useAdminShifts() {
   const $q = useQuasar()
   const { companyId } = useCompany()
 
-  const shifts = ref([])
   const shiftTypes = ref([])
   const shiftTemplates = ref([])
   const shiftTypeTemplates = ref([])
   const weeklyShiftTemplates = ref([])
 
-  const loading = ref(false)
-  const saving = ref(false)
   const loadingShiftTypeTemplates = ref(false)
   const savingShiftTypeTemplate = ref(false)
   const loadingWeeklyTemplates = ref(false)
   const savingWeeklyTemplate = ref(false)
-
-  // ─── Shift dialog state ────────────────────────────────────────────────────
-  const shiftDialog = ref(false)
-  const editingShift = ref(false)
-  const shiftForm = ref(_emptyShiftForm())
 
   // ─── Shift Type Template dialog state ─────────────────────────────────────
   const shiftTypeTemplateDialog = ref(false)
@@ -48,26 +40,13 @@ export function useAdminShifts() {
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
-  function _emptyShiftForm(cId = null) {
-    return {
-      id: null,
-      name: '',
-      company: cId,
-      site: null,
-      description: '',
-      default_start_time: '',
-      default_end_time: '',
-      break_hours: '',
-    }
-  }
-
   function _emptyRecurringForm() {
     return {
       id: null,
       name: '',
-      shift_type_ids: [],
-      site_id: null,
-      is_active: true,
+      total_hours: 0,
+      break_hours: 0,
+      shifts: [{ site_id: null, default_start_time: '', default_end_time: '' }],
     }
   }
 
@@ -147,43 +126,29 @@ export function useAdminShifts() {
     return days.map((d) => map[d.trim().toLowerCase()] || d.trim()).join(', ')
   }
 
-  // ─── Fetch shifts ──────────────────────────────────────────────────────────
+  // ─── Fetch shift templates ────────────────────────────────────────────────
 
-  async function fetchShifts() {
+  async function fetchShiftTemplates() {
     if (!companyId.value) {
-      shifts.value = []
+      shiftTemplates.value = []
       return
     }
-    loading.value = true
     try {
       const response = await api.get(`${BASE}/organization/shift-types/`, {
         params: { company: companyId.value },
         headers: authHeaders(),
       })
-      shifts.value = response.data.data ?? response.data ?? []
-      shiftTypes.value = shifts.value
-      shiftTemplates.value = shifts.value
-      return shifts.value
+      shiftTemplates.value = response.data.data ?? response.data ?? []
+      shiftTypes.value = shiftTemplates.value
+      return shiftTemplates.value
     } catch (error) {
-      console.error('Error fetching shifts:', error)
+      console.error('Error fetching shift templates:', error)
       $q.notify({
         type: 'negative',
-        message: error.response?.data?.message || 'Failed to load shifts',
+        message: error.response?.data?.message || 'Failed to load shift templates',
         position: 'top',
       })
-    } finally {
-      loading.value = false
     }
-  }
-
-  // ─── Fetch shift templates (reuses shift-types data) ──────────────────────
-
-  async function fetchShiftTemplates() {
-    if (shifts.value.length) {
-      shiftTemplates.value = shifts.value
-      return shiftTemplates.value
-    }
-    await fetchShifts()
   }
 
   // ─── Fetch weekly shift templates ─────────────────────────────────────────
@@ -370,116 +335,6 @@ export function useAdminShifts() {
     })
   }
 
-  // ─── Shift dialog helpers ──────────────────────────────────────────────────
-
-  function openShiftDialog() {
-    if (!companyId.value) {
-      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
-      return
-    }
-    editingShift.value = false
-    shiftForm.value = _emptyShiftForm(companyId.value)
-    shiftDialog.value = true
-  }
-
-  function openEditShiftDialog(shift) {
-    editingShift.value = true
-    shiftForm.value = {
-      id: shift.id,
-      name: shift.name,
-      company: shift.company || companyId.value,
-      site: shift.site || null,
-      description: shift.description || '',
-      default_start_time: extractTime(shift.default_start_time),
-      default_end_time: extractTime(shift.default_end_time),
-      break_hours: shift.break_hours || '',
-    }
-    shiftDialog.value = true
-  }
-
-  async function saveShift() {
-    if (
-      !shiftForm.value.name.trim() ||
-      !shiftForm.value.default_start_time ||
-      !shiftForm.value.default_end_time ||
-      !shiftForm.value.break_hours
-    ) {
-      $q.notify({ type: 'negative', message: 'Please fill all required fields', position: 'top' })
-      return
-    }
-    const cId = shiftForm.value.company || companyId.value
-    if (!cId) {
-      $q.notify({ type: 'negative', message: 'Company ID is required', position: 'top' })
-      return
-    }
-
-    saving.value = true
-    try {
-      const fmt = (t) => {
-        const [h, m] = t.split(':')
-        return `${h.padStart(2, '0')}:${m.padStart(2, '0')}:00`
-      }
-      const payload = {
-        name: shiftForm.value.name.trim(),
-        company: parseInt(cId),
-        site: shiftForm.value.site ? parseInt(shiftForm.value.site) : null,
-        description: shiftForm.value.description || '',
-        default_start_time: fmt(shiftForm.value.default_start_time),
-        default_end_time: fmt(shiftForm.value.default_end_time),
-        break_hours: shiftForm.value.break_hours || '',
-      }
-
-      if (editingShift.value) {
-        await api.put(`${BASE}/organization/shift-types/${shiftForm.value.id}/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Shift updated successfully' })
-      } else {
-        await api.post(`${BASE}/organization/shift-types/`, payload, { headers: authHeaders() })
-        $q.notify({ type: 'positive', message: 'Shift created successfully' })
-      }
-
-      shiftDialog.value = false
-      await fetchShifts()
-    } catch (error) {
-      console.error('Error saving shift:', error)
-      let errorMessage = 'Failed to save shift'
-      if (error.response?.data && typeof error.response.data === 'object') {
-        const errors = Object.entries(error.response.data).map(
-          ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`,
-        )
-        if (errors.length) errorMessage = errors.join(' | ')
-      } else if (error.response?.data?.message) errorMessage = error.response.data.message
-      $q.notify({ type: 'negative', message: errorMessage, position: 'top', timeout: 5000 })
-    } finally {
-      saving.value = false
-    }
-  }
-
-  async function deleteShift(shift) {
-    $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${shift.name}"?`,
-      cancel: true,
-      persistent: true,
-    }).onOk(async () => {
-      try {
-        await api.delete(`${BASE}/organization/shift-types/${shift.id}/`, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Shift deleted successfully' })
-        await fetchShifts()
-      } catch (error) {
-        console.error('Error deleting shift:', error)
-        $q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to delete shift',
-          position: 'top',
-        })
-      }
-    })
-  }
-
   // ─── Fetch shift type templates ────────────────────────────────────────────
 
   async function fetchShiftTypeTemplates() {
@@ -531,9 +386,9 @@ export function useAdminShifts() {
     shiftTypeTemplateForm.value = {
       id: row.id,
       name: row.name,
-      shift_type_ids: row.shift_type_ids || [],
-      site_id: row.site_id ?? null,
-      is_active: row.is_active ?? true,
+      total_hours: row.total_hours || 9,
+      break_hours: row.break_hours || 0,
+      shifts: row.shifts || [{ site_id: null, default_start_time: '', default_end_time: '' }],
     }
 
     console.log(
@@ -543,7 +398,6 @@ export function useAdminShifts() {
     shiftTypeTemplateDialog.value = true
   }
 
-  // FIX: build payload from `rules` array; validate before sending
   async function saveShiftTypeTemplate() {
     console.log(
       '[saveShiftTypeTemplate] shiftTypeTemplateForm state:',
@@ -551,14 +405,31 @@ export function useAdminShifts() {
     )
 
     if (!shiftTypeTemplateForm.value.name?.trim()) {
-      $q.notify({ type: 'warning', message: 'Template name is required', position: 'top' })
+      $q.notify({
+        type: 'warning',
+        message: 'Please select at least one site to generate template name',
+        position: 'top',
+      })
       return
     }
 
-    if (!shiftTypeTemplateForm.value.shift_type_ids?.length) {
+    if (!shiftTypeTemplateForm.value.shifts?.length) {
       $q.notify({
         type: 'warning',
-        message: 'Please select at least one shift type',
+        message: 'Please add at least one shift',
+        position: 'top',
+      })
+      return
+    }
+
+    // Validate each shift has required fields
+    const invalidShifts = shiftTypeTemplateForm.value.shifts.filter(
+      (s) => !s.site_id || !s.default_start_time || !s.default_end_time,
+    )
+    if (invalidShifts.length) {
+      $q.notify({
+        type: 'warning',
+        message: 'All shifts must have site, start time, and end time',
         position: 'top',
       })
       return
@@ -566,12 +437,14 @@ export function useAdminShifts() {
 
     const payload = {
       name: shiftTypeTemplateForm.value.name.trim(),
-      company: parseInt(companyId.value),
-      shift_type_ids: shiftTypeTemplateForm.value.shift_type_ids.map((id) => parseInt(id)),
-      site_id: shiftTypeTemplateForm.value.site_id
-        ? parseInt(shiftTypeTemplateForm.value.site_id)
-        : null,
-      is_active: shiftTypeTemplateForm.value.is_active ?? true,
+      company_id: parseInt(companyId.value),
+      total_hours: parseFloat(shiftTypeTemplateForm.value.total_hours) || 9,
+      break_hours: parseFloat(shiftTypeTemplateForm.value.break_hours) || 0,
+      shifts: shiftTypeTemplateForm.value.shifts.map((s) => ({
+        site_id: parseInt(s.site_id),
+        default_start_time: s.default_start_time,
+        default_end_time: s.default_end_time,
+      })),
     }
 
     console.log('[saveShiftTypeTemplate] payload to send:', JSON.stringify(payload, null, 2))
@@ -677,20 +550,14 @@ export function useAdminShifts() {
   }
 
   return {
-    shifts,
     shiftTypes,
     shiftTemplates,
     shiftTypeTemplates,
     weeklyShiftTemplates,
-    loading,
-    saving,
     loadingShiftTypeTemplates,
     savingShiftTypeTemplate,
     loadingWeeklyTemplates,
     savingWeeklyTemplate,
-    shiftDialog,
-    editingShift,
-    shiftForm,
     shiftTypeTemplateDialog,
     editingShiftTypeTemplate,
     shiftTypeTemplateForm,
@@ -701,14 +568,9 @@ export function useAdminShifts() {
     formatTime,
     extractTime,
     formatWeekdays,
-    fetchShifts,
     fetchShiftTemplates,
     fetchShiftTypeTemplates,
     fetchWeeklyShiftTemplates,
-    openShiftDialog,
-    openEditShiftDialog,
-    saveShift,
-    deleteShift,
     openShiftTypeTemplateDialog,
     openEditShiftTypeTemplateDialog,
     saveShiftTypeTemplate,

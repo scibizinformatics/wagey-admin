@@ -66,7 +66,7 @@
                   <q-tr class="table-header-row">
                     <q-th class="table-header-cell">Logo</q-th>
                     <q-th class="table-header-cell">Company Name</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
+                    <q-th class="table-header-cell actions-header">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
@@ -167,7 +167,7 @@
                     <q-th class="table-header-cell">Address</q-th>
                     <q-th class="table-header-cell">Ownership</q-th>
                     <q-th class="table-header-cell">Status</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
+                    <q-th class="table-header-cell actions-header">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
@@ -279,7 +279,7 @@
                   <q-tr class="table-header-row">
                     <q-th class="table-header-cell">Role Name</q-th>
                     <q-th class="table-header-cell">Permissions</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
+                    <q-th class="table-header-cell actions-header">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
@@ -370,120 +370,12 @@
               indicator-color="primary"
               align="left"
             >
-              <q-tab name="one-time" label="Time" class="settings-tab" />
               <q-tab name="shift-types" label="Shift Template" class="settings-tab" />
               <q-tab name="weekly-templates" label="Weekly Shift Templates" class="settings-tab" />
             </q-tabs>
           </div>
 
           <q-tab-panels v-model="shiftSubTab" animated class="transparent-panels">
-            <!-- ---- Shift Type (existing) ---- -->
-            <q-tab-panel name="one-time" class="q-pa-none">
-              <div class="table-section">
-                <div class="table-header">
-                  <div class="table-title-section">
-                    <h2 class="table-title">Time</h2>
-                    <p class="table-subtitle">Manage shift times and schedules</p>
-                  </div>
-                  <div class="table-actions">
-                    <q-btn
-                      color="primary"
-                      label="Add Time"
-                      icon="add"
-                      class="add-btn"
-                      @click="openShiftDialog"
-                    />
-                  </div>
-                </div>
-
-                <div class="modern-table-container">
-                  <q-table
-                    :rows="filteredShifts"
-                    :columns="shiftColumns"
-                    row-key="id"
-                    :loading="loadingShifts"
-                    flat
-                    no-data-label="No shifts found"
-                    class="settings-table"
-                    hide-pagination
-                    :rows-per-page-options="[0]"
-                  >
-                    <template v-slot:header>
-                      <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">Shift Name</q-th>
-                        <q-th class="table-header-cell">Time</q-th>
-                        <q-th class="table-header-cell">Type</q-th>
-                        <q-th class="table-header-cell">Night Diff</q-th>
-                        <q-th class="table-header-cell">Actions</q-th>
-                      </q-tr>
-                    </template>
-                    <template v-slot:body="props">
-                      <q-tr class="table-body-row">
-                        <q-td class="table-body-cell">
-                          <span class="item-name">{{ props.row.name || 'N/A' }}</span>
-                        </q-td>
-                        <q-td class="table-body-cell">
-                          {{ formatTime(props.row.default_start_time) }} –
-                          {{ formatTime(props.row.default_end_time) }}
-                        </q-td>
-                        <q-td class="table-body-cell">
-                          <div
-                            :class="[
-                              'status-badge',
-                              props.row.is_graveyard ? 'status-graveyard' : 'status-regular',
-                            ]"
-                          >
-                            {{ props.row.break_hours || '-' }}
-                          </div>
-                        </q-td>
-                        <q-td class="table-body-cell actions-cell">
-                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                              <q-list dense style="min-width: 150px">
-                                <q-item
-                                  clickable
-                                  v-close-popup
-                                  class="dropdown-item"
-                                  @click="viewShift(props.row)"
-                                >
-                                  <q-item-section side
-                                    ><q-icon name="visibility" size="16px"
-                                  /></q-item-section>
-                                  <q-item-section>View Details</q-item-section>
-                                </q-item>
-                                <q-item
-                                  clickable
-                                  v-close-popup
-                                  class="dropdown-item"
-                                  @click="editShift(props.row)"
-                                >
-                                  <q-item-section side
-                                    ><q-icon name="edit" size="16px"
-                                  /></q-item-section>
-                                  <q-item-section>Edit Shift</q-item-section>
-                                </q-item>
-                                <q-item
-                                  clickable
-                                  v-close-popup
-                                  class="dropdown-item dropdown-item-danger"
-                                  @click="deleteShift(props.row)"
-                                >
-                                  <q-item-section side
-                                    ><q-icon name="delete" size="16px" color="negative"
-                                  /></q-item-section>
-                                  <q-item-section>Delete</q-item-section>
-                                </q-item>
-                              </q-list>
-                            </q-menu>
-                          </q-btn>
-                        </q-td>
-                      </q-tr>
-                    </template>
-                  </q-table>
-                </div>
-              </div>
-            </q-tab-panel>
-
             <!-- ---- Shift Template ---- -->
             <q-tab-panel name="shift-types" class="q-pa-none">
               <div class="table-section">
@@ -517,103 +409,82 @@
                   >
                     <template v-slot:header>
                       <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">Name</q-th>
-                        <q-th class="table-header-cell">Shifts</q-th>
-                        <q-th class="table-header-cell">Shifts Detail</q-th>
-                        <q-th class="table-header-cell">Status</q-th>
-                        <q-th class="table-header-cell">Created</q-th>
-                        <q-th class="table-header-cell">Actions</q-th>
+                        <q-th class="table-header-cell" style="width: 40%">Name</q-th>
+                        <q-th class="table-header-cell text-center" style="width: 20%"
+                          >Shift Times</q-th
+                        >
+                        <q-th class="table-header-cell text-center" style="width: 20%"
+                          >Total Hours</q-th
+                        >
+                        <q-th
+                          class="table-header-cell text-center actions-header"
+                          style="width: 20%; text-align: center !important"
+                          >Actions</q-th
+                        >
                       </q-tr>
                     </template>
                     <template v-slot:body="props">
                       <q-tr class="table-body-row">
-                        <q-td class="table-body-cell">
+                        <q-td class="table-body-cell" style="width: 40%">
                           <span class="item-name">{{ props.row.name }}</span>
                         </q-td>
 
-                        <q-td class="table-body-cell text-center">
+                        <q-td class="table-body-cell text-center" style="width: 20%">
                           <div
-                            v-if="getShiftNames(props.row.shifts_detail).length"
-                            class="shifts-list"
+                            v-if="parseShifts(props.row.shifts_detail).length"
+                            class="shifts-time-list"
                           >
-                            <q-chip
-                              v-for="(shift, idx) in getShiftNames(props.row.shifts_detail).slice(
-                                0,
-                                2,
-                              )"
+                            <div
+                              v-for="(shift, idx) in parseShifts(props.row.shifts_detail)"
                               :key="idx"
-                              dense
-                              size="sm"
-                              color="blue-1"
-                              text-color="blue-8"
-                              :label="shift"
-                              class="permission-chip"
-                            />
-                            <q-chip
-                              v-if="getShiftNames(props.row.shifts_detail).length > 2"
-                              dense
-                              size="sm"
-                              color="grey-3"
-                              text-color="grey-8"
-                              :label="`+${getShiftNames(props.row.shifts_detail).length - 2}`"
-                              class="permission-chip"
-                            />
+                              class="shift-time-item"
+                            >
+                              {{ formatTimeDisplay(shift.default_start_time) }} -
+                              {{ formatTimeDisplay(shift.default_end_time) }}
+                            </div>
                           </div>
-                          <span v-else>N/A</span>
+                          <span v-else>No shifts</span>
                         </q-td>
 
-                        <q-td class="table-body-cell text-center">
-                          {{ getShiftCount(props.row.shifts) }} shifts
+                        <q-td class="table-body-cell text-center" style="width: 20%">
+                          {{ calculateTotalHoursFromRow(props.row) }} hrs
                         </q-td>
 
-                        <q-td class="table-body-cell text-center">
-                          <div
-                            :class="[
-                              'status-badge',
-                              props.row.is_active ? 'status-active' : 'status-inactive',
-                            ]"
-                          >
-                            {{ props.row.is_active ? 'Active' : 'Inactive' }}
+                        <q-td class="table-body-cell text-center" style="width: 20%">
+                          <div class="flex justify-center items-center full-width">
+                            <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                              <q-menu
+                                anchor="bottom right"
+                                self="top right"
+                                class="action-dropdown"
+                              >
+                                <q-list dense style="min-width: 150px">
+                                  <q-item
+                                    clickable
+                                    v-close-popup
+                                    class="dropdown-item"
+                                    @click="editShiftTypeTemplate(props.row)"
+                                  >
+                                    <q-item-section side
+                                      ><q-icon name="edit" size="16px"
+                                    /></q-item-section>
+                                    <q-item-section>Edit</q-item-section>
+                                  </q-item>
+                                  <q-item
+                                    clickable
+                                    v-close-popup
+                                    class="dropdown-item dropdown-item-danger"
+                                    @click="deleteShiftTypeTemplate(props.row)"
+                                  >
+                                    <q-item-section side
+                                      ><q-icon name="delete" size="16px" color="negative"
+                                    /></q-item-section>
+                                    <q-item-section>Delete</q-item-section>
+                                  </q-item>
+                                </q-list>
+                              </q-menu>
+                            </q-btn>
                           </div>
-                        </q-td>
-
-                        <q-td class="table-body-cell">
-                          {{
-                            props.row.created_at
-                              ? new Date(props.row.created_at).toLocaleDateString()
-                              : 'N/A'
-                          }}
-                        </q-td>
-
-                        <q-td class="table-body-cell actions-cell">
-                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                              <q-list dense style="min-width: 150px">
-                                <q-item
-                                  clickable
-                                  v-close-popup
-                                  class="dropdown-item"
-                                  @click="editShiftTypeTemplate(props.row)"
-                                >
-                                  <q-item-section side
-                                    ><q-icon name="edit" size="16px"
-                                  /></q-item-section>
-                                  <q-item-section>Edit</q-item-section>
-                                </q-item>
-                                <q-item
-                                  clickable
-                                  v-close-popup
-                                  class="dropdown-item dropdown-item-danger"
-                                  @click="deleteShiftTypeTemplate(props.row)"
-                                >
-                                  <q-item-section side
-                                    ><q-icon name="delete" size="16px" color="negative"
-                                  /></q-item-section>
-                                  <q-item-section>Delete</q-item-section>
-                                </q-item>
-                              </q-list>
-                            </q-menu>
-                          </q-btn>
                         </q-td>
                       </q-tr>
                     </template>
@@ -658,7 +529,7 @@
                         <q-th class="table-header-cell">Name</q-th>
                         <q-th class="table-header-cell">Rules</q-th>
                         <q-th class="table-header-cell">Created</q-th>
-                        <q-th class="table-header-cell">Actions</q-th>
+                        <q-th class="table-header-cell actions-header">Actions</q-th>
                       </q-tr>
                     </template>
                     <template v-slot:body="props">
@@ -753,7 +624,7 @@
                     <q-th class="table-header-cell">Department Name</q-th>
                     <q-th class="table-header-cell">Description</q-th>
                     <q-th class="table-header-cell">Date Created</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
+                    <q-th class="table-header-cell actions-header">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
@@ -847,7 +718,7 @@
                     <q-th class="table-header-cell">Position Title</q-th>
                     <q-th class="table-header-cell">Department</q-th>
                     <q-th class="table-header-cell">Description</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
+                    <q-th class="table-header-cell actions-header">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
@@ -942,7 +813,7 @@
                   <q-tr class="table-header-row">
                     <q-th class="table-header-cell">Name</q-th>
                     <q-th class="table-header-cell">Eligibilities</q-th>
-                    <q-th class="table-header-cell">Actions</q-th>
+                    <q-th class="table-header-cell actions-header">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
@@ -1099,7 +970,7 @@
                       <q-tr class="table-header-row">
                         <q-th class="table-header-cell">Name</q-th>
                         <q-th class="table-header-cell">Description</q-th>
-                        <q-th class="table-header-cell">Actions</q-th>
+                        <q-th class="table-header-cell actions-header">Actions</q-th>
                       </q-tr>
                     </template>
                     <template v-slot:body="props">
@@ -1191,7 +1062,7 @@
                         <q-th class="table-header-cell">Min Income</q-th>
                         <q-th class="table-header-cell">Max Income</q-th>
                         <q-th class="table-header-cell">Rate</q-th>
-                        <q-th class="table-header-cell">Actions</q-th>
+                        <q-th class="table-header-cell actions-header">Actions</q-th>
                       </q-tr>
                     </template>
                     <template v-slot:body="props">
@@ -1284,7 +1155,7 @@
                         <q-th class="table-header-cell">Name</q-th>
                         <q-th class="table-header-cell">Start Date</q-th>
                         <q-th class="table-header-cell">End Date</q-th>
-                        <q-th class="table-header-cell">Actions</q-th>
+                        <q-th class="table-header-cell actions-header">Actions</q-th>
                       </q-tr>
                     </template>
                     <template v-slot:body="props">
@@ -1376,7 +1247,7 @@
                       <q-tr class="table-header-row">
                         <q-th class="table-header-cell">Group Name</q-th>
                         <q-th class="table-header-cell">Description</q-th>
-                        <q-th class="table-header-cell">Actions</q-th>
+                        <q-th class="table-header-cell actions-header">Actions</q-th>
                       </q-tr>
                     </template>
                     <template v-slot:body="props">
@@ -1467,7 +1338,7 @@
                       <q-tr class="table-header-row">
                         <q-th class="table-header-cell">Rule Name</q-th>
                         <q-th class="table-header-cell">Description</q-th>
-                        <q-th class="table-header-cell">Actions</q-th>
+                        <q-th class="table-header-cell actions-header">Actions</q-th>
                       </q-tr>
                     </template>
                     <template v-slot:body="props">
@@ -1558,7 +1429,7 @@
                       <q-tr class="table-header-row">
                         <q-th class="table-header-cell">Structure Name</q-th>
                         <q-th class="table-header-cell">Base Pay</q-th>
-                        <q-th class="table-header-cell">Actions</q-th>
+                        <q-th class="table-header-cell actions-header">Actions</q-th>
                       </q-tr>
                     </template>
                     <template v-slot:body="props">
@@ -1919,77 +1790,6 @@
       </q-card>
     </q-dialog>
 
-    <!-- ===================== SHIFT DIALOG ===================== -->
-    <q-dialog v-model="shiftDialog" persistent>
-      <q-card style="min-width: 420px; border-radius: 16px">
-        <q-card-section class="row items-center q-pb-none">
-          <div class="text-h6">{{ editingShift ? 'Edit Shift' : 'Add Shift' }}</div>
-          <q-space />
-          <q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-        <q-card-section class="q-pt-md">
-          <q-input v-model="shiftForm.name" label="Shift Name *" outlined dense class="q-mb-md" />
-          <q-select
-            v-model="shiftForm.site"
-            :options="sites"
-            option-value="id"
-            option-label="name"
-            emit-value
-            map-options
-            label="Site"
-            outlined
-            dense
-            class="q-mb-md"
-            clearable
-          />
-          <q-input
-            v-model="shiftForm.description"
-            label="Description"
-            outlined
-            dense
-            class="q-mb-md"
-          />
-          <div class="row q-col-gutter-md q-mb-md">
-            <div class="col-6">
-              <q-input
-                v-model="shiftForm.default_start_time"
-                label="Start Time *"
-                type="time"
-                outlined
-                dense
-              />
-            </div>
-            <div class="col-6">
-              <q-input
-                v-model="shiftForm.default_end_time"
-                label="End Time *"
-                type="time"
-                outlined
-                dense
-              />
-            </div>
-          </div>
-          <q-input
-            v-model="shiftForm.break_hours"
-            label="Break Hours *"
-            type="text"
-            outlined
-            dense
-            class="q-mb-md"
-          />
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Cancel" v-close-popup />
-          <q-btn
-            color="primary"
-            :label="editingShift ? 'Update' : 'Save'"
-            :loading="savingShift"
-            @click="saveShift"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
     <!-- ===================== WEEKLY SHIFT TEMPLATE DIALOG ===================== -->
     <q-dialog v-model="weeklyTemplateDialog" persistent>
       <q-card style="min-width: 500px; max-width: 560px; border-radius: 16px">
@@ -2057,9 +1857,9 @@
       </q-card>
     </q-dialog>
 
-    <!-- ===================== RECURRING SCHEDULE DIALOG ===================== -->
+    <!-- ===================== SHIFT TEMPLATE DIALOG ===================== -->
     <q-dialog v-model="shiftTypeTemplateDialog" persistent>
-      <q-card style="min-width: 600px; max-width: 680px; border-radius: 16px">
+      <q-card style="min-width: 600px; max-width: 720px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             {{ editingShiftTypeTemplate ? 'Edit Shift Template' : 'Add Shift Template' }}
@@ -2068,52 +1868,118 @@
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
         <q-card-section class="q-pt-md" style="max-height: 70vh; overflow-y: auto">
-          <!-- Schedule Name -->
+          <!-- Auto-generated Template Name Display -->
           <q-input
-            v-model="shiftTypeTemplateForm.name"
-            label="Schedule Name *"
+            :model-value="generateTemplateName()"
+            label="Template Name"
             outlined
             dense
+            readonly
             class="q-mb-md"
+            hint="Auto-generated from site names"
           />
 
-          <!-- Shift Types (multi-select) -->
-          <q-select
-            v-model="shiftTypeTemplateForm.shift_type_ids"
-            :options="shiftTypeOptions"
-            option-value="id"
-            option-label="name"
-            emit-value
-            map-options
-            multiple
-            use-chips
-            label="Shift Types *"
-            outlined
-            dense
-            class="q-mb-md"
-            hint="Select one or more shift types for this template"
-          />
-
-          <!-- Site + Active -->
+          <!-- Working Hours, Break Hours, and Total Hours (Auto-calculated) -->
           <div class="row q-col-gutter-md q-mb-md">
-            <div class="col-8">
+            <div class="col-4">
+              <q-input
+                :model-value="calculateTotalHours()"
+                label="Working Hours"
+                type="number"
+                outlined
+                dense
+                readonly
+                hint="Total - Break (Net)"
+              />
+            </div>
+            <div class="col-4">
+              <q-input
+                :model-value="calculateBreakHours()"
+                label="Break Hours"
+                type="number"
+                outlined
+                dense
+                readonly
+                hint="Auto-calculated"
+              />
+            </div>
+            <div class="col-4">
+              <q-input
+                :model-value="calculateWorkingHours()"
+                label="Total Hours"
+                type="number"
+                outlined
+                dense
+                readonly
+                hint="Sum of all shift times"
+              />
+            </div>
+          </div>
+
+          <!-- Shifts List -->
+          <div class="text-subtitle2 q-mb-sm">Shifts *</div>
+          <div
+            v-for="(shift, index) in shiftTypeTemplateForm.shifts"
+            :key="index"
+            class="row q-col-gutter-sm q-mb-md items-start"
+          >
+            <div class="col-4">
               <q-select
-                v-model="shiftTypeTemplateForm.site_id"
+                v-model="shift.site_id"
                 :options="sites"
                 option-value="id"
                 option-label="name"
                 emit-value
                 map-options
-                label="Site"
+                label="Site *"
                 outlined
                 dense
                 clearable
+                @update:model-value="generateTemplateName()"
               />
             </div>
-            <div class="col-4 flex items-center">
-              <q-toggle v-model="shiftTypeTemplateForm.is_active" label="Active" color="primary" />
+            <div class="col-3">
+              <q-input
+                v-model="shift.default_start_time"
+                label="Start Time *"
+                type="time"
+                outlined
+                dense
+                @update:model-value="updateCalculations()"
+              />
+            </div>
+            <div class="col-3">
+              <q-input
+                v-model="shift.default_end_time"
+                label="End Time *"
+                type="time"
+                outlined
+                dense
+                @update:model-value="updateCalculations()"
+              />
+            </div>
+            <div class="col-2 flex items-center justify-end">
+              <q-btn
+                v-if="shiftTypeTemplateForm.shifts.length > 1"
+                flat
+                round
+                dense
+                color="negative"
+                icon="delete"
+                @click="deleteShift(index)"
+              />
             </div>
           </div>
+
+          <!-- Add Shift Button -->
+          <q-btn
+            flat
+            color="primary"
+            icon="add"
+            label="Add Shift"
+            class="q-mb-md"
+            @click="addShift()"
+          />
         </q-card-section>
 
         <q-card-actions align="right">
@@ -2504,7 +2370,7 @@ const $q = useQuasar()
 
 // ─── Page state ───────────────────────────────────────────────────────────
 const activeTab = ref('companies')
-const shiftSubTab = ref('one-time')
+const shiftSubTab = ref('shift-types')
 const payslipSubTab = ref('allowance-types')
 const searchQuery = ref('')
 
@@ -2717,34 +2583,21 @@ const {
 
 // Shifts + Shift Templates + Weekly Templates
 const {
-  shifts,
-  shiftTypes: shiftTypeOptions,
   shiftTypeTemplates,
   weeklyShiftTemplates,
-  loading: loadingShifts,
-  saving: savingShift,
   loadingShiftTypeTemplates,
   savingShiftTypeTemplate,
   loadingWeeklyTemplates,
   savingWeeklyTemplate,
-  shiftDialog,
-  editingShift,
-  shiftForm,
   shiftTypeTemplateDialog,
   editingShiftTypeTemplate,
   shiftTypeTemplateForm,
   weeklyTemplateDialog,
   weeklyTemplateForm,
   editingWeeklyTemplate,
-  formatTime,
-  fetchShifts,
   fetchShiftTemplates,
   fetchShiftTypeTemplates,
   fetchWeeklyShiftTemplates,
-  openShiftDialog,
-  openEditShiftDialog: editShift,
-  saveShift,
-  deleteShift,
   openShiftTypeTemplateDialog,
   openEditShiftTypeTemplateDialog: editShiftTypeTemplate,
   saveShiftTypeTemplate,
@@ -2919,7 +2772,6 @@ const payTypeOptions = ['monthly', 'semi-monthly', 'weekly', 'daily', 'hourly']
 const viewCompany = (r) => editCompany(r)
 const viewSite = (r) => editSite(r)
 const viewRole = (r) => editRole(r)
-const viewShift = (r) => editShift(r)
 const viewDepartment = (r) => editDepartment(r)
 const viewPosition = (r) => editPosition(r)
 const viewAllowanceType = (r) => editAllowanceType(r)
@@ -2929,6 +2781,188 @@ const viewPayrollGroup = (r) => editPayrollGroup(r)
 const viewLaborRule = (r) => editLaborRule(r)
 const viewPayStructure = (r) => editPayStructure(r)
 
+// ─── Shift Template helpers ────────────────────────────────────────────────
+function generateTemplateName() {
+  const form = shiftTypeTemplateForm.value
+  if (!form.shifts || !form.shifts.length) return ''
+
+  // Get unique site names from shifts
+  const siteNames = []
+  for (const shift of form.shifts) {
+    if (shift.site_id) {
+      // Find site name from sites array
+      const site = sites.value.find((s) => s.id === shift.site_id)
+      if (site && site.name) {
+        // Only add if not already in the list (avoid duplicates)
+        if (!siteNames.includes(site.name)) {
+          siteNames.push(site.name)
+        }
+      }
+    }
+  }
+
+  // Generate name based on sites
+  let name = ''
+  if (siteNames.length === 0) {
+    name = ''
+  } else if (siteNames.length === 1) {
+    name = siteNames[0]
+  } else {
+    // Multiple sites - join with "/"
+    name = siteNames.join('/')
+  }
+
+  form.name = name
+  return name
+}
+
+function calculateShiftDuration(startTime, endTime) {
+  if (!startTime || !endTime) return 0
+
+  const start = new Date(`2000-01-01T${startTime}`)
+  let end = new Date(`2000-01-01T${endTime}`)
+
+  // Handle midnight crossover (e.g., 10:00 PM to 02:00 AM)
+  if (end < start) {
+    end = new Date(end.getTime() + 24 * 60 * 60 * 1000)
+  }
+
+  const durationMs = end - start
+  return durationMs / (1000 * 60 * 60) // Convert to hours
+}
+
+function calculateWorkingHours() {
+  const form = shiftTypeTemplateForm.value
+  if (!form.shifts || !form.shifts.length) return 0
+
+  let totalWorkingHours = 0
+
+  for (const shift of form.shifts) {
+    const duration = calculateShiftDuration(shift.default_start_time, shift.default_end_time)
+    totalWorkingHours += duration
+  }
+
+  return Math.round(totalWorkingHours * 10) / 10
+}
+
+function calculateBreakHours() {
+  const form = shiftTypeTemplateForm.value
+  if (!form.shifts || !form.shifts.length) {
+    form.break_hours = 0
+    return 0
+  }
+
+  // Single shift logic
+  if (form.shifts.length === 1) {
+    const workingHours = calculateWorkingHours()
+    // Single shift 9+ hours gets 1 hour break auto-deducted
+    if (workingHours >= 9) {
+      form.break_hours = 1
+      return 1
+    }
+    // Single shift 8 hours or less = no break
+    form.break_hours = 0
+    return 0
+  }
+
+  // Dual/Multiple shift logic
+  let totalBreakMinutes = 0
+
+  for (let i = 1; i < form.shifts.length; i++) {
+    const prevShift = form.shifts[i - 1]
+    const currentShift = form.shifts[i]
+
+    // Different sites = no break (travel time)
+    if (prevShift.site_id !== currentShift.site_id) {
+      continue
+    }
+
+    // Same site with gap = break time
+    if (prevShift.default_end_time && currentShift.default_start_time) {
+      let prevEnd = new Date(`2000-01-01T${prevShift.default_end_time}`)
+      let currStart = new Date(`2000-01-01T${currentShift.default_start_time}`)
+
+      // Handle midnight crossover for break calculation too
+      if (currStart < prevEnd) {
+        currStart = new Date(currStart.getTime() + 24 * 60 * 60 * 1000)
+      }
+
+      const breakMinutes = (currStart - prevEnd) / (1000 * 60)
+      if (breakMinutes > 0) totalBreakMinutes += breakMinutes
+    }
+  }
+
+  const breakHours = totalBreakMinutes / 60
+  form.break_hours = Math.round(breakHours * 10) / 10 // Store 1 decimal
+  return form.break_hours
+}
+
+function calculateTotalHours() {
+  const form = shiftTypeTemplateForm.value
+  if (!form.shifts || !form.shifts.length) return 0
+
+  // Total Hours = Working Hours - Break Hours
+  // (Shows actual billable/working hours after break deduction)
+  const workingHours = calculateWorkingHours()
+  const breakHours = calculateBreakHours()
+  const totalHours = workingHours - breakHours
+
+  form.total_hours = Math.round(totalHours * 10) / 10 // Store 1 decimal
+  return form.total_hours
+}
+
+function updateCalculations() {
+  calculateWorkingHours()
+  calculateBreakHours()
+  calculateTotalHours()
+}
+
+function deleteShift(index) {
+  shiftTypeTemplateForm.value.shifts.splice(index, 1)
+  updateCalculations()
+  generateTemplateName()
+}
+
+function addShift() {
+  shiftTypeTemplateForm.value.shifts.push({
+    site_id: null,
+    default_start_time: '',
+    default_end_time: '',
+  })
+  updateCalculations()
+}
+
+// Parse shifts from API (handles both string and array)
+function parseShifts(shiftsData) {
+  if (!shiftsData) return []
+
+  if (Array.isArray(shiftsData)) {
+    return shiftsData
+  }
+
+  if (typeof shiftsData === 'string') {
+    try {
+      return JSON.parse(shiftsData)
+    } catch {
+      return []
+    }
+  }
+
+  return []
+}
+
+// Format time from 24h format (HH:mm:ss) to 12h format (h:mm AM/PM)
+function formatTimeDisplay(timeString) {
+  if (!timeString) return ''
+
+  const [hours, minutes] = timeString.split(':')
+  const hour = parseInt(hours, 10)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const hour12 = hour % 12 || 12
+
+  return `${hour12}:${minutes} ${ampm}`
+}
+
 // ─── Utility helpers ──────────────────────────────────────────────────────
 function formatDate(date) {
   if (!date) return 'N/A'
@@ -2937,26 +2971,6 @@ function formatDate(date) {
     month: 'short',
     day: 'numeric',
   })
-}
-
-function getShiftNames(shiftsDetail) {
-  if (!shiftsDetail) return []
-  try {
-    const parsed = typeof shiftsDetail === 'string' ? JSON.parse(shiftsDetail) : shiftsDetail
-    return parsed.map((s) => s.name || s.start_time + ' - ' + s.end_time)
-  } catch {
-    return []
-  }
-}
-
-function getShiftCount(shifts) {
-  if (!shifts) return 0
-  try {
-    const parsed = typeof shifts === 'string' ? JSON.parse(shifts) : shifts
-    return parsed.length
-  } catch {
-    return 0
-  }
 }
 
 // ─── Table column definitions ─────────────────────────────────────────────
@@ -2979,21 +2993,66 @@ const roleColumns = [
   { name: 'permissions', label: 'Permissions', field: 'permissions', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
-const shiftColumns = [
-  { name: 'name', label: 'Shift Name', field: 'name', align: 'left', sortable: true },
-  { name: 'description', label: 'Description', field: 'description', align: 'left' },
-  { name: 'times', label: 'Time', align: 'left' },
-  { name: 'break_hours', label: 'Break Hours', field: 'break_hours', align: 'center' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-]
 const recurringColumns = [
   { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
-  { name: 'shifts', label: 'Shifts', field: 'shifts', align: 'center' },
-  { name: 'shifts_detail', label: 'Shifts Detail', field: 'shifts_detail', align: 'center' },
-  { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
-  { name: 'created_at', label: 'Created', field: 'created_at', align: 'left', sortable: true },
+  { name: 'shift_times', label: 'Shift Times', field: 'shift_times', align: 'center' },
+  { name: 'total_hours', label: 'Total Hours', field: 'total_hours', align: 'center' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
+
+// Helper function for table display
+function calculateTotalHoursFromRow(row) {
+  const shifts = parseShifts(row.shifts_detail)
+  if (!shifts || !shifts.length) return 0
+
+  let totalMinutes = 0
+
+  for (const shift of shifts) {
+    if (shift.default_start_time && shift.default_end_time) {
+      const start = new Date(`2000-01-01T${shift.default_start_time}`)
+      let end = new Date(`2000-01-01T${shift.default_end_time}`)
+
+      // Handle midnight crossover
+      if (end < start) {
+        end = new Date(end.getTime() + 24 * 60 * 60 * 1000)
+      }
+
+      const durationMs = end - start
+      totalMinutes += durationMs / (1000 * 60)
+    }
+  }
+
+  // Calculate break hours (same logic as calculateBreakHours)
+  let breakMinutes = 0
+  if (shifts.length === 1) {
+    const totalHours = totalMinutes / 60
+    if (totalHours >= 9) {
+      breakMinutes = 60 // 1 hour break
+    }
+  } else {
+    for (let i = 1; i < shifts.length; i++) {
+      const prevShift = shifts[i - 1]
+      const currentShift = shifts[i]
+
+      if (prevShift.site_id !== currentShift.site_id) continue
+
+      if (prevShift.default_end_time && currentShift.default_start_time) {
+        let prevEnd = new Date(`2000-01-01T${prevShift.default_end_time}`)
+        let currStart = new Date(`2000-01-01T${currentShift.default_start_time}`)
+
+        if (currStart < prevEnd) {
+          currStart = new Date(currStart.getTime() + 24 * 60 * 60 * 1000)
+        }
+
+        const gapMinutes = (currStart - prevEnd) / (1000 * 60)
+        if (gapMinutes > 0) breakMinutes += gapMinutes
+      }
+    }
+  }
+
+  const totalHours = (totalMinutes - breakMinutes) / 60
+  return Math.round(totalHours * 10) / 10
+}
 const weeklyTemplateColumns = [
   { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
   { name: 'rules', label: 'Rules', field: 'rules', align: 'left' },
@@ -3091,14 +3150,6 @@ const filteredRoles = computed(() => {
   const q = searchQuery.value.toLowerCase()
   return roles.value.filter((r) => (r.name || '').toLowerCase().includes(q))
 })
-const filteredShifts = computed(() => {
-  if (!searchQuery.value) return shifts.value
-  const q = searchQuery.value.toLowerCase()
-  return shifts.value.filter(
-    (s) =>
-      (s.name || '').toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q),
-  )
-})
 const filteredDepartments = computed(() => {
   if (!searchQuery.value) return departments.value
   const q = searchQuery.value.toLowerCase()
@@ -3122,7 +3173,6 @@ onMounted(async () => {
     await fetchPositions()
     await fetchDepartments()
     await fetchEmployees()
-    await fetchShifts()
     await fetchShiftTemplates()
     await fetchWeeklyShiftTemplates()
 
@@ -3484,6 +3534,18 @@ watch(activeTab, async (newTab) => {
 .actions-cell {
   text-align: center !important;
   width: 60px;
+}
+
+.actions-header {
+  text-align: center !important;
+  width: 60px;
+}
+
+/* Force Quasar th inner span to also center */
+.actions-header .q-table__sort-icon,
+.actions-header span {
+  text-align: center !important;
+  justify-content: center !important;
 }
 
 .action-menu-btn {
