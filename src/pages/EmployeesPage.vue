@@ -1140,27 +1140,40 @@ function formatPhilippinePhone(number) {
 
 const fetchEmployees = async () => {
   try {
-    // Force a fresh network fetch every time the page loads so the module-level
-    // cache never serves stale/empty data to a new component instance.
     const list = await fetchEmployeesList({ force: true })
 
-    const detailed = await Promise.all(
-      list.map((emp) =>
-        fetchEmployee(emp.id)
-          .then((r) => ({ ...emp, phone_number: r.phone_number || '' }))
-          .catch(() => emp),
-      ),
-    )
-
-    employees.value = detailed
-    filteredEmployees.value = detailed
+    employees.value = list
+    filteredEmployees.value = list
     sortEmployees()
+
+    fetchPhoneNumbers(list)
   } catch (err) {
     $q.notify({
       type: 'negative',
       message: err.response?.data?.detail ?? 'Failed to fetch employees',
       position: 'top',
     })
+  }
+}
+
+const fetchPhoneNumbers = async (employeeList) => {
+  if (!employeeList?.length) return
+
+  try {
+    const phoneResults = await Promise.allSettled(employeeList.map((emp) => fetchEmployee(emp.id)))
+
+    phoneResults.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value) {
+        const emp = employees.value[index]
+        if (emp && result.value.phone_number) {
+          emp.phone_number = result.value.phone_number
+        }
+      }
+    })
+
+    filteredEmployees.value = [...employees.value]
+  } catch {
+    // Silent - phone numbers remain N/A
   }
 }
 
@@ -1629,10 +1642,14 @@ const sortEmployees = () => {
       sorted.sort((a, b) => new Date(a.last_date_updated || 0) - new Date(b.last_date_updated || 0))
       break
     case 'A-Z':
-      sorted.sort((a, b) => getFullName(a).localeCompare(getFullName(b)))
+      sorted.sort((a, b) =>
+        getFullName(a).toLowerCase().localeCompare(getFullName(b).toLowerCase()),
+      )
       break
     case 'Z-A':
-      sorted.sort((a, b) => getFullName(b).localeCompare(getFullName(a)))
+      sorted.sort((a, b) =>
+        getFullName(b).toLowerCase().localeCompare(getFullName(a).toLowerCase()),
+      )
       break
   }
 
