@@ -675,7 +675,7 @@
                     class="shift-fields"
                     style="display: flex; flex-direction: column; gap: 12px"
                   >
-                    <!-- 1. Shift Template -->
+                    <!-- Shift Template -->
                     <q-select
                       v-model="shift.shiftTemplate"
                       :options="shiftTemplateOptions"
@@ -688,55 +688,7 @@
                       map-options
                       clearable
                       class="form-field full-width"
-                      @update:model-value="
-                        (val) => {
-                          if (val) {
-                            shift.shiftType = null
-                            shift.site = null
-                          }
-                        }
-                      "
-                    />
-                    <!-- 2. Shift Type -->
-                    <q-select
-                      v-model="shift.shiftType"
-                      :options="shiftTypeOptions"
-                      option-value="value"
-                      option-label="label"
-                      label="Shift Type"
-                      outlined
-                      dense
-                      emit-value
-                      map-options
-                      clearable
-                      class="form-field"
-                      :class="{ 'full-width': !shift.shiftType }"
-                      :rules="[
-                        () =>
-                          !!shift.shiftType ||
-                          !!shift.shiftTemplate ||
-                          'Select a shift type or template',
-                      ]"
-                      @update:model-value="
-                        (val) => {
-                          if (val) shift.shiftTemplate = null
-                        }
-                      "
-                    />
-                    <!-- 3. Site — only shown when shift type is selected (not template) -->
-                    <q-select
-                      v-if="shift.shiftType && !shift.shiftTemplate"
-                      v-model="shift.site"
-                      :options="siteOptions"
-                      option-value="value"
-                      option-label="label"
-                      label="Select Site"
-                      outlined
-                      dense
-                      emit-value
-                      map-options
-                      class="form-field"
-                      :rules="[(val) => !!val || 'Site is required']"
+                      :rules="[(val) => !!val || 'Shift template is required']"
                     />
                   </div>
                 </div>
@@ -1027,39 +979,19 @@
                 </div>
                 <div class="shift-fields">
                   <q-select
-                    v-model="shift.site"
-                    :options="siteOptions"
+                    v-model="shift.shiftTemplate"
+                    :options="shiftTemplateOptions"
                     option-value="value"
                     option-label="label"
-                    label="Select Site"
+                    label="Shift Template"
                     outlined
                     dense
                     emit-value
                     map-options
-                    class="form-field"
-                    :rules="[(val) => !!val || 'Site is required']"
+                    clearable
+                    class="form-field full-width"
+                    :rules="[(val) => !!val || 'Shift template is required']"
                   />
-                  <q-select
-                    v-model="shift.shiftType"
-                    :options="shiftTypeOptions"
-                    option-value="value"
-                    option-label="label"
-                    label="Shift Type"
-                    outlined
-                    dense
-                    emit-value
-                    map-options
-                    class="form-field"
-                    :rules="[(val) => !!val || 'Shift type is required']"
-                  >
-                    <template #hint>
-                      {{
-                        shift.shiftType
-                          ? getShiftTypeDetails(shift.shiftType)
-                          : 'Select a shift type'
-                      }}
-                    </template>
-                  </q-select>
                 </div>
               </div>
               <!-- Add Another Shift Button -->
@@ -1347,7 +1279,7 @@ const _freshSchedule = () => ({
   userIds: [],
   selectedDate: null,
   selectedDates: [],
-  oneTimeShifts: [{ site: null, shiftType: null, shiftTemplate: null }],
+  oneTimeShifts: [{ shiftTemplate: null }],
   startTime: '',
   endTime: '',
   position: null,
@@ -1676,14 +1608,6 @@ const getAvatarColor = (name) => {
 
 const getEmployeeName = (id) => users.value.find((u) => u.id === id)?.name || 'Unknown Employee'
 
-const getShiftTypeDetails = (shiftTypeId) => {
-  const shiftType = shiftTypes.value.find((st) => st.id === shiftTypeId)
-  if (!shiftType) return ''
-  const start = shiftType.default_start_time?.substring(0, 5) || ''
-  const end = shiftType.default_end_time?.substring(0, 5) || ''
-  return start && end ? `${start} - ${end}` : ''
-}
-
 // ─── Computed ─────────────────────────────────────────────────────────────────
 
 const totalShifts = computed(() => shifts.value.length)
@@ -1711,12 +1635,12 @@ const positionOptions = computed(() =>
   shiftTypes.value.map((p) => ({ label: p.name, value: p.id })),
 )
 
-const shiftTypeOptions = computed(() =>
-  shiftTypes.value.map((st) => ({ label: st.name, value: st.id })),
-)
-
 const shiftTemplateOptions = computed(() =>
-  shiftTemplates.value.map((t) => ({ label: t.name, value: t.id })),
+  shiftTemplates.value.map((t) => ({
+    label: t.name,
+    value: t.id,
+    site: t.site || t.site_id,
+  })),
 )
 
 const recurringScheduleOptions = computed(() =>
@@ -2240,16 +2164,17 @@ const openQuickAddModal = (userId, dayIdx) => {
   quickAdd.value = {
     userId,
     day: dayIdx,
-    shifts: [{ site: null, shiftType: null }],
+    shifts: [{ shiftTemplate: null }],
     leaveType: null,
   }
+  fetchShiftTemplatesList()
   showQuickAddModal.value = true
 }
 const closeQuickAddModal = () => {
   showQuickAddModal.value = false
   quickAdd.value = { userId: null, day: null, shifts: [], leaveType: null }
 }
-const addShiftRow = () => quickAdd.value.shifts.push({ site: null, shiftType: null })
+const addShiftRow = () => quickAdd.value.shifts.push({ shiftTemplate: null })
 const removeShiftRow = (index) => quickAdd.value.shifts.splice(index, 1)
 
 const openReassignModal = async (shift) => {
@@ -2369,15 +2294,10 @@ const addSchedule = async () => {
     if (!n.selectedDates?.length)
       return $q.notify({ type: 'negative', message: 'Please select at least one date.' })
     for (const s of n.oneTimeShifts) {
-      if (!s.shiftTemplate && !s.shiftType)
+      if (!s.shiftTemplate)
         return $q.notify({
           type: 'negative',
-          message: 'Please select a shift template or shift type for all shifts.',
-        })
-      if (!s.shiftTemplate && s.shiftType && !s.site)
-        return $q.notify({
-          type: 'negative',
-          message: 'Please select a site for all shift type shifts.',
+          message: 'Please select a shift template for all shifts.',
         })
     }
   }
@@ -2430,22 +2350,16 @@ const addSchedule = async () => {
       console.log('[addSchedule] recurring payload:', JSON.stringify(payload, null, 2))
       await assignShift(payload)
     } else {
-      // ── FIX: use resolveId() so the value is always a clean integer, ────────
-      // even if q-select emits an option object instead of the raw primitive.
-      // This mirrors the same guard used in quickAddSchedule.
       const schedulePayloads = n.selectedDates.flatMap((dateStr) =>
         n.oneTimeShifts.map((shift) => {
           const templateId = resolveId(shift.shiftTemplate)
-          const shiftTypeId = resolveId(shift.shiftType)
-          const siteId = resolveId(shift.site)
-          const entry = { date: dateStr }
-          if (templateId) {
-            entry.shift_template_id = templateId
-          } else {
-            entry.site_id = siteId
-            entry.shift_type_id = shiftTypeId
+          const template = shiftTemplates.value.find((t) => t.id === templateId)
+          const siteId = template?.site || template?.site_id
+          return {
+            date: dateStr,
+            shift_template_id: templateId,
+            site_id: siteId ? Number(siteId) : undefined,
           }
-          return entry
         }),
       )
 
@@ -2501,8 +2415,8 @@ const quickAddSchedule = async () => {
   if (!userId || day === null)
     return $q.notify({ type: 'negative', message: 'Employee and day are required.' })
   for (let i = 0; i < qShifts.length; i++) {
-    if (!qShifts[i].site || !qShifts[i].shiftType)
-      return $q.notify({ type: 'negative', message: `Please fill all fields for shift ${i + 1}` })
+    if (!qShifts[i].shiftTemplate)
+      return $q.notify({ type: 'negative', message: `Please select a shift template for shift ${i + 1}` })
   }
   isAddingShift.value = true
   try {
@@ -2515,15 +2429,15 @@ const quickAddSchedule = async () => {
       company_id: cId,
       employee_ids: [userId],
       schedules: qShifts.map((shift) => {
-        const siteId = typeof shift.site === 'object' ? shift.site.value : shift.site
-
-        const shiftTypeId =
-          typeof shift.shiftType === 'object' ? shift.shiftType.value : shift.shiftType
+        const templateId =
+          typeof shift.shiftTemplate === 'object' ? shift.shiftTemplate.value : shift.shiftTemplate
+        const template = shiftTemplates.value.find((t) => t.id === Number(templateId))
+        const siteId = template?.site || template?.site_id
 
         return {
           date: dateStr,
-          site_id: Number(siteId),
-          shift_type_id: Number(shiftTypeId),
+          shift_template_id: Number(templateId),
+          site_id: siteId ? Number(siteId) : undefined,
         }
       }),
     })
