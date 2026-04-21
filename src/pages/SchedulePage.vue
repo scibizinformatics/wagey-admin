@@ -994,26 +994,13 @@
                   />
                 </div>
               </div>
-              <!-- Add Another Shift Button -->
-              <q-btn
-                flat
-                icon="add"
-                label="Add Another Shift"
-                @click="addShiftRow"
-                class="add-row-btn"
-                color="primary"
-                size="sm"
-              />
               <!-- Info Banner -->
               <q-banner class="info-banner" dense>
                 <template #avatar>
                   <q-icon name="info" color="primary" />
                 </template>
                 <span style="font-size: 12px">
-                  Adding {{ quickAdd.shifts.length }} shift{{
-                    quickAdd.shifts.length > 1 ? 's' : ''
-                  }}
-                  for <strong>{{ days[quickAdd.day] }}</strong>
+                  Adding 1 shift for <strong>{{ days[quickAdd.day] }}</strong>
                 </span>
               </q-banner>
               <div class="modal-actions">
@@ -1021,7 +1008,7 @@
                 <q-btn
                   type="submit"
                   color="primary"
-                  :label="`Add ${quickAdd.shifts.length} Shift${quickAdd.shifts.length > 1 ? 's' : ''}`"
+                  label="Add Shift"
                   unelevated
                   class="submit-btn"
                   :loading="isAddingShift"
@@ -2174,8 +2161,6 @@ const closeQuickAddModal = () => {
   showQuickAddModal.value = false
   quickAdd.value = { userId: null, day: null, shifts: [], leaveType: null }
 }
-const addShiftRow = () => quickAdd.value.shifts.push({ shiftTemplate: null })
-const removeShiftRow = (index) => quickAdd.value.shifts.splice(index, 1)
 
 const openReassignModal = async (shift) => {
   await fetchSites()
