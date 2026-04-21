@@ -226,22 +226,50 @@
                 hide-pagination
                 :rows-per-page-options="[0]"
               >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Employee</q-th>
-                    <q-th class="table-header-cell">Type</q-th>
-                    <q-th class="table-header-cell">Period</q-th>
-                    <q-th class="table-header-cell">Reason</q-th>
-                    <q-th class="table-header-cell">Status</q-th>
-                    <q-th class="table-header-cell table-header-actions">Actions</q-th>
+                <template v-slot:header="props">
+                  <q-tr class="table-header-row" :props="props">
+                    <q-th
+                      key="employeeName"
+                      :props="props"
+                      class="table-header-cell"
+                      style="width: 220px"
+                      >Employee</q-th
+                    >
+                    <q-th key="type" :props="props" class="table-header-cell" style="width: 160px"
+                      >Type</q-th
+                    >
+                    <q-th key="dates" :props="props" class="table-header-cell" style="width: 190px"
+                      >Period</q-th
+                    >
+                    <q-th key="reason" :props="props" class="table-header-cell">Reason</q-th>
+                    <q-th
+                      key="status"
+                      :props="props"
+                      class="table-header-cell"
+                      style="width: 120px; text-align: center"
+                      >Status</q-th
+                    >
+                    <q-th
+                      key="actions"
+                      :props="props"
+                      class="table-header-cell table-header-actions"
+                      style="width: 120px"
+                      >Actions</q-th
+                    >
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
                   <q-tr
                     class="table-body-row"
                     :class="{ 'rejected-row': props.row.status === 'rejected' }"
+                    :props="props"
                   >
-                    <q-td class="table-body-cell employee-name-cell">
+                    <q-td
+                      key="employeeName"
+                      :props="props"
+                      class="table-body-cell employee-name-cell"
+                      style="width: 220px"
+                    >
                       <div class="employee-info">
                         <q-avatar size="32px" color="primary" text-color="white">
                           {{ getInitials(props.row.employeeName) }}
@@ -252,12 +280,17 @@
                         </div>
                       </div>
                     </q-td>
-                    <q-td class="table-body-cell">
+                    <q-td key="type" :props="props" class="table-body-cell" style="width: 160px">
                       <div class="type-badge">
                         {{ props.row.type }}
                       </div>
                     </q-td>
-                    <q-td class="table-body-cell dates-cell">
+                    <q-td
+                      key="dates"
+                      :props="props"
+                      class="table-body-cell dates-cell"
+                      style="width: 190px"
+                    >
                       <div class="date-range">
                         <div class="start-date">{{ formatDate(props.row.startDate) }}</div>
                         <div class="date-separator">→</div>
@@ -265,15 +298,25 @@
                       </div>
                       <div class="duration">{{ props.row.duration }}</div>
                     </q-td>
-                    <q-td class="table-body-cell reason-cell">
+                    <q-td key="reason" :props="props" class="table-body-cell reason-cell">
                       <div class="reason-text">{{ props.row.reason || 'No reason provided' }}</div>
                     </q-td>
-                    <q-td class="table-body-cell">
+                    <q-td
+                      key="status"
+                      :props="props"
+                      class="table-body-cell"
+                      style="width: 120px; text-align: center"
+                    >
                       <div :class="['status-badge', getLeaveStatusClass(props.row)]">
                         {{ capitalizeStatus(props.row.status) }}
                       </div>
                     </q-td>
-                    <q-td class="table-body-cell actions-cell">
+                    <q-td
+                      key="actions"
+                      :props="props"
+                      class="table-body-cell actions-cell"
+                      style="width: 120px"
+                    >
                       <div class="action-buttons">
                         <q-btn
                           flat
@@ -366,22 +409,50 @@
                 hide-pagination
                 :rows-per-page-options="[0]"
               >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Employee</q-th>
-                    <q-th class="table-header-cell">Type</q-th>
-                    <q-th class="table-header-cell">Period</q-th>
-                    <q-th class="table-header-cell">Reason</q-th>
-                    <q-th class="table-header-cell">Status</q-th>
-                    <q-th class="table-header-cell table-header-actions">Actions</q-th>
+                <template v-slot:header="props">
+                  <q-tr class="table-header-row" :props="props">
+                    <q-th
+                      key="employeeName"
+                      :props="props"
+                      class="table-header-cell"
+                      style="width: 220px"
+                      >Employee</q-th
+                    >
+                    <q-th key="type" :props="props" class="table-header-cell" style="width: 160px"
+                      >Type</q-th
+                    >
+                    <q-th key="dates" :props="props" class="table-header-cell" style="width: 190px"
+                      >Period</q-th
+                    >
+                    <q-th key="reason" :props="props" class="table-header-cell">Reason</q-th>
+                    <q-th
+                      key="status"
+                      :props="props"
+                      class="table-header-cell"
+                      style="width: 120px; text-align: center"
+                      >Status</q-th
+                    >
+                    <q-th
+                      key="actions"
+                      :props="props"
+                      class="table-header-cell table-header-actions"
+                      style="width: 120px"
+                      >Actions</q-th
+                    >
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
                   <q-tr
                     class="table-body-row"
+                    :props="props"
                     :class="{ 'rejected-row': props.row.status === 'rejected' }"
                   >
-                    <q-td class="table-body-cell employee-name-cell">
+                    <q-td
+                      key="employeeName"
+                      :props="props"
+                      class="table-body-cell employee-name-cell"
+                      style="width: 220px"
+                    >
                       <div class="employee-info">
                         <q-avatar size="32px" color="primary" text-color="white">
                           {{ getInitials(props.row.employeeName) }}
@@ -391,26 +462,41 @@
                         </div>
                       </div>
                     </q-td>
-                    <q-td class="table-body-cell">
+                    <q-td key="type" :props="props" class="table-body-cell" style="width: 160px">
                       <div class="type-badge">
                         {{ props.row.categoryName }}
                       </div>
                     </q-td>
-                    <q-td class="table-body-cell dates-cell">
+                    <q-td
+                      key="dates"
+                      :props="props"
+                      class="table-body-cell dates-cell"
+                      style="width: 190px"
+                    >
                       <div class="date-range">
                         <div class="start-date">{{ formatDate(props.row.date) }}</div>
                       </div>
                       <div class="duration">{{ props.row.hours }}h requested</div>
                     </q-td>
-                    <q-td class="table-body-cell reason-cell">
+                    <q-td key="reason" :props="props" class="table-body-cell reason-cell">
                       <div class="reason-text">{{ props.row.reason || 'No reason provided' }}</div>
                     </q-td>
-                    <q-td class="table-body-cell">
+                    <q-td
+                      key="status"
+                      :props="props"
+                      class="table-body-cell"
+                      style="width: 120px; text-align: center"
+                    >
                       <div :class="['status-badge', getLeaveStatusClass(props.row)]">
                         {{ capitalizeStatus(props.row.status) }}
                       </div>
                     </q-td>
-                    <q-td class="table-body-cell actions-cell">
+                    <q-td
+                      key="actions"
+                      :props="props"
+                      class="table-body-cell actions-cell"
+                      style="width: 120px"
+                    >
                       <div class="action-buttons">
                         <q-btn
                           flat
@@ -1053,13 +1139,18 @@ const statusOptions = [
 ]
 
 const leaveColumns = [
-  { name: 'sl_no', label: 'SL No', field: 'id', align: 'left' },
-  { name: 'employeeName', label: 'Employee', field: 'employeeName', align: 'left' },
-  { name: 'type', label: 'Type', field: 'type', align: 'left' },
-  { name: 'dates', label: 'Period', field: 'startDate', align: 'left' },
+  {
+    name: 'employeeName',
+    label: 'Employee',
+    field: 'employeeName',
+    align: 'left',
+    style: 'width: 220px',
+  },
+  { name: 'type', label: 'Type', field: 'type', align: 'left', style: 'width: 160px' },
+  { name: 'dates', label: 'Period', field: 'startDate', align: 'left', style: 'width: 190px' },
   { name: 'reason', label: 'Reason', field: 'reason', align: 'left' },
-  { name: 'status', label: 'Status', field: 'status', align: 'left' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+  { name: 'status', label: 'Status', field: 'status', align: 'center', style: 'width: 120px' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center', style: 'width: 120px' },
 ]
 
 // ===== CASH ADVANCE STATE =====
@@ -1995,6 +2086,40 @@ onUnmounted(() => {
 .cash-advance-table {
   background: #ffffff;
   width: 100%;
+  table-layout: fixed;
+}
+
+/* Fixed column widths — header and body share the same class so they always align */
+.col-employee {
+  width: 220px;
+  min-width: 180px;
+}
+
+.col-type {
+  width: 170px;
+  min-width: 140px;
+}
+
+.col-period {
+  width: 200px;
+  min-width: 170px;
+}
+
+.col-reason {
+  width: auto;
+  min-width: 160px;
+}
+
+.col-status {
+  width: 120px;
+  min-width: 100px;
+  text-align: center !important;
+}
+
+.col-actions {
+  width: 120px;
+  min-width: 100px;
+  text-align: center !important;
 }
 
 /* Table header */
@@ -2056,7 +2181,7 @@ onUnmounted(() => {
 }
 
 .employee-name-cell {
-  min-width: 180px;
+  /* width handled by .col-employee */
 }
 
 .employee-details {
@@ -2195,7 +2320,7 @@ onUnmounted(() => {
 }
 
 .dates-cell {
-  min-width: 170px;
+  /* width handled by .col-period */
 }
 
 .amount-value {
