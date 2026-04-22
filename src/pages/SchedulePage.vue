@@ -339,6 +339,7 @@
                       <!-- Quick Action Buttons -->
                       <div class="cell-quick-actions">
                         <q-btn
+                          v-if="getShifts(user.id, dayIdx).length === 0"
                           flat
                           dense
                           size="xs"
@@ -689,7 +690,33 @@
                       clearable
                       class="form-field full-width"
                       :rules="[(val) => !!val || 'Shift template is required']"
-                    />
+                    >
+                      <template #option="scope">
+                        <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
+                          <q-item-section>
+                            <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
+                              <q-item-label
+                                v-for="(part, i) in scope.opt.label.split(' / ')"
+                                :key="i"
+                                style="font-size: 13px; line-height: 1.5"
+                                >{{ part }}</q-item-label
+                              >
+                            </template>
+                            <q-item-label
+                              v-else
+                              style="
+                                white-space: nowrap;
+                                overflow: hidden;
+                                text-overflow: ellipsis;
+                                font-size: 13px;
+                              "
+                            >
+                              {{ scope.opt.label }}
+                            </q-item-label>
+                          </q-item-section>
+                        </q-item>
+                      </template>
+                    </q-select>
                   </div>
                 </div>
               </div>
@@ -991,7 +1018,33 @@
                     clearable
                     class="form-field full-width"
                     :rules="[(val) => !!val || 'Shift template is required']"
-                  />
+                  >
+                    <template #option="scope">
+                      <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
+                        <q-item-section>
+                          <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
+                            <q-item-label
+                              v-for="(part, i) in scope.opt.label.split(' / ')"
+                              :key="i"
+                              style="font-size: 13px; line-height: 1.5"
+                              >{{ part }}</q-item-label
+                            >
+                          </template>
+                          <q-item-label
+                            v-else
+                            style="
+                              white-space: nowrap;
+                              overflow: hidden;
+                              text-overflow: ellipsis;
+                              font-size: 13px;
+                            "
+                          >
+                            {{ scope.opt.label }}
+                          </q-item-label>
+                        </q-item-section>
+                      </q-item>
+                    </template>
+                  </q-select>
                 </div>
               </div>
               <!-- Info Banner -->
@@ -1043,54 +1096,195 @@
               <!-- ── SINGLE SHIFT ── -->
               <template v-if="!reassignData.isDualShift">
                 <div class="shift-row">
+                  <!-- Shift Template Dropdown (First) -->
                   <div class="shift-row-header">
-                    <span class="row-label"><q-icon name="edit" size="16px" /> Shift Details</span>
+                    <span class="row-label"
+                      ><q-icon name="edit" size="16px" /> Select Shift Template</span
+                    >
                   </div>
                   <div class="shift-fields">
                     <q-select
-                      v-model="reassignData.siteId"
-                      :options="siteOptions"
+                      v-model="reassignData.shiftTemplateId"
+                      :options="shiftTemplateOptions"
                       option-value="value"
                       option-label="label"
-                      label="Select Site"
+                      :display-value="
+                        shiftTemplateOptions.find((o) => o.value === reassignData.shiftTemplateId)
+                          ?.label || ''
+                      "
+                      label="Shift Template"
                       outlined
                       dense
                       emit-value
                       map-options
                       class="form-field"
-                      :rules="[(val) => !!val || 'Site is required']"
-                    />
-                    <q-select
-                      v-model="reassignData.shiftTypeId"
-                      :options="positionOptions"
-                      option-value="value"
-                      option-label="label"
-                      label="Shift Type"
-                      outlined
-                      dense
-                      emit-value
-                      map-options
-                      class="form-field"
-                      :rules="[(val) => !!val || 'Shift type is required']"
+                      :rules="[(val) => !!val || 'Shift template is required']"
                     >
-                      <template #hint>{{
-                        reassignData.shiftTypeId
-                          ? getPositionName(reassignData.shiftTypeId)
-                          : 'Select a shift type'
-                      }}</template>
+                      <template #option="scope">
+                        <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
+                          <q-item-section>
+                            <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
+                              <q-item-label
+                                v-for="(part, i) in scope.opt.label.split(' / ')"
+                                :key="i"
+                                style="font-size: 13px; line-height: 1.5"
+                                >{{ part }}</q-item-label
+                              >
+                            </template>
+                            <q-item-label
+                              v-else
+                              style="
+                                white-space: nowrap;
+                                overflow: hidden;
+                                text-overflow: ellipsis;
+                                font-size: 13px;
+                              "
+                            >
+                              {{ scope.opt.label }}
+                            </q-item-label>
+                          </q-item-section>
+                        </q-item>
+                      </template>
                     </q-select>
-                    <q-select
-                      v-model="reassignData.departmentId"
-                      :options="departmentOptions"
-                      option-value="value"
-                      option-label="label"
-                      label="Department (Optional)"
-                      outlined
-                      dense
-                      emit-value
-                      map-options
-                      clearable
-                      class="form-field"
+                  </div>
+
+                  <!-- Current Shift Details Section -->
+                  <div class="shift-row-header" style="margin-top: 16px">
+                    <span class="row-label"
+                      ><q-icon name="history" size="16px" /> Current Shift</span
+                    >
+                  </div>
+                  <div
+                    class="current-shift-info"
+                    style="
+                      padding: 12px;
+                      background: #e5e7eb;
+                      border-radius: 8px;
+                      margin-bottom: 12px;
+                    "
+                  >
+                    <div style="font-size: 13px; color: #374151">
+                      <div style="margin-bottom: 6px">
+                        <strong>Template:</strong>
+                        {{ reassignData.originalTemplateName || 'N/A' }}
+                      </div>
+                      <div style="margin-bottom: 6px">
+                        <strong>Site:</strong>
+                        {{ reassignData.originalSiteName || 'N/A' }}
+                      </div>
+                      <div style="margin-bottom: 6px">
+                        <strong>Time:</strong>
+                        {{ reassignData.originalTime || 'N/A' }}
+                      </div>
+                      <div v-if="reassignData.originalDuration">
+                        <strong>Duration:</strong> {{ reassignData.originalDuration }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- New Shift Details Section (When template changed) -->
+                  <div
+                    v-if="
+                      reassignData.shiftTemplateId !== reassignData.originalTemplateId &&
+                      getTemplateById(reassignData.shiftTemplateId)
+                    "
+                    class="new-shift-info"
+                    style="
+                      padding: 12px;
+                      background: #fef3c7;
+                      border-radius: 8px;
+                      margin-bottom: 16px;
+                      border: 1px solid #f59e0b;
+                    "
+                  >
+                    <div
+                      style="
+                        font-size: 11px;
+                        color: #d97706;
+                        margin-bottom: 8px;
+                        font-weight: 600;
+                        text-transform: uppercase;
+                      "
+                    >
+                      ⚠️ This will replace your current shift
+                    </div>
+                    <div style="font-size: 13px; color: #374151">
+                      <div style="margin-bottom: 6px">
+                        <strong>Template:</strong>
+                        {{ getTemplateById(reassignData.shiftTemplateId)?.name || 'N/A' }}
+                      </div>
+                      <!-- Single-shift template: flat site/time -->
+                      <template
+                        v-if="
+                          !(
+                            getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.length > 1
+                          )
+                        "
+                      >
+                        <div style="margin-bottom: 6px">
+                          <strong>Site:</strong>
+                          {{
+                            getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.[0]?.site
+                              ?.name ||
+                            getSiteName(
+                              getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.[0]
+                                ?.site?.id,
+                            ) ||
+                            'N/A'
+                          }}
+                        </div>
+                        <div style="margin-bottom: 6px">
+                          <strong>Time:</strong>
+                          {{
+                            getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.[0]
+                              ?.start_time || 'N/A'
+                          }}
+                          -
+                          {{
+                            getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.[0]
+                              ?.end_time || 'N/A'
+                          }}
+                        </div>
+                      </template>
+                      <!-- Dual-shift template: list each sub-shift -->
+                      <template v-else>
+                        <div
+                          v-for="(sub, si) in getTemplateById(reassignData.shiftTemplateId)
+                            .shifts_detail"
+                          :key="si"
+                          style="
+                            margin-bottom: 6px;
+                            padding: 6px 8px;
+                            background: rgba(0, 0, 0, 0.04);
+                            border-radius: 6px;
+                          "
+                        >
+                          <div>
+                            <strong>Shift {{ si + 1 }} Site:</strong>
+                            {{ sub.site?.name || getSiteName(sub.site?.id) || 'N/A' }}
+                          </div>
+                          <div>
+                            <strong>Time:</strong>
+                            {{ sub.start_time || 'N/A' }} -
+                            {{ sub.end_time || 'N/A' }}
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+
+                  <!-- Back to Original Button -->
+                  <div
+                    v-if="reassignData.shiftTemplateId !== reassignData.originalTemplateId"
+                    style="margin-top: 12px"
+                  >
+                    <q-btn
+                      flat
+                      size="sm"
+                      color="grey-7"
+                      icon="refresh"
+                      label="Back to Original"
+                      @click="reassignData.shiftTemplateId = reassignData.originalTemplateId"
                     />
                   </div>
                 </div>
@@ -1098,64 +1292,194 @@
 
               <!-- ── DUAL SHIFT ── -->
               <template v-else>
-                <div
-                  v-for="(sub, idx) in reassignData.dualShifts"
-                  :key="sub.assignmentId"
-                  class="shift-row"
-                  style="margin-bottom: 12px"
-                >
+                <div class="shift-row">
+                  <!-- Shift Template Dropdown (First) -->
                   <div class="shift-row-header">
-                    <span class="row-label">
-                      <q-icon name="edit" size="16px" />
-                      Shift {{ idx + 1 }}
-                      <span style="font-size: 10px; color: #6b7280; margin-left: 4px">
-                        {{ sub.startTime }} - {{ sub.endTime }}
-                      </span>
-                    </span>
+                    <span class="row-label"
+                      ><q-icon name="edit" size="16px" /> Select Shift Template</span
+                    >
                   </div>
                   <div class="shift-fields">
                     <q-select
-                      v-model="sub.siteId"
-                      :options="siteOptions"
+                      v-model="reassignData.shiftTemplateId"
+                      :options="shiftTemplateOptions"
                       option-value="value"
                       option-label="label"
-                      :label="`Site (Shift ${idx + 1})`"
+                      :display-value="
+                        shiftTemplateOptions.find((o) => o.value === reassignData.shiftTemplateId)
+                          ?.label || ''
+                      "
+                      label="Shift Template"
                       outlined
                       dense
                       emit-value
                       map-options
                       class="form-field"
-                      :rules="[(val) => !!val || 'Site is required']"
-                    />
-                    <q-select
-                      v-model="sub.shiftTypeId"
-                      :options="positionOptions"
-                      option-value="value"
-                      option-label="label"
-                      :label="`Shift Type (Shift ${idx + 1})`"
-                      outlined
-                      dense
-                      emit-value
-                      map-options
-                      class="form-field"
-                      :rules="[(val) => !!val || 'Shift type is required']"
+                      :rules="[(val) => !!val || 'Shift template is required']"
                     >
-                      <template #hint>{{
-                        sub.shiftTypeId ? getPositionName(sub.shiftTypeId) : 'Select a shift type'
-                      }}</template>
+                      <template #option="scope">
+                        <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
+                          <q-item-section>
+                            <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
+                              <q-item-label
+                                v-for="(part, i) in scope.opt.label.split(' / ')"
+                                :key="i"
+                                style="font-size: 13px; line-height: 1.5"
+                                >{{ part }}</q-item-label
+                              >
+                            </template>
+                            <q-item-label
+                              v-else
+                              style="
+                                white-space: nowrap;
+                                overflow: hidden;
+                                text-overflow: ellipsis;
+                                font-size: 13px;
+                              "
+                            >
+                              {{ scope.opt.label }}
+                            </q-item-label>
+                          </q-item-section>
+                        </q-item>
+                      </template>
                     </q-select>
-                    <q-select
-                      v-model="sub.departmentId"
-                      :options="departmentOptions"
-                      option-value="value"
-                      option-label="label"
-                      :label="`Department (Shift ${idx + 1}, Optional)`"
-                      outlined
-                      dense
-                      emit-value
-                      map-options
-                      clearable
-                      class="form-field"
+                  </div>
+
+                  <!-- Current Shift Details Section -->
+                  <div class="shift-row-header" style="margin-top: 16px">
+                    <span class="row-label"
+                      ><q-icon name="history" size="16px" /> Current Shifts</span
+                    >
+                  </div>
+                  <div
+                    v-for="(sub, idx) in reassignData.dualShifts"
+                    :key="idx"
+                    class="current-shift-info"
+                    style="
+                      padding: 12px;
+                      background: #e5e7eb;
+                      border-radius: 8px;
+                      margin-bottom: 12px;
+                    "
+                  >
+                    <div style="font-size: 13px; color: #374151">
+                      <div style="font-weight: 600; margin-bottom: 4px; color: #4b5563">
+                        Shift {{ idx + 1 }}: {{ sub.startTime }} - {{ sub.endTime }}
+                      </div>
+                      <div style="margin-bottom: 6px">
+                        <strong>Template:</strong>
+                        {{ sub.originalTemplateName || 'N/A' }}
+                      </div>
+                      <div style="margin-bottom: 6px">
+                        <strong>Site:</strong>
+                        {{ sub.originalSiteName || 'N/A' }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- New Shift Details Section (When template changed) -->
+                  <div
+                    v-if="
+                      reassignData.shiftTemplateId !== reassignData.originalTemplateId &&
+                      getTemplateById(reassignData.shiftTemplateId)
+                    "
+                    class="new-shift-info"
+                    style="
+                      padding: 12px;
+                      background: #fef3c7;
+                      border-radius: 8px;
+                      margin-bottom: 16px;
+                      border: 1px solid #f59e0b;
+                    "
+                  >
+                    <div
+                      style="
+                        font-size: 11px;
+                        color: #d97706;
+                        margin-bottom: 8px;
+                        font-weight: 600;
+                        text-transform: uppercase;
+                      "
+                    >
+                      ⚠️ This will replace your current shifts
+                    </div>
+                    <div style="font-size: 13px; color: #374151">
+                      <div style="margin-bottom: 6px">
+                        <strong>Template:</strong>
+                        {{ getTemplateById(reassignData.shiftTemplateId)?.name || 'N/A' }}
+                      </div>
+                      <!-- Single-shift template: flat site/time -->
+                      <template
+                        v-if="
+                          !(
+                            getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.length > 1
+                          )
+                        "
+                      >
+                        <div style="margin-bottom: 6px">
+                          <strong>Site:</strong>
+                          {{
+                            getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.[0]?.site
+                              ?.name ||
+                            getSiteName(
+                              getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.[0]
+                                ?.site?.id,
+                            ) ||
+                            'N/A'
+                          }}
+                        </div>
+                        <div style="margin-bottom: 6px">
+                          <strong>Time:</strong>
+                          {{
+                            getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.[0]
+                              ?.start_time || 'N/A'
+                          }}
+                          -
+                          {{
+                            getTemplateById(reassignData.shiftTemplateId)?.shifts_detail?.[0]
+                              ?.end_time || 'N/A'
+                          }}
+                        </div>
+                      </template>
+                      <!-- Dual-shift template: list each sub-shift -->
+                      <template v-else>
+                        <div
+                          v-for="(sub, si) in getTemplateById(reassignData.shiftTemplateId)
+                            .shifts_detail"
+                          :key="si"
+                          style="
+                            margin-bottom: 6px;
+                            padding: 6px 8px;
+                            background: rgba(0, 0, 0, 0.04);
+                            border-radius: 6px;
+                          "
+                        >
+                          <div>
+                            <strong>Shift {{ si + 1 }} Site:</strong>
+                            {{ sub.site?.name || getSiteName(sub.site?.id) || 'N/A' }}
+                          </div>
+                          <div>
+                            <strong>Time:</strong>
+                            {{ sub.start_time || 'N/A' }} -
+                            {{ sub.end_time || 'N/A' }}
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+
+                  <!-- Back to Original Button -->
+                  <div
+                    v-if="reassignData.shiftTemplateId !== reassignData.originalTemplateId"
+                    style="margin-top: 12px"
+                  >
+                    <q-btn
+                      flat
+                      size="sm"
+                      color="grey-7"
+                      icon="refresh"
+                      label="Back to Original"
+                      @click="reassignData.shiftTemplateId = reassignData.originalTemplateId"
                     />
                   </div>
                 </div>
@@ -1186,10 +1510,8 @@
                   :loading="isReassigning"
                   :disable="
                     reassignData.isDualShift
-                      ? reassignData.dualShifts.some((s) => !s.siteId || !s.shiftTypeId)
-                      : !reassignData.siteId ||
-                        !reassignData.shiftTypeId ||
-                        !reassignData.assignmentId
+                      ? !reassignData.shiftTemplateId
+                      : !reassignData.shiftTemplateId || !reassignData.assignmentId
                   "
                 />
               </div>
@@ -1211,7 +1533,7 @@ import { useOrganization } from '@/composables/page/useOrganization'
 import { useEmployees } from '@/composables/page/useEmployees'
 
 const $q = useQuasar()
-// eslint-disable-next-line no-unused-vars
+
 const { companyId } = useCompany()
 const {
   fetchScheduleByDateRange,
@@ -1288,9 +1610,13 @@ const quickAdd = ref({ userId: null, day: null, shifts: [], leaveType: null })
 
 const reassignData = ref({
   assignmentId: null,
-  shiftTypeId: null,
-  siteId: null,
-  departmentId: null,
+  shiftTemplateId: null,
+  // Store display values directly to avoid lookup issues
+  originalTemplateId: null,
+  originalTemplateName: null,
+  originalSiteName: null,
+  originalTime: null,
+  originalDuration: null,
   currentEmployee: null,
   date: null,
   day: null,
@@ -1593,6 +1919,17 @@ const getAvatarColor = (name) => {
   return colors[index % colors.length]
 }
 
+// Helper to get shift template by ID for displaying details in reassign modal
+const getTemplateById = (templateId) => {
+  if (!templateId) return null
+  const id = typeof templateId === 'number' ? templateId : parseInt(templateId)
+  const tmpl = shiftTemplates.value.find((t) => t.id === id)
+  if (tmpl?.shifts?.length) {
+    console.log('[getTemplateById] sub-shift[0] raw:', JSON.stringify(tmpl.shifts[0], null, 2))
+  }
+  return tmpl
+}
+
 const getEmployeeName = (id) => users.value.find((u) => u.id === id)?.name || 'Unknown Employee'
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
@@ -1618,17 +1955,35 @@ const departmentOptions = computed(() =>
   departments.value.map((d) => ({ label: d.name, value: d.id })),
 )
 
+// eslint-disable-next-line no-unused-vars
 const positionOptions = computed(() =>
   shiftTypes.value.map((p) => ({ label: p.name, value: p.id })),
 )
 
-const shiftTemplateOptions = computed(() =>
-  shiftTemplates.value.map((t) => ({
-    label: t.name,
-    value: t.id,
-    site: t.site || t.site_id,
-  })),
-)
+const shiftTemplateOptions = computed(() => {
+  const opts = shiftTemplates.value.map((t) => {
+    // Build a descriptive label from the shifts array if available
+    let label = t.time_display || t.name
+    if (!label && Array.isArray(t.shifts_detail) && t.shifts_detail.length) {
+      label = t.shifts_detail
+        .map((s) => {
+          const site = s.site?.name || getSiteName(s.site?.id) || ''
+          const start = s.start_time || ''
+          const end = s.end_time || ''
+          const time = start && end ? `${start} - ${end}` : start || end
+          return site ? `${time} (${site})` : time
+        })
+        .filter(Boolean)
+        .join(' / ')
+    }
+    return {
+      label: label || `Template ${t.id}`,
+      value: Number(t.id),
+      site: t.site || t.site_id,
+    }
+  })
+  return opts
+})
 
 const recurringScheduleOptions = computed(() =>
   recurringSchedules.value.map((r) => ({ label: r.name, value: r.id })),
@@ -1879,6 +2234,7 @@ const fetchLeaveTypes = async () => {
 
 const fetchShiftTemplatesList = async () => {
   shiftTemplates.value = await fetchShiftTemplatesApi()
+  console.log('[shiftTemplates] sample:', JSON.stringify(shiftTemplates.value[0], null, 2))
 }
 
 const fetchLeaves = () => {
@@ -2080,6 +2436,7 @@ const fetchData = async () => {
           endTime,
           position: shiftTypeName || (startTime ? `${startTime}–${endTime}` : 'Shift'),
           shiftTypeId,
+          shiftTemplateId: schedule.shift_template || schedule.shift_template_id || null,
           site: schedule.site || null,
           siteName: schedule.site_name || null,
           department: schedule.department || null,
@@ -2164,6 +2521,9 @@ const closeQuickAddModal = () => {
 
 const openReassignModal = async (shift) => {
   await fetchSites()
+  // Ensure shift templates are loaded - MUST complete before modal opens
+  await fetchShiftTemplatesList()
+
   if (shift.isMerged && shift.shifts?.length > 1) {
     if (shift.shifts.find((s) => !s.assignmentId)) {
       $q.notify({
@@ -2173,31 +2533,43 @@ const openReassignModal = async (shift) => {
       })
       return
     }
+
+    // Resolve template ID against loaded shiftTemplates list
+    // prefer shiftTemplateId (from shift_template field), fall back to shiftTypeId
+    const resolveTemplateId = (s) => {
+      const fromTemplate = Number(s.shiftTemplateId) || null
+      if (fromTemplate && shiftTemplates.value.find((t) => t.id === fromTemplate))
+        return fromTemplate
+      const fromType = Number(s.shiftTypeId) || null
+      if (fromType && shiftTemplates.value.find((t) => t.id === fromType)) return fromType
+      return fromTemplate || fromType
+    }
+
+    const mainTemplateId = resolveTemplateId(shift.shifts[0])
+
     reassignData.value = {
       assignmentId: null,
-      shiftTypeId: null,
-      siteId: null,
-      departmentId: null,
+      shiftTemplateId: mainTemplateId,
+      originalTemplateId: mainTemplateId,
+      // Store display values for current shifts
+      dualShifts: shift.shifts.map((s) => ({
+        assignmentId: s.assignmentId,
+        shiftTemplateId: resolveTemplateId(s),
+        originalTemplateId: resolveTemplateId(s),
+        originalTemplateName: s.position || 'N/A',
+        originalSiteName: s.siteName || getSiteName(s.site),
+        startTime: s.startTime,
+        endTime: s.endTime,
+      })),
       currentEmployee: shift.userId,
       date: shift.shifts[0].date,
       day: shift.day,
       isDualShift: true,
-      originalShifts: shift.shifts.map((s) => ({
-        assignmentId: s.assignmentId,
-        shiftTypeId: s.shiftTypeId || null,
-        siteId: s.site || null,
-        departmentId: s.department || null,
-      })),
-      dualShifts: shift.shifts.map((s) => ({
-        assignmentId: s.assignmentId,
-        shiftTypeId: s.shiftTypeId || null,
-        siteId: s.site || null,
-        departmentId: s.department || null,
-        startTime: s.startTime,
-        endTime: s.endTime,
-      })),
     }
     showReassignModal.value = true
+    console.log('[openReassignModal] reassignData:', JSON.stringify(reassignData.value, null, 2))
+    const tpl = shiftTemplates.value.find((t) => t.id === mainTemplateId)
+    console.log('[openReassignModal] matched template object:', JSON.stringify(tpl, null, 2))
     return
   }
   if (!shift.assignmentId) {
@@ -2209,35 +2581,72 @@ const openReassignModal = async (shift) => {
     })
     return
   }
+
+  // Resolve template ID against loaded shiftTemplates list
+  const _fromTemplate = Number(shift.shiftTemplateId) || null
+  const _fromType = Number(shift.shiftTypeId) || null
+  const templateId =
+    _fromTemplate && shiftTemplates.value.find((t) => t.id === _fromTemplate)
+      ? _fromTemplate
+      : _fromType && shiftTemplates.value.find((t) => t.id === _fromType)
+        ? _fromType
+        : _fromTemplate || _fromType
+
+  console.log('[openReassignModal] templateId resolved:', templateId)
+  console.log(
+    '[openReassignModal] shiftTemplateId on shift:',
+    shift.shiftTemplateId,
+    '| shiftTypeId:',
+    shift.shiftTypeId,
+  )
+  console.log(
+    '[openReassignModal] shiftTemplates IDs:',
+    shiftTemplates.value.map((t) => t.id),
+  )
+  console.log(
+    '[openReassignModal] shiftTemplates sample[0]:',
+    JSON.stringify(shiftTemplates.value[0], null, 2),
+  )
+
   reassignData.value = {
     assignmentId: shift.assignmentId,
-    shiftTypeId: shift.shiftTypeId || null,
-    siteId: shift.site || null,
-    departmentId: shift.department || null,
+    shiftTemplateId: templateId,
+    originalTemplateId: templateId,
+    // Store display values directly to avoid lookup issues
+    originalTemplateName:
+      shiftTemplates.value.find((t) => t.id === templateId)?.name ||
+      shiftTemplates.value.find((t) => t.id === templateId)?.time_display ||
+      shift.position ||
+      'N/A',
+    originalSiteName: shift.siteName || getSiteName(shift.site),
+    originalTime: `${shift.startTime || ''} - ${shift.endTime || ''}`,
+    originalDuration: shift.duration,
     currentEmployee: shift.userId,
     date: shift.date,
     day: shift.day,
     isDualShift: false,
     dualShifts: [],
-    originalShift: { ...shift },
   }
   showReassignModal.value = true
+  console.log('[openReassignModal] reassignData:', JSON.stringify(reassignData.value, null, 2))
 }
 
 const closeReassignModal = () => {
   showReassignModal.value = false
   reassignData.value = {
     assignmentId: null,
-    shiftTypeId: null,
-    siteId: null,
-    departmentId: null,
+    shiftTemplateId: null,
+    // Display values
+    originalTemplateId: null,
+    originalTemplateName: null,
+    originalSiteName: null,
+    originalTime: null,
+    originalDuration: null,
     currentEmployee: null,
     date: null,
     day: null,
     isDualShift: false,
     dualShifts: [],
-    originalShift: null,
-    originalShifts: [],
   }
 }
 
@@ -2401,7 +2810,10 @@ const quickAddSchedule = async () => {
     return $q.notify({ type: 'negative', message: 'Employee and day are required.' })
   for (let i = 0; i < qShifts.length; i++) {
     if (!qShifts[i].shiftTemplate)
-      return $q.notify({ type: 'negative', message: `Please select a shift template for shift ${i + 1}` })
+      return $q.notify({
+        type: 'negative',
+        message: `Please select a shift template for shift ${i + 1}`,
+      })
   }
   isAddingShift.value = true
   try {
@@ -2448,35 +2860,26 @@ const handleReassignShift = async () => {
   const r = reassignData.value
   try {
     if (r.isDualShift) {
+      // eslint-disable-next-line no-unused-vars
       const results = await Promise.all(
         r.dualShifts.map((s) => {
-          const original = r.originalShifts?.find((orig) => orig.assignmentId === s.assignmentId) || {}
-          const payload = { assignment_id: parseInt(s.assignmentId) }
-          if (s.siteId !== original.siteId) payload.site_id = parseInt(s.siteId)
-          if (s.shiftTypeId !== original.shiftTypeId) payload.shift_type_id = parseInt(s.shiftTypeId)
-          if (s.departmentId !== original.departmentId && s.departmentId) {
-            payload.department_id = parseInt(s.departmentId)
+          // Get company_id from the selected shift template
+          const templateId = parseInt(r.shiftTemplateId)
+          const template = shiftTemplates.value.find((t) => t.id === templateId)
+          const resolvedCompanyId = template?.company?.id || template?.company_id || companyId.value
+
+          const payload = {
+            employee_id: r.currentEmployee,
+            company_id: parseInt(resolvedCompanyId),
+            date: r.date,
+            shift_template_id: templateId,
+            assignment_id: s.assignmentId,
           }
+
+          console.log('[handleReassignShift] Dual shift payload:', JSON.stringify(payload, null, 2))
           return reassignShiftApi(payload).then((res) => ({ ...res, assignmentId: s.assignmentId }))
         }),
       )
-      results.forEach((result) => {
-        const idx = shifts.value.findIndex((s) => s.assignmentId === result.assignmentId)
-        if (idx !== -1) {
-          if (r.dualShifts.find((ds) => ds.assignmentId === result.assignmentId)) {
-            const updatedShift = r.dualShifts.find((ds) => ds.assignmentId === result.assignmentId)
-            shifts.value[idx] = {
-              ...shifts.value[idx],
-              site: updatedShift.siteId,
-              shiftTypeId: updatedShift.shiftTypeId,
-              department: updatedShift.departmentId,
-              position: positionOptions.value.find((opt) => opt.value === updatedShift.shiftTypeId)?.label || shifts.value[idx].position,
-              siteName: siteOptions.value.find((opt) => opt.value === updatedShift.siteId)?.label || shifts.value[idx].siteName,
-              is_off: false,
-            }
-          }
-        }
-      })
       $q.notify({
         type: 'positive',
         message: 'Both shifts updated successfully!',
@@ -2485,33 +2888,21 @@ const handleReassignShift = async () => {
       })
       fetchData()
     } else {
-      if (!r.assignmentId || !r.siteId) {
-        $q.notify({
-          type: 'negative',
-          message: 'Assignment ID and site are required.',
-        })
-        return
+      // Get company_id from the selected shift template
+      const templateId = parseInt(r.shiftTemplateId)
+      const template = shiftTemplates.value.find((t) => t.id === templateId)
+      const resolvedCompanyId = template?.company?.id || template?.company_id || companyId.value
+
+      const payload = {
+        employee_id: r.currentEmployee,
+        company_id: parseInt(resolvedCompanyId),
+        date: r.date,
+        shift_template_id: templateId,
+        assignment_id: r.assignmentId,
       }
-      const original = r.originalShift || {}
-      const payload = { assignment_id: parseInt(r.assignmentId) }
-      if (r.siteId !== original.site) payload.site_id = parseInt(r.siteId)
-      if (r.shiftTypeId !== original.shiftTypeId) payload.shift_type_id = parseInt(r.shiftTypeId)
-      if (r.departmentId !== original.department && r.departmentId) {
-        payload.department_id = parseInt(r.departmentId)
-      }
+
+      console.log('[handleReassignShift] Single shift payload:', JSON.stringify(payload, null, 2))
       await reassignShiftApi(payload)
-      const idx = shifts.value.findIndex((s) => s.assignmentId === r.assignmentId)
-      if (idx !== -1) {
-        shifts.value[idx] = {
-          ...shifts.value[idx],
-          site: r.siteId,
-          shiftTypeId: r.shiftTypeId,
-          department: r.departmentId,
-          position: positionOptions.value.find((opt) => opt.value === r.shiftTypeId)?.label || shifts.value[idx].position,
-          siteName: siteOptions.value.find((opt) => opt.value === r.siteId)?.label || shifts.value[idx].siteName,
-          is_off: false,
-        }
-      }
       $q.notify({
         type: 'positive',
         message: 'Shift updated successfully!',
@@ -3643,6 +4034,102 @@ onMounted(async () => {
 
 .submit-btn:hover {
   background: #2563eb;
+}
+
+/* ── Dropdown: truncate long option labels ── */
+.schedule-page :deep(.q-menu) {
+  max-width: 480px !important;
+}
+.schedule-page :deep(.q-item__label) {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+/* Truncate the selected value shown in the input */
+.modal-body :deep(.q-select .q-field__native span) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Modal UI improvements ── */
+.modal-card {
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+}
+.modal-header {
+  background: #2563eb !important;
+  border-bottom: none !important;
+}
+.modal-header .q-btn {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.modal-header .q-btn:hover {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+.modal-title {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+.modal-body {
+  background: #f9fafb !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #e2e8f0 transparent !important;
+}
+.modal-body::-webkit-scrollbar {
+  width: 4px;
+  display: block !important;
+}
+.modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-body::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+.modal-body :deep(.q-field__control) {
+  background: #ffffff !important;
+  border-radius: 10px !important;
+}
+.modal-body :deep(.q-field--outlined .q-field__control:before) {
+  border-color: #e2e8f0 !important;
+  border-radius: 10px !important;
+}
+.modal-body :deep(.q-field--outlined .q-field__control:hover:before) {
+  border-color: #2563eb !important;
+}
+.modal-body :deep(.q-field--outlined.q-field--focused .q-field__control:before) {
+  border-color: #2563eb !important;
+  border-width: 2px !important;
+}
+.cancel-btn {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  padding: 0 18px !important;
+  min-height: 38px !important;
+}
+.cancel-btn:hover {
+  background: #f1f5f9 !important;
+}
+.submit-btn {
+  background: #2563eb !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  min-height: 38px !important;
+  padding: 0 22px !important;
+}
+.submit-btn:hover {
+  background: #1d4ed8 !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+}
+.quick-info {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
 }
 
 /* ==============================
