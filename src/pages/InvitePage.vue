@@ -114,25 +114,25 @@
 
             <template v-slot:header>
               <q-tr class="table-header-row">
-                <q-th class="table-header-cell">#</q-th>
-                <q-th class="table-header-cell">Email Address</q-th>
-                <q-th class="table-header-cell">Company</q-th>
-                <q-th class="table-header-cell">Role</q-th>
-                <q-th class="table-header-cell">Invitation Code</q-th>
-                <q-th class="table-header-cell">Status</q-th>
-                <q-th class="table-header-cell">Used</q-th>
-                <q-th class="table-header-cell">Created</q-th>
-                <q-th class="table-header-cell">Expires</q-th>
+                <q-th class="table-header-cell th-sl">#</q-th>
+                <q-th class="table-header-cell th-email">Email Address</q-th>
+                <q-th class="table-header-cell th-company">Company</q-th>
+                <q-th class="table-header-cell th-role">Role</q-th>
+                <q-th class="table-header-cell th-code">Invitation Code</q-th>
+                <q-th class="table-header-cell th-status">Status</q-th>
+                <q-th class="table-header-cell th-used">Used</q-th>
+                <q-th class="table-header-cell th-created">Created</q-th>
+                <q-th class="table-header-cell th-expires">Expires</q-th>
               </q-tr>
             </template>
 
             <template v-slot:body="props">
               <q-tr class="table-body-row">
-                <q-td class="table-body-cell sl-cell">
+                <q-td class="table-body-cell sl-cell td-sl">
                   {{ String(props.rowIndex + 1).padStart(2, '0') }}.
                 </q-td>
 
-                <q-td class="table-body-cell email-name-cell">
+                <q-td class="table-body-cell email-name-cell td-email">
                   <div class="employee-info">
                     <q-avatar size="34px" class="avatar-fallback">
                       {{ getInitials(props.row.email) }}
@@ -141,28 +141,28 @@
                   </div>
                 </q-td>
 
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell td-company">
                   {{ props.row.company || 'N/A' }}
                 </q-td>
 
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell td-role">
                   <span class="role-chip">{{
                     getRoleLabel(props.row.role ?? props.row.user_role)
                   }}</span>
                 </q-td>
 
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell td-code">
                   <code class="code-text">{{ props.row.code || 'N/A' }}</code>
                 </q-td>
 
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell td-status">
                   <div :class="['status-badge', getStatusClass(props.row.status)]">
                     <span class="status-dot"></span>
                     {{ props.row.status || 'Pending' }}
                   </div>
                 </q-td>
 
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell td-used">
                   <div
                     :class="['status-badge', props.row.is_used ? 'status-active' : 'status-unused']"
                   >
@@ -171,11 +171,11 @@
                   </div>
                 </q-td>
 
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell td-created">
                   {{ formatDate(props.row.created_at) }}
                 </q-td>
 
-                <q-td class="table-body-cell">
+                <q-td class="table-body-cell td-expires">
                   {{ formatDate(props.row.expires_at) }}
                 </q-td>
               </q-tr>
@@ -818,6 +818,7 @@ onMounted(async () => {
   letter-spacing: 0.05em;
   padding: 11px 16px !important;
   border-bottom: 1px solid #e8ecf0 !important;
+  text-align: left !important;
 }
 
 .table-header-actions {
@@ -845,6 +846,62 @@ onMounted(async () => {
   color: #9ca3af;
   font-size: 12px !important;
   width: 48px;
+}
+
+/* Column widths and alignment — header and body stay in sync */
+.th-sl,
+.td-sl {
+  width: 52px;
+  min-width: 52px;
+  text-align: left !important;
+}
+
+.th-email,
+.td-email {
+  min-width: 200px;
+  text-align: left !important;
+}
+
+.th-company,
+.td-company {
+  min-width: 120px;
+  text-align: left !important;
+}
+
+.th-role,
+.td-role {
+  min-width: 110px;
+  text-align: left !important;
+}
+
+.th-code,
+.td-code {
+  min-width: 130px;
+  text-align: left !important;
+}
+
+.th-status,
+.td-status {
+  min-width: 110px;
+  text-align: left !important;
+}
+
+.th-used,
+.td-used {
+  min-width: 100px;
+  text-align: left !important;
+}
+
+.th-created,
+.td-created {
+  min-width: 110px;
+  text-align: left !important;
+}
+
+.th-expires,
+.td-expires {
+  min-width: 110px;
+  text-align: left !important;
 }
 
 .email-name-cell {
