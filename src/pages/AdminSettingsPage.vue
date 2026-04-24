@@ -20,7 +20,7 @@
         >
           <q-tab name="companies" label="Companies" class="settings-tab" />
           <q-tab name="sites" label="Sites" class="settings-tab" />
-          <q-tab name="roles" label="Roles" class="settings-tab" />
+          <q-tab name="roles" label="Permissions" class="settings-tab" />
           <q-tab name="shifts" label="Shifts" class="settings-tab" />
           <q-tab name="departments" label="Departments" class="settings-tab" />
           <q-tab name="positions" label="Positions" class="settings-tab" />
@@ -248,7 +248,7 @@
           <div class="table-section">
             <div class="table-header">
               <div class="table-title-section">
-                <h2 class="table-title">Roles</h2>
+                <h2 class="table-title">Permissions</h2>
                 <p class="table-subtitle">Manage user roles and permissions across the system</p>
               </div>
               <div class="table-actions">
