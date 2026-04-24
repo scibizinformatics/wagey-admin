@@ -51,7 +51,6 @@ const routes = [
         path: 'attendance',
         name: 'attendance',
         component: () => import('pages/AttendancePage.vue'),
-        alias: '/attendance',
       },
       {
         path: 'schedule',
