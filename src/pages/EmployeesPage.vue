@@ -119,11 +119,11 @@
           >
             <!-- Skeleton rows while loading -->
             <template v-slot:loading>
-              <q-tr v-for="i in 5" :key="i" class="table-body-row skeleton-row">
+              <q-tr v-for="i in 8" :key="i" class="table-body-row skeleton-row">
                 <q-td class="table-body-cell employee-name-cell">
                   <div class="employee-info">
                     <div class="skeleton-avatar"></div>
-                    <div class="employee-name-block">
+                    <div class="employee-name-block" style="flex: 1; min-width: 0">
                       <div class="skeleton-line skeleton-name"></div>
                       <div class="skeleton-line skeleton-email"></div>
                     </div>
@@ -288,7 +288,6 @@
           </div>
           <q-btn icon="close" flat round dense class="modal-close-btn" @click="cancelAdd" />
         </q-card-section>
-        <q-separator />
 
         <!-- Stepper dots -->
         <div class="stepper-dots">
@@ -524,21 +523,21 @@
             </div>
 
             <div class="form-actions">
-              <q-btn v-if="addStep > 1" label="Back" flat color="grey-7" @click="addStep--" />
-              <q-btn label="Cancel" flat color="grey-7" @click="cancelAdd" />
+              <q-btn v-if="addStep > 1" label="Back" flat class="cancel-btn" @click="addStep--" />
+              <q-btn label="Cancel" flat class="cancel-btn" @click="cancelAdd" />
               <q-btn
                 v-if="addStep < 3"
                 label="Next"
-                color="primary"
                 unelevated
+                class="submit-btn"
                 @click="addStep++"
               />
               <q-btn
                 v-else
                 label="Add Employee"
                 type="submit"
-                color="primary"
                 unelevated
+                class="submit-btn"
                 :loading="savingEmployee || uploadingAvatar"
               />
             </div>
@@ -579,7 +578,6 @@
             @click="showViewModal = false"
           />
         </q-card-section>
-        <q-separator />
 
         <!-- Tabs -->
         <q-tabs
@@ -587,14 +585,13 @@
           dense
           align="left"
           class="view-tabs"
-          indicator-color="primary"
-          active-color="primary"
+          indicator-color="white"
+          active-color="white"
         >
           <q-tab name="user" label="User info" />
           <q-tab name="personal" label="Personal" />
           <q-tab name="employment" label="Employment" />
         </q-tabs>
-        <q-separator />
 
         <q-card-section class="modal-content">
           <q-tab-panels v-model="viewTab" animated>
@@ -854,12 +851,12 @@
             </div>
 
             <div class="form-actions">
-              <q-btn label="Cancel" flat color="grey-7" @click="cancelEdit" />
+              <q-btn label="Cancel" flat class="cancel-btn" @click="cancelEdit" />
               <q-btn
                 label="Save Changes"
                 type="submit"
-                color="primary"
                 unelevated
+                class="submit-btn"
                 :loading="savingEmployee || uploadingAvatar"
               />
             </div>
@@ -882,7 +879,7 @@
           lose system access. This can be reversed.
         </q-card-section>
         <q-card-actions align="right" class="confirm-actions">
-          <q-btn flat label="Cancel" color="grey-7" @click="showTerminateDialog = false" />
+          <q-btn flat label="Cancel" class="cancel-btn" @click="showTerminateDialog = false" />
           <q-btn
             unelevated
             label="Terminate"
@@ -908,7 +905,7 @@
           and regain system access.
         </q-card-section>
         <q-card-actions align="right" class="confirm-actions">
-          <q-btn flat label="Cancel" color="grey-7" @click="showRestoreDialog = false" />
+          <q-btn flat label="Cancel" class="cancel-btn" @click="showRestoreDialog = false" />
           <q-btn
             unelevated
             label="Restore"
@@ -1172,6 +1169,7 @@ const fetchPhoneNumbers = async (employeeList) => {
     })
 
     filteredEmployees.value = [...employees.value]
+    sortEmployees()
   } catch {
     // Silent - phone numbers remain N/A
   }
@@ -2238,24 +2236,26 @@ onMounted(async () => {
 }
 
 /* ==============================
-   MODALS - SHARED
+   MODALS - SHARED (matches SchedulePage exactly)
 ============================== */
 .modal-card {
-  width: 560px;
-  max-width: 95vw;
-  max-height: 90vh;
   border-radius: 14px !important;
+  width: 560px;
+  max-width: 95vw !important;
+  max-height: 90vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* improvement override below */
 }
 
 .modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px !important;
   background: #ffffff;
+  border-bottom: 1px solid #e8ecf0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
 }
 
 .modal-title-section {
@@ -2296,15 +2296,80 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.modal-close-btn:hover {
-  background: #f3f4f6 !important;
-  color: #374151 !important;
-}
-
 .modal-content {
   padding: 20px !important;
   overflow-y: auto;
+  max-height: 70vh;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   flex: 1;
+}
+
+.modal-content::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Schedule-page improvement overrides ── */
+.modal-card {
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+}
+.modal-header {
+  background: #2563eb !important;
+  border-bottom: none !important;
+}
+.modal-header .q-btn {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.modal-header .q-btn:hover {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+.modal-title {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+.modal-subtitle {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.modal-avatar-add {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+.modal-avatar-edit {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+.modal-content {
+  background: #f9fafb !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #e2e8f0 transparent !important;
+}
+.modal-content::-webkit-scrollbar {
+  width: 4px;
+  display: block !important;
+}
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-content::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+.modal-content :deep(.q-field__control) {
+  background: #ffffff !important;
+  border-radius: 10px !important;
+}
+.modal-content :deep(.q-field--outlined .q-field__control:before) {
+  border-color: #e2e8f0 !important;
+  border-radius: 10px !important;
+}
+.modal-content :deep(.q-field--outlined .q-field__control:hover:before) {
+  border-color: #2563eb !important;
+}
+.modal-content :deep(.q-field--outlined.q-field--focused .q-field__control:before) {
+  border-color: #2563eb !important;
+  border-width: 2px !important;
 }
 
 /* ==============================
@@ -2314,32 +2379,43 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   gap: 6px;
-  padding: 10px 0 0 0;
-  background: #ffffff;
+  padding: 8px 0 10px;
+  background: #2563eb;
 }
 
 .dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #e5e7eb;
+  background: rgba(255, 255, 255, 0.35);
   transition:
     background 0.2s ease,
     transform 0.2s ease;
 }
 
 .dot-active {
-  background: #3b82f6;
-  transform: scale(1.2);
+  background: #ffffff;
+  transform: scale(1.25);
 }
 
 /* ==============================
    VIEW MODAL TABS
 ============================== */
 .view-tabs {
-  background: #ffffff;
+  background: #2563eb;
   padding: 0 20px;
   font-size: 13px;
+}
+.view-tabs :deep(.q-tab) {
+  color: rgba(255, 255, 255, 0.7) !important;
+  text-transform: none;
+  font-weight: 500;
+}
+.view-tabs :deep(.q-tab--active) {
+  color: #ffffff !important;
+}
+.view-tabs :deep(.q-tab__indicator) {
+  background: #ffffff !important;
 }
 
 .view-modal {
@@ -2412,9 +2488,36 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding-top: 8px;
+  padding-top: 16px;
   border-top: 1px solid #f1f3f5;
   margin-top: 8px;
+}
+
+/* Exact Schedule page button styles */
+.cancel-btn {
+  color: #6b7280;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  padding: 0 18px !important;
+  min-height: 38px !important;
+}
+.cancel-btn:hover {
+  background: #f1f5f9 !important;
+}
+.submit-btn {
+  background: #2563eb !important;
+  color: white;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  min-height: 38px !important;
+  padding: 0 22px !important;
+}
+.submit-btn:hover {
+  background: #1d4ed8 !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
 }
 
 /* ==============================
@@ -2457,48 +2560,59 @@ onMounted(async () => {
 .confirm-dialog {
   width: 400px;
   max-width: 95vw;
-  border-radius: 14px !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+  overflow: hidden;
 }
 
 .confirm-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 20px 14px !important;
+  padding: 18px 20px 16px !important;
+}
+
+.confirm-header-danger {
+  background: #2563eb !important;
+}
+
+.confirm-header-success {
+  background: #2563eb !important;
 }
 
 .confirm-icon-wrap {
   border-radius: 10px !important;
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.2) !important;
 }
 
 .confirm-icon-danger {
-  background: #fef2f2 !important;
-  color: #dc2626 !important;
+  color: #ffffff !important;
 }
 
 .confirm-icon-success {
-  background: #f0fdf4 !important;
-  color: #16a34a !important;
+  color: #ffffff !important;
 }
 
 .confirm-title {
   font-size: 16px;
-  font-weight: 600;
-  color: #111827;
+  font-weight: 700;
+  color: #ffffff;
 }
 
 .confirm-content {
-  padding: 0 20px 16px !important;
+  padding: 16px 20px !important;
   font-size: 13px;
   color: #4b5563;
   line-height: 1.6;
+  background: #f9fafb;
 }
 
 .confirm-actions {
   padding: 12px 16px !important;
   border-top: 1px solid #f1f3f5;
   gap: 8px;
+  background: #f9fafb;
 }
 
 /* ==============================
@@ -2622,10 +2736,10 @@ onMounted(async () => {
 ============================== */
 @keyframes shimmer {
   0% {
-    background-position: -600px 0;
+    background-position: -800px 0;
   }
   100% {
-    background-position: 600px 0;
+    background-position: 800px 0;
   }
 }
 
@@ -2633,50 +2747,134 @@ onMounted(async () => {
   pointer-events: none;
 }
 
+/* Avatar circle */
 .skeleton-avatar {
   width: 34px;
   height: 34px;
+  min-width: 34px;
   border-radius: 50%;
   flex-shrink: 0;
   background: linear-gradient(90deg, #e8ecf0 25%, #f4f6f9 50%, #e8ecf0 75%);
-  background-size: 600px 100%;
-  animation: shimmer 1.4s infinite linear;
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite linear;
 }
 
+/* All skeleton bars share this base */
 .skeleton-line {
   border-radius: 6px;
   background: linear-gradient(90deg, #e8ecf0 25%, #f4f6f9 50%, #e8ecf0 75%);
-  background-size: 600px 100%;
-  animation: shimmer 1.4s infinite linear;
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite linear;
+  /* fill the cell by default */
+  width: 100%;
+  max-width: 100%;
 }
 
+/* Per-bar heights & width caps */
 .skeleton-name {
   height: 13px;
-  width: 120px;
+  width: 75%;
   margin-bottom: 6px;
 }
 .skeleton-email {
   height: 11px;
-  width: 160px;
+  width: 100%;
 }
 .skeleton-role {
   height: 22px;
-  width: 80px;
+  width: 80%;
   border-radius: 20px;
 }
 .skeleton-phone {
   height: 13px;
-  width: 110px;
+  width: 85%;
 }
 .skeleton-status {
   height: 22px;
-  width: 70px;
+  width: 72%;
   border-radius: 20px;
 }
 .skeleton-action {
-  height: 24px;
-  width: 24px;
+  height: 28px;
+  width: 28px;
+  min-width: 28px;
   border-radius: 50%;
   margin: 0 auto;
+}
+
+/* Skeleton cells: use the same proportions as the real columns */
+.skeleton-row td.table-body-cell:nth-child(1) {
+  width: 35%;
+}
+.skeleton-row td.table-body-cell:nth-child(2) {
+  width: 20%;
+}
+.skeleton-row td.table-body-cell:nth-child(3) {
+  width: 20%;
+}
+.skeleton-row td.table-body-cell:nth-child(4) {
+  width: 15%;
+}
+.skeleton-row td.table-body-cell:nth-child(5) {
+  width: 10%;
+}
+
+/* ── 768 px and below: table scrolls, skeleton fills the min-width ── */
+@media (max-width: 768px) {
+  .skeleton-row td.table-body-cell:nth-child(1) {
+    width: 210px;
+  }
+  .skeleton-row td.table-body-cell:nth-child(2) {
+    width: 120px;
+  }
+  .skeleton-row td.table-body-cell:nth-child(3) {
+    width: 120px;
+  }
+  .skeleton-row td.table-body-cell:nth-child(4) {
+    width: 90px;
+  }
+  .skeleton-row td.table-body-cell:nth-child(5) {
+    width: 60px;
+  }
+
+  .skeleton-name {
+    width: 80%;
+  }
+  .skeleton-email {
+    width: 100%;
+  }
+  .skeleton-role {
+    width: 85%;
+  }
+  .skeleton-phone {
+    width: 90%;
+  }
+  .skeleton-status {
+    width: 78%;
+  }
+}
+
+/* ── 480 px: slightly shorter bars, tighter avatar ── */
+@media (max-width: 480px) {
+  .skeleton-avatar {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+  }
+  .skeleton-name {
+    height: 11px;
+  }
+  .skeleton-email {
+    height: 10px;
+  }
+  .skeleton-role {
+    height: 18px;
+  }
+  .skeleton-phone {
+    height: 11px;
+  }
+  .skeleton-status {
+    height: 18px;
+  }
 }
 </style>
