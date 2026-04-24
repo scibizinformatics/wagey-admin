@@ -105,10 +105,10 @@
         </div>
 
         <!-- Employee Table -->
-        <div class="modern-table-container" style="position: relative">
+        <div class="modern-table-container">
           <!-- Centered loading spinner overlay -->
           <div v-if="loading" class="table-spinner-overlay">
-            <q-spinner-oval color="primary" size="42px" />
+            <q-spinner-oval color="primary" size="52px" />
           </div>
           <q-table
             :rows="filteredEmployees"
@@ -1959,6 +1959,7 @@ onMounted(async () => {
 .modern-table-container {
   overflow-x: auto;
   min-height: 420px;
+  position: relative;
 }
 
 .loan-table {
@@ -2719,12 +2720,15 @@ onMounted(async () => {
 ============================== */
 .table-spinner-overlay {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   z-index: 10;
-  background: rgba(255, 255, 255, 0.6);
-  min-height: 160px;
+  background: rgba(255, 255, 255, 0.75);
 }
 </style>
