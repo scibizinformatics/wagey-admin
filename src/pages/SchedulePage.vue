@@ -142,232 +142,234 @@
         </div>
       </div>
       <div class="content-section">
-        <div class="table-view">
-          <div class="table-wrapper">
-            <table class="schedule-table">
-              <thead>
-                <tr>
-                  <th class="employee-col">Employee</th>
-                  <th v-for="(day, i) in days" :key="i" class="day-col">
-                    {{ day }}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="user in filteredUsers" :key="user.id" class="table-row">
-                  <td class="employee-cell">
-                    <div class="employee-info">
-                      <q-avatar
-                        size="32px"
-                        class="employee-avatar"
-                        :style="{ backgroundColor: getAvatarColor(user.name) }"
-                      >
-                        <span class="avatar-text">{{ getInitials(user.name) }}</span>
-                      </q-avatar>
-                      <span class="employee-name">{{ user.name }}</span>
-                    </div>
-                  </td>
-                  <td v-for="(day, dayIdx) in days" :key="dayIdx" class="schedule-cell">
-                    <div class="shifts-wrapper">
-                      <!-- Existing Shifts (merged when dual-shift) -->
-                      <div
-                        v-for="element in getMergedShifts(user.id, dayIdx)"
-                        :key="element.id"
-                        class="shift-badge"
-                        :class="{
-                          'shift-badge-dayoff': isDayOff(element),
-                          'shift-badge-leave': element.isLeave,
-                          'shift-badge-merged': element.isMerged,
-                        }"
-                      >
-                        <!-- Leave Display -->
-                        <template v-if="element.isLeave">
-                          <div class="leave-content">
-                            <q-icon name="beach_access" size="15px" class="leave-icon" />
-                            <div class="leave-label">{{ element.leaveTypeName }}</div>
-                          </div>
-                          <div class="shift-actions">
-
-                          </div>
-                        </template>
-                        <!-- Day Off Display -->
-                        <template v-else-if="isDayOff(element)">
-                          <div class="dayoff-content">
-                            <q-icon name="event_busy" size="18px" class="dayoff-icon" />
-                            <div class="dayoff-label">Day Off</div>
-                          </div>
-                          <div class="shift-actions">
+        <!-- Loading Spinner -->
+        <div v-if="isLoadingSchedule" class="schedule-loading-overlay">
+          <q-spinner color="primary" size="48px" />
+          <div class="schedule-loading-text">Loading schedules...</div>
+        </div>
+        <template v-else>
+          <div class="table-view">
+            <div class="table-wrapper">
+              <table class="schedule-table">
+                <thead>
+                  <tr>
+                    <th class="employee-col">Employee</th>
+                    <th v-for="(day, i) in days" :key="i" class="day-col">
+                      {{ day }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="user in filteredUsers" :key="user.id" class="table-row">
+                    <td class="employee-cell">
+                      <div class="employee-info">
+                        <q-avatar
+                          size="32px"
+                          class="employee-avatar"
+                          :style="{ backgroundColor: getAvatarColor(user.name) }"
+                        >
+                          <span class="avatar-text">{{ getInitials(user.name) }}</span>
+                        </q-avatar>
+                        <span class="employee-name">{{ user.name }}</span>
+                      </div>
+                    </td>
+                    <td v-for="(day, dayIdx) in days" :key="dayIdx" class="schedule-cell">
+                      <div class="shifts-wrapper">
+                        <!-- Existing Shifts (merged when dual-shift) -->
+                        <div
+                          v-for="element in getMergedShifts(user.id, dayIdx)"
+                          :key="element.id"
+                          class="shift-badge"
+                          :class="{
+                            'shift-badge-dayoff': isDayOff(element),
+                            'shift-badge-leave': element.isLeave,
+                            'shift-badge-merged': element.isMerged,
+                          }"
+                        >
+                          <!-- Leave Display -->
+                          <template v-if="element.isLeave">
+                            <div class="leave-content">
+                              <q-icon name="beach_access" size="15px" class="leave-icon" />
+                              <div class="leave-label">{{ element.leaveTypeName }}</div>
+                            </div>
+                            <div class="shift-actions"></div>
+                          </template>
+                          <!-- Day Off Display -->
+                          <template v-else-if="isDayOff(element)">
+                            <div class="dayoff-content">
+                              <q-icon name="event_busy" size="18px" class="dayoff-icon" />
+                              <div class="dayoff-label">Day Off</div>
+                            </div>
+                            <div class="shift-actions">
+                              <q-btn
+                                flat
+                                dense
+                                round
+                                icon="swap_horiz"
+                                size="xs"
+                                class="action-btn reassign-btn"
+                                @click="openReassignModal(element)"
+                              >
+                                <q-tooltip>Reassign Day Off</q-tooltip>
+                              </q-btn>
+                            </div>
+                          </template>
+                          <!-- Merged Dual-Shift Display -->
+                          <template v-else-if="element.isMerged">
+                            <!-- Each shift on its own compact line -->
+                            <template v-for="(sub, si) in element.shifts" :key="sub.id">
+                              <div class="shift-time">
+                                {{ formatTimeWithTimezone(sub.startTime) }} - {{ sub.endTime }}
+                              </div>
+                              <div class="shift-site" v-if="getSiteName(sub.site, sub)">
+                                <q-icon name="location_on" size="10px" />
+                                {{ getSiteName(sub.site, sub) }}
+                              </div>
+                              <div class="shift-position">{{ getPositionName(sub.position) }}</div>
+                              <div
+                                v-if="si < element.shifts.length - 1"
+                                class="merged-shift-separator"
+                              />
+                            </template>
+                            <!-- Merged shift actions -->
+                            <div class="shift-actions">
+                              <q-btn
+                                flat
+                                dense
+                                round
+                                icon="swap_horiz"
+                                size="xs"
+                                class="action-btn reassign-btn"
+                                @click="openReassignModal(element)"
+                              >
+                                <q-tooltip>Update Shifts</q-tooltip>
+                              </q-btn>
+                              <q-btn
+                                flat
+                                dense
+                                round
+                                icon="event_busy"
+                                size="xs"
+                                class="action-btn dayoff-btn"
+                                :loading="assigningDayOffId === element.id"
+                                :disable="assigningDayOffId === element.id"
+                                @click.stop="assignDualDayOff(element)"
+                              >
+                                <q-tooltip>Assign Day Off (Both)</q-tooltip>
+                              </q-btn>
+                            </div>
+                          </template>
+                          <!-- Regular Shift Display -->
+                          <template v-else>
+                            <div class="shift-time" v-if="element.startTime && element.endTime">
+                              {{ formatTimeWithTimezone(element.startTime) }} -
+                              {{ element.endTime }}
+                            </div>
+                            <div class="shift-site" v-if="getSiteName(element.site, element)">
+                              <q-icon name="location_on" size="11px" />
+                              {{ getSiteName(element.site, element) }}
+                            </div>
+                            <div class="shift-position">
+                              {{ getPositionName(element.position) }}
+                            </div>
+                            <div class="shift-actions">
+                              <q-btn
+                                flat
+                                dense
+                                round
+                                icon="swap_horiz"
+                                size="xs"
+                                class="action-btn reassign-btn"
+                                @click="openReassignModal(element)"
+                              >
+                                <q-tooltip>Update Shift</q-tooltip>
+                              </q-btn>
+                              <q-btn
+                                flat
+                                dense
+                                round
+                                icon="event_busy"
+                                size="xs"
+                                class="action-btn dayoff-btn"
+                                :loading="assigningDayOffId === element.id"
+                                :disable="assigningDayOffId === element.id"
+                                @click.stop="assignDayOff(element)"
+                              >
+                                <q-tooltip>Assign Day Off</q-tooltip>
+                              </q-btn>
+                            </div>
+                          </template>
+                        </div>
+                        <!-- Quick Action Buttons -->
+                        <div class="cell-quick-actions">
+                          <q-btn
+                            v-if="getShifts(user.id, dayIdx).length === 0"
+                            flat
+                            dense
+                            size="xs"
+                            icon="add"
+                            label="Schedule"
+                            @click="openQuickAddModal(user.id, dayIdx)"
+                            class="cell-btn cell-btn-add"
+                          />
+                          <template v-if="getShifts(user.id, dayIdx).length === 0">
+                            <q-btn-dropdown
+                              flat
+                              dense
+                              size="xs"
+                              no-icon-animation
+                              icon="beach_access"
+                              label="Leave"
+                              :loading="quickActionLoading === `${user.id}-${dayIdx}-leave`"
+                              class="cell-btn cell-btn-leave"
+                              dropdown-icon="none"
+                              fit
+                            >
+                              <q-list dense>
+                                <q-item
+                                  v-for="lt in leaveTypes"
+                                  :key="lt.id"
+                                  clickable
+                                  v-close-popup
+                                  @click="quickDirectAssign(user.id, dayIdx, 'leave', lt.id)"
+                                  style="min-height: 28px; padding: 4px 8px"
+                                >
+                                  <q-item-section style="font-size: 11px">{{
+                                    lt.name
+                                  }}</q-item-section>
+                                </q-item>
+                                <q-item
+                                  v-if="leaveTypes.length === 0"
+                                  style="min-height: 28px; padding: 4px 8px"
+                                >
+                                  <q-item-section style="font-size: 11px; color: grey"
+                                    >No leave types found</q-item-section
+                                  >
+                                </q-item>
+                              </q-list>
+                            </q-btn-dropdown>
                             <q-btn
                               flat
                               dense
-                              round
-                              icon="swap_horiz"
                               size="xs"
-                              class="action-btn reassign-btn"
-                              @click="openReassignModal(element)"
-                            >
-                              <q-tooltip>Reassign Day Off</q-tooltip>
-                            </q-btn>
-                          </div>
-                        </template>
-                        <!-- Merged Dual-Shift Display -->
-                        <template v-else-if="element.isMerged">
-                          <!-- Each shift on its own compact line -->
-                          <template v-for="(sub, si) in element.shifts" :key="sub.id">
-                            <div class="shift-time">
-                              {{ formatTimeWithTimezone(sub.startTime) }} - {{ sub.endTime }}
-                            </div>
-                            <div class="shift-site" v-if="getSiteName(sub.site, sub)">
-                              <q-icon name="location_on" size="10px" />
-                              {{ getSiteName(sub.site, sub) }}
-                            </div>
-                            <div class="shift-position">{{ getPositionName(sub.position) }}</div>
-                            <div
-                              v-if="si < element.shifts.length - 1"
-                              class="merged-shift-separator"
+                              icon="event_busy"
+                              label="Day Off"
+                              :loading="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
+                              :disable="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
+                              @click="quickDirectAssign(user.id, dayIdx, 'dayoff')"
+                              class="cell-btn cell-btn-dayoff"
                             />
                           </template>
-                          <!-- Merged shift actions -->
-                          <div class="shift-actions">
-                            <q-btn
-                              flat
-                              dense
-                              round
-                              icon="swap_horiz"
-                              size="xs"
-                              class="action-btn reassign-btn"
-                              @click="openReassignModal(element)"
-                            >
-                              <q-tooltip>Update Shifts</q-tooltip>
-                            </q-btn>
-                            <q-btn
-                              flat
-                              dense
-                              round
-                              icon="event_busy"
-                              size="xs"
-                              class="action-btn dayoff-btn"
-                              :loading="assigningDayOffId === element.id"
-                              :disable="assigningDayOffId === element.id"
-                              @click.stop="assignDualDayOff(element)"
-                            >
-                              <q-tooltip>Assign Day Off (Both)</q-tooltip>
-                            </q-btn>
-                            
-                          </div>
-                        </template>
-                        <!-- Regular Shift Display -->
-                        <template v-else>
-                          <div class="shift-time" v-if="element.startTime && element.endTime">
-                            {{ formatTimeWithTimezone(element.startTime) }} - {{ element.endTime }}
-                          </div>
-                          <div class="shift-site" v-if="getSiteName(element.site, element)">
-                            <q-icon name="location_on" size="11px" />
-                            {{ getSiteName(element.site, element) }}
-                          </div>
-                          <div class="shift-position">
-                            {{ getPositionName(element.position) }}
-                          </div>
-                          <div class="shift-actions">
-                            <q-btn
-                              flat
-                              dense
-                              round
-                              icon="swap_horiz"
-                              size="xs"
-                              class="action-btn reassign-btn"
-                              @click="openReassignModal(element)"
-                            >
-                              <q-tooltip>Update Shift</q-tooltip>
-                            </q-btn>
-                            <q-btn
-                              flat
-                              dense
-                              round
-                              icon="event_busy"
-                              size="xs"
-                              class="action-btn dayoff-btn"
-                              :loading="assigningDayOffId === element.id"
-                              :disable="assigningDayOffId === element.id"
-                              @click.stop="assignDayOff(element)"
-                            >
-                              <q-tooltip>Assign Day Off</q-tooltip>
-                            </q-btn>
-
-                          </div>
-                        </template>
+                        </div>
                       </div>
-                      <!-- Quick Action Buttons -->
-                      <div class="cell-quick-actions">
-                        <q-btn
-                          v-if="getShifts(user.id, dayIdx).length === 0"
-                          flat
-                          dense
-                          size="xs"
-                          icon="add"
-                          label="Schedule"
-                          @click="openQuickAddModal(user.id, dayIdx)"
-                          class="cell-btn cell-btn-add"
-                        />
-                        <template v-if="getShifts(user.id, dayIdx).length === 0">
-                          <q-btn-dropdown
-                            flat
-                            dense
-                            size="xs"
-                            no-icon-animation
-                            icon="beach_access"
-                            label="Leave"
-                            :loading="quickActionLoading === `${user.id}-${dayIdx}-leave`"
-                            class="cell-btn cell-btn-leave"
-                            dropdown-icon="none"
-                            fit
-                          >
-                            <q-list dense>
-                              <q-item
-                                v-for="lt in leaveTypes"
-                                :key="lt.id"
-                                clickable
-                                v-close-popup
-                                @click="quickDirectAssign(user.id, dayIdx, 'leave', lt.id)"
-                                style="min-height: 28px; padding: 4px 8px"
-                              >
-                                <q-item-section style="font-size: 11px">{{
-                                  lt.name
-                                }}</q-item-section>
-                              </q-item>
-                              <q-item
-                                v-if="leaveTypes.length === 0"
-                                style="min-height: 28px; padding: 4px 8px"
-                              >
-                                <q-item-section style="font-size: 11px; color: grey"
-                                  >No leave types found</q-item-section
-                                >
-                              </q-item>
-                            </q-list>
-                          </q-btn-dropdown>
-                          <q-btn
-                            flat
-                            dense
-                            size="xs"
-                            icon="event_busy"
-                            label="Day Off"
-                            :loading="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
-                            :disable="quickActionLoading === `${user.id}-${dayIdx}-dayoff`"
-                            @click="quickDirectAssign(user.id, dayIdx, 'dayoff')"
-                            class="cell-btn cell-btn-dayoff"
-                          />
-                        </template>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </template>
       </div>
-      
-      <!-- Add Schedule Modal -->
 
       <q-dialog v-model="showAddModal" persistent>
         <q-card class="modal-card">
@@ -1497,6 +1499,7 @@ const { employees, loading: loadingEmployees, fetchEmployees } = useEmployees()
 const users = ref([])
 const shifts = ref([])
 const isReassigning = ref(false)
+const isLoadingSchedule = ref(false)
 const userTimezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
 const viewMode = ref('table')
 const filters = ref({ site: null, employee: null })
@@ -2220,6 +2223,7 @@ const fetchLeaves = () => {
 }
 
 const fetchData = async () => {
+  isLoadingSchedule.value = true
   try {
     const token = localStorage.getItem('access_token')
     const cId = normalizeCompanyId()
@@ -2395,6 +2399,8 @@ const fetchData = async () => {
   } catch (e) {
     console.error('❌ FETCH ERROR:', e)
     $q.notify({ type: 'negative', message: 'Failed to load schedules', timeout: 5000 })
+  } finally {
+    isLoadingSchedule.value = false
   }
 }
 
@@ -3045,6 +3051,21 @@ onMounted(async () => {
 /* ==============================
    PAGE ROOT
 ============================== */
+.schedule-loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 16px;
+}
+
+.schedule-loading-text {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
 .schedule-page {
   background: #f4f6f9;
   min-height: 100vh;
