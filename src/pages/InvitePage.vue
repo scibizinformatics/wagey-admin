@@ -211,7 +211,6 @@
           </div>
           <q-btn icon="close" flat round dense class="modal-close-btn" @click="closeModal" />
         </q-card-section>
-        <q-separator />
 
         <q-card-section class="modal-content">
           <q-form @submit="sendInvitation" class="edit-form">
@@ -261,12 +260,12 @@
             </div>
 
             <div class="form-actions">
-              <q-btn label="Cancel" flat color="grey-7" @click="closeModal" />
+              <q-btn label="Cancel" flat class="cancel-btn" @click="closeModal" />
               <q-btn
                 label="Send Invitation"
                 type="submit"
-                color="primary"
                 unelevated
+                class="submit-btn"
                 :loading="saving"
                 :disable="!isFormValid"
               />
@@ -305,7 +304,6 @@
             @click="showViewModal = false"
           />
         </q-card-section>
-        <q-separator />
 
         <q-card-section class="modal-content">
           <div class="detail-grid-cards">
@@ -366,21 +364,18 @@
     <!-- ======================== SUCCESS DIALOG ======================== -->
     <q-dialog v-model="showSuccessDialog">
       <q-card class="confirm-dialog">
-        <q-card-section class="confirm-header">
+        <q-card-section class="confirm-header confirm-header-success">
           <q-avatar size="44px" class="confirm-icon-wrap confirm-icon-success">
             <q-icon name="check_circle" size="22px" />
           </q-avatar>
-          <div>
-            <div class="confirm-title">Invitation Sent!</div>
-          </div>
+          <div class="confirm-title">Invitation Sent!</div>
         </q-card-section>
-        <q-separator />
         <q-card-section class="confirm-content">
           The invitation has been successfully sent to <strong>{{ sentToEmail }}</strong>
         </q-card-section>
         <q-card-actions align="right" class="confirm-actions">
-          <q-btn label="Close" flat color="grey-7" @click="showSuccessDialog = false" />
-          <q-btn label="Send Another" unelevated color="primary" @click="sendAnother" />
+          <q-btn flat label="Close" class="cancel-btn" @click="showSuccessDialog = false" />
+          <q-btn label="Send Another" unelevated class="submit-btn" @click="sendAnother" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -1045,7 +1040,8 @@ onMounted(async () => {
   width: 560px;
   max-width: 95vw;
   max-height: 90vh;
-  border-radius: 14px !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1063,7 +1059,8 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px !important;
-  background: #ffffff;
+  background: #2563eb !important;
+  border-bottom: none !important;
 }
 
 .modal-title-section {
@@ -1078,36 +1075,66 @@ onMounted(async () => {
 }
 
 .modal-avatar-add {
-  background: #eff6ff !important;
-  color: #3b82f6 !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
 }
 
 .modal-title {
   font-size: 16px;
-  font-weight: 600;
-  color: #111827;
+  font-weight: 700;
+  color: #ffffff !important;
 }
 
 .modal-subtitle {
   font-size: 12px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.8) !important;
   margin-top: 2px;
 }
 
 .modal-close-btn {
-  color: #9ca3af !important;
+  color: rgba(255, 255, 255, 0.8) !important;
   flex-shrink: 0;
 }
 
 .modal-close-btn:hover {
-  background: #f3f4f6 !important;
-  color: #374151 !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
 }
 
 .modal-content {
   padding: 20px !important;
   overflow-y: auto;
   flex: 1;
+  background: #f9fafb !important;
+  scrollbar-width: thin;
+  scrollbar-color: #e2e8f0 transparent;
+}
+
+.modal-content::-webkit-scrollbar {
+  width: 4px;
+}
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-content::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+.modal-content :deep(.q-field__control) {
+  background: #ffffff !important;
+  border-radius: 10px !important;
+}
+.modal-content :deep(.q-field--outlined .q-field__control:before) {
+  border-color: #e2e8f0 !important;
+  border-radius: 10px !important;
+}
+.modal-content :deep(.q-field--outlined .q-field__control:hover:before) {
+  border-color: #2563eb !important;
+}
+.modal-content :deep(.q-field--outlined.q-field--focused .q-field__control:before) {
+  border-color: #2563eb !important;
+  border-width: 2px !important;
 }
 
 /* Form */
@@ -1175,41 +1202,75 @@ onMounted(async () => {
   word-break: break-word;
 }
 
+/* Form buttons */
+.cancel-btn {
+  color: #6b7280;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  padding: 0 18px !important;
+  min-height: 38px !important;
+}
+.cancel-btn:hover {
+  background: #f1f5f9 !important;
+}
+.submit-btn {
+  background: #2563eb !important;
+  color: white;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  min-height: 38px !important;
+  padding: 0 22px !important;
+}
+.submit-btn:hover {
+  background: #1d4ed8 !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+}
+
 /* Confirm / success dialog */
 .confirm-dialog {
   width: 400px;
   max-width: 95vw;
-  border-radius: 14px !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+  overflow: hidden;
 }
 
 .confirm-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 20px 14px !important;
+  padding: 18px 20px 16px !important;
+}
+
+.confirm-header-success {
+  background: #2563eb !important;
 }
 
 .confirm-icon-wrap {
   border-radius: 10px !important;
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.2) !important;
 }
 
 .confirm-icon-success {
-  background: #f0fdf4 !important;
-  color: #16a34a !important;
+  color: #ffffff !important;
 }
 
 .confirm-title {
   font-size: 16px;
-  font-weight: 600;
-  color: #111827;
+  font-weight: 700;
+  color: #ffffff;
 }
 
 .confirm-content {
-  padding: 0 20px 16px !important;
+  padding: 16px 20px !important;
   font-size: 13px;
   color: #4b5563;
   line-height: 1.6;
+  background: #f9fafb;
 }
 
 .confirm-content strong {
@@ -1220,6 +1281,7 @@ onMounted(async () => {
   padding: 12px 16px !important;
   border-top: 1px solid #f1f3f5;
   gap: 8px;
+  background: #f9fafb;
 }
 
 /* ==============================

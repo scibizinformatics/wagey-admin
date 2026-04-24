@@ -187,17 +187,7 @@
                             <div class="leave-label">{{ element.leaveTypeName }}</div>
                           </div>
                           <div class="shift-actions">
-                            <q-btn
-                              flat
-                              dense
-                              round
-                              icon="close"
-                              size="xs"
-                              class="action-btn delete-btn"
-                              @click.stop="confirmDelete('leave', element)"
-                            >
-                              <q-tooltip>Cancel Leave</q-tooltip>
-                            </q-btn>
+
                           </div>
                         </template>
                         <!-- Day Off Display -->
@@ -217,17 +207,6 @@
                               @click="openReassignModal(element)"
                             >
                               <q-tooltip>Reassign Day Off</q-tooltip>
-                            </q-btn>
-                            <q-btn
-                              flat
-                              dense
-                              round
-                              icon="close"
-                              size="xs"
-                              class="action-btn delete-btn"
-                              @click.stop="confirmDelete('single', element.id)"
-                            >
-                              <q-tooltip>Remove Day Off</q-tooltip>
                             </q-btn>
                           </div>
                         </template>
@@ -274,17 +253,7 @@
                             >
                               <q-tooltip>Assign Day Off (Both)</q-tooltip>
                             </q-btn>
-                            <q-btn
-                              flat
-                              dense
-                              round
-                              icon="close"
-                              size="xs"
-                              class="action-btn delete-btn"
-                              @click.stop="confirmDelete('dual', element)"
-                            >
-                              <q-tooltip>Remove Both Shifts</q-tooltip>
-                            </q-btn>
+                            
                           </div>
                         </template>
                         <!-- Regular Shift Display -->
@@ -324,15 +293,7 @@
                             >
                               <q-tooltip>Assign Day Off</q-tooltip>
                             </q-btn>
-                            <q-btn
-                              flat
-                              dense
-                              round
-                              icon="close"
-                              size="xs"
-                              class="action-btn delete-btn"
-                              @click.stop="confirmDelete('single', element.id)"
-                            />
+
                           </div>
                         </template>
                       </div>
@@ -405,32 +366,7 @@
           </div>
         </div>
       </div>
-      <!-- Delete Confirmation Modal -->
-      <q-dialog v-model="showDeleteModal" persistent>
-        <q-card class="modal-card" style="min-width: 320px; max-width: 420px">
-          <q-card-section class="modal-header">
-            <div class="modal-title" style="display: flex; align-items: center; gap: 8px">
-              <q-icon name="warning" color="negative" size="22px" />
-              Delete Schedule
-            </div>
-          </q-card-section>
-          <q-card-section class="modal-body">
-            <p style="margin: 0; font-size: 15px; color: #374151">
-              Are you sure you want to delete this schedule? This action cannot be undone.
-            </p>
-          </q-card-section>
-          <q-card-actions align="right" class="modal-actions" style="padding: 12px 16px; gap: 8px">
-            <q-btn flat label="No, Keep It" class="cancel-btn" @click="showDeleteModal = false" />
-            <q-btn
-              unelevated
-              color="negative"
-              label="Yes, Delete"
-              class="submit-btn"
-              @click="confirmDeleteAction"
-            />
-          </q-card-actions>
-        </q-card>
-      </q-dialog>
+      
       <!-- Add Schedule Modal -->
 
       <q-dialog v-model="showAddModal" persistent>
@@ -1539,11 +1475,9 @@ const {
   fetchScheduleByDateRange,
   assignShift,
   reassignShift: reassignShiftApi,
-  cancelAssignment,
   assignDayOff: assignDayOffApi,
   applyLeaveForEmployee,
   fetchLeaveTypes: fetchLeaveTypesApi,
-  deleteLeave: deleteLeaveApi,
   fetchShiftTemplates: fetchShiftTemplatesApi,
 } = useSchedule()
 const {
@@ -1572,8 +1506,6 @@ const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const showAddModal = ref(false)
 const showQuickAddModal = ref(false)
 const showReassignModal = ref(false)
-const showDeleteModal = ref(false)
-const pendingDelete = ref(null)
 const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
 const assigningDayOffId = ref(null)
@@ -1872,6 +1804,19 @@ const formatTimeWithTimezone = (time) => {
 // eslint-disable-next-line no-unused-vars
 const isValidTime = (val) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(val || '')
 
+function parseShifts(shiftsData) {
+  if (!shiftsData) return []
+  if (Array.isArray(shiftsData)) return shiftsData
+  if (typeof shiftsData === 'string') {
+    try {
+      return JSON.parse(shiftsData)
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 const getPositionName = (positionId) =>
   shiftTypes.value.find((p) => p.id === positionId)?.name || positionId
 
@@ -1962,14 +1907,14 @@ const positionOptions = computed(() =>
 
 const shiftTemplateOptions = computed(() => {
   const opts = shiftTemplates.value.map((t) => {
-    // Build a descriptive label from the shifts array if available
-    let label = t.time_display || t.name
-    if (!label && Array.isArray(t.shifts_detail) && t.shifts_detail.length) {
-      label = t.shifts_detail
+    let label = t.name
+    const shifts = parseShifts(t.shifts_detail)
+    if (!label && shifts.length) {
+      label = shifts
         .map((s) => {
-          const site = s.site?.name || getSiteName(s.site?.id) || ''
-          const start = s.start_time || ''
-          const end = s.end_time || ''
+          const site = s.site?.name || getSiteName(s.site?.id || t.site_id) || ''
+          const start = s.start_time || s.default_start_time || ''
+          const end = s.end_time || s.default_end_time || ''
           const time = start && end ? `${start} - ${end}` : start || end
           return site ? `${time} (${site})` : time
         })
@@ -2195,12 +2140,6 @@ const saveLeaveToStorage = (leave) => {
     leaves.push(leave)
     localStorage.setItem(LEAVE_STORAGE_KEY, JSON.stringify(leaves))
   }
-}
-const removeLeaveFromStorage = (localId) => {
-  localStorage.setItem(
-    LEAVE_STORAGE_KEY,
-    JSON.stringify(getStoredLeaves().filter((l) => l.localId !== localId)),
-  )
 }
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
@@ -2650,19 +2589,6 @@ const closeReassignModal = () => {
   }
 }
 
-const confirmDelete = (type, payload) => {
-  pendingDelete.value = { type, payload }
-  showDeleteModal.value = true
-}
-const confirmDeleteAction = async () => {
-  showDeleteModal.value = false
-  const { type, payload } = pendingDelete.value
-  if (type === 'single') await deleteShift(payload)
-  else if (type === 'dual') await deleteDualShift(payload)
-  else if (type === 'leave') await cancelLeave(payload)
-  pendingDelete.value = null
-}
-
 // ─── CRUD actions ─────────────────────────────────────────────────────────────
 
 // ─── Helper: safely extract a raw primitive ID from a q-select value ─────────
@@ -2924,37 +2850,6 @@ const handleReassignShift = async () => {
   }
 }
 
-const deleteShift = async (id) => {
-  try {
-    const shift = shifts.value.find((s) => s.id === id)
-    await cancelAssignment(shift?.assignmentId || id)
-    shifts.value = shifts.value.filter((s) => s.id !== id)
-    $q.notify({ type: 'positive', message: 'Schedule cancelled successfully' })
-    setTimeout(async () => {
-      await fetchData()
-      fetchLeaves()
-    }, 1500)
-  } catch {
-    $q.notify({ type: 'negative', message: 'Failed to cancel schedule' })
-  }
-}
-
-const deleteDualShift = async (mergedElement) => {
-  try {
-    await Promise.all(mergedElement.shifts.map((s) => cancelAssignment(s.assignmentId)))
-    mergedElement.shifts.forEach((s) => {
-      shifts.value = shifts.value.filter((x) => s.id !== x.id)
-    })
-    $q.notify({ type: 'positive', message: 'Both shifts cancelled successfully' })
-    setTimeout(async () => {
-      await fetchData()
-      fetchLeaves()
-    }, 1500)
-  } catch {
-    $q.notify({ type: 'negative', message: 'Failed to cancel shifts' })
-  }
-}
-
 const assignDayOff = async (element) => {
   assigningDayOffId.value = element.id
   try {
@@ -3029,28 +2924,6 @@ const assignDualDayOff = async (mergedElement) => {
   } finally {
     assigningDayOffId.value = null
   }
-}
-
-const cancelLeave = async (element) => {
-  const localId = element.assignmentId
-  const storedLeave = getStoredLeaves().find((l) => l.localId === localId)
-  const apiId = storedLeave?.apiId ?? null
-  removeLeaveFromStorage(localId)
-  shifts.value = shifts.value.filter((s) => s.id !== element.id)
-  if (apiId) {
-    try {
-      await deleteLeaveApi(apiId)
-      $q.notify({ type: 'positive', message: 'Leave cancelled successfully', timeout: 3000 })
-    } catch {
-      $q.notify({ type: 'warning', message: 'Leave removed from schedule.', timeout: 3000 })
-    }
-  } else {
-    $q.notify({ type: 'positive', message: 'Leave removed from schedule.', timeout: 3000 })
-  }
-  setTimeout(async () => {
-    await fetchData()
-    fetchLeaves()
-  }, 500)
 }
 
 const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
