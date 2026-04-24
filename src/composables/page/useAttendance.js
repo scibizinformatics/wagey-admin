@@ -94,54 +94,6 @@ export function useAttendance() {
     }
   }
 
-  // ─── Update ───────────────────────────────────────────────────────────────
-
-  /**
-   * Update an attendance record (time_in, time_out, cost_center …).
-   * @param {string|number} recordId
-   * @param {object} payload
-   */
-  async function updateAttendance(recordId, payload) {
-    updating.value = true
-    try {
-      const response = await api.put(
-        `${BASE}/attendance/log-update/${companyId.value}/${recordId}/`,
-        payload,
-      )
-      return response.data
-    } finally {
-      updating.value = false
-    }
-  }
-
-  // ─── Delete ───────────────────────────────────────────────────────────────
-
-  /**
-   * Batch-delete attendance records by IDs.
-   * @param {Array<string|number>} ids
-   */
-  async function batchDeleteAttendance(ids) {
-    const response = await api.post(`${BASE}/attendance/batch-delete/`, { ids })
-    return response.data
-  }
-
-  // ─── Export ───────────────────────────────────────────────────────────────
-
-  // FIX: bare paths '/attendance/export/' replaced with full BASE prefix
-  // so these resolve correctly in production (no dev proxy available).
-
-  async function exportSelectedAttendance(ids) {
-    const response = await api.post(`${BASE}/attendance/export/`, { ids, format: 'csv' })
-    return response.data
-  }
-
-  async function exportAllAttendance(filters) {
-    const response = await api.get(`${BASE}/attendance/export/`, {
-      params: { ...filters, format: 'csv' },
-    })
-    return response.data
-  }
-
   return {
     // state
     attendanceData,
@@ -153,9 +105,5 @@ export function useAttendance() {
     fetchAttendanceByDate,
     fetchEmployeeSchedule,
     logAttendance,
-    updateAttendance,
-    batchDeleteAttendance,
-    exportSelectedAttendance,
-    exportAllAttendance,
   }
 }
