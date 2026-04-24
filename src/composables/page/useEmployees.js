@@ -38,9 +38,6 @@ export function useEmployees() {
     if (inflightByCompany[cid]) return inflightByCompany[cid]
 
     loading.value = true
-    // FIX: was api.get('/user/companies/...') — relied on axios baseURL being correct.
-    // Now uses BASE from http.js (reads from process.env.API_BASE_URL) for consistency
-    // with every other composable and to work correctly in production.
     inflightByCompany[cid] = api
       .get(`${BASE}/user/companies/${cid}/employees/`)
       .then((response) => {
@@ -63,7 +60,6 @@ export function useEmployees() {
    * detail-only fields (phone_number, bank_acct, timezone, civil_status, etc.).
    */
   async function fetchEmployee(employeeId) {
-    // FIX: same BASE fix applied here.
     const response = await api.get(
       `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
     )
@@ -81,7 +77,6 @@ export function useEmployees() {
   async function addEmployee(payload) {
     saving.value = true
     try {
-      // FIX: was api.post('/user/employees/') — now uses BASE.
       const response = await api.post(`${BASE}/user/employees/`, payload)
       invalidateCache()
       return response.data
@@ -91,7 +86,6 @@ export function useEmployees() {
   }
 
   async function updateUser(userId, payload) {
-    // FIX: was api.patch('/user/users/...') — now uses BASE.
     const response = await api.patch(`${BASE}/user/users/${userId}/`, payload)
     return response.data
   }
@@ -107,7 +101,6 @@ export function useEmployees() {
     const formData = new FormData()
     formData.append('picture', file)
 
-    // FIX: was api.patch('/user/companies/...') — now uses BASE.
     const response = await api.patch(
       `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
       formData,
@@ -121,7 +114,6 @@ export function useEmployees() {
   async function updateEmployee(employeeId, payload) {
     saving.value = true
     try {
-      // FIX: was api.patch('/user/companies/...') — now uses BASE.
       const response = await api.patch(
         `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
         payload,
@@ -155,12 +147,22 @@ export function useEmployees() {
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
+  /** Sort an employee list A→Z by full name (first + last). */
+  function sortByName(list) {
+    return [...list].sort((a, b) => {
+      const nameA = `${a.user?.first_name ?? ''} ${a.user?.last_name ?? ''}`.trim().toLowerCase()
+      const nameB = `${b.user?.first_name ?? ''} ${b.user?.last_name ?? ''}`.trim().toLowerCase()
+      return nameA.localeCompare(nameB)
+    })
+  }
+
   function normaliseList(raw) {
-    if (Array.isArray(raw)) return raw
-    if (Array.isArray(raw?.data)) return raw.data
-    if (Array.isArray(raw?.results)) return raw.results
-    if (Array.isArray(raw?.employees)) return raw.employees
-    return []
+    let list = []
+    if (Array.isArray(raw)) list = raw
+    else if (Array.isArray(raw?.data)) list = raw.data
+    else if (Array.isArray(raw?.results)) list = raw.results
+    else if (Array.isArray(raw?.employees)) list = raw.employees
+    return sortByName(list)
   }
 
   return {
