@@ -339,7 +339,7 @@ const terrainBgUrl = terrainBg
 const links = [
   { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
   { label: 'Employees', icon: 'groups', to: '/employees' },
-  { label: 'Attendance', icon: 'event_available', to: '/attendance' },
+  { label: 'Attendance', icon: 'event_available', to: '/app/attendance' },
   { label: 'Schedule', icon: 'calendar_month', to: '/schedule' },
   { label: 'Payroll', icon: 'paid', to: '/payroll' },
   { label: 'Requests', icon: 'mark_email_unread', to: '/requests' },
