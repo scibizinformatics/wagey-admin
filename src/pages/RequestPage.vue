@@ -2181,7 +2181,7 @@ onUnmounted(() => {
 }
 
 .employee-name-cell {
-  /* width handled by .col-employee */
+  font-weight: 500;
 }
 
 .employee-details {
@@ -2320,7 +2320,7 @@ onUnmounted(() => {
 }
 
 .dates-cell {
-  /* width handled by .col-period */
+  font-size: 13px;
 }
 
 .amount-value {
