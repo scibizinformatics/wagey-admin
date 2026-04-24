@@ -105,7 +105,11 @@
         </div>
 
         <!-- Employee Table -->
-        <div class="modern-table-container">
+        <div class="modern-table-container" style="position: relative">
+          <!-- Centered loading spinner overlay -->
+          <div v-if="loading" class="table-spinner-overlay">
+            <q-spinner-oval color="primary" size="42px" />
+          </div>
           <q-table
             :rows="filteredEmployees"
             :columns="columns"
@@ -117,30 +121,8 @@
             hide-pagination
             :rows-per-page-options="[0]"
           >
-            <!-- Skeleton rows while loading -->
-            <template v-slot:loading>
-              <q-tr v-for="i in 8" :key="i" class="table-body-row skeleton-row">
-                <q-td class="table-body-cell employee-name-cell">
-                  <div class="employee-info">
-                    <div class="skeleton-avatar"></div>
-                    <div class="employee-name-block" style="flex: 1; min-width: 0">
-                      <div class="skeleton-line skeleton-name"></div>
-                      <div class="skeleton-line skeleton-email"></div>
-                    </div>
-                  </div>
-                </q-td>
-                <q-td class="table-body-cell"><div class="skeleton-line skeleton-role"></div></q-td>
-                <q-td class="table-body-cell"
-                  ><div class="skeleton-line skeleton-phone"></div
-                ></q-td>
-                <q-td class="table-body-cell"
-                  ><div class="skeleton-line skeleton-status"></div
-                ></q-td>
-                <q-td class="table-body-cell actions-cell"
-                  ><div class="skeleton-line skeleton-action"></div
-                ></q-td>
-              </q-tr>
-            </template>
+            <!-- suppress default loading bar -->
+            <template v-slot:loading></template>
 
             <template v-slot:header="props">
               <q-tr class="table-header-row">
@@ -1976,6 +1958,7 @@ onMounted(async () => {
 
 .modern-table-container {
   overflow-x: auto;
+  min-height: 420px;
 }
 
 .loan-table {
@@ -2732,149 +2715,16 @@ onMounted(async () => {
 }
 
 /* ==============================
-   SKELETON LOADING
+   TABLE LOADING
 ============================== */
-@keyframes shimmer {
-  0% {
-    background-position: -800px 0;
-  }
-  100% {
-    background-position: 800px 0;
-  }
-}
-
-.skeleton-row {
-  pointer-events: none;
-}
-
-/* Avatar circle */
-.skeleton-avatar {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: linear-gradient(90deg, #e8ecf0 25%, #f4f6f9 50%, #e8ecf0 75%);
-  background-size: 800px 100%;
-  animation: shimmer 1.5s infinite linear;
-}
-
-/* All skeleton bars share this base */
-.skeleton-line {
-  border-radius: 6px;
-  background: linear-gradient(90deg, #e8ecf0 25%, #f4f6f9 50%, #e8ecf0 75%);
-  background-size: 800px 100%;
-  animation: shimmer 1.5s infinite linear;
-  /* fill the cell by default */
-  width: 100%;
-  max-width: 100%;
-}
-
-/* Per-bar heights & width caps */
-.skeleton-name {
-  height: 13px;
-  width: 75%;
-  margin-bottom: 6px;
-}
-.skeleton-email {
-  height: 11px;
-  width: 100%;
-}
-.skeleton-role {
-  height: 22px;
-  width: 80%;
-  border-radius: 20px;
-}
-.skeleton-phone {
-  height: 13px;
-  width: 85%;
-}
-.skeleton-status {
-  height: 22px;
-  width: 72%;
-  border-radius: 20px;
-}
-.skeleton-action {
-  height: 28px;
-  width: 28px;
-  min-width: 28px;
-  border-radius: 50%;
-  margin: 0 auto;
-}
-
-/* Skeleton cells: use the same proportions as the real columns */
-.skeleton-row td.table-body-cell:nth-child(1) {
-  width: 35%;
-}
-.skeleton-row td.table-body-cell:nth-child(2) {
-  width: 20%;
-}
-.skeleton-row td.table-body-cell:nth-child(3) {
-  width: 20%;
-}
-.skeleton-row td.table-body-cell:nth-child(4) {
-  width: 15%;
-}
-.skeleton-row td.table-body-cell:nth-child(5) {
-  width: 10%;
-}
-
-/* ── 768 px and below: table scrolls, skeleton fills the min-width ── */
-@media (max-width: 768px) {
-  .skeleton-row td.table-body-cell:nth-child(1) {
-    width: 210px;
-  }
-  .skeleton-row td.table-body-cell:nth-child(2) {
-    width: 120px;
-  }
-  .skeleton-row td.table-body-cell:nth-child(3) {
-    width: 120px;
-  }
-  .skeleton-row td.table-body-cell:nth-child(4) {
-    width: 90px;
-  }
-  .skeleton-row td.table-body-cell:nth-child(5) {
-    width: 60px;
-  }
-
-  .skeleton-name {
-    width: 80%;
-  }
-  .skeleton-email {
-    width: 100%;
-  }
-  .skeleton-role {
-    width: 85%;
-  }
-  .skeleton-phone {
-    width: 90%;
-  }
-  .skeleton-status {
-    width: 78%;
-  }
-}
-
-/* ── 480 px: slightly shorter bars, tighter avatar ── */
-@media (max-width: 480px) {
-  .skeleton-avatar {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-  }
-  .skeleton-name {
-    height: 11px;
-  }
-  .skeleton-email {
-    height: 10px;
-  }
-  .skeleton-role {
-    height: 18px;
-  }
-  .skeleton-phone {
-    height: 11px;
-  }
-  .skeleton-status {
-    height: 18px;
-  }
+.table-spinner-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.6);
+  min-height: 160px;
 }
 </style>
