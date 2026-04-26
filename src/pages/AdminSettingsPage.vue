@@ -1332,11 +1332,10 @@
           <!-- Template Name -->
           <q-input
             v-model="shiftTypeTemplateForm.name"
-            label="Template Name *"
+            label="Template Name"
             outlined
             dense
             class="q-mb-md"
-            :rules="[(val) => !!val?.trim() || 'Template name is required']"
           />
 
           <!-- Shifts List -->

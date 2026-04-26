@@ -404,15 +404,6 @@ export function useAdminShifts() {
       JSON.stringify(shiftTypeTemplateForm.value, null, 2),
     )
 
-    if (!shiftTypeTemplateForm.value.name?.trim()) {
-      $q.notify({
-        type: 'warning',
-        message: 'Please select at least one site to generate template name',
-        position: 'top',
-      })
-      return
-    }
-
     if (!shiftTypeTemplateForm.value.shifts?.length) {
       $q.notify({
         type: 'warning',
@@ -436,7 +427,7 @@ export function useAdminShifts() {
     }
 
     const payload = {
-      name: shiftTypeTemplateForm.value.name.trim(),
+      name: shiftTypeTemplateForm.value.name?.trim() || '',
       company_id: parseInt(companyId.value),
       total_hours: parseFloat(shiftTypeTemplateForm.value.total_hours) || 9,
       break_hours: parseFloat(shiftTypeTemplateForm.value.break_hours) || 0,
