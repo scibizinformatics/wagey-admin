@@ -104,7 +104,7 @@ export function usePayroll() {
   async function fetchContracts() {
     loading.value = true
     try {
-      const response = await api.get(`${BASE}/user/contracts/`, {
+      const response = await api.get(`${BASE}/contracts/employee-contracts/`, {
         headers: authHeaders(),
       })
       contracts.value = response.data.data ?? response.data ?? []
