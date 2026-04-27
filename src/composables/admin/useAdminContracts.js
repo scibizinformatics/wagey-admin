@@ -22,6 +22,26 @@ export function useAdminContracts() {
 
   const payTypeOptions = ['monthly', 'semi-monthly', 'weekly', 'daily', 'hourly']
 
+  // ─── Assign Contract state ─────────────────────────────────────────────────
+  const assignDialog = ref(false)
+  const assigning = ref(false)
+  const assignForm = ref(_emptyAssignForm())
+
+  function _emptyAssignForm(employeeId = null) {
+    return {
+      employee_id: employeeId,
+      company_id: null,
+      contract_type_id: null,
+      pay_type: 'monthly',
+      rate: '',
+      work_hours_per_week: null,
+      position: null,
+      eligibilities: [],
+      start_date: '',
+      end_date: '',
+    }
+  }
+
   function _emptyForm(cId = null) {
     return {
       id: null,
@@ -53,7 +73,7 @@ export function useAdminContracts() {
     }
     loading.value = true
     try {
-      const response = await api.get(`${BASE}/user/contracts/`, {
+      const response = await api.get(`${BASE}/contracts/employee-contracts/`, {
         params: { company: companyId.value },
         headers: authHeaders(),
       })
@@ -196,6 +216,84 @@ export function useAdminContracts() {
     }
   }
 
+  // ─── Assign Contract ──────────────────────────────────────────────────────
+
+  function openAssignDialog(employee) {
+    if (!companyId.value) {
+      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+      return
+    }
+    assignForm.value = _emptyAssignForm(employee.id)
+    assignForm.value.company_id = companyId.value
+    assignDialog.value = true
+  }
+
+  async function assignContract() {
+    if (
+      !assignForm.value.employee_id ||
+      !assignForm.value.contract_type_id ||
+      !assignForm.value.pay_type ||
+      !assignForm.value.rate ||
+      !assignForm.value.start_date
+    ) {
+      $q.notify({
+        type: 'negative',
+        message: 'Please fill all required fields (Contract Type, Pay Type, Rate, Start Date)',
+        position: 'top',
+      })
+      return
+    }
+
+    assigning.value = true
+    try {
+      const payload = {
+        employee_id: assignForm.value.employee_id,
+        company_id: assignForm.value.company_id || companyId.value,
+        contract_type_id: assignForm.value.contract_type_id,
+        pay_type: assignForm.value.pay_type,
+        rate: String(assignForm.value.rate),
+        work_hours_per_week: assignForm.value.work_hours_per_week
+          ? Number(assignForm.value.work_hours_per_week)
+          : null,
+        position: assignForm.value.position ? Number(assignForm.value.position) : null,
+        eligibilities: assignForm.value.eligibilities ?? [],
+        start_date: assignForm.value.start_date || null,
+        end_date: assignForm.value.end_date || null,
+      }
+
+      // Remove null/undefined optional fields
+      if (!payload.work_hours_per_week) delete payload.work_hours_per_week
+      if (!payload.position) delete payload.position
+      if (!payload.end_date) delete payload.end_date
+
+      console.log('Payload to send:', payload)
+
+      await api.post(`${BASE}/user/employment-contracts/create/`, payload, {
+        headers: authHeaders(),
+      })
+      $q.notify({ type: 'positive', message: 'Contract assigned successfully', position: 'top' })
+      assignDialog.value = false
+      await fetchContracts()
+    } catch (error) {
+      console.error('Error assigning contract:', error)
+      console.error('Response data:', JSON.stringify(error.response?.data, null, 2))
+      const data = error.response?.data
+      const message = data
+        ? Object.entries(data)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+            .join(' | ')
+        : 'Failed to assign contract'
+      $q.notify({
+        type: 'negative',
+        message,
+        position: 'top',
+        timeout: 8000,
+      })
+    } finally {
+      assigning.value = false
+    }
+  }
+
   // ─── Delete ────────────────────────────────────────────────────────────────
 
   async function deleteContract(contract) {
@@ -237,5 +335,10 @@ export function useAdminContracts() {
     viewContractPDF,
     saveContract,
     deleteContract,
+    assignDialog,
+    assigning,
+    assignForm,
+    openAssignDialog,
+    assignContract,
   }
 }
