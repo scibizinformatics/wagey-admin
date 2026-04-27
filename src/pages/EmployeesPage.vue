@@ -201,6 +201,18 @@
                           <q-item-section avatar><q-icon name="edit" size="16px" /></q-item-section>
                           <q-item-section>Edit</q-item-section>
                         </q-item>
+                        <q-item
+                          clickable
+                          v-close-popup
+                          @click="handleOpenAssignDialog(props.row)"
+                          :disable="getStatus(props.row) === 'Terminated'"
+                          class="dropdown-item"
+                        >
+                          <q-item-section avatar
+                            ><q-icon name="assignment" size="16px"
+                          /></q-item-section>
+                          <q-item-section>Assign Contract</q-item-section>
+                        </q-item>
                         <q-separator />
                         <q-item
                           v-if="getStatus(props.row) !== 'Terminated'"
@@ -898,6 +910,131 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+    <!-- ======================== ASSIGN CONTRACT DIALOG ======================== -->
+    <q-dialog v-model="assignDialog" persistent>
+      <q-card class="modal-card" style="width: 520px; max-width: 95vw">
+        <q-card-section class="modal-header">
+          <div class="modal-title-section">
+            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add">
+              <q-icon name="assignment" size="22px" />
+            </q-avatar>
+            <div>
+              <div class="modal-title">Assign Contract</div>
+              <div class="modal-subtitle">Fill in the employment contract details</div>
+            </div>
+          </div>
+          <q-btn
+            icon="close"
+            flat
+            round
+            dense
+            class="modal-close-btn"
+            @click="assignDialog = false"
+          />
+        </q-card-section>
+
+        <q-card-section class="modal-content">
+          <div class="form-section">
+            <div class="section-title">Contract Details</div>
+            <div class="form-grid">
+              <!-- Pay Type -->
+              <q-select
+                v-model="assignForm.pay_type"
+                :options="contractPayTypes"
+                label="Pay Type *"
+                outlined
+                dense
+                emit-value
+                map-options
+              />
+
+              <!-- Rate -->
+              <q-input
+                v-model="assignForm.rate"
+                label="Rate *"
+                type="number"
+                outlined
+                dense
+                prefix="₱"
+              />
+
+              <!-- Work Hours Per Week -->
+              <q-input
+                v-model.number="assignForm.work_hours_per_week"
+                label="Work Hours / Week"
+                type="number"
+                outlined
+                dense
+              />
+
+              <!-- Position ID -->
+              <q-input
+                v-model.number="assignForm.position"
+                label="Position ID"
+                type="number"
+                outlined
+                dense
+              />
+
+              <!-- Start Date -->
+              <q-input
+                v-model="assignForm.start_date"
+                label="Start Date *"
+                type="date"
+                outlined
+                dense
+              />
+
+              <!-- End Date -->
+              <q-input v-model="assignForm.end_date" label="End Date" type="date" outlined dense />
+
+              <!-- Eligibilities -->
+              <q-select
+                v-model="assignForm.contract_type_id"
+                :options="contractTypeOptions"
+                option-label="name"
+                option-value="id"
+                emit-value
+                map-options
+                label="Contract Type"
+                outlined
+                dense
+                class="col-span-2"
+                @update:model-value="onContractTypeChange"
+              />
+
+              <!-- Eligibilities -->
+              <q-select
+                v-model="assignForm.eligibilities"
+                :options="filteredEligibilityOptions"
+                option-label="name"
+                option-value="id"
+                emit-value
+                map-options
+                label="Eligibilities"
+                outlined
+                dense
+                multiple
+                use-chips
+                class="col-span-2"
+                disable
+              />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <q-btn flat label="Cancel" class="cancel-btn" @click="assignDialog = false" />
+            <q-btn
+              unelevated
+              label="Assign Contract"
+              class="submit-btn"
+              :loading="assigning"
+              @click="assignContract(eligibilityOptions)"
+            />
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -908,6 +1045,8 @@ import { useEmployees } from '@/composables/page/useEmployees'
 import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
 import { useOrganization } from '@/composables/page/useOrganization'
 import { useCompany } from '@/composables/page/useCompany'
+import { useAdminContracts } from '@/composables/admin/useAdminContracts'
+import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 
 const $q = useQuasar()
 
@@ -929,6 +1068,33 @@ const {
 const { userRoles, fetchUserRoles } = useRolesAndPositions()
 const { sites: rawSites, fetchSites: fetchSitesApi } = useOrganization()
 const { companyId } = useCompany()
+
+const {
+  assignDialog,
+  assigning,
+  assignForm,
+  openAssignDialog,
+  assignContract,
+  payTypeOptions: contractPayTypes,
+} = useAdminContracts()
+
+const { contractTypes: contractTypeOptions, fetchContractTypes: fetchContractTypes, eligibilities: eligibilityOptions, fetchEligibilities: fetchEligibilityOptions } =
+  useAdminContractTypes()
+
+const filteredEligibilityOptions = ref([])
+
+function onContractTypeChange(contractTypeId) {
+  const selectedType = contractTypeOptions.value.find(ct => ct.id === contractTypeId)
+  if (selectedType && selectedType.eligibilities) {
+    filteredEligibilityOptions.value = eligibilityOptions.value.filter(el => 
+      selectedType.eligibilities.includes(el.id)
+    )
+    assignForm.value.eligibilities = [...selectedType.eligibilities]
+  } else {
+    filteredEligibilityOptions.value = []
+    assignForm.value.eligibilities = []
+  }
+}
 
 // ─── Local UI state ───────────────────────────────────────────────────────────
 const filteredEmployees = ref([])
@@ -1385,6 +1551,11 @@ const saveEmployee = async () => {
       position: 'top',
     })
   }
+}
+
+async function handleOpenAssignDialog(employee) {
+  await Promise.all([fetchContractTypes(), fetchEligibilityOptions()])
+  openAssignDialog(employee)
 }
 
 const resetAddForm = () => {
