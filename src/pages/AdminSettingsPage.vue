@@ -1807,7 +1807,7 @@ async function fetchEmployees() {
     const { useCompany } = await import('@/composables/page/useCompany')
     const { companyId } = useCompany()
     if (!companyId.value) return
-    const res = await api.get(`${BASE}/user/employees/`, {
+    const res = await api.get(`${BASE}/user/companies/${companyId.value}/employees/`, {
       params: { company: companyId.value },
       headers: authHeaders(),
     })
