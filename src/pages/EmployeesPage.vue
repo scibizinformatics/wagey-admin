@@ -130,6 +130,7 @@
                 <q-th key="role" :props="props" class="table-header-cell">Role</q-th>
                 <q-th key="phone" :props="props" class="table-header-cell">Phone</q-th>
                 <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
+                <q-th key="contract" :props="props" class="table-header-cell">Contract</q-th>
                 <q-th key="actions" :props="props" class="table-header-cell table-header-actions"
                   >Actions</q-th
                 >
@@ -173,6 +174,12 @@
                     <span class="status-dot"></span>
                     {{ getStatus(props.row) }}
                   </div>
+                </q-td>
+
+                <q-td key="contract" :props="props" class="table-body-cell">
+                  <span :class="['contract-badge', getContract(props.row) === 'No Contract' ? 'contract-none' : 'contract-active']">
+                    {{ getContract(props.row) }}
+                  </span>
                 </q-td>
 
                 <!-- Actions: ⋯ dropdown -->
@@ -1057,6 +1064,7 @@ const {
   saving: savingEmployee,
   fetchEmployees: fetchEmployeesList,
   fetchEmployee,
+  fetchEmployeeContract,
   addEmployee: addEmployeeApi,
   updateEmployee,
   //updateUser,
@@ -1075,6 +1083,8 @@ const {
   assignForm,
   openAssignDialog,
   assignContract,
+  contractAssigned,
+  resetContractAssigned,
   payTypeOptions: contractPayTypes,
 } = useAdminContracts()
 
@@ -1082,6 +1092,20 @@ const { contractTypes: contractTypeOptions, fetchContractTypes: fetchContractTyp
   useAdminContractTypes()
 
 const filteredEligibilityOptions = ref([])
+
+// Watch for contract assignment and refresh that specific employee's contract
+watch(contractAssigned, async (newEmployeeId) => {
+  if (newEmployeeId) {
+    try {
+      const contractData = await fetchEmployeeContract(newEmployeeId)
+      employeeContracts.value[newEmployeeId] = contractData
+    } catch (err) {
+      console.error('Failed to fetch contract for employee:', newEmployeeId, err)
+    } finally {
+      resetContractAssigned()
+    }
+  }
+})
 
 function onContractTypeChange(contractTypeId) {
   const selectedType = contractTypeOptions.value.find(ct => ct.id === contractTypeId)
@@ -1102,6 +1126,7 @@ const searchTerm = ref('')
 const sortBy = ref('A-Z')
 const sites = ref([])
 const selectedSite = ref(null)
+const employeeContracts = ref({})
 
 // Modal states
 const showAddModal = ref(false)
@@ -1188,6 +1213,7 @@ const columns = ref([
   { name: 'role', label: 'Role', field: (row) => getRole(row), align: 'left' },
   { name: 'phone', label: 'Phone', field: 'phone_number', align: 'left' },
   { name: 'status', label: 'Status', field: (row) => getStatus(row), align: 'left' },
+  { name: 'contract', label: 'Contract', field: (row) => getContract(row), align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ])
 
@@ -1234,6 +1260,28 @@ const getStatus = (employee) => {
   const empStatus = employee.companies?.[0]?.employment_status
   if (empStatus?.toLowerCase() === 'terminated') return 'Terminated'
   return 'Active'
+}
+
+const getContract = (employee) => {
+  if (!employee) return 'N/A'
+  const contract = employeeContracts.value[employee.id]
+  // Handle array response (API returns array of contracts)
+  if (Array.isArray(contract) && contract.length > 0) {
+    return contract[0].pay_type
+  }
+  // Handle single contract object (direct contract object with pay_type)
+  if (contract?.pay_type) {
+    return contract.pay_type
+  }
+  // Handle nested format (contract inside companies)
+  if (contract?.contract?.name) {
+    return contract.contract.name
+  }
+  // Handle empty response (contract was deleted/unassigned)
+  if (contract === null || (contract && Object.keys(contract).length === 0)) {
+    return 'No Contract'
+  }
+  return 'No Contract'
 }
 
 const getStatusClass = (employee) => {
@@ -1292,12 +1340,34 @@ const fetchEmployees = async () => {
     sortEmployees()
 
     fetchPhoneNumbers(list)
+    fetchContracts(list)
   } catch (err) {
     $q.notify({
       type: 'negative',
       message: err.response?.data?.detail ?? 'Failed to fetch employees',
       position: 'top',
     })
+  }
+}
+
+const fetchContracts = async (employeeList) => {
+  if (!employeeList?.length) return
+
+  try {
+    const contractResults = await Promise.allSettled(
+      employeeList.map((emp) => fetchEmployeeContract(emp.id))
+    )
+
+    contractResults.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value) {
+        const emp = employeeList[index]
+        employeeContracts.value[emp.id] = result.value
+      }
+    })
+
+    filteredEmployees.value = [...filteredEmployees.value]
+  } catch {
+    // Silent - contracts remain as "No Contract"
   }
 }
 
@@ -2302,6 +2372,27 @@ onMounted(async () => {
 
 .status-default .status-dot {
   background: #9ca3af;
+}
+
+/* Contract badge */
+.contract-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.contract-active {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.contract-none {
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
 /* Action menu */
