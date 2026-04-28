@@ -26,6 +26,11 @@ export function useAdminContracts() {
   const assignDialog = ref(false)
   const assigning = ref(false)
   const assignForm = ref(_emptyAssignForm())
+  const contractAssigned = ref(null)
+
+  function resetContractAssigned() {
+    contractAssigned.value = null
+  }
 
   function _emptyAssignForm(employeeId = null) {
     return {
@@ -71,26 +76,37 @@ export function useAdminContracts() {
       contracts.value = []
       return
     }
+    if (!employees?.length) {
+      contracts.value = []
+      return
+    }
     loading.value = true
     try {
-      const response = await api.get(`${BASE}/contracts/employee-contracts/`, {
-        params: { company: companyId.value },
-        headers: authHeaders(),
-      })
-      const raw = response.data.data ?? response.data ?? []
-      contracts.value = raw.map((c) => {
-        const emp = employees.find((e) => e.id === c.employee_id)
-        const ct = contractTypes.value.find((t) => t.id === c.contract_type_id)
-        const co = companies.find((x) => x.id === (c.company_id || c.company))
-        return {
-          ...c,
-          employee_name:
-            c.employee_name ||
-            (emp ? `${emp.user?.first_name || ''} ${emp.user?.last_name || ''}`.trim() : null),
-          contract_type_name: c.contract_type_name || ct?.name || null,
-          company_name: c.company_name || co?.name || null,
+      const contractResults = await Promise.allSettled(
+        employees.map((emp) => api.get(`${BASE}/user/employee/contracts/${companyId.value}/${emp.id}/`, {
+          headers: authHeaders(),
+        }))
+      )
+
+      const raw = []
+      contractResults.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value?.data) {
+          const emp = employees[index]
+          const c = result.value.data
+          // Handle new format (direct contract object with pay_type)
+          const contractData = c.pay_type ? c : (c.contract || c)
+          const ct = contractTypes.value.find((t) => t.id === contractData?.contract_type_id)
+          const co = companies.find((x) => x.id === c.companies?.[0]?.company_id)
+          raw.push({
+            ...c,
+            employee_name: emp ? `${emp.user?.first_name || ''} ${emp.user?.last_name || ''}`.trim() : null,
+            contract_type_name: contractData?.name || ct?.name || null,
+            company_name: c.companies?.[0]?.company_name || co?.name || null,
+          })
         }
       })
+
+      contracts.value = raw
       return contracts.value
     } catch (error) {
       console.error('Error fetching contracts:', error)
@@ -272,8 +288,8 @@ export function useAdminContracts() {
         headers: authHeaders(),
       })
       $q.notify({ type: 'positive', message: 'Contract assigned successfully', position: 'top' })
+      contractAssigned.value = assignForm.value.employee_id
       assignDialog.value = false
-      await fetchContracts()
     } catch (error) {
       console.error('Error assigning contract:', error)
       console.error('Response data:', JSON.stringify(error.response?.data, null, 2))
@@ -340,5 +356,7 @@ export function useAdminContracts() {
     assignForm,
     openAssignDialog,
     assignContract,
+    contractAssigned,
+    resetContractAssigned,
   }
 }
