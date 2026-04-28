@@ -66,6 +66,17 @@ export function useEmployees() {
     return response.data
   }
 
+  /**
+   * Fetch employee contract by employee ID.
+   */
+  async function fetchEmployeeContract(employeeId) {
+    if (!companyId.value) throw new Error('Company ID not found')
+    const response = await api.get(
+      `${BASE}/user/employee/contracts/${companyId.value}/${employeeId}/`,
+    )
+    return response.data
+  }
+
   /** Call this after any mutation so the next fetchEmployees() re-fetches. */
   function invalidateCache(cid) {
     const key = cid ?? companyId.value
@@ -171,6 +182,7 @@ export function useEmployees() {
     saving,
     fetchEmployees,
     fetchEmployee,
+    fetchEmployeeContract,
     addEmployee,
     updateEmployee,
     updateUser,
