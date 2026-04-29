@@ -25,6 +25,7 @@
           <q-tab name="departments" label="Departments" class="settings-tab" />
           <q-tab name="positions" label="Positions" class="settings-tab" />
           <q-tab name="contract-types" label="Contract Types" class="settings-tab" />
+          <q-tab name="custom-multipliers" label="Custom Multipliers" class="settings-tab" />
         </q-tabs>
       </div>
 
@@ -715,7 +716,6 @@
                 <template v-slot:header>
                   <q-tr class="table-header-row">
                     <q-th class="table-header-cell">Position Title</q-th>
-                    <q-th class="table-header-cell">Department</q-th>
                     <q-th class="table-header-cell">Description</q-th>
                     <q-th class="table-header-cell actions-header">Actions</q-th>
                   </q-tr>
@@ -727,7 +727,6 @@
                         props.row.title || props.row.name || 'N/A'
                       }}</span>
                     </q-td>
-                    <q-td class="table-body-cell">{{ props.row.department_name || 'N/A' }}</q-td>
                     <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
                     <q-td class="table-body-cell actions-cell">
                       <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
@@ -897,6 +896,31 @@
                   class="q-mb-md"
                 />
                 <q-select
+                  v-model="contractTypeForm.pay_type"
+                  :options="[
+                    { label: 'Monthly', value: 'monthly' },
+                    { label: 'Daily', value: 'daily' },
+                  ]"
+                  label="Pay Type"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  class="q-mb-md"
+                />
+                <q-input
+                  v-if="contractTypeForm.pay_type === 'daily'"
+                  v-model.number="contractTypeForm.work_hours_per_week"
+                  label="Work Hours Per Week"
+                  outlined
+                  dense
+                  type="number"
+                  min="0"
+                  max="48"
+                  :rules="[(val) => !val || val <= 48 || 'Maximum is 48 hours']"
+                  class="q-mb-md"
+                />
+                <q-select
                   v-model="contractTypeForm.eligibilities"
                   :options="eligibilityOptions"
                   label="Eligibilities"
@@ -920,6 +944,145 @@
               </q-card-actions>
             </q-card>
           </q-dialog>
+        </q-tab-panel>
+
+        <!-- ===================== CUSTOM MULTIPLIERS ===================== -->
+        <q-tab-panel name="custom-multipliers" class="q-pa-none">
+          <div class="table-section">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Custom Multipliers</h2>
+                <p class="table-subtitle">Configure pay multipliers for your company</p>
+              </div>
+              <div class="table-actions">
+                <q-btn
+                  color="primary"
+                  :label="customMultipliers ? 'Update Multipliers' : 'Set Multipliers'"
+                  icon="tune"
+                  class="add-btn"
+                  :loading="savingMultipliers"
+                  @click="saveMultipliers"
+                />
+              </div>
+            </div>
+
+            <div class="multipliers-body">
+              <div v-if="loadingMultipliers" class="flex flex-center q-pa-xl">
+                <q-spinner color="primary" size="40px" />
+              </div>
+              <div v-else class="multipliers-grid">
+                <!-- Overtime -->
+                <div class="multiplier-card">
+                  <div class="multiplier-card-header">
+                    <div class="multiplier-icon-wrap multiplier-icon--overtime">
+                      <q-icon name="schedule" size="20px" />
+                    </div>
+                    <div>
+                      <div class="multiplier-card-title">Overtime</div>
+                      <div class="multiplier-card-desc">
+                        Applied to hours beyond regular schedule
+                      </div>
+                    </div>
+                  </div>
+                  <q-input
+                    v-model="multipliersForm.overtime_multiplier"
+                    outlined
+                    dense
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 1.25"
+                    class="multiplier-input"
+                  >
+                    <template v-slot:prepend>
+                      <span class="multiplier-prefix">×</span>
+                    </template>
+                  </q-input>
+                </div>
+
+                <!-- Night Differential -->
+                <div class="multiplier-card">
+                  <div class="multiplier-card-header">
+                    <div class="multiplier-icon-wrap multiplier-icon--night">
+                      <q-icon name="nights_stay" size="20px" />
+                    </div>
+                    <div>
+                      <div class="multiplier-card-title">Night Differential</div>
+                      <div class="multiplier-card-desc">Applied to hours worked at night</div>
+                    </div>
+                  </div>
+                  <q-input
+                    v-model="multipliersForm.night_diff_multiplier"
+                    outlined
+                    dense
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 1.10"
+                    class="multiplier-input"
+                  >
+                    <template v-slot:prepend>
+                      <span class="multiplier-prefix">×</span>
+                    </template>
+                  </q-input>
+                </div>
+
+                <!-- Regular Holiday -->
+                <div class="multiplier-card">
+                  <div class="multiplier-card-header">
+                    <div class="multiplier-icon-wrap multiplier-icon--regular">
+                      <q-icon name="event" size="20px" />
+                    </div>
+                    <div>
+                      <div class="multiplier-card-title">Regular Holiday</div>
+                      <div class="multiplier-card-desc">Applied on declared regular holidays</div>
+                    </div>
+                  </div>
+                  <q-input
+                    v-model="multipliersForm.regular_holiday_multiplier"
+                    outlined
+                    dense
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 2.00"
+                    class="multiplier-input"
+                  >
+                    <template v-slot:prepend>
+                      <span class="multiplier-prefix">×</span>
+                    </template>
+                  </q-input>
+                </div>
+
+                <!-- Special Holiday -->
+                <div class="multiplier-card">
+                  <div class="multiplier-card-header">
+                    <div class="multiplier-icon-wrap multiplier-icon--special">
+                      <q-icon name="celebration" size="20px" />
+                    </div>
+                    <div>
+                      <div class="multiplier-card-title">Special Holiday</div>
+                      <div class="multiplier-card-desc">Applied on special non-working days</div>
+                    </div>
+                  </div>
+                  <q-input
+                    v-model="multipliersForm.special_holiday_multiplier"
+                    outlined
+                    dense
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 1.30"
+                    class="multiplier-input"
+                  >
+                    <template v-slot:prepend>
+                      <span class="multiplier-prefix">×</span>
+                    </template>
+                  </q-input>
+                </div>
+              </div>
+            </div>
+          </div>
         </q-tab-panel>
       </q-tab-panels>
     </div>
@@ -1506,6 +1669,7 @@ import { useAdminShifts } from '@/composables/admin/useAdminShifts'
 import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
 import { useAdminPositions } from '@/composables/admin/useAdminPositions'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
+import { usePayroll } from '@/composables/page/usePayroll'
 
 // ─── Shared Quasar instance ───────────────────────────────────────────────
 const $q = useQuasar()
@@ -1796,6 +1960,70 @@ const {
   deleteContractType,
 } = useAdminContractTypes()
 
+// Custom Multipliers
+const {
+  customMultipliers,
+  loading: loadingMultipliers,
+  saving: savingMultipliers,
+  fetchCustomMultipliers,
+  createCustomMultipliers,
+  updateCustomMultipliers,
+} = usePayroll()
+
+const multipliersForm = ref({
+  overtime_multiplier: '',
+  night_diff_multiplier: '',
+  regular_holiday_multiplier: '',
+  special_holiday_multiplier: '',
+})
+
+async function loadMultipliers(companyId) {
+  const data = await fetchCustomMultipliers(companyId)
+  if (data) {
+    multipliersForm.value = {
+      overtime_multiplier: data.overtime_multiplier ?? '',
+      night_diff_multiplier: data.night_diff_multiplier ?? '',
+      regular_holiday_multiplier: data.regular_holiday_multiplier ?? '',
+      special_holiday_multiplier: data.special_holiday_multiplier ?? '',
+    }
+  } else {
+    multipliersForm.value = {
+      overtime_multiplier: '',
+      night_diff_multiplier: '',
+      regular_holiday_multiplier: '',
+      special_holiday_multiplier: '',
+    }
+  }
+}
+
+async function saveMultipliers() {
+  const { useCompany } = await import('@/composables/page/useCompany')
+  const { companyId } = useCompany()
+  if (!companyId.value) {
+    $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+    return
+  }
+  const payload = {
+    company: companyId.value,
+    ...multipliersForm.value,
+  }
+  try {
+    if (customMultipliers.value) {
+      await updateCustomMultipliers(companyId.value, payload)
+    } else {
+      await createCustomMultipliers(payload)
+    }
+    $q.notify({ type: 'positive', message: 'Multipliers saved successfully', position: 'top' })
+    await loadMultipliers(companyId.value)
+  } catch (error) {
+    $q.notify({
+      type: 'negative',
+      message: error.response?.data?.message || 'Failed to save multipliers',
+      position: 'top',
+    })
+  }
+}
+
 // Local employees list (shared by contracts)
 const employees = ref([])
 async function fetchEmployees() {
@@ -2020,7 +2248,7 @@ const departmentColumns = [
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
 const positionColumns = [
-  { name: 'name', label: 'Position Name', field: 'name', align: 'left' },
+  { name: 'name', label: 'Position Title', field: 'name', align: 'left', sortable: true },
   { name: 'description', label: 'Description', field: 'description', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
@@ -2138,8 +2366,8 @@ onMounted(async () => {
 
   // Fetch sequential deps first, then parallel
   try {
-    await fetchPositions()
     await fetchDepartments()
+    await fetchPositions()
     await fetchEmployees()
     await fetchShiftTemplates()
     await fetchWeeklyShiftTemplates()
@@ -2165,6 +2393,11 @@ onMounted(async () => {
 watch(activeTab, async (newTab) => {
   if (newTab === 'contract-types') {
     await Promise.all([fetchContractTypeDefs(), fetchEligibilities()])
+  }
+  if (newTab === 'custom-multipliers') {
+    const { useCompany } = await import('@/composables/page/useCompany')
+    const { companyId } = useCompany()
+    if (companyId.value) await loadMultipliers(companyId.value)
   }
 })
 </script>
@@ -2924,5 +3157,111 @@ watch(activeTab, async (newTab) => {
   border-top: 1px solid #e8ecf0;
   background: #ffffff;
   flex-shrink: 0;
+}
+
+/* ============================================
+   CUSTOM MULTIPLIERS
+   ============================================ */
+.multipliers-body {
+  padding: 24px;
+}
+
+.multipliers-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 700px) {
+  .multipliers-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.multiplier-card {
+  background: #ffffff;
+  border: 1px solid #e8ecf4;
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.05);
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.multiplier-card:hover {
+  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.1);
+  border-color: #c7d7f8;
+}
+
+.multiplier-card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.multiplier-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.multiplier-icon--overtime {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.multiplier-icon--night {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.multiplier-icon--regular {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.multiplier-icon--special {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.multiplier-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.3;
+}
+
+.multiplier-card-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.multiplier-input :deep(.q-field__control) {
+  background: #f8faff !important;
+  border-radius: 10px !important;
+}
+
+.multiplier-input :deep(.q-field__native) {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+}
+
+.multiplier-prefix {
+  font-size: 18px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-right: 4px;
 }
 </style>
