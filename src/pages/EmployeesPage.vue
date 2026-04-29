@@ -177,7 +177,14 @@
                 </q-td>
 
                 <q-td key="contract" :props="props" class="table-body-cell">
-                  <span :class="['contract-badge', getContract(props.row) === 'No Contract' ? 'contract-none' : 'contract-active']">
+                  <span
+                    :class="[
+                      'contract-badge',
+                      getContract(props.row) === 'No Contract'
+                        ? 'contract-none'
+                        : 'contract-active',
+                    ]"
+                  >
                     {{ getContract(props.row) }}
                   </span>
                 </q-td>
@@ -947,7 +954,10 @@
               <!-- Pay Type -->
               <q-select
                 v-model="assignForm.pay_type"
-                :options="contractPayTypes"
+                :options="[
+                  { label: 'Monthly', value: 'monthly' },
+                  { label: 'Daily', value: 'daily' },
+                ]"
                 label="Pay Type *"
                 outlined
                 dense
@@ -965,22 +975,35 @@
                 prefix="₱"
               />
 
-              <!-- Work Hours Per Week -->
+              <!-- Work Hours Per Week — hidden for monthly, max 48 for daily -->
               <q-input
+                v-if="assignForm.pay_type !== 'monthly'"
                 v-model.number="assignForm.work_hours_per_week"
                 label="Work Hours / Week"
                 type="number"
                 outlined
                 dense
+                :max="48"
+                hint="Maximum 48 hours/week"
+                @update:model-value="
+                  (val) => {
+                    if (val > 48) assignForm.work_hours_per_week = 48
+                  }
+                "
               />
 
-              <!-- Position ID -->
-              <q-input
-                v-model.number="assignForm.position"
-                label="Position ID"
-                type="number"
+              <!-- Position Dropdown -->
+              <q-select
+                v-model="assignForm.position"
+                :options="positions"
+                option-label="name"
+                option-value="id"
+                emit-value
+                map-options
+                label="Position"
                 outlined
                 dense
+                clearable
               />
 
               <!-- Start Date -->
@@ -995,7 +1018,7 @@
               <!-- End Date -->
               <q-input v-model="assignForm.end_date" label="End Date" type="date" outlined dense />
 
-              <!-- Eligibilities -->
+              <!-- Contract Type -->
               <q-select
                 v-model="assignForm.contract_type_id"
                 :options="contractTypeOptions"
@@ -1026,6 +1049,34 @@
                 class="col-span-2"
                 disable
               />
+
+              <!-- Multipliers -->
+              <div v-if="companyMultipliers" class="col-span-2">
+                <div class="section-title" style="margin-top: 8px; margin-bottom: 8px">
+                  Pay Multipliers
+                </div>
+                <q-select
+                  v-model="assignForm.multiplier_set"
+                  :options="multiplierOptions"
+                  option-label="label"
+                  option-value="value"
+                  emit-value
+                  map-options
+                  label="Multiplier Set *"
+                  outlined
+                  dense
+                />
+                <div v-if="assignForm.multiplier_set" class="multiplier-preview">
+                  <div
+                    v-for="(item, key) in selectedMultiplierPreview"
+                    :key="key"
+                    class="multiplier-row"
+                  >
+                    <span class="multiplier-label">{{ item.label }}</span>
+                    <span class="multiplier-value">{{ item.value }}×</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1054,6 +1105,7 @@ import { useOrganization } from '@/composables/page/useOrganization'
 import { useCompany } from '@/composables/page/useCompany'
 import { useAdminContracts } from '@/composables/admin/useAdminContracts'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
+import { useAdminPositions } from '@/composables/admin/useAdminPositions'
 
 const $q = useQuasar()
 
@@ -1085,20 +1137,71 @@ const {
   assignContract,
   contractAssigned,
   resetContractAssigned,
-  payTypeOptions: contractPayTypes,
 } = useAdminContracts()
 
-const { contractTypes: contractTypeOptions, fetchContractTypes: fetchContractTypes, eligibilities: eligibilityOptions, fetchEligibilities: fetchEligibilityOptions } =
-  useAdminContractTypes()
+const {
+  contractTypes: contractTypeOptions,
+  fetchContractTypes: fetchContractTypes,
+  eligibilities: eligibilityOptions,
+  fetchEligibilities: fetchEligibilityOptions,
+} = useAdminContractTypes()
+
+const { positions, fetchPositions } = useAdminPositions()
+
+const companyMultipliers = ref(null)
+
+async function fetchCompanyMultipliers(cid) {
+  try {
+    const { api } = await import('src/boot/axios')
+    const { BASE, authHeaders } = await import('src/composables/utils/http')
+    const response = await api.get(`${BASE}/payroll/admin/company-multipliers/${cid}/`, {
+      headers: authHeaders(),
+    })
+    companyMultipliers.value = response.data.data ?? response.data ?? null
+  } catch {
+    companyMultipliers.value = null
+  }
+}
 
 const filteredEligibilityOptions = ref([])
 
+// ─── Multiplier computed ───────────────────────────────────────────────────────
+const multiplierOptions = computed(() => {
+  if (!companyMultipliers.value) return []
+  const opts = []
+  if (companyMultipliers.value.dole_multipliers) {
+    opts.push({ label: 'DOLE Standard', value: 'dole' })
+  }
+  if (companyMultipliers.value.custom_multipliers) {
+    opts.push({ label: 'Custom Multipliers', value: 'custom' })
+  }
+  return opts
+})
+
+const selectedMultiplierPreview = computed(() => {
+  if (!companyMultipliers.value || !assignForm.value?.multiplier_set) return {}
+  const src =
+    assignForm.value.multiplier_set === 'dole'
+      ? companyMultipliers.value.dole_multipliers
+      : companyMultipliers.value.custom_multipliers
+  if (!src) return {}
+  return {
+    overtime: { label: 'Overtime', value: src.overtime_multiplier },
+    special_holiday: { label: 'Special Holiday', value: src.special_holiday_multiplier },
+    regular_holiday: { label: 'Regular Holiday', value: src.regular_holiday_multiplier },
+    night_diff: { label: 'Night Differential', value: src.night_diff_multiplier },
+  }
+})
+
 // Watch for contract assignment and refresh that specific employee's contract
 watch(contractAssigned, async (newEmployeeId) => {
-  if (newEmployeeId) {
+  if (newEmployeeId && companyId.value) {
     try {
       const contractData = await fetchEmployeeContract(newEmployeeId)
-      employeeContracts.value[newEmployeeId] = contractData
+      if (!employeeContracts.value[companyId.value]) {
+        employeeContracts.value[companyId.value] = {}
+      }
+      employeeContracts.value[companyId.value][newEmployeeId] = contractData
     } catch (err) {
       console.error('Failed to fetch contract for employee:', newEmployeeId, err)
     } finally {
@@ -1107,11 +1210,19 @@ watch(contractAssigned, async (newEmployeeId) => {
   }
 })
 
+// Clear contracts when company changes
+watch(companyId, (newCompanyId, oldCompanyId) => {
+  if (oldCompanyId && newCompanyId !== oldCompanyId) {
+    // Optionally remove old company contracts from memory
+    delete employeeContracts.value[oldCompanyId]
+  }
+})
+
 function onContractTypeChange(contractTypeId) {
-  const selectedType = contractTypeOptions.value.find(ct => ct.id === contractTypeId)
+  const selectedType = contractTypeOptions.value.find((ct) => ct.id === contractTypeId)
   if (selectedType && selectedType.eligibilities) {
-    filteredEligibilityOptions.value = eligibilityOptions.value.filter(el => 
-      selectedType.eligibilities.includes(el.id)
+    filteredEligibilityOptions.value = eligibilityOptions.value.filter((el) =>
+      selectedType.eligibilities.includes(el.id),
     )
     assignForm.value.eligibilities = [...selectedType.eligibilities]
   } else {
@@ -1126,7 +1237,7 @@ const searchTerm = ref('')
 const sortBy = ref('A-Z')
 const sites = ref([])
 const selectedSite = ref(null)
-const employeeContracts = ref({})
+const employeeContracts = ref({}) // { companyId: { employeeId: contract } }
 
 // Modal states
 const showAddModal = ref(false)
@@ -1264,7 +1375,15 @@ const getStatus = (employee) => {
 
 const getContract = (employee) => {
   if (!employee) return 'N/A'
-  const contract = employeeContracts.value[employee.id]
+  if (!companyId.value) return 'N/A'
+
+  // Get contract for current company
+  const companyContracts = employeeContracts.value[companyId.value]
+  if (!companyContracts) return 'No Contract'
+
+  const contract = companyContracts[employee.id]
+  if (!contract) return 'No Contract'
+
   // Handle array response (API returns array of contracts)
   if (Array.isArray(contract) && contract.length > 0) {
     return contract[0].pay_type
@@ -1352,16 +1471,21 @@ const fetchEmployees = async () => {
 
 const fetchContracts = async (employeeList) => {
   if (!employeeList?.length) return
+  if (!companyId.value) return
+
+  // Clear current company contracts before fetching
+  delete employeeContracts.value[companyId.value]
+  employeeContracts.value[companyId.value] = {}
 
   try {
     const contractResults = await Promise.allSettled(
-      employeeList.map((emp) => fetchEmployeeContract(emp.id))
+      employeeList.map((emp) => fetchEmployeeContract(emp.id)),
     )
 
     contractResults.forEach((result, index) => {
       if (result.status === 'fulfilled' && result.value) {
         const emp = employeeList[index]
-        employeeContracts.value[emp.id] = result.value
+        employeeContracts.value[companyId.value][emp.id] = result.value
       }
     })
 
@@ -1624,7 +1748,12 @@ const saveEmployee = async () => {
 }
 
 async function handleOpenAssignDialog(employee) {
-  await Promise.all([fetchContractTypes(), fetchEligibilityOptions()])
+  await Promise.all([
+    fetchContractTypes(),
+    fetchEligibilityOptions(),
+    fetchPositions(),
+    fetchCompanyMultipliers(companyId.value),
+  ])
   openAssignDialog(employee)
 }
 
@@ -2992,5 +3121,36 @@ onMounted(async () => {
   justify-content: center;
   z-index: 10;
   background: rgba(255, 255, 255, 0.75);
+}
+
+/* ==============================
+   MULTIPLIER PREVIEW
+============================== */
+.multiplier-preview {
+  margin-top: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+
+.multiplier-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.multiplier-label {
+  color: #6b7280;
+}
+
+.multiplier-value {
+  font-weight: 600;
+  color: #2563eb;
+  font-size: 13px;
 }
 </style>
