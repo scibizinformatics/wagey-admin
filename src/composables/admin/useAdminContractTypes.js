@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
@@ -23,9 +23,20 @@ export function useAdminContractTypes() {
       id: null,
       name: '',
       company: null,
+      pay_type: 'monthly',
+      work_hours_per_week: null,
       eligibilities: [],
     }
   }
+
+  watch(
+    () => form.value.pay_type,
+    (newVal) => {
+      if (newVal === 'monthly') {
+        form.value.work_hours_per_week = null
+      }
+    },
+  )
 
   async function fetchContractTypes() {
     if (!companyId.value) {
@@ -80,6 +91,8 @@ export function useAdminContractTypes() {
       id: contractType.id,
       name: contractType.name,
       company: contractType.company,
+      pay_type: contractType.pay_type ?? 'monthly',
+      work_hours_per_week: contractType.work_hours_per_week ?? null,
       eligibilities: contractType.eligibilities ?? [],
     }
     dialog.value = true
@@ -96,6 +109,8 @@ export function useAdminContractTypes() {
       const payload = {
         name: form.value.name,
         company: form.value.company || companyId.value,
+        pay_type: form.value.pay_type,
+        work_hours_per_week: form.value.work_hours_per_week,
         eligibilities: form.value.eligibilities,
       }
 
