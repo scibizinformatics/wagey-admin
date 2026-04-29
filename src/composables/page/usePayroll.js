@@ -10,6 +10,7 @@ export function usePayroll() {
   const allowanceTypes = ref([])
   const contracts = ref([])
   const contractTypes = ref([])
+  const customMultipliers = ref(null)
   const loading = ref(false)
   const saving = ref(false)
 
@@ -155,12 +156,58 @@ export function usePayroll() {
     return response.data
   }
 
+  // ─── Custom Multipliers ───────────────────────────────────────────────────
+
+  async function fetchCustomMultipliers(companyId) {
+    loading.value = true
+    try {
+      const response = await api.get(`${BASE}/payroll/admin/company-custom-multipliers/`, {
+        params: { company: companyId },
+        headers: authHeaders(),
+      })
+      const data = response.data.data ?? response.data ?? []
+      customMultipliers.value = Array.isArray(data) ? (data[0] ?? null) : data
+      return customMultipliers.value
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function createCustomMultipliers(payload) {
+    saving.value = true
+    try {
+      const response = await api.post(
+        `${BASE}/payroll/admin/company-custom-multipliers/`,
+        payload,
+        { headers: authHeaders() },
+      )
+      return response.data
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function updateCustomMultipliers(companyId, payload) {
+    saving.value = true
+    try {
+      const response = await api.patch(
+        `${BASE}/payroll/admin/company-custom-multipliers/${companyId}/`,
+        payload,
+        { headers: authHeaders() },
+      )
+      return response.data
+    } finally {
+      saving.value = false
+    }
+  }
+
   return {
     // state
     payslips,
     allowanceTypes,
     contracts,
     contractTypes,
+    customMultipliers,
     loading,
     saving,
     // payslips
@@ -178,5 +225,9 @@ export function usePayroll() {
     createContract,
     updateContract,
     deleteContract,
+    // custom multipliers
+    fetchCustomMultipliers,
+    createCustomMultipliers,
+    updateCustomMultipliers,
   }
 }
