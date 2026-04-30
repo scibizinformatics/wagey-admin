@@ -49,7 +49,23 @@ export function useAdminContractTypes() {
         params: { company: companyId.value },
         headers: authHeaders(),
       })
-      contractTypes.value = response.data.data ?? response.data ?? []
+      const all = response.data.data ?? response.data ?? []
+
+      // Debug: log the first item to identify the company field name
+      if (all.length > 0) {
+        console.log('[ContractTypes] sample item:', JSON.stringify(all[0]))
+        console.log('[ContractTypes] current companyId:', companyId.value)
+      }
+
+      // Filter client-side — handles company as int, string, or nested object
+      contractTypes.value = all.filter((ct) => {
+        const ctCompany = ct.company?.id ?? ct.company ?? ct.company_id
+        return String(ctCompany) === String(companyId.value)
+      })
+
+      console.log(
+        `[ContractTypes] ${all.length} total -> ${contractTypes.value.length} for company ${companyId.value}`,
+      )
       return contractTypes.value
     } catch (error) {
       console.error('Error fetching contract types:', error)
