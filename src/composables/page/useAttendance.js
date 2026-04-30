@@ -94,6 +94,26 @@ export function useAttendance() {
     }
   }
 
+  // ─── Update ───────────────────────────────────────────────────────────────
+
+  /**
+   * Update an attendance record (time_in, time_out, cost_center …).
+   * @param {string|number} recordId
+   * @param {object} payload
+   */
+  async function updateAttendance(recordId, payload) {
+    updating.value = true
+    try {
+      const response = await api.put(
+        `${BASE}/attendance/log-update/${companyId.value}/${recordId}/`,
+        payload,
+      )
+      return response.data
+    } finally {
+      updating.value = false
+    }
+  }
+
   return {
     // state
     attendanceData,
@@ -105,5 +125,6 @@ export function useAttendance() {
     fetchAttendanceByDate,
     fetchEmployeeSchedule,
     logAttendance,
+    updateAttendance,
   }
 }
