@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <q-page class="employee-dashboard">
     <div class="dashboard-container">
       <!-- Header Section -->
@@ -128,7 +128,6 @@
               <q-tr class="table-header-row">
                 <q-th key="name" :props="props" class="table-header-cell">Employee</q-th>
                 <q-th key="role" :props="props" class="table-header-cell">Role</q-th>
-                <q-th key="phone" :props="props" class="table-header-cell">Phone</q-th>
                 <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
                 <q-th key="contract" :props="props" class="table-header-cell">Contract</q-th>
                 <q-th key="actions" :props="props" class="table-header-cell table-header-actions"
@@ -163,10 +162,6 @@
 
                 <q-td key="role" :props="props" class="table-body-cell">
                   <span class="role-chip">{{ getRole(props.row) }}</span>
-                </q-td>
-
-                <q-td key="phone" :props="props" class="table-body-cell">
-                  {{ getPhoneNumber(props.row) }}
                 </q-td>
 
                 <q-td key="status" :props="props" class="table-body-cell">
@@ -951,73 +946,6 @@
           <div class="form-section">
             <div class="section-title">Contract Details</div>
             <div class="form-grid">
-              <!-- Pay Type -->
-              <q-select
-                v-model="assignForm.pay_type"
-                :options="[
-                  { label: 'Monthly', value: 'monthly' },
-                  { label: 'Daily', value: 'daily' },
-                ]"
-                label="Pay Type *"
-                outlined
-                dense
-                emit-value
-                map-options
-              />
-
-              <!-- Rate -->
-              <q-input
-                v-model="assignForm.rate"
-                label="Rate *"
-                type="number"
-                outlined
-                dense
-                prefix="₱"
-              />
-
-              <!-- Work Hours Per Week — hidden for monthly, max 48 for daily -->
-              <q-input
-                v-if="assignForm.pay_type !== 'monthly'"
-                v-model.number="assignForm.work_hours_per_week"
-                label="Work Hours / Week"
-                type="number"
-                outlined
-                dense
-                :max="48"
-                hint="Maximum 48 hours/week"
-                @update:model-value="
-                  (val) => {
-                    if (val > 48) assignForm.work_hours_per_week = 48
-                  }
-                "
-              />
-
-              <!-- Position Dropdown -->
-              <q-select
-                v-model="assignForm.position"
-                :options="positions"
-                option-label="name"
-                option-value="id"
-                emit-value
-                map-options
-                label="Position"
-                outlined
-                dense
-                clearable
-              />
-
-              <!-- Start Date -->
-              <q-input
-                v-model="assignForm.start_date"
-                label="Start Date *"
-                type="date"
-                outlined
-                dense
-              />
-
-              <!-- End Date -->
-              <q-input v-model="assignForm.end_date" label="End Date" type="date" outlined dense />
-
               <!-- Contract Type -->
               <q-select
                 v-model="assignForm.contract_type_id"
@@ -1033,47 +961,115 @@
                 @update:model-value="onContractTypeChange"
               />
 
-              <!-- Eligibilities -->
+              <!-- Row 2: Pay Type | Work Hours -->
               <q-select
-                v-model="assignForm.eligibilities"
-                :options="filteredEligibilityOptions"
+                v-model="assignForm.pay_type"
+                :options="[
+                  { label: 'Monthly', value: 'monthly' },
+                  { label: 'Daily', value: 'daily' },
+                ]"
+                label="Pay Type *"
+                outlined
+                dense
+                emit-value
+                map-options
+                :disable="payTypeAutoFilled"
+              />
+
+              <q-input
+                v-model.number="assignForm.work_hours_per_week"
+                label="Work Hours / Month"
+                type="number"
+                outlined
+                dense
+                :readonly="assignForm.pay_type === 'daily'"
+                :hint="
+                  assignForm.pay_type === 'daily'
+                    ? 'Fixed at 8 hrs/day'
+                    : 'Editable — default 208 hrs/month'
+                "
+                :bg-color="assignForm.pay_type === 'daily' ? 'grey-2' : undefined"
+              />
+
+              <!-- Row 3: Rate (full width with daily rate preview) -->
+              <div class="col-span-2">
+                <q-input
+                  v-model.number="assignForm.rate"
+                  label="Rate *"
+                  type="number"
+                  outlined
+                  dense
+                  prefix="₱"
+                  :rules="[(val) => !val || val >= 500 || 'Minimum rate is ₱500']"
+                  :hint="
+                    assignForm.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate (min ₱500)'
+                  "
+                />
+                <div
+                  v-if="
+                    assignForm.pay_type === 'monthly' &&
+                    assignForm.rate >= 500 &&
+                    assignForm.work_hours_per_week > 0
+                  "
+                  class="daily-rate-preview"
+                >
+                  <span class="daily-rate-label">Equivalent Daily Rate</span>
+                  <span class="daily-rate-value">₱{{ computedDailyRate }}</span>
+                  <span class="daily-rate-formula"
+                    >based on {{ assignForm.work_hours_per_week }} hrs/month</span
+                  >
+                </div>
+              </div>
+
+              <!-- Row 4: Position | Department -->
+              <q-select
+                v-model="assignForm.position"
+                :options="positions"
                 option-label="name"
                 option-value="id"
                 emit-value
                 map-options
-                label="Eligibilities"
+                label="Position"
                 outlined
                 dense
-                multiple
-                use-chips
-                class="col-span-2"
-                disable
+                clearable
               />
 
-              <!-- Multipliers -->
-              <div v-if="companyMultipliers" class="col-span-2">
-                <div class="section-title" style="margin-top: 8px; margin-bottom: 8px">
-                  Pay Multipliers
-                </div>
-                <q-select
-                  v-model="assignForm.multiplier_set"
-                  :options="multiplierOptions"
-                  option-label="label"
-                  option-value="value"
-                  emit-value
-                  map-options
-                  label="Multiplier Set *"
-                  outlined
-                  dense
-                />
-                <div v-if="assignForm.multiplier_set" class="multiplier-preview">
+              <q-select
+                v-model="assignForm.department"
+                :options="departments"
+                option-label="name"
+                option-value="id"
+                emit-value
+                map-options
+                label="Department"
+                outlined
+                dense
+                clearable
+              />
+
+              <!-- Row 5: Start Date | End Date -->
+              <q-input
+                v-model="assignForm.start_date"
+                label="Start Date *"
+                type="date"
+                outlined
+                dense
+              />
+
+              <q-input v-model="assignForm.end_date" label="End Date" type="date" outlined dense />
+
+              <!-- Eligibilities (formal numbered list) -->
+              <div v-if="selectedEligibilityObjectsData.length" class="col-span-2">
+                <div class="section-label">Eligibilities</div>
+                <div class="eligibility-formal-list">
                   <div
-                    v-for="(item, key) in selectedMultiplierPreview"
-                    :key="key"
-                    class="multiplier-row"
+                    v-for="(el, index) in selectedEligibilityObjectsData"
+                    :key="el.id"
+                    class="eligibility-formal-item"
                   >
-                    <span class="multiplier-label">{{ item.label }}</span>
-                    <span class="multiplier-value">{{ item.value }}×</span>
+                    <span class="eligibility-number">{{ index + 1 }}</span>
+                    <span class="eligibility-name">{{ el.name }}</span>
                   </div>
                 </div>
               </div>
@@ -1106,6 +1102,7 @@ import { useCompany } from '@/composables/page/useCompany'
 import { useAdminContracts } from '@/composables/admin/useAdminContracts'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 import { useAdminPositions } from '@/composables/admin/useAdminPositions'
+import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
 
 const $q = useQuasar()
 
@@ -1129,15 +1126,8 @@ const { userRoles, fetchUserRoles } = useRolesAndPositions()
 const { sites: rawSites, fetchSites: fetchSitesApi } = useOrganization()
 const { companyId } = useCompany()
 
-const {
-  assignDialog,
-  assigning,
-  assignForm,
-  openAssignDialog,
-  assignContract,
-  contractAssigned,
-  resetContractAssigned,
-} = useAdminContracts()
+const { assignDialog, assigning, assignForm, openAssignDialog, assignContract } =
+  useAdminContracts()
 
 const {
   contractTypes: contractTypeOptions,
@@ -1147,89 +1137,9 @@ const {
 } = useAdminContractTypes()
 
 const { positions, fetchPositions } = useAdminPositions()
+const { departments, fetchDepartments } = useAdminDepartments()
 
-const companyMultipliers = ref(null)
-
-async function fetchCompanyMultipliers(cid) {
-  try {
-    const { api } = await import('src/boot/axios')
-    const { BASE, authHeaders } = await import('src/composables/utils/http')
-    const response = await api.get(`${BASE}/payroll/admin/company-multipliers/${cid}/`, {
-      headers: authHeaders(),
-    })
-    companyMultipliers.value = response.data.data ?? response.data ?? null
-  } catch {
-    companyMultipliers.value = null
-  }
-}
-
-const filteredEligibilityOptions = ref([])
-
-// ─── Multiplier computed ───────────────────────────────────────────────────────
-const multiplierOptions = computed(() => {
-  if (!companyMultipliers.value) return []
-  const opts = []
-  if (companyMultipliers.value.dole_multipliers) {
-    opts.push({ label: 'DOLE Standard', value: 'dole' })
-  }
-  if (companyMultipliers.value.custom_multipliers) {
-    opts.push({ label: 'Custom Multipliers', value: 'custom' })
-  }
-  return opts
-})
-
-const selectedMultiplierPreview = computed(() => {
-  if (!companyMultipliers.value || !assignForm.value?.multiplier_set) return {}
-  const src =
-    assignForm.value.multiplier_set === 'dole'
-      ? companyMultipliers.value.dole_multipliers
-      : companyMultipliers.value.custom_multipliers
-  if (!src) return {}
-  return {
-    overtime: { label: 'Overtime', value: src.overtime_multiplier },
-    special_holiday: { label: 'Special Holiday', value: src.special_holiday_multiplier },
-    regular_holiday: { label: 'Regular Holiday', value: src.regular_holiday_multiplier },
-    night_diff: { label: 'Night Differential', value: src.night_diff_multiplier },
-  }
-})
-
-// Watch for contract assignment and refresh that specific employee's contract
-watch(contractAssigned, async (newEmployeeId) => {
-  if (newEmployeeId && companyId.value) {
-    try {
-      const contractData = await fetchEmployeeContract(newEmployeeId)
-      if (!employeeContracts.value[companyId.value]) {
-        employeeContracts.value[companyId.value] = {}
-      }
-      employeeContracts.value[companyId.value][newEmployeeId] = contractData
-    } catch (err) {
-      console.error('Failed to fetch contract for employee:', newEmployeeId, err)
-    } finally {
-      resetContractAssigned()
-    }
-  }
-})
-
-// Clear contracts when company changes
-watch(companyId, (newCompanyId, oldCompanyId) => {
-  if (oldCompanyId && newCompanyId !== oldCompanyId) {
-    // Optionally remove old company contracts from memory
-    delete employeeContracts.value[oldCompanyId]
-  }
-})
-
-function onContractTypeChange(contractTypeId) {
-  const selectedType = contractTypeOptions.value.find((ct) => ct.id === contractTypeId)
-  if (selectedType && selectedType.eligibilities) {
-    filteredEligibilityOptions.value = eligibilityOptions.value.filter((el) =>
-      selectedType.eligibilities.includes(el.id),
-    )
-    assignForm.value.eligibilities = [...selectedType.eligibilities]
-  } else {
-    filteredEligibilityOptions.value = []
-    assignForm.value.eligibilities = []
-  }
-}
+const selectedEligibilityObjectsData = ref([])
 
 // ─── Local UI state ───────────────────────────────────────────────────────────
 const filteredEmployees = ref([])
@@ -1238,6 +1148,75 @@ const sortBy = ref('A-Z')
 const sites = ref([])
 const selectedSite = ref(null)
 const employeeContracts = ref({}) // { companyId: { employeeId: contract } }
+const payTypeAutoFilled = ref(false)
+
+function onContractTypeChange(contractTypeId) {
+  const selectedType = contractTypeOptions.value.find((ct) => ct.id === contractTypeId)
+  if (selectedType && selectedType.eligibilities) {
+    const eligs = eligibilityOptions.value.filter((el) =>
+      selectedType.eligibilities.includes(el.id),
+    )
+    selectedEligibilityObjectsData.value = eligs
+    assignForm.value.eligibilities = [...selectedType.eligibilities]
+  } else {
+    selectedEligibilityObjectsData.value = []
+    assignForm.value.eligibilities = []
+  }
+  if (selectedType && selectedType.pay_type) {
+    assignForm.value.pay_type = selectedType.pay_type
+    payTypeAutoFilled.value = true
+  } else {
+    payTypeAutoFilled.value = false
+  }
+  // Auto-set work hours based on pay type
+  if (assignForm.value.pay_type === 'daily') {
+    assignForm.value.work_hours_per_week = 8
+  } else {
+    assignForm.value.work_hours_per_week = 208
+  }
+  // Set minimum rate
+  if (!assignForm.value.rate || assignForm.value.rate < 500) {
+    assignForm.value.rate = 500
+  }
+}
+
+// Watch pay_type changes to auto-set work hours
+watch(
+  () => assignForm.value.pay_type,
+  (newType) => {
+    if (newType === 'daily') {
+      assignForm.value.work_hours_per_week = 8
+    } else if (newType === 'monthly') {
+      assignForm.value.work_hours_per_week = 208
+    }
+    if (!assignForm.value.rate || assignForm.value.rate < 500) {
+      assignForm.value.rate = 500
+    }
+  },
+)
+
+// Computed daily rate from monthly salary
+const computedDailyRate = computed(() => {
+  const monthly = parseFloat(assignForm.value.rate) || 0
+  const hours = parseFloat(assignForm.value.work_hours_per_week) || 208
+  if (monthly <= 0 || hours <= 0) return '0.00'
+  const daily = (monthly / hours) * 8
+  return daily.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+})
+
+// Watch for eligibilityOptions to load and update selectedEligibilityObjectsData
+watch(
+  () => eligibilityOptions.value,
+  (newEligs) => {
+    console.log('[watch eligibilityOptions] newEligs:', newEligs)
+    if (newEligs.length && assignForm.value.eligibilities.length) {
+      const eligs = newEligs.filter((el) => assignForm.value.eligibilities.includes(el.id))
+      selectedEligibilityObjectsData.value = eligs
+      console.log('[watch] updated selectedEligibilityObjectsData:', eligs)
+    }
+  },
+  { deep: true },
+)
 
 // Modal states
 const showAddModal = ref(false)
@@ -1322,7 +1301,6 @@ const filteredTimezoneOptions = ref([])
 const columns = ref([
   { name: 'name', label: 'Employee', field: (row) => getFullName(row), align: 'left' },
   { name: 'role', label: 'Role', field: (row) => getRole(row), align: 'left' },
-  { name: 'phone', label: 'Phone', field: 'phone_number', align: 'left' },
   { name: 'status', label: 'Status', field: (row) => getStatus(row), align: 'left' },
   { name: 'contract', label: 'Contract', field: (row) => getContract(row), align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
@@ -1452,13 +1430,14 @@ function formatPhilippinePhone(number) {
 
 const fetchEmployees = async () => {
   try {
+    loading.value = true
+
     const list = await fetchEmployeesList({ force: true })
 
     employees.value = list
     filteredEmployees.value = list
     sortEmployees()
 
-    fetchPhoneNumbers(list)
     fetchContracts(list)
   } catch (err) {
     $q.notify({
@@ -1469,51 +1448,32 @@ const fetchEmployees = async () => {
   }
 }
 
-const fetchContracts = async (employeeList) => {
+const fetchContracts = async (employeeList, batchSize = 15) => {
   if (!employeeList?.length) return
   if (!companyId.value) return
 
-  // Clear current company contracts before fetching
   delete employeeContracts.value[companyId.value]
   employeeContracts.value[companyId.value] = {}
 
-  try {
-    const contractResults = await Promise.allSettled(
-      employeeList.map((emp) => fetchEmployeeContract(emp.id)),
-    )
+  const fetchBatch = async (startIndex) => {
+    const batch = employeeList.slice(startIndex, startIndex + batchSize)
+    const results = await Promise.allSettled(batch.map((emp) => fetchEmployeeContract(emp.id)))
 
-    contractResults.forEach((result, index) => {
+    results.forEach((result, idx) => {
       if (result.status === 'fulfilled' && result.value) {
-        const emp = employeeList[index]
+        const emp = batch[idx]
         employeeContracts.value[companyId.value][emp.id] = result.value
       }
     })
+  }
 
+  try {
+    for (let i = 0; i < employeeList.length; i += batchSize) {
+      await fetchBatch(i)
+    }
     filteredEmployees.value = [...filteredEmployees.value]
   } catch {
     // Silent - contracts remain as "No Contract"
-  }
-}
-
-const fetchPhoneNumbers = async (employeeList) => {
-  if (!employeeList?.length) return
-
-  try {
-    const phoneResults = await Promise.allSettled(employeeList.map((emp) => fetchEmployee(emp.id)))
-
-    phoneResults.forEach((result, index) => {
-      if (result.status === 'fulfilled' && result.value) {
-        const emp = employees.value[index]
-        if (emp && result.value.phone_number) {
-          emp.phone_number = result.value.phone_number
-        }
-      }
-    })
-
-    filteredEmployees.value = [...employees.value]
-    sortEmployees()
-  } catch {
-    // Silent - phone numbers remain N/A
   }
 }
 
@@ -1748,12 +1708,17 @@ const saveEmployee = async () => {
 }
 
 async function handleOpenAssignDialog(employee) {
-  await Promise.all([
-    fetchContractTypes(),
-    fetchEligibilityOptions(),
-    fetchPositions(),
-    fetchCompanyMultipliers(companyId.value),
-  ])
+  if (!contractTypeOptions.value.length) {
+    await fetchContractTypes()
+  }
+  // Always ensure eligibilities are loaded
+  if (!eligibilityOptions.value.length) {
+    await fetchEligibilityOptions()
+  }
+  if (!positions.value.length) {
+    await fetchPositions()
+  }
+  payTypeAutoFilled.value = false
   openAssignDialog(employee)
 }
 
@@ -2111,12 +2076,19 @@ watch(
   async (newId) => {
     if (newId && !initialised) {
       initialised = true
-      await Promise.all([fetchRoles(), fetchSites()])
+      await Promise.all([fetchRoles(), fetchSites(), fetchContractTypes()])
       await fetchEmployees()
     }
   },
   { immediate: true }, // runs immediately if companyId is already set
 )
+
+// Re-fetch contract types whenever the company changes (e.g. admin switching companies)
+watch(companyId, (newId, oldId) => {
+  if (newId && oldId && newId !== oldId) {
+    fetchContractTypes()
+  }
+})
 
 onMounted(async () => {
   // If companyId was already available, the watch above already triggered the fetch.
@@ -2126,7 +2098,14 @@ onMounted(async () => {
   // being defensive here costs nothing).
   if (companyId.value && !initialised) {
     initialised = true
-    await Promise.all([fetchRoles(), fetchSites()])
+    await Promise.all([
+      fetchRoles(),
+      fetchSites(),
+      fetchContractTypes(),
+      fetchEligibilityOptions(),
+      fetchPositions(),
+      fetchDepartments(),
+    ])
     await fetchEmployees()
   }
 })
@@ -3123,34 +3102,91 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.75);
 }
 
-/* ==============================
-   MULTIPLIER PREVIEW
-============================== */
-.multiplier-preview {
-  margin-top: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 10px 14px;
+.section-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.eligibility-list {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.eligibility-list li {
+  padding: 4px 0;
+  color: #374151;
+  font-size: 13px;
+}
+
+.daily-rate-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+}
+
+.daily-rate-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.daily-rate-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.daily-rate-formula {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-left: auto;
+}
+
+.eligibility-formal-list {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px 12px;
+  margin-top: 6px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
 }
 
-.multiplier-row {
+.eligibility-formal-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+}
+
+.eligibility-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.eligibility-name {
   font-size: 12.5px;
-}
-
-.multiplier-label {
-  color: #6b7280;
-}
-
-.multiplier-value {
-  font-weight: 600;
-  color: #2563eb;
-  font-size: 13px;
+  color: #1e3a5f;
+  font-weight: 500;
 }
 </style>
