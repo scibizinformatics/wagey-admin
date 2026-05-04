@@ -501,6 +501,28 @@ export function usePayroll() {
     }
   }
 
+  // ─── Workflow: Check if stage has auto-selection behavior ──────
+  function isStageAutoSelectable(currentStage) {
+    return ['released', 'acknowledged', 'funded'].includes(currentStage)
+  }
+
+  // ─── Workflow: Check if employee is in pre-approved state ───────
+  function isEmployeePreApproved(emp, currentStage) {
+    if (!isStageAutoSelectable(currentStage)) return false
+
+    // In released/acknowledged/funded stages, employees with these statuses
+    // are considered pre-approved for earlier stages
+    const preApprovedStatuses = [
+      'released',
+      'acknowledged',
+      'funded',
+      'cash_disbursed',
+      'bank_disbursed',
+      'completed',
+    ]
+    return preApprovedStatuses.includes(emp.status)
+  }
+
   // ─── Workflow: Get Actionable Employees ────────────────────────
   function getActionableEmployees(currentStage) {
     const employees = payrollRunEmployees.value
@@ -516,11 +538,14 @@ export function usePayroll() {
         // Owner approved, waiting to be released
         return employees.filter((e) => e.status === 'approved_owner')
       case 'released':
-        // Released — waiting for mobile acknowledgment, no admin action
-        return []
       case 'acknowledged':
-        // All acknowledged — fund is a global action, not per employee
-        return []
+        // All employees are auto-selected (locked in) for visual indication
+        // Return all employees in pre-approved state
+        return employees.filter((e) =>
+          ['released', 'acknowledged', 'funded', 'cash_disbursed', 'bank_disbursed', 'completed'].includes(
+            e.status,
+          ),
+        )
       case 'funded':
         // Funded — need disbursement method selected per employee
         return employees.filter((e) => e.status === 'funded')
@@ -652,5 +677,8 @@ export function usePayroll() {
     updateWorkflowStage,
     getActionableEmployees,
     canFundPayroll,
+    // auto-selection helpers
+    isStageAutoSelectable,
+    isEmployeePreApproved,
   }
 }
