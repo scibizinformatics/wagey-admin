@@ -1,22 +1,12 @@
 <template>
   <div class="payroll-dashboard">
     <div class="dashboard-container">
-      <!-- Header -->
+      <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
           <h1 class="page-title">Payroll</h1>
           <div class="header-actions">
-            <q-btn 
-              flat 
-              round 
-              icon="arrow_back" 
-              class="header-btn" 
-              v-if="selectedRun" 
-              @click="backToRuns"
-            >
-              <q-tooltip>Back to Runs</q-tooltip>
-            </q-btn>
-            <q-btn flat round icon="refresh" class="header-btn" @click="refreshData" />
+            <q-btn flat round icon="refresh" class="header-btn" @click="fetchPayrollData" />
             <q-btn
               unelevated
               icon="file_download"
@@ -37,8 +27,8 @@
             <q-icon name="people" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-label">{{ selectedRun ? 'Employees' : 'Total Runs' }}</div>
-            <div class="stats-amount">{{ selectedRun ? paginatedEmployees.length : payrollRunsSummary.length }}</div>
+            <div class="stats-label">Total Employees</div>
+            <div class="stats-amount">{{ totalEmployees }}</div>
           </div>
         </div>
         <div class="stats-card">
@@ -64,629 +54,1031 @@
             <q-icon name="schedule" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-label">Stage</div>
-            <div class="stats-amount stage-text">{{ selectedRun ? getStageLabel(selectedRun.status) : 'Overview' }}</div>
+            <div class="stats-label">Total Hours</div>
+            <div class="stats-amount">{{ totalHours }}h</div>
           </div>
         </div>
       </div>
 
-      <!-- Payroll Runs List (shown when no run selected) -->
-      <div v-if="!selectedRun" class="table-section">
+      <!-- Payroll Runs Table -->
+      <div class="table-section" style="margin-bottom: 16px">
         <div class="table-header">
           <div class="table-title-section">
             <h2 class="table-title">Payroll Runs</h2>
-            <div class="table-info">{{ payrollRunsSummary.length }} runs available</div>
+            <div class="table-info">{{ payrollRunsSummary.length }} runs</div>
           </div>
-          <q-btn flat round icon="refresh" @click="fetchPayrollRunsSummary" :loading="loading" />
-        </div>
-
-        <div class="modern-table-container">
-          <div class="table-wrapper">
-            <table class="payroll-table">
-              <thead>
-                <tr class="table-header-row">
-                  <th class="table-header-cell">Run ID</th>
-                  <th class="table-header-cell">Name</th>
-                  <th class="table-header-cell">Status</th>
-                  <th class="table-header-cell">Period</th>
-                  <th class="table-header-cell">Calculated</th>
-                  <th class="table-header-cell">Final Amount</th>
-                  <th class="table-header-cell" style="text-align: center">Employees</th>
-                  <th class="table-header-cell" style="text-align: center">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="loading">
-                  <td colspan="8" class="table-body-cell text-center">
-                    <q-spinner color="primary" size="24px" />
-                  </td>
-                </tr>
-                <tr
-                  v-else
-                  v-for="run in payrollRunsSummary"
-                  :key="run.id"
-                  class="table-body-row run-row"
-                >
-                  <td class="table-body-cell">
-                    <div class="run-badge">#{{ run.id }}</div>
-                  </td>
-                  <td class="table-body-cell">{{ run.name }}</td>
-                  <td class="table-body-cell">
-                    <q-badge :color="getStageColor(run.status)">
-                      {{ getStageLabel(run.status) }}
-                    </q-badge>
-                  </td>
-                  <td class="table-body-cell">{{ run.period || 'N/A' }}</td>
-                  <td class="table-body-cell amount-cell">
-                    {{ formatCurrency(run.calculated_amount) }}
-                  </td>
-                  <td class="table-body-cell amount-cell">
-                    {{ formatCurrency(run.final_amount) }}
-                  </td>
-                  <td class="table-body-cell text-center">
-                    <span class="count-badge">{{ run.employee_count || 0 }}</span>
-                  </td>
-                  <td class="table-body-cell actions-cell">
-                    <q-btn
-                      unelevated
-                      color="primary"
-                      icon="visibility"
-                      label="View"
-                      size="sm"
-                      no-caps
-                      @click="selectRun(run)"
-                    />
-                  </td>
-                </tr>
-                <tr v-if="!loading && !payrollRunsSummary.length">
-                  <td colspan="8" class="table-body-cell text-center text-grey-5">
-                    No payroll runs found
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- Employees Table (shown when run selected) -->
-      <div v-else class="employees-section">
-        <!-- Run Info Header -->
-        <div class="run-info-card">
-          <div class="run-info-content">
-            <div class="run-info-main">
-              <span class="run-info-id">Run #{{ selectedRun.id }}</span>
-              <span class="run-info-name">{{ selectedRun.name }}</span>
-              <q-badge :color="getStageColor(selectedRun.status)">
-                {{ getStageLabel(selectedRun.status) }}
-              </q-badge>
-            </div>
-            <div class="run-info-stats">
-              <span>{{ payrollRunEmployees.length }} Employees</span>
-              <span>·</span>
-              <span>{{ formatCurrency(selectedRun.final_amount) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bulk Actions Toolbar -->
-        <div v-if="selectedEmployees.length > 0" class="bulk-actions-bar">
-          <div class="bulk-actions-info">
-            <q-icon name="check_circle" color="positive" />
-            <span>{{ selectedEmployees.length }} employees selected</span>
-          </div>
-          <div class="bulk-actions-buttons">
-            <q-btn
-              v-if="canBulkApproveAdmin"
-              unelevated
-              color="primary"
-              icon="verified_user"
-              label="Approve Admin"
-              size="sm"
-              no-caps
-              :loading="saving"
-              @click="bulkAction('approve_admin')"
-            />
-            <q-btn
-              v-if="canBulkApproveOwner"
-              unelevated
-              color="indigo"
-              icon="admin_panel_settings"
-              label="Approve Owner"
-              size="sm"
-              no-caps
-              :loading="saving"
-              @click="bulkAction('approve_owner')"
-            />
-            <q-btn
-              v-if="canBulkRelease"
-              unelevated
-              color="orange"
-              icon="send"
-              label="Release"
-              size="sm"
-              no-caps
-              :loading="saving"
-              @click="bulkAction('release')"
-            />
-            <q-btn flat size="sm" @click="clearSelection">Clear</q-btn>
-          </div>
-        </div>
-
-        <!-- Filters -->
-        <div class="filters-bar">
-          <q-input
-            dense
-            outlined
-            v-model="employeeSearch"
-            placeholder="Search employees..."
-            class="filter-input"
-            clearable
-          >
-            <template v-slot:prepend>
-              <q-icon name="search" />
-            </template>
-          </q-input>
-          <q-select
-            dense
-            outlined
-            v-model="statusFilter"
-            :options="statusOptions"
-            label="Status"
-            class="filter-input"
-            clearable
-            emit-value
-            map-options
+          <q-btn
+            flat
+            round
+            icon="refresh"
+            class="header-btn"
+            @click="fetchPayrollRunsSummary"
+            :loading="loading"
           />
         </div>
 
-        <!-- Employees Table -->
-        <div class="table-section">
-          <div class="table-header">
-            <div class="table-title-section">
-              <h2 class="table-title">Employees</h2>
-              <div class="table-info">
-                Showing {{ filteredEmployees.length }} of {{ payrollRunEmployees.length }}
+        <!-- Loading state -->
+        <div v-if="loading" class="loading-state">
+          <q-spinner color="primary" size="32px" />
+        </div>
+
+        <!-- Empty state -->
+        <div v-else-if="!payrollRunsSummary.length" class="loading-state">
+          <span class="text-grey-5">No payroll runs found</span>
+        </div>
+
+        <!-- One card per payroll run, always showing employees below -->
+        <div v-else class="runs-list">
+          <div v-for="run in payrollRunsSummary" :key="run.id" class="run-card">
+            <!-- Run header row -->
+            <div class="run-card-header">
+              <div class="run-header-left">
+                <div class="run-badge">#{{ run.id }}</div>
+                <div class="run-name">{{ run.name }}</div>
+                <q-badge :color="getStageColor(run.status)" :label="getStageLabel(run.status)" />
+              </div>
+              <div class="run-header-amounts">
+                <div class="run-amount-item">
+                  <span class="run-amount-label">Calculated</span>
+                  <span class="run-amount-value">{{ formatCurrency(run.calculated_amount) }}</span>
+                </div>
+                <div class="run-amount-item">
+                  <span class="run-amount-label">Final</span>
+                  <span class="run-amount-value">{{ formatCurrency(run.final_amount) }}</span>
+                </div>
+              </div>
+              <div class="run-header-action">
+                <q-btn
+                  v-if="run.status === 'draft'"
+                  flat
+                  dense
+                  no-caps
+                  size="sm"
+                  icon="verified_user"
+                  color="primary"
+                  label="Approve Admin"
+                  :loading="saving && selectedRun?.id === run.id"
+                  @click="selectAndApprove(run, 'approve_admin')"
+                />
+                <q-btn
+                  v-else-if="run.status === 'admin_approved'"
+                  flat
+                  dense
+                  no-caps
+                  size="sm"
+                  icon="admin_panel_settings"
+                  color="indigo"
+                  label="Approve Owner"
+                  :loading="saving && selectedRun?.id === run.id"
+                  @click="selectAndApprove(run, 'approve_owner')"
+                />
+                <q-btn
+                  v-else-if="run.status === 'owner_approved'"
+                  flat
+                  dense
+                  no-caps
+                  size="sm"
+                  icon="send"
+                  color="orange"
+                  label="Release"
+                  :loading="saving && selectedRun?.id === run.id"
+                  @click="selectAndApprove(run, 'release')"
+                />
+                <q-btn
+                  v-else-if="run.status === 'acknowledged'"
+                  flat
+                  dense
+                  no-caps
+                  size="sm"
+                  icon="account_balance"
+                  color="purple"
+                  label="Fund Payroll"
+                  :loading="saving && selectedRun?.id === run.id"
+                  @click="selectAndApprove(run, 'fund')"
+                />
+                <q-icon
+                  v-else-if="['funded', 'disbursed', 'completed'].includes(run.status)"
+                  name="task_alt"
+                  color="positive"
+                  size="22px"
+                >
+                  <q-tooltip>{{ getStageLabel(run.status) }}</q-tooltip>
+                </q-icon>
+                <span v-else class="text-grey-5 text-caption">{{ getStageLabel(run.status) }}</span>
               </div>
             </div>
-            <q-checkbox
-              v-model="selectAll"
-              label="Select All"
-              @update:model-value="toggleSelectAll"
-            />
-          </div>
 
-          <div class="modern-table-container">
-            <div class="table-wrapper">
-              <table class="payroll-table">
+            <!-- Employees panel — always visible, loads when run data available -->
+            <div class="employees-panel">
+              <!-- Panel header / merged action toolbar -->
+              <div class="employees-panel-header">
+                <div class="employees-panel-title">
+                  <q-icon name="people" size="16px" color="primary" />
+                  <span>Employees</span>
+                  <span class="employees-panel-count">{{
+                    run.id === selectedRun?.id ? payrollRunEmployees.length : '—'
+                  }}</span>
+                  <span
+                    v-if="selectedEmployees.length && run.id === selectedRun?.id"
+                    class="employees-panel-selected"
+                  >
+                    · {{ selectedEmployees.length }} selected
+                  </span>
+                </div>
+                <div class="employees-panel-actions">
+                  <q-input
+                    dense
+                    outlined
+                    v-model="employeeSearchQuery"
+                    placeholder="Search employees..."
+                    class="employee-search-input"
+                    clearable
+                    style="min-width: 180px"
+                  >
+                    <template v-slot:prepend><q-icon name="search" size="16px" /></template>
+                  </q-input>
+                  <q-checkbox
+                    v-model="selectAll"
+                    label="Select All"
+                    dense
+                    @update:model-value="toggleSelectAll"
+                    :disable="
+                      getActionableEmployees(workflowStage).length === 0 ||
+                      ['released', 'acknowledged'].includes(workflowStage)
+                    "
+                    class="select-all-checkbox"
+                  />
+                  <!-- Approve Selected - Hidden for released/acknowledged stages (auto-selected) -->
+                  <q-btn
+                    v-if="selectedEmployees.length > 0 && run.status === 'draft'"
+                    unelevated
+                    dense
+                    no-caps
+                    size="sm"
+                    icon="verified_user"
+                    color="primary"
+                    :label="`Approve Selected (${selectedEmployees.length})`"
+                    :loading="saving"
+                    @click="handleBulkAction('approve_admin')"
+                  />
+                  <q-btn
+                    v-else-if="selectedEmployees.length > 0 && run.status === 'admin_approved'"
+                    unelevated
+                    dense
+                    no-caps
+                    size="sm"
+                    icon="admin_panel_settings"
+                    color="indigo"
+                    :label="`Approve Selected (${selectedEmployees.length})`"
+                    :loading="saving"
+                    @click="handleBulkAction('approve_owner')"
+                  />
+                  <q-btn
+                    v-else-if="selectedEmployees.length > 0 && run.status === 'owner_approved'"
+                    unelevated
+                    dense
+                    no-caps
+                    size="sm"
+                    icon="send"
+                    color="orange"
+                    :label="`Release Selected (${selectedEmployees.length})`"
+                    :loading="saving"
+                    @click="handleBulkAction('release')"
+                  />
+                  <!-- Note: No "Approve Selected" buttons for released/acknowledged stages -->
+                  <!-- All employees are auto-selected and pre-approved in these stages -->
+                  <!-- Approve All -->
+                  <q-btn
+                    v-if="
+                      run.status === 'draft' && getActionableEmployees(workflowStage).length > 0
+                    "
+                    flat
+                    dense
+                    no-caps
+                    size="sm"
+                    icon="done_all"
+                    color="primary"
+                    label="Approve All (Admin)"
+                    :loading="saving"
+                    @click="approveAllByAdmin(run)"
+                  />
+                  <q-btn
+                    v-else-if="
+                      run.status === 'admin_approved' &&
+                      getActionableEmployees(workflowStage).length > 0
+                    "
+                    flat
+                    dense
+                    no-caps
+                    size="sm"
+                    icon="done_all"
+                    color="indigo"
+                    label="Approve All (Owner)"
+                    :loading="saving"
+                    @click="approveAllByOwner(run)"
+                  />
+                  <q-btn
+                    v-else-if="
+                      run.status === 'owner_approved' &&
+                      getActionableEmployees(workflowStage).length > 0
+                    "
+                    flat
+                    dense
+                    no-caps
+                    size="sm"
+                    icon="done_all"
+                    color="orange"
+                    label="Release All"
+                    :loading="saving"
+                    @click="releaseAll(run)"
+                  />
+                </div>
+              </div>
+
+              <!-- Loading employees -->
+              <div
+                v-if="workflowLoading && run.id === selectedRun?.id"
+                style="display: flex; align-items: center; gap: 10px; padding: 20px 24px"
+              >
+                <q-spinner color="primary" size="20px" />
+                <span style="font-size: 13px; color: #6b7280">Loading employees...</span>
+              </div>
+
+              <!-- Unified Employees Table -->
+              <table class="payroll-table employees-nested-table">
                 <thead>
                   <tr class="table-header-row">
-                    <th class="table-header-cell" style="width: 40px">
-                      <q-checkbox v-model="selectAll" @update:model-value="toggleSelectAll" />
-                    </th>
+                    <th class="table-header-cell" style="width: 48px"></th>
                     <th class="table-header-cell">Employee</th>
                     <th class="table-header-cell">Status</th>
+                    <th class="table-header-cell">Period</th>
+                    <th class="table-header-cell">Run</th>
                     <th class="table-header-cell">Gross Pay</th>
                     <th class="table-header-cell">Net Pay</th>
+                    <th class="table-header-cell">Total Hours</th>
                     <th class="table-header-cell" style="text-align: center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-if="workflowLoading">
-                    <td colspan="6" class="table-body-cell text-center">
-                      <q-spinner color="primary" size="24px" />
-                    </td>
-                  </tr>
-                  <tr
-                    v-else
-                    v-for="emp in paginatedEmployees"
-                    :key="emp.employee_id"
-                    class="table-body-row"
-                    :class="{ 'selected-row': selectedEmployees.includes(emp.employee_id) }"
-                  >
-                    <td class="table-body-cell text-center">
-                      <q-checkbox
-                        :model-value="selectedEmployees.includes(emp.employee_id)"
-                        @update:model-value="toggleSelection(emp.employee_id)"
-                      />
-                    </td>
-                    <td class="table-body-cell employee-cell">
-                      <div class="employee-info">
-                        <q-avatar size="34px" class="avatar-fallback">
-                          {{ getInitials(emp.employee_name) }}
-                        </q-avatar>
-                        <div class="employee-details">
-                          <div class="employee-name">{{ emp.employee_name }}</div>
-                          <div class="employee-id">{{ emp.employee_id }}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="table-body-cell">
-                      <q-badge :color="getStatusColor(emp.status)">
-                        {{ getStatusLabel(emp.status) }}
-                      </q-badge>
-                    </td>
-                    <td class="table-body-cell amount-cell">
-                      {{ formatCurrency(emp.gross_pay) }}
-                    </td>
-                    <td class="table-body-cell amount-cell">
-                      {{ formatCurrency(emp.net_pay) }}
-                    </td>
-                    <td class="table-body-cell actions-cell">
-                      <div class="action-buttons">
-                        <q-btn
-                          v-if="emp.status === 'draft'"
-                          flat
+                  <template v-if="run.id === selectedRun?.id">
+                    <tr
+                      v-for="emp in filteredEmployees"
+                      :key="emp.employee_id || emp.payslip_id"
+                      class="table-body-row"
+                      :class="{
+                        'selected-row': selectedEmployees.includes(emp.employee_id),
+                        'failed-row': emp.lastError,
+                      }"
+                    >
+                      <td class="table-body-cell text-center">
+                        <!-- Auto-selected stages (released/acknowledged): show disabled checked checkbox with lock icon -->
+                        <q-checkbox
+                          v-if="isAutoSelectStage && isEmployeePreApproved(emp, workflowStage)"
+                          :model-value="true"
+                          disable
                           dense
-                          color="primary"
-                          icon="verified_user"
-                          label="Approve"
-                          size="sm"
-                          no-caps
-                          :loading="saving"
-                          @click="employeeAction(emp, 'approve_admin')"
-                        />
-                        <q-btn
-                          v-else-if="emp.status === 'approved_admin'"
-                          flat
+                          checked-icon="lock"
+                          color="positive"
+                        >
+                          <q-tooltip>Pre-approved and locked</q-tooltip>
+                        </q-checkbox>
+
+                        <!-- Normal actionable checkbox for draft/admin/owner/funded stages -->
+                        <q-checkbox
+                          v-else-if="isEmployeeActionable(emp)"
+                          :model-value="selectedEmployees.includes(emp.employee_id)"
+                          @update:model-value="toggleEmployeeSelection(emp.employee_id)"
                           dense
-                          color="indigo"
-                          icon="admin_panel_settings"
-                          label="Approve"
-                          size="sm"
-                          no-caps
-                          :loading="saving"
-                          @click="employeeAction(emp, 'approve_owner')"
                         />
-                        <q-btn
-                          v-else-if="emp.status === 'approved_owner'"
-                          flat
-                          dense
-                          color="orange"
-                          icon="send"
-                          label="Release"
-                          size="sm"
-                          no-caps
-                          :loading="saving"
-                          @click="employeeAction(emp, 'release')"
-                        />
-                        <div v-else-if="emp.status === 'funded'" class="disbursement-buttons">
-                          <q-btn
-                            flat
-                            dense
-                            color="amber-8"
-                            icon="payments"
-                            label="Cash"
-                            size="sm"
-                            no-caps
-                            :loading="saving"
-                            @click="employeeAction(emp, 'cash')"
-                          />
-                          <q-btn
-                            flat
-                            dense
-                            color="blue"
-                            icon="account_balance"
-                            label="Bank"
-                            size="sm"
-                            no-caps
-                            :loading="saving"
-                            @click="employeeAction(emp, 'bank')"
-                          />
-                        </div>
+
+                        <!-- Completed/disbursement completed -->
                         <q-icon
-                          v-else-if="['cash_disbursed', 'bank_disbursed', 'completed'].includes(emp.status)"
+                          v-else-if="
+                            ['cash_disbursed', 'bank_disbursed', 'completed'].includes(emp.status)
+                          "
                           name="task_alt"
                           color="positive"
-                          size="24px"
-                        >
-                          <q-tooltip>Completed</q-tooltip>
-                        </q-icon>
-                        <span v-else class="text-grey-5 text-caption">{{ getStatusLabel(emp.status) }}</span>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr v-if="!workflowLoading && !paginatedEmployees.length">
-                    <td colspan="6" class="table-body-cell text-center text-grey-5">
-                      No employees found
+                          size="20px"
+                        />
+
+                        <!-- Non-actionable -->
+                        <span v-else class="text-grey-5">—</span>
+                      </td>
+                      <td class="table-body-cell employee-cell">
+                        <div class="employee-info">
+                          <q-avatar size="32px" class="avatar-fallback">{{
+                            getInitials(emp.employee_name || emp.employee)
+                          }}</q-avatar>
+                          <div class="employee-details">
+                            <div class="employee-name">{{ emp.employee_name || emp.employee }}</div>
+                            <div class="employee-id">{{ emp.employee_id || 'N/A' }}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="table-body-cell">
+                        <q-badge
+                          :color="getStatusColor(emp.status)"
+                          :label="getStatusLabel(emp.status)"
+                        />
+                        <q-tooltip v-if="emp.lastError" class="bg-negative">{{
+                          emp.lastError
+                        }}</q-tooltip>
+                      </td>
+                      <td class="table-body-cell">
+                        <div class="period-badge">{{ emp.period || run.name || '—' }}</div>
+                      </td>
+                      <td class="table-body-cell">
+                        <div class="run-badge">#{{ run.id }}</div>
+                      </td>
+                      <td class="table-body-cell amount-cell">
+                        <div class="amount-display">{{ formatCurrency(emp.gross_pay) }}</div>
+                        <div class="amount-progress">
+                          <div
+                            class="amount-bar gross-bar"
+                            :style="{ width: getPayPercentage(emp.gross_pay, maxGrossPay) + '%' }"
+                          ></div>
+                        </div>
+                      </td>
+                      <td class="table-body-cell amount-cell">
+                        <div class="amount-display">{{ formatCurrency(emp.net_pay) }}</div>
+                        <div class="amount-progress">
+                          <div
+                            class="amount-bar net-bar"
+                            :style="{ width: getPayPercentage(emp.net_pay, maxNetPay) + '%' }"
+                          ></div>
+                        </div>
+                      </td>
+                      <td class="table-body-cell">
+                        <div class="hours-badge">
+                          {{ emp.breakdown?.attendance?.total_hours_worked || 0 }}h
+                        </div>
+                      </td>
+                      <td class="table-body-cell actions-cell">
+                        <div class="workflow-actions-cell">
+                          <template v-if="workflowStage === 'funded' && emp.status === 'funded'">
+                            <q-btn
+                              flat
+                              dense
+                              icon="payments"
+                              color="amber-8"
+                              label="Cash"
+                              no-caps
+                              size="sm"
+                              @click="handleWorkflowAction(emp, 'cash')"
+                              :loading="saving"
+                            />
+                            <q-btn
+                              flat
+                              dense
+                              icon="account_balance"
+                              color="blue"
+                              label="Bank"
+                              no-caps
+                              size="sm"
+                              @click="handleWorkflowAction(emp, 'bank')"
+                              :loading="saving"
+                            />
+                          </template>
+                          <q-icon
+                            v-else-if="
+                              ['cash_disbursed', 'bank_disbursed', 'completed'].includes(emp.status)
+                            "
+                            name="task_alt"
+                            color="positive"
+                            size="22px"
+                          />
+                          <q-btn
+                            v-if="emp.lastError"
+                            flat
+                            dense
+                            icon="refresh"
+                            color="negative"
+                            size="sm"
+                            @click="retryEmployeeAction(emp)"
+                            round
+                            ><q-tooltip>Retry</q-tooltip></q-btn
+                          >
+                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                              <q-list dense style="min-width: 160px">
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  @click="viewDetails(emp)"
+                                  class="dropdown-item"
+                                >
+                                  <q-item-section avatar
+                                    ><q-icon name="visibility" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>View details</q-item-section>
+                                </q-item>
+                                <q-item
+                                  clickable
+                                  v-close-popup
+                                  @click="downloadPayslip(emp)"
+                                  class="dropdown-item"
+                                >
+                                  <q-item-section avatar
+                                    ><q-icon name="description" size="16px"
+                                  /></q-item-section>
+                                  <q-item-section>Download payslip</q-item-section>
+                                </q-item>
+                              </q-list>
+                            </q-menu>
+                          </q-btn>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr v-if="!filteredEmployees.length && !workflowLoading">
+                      <td colspan="9" class="table-body-cell text-center text-grey-5">
+                        No employees found
+                      </td>
+                    </tr>
+                  </template>
+                  <tr v-else>
+                    <td
+                      colspan="9"
+                      class="table-body-cell text-center"
+                      @click="loadRunEmployees(run)"
+                      style="cursor: pointer; color: #3b82f6; font-size: 13px"
+                    >
+                      <q-icon name="refresh" size="14px" /> Click to load employees
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
-
-          <!-- Pagination -->
-          <div class="pagination-bar">
-            <div class="pagination-info">
-              Page {{ currentPage }} of {{ totalPages }} · {{ itemsPerPage }} per page
-            </div>
-            <div class="pagination-controls">
-              <q-btn
-                flat
-                icon="chevron_left"
-                :disable="currentPage === 1"
-                @click="currentPage--"
-              />
-              <q-btn
-                flat
-                icon="chevron_right"
-                :disable="currentPage === totalPages"
-                @click="currentPage++"
-              />
-            </div>
-          </div>
-        </div>
-
-        <!-- Run-Level Actions (when not in bulk selection) -->
-        <div v-if="selectedEmployees.length === 0" class="run-actions">
-          <q-btn
-            v-if="selectedRun.status === 'acknowledged'"
-            unelevated
-            color="purple"
-            icon="account_balance"
-            label="Fund This Run"
-            no-caps
-            :loading="saving"
-            @click="fundRun"
-          />
         </div>
       </div>
     </div>
+
+    <!-- ======================== DETAIL MODAL ======================== -->
+    <q-dialog v-model="showDetailModal" persistent>
+      <q-card class="detail-modal-card">
+        <q-card-section class="modal-header">
+          <div class="modal-title-section">
+            <q-avatar size="44px" class="modal-avatar-icon">
+              <q-icon name="receipt_long" size="22px" />
+            </q-avatar>
+            <div>
+              <div class="modal-title">Payroll Details</div>
+              <div class="modal-subtitle" v-if="selectedRecord">{{ selectedRecord.employee }}</div>
+            </div>
+          </div>
+          <q-btn icon="close" flat round dense class="modal-close-btn" @click="closeDetailModal" />
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section class="modal-content" v-if="selectedRecord">
+          <div class="modal-section-title">Employee information</div>
+          <div class="detail-grid-cards">
+            <div class="detail-card">
+              <div class="detail-card-label">Name</div>
+              <div class="detail-card-value">{{ selectedRecord.employee }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Employee ID</div>
+              <div class="detail-card-value">{{ selectedRecord.employee_id || 'N/A' }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Period</div>
+              <div class="detail-card-value">{{ selectedRecord.period }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Run</div>
+              <div class="detail-card-value">#{{ selectedRecord.run }}</div>
+            </div>
+          </div>
+          <div class="modal-section-title">Pay information</div>
+          <div class="detail-grid-cards">
+            <div class="detail-card">
+              <div class="detail-card-label">Gross Pay</div>
+              <div class="detail-card-value amount-green">
+                {{ formatCurrency(selectedRecord.gross_pay) }}
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Net Pay</div>
+              <div class="detail-card-value amount-blue">
+                {{ formatCurrency(selectedRecord.net_pay) }}
+              </div>
+            </div>
+            <div class="detail-card detail-card-full">
+              <div class="detail-card-label">Deductions</div>
+              <div class="detail-card-value amount-red">
+                {{ formatCurrency(selectedRecord.gross_pay - selectedRecord.net_pay) }}
+              </div>
+            </div>
+          </div>
+          <div class="modal-section-title">Hours breakdown</div>
+          <div class="detail-grid-cards">
+            <div class="detail-card">
+              <div class="detail-card-label">Regular</div>
+              <div class="detail-card-value">
+                {{ selectedRecord.breakdown?.attendance?.regular_hours || 0 }}h
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Overtime</div>
+              <div class="detail-card-value amount-amber">
+                {{ selectedRecord.breakdown?.attendance?.overtime_hours || 0 }}h
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Holiday</div>
+              <div class="detail-card-value amount-purple">
+                {{ selectedRecord.breakdown?.attendance?.holiday_hours || 0 }}h
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Total</div>
+              <div class="detail-card-value">
+                {{ selectedRecord.breakdown?.attendance?.total_hours_worked || 0 }}h
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Close" @click="closeDetailModal" class="dialog-btn" no-caps />
+          <q-btn
+            color="primary"
+            label="Download Payslip"
+            @click="downloadPayslip(selectedRecord)"
+            class="dialog-btn primary-btn"
+            no-caps
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { useQuasar } from 'quasar'
 import { usePayroll } from 'src/composables/page/usePayroll'
 
 const $q = useQuasar()
-
-// Payroll composable
 const {
   payrollRunsSummary,
-  payrollRunEmployees,
   fetchPayrollRunsSummary,
-  fetchPayrollRunEmployees,
+  payrollRunId,
+  workflowStage,
+  payrollRunEmployees,
+  workflowLoading,
   approveByAdmin,
   approveByOwner,
   releasePayslip,
   fundPayroll,
   cashDisbursement,
   bankTransfer,
-  loading,
-  saving,
-  workflowLoading,
+  fetchPayrollRunEmployees,
+  getActionableEmployees,
+  canFundPayroll,
+  isStageAutoSelectable,
+  isEmployeePreApproved,
 } = usePayroll()
 
-// State
+onMounted(async () => {
+  await fetchPayrollRunsSummary()
+  if (payrollRunsSummary.value.length > 0) {
+    await loadRunEmployees(payrollRunsSummary.value[0])
+  }
+  fetchPayrollData()
+})
+
+// Inline run selection state
 const selectedRun = ref(null)
-const selectedEmployees = ref([])
-const selectAll = ref(false)
-const currentPage = ref(1)
-const itemsPerPage = 20
-const employeeSearch = ref('')
-const statusFilter = ref(null)
+const saving = ref(false)
 
-// Status filter options
-const statusOptions = [
-  { label: 'Draft', value: 'draft' },
-  { label: 'Admin Approved', value: 'approved_admin' },
-  { label: 'Owner Approved', value: 'approved_owner' },
-  { label: 'Released', value: 'released' },
-  { label: 'Acknowledged', value: 'acknowledged' },
-  { label: 'Funded', value: 'funded' },
-  { label: 'Completed', value: 'completed' },
-]
-
-// Computed
-const filteredEmployees = computed(() => {
-  let employees = payrollRunEmployees.value || []
-  
-  // Search filter
-  if (employeeSearch.value) {
-    const query = employeeSearch.value.toLowerCase()
-    employees = employees.filter(e => 
-      (e.employee_name || '').toLowerCase().includes(query) ||
-      (e.employee_id || '').toString().includes(query)
-    )
-  }
-  
-  // Status filter
-  if (statusFilter.value) {
-    employees = employees.filter(e => e.status === statusFilter.value)
-  }
-  
-  return employees
-})
-
-const paginatedEmployees = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  const end = start + itemsPerPage
-  return filteredEmployees.value.slice(start, end)
-})
-
-const totalPages = computed(() => 
-  Math.ceil(filteredEmployees.value.length / itemsPerPage) || 1
-)
-
-const totalGrossPay = computed(() => 
-  filteredEmployees.value.reduce((sum, e) => sum + (e.gross_pay || 0), 0)
-)
-
-const totalNetPay = computed(() => 
-  filteredEmployees.value.reduce((sum, e) => sum + (e.net_pay || 0), 0)
-)
-
-// Bulk action eligibility
-const canBulkApproveAdmin = computed(() => 
-  selectedEmployees.value.some(id => {
-    const emp = payrollRunEmployees.value.find(e => e.employee_id === id)
-    return emp?.status === 'draft'
-  })
-)
-
-const canBulkApproveOwner = computed(() => 
-  selectedEmployees.value.some(id => {
-    const emp = payrollRunEmployees.value.find(e => e.employee_id === id)
-    return emp?.status === 'approved_admin'
-  })
-)
-
-const canBulkRelease = computed(() => 
-  selectedEmployees.value.some(id => {
-    const emp = payrollRunEmployees.value.find(e => e.employee_id === id)
-    return emp?.status === 'approved_owner'
-  })
-)
-
-// Methods
-const selectRun = async (run) => {
+const loadRunEmployees = async (run) => {
+  if (selectedRun.value && selectedRun.value.id === run.id) return
   selectedRun.value = run
-  currentPage.value = 1
+  payrollRunId.value = run.id
   selectedEmployees.value = []
   selectAll.value = false
   await fetchPayrollRunEmployees(run.id)
+  selectedRunForData.value = run.id
+  await fetchPayrollData()
 }
 
-const backToRuns = () => {
-  selectedRun.value = null
-  selectedEmployees.value = []
-  selectAll.value = false
-  currentPage.value = 1
-}
-
-const refreshData = () => {
-  if (selectedRun.value) {
-    fetchPayrollRunEmployees(selectedRun.value.id)
+// Action button in the Payroll Runs table row
+const selectAndApprove = async (run, action) => {
+  selectedRun.value = run
+  payrollRunId.value = run.id
+  await fetchPayrollRunEmployees(run.id)
+  if (action === 'fund') {
+    await handleFundPayroll()
   } else {
-    fetchPayrollRunsSummary()
+    await handleBulkAction(action)
   }
+  await fetchPayrollRunsSummary()
 }
 
-const toggleSelection = (employeeId) => {
-  const index = selectedEmployees.value.indexOf(employeeId)
-  if (index > -1) {
-    selectedEmployees.value.splice(index, 1)
-  } else {
-    selectedEmployees.value.push(employeeId)
+const employeeSearchQuery = ref('')
+
+const filteredEmployees = computed(() => {
+  const q = employeeSearchQuery.value?.toLowerCase() || ''
+  if (!q) return payrollRunEmployees.value
+  return payrollRunEmployees.value.filter(
+    (e) =>
+      (e.employee_name || e.employee || '').toLowerCase().includes(q) ||
+      (e.employee_id || '').toString().toLowerCase().includes(q),
+  )
+})
+
+const approveAllByAdmin = async (run) => {
+  selectedRun.value = run
+  payrollRunId.value = run.id
+  await fetchPayrollRunEmployees(run.id)
+  await handleBulkAction('approve_admin')
+  await fetchPayrollRunsSummary()
+}
+
+const approveAllByOwner = async (run) => {
+  selectedRun.value = run
+  payrollRunId.value = run.id
+  await fetchPayrollRunEmployees(run.id)
+  await handleBulkAction('approve_owner')
+  await fetchPayrollRunsSummary()
+}
+
+const releaseAll = async (run) => {
+  selectedRun.value = run
+  payrollRunId.value = run.id
+  await fetchPayrollRunEmployees(run.id)
+  await handleBulkAction('release')
+  await fetchPayrollRunsSummary()
+}
+
+// Selection state for bulk operations
+const selectedEmployees = ref([])
+const selectAll = ref(false)
+
+// Auto-selection state for released+ stages
+const isAutoSelectStage = computed(() => {
+  return isStageAutoSelectable(workflowStage.value)
+})
+
+// Data
+const payrollData = ref([])
+const loading = ref(false)
+const error = ref(null)
+
+const selectedRunForData = ref(null)
+
+// Detail modal
+const showDetailModal = ref(false)
+const selectedRecord = ref(null)
+
+const fetchPayrollData = async () => {
+  const runId = selectedRunForData.value ?? null
+  if (!runId) {
+    payrollData.value = []
+    return
   }
-  updateSelectAllState()
-}
-
-const toggleSelectAll = () => {
-  if (selectAll.value) {
-    // Select all actionable employees
-    selectedEmployees.value = filteredEmployees.value
-      .filter(e => isActionable(e))
-      .map(e => e.employee_id)
-  } else {
-    selectedEmployees.value = []
-  }
-}
-
-const updateSelectAllState = () => {
-  const actionableCount = filteredEmployees.value.filter(e => isActionable(e)).length
-  selectAll.value = actionableCount > 0 && actionableCount === selectedEmployees.value.length
-}
-
-const isActionable = (employee) => {
-  return ['draft', 'approved_admin', 'approved_owner', 'funded'].includes(employee.status)
-}
-
-const clearSelection = () => {
-  selectedEmployees.value = []
-  selectAll.value = false
-}
-
-const employeeAction = async (employee, action) => {
+  loading.value = true
+  error.value = null
   try {
-    switch (action) {
-      case 'approve_admin':
-        await approveByAdmin(selectedRun.value.id, [employee.employee_id])
-        $q.notify({ type: 'positive', message: `${employee.employee_name} approved by admin` })
-        break
-      case 'approve_owner':
-        await approveByOwner(selectedRun.value.id, [employee.employee_id])
-        $q.notify({ type: 'positive', message: `${employee.employee_name} approved by owner` })
-        break
-      case 'release':
-        await releasePayslip(selectedRun.value.id, [employee.employee_id])
-        $q.notify({ type: 'positive', message: `Payslip released for ${employee.employee_name}` })
-        break
-      case 'cash':
-        await cashDisbursement(selectedRun.value.id, [employee.employee_id])
-        $q.notify({ type: 'positive', message: `Cash disbursed to ${employee.employee_name}` })
-        break
-      case 'bank':
-        await bankTransfer(selectedRun.value.id, [employee.employee_id])
-        $q.notify({ type: 'positive', message: `Bank transfer for ${employee.employee_name}` })
-        break
+    const employees = await fetchPayrollRunEmployees(runId)
+    if (!employees || employees.length === 0) {
+      payrollData.value = []
+      return
     }
-    await fetchPayrollRunEmployees(selectedRun.value.id)
-  } catch (error) {
-    $q.notify({ type: 'negative', message: error.message || 'Action failed' })
+    payrollData.value = employees.map((r, i) => ({
+      id: r.payslip_id ?? `payroll-${i}`,
+      employee: r.employee_name ?? 'Unknown',
+      employee_id: r.employee_id ?? null,
+      period: r.period ?? null,
+      run: runId,
+      gross_pay: Number(r.gross_pay ?? 0),
+      total_deductions: Number(r.total_deductions ?? 0),
+      net_pay: Number(r.net_pay ?? 0),
+      status: r.status ?? 'draft',
+    }))
+  } catch (err) {
+    error.value = err?.response?.data?.message ?? err?.message ?? 'Failed to fetch payroll data'
+    $q.notify({ type: 'negative', message: error.value, position: 'top', timeout: 5000 })
+  } finally {
+    loading.value = false
   }
 }
 
-const bulkAction = async (action) => {
-  const runId = selectedRun.value.id
-  const employeeIds = [...selectedEmployees.value]
-  
-  try {
-    for (const empId of employeeIds) {
-      switch (action) {
-        case 'approve_admin':
-          await approveByAdmin(runId, [empId])
-          break
-        case 'approve_owner':
-          await approveByOwner(runId, [empId])
-          break
-        case 'release':
-          await releasePayslip(runId, [empId])
-          break
-      }
-    }
-    $q.notify({ type: 'positive', message: `${employeeIds.length} employees processed` })
-    selectedEmployees.value = []
-    selectAll.value = false
-    await fetchPayrollRunEmployees(runId)
-  } catch (error) {
-    $q.notify({ type: 'negative', message: error.message || 'Bulk action failed' })
-  }
-}
+const safeArray = (arr) => (Array.isArray(arr) ? arr : [])
 
-const fundRun = async () => {
-  try {
-    await fundPayroll(selectedRun.value.id)
-    $q.notify({ type: 'positive', message: 'Payroll funded successfully!' })
-    await fetchPayrollRunEmployees(selectedRun.value.id)
-  } catch (error) {
-    $q.notify({ type: 'negative', message: error.message || 'Funding failed' })
-  }
-}
+const totalEmployees = computed(() => safeArray(payrollData.value).length)
+const totalGrossPay = computed(() =>
+  safeArray(payrollData.value).reduce((sum, r) => sum + Number(r.gross_pay || 0), 0),
+)
+const totalNetPay = computed(() =>
+  safeArray(payrollData.value).reduce((sum, r) => sum + Number(r.net_pay || 0), 0),
+)
+const totalHours = computed(() =>
+  safeArray(payrollData.value).reduce(
+    (sum, r) => sum + Number(r.breakdown?.attendance?.total_hours_worked || 0),
+    0,
+  ),
+)
 
-// Helpers
-const formatCurrency = (amount) => {
-  if (!amount && amount !== 0) return '₱0.00'
-  return '₱' + Number(amount).toLocaleString('en-PH', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
+const formatCurrency = (val) => {
+  const n = Number(val ?? 0)
+  return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 const getInitials = (name) => {
   if (!name) return '?'
   return name
+    .toString()
     .split(' ')
-    .map(n => n[0])
+    .map((n) => n.charAt(0))
     .join('')
-    .slice(0, 2)
     .toUpperCase()
+    .slice(0, 2)
 }
 
-const getStageColor = (status) => {
+const maxGrossPay = computed(() => {
+  const arr = safeArray(payrollData.value).map((r) => Number(r.gross_pay || 0))
+  return arr.length ? Math.max(...arr) : 1
+})
+const maxNetPay = computed(() => {
+  const arr = safeArray(payrollData.value).map((r) => Number(r.net_pay || 0))
+  return arr.length ? Math.max(...arr) : 1
+})
+const getPayPercentage = (value, max) => (max > 0 ? Math.round(((value || 0) / max) * 100) : 0)
+
+const exportToPDF = () => {
+  const arr = safeArray(payrollData.value)
+  if (!arr.length) {
+    $q.notify({ type: 'warning', message: 'No payroll data to export' })
+    return
+  }
+  const doc = new jsPDF()
+  doc.setFontSize(14)
+  doc.text('Payroll Report', 14, 20)
+  doc.setFontSize(10)
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
+  autoTable(doc, {
+    startY: 35,
+    head: [['#', 'Employee', 'Period', 'Run', 'Gross Pay', 'Net Pay', 'Hours']],
+    body: arr.map((r, i) => [
+      i + 1,
+      r.employee ?? 'N/A',
+      r.period ?? '-',
+      `#${r.run ?? ''}`,
+      formatCurrency(r.gross_pay),
+      formatCurrency(r.net_pay),
+      `${r.breakdown?.attendance?.total_hours_worked ?? 0}h`,
+    ]),
+  })
+  doc.save(`Payroll_Report_${new Date().toISOString().split('T')[0]}.pdf`)
+  $q.notify({ type: 'positive', message: 'Payroll exported as PDF!' })
+}
+
+const downloadPayslip = (record) => {
+  const rec = record ?? selectedRecord.value
+  if (!rec) {
+    $q.notify({ type: 'negative', message: 'No record selected to download' })
+    return
+  }
+  const doc = new jsPDF()
+  doc.setFontSize(16)
+  doc.text('Employee Payslip', 14, 20)
+  doc.setFontSize(12)
+  doc.text(`Name: ${rec.employee ?? rec.employee_name}`, 14, 35)
+  doc.text(`Employee ID: ${rec.employee_id ?? 'N/A'}`, 14, 45)
+  doc.text(`Period: ${rec.period ?? '-'}`, 14, 55)
+  doc.text(`Run: #${rec.run ?? ''}`, 14, 65)
+  autoTable(doc, {
+    startY: 80,
+    head: [['Description', 'Amount']],
+    body: [
+      ['Gross Pay', formatCurrency(rec.gross_pay)],
+      ['Net Pay', formatCurrency(rec.net_pay)],
+      ['Deductions', formatCurrency((rec.gross_pay || 0) - (rec.net_pay || 0))],
+    ],
+  })
+  doc.save(`${(rec.employee || 'employee').toString().replace(/\s+/g, '_')}_Payslip.pdf`)
+  $q.notify({ type: 'positive', message: `Payslip downloaded for ${rec.employee}` })
+}
+
+const viewDetails = (record) => {
+  // Normalize emp fields from the nested table to the modal format
+  selectedRecord.value = {
+    employee: record.employee_name || record.employee,
+    employee_id: record.employee_id,
+    period: record.period,
+    run: record.run ?? selectedRun.value?.id,
+    gross_pay: record.gross_pay,
+    net_pay: record.net_pay,
+    breakdown: record.breakdown,
+  }
+  showDetailModal.value = true
+}
+const closeDetailModal = () => {
+  showDetailModal.value = false
+  selectedRecord.value = null
+}
+
+const toggleSelectAll = () => {
+  const actionable = getActionableEmployees(workflowStage.value)
+
+  if (isAutoSelectStage.value) {
+    // In auto-select stages (released/acknowledged/funded), handle specially
+    if (workflowStage.value === 'funded') {
+      // For funded stage, only select funded employees (for disbursement)
+      selectedEmployees.value = selectAll.value ? actionable.map((e) => e.employee_id) : []
+    } else {
+      // For released/acknowledged stages, all are auto-selected
+      // Clear selection as these stages don't support bulk actions
+      selectedEmployees.value = []
+    }
+  } else {
+    // Normal behavior for draft/admin_approved/owner_approved stages
+    if (selectAll.value) {
+      selectedEmployees.value = actionable.map((e) => e.employee_id)
+    } else {
+      selectedEmployees.value = []
+    }
+  }
+}
+
+const toggleEmployeeSelection = (employeeId) => {
+  const index = selectedEmployees.value.indexOf(employeeId)
+  if (index > -1) {
+    selectedEmployees.value.splice(index, 1)
+    selectAll.value = false
+  } else {
+    selectedEmployees.value.push(employeeId)
+    const actionableIds = getActionableEmployees(workflowStage.value).map((e) => e.employee_id)
+    selectAll.value = actionableIds.every((id) => selectedEmployees.value.includes(id))
+  }
+}
+
+const isEmployeeActionable = (emp) => {
+  const stage = workflowStage.value
+
+  // Auto-select stages: show all employees as "actionable" (for visual checkboxes)
+  // They will be shown as disabled/pre-selected
+  if (['released', 'acknowledged'].includes(stage)) {
+    return ['released', 'acknowledged', 'funded', 'cash_disbursed', 'bank_disbursed', 'completed'].includes(
+      emp.status,
+    )
+  }
+
+  switch (stage) {
+    case 'draft':
+      return emp.status === 'draft'
+    case 'admin_approved':
+      return emp.status === 'approved_admin'
+    case 'owner_approved':
+      return emp.status === 'approved_owner'
+    case 'funded':
+      return emp.status === 'funded'
+    default:
+      return false
+  }
+}
+
+const workflowSteps = [
+  { key: 'draft', label: 'Draft', icon: 'edit' },
+  { key: 'admin_approved', label: 'Admin Approved', icon: 'verified_user' },
+  { key: 'owner_approved', label: 'Owner Approved', icon: 'admin_panel_settings' },
+  { key: 'released', label: 'Released', icon: 'send' },
+  { key: 'acknowledged', label: 'Acknowledged', icon: 'check_circle' },
+  { key: 'funded', label: 'Funded', icon: 'account_balance' },
+  { key: 'disbursed', label: 'Disbursed', icon: 'payments' },
+]
+
+const canProceedToFund = computed(() => canFundPayroll())
+
+const handleWorkflowAction = async (employee, action) => {
+  const runId = payrollRunId.value
+  if (!runId) {
+    $q.notify({ type: 'warning', message: 'Please select a payroll run first' })
+    return
+  }
+  const employeeId = employee.employee_id || employee.id
+  try {
+    saving.value = true
+    switch (action) {
+      case 'approve_admin':
+        await approveByAdmin(runId, [employeeId])
+        break
+      case 'approve_owner':
+        await approveByOwner(runId, [employeeId])
+        break
+      case 'release':
+        await releasePayslip(runId, [employeeId])
+        break
+      case 'cash':
+        await cashDisbursement(runId, [employeeId])
+        break
+      case 'bank':
+        await bankTransfer(runId, [employeeId])
+        break
+    }
+    $q.notify({
+      type: 'positive',
+      message: `Success: ${employee.employee_name || employee.employee}`,
+    })
+    await fetchPayrollRunEmployees(runId)
+    selectedEmployees.value = []
+    selectAll.value = false
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.message || 'Action failed' })
+  } finally {
+    saving.value = false
+  }
+}
+
+const handleBulkAction = async (action) => {
+  const runId = payrollRunId.value
+  if (!runId) {
+    $q.notify({ type: 'warning', message: 'Please select a payroll run first' })
+    return
+  }
+  let employeeIds =
+    selectedEmployees.value.length > 0
+      ? selectedEmployees.value
+      : getActionableEmployees(workflowStage.value).map((e) => e.employee_id)
+  if (employeeIds.length === 0) {
+    $q.notify({ type: 'info', message: 'No employees to process' })
+    return
+  }
+  $q.dialog({
+    title: 'Confirm Bulk Action',
+    message: `Process ${action} for ${employeeIds.length} employee(s)?`,
+    ok: { label: 'Confirm', color: 'primary', unelevated: true },
+    cancel: { label: 'Cancel', flat: true },
+  }).onOk(async () => {
+    saving.value = true
+    let successCount = 0
+    let failCount = 0
+    for (const empId of employeeIds) {
+      try {
+        switch (action) {
+          case 'approve_admin':
+            await approveByAdmin(runId, [empId])
+            break
+          case 'approve_owner':
+            await approveByOwner(runId, [empId])
+            break
+          case 'release':
+            await releasePayslip(runId, [empId])
+            break
+        }
+        successCount++
+      } catch {
+        failCount++
+      }
+    }
+    saving.value = false
+    if (failCount > 0) {
+      $q.notify({
+        type: 'warning',
+        message: `${successCount} succeeded, ${failCount} failed`,
+        timeout: 5000,
+      })
+    } else {
+      $q.notify({ type: 'positive', message: `Completed: ${successCount} employees processed!` })
+    }
+    await fetchPayrollRunEmployees(runId)
+    selectedEmployees.value = []
+    selectAll.value = false
+  })
+}
+
+const handleFundPayroll = async () => {
+  const runId = payrollRunId.value
+  if (!runId || !canProceedToFund.value) {
+    $q.notify({ type: 'warning', message: 'All employees must be acknowledged first' })
+    return
+  }
+  $q.dialog({
+    title: 'Fund Payroll',
+    message: 'Are you sure you want to fund this payroll run?',
+    ok: { label: 'Fund', color: 'primary', unelevated: true },
+    cancel: { label: 'Cancel', flat: true },
+  }).onOk(async () => {
+    try {
+      saving.value = true
+      await fundPayroll(runId)
+      $q.notify({ type: 'positive', message: 'Payroll funded successfully!' })
+      await fetchPayrollRunEmployees(runId)
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.message || 'Funding failed' })
+    } finally {
+      saving.value = false
+    }
+  })
+}
+
+const getStageColor = (stage) => {
   const colors = {
     draft: 'grey',
     admin_approved: 'blue',
@@ -697,21 +1089,12 @@ const getStageColor = (status) => {
     disbursed: 'green',
     completed: 'green',
   }
-  return colors[status] || 'grey'
+  return colors[stage] || 'grey'
 }
 
 const getStageLabel = (stage) => {
-  const labels = {
-    draft: 'Draft',
-    admin_approved: 'Admin Approved',
-    owner_approved: 'Owner Approved',
-    released: 'Released',
-    acknowledged: 'Acknowledged',
-    funded: 'Funded',
-    disbursed: 'Disbursed',
-    completed: 'Completed',
-  }
-  return labels[stage] || stage
+  const step = workflowSteps.find((s) => s.key === stage)
+  return step ? step.label : stage
 }
 
 const getStatusColor = (status) => {
@@ -738,46 +1121,150 @@ const getStatusLabel = (status) => {
     acknowledged: 'Acknowledged',
     funded: 'Funded',
     cash_disbursed: 'Cash Disbursed',
-    bank_disbursed: 'Bank Transfer',
+    bank_disbursed: 'Bank Disbursed',
     completed: 'Completed',
   }
   return labels[status] || status
 }
 
-const exportToPDF = () => {
-  $q.notify({ type: 'info', message: 'Export to PDF coming soon!' })
+const retryEmployeeAction = async (emp) => {
+  const runId = payrollRunId.value
+  if (!runId) return
+  try {
+    emp.lastError = null
+    saving.value = true
+    switch (emp.status) {
+      case 'draft':
+        await approveByAdmin(runId, [emp.employee_id])
+        break
+      case 'approved_admin':
+        await approveByOwner(runId, [emp.employee_id])
+        break
+      case 'approved_owner':
+        await releasePayslip(runId, [emp.employee_id])
+        break
+    }
+    $q.notify({ type: 'positive', message: `Success: ${emp.employee_name || emp.employee}` })
+    await fetchPayrollRunEmployees(runId)
+  } catch (err) {
+    emp.lastError = err.response?.data?.message || err.message
+    $q.notify({ type: 'negative', message: 'Retry failed' })
+  } finally {
+    saving.value = false
+  }
 }
-
-// Init
-onMounted(() => {
-  fetchPayrollRunsSummary()
-})
 </script>
 
 <style scoped>
+/* ==============================
+   BASE
+============================== */
 .payroll-dashboard {
-  padding: 24px;
+  background: #f4f6f9;
   min-height: 100vh;
+  padding: 0;
 }
 
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
+  padding: 20px;
 }
 
-/* Header */
+/* ==============================
+   RUN CARDS (always-visible layout)
+============================== */
+.runs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+.run-card {
+  background: #ffffff;
+  border: 1px solid #e0e7ef;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.run-card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e0e7ef;
+  flex-wrap: wrap;
+}
+
+.run-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.run-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.run-header-amounts {
+  display: flex;
+  gap: 24px;
+}
+
+.run-amount-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.run-amount-label {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+
+.run-amount-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.run-header-action {
+  display: flex;
+  align-items: center;
+}
+
+/* ==============================
+   HEADER
+============================== */
 .page-header {
-  margin-bottom: 20px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 16px;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
   color: #111827;
   margin: 0;
@@ -785,36 +1272,54 @@ onMounted(() => {
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
 }
 
 .header-btn {
   color: #6b7280 !important;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px !important;
+}
+
+.header-btn:hover {
+  background: #f3f4f6 !important;
 }
 
 .export-btn {
   height: 36px;
-  border-radius: 8px;
+  border-radius: 8px !important;
   font-weight: 500;
+  font-size: 13px;
+  text-transform: none;
+  padding: 0 16px;
 }
 
-/* Stats */
+/* ==============================
+   STATS CARDS
+============================== */
 .stats-section {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .stats-card {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
-  padding: 16px;
+  padding: 16px 18px;
   border: 1px solid #e8ecf0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  min-width: 0;
+  transition: box-shadow 0.2s ease;
+}
+
+.stats-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
 }
 
 .stats-icon-wrapper {
@@ -824,15 +1329,31 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
-
-.stats-icon-blue { background: #eff6ff; color: #3b82f6; }
-.stats-icon-amber { background: #fefce8; color: #ca8a04; }
-.stats-icon-green { background: #f0fdf4; color: #22c55e; }
-.stats-icon-purple { background: #f5f3ff; color: #8b5cf6; }
 
 .stats-icon {
   font-size: 20px;
+}
+.stats-icon-blue {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+.stats-icon-amber {
+  background: #fefce8;
+  color: #ca8a04;
+}
+.stats-icon-green {
+  background: #f0fdf4;
+  color: #22c55e;
+}
+.stats-icon-purple {
+  background: #f5f3ff;
+  color: #8b5cf6;
+}
+
+.stats-content {
+  min-width: 0;
 }
 
 .stats-label {
@@ -841,24 +1362,83 @@ onMounted(() => {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  margin-bottom: 2px;
 }
 
 .stats-amount {
   font-size: 22px;
   font-weight: 700;
   color: #111827;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.stage-text {
-  font-size: 16px;
+/* ==============================
+   FILTERS SECTION
+============================== */
+.filters-section {
+  margin-bottom: 16px;
 }
 
-/* Table Section */
+.filters-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  border: 1px solid #e8ecf0;
+}
+
+.filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.filters-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.toggle-btn {
+  border-radius: 6px !important;
+  font-weight: 500;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  text-transform: none;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.filter-input :deep(.q-field__control) {
+  border-radius: 8px;
+}
+
+/* ==============================
+   TABLE SECTION
+============================== */
 .table-section {
-  background: white;
+  background: #ffffff;
   border-radius: 12px;
   border: 1px solid #e8ecf0;
   overflow: hidden;
+  margin-bottom: 16px;
 }
 
 .table-header {
@@ -867,6 +1447,8 @@ onMounted(() => {
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid #f1f3f5;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .table-title-section {
@@ -876,7 +1458,7 @@ onMounted(() => {
 }
 
 .table-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #111827;
   margin: 0;
@@ -885,6 +1467,12 @@ onMounted(() => {
 .table-info {
   font-size: 12px;
   color: #9ca3af;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .modern-table-container {
@@ -910,7 +1498,7 @@ onMounted(() => {
 }
 
 .table-header-cell {
-  padding: 12px 16px;
+  padding: 11px 16px;
   text-align: left;
   font-size: 11px;
   font-weight: 600;
@@ -918,13 +1506,24 @@ onMounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 1px solid #e8ecf0;
+  white-space: nowrap;
+}
+
+.table-header-cell.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.table-header-cell.sortable:hover {
+  background: #f1f5f9;
+  color: #374151;
 }
 
 .table-body-row {
   border-bottom: 1px solid #f1f3f5;
+  transition: background 0.15s;
 }
 
-.table-body-row:hover {
+.table-body-row:hover .table-body-cell {
   background: #f9fafb;
 }
 
@@ -935,39 +1534,35 @@ onMounted(() => {
   vertical-align: middle;
 }
 
-.selected-row {
-  background: #eff6ff !important;
+.highlight-row .table-body-cell {
+  background: #f0fdf4;
 }
 
-/* Run Row Styling */
-.run-row:hover {
-  background: #f3f4f6;
-  cursor: default;
+/* ==============================
+   AVATAR — matches EmployeesPage exactly
+============================== */
+.avatar-fallback {
+  background: #e0e7ff !important;
+  color: #4338ca !important;
+  font-weight: 600 !important;
+  min-width: 34px !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
 }
 
-/* Run Badge */
-.run-badge {
-  display: inline-block;
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-  background: #f5f3ff;
-  color: #6d28d9;
-  border: 1px solid #ddd6fe;
+.avatar-fallback :deep(.q-avatar__content) {
+  font-size: 12px !important;
+  line-height: 1 !important;
 }
 
-.count-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-/* Employee Cell */
+/* ==============================
+   EMPLOYEE CELL
+============================== */
 .employee-cell {
   min-width: 200px;
 }
@@ -978,22 +1573,19 @@ onMounted(() => {
   gap: 10px;
 }
 
-.avatar-fallback {
-  background: #e0e7ff !important;
-  color: #4338ca !important;
-  font-weight: 600;
-  font-size: 12px;
-}
-
 .employee-details {
   display: flex;
   flex-direction: column;
+  gap: 1px;
 }
 
 .employee-name {
   font-weight: 600;
   color: #111827;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .employee-id {
@@ -1001,181 +1593,862 @@ onMounted(() => {
   color: #9ca3af;
 }
 
-/* Amount Cell */
+/* ==============================
+   BADGES
+============================== */
+.period-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  white-space: nowrap;
+}
+
+.run-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+  white-space: nowrap;
+}
+
+.hours-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  white-space: nowrap;
+}
+
+/* ==============================
+   AMOUNT CELLS
+============================== */
 .amount-cell {
+  min-width: 120px;
+}
+
+.amount-display {
   font-weight: 600;
   color: #111827;
-  font-family: monospace;
+  font-size: 13px;
+  margin-bottom: 4px;
 }
 
-/* Actions */
+.amount-progress {
+  height: 3px;
+  background: #f1f3f5;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.amount-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.gross-bar {
+  background: #f59e0b;
+}
+.net-bar {
+  background: #22c55e;
+}
+
+/* ==============================
+   ACTIONS
+============================== */
 .actions-cell {
   text-align: center;
-  width: 120px;
+  width: 60px;
 }
 
-.action-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 4px;
+.action-menu-btn {
+  color: #6b7280 !important;
+  border-radius: 6px !important;
+}
+.action-menu-btn:hover {
+  background: #f3f4f6 !important;
+}
+.action-dropdown {
+  border-radius: 8px !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
 }
 
-.disbursement-buttons {
-  display: flex;
-  gap: 4px;
+.dropdown-item {
+  font-size: 13px !important;
+  color: #374151 !important;
+  min-height: 36px !important;
+  padding: 0 12px !important;
+}
+.dropdown-item:hover {
+  background: #f9fafb !important;
 }
 
-/* Employees Section */
-.employees-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* Run Info Card */
-.run-info-card {
-  background: white;
-  border-radius: 12px;
-  padding: 16px 20px;
-  border: 1px solid #e8ecf0;
-}
-
-.run-info-content {
+/* ==============================
+   TABLE FOOTER
+============================== */
+.table-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 12px 16px;
+  background: #f8fafc;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 
-.run-info-main {
+.footer-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #6b7280;
+}
+.total-label {
+  font-weight: 600;
+  color: #374151;
+}
+.total-records {
+  color: #6b7280;
+}
+.total-amount {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pagination-btn {
+  color: #6b7280;
+  border-radius: 6px !important;
+}
+.pagination-btn:hover {
+  background: #f3f4f6 !important;
+}
+.page-info {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+  min-width: 90px;
+  text-align: center;
+}
+
+/* ==============================
+   CARDS VIEW
+============================== */
+.cards-section {
+  margin-bottom: 16px;
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.payroll-card {
+  background: #ffffff;
+  border: 1px solid #e8ecf0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.payroll-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.card-header {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e8ecf0;
 }
 
-.run-info-id {
-  font-size: 18px;
+.employee-avatar-large {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e0e7ff;
+  color: #4338ca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.employee-info-card {
+  flex: 1;
+  min-width: 0;
+}
+.card-employee-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-employee-id {
+  font-size: 11px;
+  color: #9ca3af;
+  margin: 0;
+}
+.card-actions {
+  display: flex;
+  gap: 4px;
+}
+.card-action-btn {
+  color: #6b7280 !important;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px !important;
+}
+.card-action-btn:hover {
+  background: #f3f4f6 !important;
+}
+
+.card-body {
+  padding: 14px 16px;
+}
+
+.pay-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.pay-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pay-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pay-value {
+  font-size: 16px;
   font-weight: 700;
   color: #111827;
 }
-
-.run-info-name {
-  font-size: 14px;
-  color: #6b7280;
+.pay-value.net {
+  color: #16a34a;
 }
 
-.run-info-stats {
-  font-size: 13px;
-  color: #6b7280;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.hours-section {
+  margin-bottom: 12px;
 }
 
-/* Bulk Actions */
-.bulk-actions-bar {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 12px;
-  padding: 12px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
+.hours-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
 }
 
-.bulk-actions-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #1d4ed8;
-}
-
-.bulk-actions-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* Filters */
-.filters-bar {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.filter-input {
-  min-width: 200px;
-}
-
-/* Pagination */
-.pagination-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-  border-top: 1px solid #f1f3f5;
+.hours-item {
   background: #f8fafc;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+}
+.hours-label {
+  font-size: 10px;
+  color: #9ca3af;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+.hours-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+.hours-value.overtime {
+  color: #f59e0b;
+}
+.hours-value.holiday {
+  color: #8b5cf6;
+}
+.hours-value.total {
+  color: #3b82f6;
 }
 
+.card-footer {
+  padding-top: 10px;
+  border-top: 1px solid #f1f3f5;
+}
+.period-info {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cards-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 4px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .pagination-info {
   font-size: 13px;
   color: #6b7280;
 }
 
-.pagination-controls {
+/* ==============================
+   PAYROLL RUN DIALOG
+============================== */
+.run-dialog-card {
+  display: flex;
+  flex-direction: column;
+  background: #f4f6f9;
+}
+
+.run-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px !important;
+  background: #ffffff;
+  border-bottom: 1px solid #e8ecf0;
+}
+
+.run-dialog-title-section {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.run-dialog-icon {
+  background: #eff6ff !important;
+  color: #3b82f6 !important;
+  border-radius: 10px !important;
+  flex-shrink: 0;
+}
+
+.run-dialog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.run-dialog-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.run-dialog-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.run-dialog-footer {
+  background: #ffffff;
+  border-top: 1px solid #e8ecf0;
+  padding: 12px 20px !important;
+}
+
+/* ==============================
+   WORKFLOW SECTION (inside dialog)
+============================== */
+.workflow-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e8ecf0;
+}
+
+.workflow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.workflow-title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workflow-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.workflow-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+.workflow-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.workflow-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding: 12px 0;
+  overflow-x: auto;
+}
+
+.stepper-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  min-width: 80px;
+  flex: 1;
+}
+
+.step-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  color: #9ca3af;
+  transition: all 0.3s;
+  position: relative;
+  z-index: 1;
+}
+
+.stepper-step.step-active .step-icon {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+.stepper-step.step-completed .step-icon {
+  background: #22c55e;
+  color: white;
+}
+.stepper-step.step-pending .step-icon {
+  background: #f3f4f6;
+  color: #d1d5db;
+}
+
+.step-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  text-align: center;
+  white-space: nowrap;
+}
+.stepper-step.step-active .step-label {
+  color: #3b82f6;
+  font-weight: 600;
+}
+.stepper-step.step-completed .step-label {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.step-connector {
+  position: absolute;
+  top: 20px;
+  left: calc(50% + 20px);
+  right: calc(-50% + 20px);
+  height: 2px;
+  background: #e5e7eb;
+  z-index: 0;
+}
+.stepper-step.step-completed .step-connector {
+  background: #22c55e;
+}
+
+.workflow-actions {
+  margin-bottom: 4px;
+}
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.action-hint {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* ==============================
+   WORKFLOW TABLE (inside dialog)
+============================== */
+.workflow-table-card {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  overflow: hidden;
+}
+
+.workflow-actions-cell {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.disbursement-btns {
   display: flex;
   gap: 4px;
 }
 
-/* Run Actions */
-.run-actions {
-  display: flex;
-  justify-content: center;
-  padding: 16px;
+/* ==============================
+   EMPLOYEES PANEL (inline under run row)
+============================== */
+.employees-panel {
+  background: #f4f7fb;
+  border-top: 1px solid #dde3ec;
+  border-left: 4px solid #3b82f6;
+  margin-left: 0;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+.employees-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 20px 10px 20px;
+  background: #eef2f9;
+  border-bottom: 1px solid #dde3ec;
+}
+
+.employees-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.employees-panel-count {
+  background: #3b82f6;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 1px 7px;
+  line-height: 1.6;
+}
+
+.employees-panel-selected {
+  font-size: 12px;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.employees-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.employee-search-input {
+  font-size: 13px;
+}
+
+.select-all-checkbox {
+  font-size: 13px;
+  color: #374151;
+}
+
+.employees-nested-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.employees-nested-table .table-header-row th {
+  background: #eef2f9 !important;
+}
+
+.employees-nested-table .table-body-row:last-child td {
+  border-bottom: none;
+}
+
+/* ==============================
+   INLINE RUN DETAIL (legacy, kept for compatibility)
+============================== */
+
+.inline-run-detail {
+  background: #f8fafc;
+  border-bottom: 1px solid #e0e7ef;
+  padding-bottom: 16px;
+}
+
+/* ==============================
+   SELECTION STATES
+============================== */
+.selected-row .table-body-cell {
+  background: #f0f9ff !important;
+}
+.selected-row:hover .table-body-cell {
+  background: #e0f2fe !important;
+}
+.failed-row .table-body-cell {
+  background: #fef2f2 !important;
+}
+
+/* ==============================
+   DETAIL MODAL
+============================== */
+.detail-modal-card {
+  width: 560px;
+  max-width: 95vw;
+  max-height: 90vh;
+  border-radius: 14px !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px !important;
+  background: #ffffff;
+}
+
+.modal-title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-avatar-icon {
+  background: #eff6ff !important;
+  color: #3b82f6 !important;
+  border-radius: 10px !important;
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+.modal-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+.modal-close-btn {
+  color: #9ca3af !important;
+}
+.modal-close-btn:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.modal-content {
+  padding: 20px !important;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 16px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f3f5;
+}
+.modal-section-title:first-child {
+  margin-top: 0;
+}
+
+.detail-grid-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.detail-card {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 14px;
+  border: 1px solid #f1f3f5;
+}
+.detail-card-full {
+  grid-column: 1 / -1;
+}
+.detail-card-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.detail-card-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.amount-green {
+  color: #16a34a;
+}
+.amount-blue {
+  color: #2563eb;
+}
+.amount-red {
+  color: #dc2626;
+}
+.amount-amber {
+  color: #d97706;
+}
+.amount-purple {
+  color: #7c3aed;
+}
+
+.dialog-btn {
+  border-radius: 8px !important;
+  font-size: 13px;
+  text-transform: none;
+}
+.primary-btn {
+  font-weight: 500;
+}
+
+/* ==============================
+   MISC
+============================== */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 32px;
+}
+
+.text-center {
+  text-align: center;
+}
+.text-grey-5 {
+  color: #b0b8c1;
+  font-size: 12px;
+}
+.text-caption {
+  font-size: 11px;
+}
+
+/* ==============================
+   RESPONSIVE
+============================== */
+@media (max-width: 900px) {
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
   }
-  
-  .payroll-dashboard {
-    padding: 16px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 14px;
   }
-  
-  .table-header {
+  .header-content {
+    flex-wrap: wrap;
+  }
+  .stats-section {
+    grid-template-columns: 1fr;
+  }
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+  .detail-grid-cards {
+    grid-template-columns: 1fr;
+  }
+  .detail-card-full {
+    grid-column: span 1;
+  }
+  .modern-table-container {
+    margin: 0 10px 10px;
+  }
+  .hours-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .workflow-stepper {
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+  }
+  .step-connector {
+    display: none;
+  }
+  .stepper-step {
+    min-width: 60px;
+  }
+  .workflow-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
-  .bulk-actions-bar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .run-info-content {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .filters-bar {
-    flex-direction: column;
-  }
-  
-  .filter-input {
-    width: 100%;
+  .run-dialog-body {
+    padding: 14px !important;
   }
 }
 
 @media (max-width: 480px) {
-  .stats-section {
+  .page-title {
+    font-size: 18px;
+  }
+  .stats-amount {
+    font-size: 18px;
+  }
+  .cards-grid {
     grid-template-columns: 1fr;
   }
 }
