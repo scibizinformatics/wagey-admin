@@ -22,9 +22,7 @@ export default defineConfig((ctx) => {
     extras: ['roboto-font', 'material-icons'],
 
     babel: {
-      presets: [
-        ['@quasar/babel-preset-app', {}]
-      ]
+      presets: [['@quasar/babel-preset-app', {}]],
     },
 
     build: {
@@ -85,7 +83,15 @@ export default defineConfig((ctx) => {
           secure: false,
         },
         {
-          context: ['/payroll'],
+          // Only proxy actual API calls — not the bare /payroll SPA route.
+          // Without this, refreshing /app/payroll forwards the request to
+          // Django instead of letting Quasar's history-mode router handle it.
+          context: [
+            '/payroll/admin',
+            '/payroll/payroll-components',
+            '/payroll/payroll-component-types',
+            '/payroll/pay-structures',
+          ],
           target: apiBaseUrl,
           changeOrigin: true,
           secure: false,
