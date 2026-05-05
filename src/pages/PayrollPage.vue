@@ -109,32 +109,8 @@
               </div>
               <div class="run-header-action">
                 <q-btn
-                  v-if="run.status === 'draft'"
-                  flat
-                  dense
-                  no-caps
-                  size="sm"
-                  icon="verified_user"
-                  color="primary"
-                  label="Approve Admin"
-                  :loading="saving && selectedRun?.id === run.id"
-                  @click="selectAndApprove(run, 'approve_admin')"
-                />
-                <q-btn
-                  v-else-if="run.status === 'admin_approved'"
-                  flat
-                  dense
-                  no-caps
-                  size="sm"
-                  icon="admin_panel_settings"
-                  color="indigo"
-                  label="Approve Owner"
-                  :loading="saving && selectedRun?.id === run.id"
-                  @click="selectAndApprove(run, 'approve_owner')"
-                />
-                <q-btn
-                  v-else-if="run.status === 'owner_approved'"
-                  flat
+                  v-if="run.status === 'owner_approved'"
+                  unelevated
                   dense
                   no-caps
                   size="sm"
@@ -142,11 +118,11 @@
                   color="orange"
                   label="Release"
                   :loading="saving && selectedRun?.id === run.id"
-                  @click="selectAndApprove(run, 'release')"
+                  @click.stop="selectAndApprove(run, 'release')"
                 />
                 <q-btn
-                  v-else-if="run.status === 'acknowledged'"
-                  flat
+                  v-else-if="run.status === 'released_for_review'"
+                  unelevated
                   dense
                   no-caps
                   size="sm"
@@ -154,10 +130,14 @@
                   color="purple"
                   label="Fund Payroll"
                   :loading="saving && selectedRun?.id === run.id"
-                  @click="selectAndApprove(run, 'fund')"
+                  @click.stop="selectAndApprove(run, 'fund')"
                 />
                 <q-icon
-                  v-else-if="['funded', 'disbursed', 'completed'].includes(run.status)"
+                  v-else-if="
+                    ['partially_paid', 'payroll_funded', 'disbursed', 'completed'].includes(
+                      run.status,
+                    )
+                  "
                   name="task_alt"
                   color="positive"
                   size="22px"
@@ -208,51 +188,14 @@
                     "
                     class="select-all-checkbox"
                   />
-                  <!-- Approve Selected - Hidden for released/acknowledged stages (auto-selected) -->
-                  <q-btn
-                    v-if="selectedEmployees.length > 0 && run.status === 'draft'"
-                    unelevated
-                    dense
-                    no-caps
-                    size="sm"
-                    icon="verified_user"
-                    color="primary"
-                    :label="`Approve Selected (${selectedEmployees.length})`"
-                    :loading="saving"
-                    @click="handleBulkAction('approve_admin')"
-                  />
-                  <q-btn
-                    v-else-if="selectedEmployees.length > 0 && run.status === 'admin_approved'"
-                    unelevated
-                    dense
-                    no-caps
-                    size="sm"
-                    icon="admin_panel_settings"
-                    color="indigo"
-                    :label="`Approve Selected (${selectedEmployees.length})`"
-                    :loading="saving"
-                    @click="handleBulkAction('approve_owner')"
-                  />
-                  <q-btn
-                    v-else-if="selectedEmployees.length > 0 && run.status === 'owner_approved'"
-                    unelevated
-                    dense
-                    no-caps
-                    size="sm"
-                    icon="send"
-                    color="orange"
-                    :label="`Release Selected (${selectedEmployees.length})`"
-                    :loading="saving"
-                    @click="handleBulkAction('release')"
-                  />
-                  <!-- Note: No "Approve Selected" buttons for released/acknowledged stages -->
-                  <!-- All employees are auto-selected and pre-approved in these stages -->
+                  <!-- Approve Selected - removed; per-row approve buttons are in the Actions column -->
                   <!-- Approve All -->
+
                   <q-btn
                     v-if="
-                      run.status === 'draft' && getActionableEmployees(workflowStage).length > 0
+                      run.status === 'computed' && getActionableEmployees(workflowStage).length > 0
                     "
-                    flat
+                    unelevated
                     dense
                     no-caps
                     size="sm"
@@ -264,10 +207,10 @@
                   />
                   <q-btn
                     v-else-if="
-                      run.status === 'admin_approved' &&
+                      run.status === 'admin_reviewed' &&
                       getActionableEmployees(workflowStage).length > 0
                     "
-                    flat
+                    unelevated
                     dense
                     no-caps
                     size="sm"
@@ -282,7 +225,7 @@
                       run.status === 'owner_approved' &&
                       getActionableEmployees(workflowStage).length > 0
                     "
-                    flat
+                    unelevated
                     dense
                     no-caps
                     size="sm"
@@ -415,38 +358,6 @@
                       </td>
                       <td class="table-body-cell actions-cell">
                         <div class="workflow-actions-cell">
-                          <template v-if="workflowStage === 'funded' && emp.status === 'funded'">
-                            <q-btn
-                              flat
-                              dense
-                              icon="payments"
-                              color="amber-8"
-                              label="Cash"
-                              no-caps
-                              size="sm"
-                              @click="handleWorkflowAction(emp, 'cash')"
-                              :loading="saving"
-                            />
-                            <q-btn
-                              flat
-                              dense
-                              icon="account_balance"
-                              color="blue"
-                              label="Bank"
-                              no-caps
-                              size="sm"
-                              @click="handleWorkflowAction(emp, 'bank')"
-                              :loading="saving"
-                            />
-                          </template>
-                          <q-icon
-                            v-else-if="
-                              ['cash_disbursed', 'bank_disbursed', 'completed'].includes(emp.status)
-                            "
-                            name="task_alt"
-                            color="positive"
-                            size="22px"
-                          />
                           <q-btn
                             v-if="emp.lastError"
                             flat
@@ -460,7 +371,83 @@
                           >
                           <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                             <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                              <q-list dense style="min-width: 160px">
+                              <q-list dense style="min-width: 180px">
+                                <!-- Workflow action item — shown based on employee status -->
+                                <q-item
+                                  v-if="emp.status === 'draft'"
+                                  clickable
+                                  v-close-popup
+                                  @click="handleWorkflowAction(emp, 'approve_admin')"
+                                  class="dropdown-item"
+                                >
+                                  <q-item-section avatar
+                                    ><q-icon name="verified_user" size="16px" color="primary"
+                                  /></q-item-section>
+                                  <q-item-section>Approve (Admin)</q-item-section>
+                                </q-item>
+                                <q-item
+                                  v-else-if="emp.status === 'approved_admin'"
+                                  clickable
+                                  v-close-popup
+                                  @click="handleWorkflowAction(emp, 'approve_owner')"
+                                  class="dropdown-item"
+                                >
+                                  <q-item-section avatar
+                                    ><q-icon name="admin_panel_settings" size="16px" color="indigo"
+                                  /></q-item-section>
+                                  <q-item-section>Approve (Owner)</q-item-section>
+                                </q-item>
+                                <q-item
+                                  v-else-if="emp.status === 'approved_owner'"
+                                  clickable
+                                  v-close-popup
+                                  @click="handleWorkflowAction(emp, 'release')"
+                                  class="dropdown-item"
+                                >
+                                  <q-item-section avatar
+                                    ><q-icon name="send" size="16px" color="orange"
+                                  /></q-item-section>
+                                  <q-item-section>Release</q-item-section>
+                                </q-item>
+                                <q-item
+                                  v-if="emp.status === 'payroll_funded'"
+                                  clickable
+                                  v-close-popup
+                                  @click="handleWorkflowAction(emp, 'cash')"
+                                  class="dropdown-item"
+                                >
+                                  <q-item-section avatar
+                                    ><q-icon name="payments" size="16px" color="amber-8"
+                                  /></q-item-section>
+                                  <q-item-section>Cash Disbursement</q-item-section>
+                                </q-item>
+                                <q-item
+                                  v-if="emp.status === 'payroll_funded'"
+                                  clickable
+                                  v-close-popup
+                                  @click="handleWorkflowAction(emp, 'bank')"
+                                  class="dropdown-item"
+                                >
+                                  <q-item-section avatar
+                                    ><q-icon name="account_balance" size="16px" color="blue"
+                                  /></q-item-section>
+                                  <q-item-section>Bank Transfer</q-item-section>
+                                </q-item>
+
+                                <q-separator
+                                  v-if="
+                                    ![
+                                      'released',
+                                      'pending_review',
+                                      'disbursed',
+                                      'cash_disbursed',
+                                      'bank_disbursed',
+                                      'completed',
+                                    ].includes(emp.status)
+                                  "
+                                  spaced
+                                />
+
                                 <q-item
                                   clickable
                                   v-close-popup
@@ -639,7 +626,6 @@ const {
   bankTransfer,
   fetchPayrollRunEmployees,
   getActionableEmployees,
-  canFundPayroll,
   isStageAutoSelectable,
   isEmployeePreApproved,
 } = usePayroll()
@@ -845,25 +831,520 @@ const downloadPayslip = (record) => {
     $q.notify({ type: 'negative', message: 'No record selected to download' })
     return
   }
-  const doc = new jsPDF()
-  doc.setFontSize(16)
-  doc.text('Employee Payslip', 14, 20)
-  doc.setFontSize(12)
-  doc.text(`Name: ${rec.employee ?? rec.employee_name}`, 14, 35)
-  doc.text(`Employee ID: ${rec.employee_id ?? 'N/A'}`, 14, 45)
-  doc.text(`Period: ${rec.period ?? '-'}`, 14, 55)
-  doc.text(`Run: #${rec.run ?? ''}`, 14, 65)
-  autoTable(doc, {
-    startY: 80,
-    head: [['Description', 'Amount']],
-    body: [
-      ['Gross Pay', formatCurrency(rec.gross_pay)],
-      ['Net Pay', formatCurrency(rec.net_pay)],
-      ['Deductions', formatCurrency((rec.gross_pay || 0) - (rec.net_pay || 0))],
-    ],
+
+  // ─── Resolve fields from either the table row shape or the modal shape ───
+  const employeeName = rec.employee_name ?? rec.employee ?? 'N/A'
+  const employeeId = rec.employee_id ?? 'N/A'
+  const position = rec.position ?? rec.job_title ?? '—'
+  const employmentType = rec.employment_type ?? '—'
+  const empStatus = rec.employment_status ?? '—'
+  const runName = rec.period ?? selectedRun.value?.name ?? '—'
+  const fmtDate = (d) => {
+    if (!d || d === '—') return '—'
+    try {
+      return new Date(d).toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    } catch {
+      return d
+    }
+  }
+  const payDate = fmtDate(rec.pay_date ?? rec.released_at)
+  const payslipNo = rec.payslip_no ?? `PS-${rec.payslip_id ?? rec.id ?? ''}`
+
+  // Employer / company info — pulled exclusively from API data, never from Wagey defaults
+  const companyName = selectedRun.value?.company_name ?? rec.company_name ?? ''
+  const companyAddress = selectedRun.value?.company_address ?? rec.company_address ?? ''
+  const companyTin = selectedRun.value?.company_tin ?? rec.company_tin ?? ''
+
+  // Work summary
+  const bd = rec.breakdown ?? {}
+  const att = bd.attendance ?? {}
+  const daysWorked = att.days_worked ?? rec.days_worked ?? '—'
+  const daysAbsent = att.days_absent ?? rec.days_absent ?? 0
+  const vlUsed = att.vacation_leave ?? rec.vacation_leave ?? 0
+  const slUsed = att.sick_leave ?? rec.sick_leave ?? 0
+  const totalHoursW = att.total_hours_worked ?? rec.total_hours_worked ?? 0
+  const otHours = att.overtime_hours ?? rec.overtime_hours ?? 0
+  const ndHours = att.night_diff_hours ?? rec.night_diff_hours ?? 0
+  const restDays = att.rest_days_worked ?? rec.rest_days_worked ?? 0
+  const holidayDays = att.holidays_worked ?? rec.holidays_worked ?? 0
+
+  // Rate basis
+  const monthlyRate = Number(rec.monthly_rate ?? rec.rate ?? 0)
+  const dailyRate = Number(rec.daily_rate ?? (monthlyRate ? monthlyRate / 22 : 0))
+  const hourlyRate = Number(rec.hourly_rate ?? (dailyRate ? dailyRate / 8 : 0))
+
+  // Earnings
+  const basicPay = Number(rec.basic_pay ?? rec.gross_pay ?? 0)
+  const earnings = Array.isArray(rec.earnings) ? rec.earnings : []
+
+  // Separate earning categories
+  const premiumItems = earnings.filter((e) =>
+    ['overtime', 'night_differential', 'holiday', 'rest_day'].includes(e.type),
+  )
+  const allowances = earnings.filter((e) => e.type === 'allowance')
+  const incentives = earnings.filter((e) => e.type === 'incentive')
+  const adjAdditions = earnings.filter((e) => e.type === 'adjustment_add')
+
+  // Fall back to top-level fields if earnings array is empty
+  const overtimePay =
+    premiumItems.find((e) => e.type === 'overtime')?.amount ?? Number(rec.overtime_pay ?? 0)
+  const nightDiffPay =
+    premiumItems.find((e) => e.type === 'night_differential')?.amount ??
+    Number(rec.night_diff_pay ?? 0)
+  const holidayPay =
+    premiumItems.find((e) => e.type === 'holiday')?.amount ?? Number(rec.holiday_pay ?? 0)
+  const grossPay = Number(rec.gross_pay ?? 0)
+
+  // Deductions
+  const deductions = Array.isArray(rec.deductions) ? rec.deductions : []
+  const withholdingTax = Number(
+    rec.withholding_tax ?? deductions.find((d) => d.type === 'withholding_tax')?.amount ?? 0,
+  )
+  const sssContrib = Number(rec.sss ?? deductions.find((d) => d.type === 'sss')?.amount ?? 0)
+  const philhealth = Number(
+    rec.philhealth ?? deductions.find((d) => d.type === 'philhealth')?.amount ?? 0,
+  )
+  const pagibig = Number(rec.pagibig ?? deductions.find((d) => d.type === 'pagibig')?.amount ?? 0)
+  const sssLoan = Number(rec.sss_loan ?? deductions.find((d) => d.type === 'sss_loan')?.amount ?? 0)
+  const pagibigLoan = Number(
+    rec.pagibig_loan ?? deductions.find((d) => d.type === 'pagibig_loan')?.amount ?? 0,
+  )
+  const cashAdvance = Number(
+    rec.cash_advance ?? deductions.find((d) => d.type === 'cash_advance')?.amount ?? 0,
+  )
+  const companyLoan = Number(
+    rec.company_loan ?? deductions.find((d) => d.type === 'company_loan')?.amount ?? 0,
+  )
+  const absenceDeduct = Number(
+    rec.absence_deduction ??
+      deductions.find((d) => d.type === 'absence')?.amount ??
+      (daysAbsent > 0 ? dailyRate * daysAbsent : 0),
+  )
+  const lateDeduct = Number(
+    rec.late_deduction ?? deductions.find((d) => d.type === 'late')?.amount ?? 0,
+  )
+  const totalDeductions = Number(rec.total_deductions ?? grossPay - Number(rec.net_pay ?? 0))
+  const netPay = Number(rec.net_pay ?? 0)
+
+  // Payment / loan / 13th month
+  const paymentMethod = rec.payment_method ?? rec.disbursement_type ?? '—'
+  const paymentStatus = rec.status ?? '—'
+  const dateReleased = fmtDate(rec.released_at ?? rec.pay_date)
+  const loans = Array.isArray(rec.loans)
+    ? rec.loans
+    : companyLoan
+      ? [
+          {
+            type: 'Company Loan',
+            total: rec.total_loan_amount ?? 0,
+            deduction: companyLoan,
+            balance: rec.loan_balance ?? 0,
+          },
+        ]
+      : []
+  const thirteenthAccrual = Number(rec.thirteenth_month_accrual ?? rec.month_accrual ?? 0)
+  const thirteenthYtd = Number(rec.thirteenth_month_ytd ?? rec.ytd_accrual ?? 0)
+
+  // ─── PDF construction ────────────────────────────────────────────────────
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const PW = 210 // page width mm
+  const ML = 15 // margin left
+  const MR = 193 // margin right — 15mm from right edge keeps amounts inside printable area
+  let y = 14
+
+  // ── Helpers ──
+  // ₱ is unsupported by jsPDF built-in Helvetica; use "PHP" prefix for PDF output
+  const fc = (v) => {
+    const n = Number(v ?? 0)
+    return (
+      'PHP ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    )
+  }
+  const line = (x1, yy, x2) => {
+    doc.setDrawColor(200, 200, 200)
+    doc.line(x1, yy, x2, yy)
+  }
+  const sectionTitle = (title, yy) => {
+    doc.setFillColor(240, 244, 255)
+    doc.rect(ML, yy - 4.5, MR - ML, 6.5, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(50, 60, 120)
+    doc.text(title.toUpperCase(), ML + 2, yy)
+    doc.setTextColor(30, 30, 30)
+    return yy + 5
+  }
+  const dotRow = (label, val, yy, bold = false) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(80, 80, 80)
+    doc.text(label, ML + 2, yy)
+    // dotted leader
+    doc.setTextColor(180, 180, 180)
+    const dotStart = ML + 2 + doc.getTextWidth(label) + 1
+    const dotEnd = MR - doc.getTextWidth(val) - 1
+    if (dotEnd > dotStart) {
+      let dx = dotStart
+      while (dx < dotEnd) {
+        doc.text('.', dx, yy)
+        dx += 1.6
+      }
+    }
+    doc.setTextColor(bold ? 20 : 40, bold ? 20 : 40, bold ? 20 : 40)
+    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+    doc.text(val, MR, yy, { align: 'right' })
+    return yy + 5.2
+  }
+  const kv = (label, val, yy) => {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(100, 100, 100)
+    doc.text(label + ':', ML + 2, yy)
+    doc.setTextColor(20, 20, 20)
+    doc.setFont('helvetica', 'bold')
+    doc.text(String(val), ML + 45, yy)
+    doc.setFont('helvetica', 'normal')
+    return yy + 5
+  }
+
+  // ══════════════════════════════════════════════
+  // HEADER
+  // ══════════════════════════════════════════════
+  doc.setFillColor(37, 56, 120)
+  doc.rect(0, 0, PW, 22, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(14)
+  doc.setTextColor(255, 255, 255)
+  doc.text('OFFICIAL PAYSLIP', PW / 2, 9, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  if (companyName) doc.text(companyName, PW / 2, 15, { align: 'center' })
+  if (companyAddress) doc.text(companyAddress, PW / 2, 19, { align: 'center' })
+  y = 28
+
+  // Company meta row
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(80, 80, 80)
+  if (companyTin) {
+    doc.text(`TIN: ${companyTin}`, ML, y)
+  }
+  doc.text(`Payslip No.: ${payslipNo}`, MR, y, { align: 'right' })
+  y += 5
+  doc.text(`Payroll Period: ${runName}`, ML, y)
+  doc.text(`Pay Date: ${payDate}`, MR, y, { align: 'right' })
+  y += 3
+  line(ML, y, MR)
+  y += 5
+
+  // ══════════════════════════════════════════════
+  // EMPLOYEE INFORMATION
+  // ══════════════════════════════════════════════
+  y = sectionTitle('Employee Information', y)
+  y += 1
+  y = kv('Full Name', employeeName, y)
+  y = kv('Employee ID', employeeId, y)
+  y = kv('Position', position, y)
+  y = kv('Employment Type', employmentType, y)
+  y = kv('Status', empStatus, y)
+  y += 2
+  line(ML, y, MR)
+  y += 5
+
+  // ══════════════════════════════════════════════
+  // WORK SUMMARY
+  // ══════════════════════════════════════════════
+  y = sectionTitle('Work Summary', y)
+  y += 1
+  const workRows = [
+    ['Days Worked', String(daysWorked)],
+    ['Days Absent', String(daysAbsent)],
+    ['Vacation Leave (VL)', String(vlUsed)],
+    ['Sick Leave (SL)', String(slUsed)],
+    ['Total Hours Worked', `${totalHoursW}h`],
+    ['Overtime Hours', `${otHours}h`],
+    ['Night Differential Hrs', `${ndHours}h`],
+    ['Rest Days Worked', String(restDays)],
+    ['Holidays Worked', String(holidayDays)],
+  ]
+  workRows.forEach(([l, v]) => {
+    y = dotRow(l, v, y)
   })
-  doc.save(`${(rec.employee || 'employee').toString().replace(/\s+/g, '_')}_Payslip.pdf`)
-  $q.notify({ type: 'positive', message: `Payslip downloaded for ${rec.employee}` })
+  y += 2
+  line(ML, y, MR)
+  y += 5
+
+  // ══════════════════════════════════════════════
+  // RATE BASIS  (only shown when rates are available)
+  // ══════════════════════════════════════════════
+  if (monthlyRate > 0 || dailyRate > 0 || hourlyRate > 0) {
+    y = sectionTitle('Rate Basis', y)
+    y += 1
+    if (monthlyRate > 0) y = dotRow('Monthly Rate', fc(monthlyRate), y)
+    if (dailyRate > 0) y = dotRow('Daily Rate', fc(dailyRate), y)
+    if (hourlyRate > 0) y = dotRow('Hourly Rate', fc(hourlyRate), y)
+    y += 2
+    line(ML, y, MR)
+    y += 5
+  }
+
+  // ══════════════════════════════════════════════
+  // EARNINGS
+  // ══════════════════════════════════════════════
+  y = sectionTitle('Earnings', y)
+  y += 1
+  y = dotRow('Basic Pay', fc(basicPay), y)
+
+  // Premium Pay
+  const hasPremium =
+    overtimePay > 0 || nightDiffPay > 0 || holidayPay > 0 || premiumItems.length > 0
+  if (hasPremium) {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+    doc.text('Premium Pay', ML + 2, y)
+    y += 4.5
+    if (overtimePay > 0) y = dotRow('Overtime Pay', fc(overtimePay), y, false)
+    if (nightDiffPay > 0) y = dotRow('Night Differential Pay', fc(nightDiffPay), y, false)
+    if (holidayPay > 0) y = dotRow('Holiday Pay', fc(holidayPay), y, false)
+    premiumItems
+      .filter((e) => !['overtime', 'night_differential', 'holiday'].includes(e.type))
+      .forEach((e) => {
+        y = dotRow(e.label ?? e.type, fc(e.amount), y, false)
+      })
+  }
+
+  // Allowances
+  if (allowances.length > 0) {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+    doc.text('Allowances', ML + 2, y)
+    y += 4.5
+    allowances.forEach((a) => {
+      y = dotRow(a.label ?? a.type, fc(a.amount), y)
+    })
+  }
+
+  // Incentives
+  if (incentives.length > 0) {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+    doc.text('Incentives', ML + 2, y)
+    y += 4.5
+    incentives.forEach((a) => {
+      y = dotRow(a.label ?? a.type, fc(a.amount), y)
+    })
+  }
+
+  // Adjustments (additions)
+  doc.setFont('helvetica', 'bolditalic')
+  doc.setFontSize(8)
+  doc.setTextColor(100, 100, 100)
+  doc.text('Adjustments (Additions)', ML + 2, y)
+  y += 4.5
+  if (adjAdditions.length > 0) {
+    adjAdditions.forEach((a) => {
+      y = dotRow(a.label ?? a.type, fc(a.amount), y)
+    })
+  } else {
+    y = dotRow('—', fc(0), y)
+  }
+
+  // Gross Pay total bar
+  doc.setFillColor(37, 56, 120)
+  doc.rect(ML, y - 1, MR - ML, 7, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(255, 255, 255)
+  doc.text('GROSS PAY', ML + 3, y + 4)
+  doc.text(fc(grossPay), MR - 2, y + 4, { align: 'right' })
+  y += 11
+  doc.setTextColor(30, 30, 30)
+
+  // ══════════════════════════════════════════════
+  // DEDUCTIONS
+  // ══════════════════════════════════════════════
+  y = sectionTitle('Deductions', y)
+  y += 1
+
+  doc.setFont('helvetica', 'bolditalic')
+  doc.setFontSize(8)
+  doc.setTextColor(100, 100, 100)
+  doc.text('Government Contributions', ML + 2, y)
+  y += 4.5
+  if (withholdingTax > 0) y = dotRow('Withholding Tax', fc(withholdingTax), y)
+  if (sssContrib > 0) y = dotRow('SSS Contribution', fc(sssContrib), y)
+  if (philhealth > 0) y = dotRow('PhilHealth', fc(philhealth), y)
+  if (pagibig > 0) y = dotRow('Pag-IBIG', fc(pagibig), y)
+
+  doc.setFont('helvetica', 'bolditalic')
+  doc.setFontSize(8)
+  doc.setTextColor(100, 100, 100)
+  doc.text('Government Loans', ML + 2, y)
+  y += 4.5
+  y = dotRow('SSS Loan', fc(sssLoan), y)
+  y = dotRow('Pag-IBIG Loan', fc(pagibigLoan), y)
+
+  doc.setFont('helvetica', 'bolditalic')
+  doc.setFontSize(8)
+  doc.setTextColor(100, 100, 100)
+  doc.text('Company Deductions', ML + 2, y)
+  y += 4.5
+  if (cashAdvance > 0) y = dotRow('Cash Advance', fc(cashAdvance), y)
+  if (companyLoan > 0) y = dotRow('Company Loan', fc(companyLoan), y)
+
+  doc.setFont('helvetica', 'bolditalic')
+  doc.setFontSize(8)
+  doc.setTextColor(100, 100, 100)
+  doc.text('Attendance Deductions', ML + 2, y)
+  y += 4.5
+  y = dotRow(`Absence (${daysAbsent} day${daysAbsent !== 1 ? 's' : ''})`, fc(absenceDeduct), y)
+  y = dotRow('Late / Undertime', fc(lateDeduct), y)
+
+  // Other deductions from array
+  const otherDeductions = deductions.filter(
+    (d) =>
+      ![
+        'withholding_tax',
+        'sss',
+        'philhealth',
+        'pagibig',
+        'sss_loan',
+        'pagibig_loan',
+        'cash_advance',
+        'company_loan',
+        'absence',
+        'late',
+      ].includes(d.type),
+  )
+  if (otherDeductions.length > 0) {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+    doc.text('Other Deductions', ML + 2, y)
+    y += 4.5
+    otherDeductions.forEach((d) => {
+      y = dotRow(d.label ?? d.type, fc(d.amount), y)
+    })
+  } else {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+    doc.text('Other Deductions', ML + 2, y)
+    y += 4.5
+    y = dotRow('—', fc(0), y)
+  }
+
+  // Total Deductions bar
+  doc.setFillColor(180, 30, 30)
+  doc.rect(ML, y - 1, MR - ML, 7, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(255, 255, 255)
+  doc.text('TOTAL DEDUCTIONS', ML + 3, y + 4)
+  doc.text(fc(totalDeductions), MR - 2, y + 4, { align: 'right' })
+  y += 10
+  doc.setTextColor(30, 30, 30)
+
+  // ══════════════════════════════════════════════
+  // NET PAY
+  // ══════════════════════════════════════════════
+  doc.setFillColor(22, 101, 52)
+  doc.rect(ML, y, MR - ML, 12, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(255, 255, 255)
+  doc.text('NET PAY', ML + 4, y + 8)
+  doc.setFontSize(13)
+  doc.text(fc(netPay), MR - 2, y + 8, { align: 'right' })
+  y += 17
+  doc.setTextColor(30, 30, 30)
+
+  // ══════════════════════════════════════════════
+  // Check for new page before optional sections
+  // ══════════════════════════════════════════════
+  const checkPage = (needed) => {
+    if (y + needed > 280) {
+      doc.addPage()
+      y = 14
+    }
+  }
+
+  // ── PAYMENT DETAILS ──
+  checkPage(30)
+  y = sectionTitle('Payment Details', y)
+  y += 1
+  y = kv('Payment Method', paymentMethod, y)
+  y = kv('Status', paymentStatus, y)
+  y = kv('Date Released', dateReleased, y)
+  y += 2
+  line(ML, y, MR)
+  y += 5
+
+  // ── LOAN DISCLOSURE ──
+  if (loans.length > 0) {
+    checkPage(30)
+    y = sectionTitle('Loan Disclosure', y)
+    y += 1
+    loans.forEach((loan) => {
+      y = kv('Loan Type', loan.type ?? '—', y)
+      y = kv('Total Loan Amount', fc(loan.total ?? 0), y)
+      y = kv('Deduction This Period', fc(loan.deduction ?? 0), y)
+      y = kv('Remaining Balance', fc(loan.balance ?? 0), y)
+      y += 2
+    })
+    line(ML, y, MR)
+    y += 5
+  }
+
+  // ── 13TH MONTH TRACKING ──
+  if (thirteenthAccrual > 0 || thirteenthYtd > 0) {
+    checkPage(20)
+    y = sectionTitle('13th Month Tracking', y)
+    y += 1
+    y = kv('This Period Accrual', fc(thirteenthAccrual), y)
+    y = kv('Year-to-Date Accrual', fc(thirteenthYtd), y)
+    y += 2
+    line(ML, y, MR)
+    y += 5
+  }
+
+  // ── CERTIFICATION ──
+  checkPage(30)
+  y = sectionTitle('Certification', y)
+  y += 3
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(60, 60, 60)
+  doc.text('I acknowledge receipt of the amount stated above.', ML + 2, y)
+  y += 10
+  doc.line(ML + 2, y, ML + 70, y)
+  doc.text('Employee Signature', ML + 2, y + 4)
+  doc.line(MR - 68, y, MR, y)
+  doc.text('Date', MR - 12, y + 4)
+  y += 12
+
+  // ── Footer ──
+  const pageCount = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(160, 160, 160)
+    doc.text(`Page ${i} of ${pageCount}`, PW / 2, 292, { align: 'center' })
+    doc.text('This is a system-generated payslip.', PW / 2, 296, { align: 'center' })
+  }
+
+  // ── Save ──
+  const safeName = employeeName.replace(/\s+/g, '_')
+  doc.save(`Payslip_${safeName}_${runName.replace(/\s+/g, '_')}.pdf`)
+  $q.notify({ type: 'positive', message: `Payslip downloaded for ${employeeName}` })
 }
 
 const viewDetails = (record) => {
@@ -925,9 +1406,14 @@ const isEmployeeActionable = (emp) => {
   // Auto-select stages: show all employees as "actionable" (for visual checkboxes)
   // They will be shown as disabled/pre-selected
   if (['released', 'acknowledged'].includes(stage)) {
-    return ['released', 'acknowledged', 'funded', 'cash_disbursed', 'bank_disbursed', 'completed'].includes(
-      emp.status,
-    )
+    return [
+      'released',
+      'acknowledged',
+      'funded',
+      'cash_disbursed',
+      'bank_disbursed',
+      'completed',
+    ].includes(emp.status)
   }
 
   switch (stage) {
@@ -945,16 +1431,15 @@ const isEmployeeActionable = (emp) => {
 }
 
 const workflowSteps = [
-  { key: 'draft', label: 'Draft', icon: 'edit' },
-  { key: 'admin_approved', label: 'Admin Approved', icon: 'verified_user' },
+  { key: 'computed', label: 'Computed', icon: 'edit' },
+  { key: 'admin_reviewed', label: 'Admin Reviewed', icon: 'verified_user' },
   { key: 'owner_approved', label: 'Owner Approved', icon: 'admin_panel_settings' },
-  { key: 'released', label: 'Released', icon: 'send' },
-  { key: 'acknowledged', label: 'Acknowledged', icon: 'check_circle' },
-  { key: 'funded', label: 'Funded', icon: 'account_balance' },
+  { key: 'released_for_review', label: 'Released for Review', icon: 'send' },
+  { key: 'partially_paid', label: 'Partially Paid', icon: 'hourglass_top' },
+  { key: 'payroll_funded', label: 'Payroll Funded', icon: 'account_balance' },
   { key: 'disbursed', label: 'Disbursed', icon: 'payments' },
+  { key: 'completed', label: 'Completed', icon: 'task_alt' },
 ]
-
-const canProceedToFund = computed(() => canFundPayroll())
 
 const handleWorkflowAction = async (employee, action) => {
   const runId = payrollRunId.value
@@ -965,6 +1450,43 @@ const handleWorkflowAction = async (employee, action) => {
   const employeeId = employee.employee_id || employee.id
   try {
     saving.value = true
+    if (action === 'bank') {
+      saving.value = false
+      $q.dialog({
+        title: 'Bank Transfer',
+        message: 'Enter payment reference number:',
+        prompt: {
+          model: '',
+          type: 'text',
+          placeholder: 'e.g. BTR-2026-001',
+          isValid: (val) => val && val.trim().length > 0,
+        },
+        ok: { label: 'Transfer', color: 'primary', unelevated: true },
+        cancel: { label: 'Cancel', flat: true },
+      }).onOk(async (paymentReference) => {
+        try {
+          saving.value = true
+          await bankTransfer(runId, [employeeId], paymentReference.trim())
+          $q.notify({
+            type: 'positive',
+            message: `Bank transfer done: ${employee.employee_name || employee.employee}`,
+          })
+          await fetchPayrollRunEmployees(runId)
+          await fetchPayrollRunsSummary()
+          selectedEmployees.value = []
+          selectAll.value = false
+        } catch (err) {
+          $q.notify({
+            type: 'negative',
+            message: err.response?.data?.message || 'Bank transfer failed',
+          })
+        } finally {
+          saving.value = false
+        }
+      })
+      return
+    }
+
     switch (action) {
       case 'approve_admin':
         await approveByAdmin(runId, [employeeId])
@@ -978,15 +1500,13 @@ const handleWorkflowAction = async (employee, action) => {
       case 'cash':
         await cashDisbursement(runId, [employeeId])
         break
-      case 'bank':
-        await bankTransfer(runId, [employeeId])
-        break
     }
     $q.notify({
       type: 'positive',
       message: `Success: ${employee.employee_name || employee.employee}`,
     })
     await fetchPayrollRunEmployees(runId)
+    await fetchPayrollRunsSummary()
     selectedEmployees.value = []
     selectAll.value = false
   } catch (err) {
@@ -1048,6 +1568,7 @@ const handleBulkAction = async (action) => {
       $q.notify({ type: 'positive', message: `Completed: ${successCount} employees processed!` })
     }
     await fetchPayrollRunEmployees(runId)
+    await fetchPayrollRunsSummary()
     selectedEmployees.value = []
     selectAll.value = false
   })
@@ -1055,21 +1576,38 @@ const handleBulkAction = async (action) => {
 
 const handleFundPayroll = async () => {
   const runId = payrollRunId.value
-  if (!runId || !canProceedToFund.value) {
-    $q.notify({ type: 'warning', message: 'All employees must be acknowledged first' })
+  if (!runId) {
+    $q.notify({ type: 'warning', message: 'Please select a payroll run first' })
     return
   }
+
+  // Use selected employees if any, otherwise all ready_for_payment employees
+  const fundableIds =
+    selectedEmployees.value.length > 0
+      ? selectedEmployees.value
+      : payrollRunEmployees.value
+          .filter((e) => e.status === 'ready_for_payment')
+          .map((e) => e.employee_id)
+
+  if (fundableIds.length === 0) {
+    $q.notify({ type: 'warning', message: 'No employees are ready for payment' })
+    return
+  }
+
   $q.dialog({
     title: 'Fund Payroll',
-    message: 'Are you sure you want to fund this payroll run?',
+    message: `Fund payroll for ${fundableIds.length} employee(s)?`,
     ok: { label: 'Fund', color: 'primary', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
     try {
       saving.value = true
-      await fundPayroll(runId)
+      await fundPayroll(runId, fundableIds)
       $q.notify({ type: 'positive', message: 'Payroll funded successfully!' })
       await fetchPayrollRunEmployees(runId)
+      await fetchPayrollRunsSummary()
+      selectedEmployees.value = []
+      selectAll.value = false
     } catch (err) {
       $q.notify({ type: 'negative', message: err.response?.data?.message || 'Funding failed' })
     } finally {
@@ -1080,12 +1618,12 @@ const handleFundPayroll = async () => {
 
 const getStageColor = (stage) => {
   const colors = {
-    draft: 'grey',
-    admin_approved: 'blue',
+    computed: 'grey',
+    admin_reviewed: 'blue',
     owner_approved: 'indigo',
-    released: 'orange',
-    acknowledged: 'teal',
-    funded: 'purple',
+    released_for_review: 'orange',
+    partially_paid: 'amber',
+    payroll_funded: 'purple',
     disbursed: 'green',
     completed: 'green',
   }
