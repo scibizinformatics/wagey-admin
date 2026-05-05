@@ -266,15 +266,18 @@ export function usePayroll() {
   }
 
   // ─── Workflow: Fund Payroll ────────────────────────────────────
-  async function fundPayroll(payrollRunId) {
+  async function fundPayroll(payrollRunId, employeeIds) {
     saving.value = true
+    const ids = Array.isArray(employeeIds) ? employeeIds : [employeeIds]
     console.group('🔧 fundPayroll API Call')
     console.log('URL:', `${BASE}/payroll/admin/payslips/${payrollRunId}/fund/`)
     console.log('Method: PATCH')
-    console.log('Payload: {}')
+    console.log('Payload:', { employee_ids: ids })
 
     try {
-      const response = await api.patch(`${BASE}/payroll/admin/payslips/${payrollRunId}/fund/`, {})
+      const response = await api.patch(`${BASE}/payroll/admin/payslips/${payrollRunId}/fund/`, {
+        employee_ids: ids,
+      })
       console.log('✅ Success:', response.data)
       console.groupEnd()
       return response.data
@@ -325,19 +328,18 @@ export function usePayroll() {
   }
 
   // ─── Workflow: Bank Transfer ───────────────────────────────────
-  async function bankTransfer(payrollRunId, employeeIds) {
+  async function bankTransfer(payrollRunId, employeeIds, paymentReference) {
     saving.value = true
+    const ids = Array.isArray(employeeIds) ? employeeIds : [employeeIds]
     console.group('🔧 bankTransfer API Call')
     console.log('URL:', `${BASE}/payroll/admin/payslips/${payrollRunId}/bank-transfer/`)
     console.log('Method: PATCH')
-    console.log('Payload:', {
-      employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds],
-    })
+    console.log('Payload:', { employee_ids: ids, payment_reference: paymentReference })
 
     try {
       const response = await api.patch(
         `${BASE}/payroll/admin/payslips/${payrollRunId}/bank-transfer/`,
-        { employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds] },
+        { employee_ids: ids, payment_reference: paymentReference },
       )
       console.log('✅ Success:', response.data)
       console.groupEnd()
@@ -542,9 +544,14 @@ export function usePayroll() {
         // All employees are auto-selected (locked in) for visual indication
         // Return all employees in pre-approved state
         return employees.filter((e) =>
-          ['released', 'acknowledged', 'funded', 'cash_disbursed', 'bank_disbursed', 'completed'].includes(
-            e.status,
-          ),
+          [
+            'released',
+            'acknowledged',
+            'funded',
+            'cash_disbursed',
+            'bank_disbursed',
+            'completed',
+          ].includes(e.status),
         )
       case 'funded':
         // Funded — need disbursement method selected per employee
