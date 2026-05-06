@@ -193,7 +193,9 @@
 
                   <q-btn
                     v-if="
-                      run.status === 'computed' && getActionableEmployees(workflowStage).length > 0
+                      run.id === selectedRun?.id &&
+                      workflowStage === 'draft' &&
+                      getActionableEmployees(workflowStage).length > 0
                     "
                     unelevated
                     dense
@@ -207,7 +209,8 @@
                   />
                   <q-btn
                     v-else-if="
-                      run.status === 'admin_reviewed' &&
+                      run.id === selectedRun?.id &&
+                      workflowStage === 'admin_approved' &&
                       getActionableEmployees(workflowStage).length > 0
                     "
                     unelevated
@@ -222,7 +225,8 @@
                   />
                   <q-btn
                     v-else-if="
-                      run.status === 'owner_approved' &&
+                      run.id === selectedRun?.id &&
+                      workflowStage === 'owner_approved' &&
                       getActionableEmployees(workflowStage).length > 0
                     "
                     unelevated
