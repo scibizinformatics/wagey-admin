@@ -87,12 +87,26 @@
           <span class="text-grey-5">No payroll runs found</span>
         </div>
 
-        <!-- One card per payroll run, always showing employees below -->
+        <!-- One card per payroll run, with collapsible employees panel -->
         <div v-else class="runs-list">
           <div v-for="run in payrollRunsSummary" :key="run.id" class="run-card">
-            <!-- Run header row -->
-            <div class="run-card-header">
+            <!-- Run header row - CLICKABLE to expand/collapse -->
+            <div
+              class="run-card-header"
+              :class="{ expanded: selectedRun?.id === run.id }"
+              @click="toggleRunExpanded(run)"
+              style="cursor: pointer; user-select: none"
+            >
               <div class="run-header-left">
+                <q-icon
+                  name="expand_more"
+                  :style="{
+                    transform: selectedRun?.id === run.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s ease',
+                  }"
+                  size="20px"
+                  class="expand-icon"
+                />
                 <div class="run-badge">#{{ run.id }}</div>
                 <div class="run-name">{{ run.name }}</div>
                 <q-badge :color="getStageColor(run.status)" :label="getStageLabel(run.status)" />
@@ -148,8 +162,8 @@
               </div>
             </div>
 
-            <!-- Employees panel — always visible, loads when run data available -->
-            <div class="employees-panel">
+            <!-- Employees panel — only visible when run is expanded -->
+            <div v-if="selectedRun?.id === run.id" class="employees-panel">
               <!-- Panel header / merged action toolbar -->
               <div class="employees-panel-header">
                 <div class="employees-panel-title">
@@ -188,22 +202,21 @@
                     "
                     class="select-all-checkbox"
                   />
-                  <!-- Approve Selected - removed; per-row approve buttons are in the Actions column -->
-                  <!-- Approve All -->
+                  <!-- Approve Selected / Approve All (Dynamic) -->
 
                   <q-btn
                     v-if="
                       run.id === selectedRun?.id &&
                       workflowStage === 'draft' &&
-                      getActionableEmployees(workflowStage).length > 0
+                      selectedEmployees.length > 0
                     "
                     unelevated
                     dense
                     no-caps
                     size="sm"
-                    icon="done_all"
+                    icon="done"
                     color="primary"
-                    label="Approve All (Admin)"
+                    :label="approveBtnLabel"
                     :loading="saving"
                     @click="approveAllByAdmin(run)"
                   />
@@ -211,15 +224,15 @@
                     v-else-if="
                       run.id === selectedRun?.id &&
                       workflowStage === 'admin_approved' &&
-                      getActionableEmployees(workflowStage).length > 0
+                      selectedEmployees.length > 0
                     "
                     unelevated
                     dense
                     no-caps
                     size="sm"
-                    icon="done_all"
+                    icon="done"
                     color="indigo"
-                    label="Approve All (Owner)"
+                    :label="approveOwnerBtnLabel"
                     :loading="saving"
                     @click="approveAllByOwner(run)"
                   />
@@ -227,15 +240,15 @@
                     v-else-if="
                       run.id === selectedRun?.id &&
                       workflowStage === 'owner_approved' &&
-                      getActionableEmployees(workflowStage).length > 0
+                      selectedEmployees.length > 0
                     "
                     unelevated
                     dense
                     no-caps
                     size="sm"
-                    icon="done_all"
+                    icon="send"
                     color="orange"
-                    label="Release All"
+                    :label="releaseBtnLabel"
                     :loading="saving"
                     @click="releaseAll(run)"
                   />
@@ -654,7 +667,23 @@ const loadRunEmployees = async (run) => {
   selectAll.value = false
   await fetchPayrollRunEmployees(run.id)
   selectedRunForData.value = run.id
-  await fetchPayrollData()
+  // Don't call fetchPayrollData() - it causes unnecessary refresh
+}
+
+// Toggle run expansion - click header to expand/collapse
+const toggleRunExpanded = async (run) => {
+  if (selectedRun.value?.id === run.id) {
+    // Collapse if already expanded
+    selectedRun.value = null
+  } else {
+    // Expand and load only this run's employees (no full table refresh)
+    selectedRun.value = run
+    payrollRunId.value = run.id
+    selectedEmployees.value = []
+    selectAll.value = false
+    await fetchPayrollRunEmployees(run.id)
+    selectedRunForData.value = run.id
+  }
 }
 
 // Action button in the Payroll Runs table row
@@ -713,6 +742,33 @@ const selectAll = ref(false)
 // Auto-selection state for released+ stages
 const isAutoSelectStage = computed(() => {
   return isStageAutoSelectable(workflowStage.value)
+})
+
+// Computed properties for dynamic approve button labels
+const isAllSelected = computed(() => {
+  const actionableCount = getActionableEmployees(workflowStage.value).length
+  return actionableCount > 0 && selectedEmployees.value.length === actionableCount
+})
+
+const approveBtnLabel = computed(() => {
+  if (selectedEmployees.value.length === 0) {
+    return null // No button shown if no selection
+  }
+  return isAllSelected.value ? 'Approve All (Admin)' : 'Approve'
+})
+
+const approveOwnerBtnLabel = computed(() => {
+  if (selectedEmployees.value.length === 0) {
+    return null // No button shown if no selection
+  }
+  return isAllSelected.value ? 'Approve All (Owner)' : 'Approve'
+})
+
+const releaseBtnLabel = computed(() => {
+  if (selectedEmployees.value.length === 0) {
+    return null // No button shown if no selection
+  }
+  return isAllSelected.value ? 'Release All' : 'Release'
 })
 
 // Data
@@ -1738,6 +1794,22 @@ const retryEmployeeAction = async (emp) => {
   background: #f8fafc;
   border-bottom: 1px solid #e0e7ef;
   flex-wrap: wrap;
+  transition: all 0.2s ease;
+}
+
+.run-card-header:hover {
+  background: #f3f7fc;
+}
+
+.run-card-header.expanded {
+  background: #eff6ff;
+  border-bottom-color: #bfdbfe;
+}
+
+.expand-icon {
+  flex-shrink: 0;
+  color: #6b7280;
+  transition: transform 0.3s ease;
 }
 
 .run-header-left {
