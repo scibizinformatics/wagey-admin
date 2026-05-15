@@ -1,12 +1,46 @@
 <template>
   <div class="payroll-dashboard">
     <div class="dashboard-container">
-      <!-- Header Section -->
+      <!-- Header -->
       <div class="page-header">
         <div class="header-content">
-          <h1 class="page-title">Payroll</h1>
+          <div class="header-left">
+            <h1 class="page-title">Disbursements</h1>
+          </div>
           <div class="header-actions">
-            <q-btn flat round icon="refresh" class="header-btn" @click="fetchPayrollData" />
+            <q-btn flat round icon="refresh" class="refresh-btn" @click="fetchPayrollData">
+              <q-tooltip>Refresh</q-tooltip>
+            </q-btn>
+            <q-input
+              v-model="disbursementSearch"
+              dense
+              outlined
+              placeholder="Search disbursements..."
+              class="header-search"
+              clearable
+            >
+              <template v-slot:prepend><q-icon name="search" class="search-icon" /></template>
+            </q-input>
+            <q-btn
+              v-if="activeTab === 'logs'"
+              unelevated
+              icon="add"
+              label="Add Disbursements"
+              color="positive"
+              class="export-btn"
+              no-caps
+              @click="openCreateRunDialog"
+            />
+            <q-btn
+              v-if="activeTab === 'funding'"
+              unelevated
+              icon="add"
+              label="Add Funds"
+              color="primary"
+              class="export-btn"
+              no-caps
+              @click="scrollToFundingForm"
+            />
             <q-btn
               unelevated
               icon="file_download"
@@ -20,15 +54,15 @@
         </div>
       </div>
 
-      <!-- Stats Cards -->
+      <!-- Stats Cards — always visible, outside tab panels -->
       <div class="stats-section">
         <div class="stats-card">
           <div class="stats-icon-wrapper stats-icon-blue">
             <q-icon name="people" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-label">Total Employees</div>
             <div class="stats-amount">{{ totalEmployees }}</div>
+            <div class="stats-label">Total Employees</div>
           </div>
         </div>
         <div class="stats-card">
@@ -36,8 +70,8 @@
             <q-icon name="attach_money" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-label">Total Gross Pay</div>
             <div class="stats-amount">{{ formatCurrency(totalGrossPay) }}</div>
+            <div class="stats-label">Total Gross Pay</div>
           </div>
         </div>
         <div class="stats-card">
@@ -45,8 +79,8 @@
             <q-icon name="account_balance_wallet" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-label">Total Net Pay</div>
             <div class="stats-amount">{{ formatCurrency(totalNetPay) }}</div>
+            <div class="stats-label">Total Net Pay</div>
           </div>
         </div>
         <div class="stats-card">
@@ -54,468 +88,771 @@
             <q-icon name="schedule" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-label">Total Hours</div>
             <div class="stats-amount">{{ totalHours }}h</div>
+            <div class="stats-label">Total Hours</div>
           </div>
         </div>
       </div>
 
-      <!-- Payroll Runs Table -->
-      <div class="table-section" style="margin-bottom: 16px">
-        <div class="table-header">
-          <div class="table-title-section">
-            <h2 class="table-title">Payroll Runs</h2>
-            <div class="table-info">{{ payrollRunsSummary.length }} runs</div>
-          </div>
-          <q-btn
-            flat
-            round
-            icon="refresh"
-            class="header-btn"
-            @click="fetchPayrollRunsSummary"
-            :loading="loading"
-          />
+      <!-- Tabs (below stats) — pill style matching RequestPage -->
+      <div class="tabs-section">
+        <div class="tab-pills">
+          <button
+            :class="['tab-pill', { active: activeTab === 'logs' }]"
+            @click="activeTab = 'logs'"
+          >
+            <q-icon name="receipt_long" class="tab-pill-icon" />
+            <span>Logs</span>
+          </button>
+          <button
+            :class="['tab-pill', { active: activeTab === 'funding' }]"
+            @click="activeTab = 'funding'"
+          >
+            <q-icon name="account_balance" class="tab-pill-icon" />
+            <span>Funding</span>
+          </button>
         </div>
+      </div>
 
-        <!-- Loading state -->
-        <div v-if="loading" class="loading-state">
-          <q-spinner color="primary" size="32px" />
-        </div>
-
-        <!-- Empty state -->
-        <div v-else-if="!payrollRunsSummary.length" class="loading-state">
-          <span class="text-grey-5">No payroll runs found</span>
-        </div>
-
-        <!-- One card per payroll run, with collapsible employees panel -->
-        <div v-else class="runs-list">
-          <div v-for="run in payrollRunsSummary" :key="run.id" class="run-card">
-            <!-- Run header row - CLICKABLE to expand/collapse -->
-            <div
-              class="run-card-header"
-              :class="{ expanded: selectedRun?.id === run.id }"
-              @click="toggleRunExpanded(run)"
-              style="cursor: pointer; user-select: none"
-            >
-              <div class="run-header-left">
-                <q-icon
-                  name="expand_more"
-                  :style="{
-                    transform: selectedRun?.id === run.id ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.3s ease',
-                  }"
-                  size="20px"
-                  class="expand-icon"
-                />
-                <div class="run-badge">#{{ run.id }}</div>
-                <div class="run-name">{{ run.name }}</div>
-                <q-badge :color="getStageColor(run.status)" :label="getStageLabel(run.status)" />
+      <!-- Tab Panels -->
+      <q-tab-panels v-model="activeTab" animated class="tab-panels">
+        <!-- ===================== LOGS TAB ===================== -->
+        <q-tab-panel name="logs" class="tab-panel-content">
+          <!-- Logs Table -->
+          <div class="table-section" style="margin-bottom: 16px">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Logs</h2>
+                <div class="table-info">{{ payrollRunsSummary.length }} runs</div>
               </div>
-              <div class="run-header-amounts">
-                <div class="run-amount-item">
-                  <span class="run-amount-label">Calculated</span>
-                  <span class="run-amount-value">{{ formatCurrency(run.calculated_amount) }}</span>
-                </div>
-                <div class="run-amount-item">
-                  <span class="run-amount-label">Final</span>
-                  <span class="run-amount-value">{{ formatCurrency(run.final_amount) }}</span>
-                </div>
-              </div>
-              <div class="run-header-action">
-                <q-btn
-                  v-if="run.status === 'owner_approved'"
-                  unelevated
-                  dense
-                  no-caps
-                  size="sm"
-                  icon="send"
-                  color="orange"
-                  label="Release"
-                  :loading="saving && selectedRun?.id === run.id"
-                  @click.stop="selectAndApprove(run, 'release')"
-                />
-                <q-btn
-                  v-else-if="run.status === 'released_for_review'"
-                  unelevated
-                  dense
-                  no-caps
-                  size="sm"
-                  icon="account_balance"
-                  color="purple"
-                  label="Fund Payroll"
-                  :loading="saving && selectedRun?.id === run.id"
-                  @click.stop="selectAndApprove(run, 'fund')"
-                />
-                <q-icon
-                  v-else-if="
-                    ['partially_paid', 'payroll_funded', 'disbursed', 'completed'].includes(
-                      run.status,
-                    )
-                  "
-                  name="task_alt"
-                  color="positive"
-                  size="22px"
+              <q-btn
+                flat
+                round
+                icon="refresh"
+                class="header-btn"
+                @click="fetchPayrollRunsSummary"
+                :loading="loading"
+              />
+            </div>
+
+            <!-- Loading state -->
+            <div v-if="loading" class="loading-state">
+              <q-spinner color="primary" size="32px" />
+            </div>
+
+            <!-- Empty state -->
+            <div v-else-if="!payrollRunsSummary.length" class="loading-state">
+              <span class="text-grey-5">No payroll runs found</span>
+            </div>
+
+            <!-- One card per payroll run, with collapsible employees panel -->
+            <div v-else class="runs-list">
+              <div v-for="run in payrollRunsSummary" :key="run.id" class="run-card">
+                <!-- Run header row - CLICKABLE to expand/collapse -->
+                <div
+                  class="run-card-header"
+                  :class="{ expanded: selectedRun?.id === run.id }"
+                  @click="toggleRunExpanded(run)"
+                  style="cursor: pointer; user-select: none"
                 >
-                  <q-tooltip>{{ getStageLabel(run.status) }}</q-tooltip>
-                </q-icon>
-                <span v-else class="text-grey-5 text-caption">{{ getStageLabel(run.status) }}</span>
+                  <div class="run-header-left">
+                    <q-icon
+                      name="expand_more"
+                      :style="{
+                        transform: selectedRun?.id === run.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.3s ease',
+                      }"
+                      size="20px"
+                      class="expand-icon"
+                    />
+                    <div class="run-name">{{ run.name }}</div>
+                    <div class="run-period text-caption text-grey-6">{{ run.period ?? '' }}</div>
+                  </div>
+
+                  <!-- Disbursement columns -->
+                  <div class="run-header-stats">
+                    <div class="run-stat-item">
+                      <span class="run-stat-label">Employees</span>
+                      <span class="run-stat-value">{{ run.number_of_employee ?? '—' }}</span>
+                    </div>
+                    <div class="run-stat-item">
+                      <span class="run-stat-label">Calculated</span>
+                      <span class="run-stat-value">{{
+                        formatCurrency(run.calculated_amount)
+                      }}</span>
+                    </div>
+                    <div class="run-stat-item">
+                      <span class="run-stat-label">Total Net Pay</span>
+                      <span class="run-stat-value">{{ formatCurrency(run.total_net_pay) }}</span>
+                    </div>
+                    <div class="run-stat-item">
+                      <span class="run-stat-label">Funded</span>
+                      <span class="run-stat-value">{{ formatCurrency(run.funded ?? 0) }}</span>
+                    </div>
+                    <div class="run-stat-item">
+                      <span class="run-stat-label">Released</span>
+                      <span class="run-stat-value">{{ formatCurrency(run.released ?? 0) }}</span>
+                    </div>
+                    <div class="run-stat-item">
+                      <span class="run-stat-label">Status</span>
+                      <q-badge
+                        :color="getStageColor(run.status)"
+                        :label="getStageLabel(run.status)"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="run-header-action">
+                    <!-- Draft: admin can bulk-release for employee review -->
+                    <q-btn
+                      v-if="
+                        run.status === 'pending' ||
+                        (selectedRun?.id === run.id && workflowStage === 'draft')
+                      "
+                      unelevated
+                      dense
+                      no-caps
+                      size="sm"
+                      icon="send"
+                      color="orange"
+                      label="Release"
+                      :loading="saving && selectedRun?.id === run.id"
+                      @click.stop="bulkReleaseAll(run)"
+                    />
+                    <!-- Pending review: waiting for employees to acknowledge -->
+                    <q-chip
+                      v-else-if="run.status === 'pending_review'"
+                      dense
+                      color="orange"
+                      text-color="white"
+                      icon="hourglass_top"
+                      label="Awaiting Acknowledgement"
+                      style="font-size: 11px"
+                    />
+                    <!-- Ready for payment: admin can disburse (after funding) -->
+                    <q-btn
+                      v-else-if="run.status === 'ready_for_payment'"
+                      unelevated
+                      dense
+                      no-caps
+                      size="sm"
+                      icon="payments"
+                      color="teal"
+                      label="Disburse"
+                      :loading="saving && selectedRun?.id === run.id"
+                      @click.stop="selectAndDisburse(run)"
+                    />
+                    <!-- Disbursed/Completed -->
+                    <q-icon
+                      v-else-if="['disbursed', 'completed', 'closed'].includes(run.status)"
+                      name="task_alt"
+                      color="positive"
+                      size="22px"
+                    >
+                      <q-tooltip>{{ getStageLabel(run.status) }}</q-tooltip>
+                    </q-icon>
+                    <span v-else class="text-grey-5 text-caption">{{
+                      getStageLabel(run.status)
+                    }}</span>
+                  </div>
+                </div>
+
+                <!-- Employees panel — only visible when run is expanded -->
+                <div v-if="selectedRun?.id === run.id" class="employees-panel">
+                  <!-- Panel header / merged action toolbar -->
+                  <div class="employees-panel-header">
+                    <div class="employees-panel-title">
+                      <q-icon name="people" size="16px" color="primary" />
+                      <span>Employees</span>
+                      <span class="employees-panel-count">{{
+                        run.id === selectedRun?.id ? payrollRunEmployees.length : '—'
+                      }}</span>
+                      <span
+                        v-if="selectedEmployees.length && run.id === selectedRun?.id"
+                        class="employees-panel-selected"
+                      >
+                        · {{ selectedEmployees.length }} selected
+                      </span>
+                    </div>
+                    <div class="employees-panel-actions">
+                      <q-input
+                        dense
+                        outlined
+                        v-model="employeeSearchQuery"
+                        placeholder="Search employees..."
+                        class="employee-search-input"
+                        clearable
+                        style="min-width: 180px"
+                      >
+                        <template v-slot:prepend><q-icon name="search" size="16px" /></template>
+                      </q-input>
+                      <q-checkbox
+                        v-model="selectAll"
+                        label="Select All"
+                        dense
+                        @update:model-value="toggleSelectAll"
+                        :disable="
+                          getActionableEmployees(workflowStage).length === 0 ||
+                          ['pending_review'].includes(workflowStage)
+                        "
+                        class="select-all-checkbox"
+                      />
+                      <!-- Step 4: Bulk Release (draft → pending_review) -->
+                      <q-btn
+                        v-if="
+                          run.id === selectedRun?.id &&
+                          workflowStage === 'draft' &&
+                          selectedEmployees.length > 0
+                        "
+                        unelevated
+                        dense
+                        no-caps
+                        size="sm"
+                        icon="send"
+                        color="orange"
+                        :label="releaseBtnLabel"
+                        :loading="saving"
+                        @click="handleBulkAction"
+                      />
+                      <!-- Step 9: Disburse (ready_for_payment → disbursed/completed) -->
+                      <q-btn
+                        v-if="
+                          run.id === selectedRun?.id &&
+                          workflowStage === 'ready_for_payment' &&
+                          selectedEmployees.length > 0
+                        "
+                        unelevated
+                        dense
+                        no-caps
+                        size="sm"
+                        icon="payments"
+                        color="teal"
+                        label="Disburse Selected"
+                        :loading="saving"
+                        @click="handleBulkDisburse"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Loading employees -->
+                  <div
+                    v-if="workflowLoading && run.id === selectedRun?.id"
+                    style="display: flex; align-items: center; gap: 10px; padding: 20px 24px"
+                  >
+                    <q-spinner color="primary" size="20px" />
+                    <span style="font-size: 13px; color: #6b7280">Loading employees...</span>
+                  </div>
+
+                  <!-- Unified Employees Table -->
+                  <table class="payroll-table employees-nested-table">
+                    <thead>
+                      <tr class="table-header-row">
+                        <th class="table-header-cell" style="width: 48px"></th>
+                        <th class="table-header-cell">Employee</th>
+                        <th class="table-header-cell">Status</th>
+                        <th class="table-header-cell">Period</th>
+                        <th class="table-header-cell">Run</th>
+                        <th class="table-header-cell">Gross Pay</th>
+                        <th class="table-header-cell">Net Pay</th>
+                        <th class="table-header-cell">Total Hours</th>
+                        <th class="table-header-cell" style="text-align: center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template v-if="run.id === selectedRun?.id">
+                        <tr
+                          v-for="emp in filteredEmployees"
+                          :key="emp.employee_id || emp.payslip_id"
+                          class="table-body-row"
+                          :class="{
+                            'selected-row': selectedEmployees.includes(emp.employee_id),
+                            'failed-row': emp.lastError,
+                          }"
+                        >
+                          <td class="table-body-cell text-center">
+                            <!-- Auto-selected stages (released/acknowledged): show disabled checked checkbox with lock icon -->
+                            <q-checkbox
+                              v-if="isAutoSelectStage && isEmployeePreApproved(emp, workflowStage)"
+                              :model-value="true"
+                              disable
+                              dense
+                              checked-icon="lock"
+                              color="positive"
+                            >
+                              <q-tooltip>Pre-approved and locked</q-tooltip>
+                            </q-checkbox>
+
+                            <!-- Normal actionable checkbox for draft/admin/owner/funded stages -->
+                            <q-checkbox
+                              v-else-if="isEmployeeActionable(emp)"
+                              :model-value="selectedEmployees.includes(emp.employee_id)"
+                              @update:model-value="toggleEmployeeSelection(emp.employee_id)"
+                              dense
+                            />
+
+                            <!-- Completed/disbursement completed -->
+                            <q-icon
+                              v-else-if="['disbursed', 'completed'].includes(emp.status)"
+                              name="task_alt"
+                              color="positive"
+                              size="20px"
+                            />
+
+                            <!-- Non-actionable -->
+                            <span v-else class="text-grey-5">—</span>
+                          </td>
+                          <td class="table-body-cell employee-cell">
+                            <div class="employee-info">
+                              <q-avatar size="32px" class="avatar-fallback">{{
+                                getInitials(emp.employee_name || emp.employee)
+                              }}</q-avatar>
+                              <div class="employee-details">
+                                <div class="employee-name">
+                                  {{ emp.employee_name || emp.employee }}
+                                </div>
+                                <div class="employee-id">{{ emp.employee_id || 'N/A' }}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td class="table-body-cell">
+                            <q-badge
+                              :color="getStatusColor(emp.status)"
+                              :label="getStatusLabel(emp.status)"
+                            />
+                            <q-tooltip v-if="emp.lastError" class="bg-negative">{{
+                              emp.lastError
+                            }}</q-tooltip>
+                          </td>
+                          <td class="table-body-cell">
+                            <div class="period-badge">{{ emp.period || run.name || '—' }}</div>
+                          </td>
+                          <td class="table-body-cell">
+                            <div class="run-badge">#{{ run.id }}</div>
+                          </td>
+                          <td class="table-body-cell amount-cell">
+                            <div class="amount-display">{{ formatCurrency(emp.gross_pay) }}</div>
+                            <div class="amount-progress">
+                              <div
+                                class="amount-bar gross-bar"
+                                :style="{
+                                  width: getPayPercentage(emp.gross_pay, maxGrossPay) + '%',
+                                }"
+                              ></div>
+                            </div>
+                          </td>
+                          <td class="table-body-cell amount-cell">
+                            <div class="amount-display">{{ formatCurrency(emp.net_pay) }}</div>
+                            <div class="amount-progress">
+                              <div
+                                class="amount-bar net-bar"
+                                :style="{ width: getPayPercentage(emp.net_pay, maxNetPay) + '%' }"
+                              ></div>
+                            </div>
+                          </td>
+                          <td class="table-body-cell">
+                            <div class="hours-badge">
+                              {{ emp.breakdown?.attendance?.total_hours_worked || 0 }}h
+                            </div>
+                          </td>
+                          <td class="table-body-cell actions-cell">
+                            <div class="workflow-actions-cell">
+                              <q-btn
+                                v-if="emp.lastError"
+                                flat
+                                dense
+                                icon="refresh"
+                                color="negative"
+                                size="sm"
+                                @click="retryEmployeeAction(emp)"
+                                round
+                                ><q-tooltip>Retry</q-tooltip></q-btn
+                              >
+                              <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                                <q-menu
+                                  anchor="bottom right"
+                                  self="top right"
+                                  class="action-dropdown"
+                                >
+                                  <q-list dense style="min-width: 180px">
+                                    <!-- Step 4: Release for Employee Review -->
+                                    <q-item
+                                      v-if="emp.status === 'draft'"
+                                      clickable
+                                      v-close-popup
+                                      @click="handleWorkflowAction(emp, 'release')"
+                                      class="dropdown-item"
+                                    >
+                                      <q-item-section avatar
+                                        ><q-icon name="send" size="16px" color="orange"
+                                      /></q-item-section>
+                                      <q-item-section>Release for Review</q-item-section>
+                                    </q-item>
+                                    <!-- Step 9: Disburse (employee has acknowledged) -->
+                                    <q-item
+                                      v-if="emp.status === 'ready_for_payment'"
+                                      clickable
+                                      v-close-popup
+                                      @click="handleWorkflowAction(emp, 'disburse')"
+                                      class="dropdown-item"
+                                    >
+                                      <q-item-section avatar
+                                        ><q-icon name="payments" size="16px" color="teal"
+                                      /></q-item-section>
+                                      <q-item-section>Disburse</q-item-section>
+                                    </q-item>
+                                    <!-- Step 10: Disbursed → waiting for employee to confirm receipt (read-only for admin) -->
+                                    <q-item
+                                      v-if="emp.status === 'disbursed'"
+                                      clickable
+                                      v-close-popup
+                                      @click="handleMarkComplete(emp)"
+                                      class="dropdown-item"
+                                    >
+                                      <q-item-section avatar
+                                        ><q-icon name="hourglass_top" size="16px" color="amber-8"
+                                      /></q-item-section>
+                                      <q-item-section
+                                        >Awaiting Employee Confirmation</q-item-section
+                                      >
+                                    </q-item>
+
+                                    <q-separator
+                                      v-if="!['disbursed', 'completed'].includes(emp.status)"
+                                      spaced
+                                    />
+
+                                    <q-item
+                                      clickable
+                                      v-close-popup
+                                      @click="viewDetails(emp)"
+                                      class="dropdown-item"
+                                    >
+                                      <q-item-section avatar
+                                        ><q-icon name="visibility" size="16px"
+                                      /></q-item-section>
+                                      <q-item-section>View details</q-item-section>
+                                    </q-item>
+                                    <q-item
+                                      clickable
+                                      v-close-popup
+                                      @click="downloadPayslip(emp)"
+                                      class="dropdown-item"
+                                    >
+                                      <q-item-section avatar
+                                        ><q-icon name="description" size="16px"
+                                      /></q-item-section>
+                                      <q-item-section>Download payslip</q-item-section>
+                                    </q-item>
+                                  </q-list>
+                                </q-menu>
+                              </q-btn>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr v-if="!filteredEmployees.length && !workflowLoading">
+                          <td colspan="9" class="table-body-cell text-center text-grey-5">
+                            No employees found
+                          </td>
+                        </tr>
+                      </template>
+                      <tr v-else>
+                        <td
+                          colspan="9"
+                          class="table-body-cell text-center"
+                          @click="loadRunEmployees(run)"
+                          style="cursor: pointer; color: #3b82f6; font-size: 13px"
+                        >
+                          <q-icon name="refresh" size="14px" /> Click to load employees
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </q-tab-panel>
+
+        <!-- ===================== FUNDING TAB ===================== -->
+        <q-tab-panel name="funding" class="tab-panel-funding">
+          <!-- Add Funds Form -->
+          <div class="funding-form-card" ref="fundingFormRef">
+            <div class="funding-form-header">
+              <h2 class="funding-form-title">Add funds</h2>
+            </div>
+
+            <div class="funding-form-grid">
+              <div class="funding-form-field funding-form-field-full">
+                <label class="funding-field-label">Log</label>
+                <q-select
+                  v-model="fundingForm.logId"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  :options="payrollRunsSummary.map((r) => ({ label: r.name, value: r.id }))"
+                  placeholder="Select a disbursement log"
+                  no-error-icon
+                  @update:model-value="onFundingLogChange"
+                >
+                  <template v-slot:prepend><q-icon name="receipt_long" size="16px" /></template>
+                </q-select>
+              </div>
+
+              <div class="funding-form-field">
+                <label class="funding-field-label">Date</label>
+                <q-input v-model="fundingForm.date" outlined dense type="date" no-error-icon />
+              </div>
+
+              <div class="funding-form-field">
+                <label class="funding-field-label">Type</label>
+                <q-select
+                  v-model="fundingForm.type"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  :options="[
+                    { label: 'Check', value: 'check' },
+                    { label: 'Bank Transfer', value: 'bank_transfer' },
+                    { label: 'Cash', value: 'cash' },
+                    { label: 'GCash', value: 'gcash' },
+                  ]"
+                  no-error-icon
+                />
+              </div>
+
+              <div class="funding-form-field">
+                <label class="funding-field-label">Reference #</label>
+                <q-input
+                  v-model="fundingForm.reference"
+                  outlined
+                  dense
+                  placeholder="e.g. 125436345"
+                  no-error-icon
+                >
+                  <template v-slot:prepend
+                    ><span style="font-size: 13px; color: #9ca3af">#</span></template
+                  >
+                </q-input>
+              </div>
+
+              <div class="funding-form-field">
+                <label class="funding-field-label">Source</label>
+                <q-select
+                  v-model="fundingForm.source"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  :options="fundingSources"
+                  no-error-icon
+                />
+              </div>
+
+              <div class="funding-form-field">
+                <label class="funding-field-label">Amount</label>
+                <q-input
+                  v-model="fundingForm.amount"
+                  outlined
+                  dense
+                  type="number"
+                  placeholder="0.00"
+                  no-error-icon
+                >
+                  <template v-slot:prepend
+                    ><span style="font-size: 13px; font-weight: 600">₱</span></template
+                  >
+                </q-input>
+              </div>
+
+              <div class="funding-form-field funding-form-field-full">
+                <label class="funding-field-label"
+                  >Notes <span style="color: #9ca3af">(optional)</span></label
+                >
+                <q-input
+                  v-model="fundingForm.notes"
+                  outlined
+                  dense
+                  placeholder="Add a note..."
+                  no-error-icon
+                />
               </div>
             </div>
 
-            <!-- Employees panel — only visible when run is expanded -->
-            <div v-if="selectedRun?.id === run.id" class="employees-panel">
-              <!-- Panel header / merged action toolbar -->
-              <div class="employees-panel-header">
-                <div class="employees-panel-title">
-                  <q-icon name="people" size="16px" color="primary" />
-                  <span>Employees</span>
-                  <span class="employees-panel-count">{{
-                    run.id === selectedRun?.id ? payrollRunEmployees.length : '—'
-                  }}</span>
-                  <span
-                    v-if="selectedEmployees.length && run.id === selectedRun?.id"
-                    class="employees-panel-selected"
-                  >
-                    · {{ selectedEmployees.length }} selected
-                  </span>
-                </div>
-                <div class="employees-panel-actions">
-                  <q-input
-                    dense
-                    outlined
-                    v-model="employeeSearchQuery"
-                    placeholder="Search employees..."
-                    class="employee-search-input"
-                    clearable
-                    style="min-width: 180px"
-                  >
-                    <template v-slot:prepend><q-icon name="search" size="16px" /></template>
-                  </q-input>
-                  <q-checkbox
-                    v-model="selectAll"
-                    label="Select All"
-                    dense
-                    @update:model-value="toggleSelectAll"
-                    :disable="
-                      getActionableEmployees(workflowStage).length === 0 ||
-                      ['released', 'acknowledged'].includes(workflowStage)
-                    "
-                    class="select-all-checkbox"
-                  />
-                  <!-- Approve Selected / Approve All (Dynamic) -->
+            <div class="funding-form-actions">
+              <q-btn
+                unelevated
+                color="primary"
+                label="Add funds"
+                icon="add"
+                no-caps
+                :loading="savingFunding"
+                @click="submitFunding"
+              />
+            </div>
+          </div>
 
-                  <q-btn
-                    v-if="
-                      run.id === selectedRun?.id &&
-                      workflowStage === 'draft' &&
-                      selectedEmployees.length > 0
-                    "
-                    unelevated
-                    dense
-                    no-caps
-                    size="sm"
-                    icon="done"
-                    color="primary"
-                    :label="approveBtnLabel"
-                    :loading="saving"
-                    @click="approveAllByAdmin(run)"
-                  />
-                  <q-btn
-                    v-else-if="
-                      run.id === selectedRun?.id &&
-                      workflowStage === 'admin_approved' &&
-                      selectedEmployees.length > 0
-                    "
-                    unelevated
-                    dense
-                    no-caps
-                    size="sm"
-                    icon="done"
-                    color="indigo"
-                    :label="approveOwnerBtnLabel"
-                    :loading="saving"
-                    @click="approveAllByOwner(run)"
-                  />
-                  <q-btn
-                    v-else-if="
-                      run.id === selectedRun?.id &&
-                      workflowStage === 'owner_approved' &&
-                      selectedEmployees.length > 0
-                    "
-                    unelevated
-                    dense
-                    no-caps
-                    size="sm"
-                    icon="send"
-                    color="orange"
-                    :label="releaseBtnLabel"
-                    :loading="saving"
-                    @click="releaseAll(run)"
-                  />
-                </div>
-              </div>
+          <!-- Funding History (filtered by selected log) -->
+          <div class="funding-history-section">
+            <h3 class="funding-history-title">History</h3>
 
-              <!-- Loading employees -->
-              <div
-                v-if="workflowLoading && run.id === selectedRun?.id"
-                style="display: flex; align-items: center; gap: 10px; padding: 20px 24px"
-              >
-                <q-spinner color="primary" size="20px" />
-                <span style="font-size: 13px; color: #6b7280">Loading employees...</span>
-              </div>
+            <div v-if="fundingHistoryLoading" class="loading-state">
+              <q-spinner color="primary" size="24px" />
+            </div>
 
-              <!-- Unified Employees Table -->
-              <table class="payroll-table employees-nested-table">
+            <div v-else-if="filteredFundingHistory.length === 0" class="loading-state">
+              <span class="text-grey-5">
+                {{
+                  fundingForm.logId
+                    ? 'No funding entries for this log yet'
+                    : 'Select a log above to see its funding history'
+                }}
+              </span>
+            </div>
+
+            <div v-else class="funding-history-table-wrap">
+              <table class="funding-history-table">
                 <thead>
-                  <tr class="table-header-row">
-                    <th class="table-header-cell" style="width: 48px"></th>
-                    <th class="table-header-cell">Employee</th>
-                    <th class="table-header-cell">Status</th>
-                    <th class="table-header-cell">Period</th>
-                    <th class="table-header-cell">Run</th>
-                    <th class="table-header-cell">Gross Pay</th>
-                    <th class="table-header-cell">Net Pay</th>
-                    <th class="table-header-cell">Total Hours</th>
-                    <th class="table-header-cell" style="text-align: center">Actions</th>
+                  <tr>
+                    <th>Log</th>
+                    <th>Source</th>
+                    <th style="text-align: right">Amount</th>
+                    <th style="text-align: right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <template v-if="run.id === selectedRun?.id">
-                    <tr
-                      v-for="emp in filteredEmployees"
-                      :key="emp.employee_id || emp.payslip_id"
-                      class="table-body-row"
-                      :class="{
-                        'selected-row': selectedEmployees.includes(emp.employee_id),
-                        'failed-row': emp.lastError,
-                      }"
-                    >
-                      <td class="table-body-cell text-center">
-                        <!-- Auto-selected stages (released/acknowledged): show disabled checked checkbox with lock icon -->
-                        <q-checkbox
-                          v-if="isAutoSelectStage && isEmployeePreApproved(emp, workflowStage)"
-                          :model-value="true"
-                          disable
-                          dense
-                          checked-icon="lock"
-                          color="positive"
-                        >
-                          <q-tooltip>Pre-approved and locked</q-tooltip>
-                        </q-checkbox>
-
-                        <!-- Normal actionable checkbox for draft/admin/owner/funded stages -->
-                        <q-checkbox
-                          v-else-if="isEmployeeActionable(emp)"
-                          :model-value="selectedEmployees.includes(emp.employee_id)"
-                          @update:model-value="toggleEmployeeSelection(emp.employee_id)"
-                          dense
-                        />
-
-                        <!-- Completed/disbursement completed -->
-                        <q-icon
-                          v-else-if="
-                            ['cash_disbursed', 'bank_disbursed', 'completed'].includes(emp.status)
-                          "
-                          name="task_alt"
-                          color="positive"
-                          size="20px"
-                        />
-
-                        <!-- Non-actionable -->
-                        <span v-else class="text-grey-5">—</span>
-                      </td>
-                      <td class="table-body-cell employee-cell">
-                        <div class="employee-info">
-                          <q-avatar size="32px" class="avatar-fallback">{{
-                            getInitials(emp.employee_name || emp.employee)
-                          }}</q-avatar>
-                          <div class="employee-details">
-                            <div class="employee-name">{{ emp.employee_name || emp.employee }}</div>
-                            <div class="employee-id">{{ emp.employee_id || 'N/A' }}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td class="table-body-cell">
-                        <q-badge
-                          :color="getStatusColor(emp.status)"
-                          :label="getStatusLabel(emp.status)"
-                        />
-                        <q-tooltip v-if="emp.lastError" class="bg-negative">{{
-                          emp.lastError
-                        }}</q-tooltip>
-                      </td>
-                      <td class="table-body-cell">
-                        <div class="period-badge">{{ emp.period || run.name || '—' }}</div>
-                      </td>
-                      <td class="table-body-cell">
-                        <div class="run-badge">#{{ run.id }}</div>
-                      </td>
-                      <td class="table-body-cell amount-cell">
-                        <div class="amount-display">{{ formatCurrency(emp.gross_pay) }}</div>
-                        <div class="amount-progress">
-                          <div
-                            class="amount-bar gross-bar"
-                            :style="{ width: getPayPercentage(emp.gross_pay, maxGrossPay) + '%' }"
-                          ></div>
-                        </div>
-                      </td>
-                      <td class="table-body-cell amount-cell">
-                        <div class="amount-display">{{ formatCurrency(emp.net_pay) }}</div>
-                        <div class="amount-progress">
-                          <div
-                            class="amount-bar net-bar"
-                            :style="{ width: getPayPercentage(emp.net_pay, maxNetPay) + '%' }"
-                          ></div>
-                        </div>
-                      </td>
-                      <td class="table-body-cell">
-                        <div class="hours-badge">
-                          {{ emp.breakdown?.attendance?.total_hours_worked || 0 }}h
-                        </div>
-                      </td>
-                      <td class="table-body-cell actions-cell">
-                        <div class="workflow-actions-cell">
-                          <q-btn
-                            v-if="emp.lastError"
-                            flat
-                            dense
-                            icon="refresh"
-                            color="negative"
-                            size="sm"
-                            @click="retryEmployeeAction(emp)"
-                            round
-                            ><q-tooltip>Retry</q-tooltip></q-btn
-                          >
-                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                              <q-list dense style="min-width: 180px">
-                                <!-- Workflow action item — shown based on employee status -->
-                                <q-item
-                                  v-if="emp.status === 'draft'"
-                                  clickable
-                                  v-close-popup
-                                  @click="handleWorkflowAction(emp, 'approve_admin')"
-                                  class="dropdown-item"
-                                >
-                                  <q-item-section avatar
-                                    ><q-icon name="verified_user" size="16px" color="primary"
-                                  /></q-item-section>
-                                  <q-item-section>Approve (Admin)</q-item-section>
-                                </q-item>
-                                <q-item
-                                  v-else-if="emp.status === 'approved_admin'"
-                                  clickable
-                                  v-close-popup
-                                  @click="handleWorkflowAction(emp, 'approve_owner')"
-                                  class="dropdown-item"
-                                >
-                                  <q-item-section avatar
-                                    ><q-icon name="admin_panel_settings" size="16px" color="indigo"
-                                  /></q-item-section>
-                                  <q-item-section>Approve (Owner)</q-item-section>
-                                </q-item>
-                                <q-item
-                                  v-else-if="emp.status === 'approved_owner'"
-                                  clickable
-                                  v-close-popup
-                                  @click="handleWorkflowAction(emp, 'release')"
-                                  class="dropdown-item"
-                                >
-                                  <q-item-section avatar
-                                    ><q-icon name="send" size="16px" color="orange"
-                                  /></q-item-section>
-                                  <q-item-section>Release</q-item-section>
-                                </q-item>
-                                <q-item
-                                  v-if="emp.status === 'payroll_funded'"
-                                  clickable
-                                  v-close-popup
-                                  @click="handleWorkflowAction(emp, 'cash')"
-                                  class="dropdown-item"
-                                >
-                                  <q-item-section avatar
-                                    ><q-icon name="payments" size="16px" color="amber-8"
-                                  /></q-item-section>
-                                  <q-item-section>Cash Disbursement</q-item-section>
-                                </q-item>
-                                <q-item
-                                  v-if="emp.status === 'payroll_funded'"
-                                  clickable
-                                  v-close-popup
-                                  @click="handleWorkflowAction(emp, 'bank')"
-                                  class="dropdown-item"
-                                >
-                                  <q-item-section avatar
-                                    ><q-icon name="account_balance" size="16px" color="blue"
-                                  /></q-item-section>
-                                  <q-item-section>Bank Transfer</q-item-section>
-                                </q-item>
-
-                                <q-separator
-                                  v-if="
-                                    ![
-                                      'released',
-                                      'pending_review',
-                                      'disbursed',
-                                      'cash_disbursed',
-                                      'bank_disbursed',
-                                      'completed',
-                                    ].includes(emp.status)
-                                  "
-                                  spaced
-                                />
-
-                                <q-item
-                                  clickable
-                                  v-close-popup
-                                  @click="viewDetails(emp)"
-                                  class="dropdown-item"
-                                >
-                                  <q-item-section avatar
-                                    ><q-icon name="visibility" size="16px"
-                                  /></q-item-section>
-                                  <q-item-section>View details</q-item-section>
-                                </q-item>
-                                <q-item
-                                  clickable
-                                  v-close-popup
-                                  @click="downloadPayslip(emp)"
-                                  class="dropdown-item"
-                                >
-                                  <q-item-section avatar
-                                    ><q-icon name="description" size="16px"
-                                  /></q-item-section>
-                                  <q-item-section>Download payslip</q-item-section>
-                                </q-item>
-                              </q-list>
-                            </q-menu>
-                          </q-btn>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr v-if="!filteredEmployees.length && !workflowLoading">
-                      <td colspan="9" class="table-body-cell text-center text-grey-5">
-                        No employees found
-                      </td>
-                    </tr>
-                  </template>
-                  <tr v-else>
-                    <td
-                      colspan="9"
-                      class="table-body-cell text-center"
-                      @click="loadRunEmployees(run)"
-                      style="cursor: pointer; color: #3b82f6; font-size: 13px"
-                    >
-                      <q-icon name="refresh" size="14px" /> Click to load employees
+                  <tr v-for="entry in filteredFundingHistory" :key="entry.id">
+                    <td>
+                      <div class="fh-log-name">{{ entry.logName }}</div>
+                      <div class="fh-log-period">{{ entry.period }}</div>
+                    </td>
+                    <td class="fh-source">{{ entry.source }}</td>
+                    <td class="fh-amount" style="text-align: right">
+                      {{ formatCurrency(entry.amount) }}
+                    </td>
+                    <td class="fh-actions" style="text-align: right">
+                      <q-btn
+                        flat
+                        dense
+                        no-caps
+                        size="sm"
+                        label="View"
+                        color="primary"
+                        @click="viewFundingEntry(entry)"
+                      />
+                      <span class="fh-sep">|</span>
+                      <q-btn
+                        flat
+                        dense
+                        no-caps
+                        size="sm"
+                        label="Edit"
+                        color="grey-7"
+                        @click="editFundingEntry(entry)"
+                      />
                     </td>
                   </tr>
                 </tbody>
               </table>
+
+              <div class="funding-history-footer">
+                <q-btn flat no-caps size="sm" label="View all funding logs" color="primary" />
+                <span class="fh-page-info">Page 1 of {{ fundingTotalPages }}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </q-tab-panel>
+      </q-tab-panels>
     </div>
+
+    <!-- ======================== CREATE PAYROLL RUN DIALOG ======================== -->
+    <q-dialog v-model="showCreateRunDialog" persistent>
+      <q-card style="min-width: 420px; max-width: 95vw; border-radius: 14px">
+        <q-card-section class="modal-header">
+          <div class="modal-title-section">
+            <q-avatar size="44px" class="modal-avatar-icon">
+              <q-icon name="add_circle" size="22px" />
+            </q-avatar>
+            <div>
+              <div class="modal-title">New Payroll Run</div>
+              <div class="modal-subtitle">Create and compute a new payroll run</div>
+            </div>
+          </div>
+          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="modal-content">
+          <div class="q-gutter-sm">
+            <q-select
+              v-model="createRunForm.type"
+              label="Payroll Type *"
+              outlined
+              dense
+              emit-value
+              map-options
+              :options="[
+                { label: 'Salary', value: 'salary' },
+                { label: 'Hourly', value: 'hourly' },
+                { label: '13th Month', value: '13th_month' },
+              ]"
+              no-error-icon
+            >
+              <template v-slot:prepend><q-icon name="payments" /></template>
+            </q-select>
+            <q-select
+              v-model="createRunForm.department_id"
+              label="Department"
+              outlined
+              dense
+              clearable
+              emit-value
+              map-options
+              :options="(departments ?? []).map((d) => ({ label: d.name, value: d.id }))"
+              :loading="!departments?.length && !!companyId"
+              hint="Optional"
+              no-error-icon
+            >
+              <template v-slot:prepend><q-icon name="account_tree" /></template>
+              <template v-slot:no-option>
+                <q-item>
+                  <q-item-section class="text-grey-5">No departments found</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+            <q-input
+              v-model="createRunForm.start_date"
+              label="Start Date *"
+              outlined
+              dense
+              type="date"
+              hint="e.g. 2026-05-01"
+            />
+            <q-input
+              v-model="createRunForm.end_date"
+              label="End Date *"
+              outlined
+              dense
+              type="date"
+              hint="e.g. 2026-05-15"
+            />
+          </div>
+        </q-card-section>
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn flat label="Cancel" v-close-popup class="dialog-btn" no-caps />
+          <q-btn
+            unelevated
+            color="positive"
+            label="Create & Compute"
+            icon="play_arrow"
+            :loading="createRunLoading"
+            @click="submitCreatePayrollRun"
+            class="dialog-btn primary-btn"
+            no-caps
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- ======================== DETAIL MODAL ======================== -->
     <q-dialog v-model="showDetailModal" persistent>
@@ -626,8 +963,11 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useQuasar } from 'quasar'
 import { usePayroll } from 'src/composables/page/usePayroll'
+import { useCompany } from 'src/composables/page/useCompany'
+import { useAdminDepartments } from 'src/composables/admin/useAdminDepartments'
 
 const $q = useQuasar()
+const { companyId } = useCompany()
 const {
   payrollRunsSummary,
   fetchPayrollRunsSummary,
@@ -635,17 +975,215 @@ const {
   workflowStage,
   payrollRunEmployees,
   workflowLoading,
-  approveByAdmin,
-  approveByOwner,
-  releasePayslip,
-  fundPayroll,
-  cashDisbursement,
-  bankTransfer,
+  // New flow API functions
+  bulkReleasePayslips,
+  addDisbursementFunding,
+  fetchDisbursementFundings,
+  disbursePayslips,
   fetchPayrollRunEmployees,
   getActionableEmployees,
   isStageAutoSelectable,
   isEmployeePreApproved,
+  createPayrollRun,
 } = usePayroll()
+
+// ─── Departments (for the Add Disbursement dialog) ────────────────────────────
+const { departments, fetchDepartments } = useAdminDepartments()
+
+// ─── Tab State ───────────────────────────────────────────────────────────────
+const activeTab = ref('logs')
+const disbursementSearch = ref('')
+
+// ─── Funding Tab State ────────────────────────────────────────────────────────
+const fundingFormRef = ref(null)
+const savingFunding = ref(false)
+const fundingHistoryLoading = ref(false)
+//const fundingPage = ref(1)
+const fundingPageSize = 7
+
+const fundingForm = ref({
+  logId: null,
+  date: new Date().toISOString().split('T')[0],
+  type: 'check',
+  reference: '',
+  source: null,
+  amount: '',
+  notes: '',
+})
+
+// Funding sources list — extend from your company bank accounts as needed
+const fundingSources = ref([
+  { label: 'Bank of Commerce – Little Green Kitchen – 102436733', value: 'boc_lgk' },
+  { label: 'BDO – Little Green Kitchen – 987654321', value: 'bdo_lgk' },
+])
+
+// All funding history entries (loaded per log when log changes)
+const allFundingHistory = ref([])
+
+const filteredFundingHistory = computed(() => {
+  if (!fundingForm.value.logId) return []
+  return allFundingHistory.value.filter((e) => e.logId === fundingForm.value.logId)
+})
+
+const fundingTotalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredFundingHistory.value.length / fundingPageSize)),
+)
+
+// Step 8: fetch real funding entries for the selected disbursement log
+const onFundingLogChange = async (logId) => {
+  if (!logId) return
+  fundingHistoryLoading.value = true
+  try {
+    const run = payrollRunsSummary.value.find((r) => r.id === logId)
+    const entries = await fetchDisbursementFundings(logId)
+    allFundingHistory.value = entries.map((h) => ({
+      id: h.id,
+      logId: h.log,
+      logName: h.log_name ?? run?.name ?? '—',
+      period: run?.period ?? '',
+      source: h.source_bank_name ?? h.source ?? '—',
+      amount: Number(h.amount ?? 0),
+      date: h.date ?? '',
+      type: h.type ?? '',
+      type_display: h.type_display ?? h.type ?? '',
+      reference: h.reference_num ?? '',
+      notes: h.notes ?? '',
+    }))
+  } catch {
+    allFundingHistory.value = []
+  } finally {
+    fundingHistoryLoading.value = false
+  }
+}
+
+const scrollToFundingForm = () => {
+  activeTab.value = 'funding'
+  setTimeout(() => {
+    fundingFormRef.value?.$el?.scrollIntoView({ behavior: 'smooth' })
+  }, 100)
+}
+
+const submitFunding = async () => {
+  if (!fundingForm.value.logId || !fundingForm.value.amount) {
+    $q.notify({ type: 'warning', message: 'Please fill in Log and Amount' })
+    return
+  }
+  savingFunding.value = true
+  try {
+    // Step 7: POST /admin/disbursement-fundings/
+    await addDisbursementFunding({
+      log: fundingForm.value.logId,
+      date: fundingForm.value.date,
+      type: fundingForm.value.type,
+      reference_num: fundingForm.value.reference,
+      source: fundingForm.value.source,
+      amount: fundingForm.value.amount,
+      notes: fundingForm.value.notes || '',
+    })
+    $q.notify({ type: 'positive', message: 'Funds added successfully!' })
+    // Refresh funding history and summary for this log
+    await onFundingLogChange(fundingForm.value.logId)
+    await fetchPayrollRunsSummary()
+    // Reset form (keep logId so history stays visible)
+    const keepLogId = fundingForm.value.logId
+    fundingForm.value = {
+      logId: keepLogId,
+      date: new Date().toISOString().split('T')[0],
+      type: 'check',
+      reference: '',
+      source: null,
+      amount: '',
+      notes: '',
+    }
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Failed to add funds' })
+  } finally {
+    savingFunding.value = false
+  }
+}
+
+const viewFundingEntry = (entry) => {
+  $q.dialog({
+    title: 'Funding Entry',
+    message: `Log: ${entry.logName}\nAmount: ${formatCurrency(entry.amount)}\nSource: ${entry.source}`,
+    ok: { label: 'Close', flat: true },
+  })
+}
+
+const editFundingEntry = (entry) => {
+  // Pre-fill the form with the entry data for editing
+  fundingForm.value = {
+    logId: entry.logId,
+    date: entry.date || new Date().toISOString().split('T')[0],
+    type: entry.type || 'check',
+    reference: entry.reference || '',
+    source: entry.source || null,
+    amount: entry.amount || '',
+    notes: entry.notes || '',
+  }
+  fundingFormRef.value?.$el?.scrollIntoView({ behavior: 'smooth' })
+}
+
+const showCreateRunDialog = ref(false)
+const createRunForm = ref({
+  company_id: '',
+  department_id: null,
+  start_date: '',
+  end_date: '',
+  type: 'salary',
+})
+const createRunLoading = ref(false)
+
+const openCreateRunDialog = () => {
+  if (!companyId.value) {
+    $q.notify({ type: 'warning', message: 'Please select a company first' })
+    return
+  }
+  createRunForm.value = {
+    company_id: companyId.value ?? '',
+    department_id: null,
+    start_date: '',
+    end_date: '',
+    type: 'salary',
+  }
+  showCreateRunDialog.value = true
+  fetchDepartments(companyId.value)
+}
+
+const submitCreatePayrollRun = async () => {
+  const resolvedCompanyId = companyId.value || createRunForm.value.company_id
+  if (!resolvedCompanyId || !createRunForm.value.start_date || !createRunForm.value.end_date) {
+    $q.notify({ type: 'warning', message: 'Please fill in Company, Start Date, and End Date.' })
+    return
+  }
+  try {
+    createRunLoading.value = true
+    // Step 1: POST /admin/generate-payslip/
+    const payload = {
+      company_id: Number(resolvedCompanyId),
+      start_date: createRunForm.value.start_date,
+      end_date: createRunForm.value.end_date,
+      type: createRunForm.value.type || 'salary',
+    }
+    if (createRunForm.value.department_id) {
+      payload.department_id = Number(createRunForm.value.department_id)
+    }
+    const result = await createPayrollRun(payload)
+    $q.notify({
+      type: 'positive',
+      message: result?.message || `Generated ${result?.generated_count ?? 0} payslip(s)!`,
+    })
+    showCreateRunDialog.value = false
+    await fetchPayrollRunsSummary()
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err.response?.data?.message || 'Failed to generate payslips',
+    })
+  } finally {
+    createRunLoading.value = false
+  }
+}
 
 onMounted(async () => {
   await fetchPayrollRunsSummary()
@@ -686,16 +1224,12 @@ const toggleRunExpanded = async (run) => {
   }
 }
 
-// Action button in the Payroll Runs table row
-const selectAndApprove = async (run, action) => {
+// Quick-action from the run-header button: load employees then disburse
+const selectAndDisburse = async (run) => {
   selectedRun.value = run
   payrollRunId.value = run.id
   await fetchPayrollRunEmployees(run.id)
-  if (action === 'fund') {
-    await handleFundPayroll()
-  } else {
-    await handleBulkAction(action)
-  }
+  await handleBulkDisburse()
   await fetchPayrollRunsSummary()
 }
 
@@ -711,28 +1245,41 @@ const filteredEmployees = computed(() => {
   )
 })
 
-const approveAllByAdmin = async (run) => {
+// Step 4: Bulk release draft payslips → pending_review
+const bulkReleaseAll = async (run) => {
   selectedRun.value = run
   payrollRunId.value = run.id
   await fetchPayrollRunEmployees(run.id)
-  await handleBulkAction('approve_admin')
-  await fetchPayrollRunsSummary()
-}
-
-const approveAllByOwner = async (run) => {
-  selectedRun.value = run
-  payrollRunId.value = run.id
-  await fetchPayrollRunEmployees(run.id)
-  await handleBulkAction('approve_owner')
-  await fetchPayrollRunsSummary()
-}
-
-const releaseAll = async (run) => {
-  selectedRun.value = run
-  payrollRunId.value = run.id
-  await fetchPayrollRunEmployees(run.id)
-  await handleBulkAction('release')
-  await fetchPayrollRunsSummary()
+  const draftIds = payrollRunEmployees.value
+    .filter((e) => e.status === 'draft')
+    .map((e) => e.employee_id)
+  if (!draftIds.length) {
+    $q.notify({ type: 'info', message: 'No draft employees to release' })
+    return
+  }
+  $q.dialog({
+    title: 'Bulk Release for Review',
+    message: `Release ${draftIds.length} payslip(s) for employee review?`,
+    ok: { label: 'Release', color: 'orange', unelevated: true },
+    cancel: { label: 'Cancel', flat: true },
+  }).onOk(async () => {
+    try {
+      saving.value = true
+      const result = await bulkReleasePayslips(run.id, draftIds)
+      $q.notify({
+        type: 'positive',
+        message: `Released ${result?.summary?.updated_to_pending_review ?? draftIds.length} payslip(s)!`,
+      })
+      await fetchPayrollRunEmployees(run.id)
+      await fetchPayrollRunsSummary()
+      selectedEmployees.value = []
+      selectAll.value = false
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Release failed' })
+    } finally {
+      saving.value = false
+    }
+  })
 }
 
 // Selection state for bulk operations
@@ -745,30 +1292,12 @@ const isAutoSelectStage = computed(() => {
 })
 
 // Computed properties for dynamic approve button labels
-const isAllSelected = computed(() => {
-  const actionableCount = getActionableEmployees(workflowStage.value).length
-  return actionableCount > 0 && selectedEmployees.value.length === actionableCount
-})
 
-const approveBtnLabel = computed(() => {
-  if (selectedEmployees.value.length === 0) {
-    return null // No button shown if no selection
-  }
-  return isAllSelected.value ? 'Approve All (Admin)' : 'Approve'
-})
-
-const approveOwnerBtnLabel = computed(() => {
-  if (selectedEmployees.value.length === 0) {
-    return null // No button shown if no selection
-  }
-  return isAllSelected.value ? 'Approve All (Owner)' : 'Approve'
-})
-
+// Computed label for the bulk release button
 const releaseBtnLabel = computed(() => {
-  if (selectedEmployees.value.length === 0) {
-    return null // No button shown if no selection
-  }
-  return isAllSelected.value ? 'Release All' : 'Release'
+  if (selectedEmployees.value.length === 0) return null
+  const actionableCount = getActionableEmployees(workflowStage.value).length
+  return selectedEmployees.value.length === actionableCount ? 'Release All' : 'Release'
 })
 
 // Data
@@ -1427,24 +1956,10 @@ const closeDetailModal = () => {
 
 const toggleSelectAll = () => {
   const actionable = getActionableEmployees(workflowStage.value)
-
-  if (isAutoSelectStage.value) {
-    // In auto-select stages (released/acknowledged/funded), handle specially
-    if (workflowStage.value === 'funded') {
-      // For funded stage, only select funded employees (for disbursement)
-      selectedEmployees.value = selectAll.value ? actionable.map((e) => e.employee_id) : []
-    } else {
-      // For released/acknowledged stages, all are auto-selected
-      // Clear selection as these stages don't support bulk actions
-      selectedEmployees.value = []
-    }
+  if (selectAll.value) {
+    selectedEmployees.value = actionable.map((e) => e.employee_id)
   } else {
-    // Normal behavior for draft/admin_approved/owner_approved stages
-    if (selectAll.value) {
-      selectedEmployees.value = actionable.map((e) => e.employee_id)
-    } else {
-      selectedEmployees.value = []
-    }
+    selectedEmployees.value = []
   }
 }
 
@@ -1462,250 +1977,216 @@ const toggleEmployeeSelection = (employeeId) => {
 
 const isEmployeeActionable = (emp) => {
   const stage = workflowStage.value
-
-  // Auto-select stages: show all employees as "actionable" (for visual checkboxes)
-  // They will be shown as disabled/pre-selected
-  if (['released', 'acknowledged'].includes(stage)) {
-    return [
-      'released',
-      'acknowledged',
-      'funded',
-      'cash_disbursed',
-      'bank_disbursed',
-      'completed',
-    ].includes(emp.status)
-  }
-
   switch (stage) {
     case 'draft':
       return emp.status === 'draft'
-    case 'admin_approved':
-      return emp.status === 'approved_admin'
-    case 'owner_approved':
-      return emp.status === 'approved_owner'
-    case 'funded':
-      return emp.status === 'funded'
+    case 'ready_for_payment':
+      return emp.status === 'ready_for_payment'
     default:
       return false
   }
 }
 
-const workflowSteps = [
-  { key: 'computed', label: 'Computed', icon: 'edit' },
-  { key: 'admin_reviewed', label: 'Admin Reviewed', icon: 'verified_user' },
-  { key: 'owner_approved', label: 'Owner Approved', icon: 'admin_panel_settings' },
-  { key: 'released_for_review', label: 'Released for Review', icon: 'send' },
-  { key: 'partially_paid', label: 'Partially Paid', icon: 'hourglass_top' },
-  { key: 'payroll_funded', label: 'Payroll Funded', icon: 'account_balance' },
-  { key: 'disbursed', label: 'Disbursed', icon: 'payments' },
-  { key: 'completed', label: 'Completed', icon: 'task_alt' },
-]
-
+// Per-employee action from the row dropdown menu
 const handleWorkflowAction = async (employee, action) => {
-  const runId = payrollRunId.value
-  if (!runId) {
-    $q.notify({ type: 'warning', message: 'Please select a payroll run first' })
+  const logId = payrollRunId.value
+  if (!logId) {
+    $q.notify({ type: 'warning', message: 'Please select a disbursement log first' })
     return
   }
   const employeeId = employee.employee_id || employee.id
-  try {
-    saving.value = true
-    if (action === 'bank') {
-      saving.value = false
-      $q.dialog({
-        title: 'Bank Transfer',
-        message: 'Enter payment reference number:',
-        prompt: {
-          model: '',
-          type: 'text',
-          placeholder: 'e.g. BTR-2026-001',
-          isValid: (val) => val && val.trim().length > 0,
-        },
-        ok: { label: 'Transfer', color: 'primary', unelevated: true },
-        cancel: { label: 'Cancel', flat: true },
-      }).onOk(async (paymentReference) => {
-        try {
-          saving.value = true
-          await bankTransfer(runId, [employeeId], paymentReference.trim())
-          $q.notify({
-            type: 'positive',
-            message: `Bank transfer done: ${employee.employee_name || employee.employee}`,
-          })
-          await fetchPayrollRunEmployees(runId)
-          await fetchPayrollRunsSummary()
-          selectedEmployees.value = []
-          selectAll.value = false
-        } catch (err) {
-          $q.notify({
-            type: 'negative',
-            message: err.response?.data?.message || 'Bank transfer failed',
-          })
-        } finally {
-          saving.value = false
-        }
-      })
-      return
-    }
 
-    switch (action) {
-      case 'approve_admin':
-        await approveByAdmin(runId, [employeeId])
-        break
-      case 'approve_owner':
-        await approveByOwner(runId, [employeeId])
-        break
-      case 'release':
-        await releasePayslip(runId, [employeeId])
-        break
-      case 'cash':
-        await cashDisbursement(runId, [employeeId])
-        break
-    }
-    $q.notify({
-      type: 'positive',
-      message: `Success: ${employee.employee_name || employee.employee}`,
+  // Step 4: release a single draft employee
+  if (action === 'release') {
+    $q.dialog({
+      title: 'Release for Review',
+      message: `Release payslip for ${employee.employee_name || employee.employee}?`,
+      ok: { label: 'Release', color: 'orange', unelevated: true },
+      cancel: { label: 'Cancel', flat: true },
+    }).onOk(async () => {
+      try {
+        saving.value = true
+        await bulkReleasePayslips(logId, [employeeId])
+        $q.notify({
+          type: 'positive',
+          message: `Released: ${employee.employee_name || employee.employee}`,
+        })
+        await fetchPayrollRunEmployees(logId)
+        await fetchPayrollRunsSummary()
+        selectedEmployees.value = []
+        selectAll.value = false
+      } catch (err) {
+        $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Release failed' })
+      } finally {
+        saving.value = false
+      }
     })
-    await fetchPayrollRunEmployees(runId)
-    await fetchPayrollRunsSummary()
-    selectedEmployees.value = []
-    selectAll.value = false
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.message || 'Action failed' })
-  } finally {
-    saving.value = false
+    return
+  }
+
+  // Step 9: disburse a single ready_for_payment employee
+  if (action === 'disburse') {
+    $q.dialog({
+      title: 'Disburse',
+      message: `Disburse payment for ${employee.employee_name || employee.employee}?`,
+      ok: { label: 'Disburse', color: 'positive', unelevated: true },
+      cancel: { label: 'Cancel', flat: true },
+    }).onOk(async () => {
+      try {
+        saving.value = true
+        await disbursePayslips(logId, [employeeId])
+        $q.notify({
+          type: 'positive',
+          message: `Disbursed: ${employee.employee_name || employee.employee}`,
+        })
+        await fetchPayrollRunEmployees(logId)
+        await fetchPayrollRunsSummary()
+        selectedEmployees.value = []
+        selectAll.value = false
+      } catch (err) {
+        $q.notify({
+          type: 'negative',
+          message: err?.response?.data?.message || 'Disbursement failed',
+        })
+      } finally {
+        saving.value = false
+      }
+    })
+    return
   }
 }
 
-const handleBulkAction = async (action) => {
-  const runId = payrollRunId.value
-  if (!runId) {
-    $q.notify({ type: 'warning', message: 'Please select a payroll run first' })
+// Bulk release selected draft employees (Step 4)
+const handleBulkAction = async () => {
+  const logId = payrollRunId.value
+  if (!logId) {
+    $q.notify({ type: 'warning', message: 'Please select a disbursement log first' })
     return
   }
-  let employeeIds =
+  const employeeIds =
     selectedEmployees.value.length > 0
       ? selectedEmployees.value
-      : getActionableEmployees(workflowStage.value).map((e) => e.employee_id)
-  if (employeeIds.length === 0) {
-    $q.notify({ type: 'info', message: 'No employees to process' })
+      : getActionableEmployees('draft').map((e) => e.employee_id)
+  if (!employeeIds.length) {
+    $q.notify({ type: 'info', message: 'No draft employees to release' })
     return
   }
   $q.dialog({
-    title: 'Confirm Bulk Action',
-    message: `Process ${action} for ${employeeIds.length} employee(s)?`,
-    ok: { label: 'Confirm', color: 'primary', unelevated: true },
+    title: 'Bulk Release for Review',
+    message: `Release ${employeeIds.length} payslip(s) for employee review?`,
+    ok: { label: 'Release', color: 'orange', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
     saving.value = true
-    let successCount = 0
-    let failCount = 0
-    for (const empId of employeeIds) {
-      try {
-        switch (action) {
-          case 'approve_admin':
-            await approveByAdmin(runId, [empId])
-            break
-          case 'approve_owner':
-            await approveByOwner(runId, [empId])
-            break
-          case 'release':
-            await releasePayslip(runId, [empId])
-            break
-        }
-        successCount++
-      } catch {
-        failCount++
-      }
-    }
-    saving.value = false
-    if (failCount > 0) {
+    try {
+      const result = await bulkReleasePayslips(logId, employeeIds)
       $q.notify({
-        type: 'warning',
-        message: `${successCount} succeeded, ${failCount} failed`,
-        timeout: 5000,
+        type: 'positive',
+        message: `Released ${result?.summary?.updated_to_pending_review ?? employeeIds.length} payslip(s)!`,
       })
-    } else {
-      $q.notify({ type: 'positive', message: `Completed: ${successCount} employees processed!` })
+    } catch {
+      $q.notify({ type: 'negative', message: 'Bulk release failed' })
+    } finally {
+      saving.value = false
     }
-    await fetchPayrollRunEmployees(runId)
+    await fetchPayrollRunEmployees(logId)
     await fetchPayrollRunsSummary()
     selectedEmployees.value = []
     selectAll.value = false
   })
 }
 
-const handleFundPayroll = async () => {
-  const runId = payrollRunId.value
-  if (!runId) {
-    $q.notify({ type: 'warning', message: 'Please select a payroll run first' })
+// handleMarkComplete is now employee-side (Step 10).
+// Admin can only monitor. We keep a stub for the UI dropdown item visibility.
+const handleMarkComplete = (employee) => {
+  $q.notify({
+    type: 'info',
+    message: `Waiting for ${employee.employee_name || employee.employee} to confirm receipt via the app.`,
+    timeout: 4000,
+  })
+}
+
+// Step 9: bulk disburse selected ready_for_payment employees
+const handleBulkDisburse = async () => {
+  const logId = payrollRunId.value
+  if (!logId) {
+    $q.notify({ type: 'warning', message: 'Please select a disbursement log first' })
     return
   }
-
-  // Use selected employees if any, otherwise all ready_for_payment employees
-  const fundableIds =
+  const readyIds =
     selectedEmployees.value.length > 0
       ? selectedEmployees.value
       : payrollRunEmployees.value
           .filter((e) => e.status === 'ready_for_payment')
           .map((e) => e.employee_id)
 
-  if (fundableIds.length === 0) {
+  if (!readyIds.length) {
     $q.notify({ type: 'warning', message: 'No employees are ready for payment' })
     return
   }
 
   $q.dialog({
-    title: 'Fund Payroll',
-    message: `Fund payroll for ${fundableIds.length} employee(s)?`,
-    ok: { label: 'Fund', color: 'primary', unelevated: true },
+    title: 'Disburse Payslips',
+    message: `Disburse payment for ${readyIds.length} employee(s)? Cash employees will move to "Disbursed", bank employees will move to "Completed".`,
+    ok: { label: 'Disburse', color: 'positive', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
     try {
       saving.value = true
-      await fundPayroll(runId, fundableIds)
-      $q.notify({ type: 'positive', message: 'Payroll funded successfully!' })
-      await fetchPayrollRunEmployees(runId)
+      const result = await disbursePayslips(logId, readyIds)
+      const summary = result?.summary ?? {}
+      $q.notify({
+        type: 'positive',
+        message: `Done! Cash: ${summary.disbursed_cash ?? 0}, Bank: ${summary.completed_bank ?? 0}`,
+      })
+      await fetchPayrollRunEmployees(logId)
       await fetchPayrollRunsSummary()
       selectedEmployees.value = []
       selectAll.value = false
     } catch (err) {
-      $q.notify({ type: 'negative', message: err.response?.data?.message || 'Funding failed' })
+      $q.notify({
+        type: 'negative',
+        message: err?.response?.data?.message || 'Disbursement failed',
+      })
     } finally {
       saving.value = false
     }
   })
 }
 
-const getStageColor = (stage) => {
+const getStageColor = (status) => {
   const colors = {
-    computed: 'grey',
-    admin_reviewed: 'blue',
-    owner_approved: 'indigo',
-    released_for_review: 'orange',
-    partially_paid: 'amber',
-    payroll_funded: 'purple',
-    disbursed: 'green',
-    completed: 'green',
+    pending: 'grey',
+    draft: 'grey',
+    pending_review: 'orange',
+    ready_for_payment: 'teal',
+    disbursed: 'amber',
+    completed: 'positive',
+    closed: 'positive',
   }
-  return colors[stage] || 'grey'
+  return colors[status] || 'grey'
 }
 
-const getStageLabel = (stage) => {
-  const step = workflowSteps.find((s) => s.key === stage)
-  return step ? step.label : stage
+const getStageLabel = (status) => {
+  const labels = {
+    pending: 'Pending',
+    draft: 'Draft',
+    pending_review: 'Pending Review',
+    ready_for_payment: 'Ready for Payment',
+    disbursed: 'Disbursed',
+    completed: 'Completed',
+    closed: 'Closed',
+  }
+  return labels[status] || status
 }
 
 const getStatusColor = (status) => {
   const colors = {
     draft: 'grey',
-    approved_admin: 'blue',
-    approved_owner: 'indigo',
-    released: 'orange',
-    acknowledged: 'teal',
-    funded: 'purple',
-    cash_disbursed: 'amber',
-    bank_disbursed: 'blue',
-    completed: 'green',
+    pending_review: 'orange',
+    ready_for_payment: 'teal',
+    disbursed: 'amber',
+    completed: 'positive',
   }
   return colors[status] || 'grey'
 }
@@ -1713,37 +2194,27 @@ const getStatusColor = (status) => {
 const getStatusLabel = (status) => {
   const labels = {
     draft: 'Draft',
-    approved_admin: 'Admin Approved',
-    approved_owner: 'Owner Approved',
-    released: 'Released',
-    acknowledged: 'Acknowledged',
-    funded: 'Funded',
-    cash_disbursed: 'Cash Disbursed',
-    bank_disbursed: 'Bank Disbursed',
+    pending_review: 'Pending Review',
+    ready_for_payment: 'Ready for Payment',
+    disbursed: 'Disbursed',
     completed: 'Completed',
   }
   return labels[status] || status
 }
 
 const retryEmployeeAction = async (emp) => {
-  const runId = payrollRunId.value
-  if (!runId) return
+  const logId = payrollRunId.value
+  if (!logId) return
   try {
     emp.lastError = null
     saving.value = true
-    switch (emp.status) {
-      case 'draft':
-        await approveByAdmin(runId, [emp.employee_id])
-        break
-      case 'approved_admin':
-        await approveByOwner(runId, [emp.employee_id])
-        break
-      case 'approved_owner':
-        await releasePayslip(runId, [emp.employee_id])
-        break
+    if (emp.status === 'draft') {
+      await bulkReleasePayslips(logId, [emp.employee_id])
+    } else if (emp.status === 'ready_for_payment') {
+      await disbursePayslips(logId, [emp.employee_id])
     }
-    $q.notify({ type: 'positive', message: `Success: ${emp.employee_name || emp.employee}` })
-    await fetchPayrollRunEmployees(runId)
+    $q.notify({ type: 'positive', message: `Retried: ${emp.employee_name || emp.employee}` })
+    await fetchPayrollRunEmployees(logId)
   } catch (err) {
     emp.lastError = err.response?.data?.message || err.message
     $q.notify({ type: 'negative', message: 'Retry failed' })
@@ -1754,6 +2225,222 @@ const retryEmployeeAction = async (emp) => {
 </script>
 
 <style scoped>
+/* ==============================
+   DISBURSEMENT TABS
+============================== */
+.disbursement-tab-bar {
+  font-size: 14px;
+  min-height: 36px;
+}
+
+.tab-panel-logs,
+.tab-panel-funding {
+  padding: 0;
+}
+
+/* ==============================
+   RUN CARD HEADER — DISBURSEMENT COLUMNS
+============================== */
+.run-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e0e7ef;
+  flex-wrap: wrap;
+  transition: all 0.2s ease;
+}
+
+.run-period {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.run-header-stats {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.run-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 80px;
+}
+
+.run-stat-label {
+  font-size: 10px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.run-stat-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* ==============================
+   FUNDING FORM CARD
+============================== */
+.funding-form-card {
+  background: #ffffff;
+  border: 1px solid #e8ecf0;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+
+.funding-form-header {
+  margin-bottom: 16px;
+}
+
+.funding-form-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.funding-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.funding-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.funding-form-field-full {
+  grid-column: 1 / -1;
+}
+
+.funding-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.funding-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ==============================
+   FUNDING HISTORY
+============================== */
+.funding-history-section {
+  background: #ffffff;
+  border: 1px solid #e8ecf0;
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+.funding-history-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 14px;
+}
+
+.funding-history-table-wrap {
+  overflow-x: auto;
+}
+
+.funding-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  border: 1px solid #e8ecf0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.funding-history-table th {
+  background: #f8fafc;
+  text-align: left;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e8ecf0;
+}
+
+.funding-history-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid #f1f3f5;
+  color: #374151;
+  vertical-align: middle;
+}
+
+.funding-history-table tr:last-child td {
+  border-bottom: none;
+}
+
+.funding-history-table tr:hover td {
+  background: #f9fafb;
+}
+
+.fh-log-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
+}
+
+.fh-log-period {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 1px;
+}
+
+.fh-source {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.fh-amount {
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
+}
+
+.fh-actions {
+  white-space: nowrap;
+}
+
+.fh-sep {
+  font-size: 11px;
+  color: #d1d5db;
+  margin: 0 2px;
+}
+
+.funding-history-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f3f5;
+}
+
+.fh-page-info {
+  font-size: 12px;
+  color: #6b7280;
+}
+
 /* ==============================
    BASE
 ============================== */
@@ -1888,17 +2575,34 @@ const retryEmployeeAction = async (emp) => {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
-.header-btn {
-  color: #6b7280 !important;
-  width: 36px;
+.refresh-btn {
   height: 36px;
-  border-radius: 8px !important;
+  width: 36px;
+  border-radius: 8px;
+  color: #6b7280 !important;
 }
 
-.header-btn:hover {
+.refresh-btn:hover {
   background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.header-search {
+  min-width: 200px;
+  max-width: 260px;
+  flex: 1;
+}
+
+.header-search :deep(.q-field__control) {
+  border-radius: 8px;
+  height: 36px;
+}
+
+.search-icon {
+  color: #9ca3af;
 }
 
 .export-btn {
@@ -1944,10 +2648,11 @@ const retryEmployeeAction = async (emp) => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  font-size: 20px;
 }
 
 .stats-icon {
-  font-size: 20px;
+  font-size: 22px;
 }
 .stats-icon-blue {
   background: #eff6ff;
@@ -1973,20 +2678,75 @@ const retryEmployeeAction = async (emp) => {
 .stats-label {
   font-size: 12px;
   color: #6b7280;
+  margin-bottom: 2px;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: 2px;
 }
 
 .stats-amount {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
   color: #111827;
   line-height: 1.1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+/* ==============================
+   TABS - pill style (matches RequestPage)
+============================== */
+.tabs-section {
+  background: #ffffff;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  border: 1px solid #e8ecf0;
+  padding: 10px 14px;
+}
+
+.tab-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.tab-pill:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.tab-pill.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.tab-pill-icon {
+  font-size: 15px;
+}
+
+.tab-panels {
+  background: transparent;
+}
+
+.tab-panel-content {
+  padding: 0;
 }
 
 /* ==============================
@@ -3004,9 +3764,18 @@ const retryEmployeeAction = async (emp) => {
 /* ==============================
    RESPONSIVE
 ============================== */
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .stats-amount {
+    font-size: 24px;
+  }
+
+  .modern-table-container {
+    margin: 0 14px 14px 14px;
   }
 }
 
@@ -3014,54 +3783,135 @@ const retryEmployeeAction = async (emp) => {
   .dashboard-container {
     padding: 14px;
   }
+
+  .page-header {
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+
   .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .header-actions {
+    flex-direction: row;
+    gap: 8px;
     flex-wrap: wrap;
   }
-  .stats-section {
-    grid-template-columns: 1fr;
+
+  .header-search {
+    max-width: 100%;
+    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
+
+  .stats-section {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .stats-card {
+    padding: 14px;
+  }
+
+  .stats-amount {
+    font-size: 22px;
+  }
+
+  .tabs-section {
+    padding: 8px 10px;
+    margin-bottom: 12px;
+  }
+
+  .tab-pills {
+    gap: 5px;
+  }
+
+  .tab-pill {
+    padding: 7px 11px;
+    font-size: 12px;
+    flex: 1;
+    justify-content: center;
+  }
+
   .filters-grid {
     grid-template-columns: 1fr;
   }
+
   .detail-grid-cards {
     grid-template-columns: 1fr;
   }
+
   .detail-card-full {
     grid-column: span 1;
   }
+
   .modern-table-container {
     margin: 0 10px 10px;
   }
+
   .hours-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
   .workflow-stepper {
     flex-wrap: wrap;
     gap: 16px;
     justify-content: center;
   }
+
   .step-connector {
     display: none;
   }
+
   .stepper-step {
     min-width: 60px;
   }
+
   .workflow-header {
     flex-direction: column;
     align-items: flex-start;
   }
+
   .run-dialog-body {
     padding: 14px !important;
   }
 }
 
 @media (max-width: 480px) {
+  .dashboard-container {
+    padding: 10px;
+  }
+
   .page-title {
     font-size: 18px;
   }
-  .stats-amount {
-    font-size: 18px;
+
+  .stats-section {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
   }
+
+  .stats-card {
+    padding: 12px;
+  }
+
+  .stats-amount {
+    font-size: 20px;
+  }
+
+  .tab-pill span:not(.tab-badge) {
+    display: none;
+  }
+
+  .tab-pill-icon {
+    font-size: 16px;
+  }
+
   .cards-grid {
     grid-template-columns: 1fr;
   }
