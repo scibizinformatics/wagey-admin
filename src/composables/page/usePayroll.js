@@ -16,37 +16,39 @@ export function usePayroll() {
 
   // ─── Workflow State ────────────────────────────────────────────────
   const payrollRunId = ref(null)
-  const workflowStage = ref('draft') // draft | admin_approved | owner_approved | released | acknowledged | funded | disbursed
+  /**
+   * New simplified workflow stages:
+   *   draft → pending_review → ready_for_payment → disbursed/completed
+   *
+   * "draft"            – payslips just generated, not yet bulk-released
+   * "pending_review"   – bulk-released; employees can view & acknowledge
+   * "ready_for_payment"– all employees acknowledged; can be disbursed
+   * "disbursed"        – cash disbursed (waiting for employee money-received)
+   * "completed"        – all payslips completed
+   */
+  const workflowStage = ref('draft')
   const payrollRunEmployees = ref([])
   const workflowLoading = ref(false)
   const workflowStats = ref({
     total: 0,
-    adminApproved: 0,
-    ownerApproved: 0,
-    released: 0,
-    acknowledged: 0,
-    funded: false,
-    cashDisbursed: 0,
-    bankDisbursed: 0,
+    draft: 0,
+    pending_review: 0,
+    ready_for_payment: 0,
+    disbursed: 0,
     completed: 0,
   })
 
   // ─── Payslips ─────────────────────────────────────────────────────────────
 
-  /**
-   * Fetch payslips. When a selectedCompany is provided it uses the admin endpoint.
-   * @param {string|null} selectedCompany
-   * @param {object} [params]
-   */
-  async function fetchPayslips(payrollRunId = null, params = {}) {
-    if (!payrollRunId) return []
+  async function fetchPayslips(logId = null, params = {}) {
+    if (!logId) return []
     loading.value = true
     try {
-      const response = await api.get(
-        `${BASE}/payroll/admin/payroll-runs/${payrollRunId}/employees/`,
-        { params, headers: authHeaders() },
-      )
-      payslips.value = response.data.data ?? response.data ?? []
+      const response = await api.get(`${BASE}/admin/disbursement-logs/${logId}/employees/`, {
+        params,
+        headers: authHeaders(),
+      })
+      payslips.value = response.data.employees ?? response.data.data ?? response.data ?? []
       return payslips.value
     } finally {
       loading.value = false
@@ -55,11 +57,6 @@ export function usePayroll() {
 
   // ─── Hours breakdown ──────────────────────────────────────────────────────
 
-  /**
-   * Fetch an employee's hours breakdown for a given period.
-   * @param {string} employeeId
-   * @param {string} period – e.g. '2025-07'
-   */
   async function fetchHoursBreakdown(employeeId, period) {
     const response = await api.get(`${BASE}/attendance/${employeeId}/hours-breakdown/`, {
       params: { period },
@@ -170,233 +167,94 @@ export function usePayroll() {
     return response.data
   }
 
-  // ─── Workflow: Approve by Admin ─────────────────────────────────
-  async function approveByAdmin(payrollRunId, employeeIds) {
-    saving.value = true
-    console.group('🔧 approveByAdmin API Call')
-    console.log('URL:', `${BASE}/payroll/admin/payslips/${payrollRunId}/approve-by-admin/`)
-    console.log('Method: PATCH')
-    console.log('Payload:', {
-      employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds],
-    })
-
-    try {
-      const response = await api.patch(
-        `${BASE}/payroll/admin/payslips/${payrollRunId}/approve-by-admin/`,
-        { employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds] },
-      )
-      console.log('✅ Success:', response.data)
-      console.groupEnd()
-      return response.data
-    } catch (error) {
-      console.error('❌ Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      })
-      console.groupEnd()
-      throw error
-    } finally {
-      saving.value = false
-    }
-  }
-
-  // ─── Workflow: Approve by Owner ─────────────────────────────────
-  async function approveByOwner(payrollRunId, employeeIds) {
-    saving.value = true
-    console.group('🔧 approveByOwner API Call')
-    console.log('URL:', `${BASE}/payroll/admin/payslips/${payrollRunId}/approve-by-owner/`)
-    console.log('Method: PATCH')
-    console.log('Payload:', {
-      employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds],
-    })
-
-    try {
-      const response = await api.patch(
-        `${BASE}/payroll/admin/payslips/${payrollRunId}/approve-by-owner/`,
-        { employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds] },
-      )
-      console.log('✅ Success:', response.data)
-      console.groupEnd()
-      return response.data
-    } catch (error) {
-      console.error('❌ Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      })
-      console.groupEnd()
-      throw error
-    } finally {
-      saving.value = false
-    }
-  }
-
-  // ─── Workflow: Release Payslip ─────────────────────────────────
-  async function releasePayslip(payrollRunId, employeeIds) {
-    saving.value = true
-    console.group('🔧 releasePayslip API Call')
-    console.log('URL:', `${BASE}/payroll/admin/payslips/${payrollRunId}/release/`)
-    console.log('Method: PATCH')
-    console.log('Payload:', {
-      employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds],
-    })
-
-    try {
-      const response = await api.patch(`${BASE}/payroll/admin/payslips/${payrollRunId}/release/`, {
-        employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds],
-      })
-      console.log('✅ Success:', response.data)
-      console.groupEnd()
-      return response.data
-    } catch (error) {
-      console.error('❌ Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      })
-      console.groupEnd()
-      throw error
-    } finally {
-      saving.value = false
-    }
-  }
-
-  // ─── Workflow: Fund Payroll ────────────────────────────────────
-  async function fundPayroll(payrollRunId, employeeIds) {
+  // ─── Step 4: Bulk Release Payslips for Review ─────────────────────────────
+  // POST /admin/payslips/bulk-release/
+  // { disbursement_log_id, employee_ids }
+  // → Payslip status: pending_review
+  async function bulkReleasePayslips(disbursementLogId, employeeIds) {
     saving.value = true
     const ids = Array.isArray(employeeIds) ? employeeIds : [employeeIds]
-    console.group('🔧 fundPayroll API Call')
-    console.log('URL:', `${BASE}/payroll/admin/payslips/${payrollRunId}/fund/`)
-    console.log('Method: PATCH')
-    console.log('Payload:', { employee_ids: ids })
-
-    try {
-      const response = await api.patch(`${BASE}/payroll/admin/payslips/${payrollRunId}/fund/`, {
-        employee_ids: ids,
-      })
-      console.log('✅ Success:', response.data)
-      console.groupEnd()
-      return response.data
-    } catch (error) {
-      console.error('❌ Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      })
-      console.groupEnd()
-      throw error
-    } finally {
-      saving.value = false
-    }
-  }
-
-  // ─── Workflow: Cash Disbursement ───────────────────────────────
-  async function cashDisbursement(payrollRunId, employeeIds) {
-    saving.value = true
-    console.group('🔧 cashDisbursement API Call')
-    console.log('URL:', `${BASE}/payroll/admin/payslips/${payrollRunId}/cash-disbursement/`)
-    console.log('Method: PATCH')
-    console.log('Payload:', {
-      employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds],
-    })
-
     try {
       const response = await api.patch(
-        `${BASE}/payroll/admin/payslips/${payrollRunId}/cash-disbursement/`,
-        { employee_ids: Array.isArray(employeeIds) ? employeeIds : [employeeIds] },
+        `${BASE}/admin/payslips/bulk-release/`,
+        { disbursement_log_id: disbursementLogId, employee_ids: ids },
+        { headers: authHeaders() },
       )
-      console.log('✅ Success:', response.data)
-      console.groupEnd()
       return response.data
-    } catch (error) {
-      console.error('❌ Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      })
-      console.groupEnd()
-      throw error
     } finally {
       saving.value = false
     }
   }
 
-  // ─── Workflow: Bank Transfer ───────────────────────────────────
-  async function bankTransfer(payrollRunId, employeeIds, paymentReference) {
+  // ─── Step 7: Add Disbursement Funding ────────────────────────────────────
+  // POST /admin/disbursement-fundings/
+  async function addDisbursementFunding(payload) {
+    saving.value = true
+    try {
+      const response = await api.post(`${BASE}/admin/disbursement-fundings/`, payload, {
+        headers: authHeaders(),
+      })
+      return response.data
+    } finally {
+      saving.value = false
+    }
+  }
+
+  // ─── Step 8: List Fundings for a Disbursement Log ────────────────────────
+  // GET /admin/disbursement-fundings/?disbursement_log_id=123
+  async function fetchDisbursementFundings(disbursementLogId) {
+    loading.value = true
+    try {
+      const response = await api.get(`${BASE}/admin/disbursement-fundings/`, {
+        params: { disbursement_log_id: disbursementLogId },
+        headers: authHeaders(),
+      })
+      return response.data.results ?? response.data.data ?? response.data ?? []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // ─── Step 9: Admin Disburse Payslips ─────────────────────────────────────
+  // PATCH /admin/disburse-payslips/
+  // { disbursement_log_id, employee_ids }
+  // Cash → status: disbursed | Bank → status: completed
+  async function disbursePayslips(disbursementLogId, employeeIds) {
     saving.value = true
     const ids = Array.isArray(employeeIds) ? employeeIds : [employeeIds]
-    console.group('🔧 bankTransfer API Call')
-    console.log('URL:', `${BASE}/payroll/admin/payslips/${payrollRunId}/bank-transfer/`)
-    console.log('Method: PATCH')
-    console.log('Payload:', { employee_ids: ids, payment_reference: paymentReference })
-
     try {
       const response = await api.patch(
-        `${BASE}/payroll/admin/payslips/${payrollRunId}/bank-transfer/`,
-        { employee_ids: ids, payment_reference: paymentReference },
+        `${BASE}/admin/disburse-payslips/`,
+        { disbursement_log_id: disbursementLogId, employee_ids: ids },
+        { headers: authHeaders() },
       )
-      console.log('✅ Success:', response.data)
-      console.groupEnd()
       return response.data
-    } catch (error) {
-      console.error('❌ Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      })
-      console.groupEnd()
-      throw error
     } finally {
       saving.value = false
     }
   }
 
-  // ─── Workflow: Fetch Payroll Run Employees ─────────────────────
-  async function fetchPayrollRunEmployees(runId, statusFilter = null) {
+  // ─── Workflow: Fetch Disbursement Log Employees ───────────────────────────
+  // Step 3: GET /admin/disbursement-logs/{id}/employees/
+  async function fetchPayrollRunEmployees(logId, statusFilter = null) {
     workflowLoading.value = true
-    console.group('🔧 fetchPayrollRunEmployees API Call')
-    console.log('URL:', `${BASE}/payroll/admin/payroll-runs/${runId}/employees/`)
-    console.log('Method: GET')
-
     try {
       const params = {}
       if (statusFilter) {
-        if (typeof statusFilter === 'string') {
-          params.status = statusFilter
-        } else if (Array.isArray(statusFilter)) {
-          params.status = statusFilter
-        }
+        params.status = Array.isArray(statusFilter) ? statusFilter : statusFilter
       }
 
-      const response = await api.get(`${BASE}/payroll/admin/payroll-runs/${runId}/employees/`, {
+      const response = await api.get(`${BASE}/admin/disbursement-logs/${logId}/employees/`, {
         params,
+        headers: authHeaders(),
       })
-
-      console.log('✅ Success:', response.data)
-      console.groupEnd()
 
       payrollRunEmployees.value =
         response.data.employees ?? response.data.data ?? response.data ?? []
-      payrollRunId.value = runId
+      payrollRunId.value = logId
       updateWorkflowStats()
       updateWorkflowStage()
       return payrollRunEmployees.value
-    } catch (error) {
-      console.error('❌ Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      })
-      console.groupEnd()
-      throw error
     } finally {
       workflowLoading.value = false
     }
@@ -406,16 +264,11 @@ export function usePayroll() {
   function updateWorkflowStats() {
     const employees = payrollRunEmployees.value
 
-    // Count by status
     const statusCounts = {
       draft: 0,
-      approved_admin: 0,
-      approved_owner: 0,
-      released: 0,
-      acknowledged: 0,
-      funded: 0,
-      cash_disbursed: 0,
-      bank_disbursed: 0,
+      pending_review: 0,
+      ready_for_payment: 0,
+      disbursed: 0,
       completed: 0,
     }
 
@@ -429,19 +282,18 @@ export function usePayroll() {
     workflowStats.value = {
       total: employees.length,
       ...statusCounts,
-      // Legacy compatibility (for UI)
-      adminApproved: statusCounts.approved_admin,
-      ownerApproved: statusCounts.approved_owner,
-      released: statusCounts.released,
-      acknowledged: statusCounts.acknowledged,
-      funded: statusCounts.funded,
-      cashDisbursed: statusCounts.cash_disbursed,
-      bankDisbursed: statusCounts.bank_disbursed,
-      completed: statusCounts.completed,
     }
   }
 
   // ─── Workflow: Update Stage ────────────────────────────────────
+  // Maps employee statuses → a single UI workflow stage for showing
+  // the correct action buttons.
+  //
+  //  draft             → admin can bulk-release
+  //  pending_review    → waiting for employees to acknowledge (read-only for admin)
+  //  ready_for_payment → admin can disburse (after funding)
+  //  disbursed         → cash employees waiting to confirm money received
+  //  completed         → done
   function updateWorkflowStage() {
     const employees = payrollRunEmployees.value
 
@@ -454,75 +306,15 @@ export function usePayroll() {
 
     if (allHaveStatus(['completed'])) {
       workflowStage.value = 'completed'
-    } else if (allHaveStatus(['cash_disbursed', 'bank_disbursed', 'completed'])) {
+    } else if (allHaveStatus(['disbursed', 'completed'])) {
       workflowStage.value = 'disbursed'
-    } else if (allHaveStatus(['funded', 'cash_disbursed', 'bank_disbursed', 'completed'])) {
-      workflowStage.value = 'funded'
-    } else if (
-      allHaveStatus(['acknowledged', 'funded', 'cash_disbursed', 'bank_disbursed', 'completed'])
-    ) {
-      workflowStage.value = 'acknowledged'
-    } else if (
-      allHaveStatus([
-        'released',
-        'acknowledged',
-        'funded',
-        'cash_disbursed',
-        'bank_disbursed',
-        'completed',
-      ])
-    ) {
-      workflowStage.value = 'released'
-    } else if (
-      allHaveStatus([
-        'approved_owner',
-        'released',
-        'acknowledged',
-        'funded',
-        'cash_disbursed',
-        'bank_disbursed',
-        'completed',
-      ])
-    ) {
-      workflowStage.value = 'owner_approved'
-    } else if (
-      allHaveStatus([
-        'approved_admin',
-        'approved_owner',
-        'released',
-        'acknowledged',
-        'funded',
-        'cash_disbursed',
-        'bank_disbursed',
-        'completed',
-      ])
-    ) {
-      workflowStage.value = 'admin_approved'
+    } else if (allHaveStatus(['ready_for_payment', 'disbursed', 'completed'])) {
+      workflowStage.value = 'ready_for_payment'
+    } else if (allHaveStatus(['pending_review', 'ready_for_payment', 'disbursed', 'completed'])) {
+      workflowStage.value = 'pending_review'
     } else {
       workflowStage.value = 'draft'
     }
-  }
-
-  // ─── Workflow: Check if stage has auto-selection behavior ──────
-  function isStageAutoSelectable(currentStage) {
-    return ['released', 'acknowledged', 'funded'].includes(currentStage)
-  }
-
-  // ─── Workflow: Check if employee is in pre-approved state ───────
-  function isEmployeePreApproved(emp, currentStage) {
-    if (!isStageAutoSelectable(currentStage)) return false
-
-    // In released/acknowledged/funded stages, employees with these statuses
-    // are considered pre-approved for earlier stages
-    const preApprovedStatuses = [
-      'released',
-      'acknowledged',
-      'funded',
-      'cash_disbursed',
-      'bank_disbursed',
-      'completed',
-    ]
-    return preApprovedStatuses.includes(emp.status)
   }
 
   // ─── Workflow: Get Actionable Employees ────────────────────────
@@ -531,59 +323,46 @@ export function usePayroll() {
 
     switch (currentStage) {
       case 'draft':
-        // Employees still in draft — need admin approval
+        // Admin can bulk-release draft payslips
         return employees.filter((e) => e.status === 'draft')
-      case 'admin_approved':
-        // Admin approved, waiting for owner approval
-        return employees.filter((e) => e.status === 'approved_admin')
-      case 'owner_approved':
-        // Owner approved, waiting to be released
-        return employees.filter((e) => e.status === 'approved_owner')
-      case 'released':
-      case 'acknowledged':
-        // All employees are auto-selected (locked in) for visual indication
-        // Return all employees in pre-approved state
-        return employees.filter((e) =>
-          [
-            'released',
-            'acknowledged',
-            'funded',
-            'cash_disbursed',
-            'bank_disbursed',
-            'completed',
-          ].includes(e.status),
-        )
-      case 'funded':
-        // Funded — need disbursement method selected per employee
-        return employees.filter((e) => e.status === 'funded')
+      case 'pending_review':
+        // Waiting for employee to acknowledge — read-only for admin
+        return employees.filter((e) => e.status === 'pending_review')
+      case 'ready_for_payment':
+        // Acknowledged by employee — admin can disburse
+        return employees.filter((e) => e.status === 'ready_for_payment')
+      case 'disbursed':
+        // Cash disbursed — waiting for employee to confirm money received
+        return employees.filter((e) => e.status === 'disbursed')
       default:
         return []
     }
   }
 
-  // ─── Workflow: Can Fund Payroll ────────────────────────────────
-  function canFundPayroll() {
-    const employees = payrollRunEmployees.value
-    if (employees.length === 0) return false
-    // ALL employees must be acknowledged before funding
-    return employees.every((e) =>
-      ['acknowledged', 'funded', 'cash_disbursed', 'bank_disbursed', 'completed'].includes(
-        e.status,
-      ),
-    )
+  // ─── Workflow: Check if stage has auto-selection behavior ──────
+  // In pending_review, employees are auto-selected (read-only display)
+  function isStageAutoSelectable(currentStage) {
+    return currentStage === 'pending_review'
   }
 
-  // ─── Payroll Runs Summary ─────────────────────────────────────────────────
+  // ─── Workflow: Check if employee is in pre-approved state ───────
+  function isEmployeePreApproved(emp, currentStage) {
+    if (!isStageAutoSelectable(currentStage)) return false
+    return ['pending_review', 'ready_for_payment', 'disbursed', 'completed'].includes(emp.status)
+  }
+
+  // ─── Disbursement Logs Summary ────────────────────────────────────────────
+  // Step 2: GET /admin/disbursement-logs/summary/?company_id=1
   const payrollRunsSummary = ref([])
 
   async function fetchPayrollRunsSummary(params = {}) {
     loading.value = true
     try {
-      const response = await api.get(`${BASE}/payroll/admin/payroll-runs/summary/`, {
+      const response = await api.get(`${BASE}/admin/disbursement-logs/summary/`, {
         params,
         headers: authHeaders(),
       })
-      payrollRunsSummary.value = response.data.data ?? response.data ?? []
+      payrollRunsSummary.value = response.data.results ?? response.data.data ?? response.data ?? []
       return payrollRunsSummary.value
     } finally {
       loading.value = false
@@ -635,6 +414,40 @@ export function usePayroll() {
     }
   }
 
+  // ─── Cost Centers ─────────────────────────────────────────────
+  // const costCenters = ref([])
+
+  // async function fetchCostCenters(companyId) {
+  // if (!companyId) return []
+  //oading.value = true
+  // try {
+  // const response = await api.get(`${BASE}/payroll/cost-centers/`, {
+  // params: { company: companyId },
+  //headers: authHeaders(),
+  // })
+  //costCenters.value = response.data.data ?? response.data ?? []
+  //return costCenters.value
+  //} finally {
+  loading.value = false
+  //}
+  //}
+
+  // ─── Step 1: Generate Payslips ────────────────────────────────
+  // POST /admin/generate-payslip/
+  // { company_id, department_id, start_date, end_date, type }
+  // Returns: { success, message, disbursement_log_id, generated_count }
+  async function createPayrollRun(payload) {
+    saving.value = true
+    try {
+      const response = await api.post(`${BASE}/admin/generate-payslip/`, payload, {
+        headers: authHeaders(),
+      })
+      return response.data
+    } finally {
+      saving.value = false
+    }
+  }
+
   return {
     // state
     payslips,
@@ -650,10 +463,10 @@ export function usePayroll() {
     payrollRunEmployees,
     workflowLoading,
     workflowStats,
-    // payroll runs summary
+    // disbursement logs summary (replaces payroll-runs/summary)
     payrollRunsSummary,
     fetchPayrollRunsSummary,
-    // payslips
+    // payslips / employees
     fetchPayslips,
     // hours
     fetchHoursBreakdown,
@@ -672,19 +485,21 @@ export function usePayroll() {
     fetchCustomMultipliers,
     createCustomMultipliers,
     updateCustomMultipliers,
-    // workflow methods
-    approveByAdmin,
-    approveByOwner,
-    releasePayslip,
-    fundPayroll,
-    cashDisbursement,
-    bankTransfer,
+    // Step 1: generate payslips + create disbursement log
+    createPayrollRun,
+    // Step 4: bulk release for employee review
+    bulkReleasePayslips,
+    // Step 7: add funding to a disbursement log
+    addDisbursementFunding,
+    // Step 8: list fundings for a log
+    fetchDisbursementFundings,
+    // Step 9: disburse (cash → disbursed, bank → completed)
+    disbursePayslips,
+    // Workflow helpers
     fetchPayrollRunEmployees,
     updateWorkflowStats,
     updateWorkflowStage,
     getActionableEmployees,
-    canFundPayroll,
-    // auto-selection helpers
     isStageAutoSelectable,
     isEmployeePreApproved,
   }
