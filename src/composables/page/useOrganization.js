@@ -179,11 +179,11 @@ export function useOrganization() {
 
   // ─── Cost Centers ─────────────────────────────────────────────────────────
 
-  async function fetchCostCenters() {
+  async function fetchCostCenters(overrideCompanyId = null) {
     loading.value = true
     try {
       const response = await api.get(`${BASE}/payroll/cost-centers/`, {
-        params: { company: companyId.value },
+        params: { company: overrideCompanyId ?? companyId.value },
         headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
