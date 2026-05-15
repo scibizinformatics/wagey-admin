@@ -114,6 +114,12 @@ export default defineConfig((ctx) => {
           changeOrigin: true,
           secure: false,
         },
+        {
+          context: ['/admin'],
+          target: apiBaseUrl,
+          changeOrigin: true,
+          secure: false,
+        },
       ],
     },
 
