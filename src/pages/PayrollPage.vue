@@ -369,7 +369,7 @@
                         class="employee-virtual-scroll"
                         style="max-height: 600px"
                       >
-                        <template v-slot="{ item: emp, index }">
+                        <template v-slot="{ item: emp }">
                           <div
                             class="employees-table-row"
                             :class="{
@@ -1316,7 +1316,6 @@ const bulkReleaseAll = async (run) => {
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
     try {
-      saving.value = true
       const result = await bulkReleasePayslips(run.id, draftIds)
       $q.notify({
         type: 'positive',
@@ -1328,8 +1327,6 @@ const bulkReleaseAll = async (run) => {
       selectAll.value = false
     } catch (err) {
       $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Release failed' })
-    } finally {
-      saving.value = false
     }
   })
 }
@@ -2140,7 +2137,6 @@ const closeDetailModal = () => {
 }
 
 const toggleSelectAll = () => {
-  const actionable = getActionableEmployees(workflowStage.value)
   if (selectAll.value) {
     selectAllActionable()
   } else {
@@ -2178,7 +2174,6 @@ const handleWorkflowAction = async (employee, action) => {
       cancel: { label: 'Cancel', flat: true },
     }).onOk(async () => {
       try {
-        saving.value = true
         await bulkReleasePayslips(logId, [employeeId])
         $q.notify({
           type: 'positive',
@@ -2190,8 +2185,6 @@ const handleWorkflowAction = async (employee, action) => {
         selectAll.value = false
       } catch (err) {
         $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Release failed' })
-      } finally {
-        saving.value = false
       }
     })
     return
@@ -2206,7 +2199,6 @@ const handleWorkflowAction = async (employee, action) => {
       cancel: { label: 'Cancel', flat: true },
     }).onOk(async () => {
       try {
-        saving.value = true
         await disbursePayslips(logId, [employeeId])
         $q.notify({
           type: 'positive',
@@ -2221,8 +2213,6 @@ const handleWorkflowAction = async (employee, action) => {
           type: 'negative',
           message: err?.response?.data?.message || 'Disbursement failed',
         })
-      } finally {
-        saving.value = false
       }
     })
     return
@@ -2250,7 +2240,6 @@ const handleBulkAction = async () => {
     ok: { label: 'Release', color: 'orange', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
-    saving.value = true
     try {
       const result = await bulkReleasePayslips(logId, employeeIds)
       $q.notify({
@@ -2259,8 +2248,6 @@ const handleBulkAction = async () => {
       })
     } catch {
       $q.notify({ type: 'negative', message: 'Bulk release failed' })
-    } finally {
-      saving.value = false
     }
     await fetchPayrollRunEmployees(logId)
     await fetchPayrollRunsSummary()
@@ -2305,7 +2292,6 @@ const handleBulkDisburse = async () => {
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
     try {
-      saving.value = true
       const result = await disbursePayslips(logId, readyIds)
       const summary = result?.summary ?? {}
       $q.notify({
@@ -2321,8 +2307,6 @@ const handleBulkDisburse = async () => {
         type: 'negative',
         message: err?.response?.data?.message || 'Disbursement failed',
       })
-    } finally {
-      saving.value = false
     }
   })
 }
@@ -2380,7 +2364,6 @@ const retryEmployeeAction = async (emp) => {
   if (!logId) return
   try {
     emp.lastError = null
-    saving.value = true
     if (emp.status === 'draft') {
       await bulkReleasePayslips(logId, [emp.employee_id])
     } else if (emp.status === 'ready_for_payment') {
@@ -2391,8 +2374,6 @@ const retryEmployeeAction = async (emp) => {
   } catch (err) {
     emp.lastError = err.response?.data?.message || err.message
     $q.notify({ type: 'negative', message: 'Retry failed' })
-  } finally {
-    saving.value = false
   }
 }
 </script>

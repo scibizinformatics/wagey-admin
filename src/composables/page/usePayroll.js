@@ -85,7 +85,7 @@ export function usePayroll() {
    */
   const workflowStage = ref('draft')
   const payrollRunEmployees = ref([])
-  const workflowLoading = ref(false)
+  // Note: workflowLoading removed - using per-operation loading states instead
   const workflowStats = ref({
     total: 0,
     draft: 0,
