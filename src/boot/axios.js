@@ -12,11 +12,27 @@ const baseURL =
 
 const api = axios.create({ baseURL })
 
+// Read Django's csrftoken cookie
+function getCsrfToken() {
+  const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]*)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 api.interceptors.request.use((config) => {
   const authStore = useAuthStore()
   if (authStore.token) {
     config.headers.Authorization = `Bearer ${authStore.token}`
   }
+
+  // Attach CSRF token for all mutating requests
+  const method = (config.method || '').toUpperCase()
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCsrfToken()
+    if (csrf) {
+      config.headers['X-CSRFToken'] = csrf
+    }
+  }
+
   return config
 })
 
