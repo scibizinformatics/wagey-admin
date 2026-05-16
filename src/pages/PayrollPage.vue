@@ -130,7 +130,7 @@
                 round
                 icon="refresh"
                 class="header-btn"
-                @click="fetchPayrollRunsSummary"
+                @click="fetchPayrollRunsSummary()"
                 :loading="isLoading('fetchingPayrollRunsSummary')"
               />
             </div>
@@ -216,7 +216,7 @@
                       icon="send"
                       color="orange"
                       label="Release"
-                      :loading="saving && selectedRun?.id === run.id"
+                      :loading="isSaving('bulkReleasing') && selectedRun?.id === run.id"
                       @click.stop="bulkReleaseAll(run)"
                     />
                     <!-- Pending review: waiting for employees to acknowledge -->
@@ -239,7 +239,7 @@
                       icon="payments"
                       color="teal"
                       label="Disburse"
-                      :loading="saving && selectedRun?.id === run.id"
+                      :loading="isSaving('disbursing') && selectedRun?.id === run.id"
                       @click.stop="selectAndDisburse(run)"
                     />
                     <!-- Disbursed/Completed -->
@@ -484,11 +484,11 @@
                                   round
                                   ><q-tooltip>Retry</q-tooltip></q-btn
                                 >
-                                <q-btn 
-                                  flat 
-                                  round 
-                                  dense 
-                                  icon="more_horiz" 
+                                <q-btn
+                                  flat
+                                  round
+                                  dense
+                                  icon="more_horiz"
                                   class="action-menu-btn"
                                   @click.stop="openEmployeeMenu($event, emp)"
                                 />
@@ -902,13 +902,137 @@
       </q-card>
     </q-dialog>
 
+    <!-- ========= STEP 5/6: EMPLOYEE PAYSLIP PREVIEW + ACKNOWLEDGE DIALOG ========= -->
+    <q-dialog v-model="showAcknowledgeDialog" persistent>
+      <q-card style="min-width: 460px; max-width: 95vw; border-radius: 14px">
+        <q-card-section class="modal-header">
+          <div class="modal-title-section">
+            <q-avatar size="44px" class="modal-avatar-icon" color="blue-1">
+              <q-icon name="fact_check" size="22px" color="blue" />
+            </q-avatar>
+            <div>
+              <div class="modal-title">Payslip Review &amp; Acknowledge</div>
+              <div class="modal-subtitle" v-if="acknowledgeTarget">
+                {{ acknowledgeTarget.employee_name || acknowledgeTarget.employee }}
+              </div>
+            </div>
+          </div>
+          <q-btn
+            icon="close"
+            flat
+            round
+            dense
+            class="modal-close-btn"
+            @click="showAcknowledgeDialog = false"
+          />
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section class="modal-content" v-if="acknowledgeTarget">
+          <!-- Loading spinner while fetching full payslip (Step 5) -->
+          <div
+            v-if="acknowledgeDialogLoading"
+            style="display: flex; align-items: center; gap: 10px; padding: 16px 0"
+          >
+            <q-spinner color="primary" size="20px" />
+            <span style="font-size: 13px; color: #6b7280">Loading payslip details…</span>
+          </div>
+
+          <template v-else>
+            <!-- Status banner -->
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 14px;
+                background: #eff6ff;
+                border-radius: 8px;
+                margin-bottom: 16px;
+              "
+            >
+              <q-icon name="info" color="blue" size="18px" />
+              <span style="font-size: 13px; color: #1d4ed8">
+                Review the payslip details below. The employee must acknowledge before payment can
+                be released.
+              </span>
+            </div>
+
+            <!-- Pay summary -->
+            <div class="modal-section-title">Pay summary</div>
+            <div class="detail-grid-cards">
+              <div class="detail-card">
+                <div class="detail-card-label">Net Pay</div>
+                <div class="detail-card-value amount-blue">
+                  {{ formatCurrency(acknowledgeTarget.net_pay) }}
+                </div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-card-label">Payment Method</div>
+                <div class="detail-card-value">
+                  {{ acknowledgeTarget.payment_method || '—' }}
+                </div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-card-label">Current Status</div>
+                <div class="detail-card-value">
+                  <q-badge
+                    :color="getStatusColor(acknowledgeTarget.status)"
+                    :label="getStatusLabel(acknowledgeTarget.status)"
+                  />
+                </div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-card-label">Review Status</div>
+                <div class="detail-card-value">
+                  {{ acknowledgeTarget.review_status || 'pending' }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Note -->
+            <div
+              style="
+                font-size: 12px;
+                color: #6b7280;
+                margin-top: 12px;
+                padding: 8px 12px;
+                background: #f9fafb;
+                border-radius: 6px;
+              "
+            >
+              Once acknowledged, the payslip moves to <strong>Ready for Payment</strong> and the
+              admin will be able to disburse it.
+            </div>
+          </template>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn
+            flat
+            label="Cancel"
+            no-caps
+            @click="showAcknowledgeDialog = false"
+            class="dialog-btn"
+          />
+          <q-btn
+            unelevated
+            color="blue"
+            label="Acknowledge Payslip"
+            icon="check_circle"
+            no-caps
+            :loading="acknowledgeLoading"
+            :disable="acknowledgeTarget?.status !== 'pending_review'"
+            @click="submitAcknowledge"
+            class="dialog-btn primary-btn"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- ===================== SHARED GLOBAL EMPLOYEE MENU ===================== -->
-    <q-menu 
-      ref="employeeMenuRef" 
-      anchor="bottom right" 
-      self="top right"
-      class="action-dropdown"
-    >
+    <q-menu ref="employeeMenuRef" anchor="bottom right" self="top right" class="action-dropdown">
       <q-list dense style="min-width: 180px">
         <!-- Step 4: Release for Employee Review -->
         <q-item
@@ -923,7 +1047,21 @@
           </q-item-section>
           <q-item-section>Release for Review</q-item-section>
         </q-item>
-        
+
+        <!-- Step 6: Acknowledge on behalf of employee (pending_review) -->
+        <q-item
+          v-if="menuEmployee?.status === 'pending_review'"
+          clickable
+          v-close-popup
+          @click="handleMenuAction('acknowledge')"
+          class="dropdown-item"
+        >
+          <q-item-section avatar>
+            <q-icon name="fact_check" size="16px" color="blue" />
+          </q-item-section>
+          <q-item-section>View &amp; Acknowledge</q-item-section>
+        </q-item>
+
         <!-- Step 9: Disburse (employee has acknowledged) -->
         <q-item
           v-if="menuEmployee?.status === 'ready_for_payment'"
@@ -937,45 +1075,44 @@
           </q-item-section>
           <q-item-section>Disburse</q-item-section>
         </q-item>
-        
-        <!-- Step 10: Disbursed → waiting for employee to confirm receipt -->
+
+        <!-- Step 10: Confirm money received (cash disbursed only) -->
         <q-item
-          v-if="menuEmployee?.status === 'disbursed'"
+          v-if="menuEmployee?.status === 'disbursed' && menuEmployee?.payment_method === 'cash'"
           clickable
           v-close-popup
           @click="handleMenuAction('markComplete')"
           class="dropdown-item"
         >
           <q-item-section avatar>
-            <q-icon name="hourglass_top" size="16px" color="amber-8" />
+            <q-icon name="handshake" size="16px" color="positive" />
           </q-item-section>
-          <q-item-section>Awaiting Employee Confirmation</q-item-section>
+          <q-item-section>Confirm Money Received</q-item-section>
         </q-item>
 
-        <q-separator
-          v-if="!['disbursed', 'completed'].includes(menuEmployee?.status)"
-          spaced
-        />
-
-        <!-- Common actions -->
+        <!-- Step 10: Bank disbursed → auto-completed, no action needed -->
         <q-item
-          clickable
-          v-close-popup
-          @click="handleMenuAction('view')"
+          v-if="menuEmployee?.status === 'disbursed' && menuEmployee?.payment_method !== 'cash'"
+          disable
           class="dropdown-item"
         >
+          <q-item-section avatar>
+            <q-icon name="hourglass_top" size="16px" color="grey" />
+          </q-item-section>
+          <q-item-section class="text-grey-6">Processing bank transfer…</q-item-section>
+        </q-item>
+
+        <q-separator v-if="!['completed'].includes(menuEmployee?.status)" spaced />
+
+        <!-- Common actions -->
+        <q-item clickable v-close-popup @click="handleMenuAction('view')" class="dropdown-item">
           <q-item-section avatar>
             <q-icon name="visibility" size="16px" />
           </q-item-section>
           <q-item-section>View details</q-item-section>
         </q-item>
-        
-        <q-item
-          clickable
-          v-close-popup
-          @click="handleMenuAction('download')"
-          class="dropdown-item"
-        >
+
+        <q-item clickable v-close-popup @click="handleMenuAction('download')" class="dropdown-item">
           <q-item-section avatar>
             <q-icon name="description" size="16px" />
           </q-item-section>
@@ -999,7 +1136,7 @@ const $q = useQuasar()
 const { companyId } = useCompany()
 const {
   payrollRunsSummary,
-  fetchPayrollRunsSummary,
+  fetchPayrollRunsSummary: _fetchPayrollRunsSummary,
   payrollRunId,
   workflowStage,
   payrollRunEmployees,
@@ -1015,10 +1152,26 @@ const {
   isStageAutoSelectable,
   isEmployeePreApproved,
   createPayrollRun,
+  // Step 5: employee view payslips
+  //employeePayslips,//
+  fetchEmployeePayslips,
+  // Step 6: employee acknowledge payslip
+  acknowledgePayslip,
+  // Step 10: employee confirm money received
+  confirmMoneyReceived,
 } = usePayroll()
 
 // ─── Departments (for the Add Disbursement dialog) ────────────────────────────
 const { departments, fetchDepartments } = useAdminDepartments()
+
+// ─── Always pass company_id to summary fetches ────────────────────────────────
+// fetchPayrollRunsSummary (from usePayroll) accepts a params object.
+// Wrapping it here means every call site automatically includes company_id
+// without having to remember to pass it manually everywhere.
+const fetchPayrollRunsSummary = (extraParams = {}) => {
+  const cid = Number(companyId.value)
+  return _fetchPayrollRunsSummary(cid ? { company_id: cid, ...extraParams } : extraParams)
+}
 
 // ─── Tab State ───────────────────────────────────────────────────────────────
 const activeTab = ref('logs')
@@ -1165,23 +1318,26 @@ const createRunForm = ref({
 const createRunLoading = ref(false)
 
 const openCreateRunDialog = () => {
-  if (!companyId.value) {
+  // Coerce to number so string "0" from useCompany is caught by the guard
+  const cid = Number(companyId.value)
+  if (!cid) {
     $q.notify({ type: 'warning', message: 'Please select a company first' })
     return
   }
   createRunForm.value = {
-    company_id: companyId.value ?? '',
+    company_id: cid,
     department_id: null,
     start_date: '',
     end_date: '',
     type: 'salary',
   }
   showCreateRunDialog.value = true
-  fetchDepartments(companyId.value)
+  fetchDepartments(cid)
 }
 
 const submitCreatePayrollRun = async () => {
-  const resolvedCompanyId = companyId.value || createRunForm.value.company_id
+  // Coerce both to number — guards against string "0" being treated as valid
+  const resolvedCompanyId = Number(companyId.value) || Number(createRunForm.value.company_id)
   if (!resolvedCompanyId || !createRunForm.value.start_date || !createRunForm.value.end_date) {
     $q.notify({ type: 'warning', message: 'Please fill in Company, Start Date, and End Date.' })
     return
@@ -1190,13 +1346,15 @@ const submitCreatePayrollRun = async () => {
     createRunLoading.value = true
     // Step 1: POST /admin/generate-payslip/
     const payload = {
-      company_id: Number(resolvedCompanyId),
+      company_id: resolvedCompanyId,
       start_date: createRunForm.value.start_date,
       end_date: createRunForm.value.end_date,
       type: createRunForm.value.type || 'salary',
     }
-    if (createRunForm.value.department_id) {
-      payload.department_id = Number(createRunForm.value.department_id)
+    // Only include department_id if it's a real non-zero ID
+    const deptId = Number(createRunForm.value.department_id)
+    if (deptId) {
+      payload.department_id = deptId
     }
     const result = await createPayrollRun(payload)
     $q.notify({
@@ -1245,8 +1403,9 @@ const loadRunEmployees = async (run) => {
 // Toggle run expansion - click header to expand/collapse
 const toggleRunExpanded = async (run) => {
   if (selectedRun.value?.id === run.id) {
-    // Collapse if already expanded
+    // Collapse — also clear payrollRunId so stale logId isn't used by row actions
     selectedRun.value = null
+    payrollRunId.value = null
   } else {
     // Expand and load only this run's employees (no full table refresh)
     selectedRun.value = run
@@ -1263,6 +1422,13 @@ const selectAndDisburse = async (run) => {
   selectedRun.value = run
   payrollRunId.value = run.id
   await fetchPayrollRunEmployees(run.id)
+  const readyCount = payrollRunEmployees.value.filter(
+    (e) => e.status === 'ready_for_payment',
+  ).length
+  if (!readyCount) {
+    $q.notify({ type: 'warning', message: 'No employees are ready for payment yet' })
+    return
+  }
   await handleBulkDisburse()
   await fetchPayrollRunsSummary()
 }
@@ -1349,12 +1515,12 @@ const toggleEmployeeSelection = (employeeId) => {
     newSet.add(employeeId)
   }
   selectedEmployeeIds.value = newSet
-  
+
   // Update selectAll state
   const actionable = getActionableEmployees(workflowStage.value)
   const actionableIds = new Set(actionable.map((e) => e.employee_id))
-  selectAll.value = actionableIds.size > 0 && 
-    Array.from(actionableIds).every((id) => newSet.has(id))
+  selectAll.value =
+    actionableIds.size > 0 && Array.from(actionableIds).every((id) => newSet.has(id))
 }
 
 const clearSelection = () => {
@@ -1390,6 +1556,9 @@ const handleMenuAction = async (action) => {
   switch (action) {
     case 'release':
       await handleWorkflowAction(emp, 'release')
+      break
+    case 'acknowledge':
+      openAcknowledgeDialog(emp)
       break
     case 'disburse':
       await handleWorkflowAction(emp, 'disburse')
@@ -2246,24 +2415,112 @@ const handleBulkAction = async () => {
         type: 'positive',
         message: `Released ${result?.summary?.updated_to_pending_review ?? employeeIds.length} payslip(s)!`,
       })
+      await fetchPayrollRunEmployees(logId)
+      await fetchPayrollRunsSummary()
+      clearSelection()
+      selectAll.value = false
     } catch {
       $q.notify({ type: 'negative', message: 'Bulk release failed' })
     }
-    await fetchPayrollRunEmployees(logId)
-    await fetchPayrollRunsSummary()
-    clearSelection()
-    selectAll.value = false
   })
 }
 
-// handleMarkComplete is now employee-side (Step 10).
-// Admin can only monitor. We keep a stub for the UI dropdown item visibility.
+// ─── Step 10: Confirm Money Received (cash only) ──────────────────────────
+// Called from the employee-row menu when status === 'disbursed'.
+// This calls PATCH /employee/payslips/<id>/money-received/ on behalf of the
+// employee (e.g. admin confirms physical handoff), moving the payslip to
+// 'completed'. If you want strict employee-only flow, remove this handler
+// and keep the menu item read-only.
 const handleMarkComplete = (employee) => {
-  $q.notify({
-    type: 'info',
-    message: `Waiting for ${employee.employee_name || employee.employee} to confirm receipt via the app.`,
-    timeout: 4000,
+  const payslipId = employee.payslip_id
+  if (!payslipId) {
+    $q.notify({ type: 'warning', message: 'No payslip ID found for this employee' })
+    return
+  }
+
+  $q.dialog({
+    title: 'Confirm Money Received',
+    message: `Confirm that ${employee.employee_name || employee.employee} has physically received their cash payment? This will mark their payslip as Completed.`,
+    ok: { label: 'Confirm Received', color: 'positive', unelevated: true },
+    cancel: { label: 'Cancel', flat: true },
+  }).onOk(async () => {
+    try {
+      const result = await confirmMoneyReceived(payslipId)
+      $q.notify({
+        type: 'positive',
+        message: `Marked as received for ${employee.employee_name || employee.employee}.${result?.disbursement_log_closed ? ' Disbursement log is now closed.' : ''}`,
+      })
+      const logId = payrollRunId.value
+      if (logId) {
+        await fetchPayrollRunEmployees(logId)
+        await fetchPayrollRunsSummary()
+      }
+    } catch (err) {
+      $q.notify({
+        type: 'negative',
+        message:
+          err?.response?.data?.message ||
+          'Failed to confirm receipt. Employee may need to confirm via the app.',
+      })
+    }
   })
+}
+
+// ─── Step 5 & 6: Employee Payslip Preview + Acknowledge ──────────────────
+// Opens a dialog showing the employee's payslip with an Acknowledge button.
+// Calls GET /employee/payslips/ (Step 5) to load full data, then
+// PATCH /employee/payslips/<id>/acknowledge/ (Step 6) to acknowledge.
+const showAcknowledgeDialog = ref(false)
+const acknowledgeTarget = ref(null)
+const acknowledgeLoading = ref(false)
+const acknowledgeDialogLoading = ref(false)
+
+const openAcknowledgeDialog = async (employee) => {
+  acknowledgeTarget.value = employee
+  showAcknowledgeDialog.value = true
+  // Step 5: fetch the employee's own payslip list to get full payslip details
+  acknowledgeDialogLoading.value = true
+  try {
+    const payslips = await fetchEmployeePayslips(companyId.value)
+    // Merge full payslip data into acknowledgeTarget if we find a match
+    const full = payslips.find((p) => p.id === employee.payslip_id)
+    if (full) {
+      acknowledgeTarget.value = { ...employee, ...full, payslip_id: full.id ?? employee.payslip_id }
+    }
+  } catch {
+    // Non-fatal — dialog still shows with partial data from the employee row
+  } finally {
+    acknowledgeDialogLoading.value = false
+  }
+}
+
+const submitAcknowledge = async () => {
+  const emp = acknowledgeTarget.value
+  if (!emp?.payslip_id) return
+  acknowledgeLoading.value = true
+  try {
+    const result = await acknowledgePayslip(emp.payslip_id, 'web')
+    $q.notify({
+      type: 'positive',
+      message: `Payslip acknowledged for ${emp.employee_name || emp.employee}. Status: ${result?.new_status ?? 'ready_for_payment'}.`,
+    })
+    showAcknowledgeDialog.value = false
+    acknowledgeTarget.value = null
+    const logId = payrollRunId.value
+    if (logId) {
+      await fetchPayrollRunEmployees(logId)
+      await fetchPayrollRunsSummary()
+    }
+  } catch (err) {
+    const status = err?.response?.status
+    const msg =
+      status === 403
+        ? 'Permission denied — this action must be completed by the employee in their own app.'
+        : err?.response?.data?.message || 'Acknowledge failed'
+    $q.notify({ type: 'negative', message: msg })
+  } finally {
+    acknowledgeLoading.value = false
+  }
 }
 
 // Step 9: bulk disburse selected ready_for_payment employees
@@ -2368,6 +2625,9 @@ const retryEmployeeAction = async (emp) => {
       await bulkReleasePayslips(logId, [emp.employee_id])
     } else if (emp.status === 'ready_for_payment') {
       await disbursePayslips(logId, [emp.employee_id])
+    } else if (emp.status === 'disbursed' && emp.payment_method === 'cash' && emp.payslip_id) {
+      // Step 10 retry: cash employee failed to confirm receipt
+      await confirmMoneyReceived(emp.payslip_id)
     }
     $q.notify({ type: 'positive', message: `Retried: ${emp.employee_name || emp.employee}` })
     await fetchPayrollRunEmployees(logId)
