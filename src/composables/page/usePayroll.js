@@ -358,6 +358,19 @@ export function usePayroll() {
   function updateWorkflowStats() {
     const employees = payrollRunEmployees.value
 
+    // Ensure employees is an array before processing
+    if (!Array.isArray(employees)) {
+      workflowStats.value = {
+        total: 0,
+        draft: 0,
+        pending_review: 0,
+        ready_for_payment: 0,
+        disbursed: 0,
+        completed: 0,
+      }
+      return
+    }
+
     const statusCounts = {
       draft: 0,
       pending_review: 0,
@@ -391,7 +404,8 @@ export function usePayroll() {
   function updateWorkflowStage() {
     const employees = payrollRunEmployees.value
 
-    if (employees.length === 0) {
+    // Ensure employees is an array
+    if (!Array.isArray(employees) || employees.length === 0) {
       workflowStage.value = 'draft'
       return
     }
