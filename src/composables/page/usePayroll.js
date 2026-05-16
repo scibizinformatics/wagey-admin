@@ -3,6 +3,25 @@ import { api } from 'src/boot/axios'
 // import { useCompany } from 'src/composables/page/useCompany'
 import { BASE, authHeaders } from 'src/composables/utils/http'
 
+// Store abort controllers for request cancellation
+const abortControllers = new Map()
+
+const getAbortController = (key) => {
+  // Cancel any existing request with this key
+  const existing = abortControllers.get(key)
+  if (existing) {
+    existing.abort()
+    abortControllers.delete(key)
+  }
+  const controller = new AbortController()
+  abortControllers.set(key, controller)
+  return controller
+}
+
+const clearAbortController = (key) => {
+  abortControllers.delete(key)
+}
+
 export function usePayroll() {
   // const { companyId } = useCompany()
 
@@ -11,8 +30,46 @@ export function usePayroll() {
   const contracts = ref([])
   const contractTypes = ref([])
   const customMultipliers = ref(null)
-  const loading = ref(false)
-  const saving = ref(false)
+
+  // Per-operation loading states (prevents race conditions)
+  const loadingStates = ref({
+    fetchingPayslips: false,
+    fetchingAllowanceTypes: false,
+    fetchingContracts: false,
+    fetchingContractTypes: false,
+    fetchingPayrollRunsSummary: false,
+    fetchingPayrollRunEmployees: false,
+    fetchingDisbursementFundings: false,
+    fetchingCustomMultipliers: false,
+  })
+
+  // Per-operation saving states (prevents duplicate submissions)
+  const savingStates = ref({
+    creatingAllowanceType: false,
+    updatingAllowanceType: false,
+    deletingAllowanceType: false,
+    creatingContract: false,
+    updatingContract: false,
+    deletingContract: false,
+    bulkReleasing: false,
+    disbursing: false,
+    addingFunding: false,
+    creatingPayrollRun: false,
+    updatingCustomMultipliers: false,
+    creatingCustomMultipliers: false,
+  })
+
+  // Helper functions to get/set loading states
+  const setLoading = (key, value) => {
+    loadingStates.value[key] = value
+  }
+
+  const setSaving = (key, value) => {
+    savingStates.value[key] = value
+  }
+
+  const isLoading = (key) => loadingStates.value[key]
+  const isSaving = (key) => savingStates.value[key]
 
   // ─── Workflow State ────────────────────────────────────────────────
   const payrollRunId = ref(null)
@@ -42,112 +99,138 @@ export function usePayroll() {
 
   async function fetchPayslips(logId = null, params = {}) {
     if (!logId) return []
-    loading.value = true
+    const controller = getAbortController('fetchPayslips')
+    setLoading('fetchingPayslips', true)
     try {
       const response = await api.get(`${BASE}/admin/disbursement-logs/${logId}/employees/`, {
         params,
         headers: authHeaders(),
+        signal: controller.signal,
       })
       payslips.value = response.data.employees ?? response.data.data ?? response.data ?? []
       return payslips.value
     } finally {
-      loading.value = false
+      setLoading('fetchingPayslips', false)
+      clearAbortController('fetchPayslips')
     }
   }
 
   // ─── Hours breakdown ──────────────────────────────────────────────────────
 
   async function fetchHoursBreakdown(employeeId, period) {
-    const response = await api.get(`${BASE}/attendance/${employeeId}/hours-breakdown/`, {
-      params: { period },
-      headers: authHeaders(),
-    })
-    return response.data
+    const controller = getAbortController(`hoursBreakdown-${employeeId}`)
+    try {
+      const response = await api.get(`${BASE}/attendance/${employeeId}/hours-breakdown/`, {
+        params: { period },
+        headers: authHeaders(),
+        signal: controller.signal,
+      })
+      return response.data
+    } finally {
+      clearAbortController(`hoursBreakdown-${employeeId}`)
+    }
   }
 
   // ─── Allowance types ──────────────────────────────────────────────────────
 
   async function fetchAllowanceTypes() {
-    loading.value = true
+    const controller = getAbortController('fetchAllowanceTypes')
+    setLoading('fetchingAllowanceTypes', true)
     try {
       const response = await api.get(`${BASE}/payroll/admin/allowance-types/`, {
         headers: authHeaders(),
+        signal: controller.signal,
       })
       allowanceTypes.value = response.data.data ?? response.data ?? []
       return allowanceTypes.value
     } finally {
-      loading.value = false
+      setLoading('fetchingAllowanceTypes', false)
+      clearAbortController('fetchAllowanceTypes')
     }
   }
 
   async function createAllowanceType(payload) {
-    saving.value = true
+    setSaving('creatingAllowanceType', true)
     try {
       const response = await api.post(`${BASE}/payroll/admin/allowance-types/`, payload, {
         headers: authHeaders(),
       })
       return response.data
     } finally {
-      saving.value = false
+      setSaving('creatingAllowanceType', false)
     }
   }
 
   async function updateAllowanceType(typeId, payload) {
-    saving.value = true
+    setSaving('updatingAllowanceType', true)
     try {
       const response = await api.put(`${BASE}/payroll/admin/allowance-types/${typeId}/`, payload, {
         headers: authHeaders(),
       })
       return response.data
     } finally {
-      saving.value = false
+      setSaving('updatingAllowanceType', false)
     }
   }
 
   async function deleteAllowanceType(typeId) {
-    const response = await api.delete(`${BASE}/payroll/admin/allowance-types/${typeId}/`, {
-      headers: authHeaders(),
-    })
-    return response.data
+    setSaving('deletingAllowanceType', true)
+    try {
+      const response = await api.delete(`${BASE}/payroll/admin/allowance-types/${typeId}/`, {
+        headers: authHeaders(),
+      })
+      return response.data
+    } finally {
+      setSaving('deletingAllowanceType', false)
+    }
   }
 
   // ─── Employee contracts ───────────────────────────────────────────────────
 
   async function fetchContracts() {
-    loading.value = true
+    const controller = getAbortController('fetchContracts')
+    setLoading('fetchingContracts', true)
     try {
       const response = await api.get(`${BASE}/contracts/employee-contracts/`, {
         headers: authHeaders(),
+        signal: controller.signal,
       })
       contracts.value = response.data.data ?? response.data ?? []
       return contracts.value
     } finally {
-      loading.value = false
+      setLoading('fetchingContracts', false)
+      clearAbortController('fetchContracts')
     }
   }
 
   async function fetchContractTypes() {
-    const response = await api.get(`${BASE}/contracts/contract-types/`, {
-      headers: authHeaders(),
-    })
-    contractTypes.value = response.data.data ?? response.data ?? []
-    return contractTypes.value
+    const controller = getAbortController('fetchContractTypes')
+    try {
+      const response = await api.get(`${BASE}/contracts/contract-types/`, {
+        headers: authHeaders(),
+        signal: controller.signal,
+      })
+      contractTypes.value = response.data.data ?? response.data ?? []
+      return contractTypes.value
+    } finally {
+      clearAbortController('fetchContractTypes')
+    }
   }
 
   async function createContract(payload) {
-    saving.value = true
+    setSaving('creatingContract', true)
     try {
       const response = await api.post(`${BASE}/contracts/employee-contracts/`, payload, {
         headers: authHeaders(),
       })
       return response.data
     } finally {
-      saving.value = false
+      setSaving('creatingContract', false)
     }
   }
 
   async function updateContract(contractId, payload) {
-    saving.value = true
+    setSaving('updatingContract', true)
     try {
       const response = await api.patch(
         `${BASE}/contracts/employee-contracts/${contractId}/`,
@@ -156,15 +239,20 @@ export function usePayroll() {
       )
       return response.data
     } finally {
-      saving.value = false
+      setSaving('updatingContract', false)
     }
   }
 
   async function deleteContract(contractId) {
-    const response = await api.delete(`${BASE}/contracts/employee-contracts/${contractId}/`, {
-      headers: authHeaders(),
-    })
-    return response.data
+    setSaving('deletingContract', true)
+    try {
+      const response = await api.delete(`${BASE}/contracts/employee-contracts/${contractId}/`, {
+        headers: authHeaders(),
+      })
+      return response.data
+    } finally {
+      setSaving('deletingContract', false)
+    }
   }
 
   // ─── Step 4: Bulk Release Payslips for Review ─────────────────────────────
@@ -172,7 +260,7 @@ export function usePayroll() {
   // { disbursement_log_id, employee_ids }
   // → Payslip status: pending_review
   async function bulkReleasePayslips(disbursementLogId, employeeIds) {
-    saving.value = true
+    setSaving('bulkReleasing', true)
     const ids = Array.isArray(employeeIds) ? employeeIds : [employeeIds]
     try {
       const response = await api.patch(
@@ -182,36 +270,39 @@ export function usePayroll() {
       )
       return response.data
     } finally {
-      saving.value = false
+      setSaving('bulkReleasing', false)
     }
   }
 
   // ─── Step 7: Add Disbursement Funding ────────────────────────────────────
   // POST /admin/disbursement-fundings/
   async function addDisbursementFunding(payload) {
-    saving.value = true
+    setSaving('addingFunding', true)
     try {
       const response = await api.post(`${BASE}/admin/disbursement-fundings/`, payload, {
         headers: authHeaders(),
       })
       return response.data
     } finally {
-      saving.value = false
+      setSaving('addingFunding', false)
     }
   }
 
   // ─── Step 8: List Fundings for a Disbursement Log ────────────────────────
   // GET /admin/disbursement-fundings/?disbursement_log_id=123
   async function fetchDisbursementFundings(disbursementLogId) {
-    loading.value = true
+    const controller = getAbortController('fetchDisbursementFundings')
+    setLoading('fetchingDisbursementFundings', true)
     try {
       const response = await api.get(`${BASE}/admin/disbursement-fundings/`, {
         params: { disbursement_log_id: disbursementLogId },
         headers: authHeaders(),
+        signal: controller.signal,
       })
       return response.data.results ?? response.data.data ?? response.data ?? []
     } finally {
-      loading.value = false
+      setLoading('fetchingDisbursementFundings', false)
+      clearAbortController('fetchDisbursementFundings')
     }
   }
 
@@ -220,7 +311,7 @@ export function usePayroll() {
   // { disbursement_log_id, employee_ids }
   // Cash → status: disbursed | Bank → status: completed
   async function disbursePayslips(disbursementLogId, employeeIds) {
-    saving.value = true
+    setSaving('disbursing', true)
     const ids = Array.isArray(employeeIds) ? employeeIds : [employeeIds]
     try {
       const response = await api.patch(
@@ -230,14 +321,15 @@ export function usePayroll() {
       )
       return response.data
     } finally {
-      saving.value = false
+      setSaving('disbursing', false)
     }
   }
 
   // ─── Workflow: Fetch Disbursement Log Employees ───────────────────────────
   // Step 3: GET /admin/disbursement-logs/{id}/employees/
   async function fetchPayrollRunEmployees(logId, statusFilter = null) {
-    workflowLoading.value = true
+    const controller = getAbortController('fetchPayrollRunEmployees')
+    setLoading('fetchingPayrollRunEmployees', true)
     try {
       const params = {}
       if (statusFilter) {
@@ -247,6 +339,7 @@ export function usePayroll() {
       const response = await api.get(`${BASE}/admin/disbursement-logs/${logId}/employees/`, {
         params,
         headers: authHeaders(),
+        signal: controller.signal,
       })
 
       payrollRunEmployees.value =
@@ -256,7 +349,8 @@ export function usePayroll() {
       updateWorkflowStage()
       return payrollRunEmployees.value
     } finally {
-      workflowLoading.value = false
+      setLoading('fetchingPayrollRunEmployees', false)
+      clearAbortController('fetchPayrollRunEmployees')
     }
   }
 
@@ -321,6 +415,11 @@ export function usePayroll() {
   function getActionableEmployees(currentStage) {
     const employees = payrollRunEmployees.value
 
+    // Ensure employees is an array before filtering
+    if (!Array.isArray(employees)) {
+      return []
+    }
+
     switch (currentStage) {
       case 'draft':
         // Admin can bulk-release draft payslips
@@ -356,38 +455,44 @@ export function usePayroll() {
   const payrollRunsSummary = ref([])
 
   async function fetchPayrollRunsSummary(params = {}) {
-    loading.value = true
+    const controller = getAbortController('fetchPayrollRunsSummary')
+    setLoading('fetchingPayrollRunsSummary', true)
     try {
       const response = await api.get(`${BASE}/admin/disbursement-logs/summary/`, {
         params,
         headers: authHeaders(),
+        signal: controller.signal,
       })
       payrollRunsSummary.value = response.data.results ?? response.data.data ?? response.data ?? []
       return payrollRunsSummary.value
     } finally {
-      loading.value = false
+      setLoading('fetchingPayrollRunsSummary', false)
+      clearAbortController('fetchPayrollRunsSummary')
     }
   }
 
   // ─── Custom Multipliers ───────────────────────────────────────────────────
 
   async function fetchCustomMultipliers(companyId) {
-    loading.value = true
+    const controller = getAbortController('fetchCustomMultipliers')
+    setLoading('fetchingCustomMultipliers', true)
     try {
       const response = await api.get(`${BASE}/payroll/admin/company-custom-multipliers/`, {
         params: { company: companyId },
         headers: authHeaders(),
+        signal: controller.signal,
       })
       const data = response.data.data ?? response.data ?? []
       customMultipliers.value = Array.isArray(data) ? (data[0] ?? null) : data
       return customMultipliers.value
     } finally {
-      loading.value = false
+      setLoading('fetchingCustomMultipliers', false)
+      clearAbortController('fetchCustomMultipliers')
     }
   }
 
   async function createCustomMultipliers(payload) {
-    saving.value = true
+    setSaving('creatingCustomMultipliers', true)
     try {
       const response = await api.post(
         `${BASE}/payroll/admin/company-custom-multipliers/`,
@@ -396,12 +501,12 @@ export function usePayroll() {
       )
       return response.data
     } finally {
-      saving.value = false
+      setSaving('creatingCustomMultipliers', false)
     }
   }
 
   async function updateCustomMultipliers(companyId, payload) {
-    saving.value = true
+    setSaving('updatingCustomMultipliers', true)
     try {
       const response = await api.patch(
         `${BASE}/payroll/admin/company-custom-multipliers/${companyId}/`,
@@ -410,41 +515,25 @@ export function usePayroll() {
       )
       return response.data
     } finally {
-      saving.value = false
+      setSaving('updatingCustomMultipliers', false)
     }
   }
 
-  // ─── Cost Centers ─────────────────────────────────────────────
-  // const costCenters = ref([])
-
-  // async function fetchCostCenters(companyId) {
-  // if (!companyId) return []
-  //oading.value = true
-  // try {
-  // const response = await api.get(`${BASE}/payroll/cost-centers/`, {
-  // params: { company: companyId },
-  //headers: authHeaders(),
-  // })
-  //costCenters.value = response.data.data ?? response.data ?? []
-  //return costCenters.value
-  //} finally {
-  loading.value = false
-  //}
-  //}
+  // ─── Cost Centers (commented out) ────────────────────────────
 
   // ─── Step 1: Generate Payslips ────────────────────────────────
   // POST /admin/generate-payslip/
   // { company_id, department_id, start_date, end_date, type }
   // Returns: { success, message, disbursement_log_id, generated_count }
   async function createPayrollRun(payload) {
-    saving.value = true
+    setSaving('creatingPayrollRun', true)
     try {
       const response = await api.post(`${BASE}/admin/generate-payslip/`, payload, {
         headers: authHeaders(),
       })
       return response.data
     } finally {
-      saving.value = false
+      setSaving('creatingPayrollRun', false)
     }
   }
 
@@ -455,13 +544,15 @@ export function usePayroll() {
     contracts,
     contractTypes,
     customMultipliers,
-    loading,
-    saving,
+    // Per-operation loading/saving states
+    loadingStates,
+    savingStates,
+    isLoading,
+    isSaving,
     // workflow state
     payrollRunId,
     workflowStage,
     payrollRunEmployees,
-    workflowLoading,
     workflowStats,
     // disbursement logs summary (replaces payroll-runs/summary)
     payrollRunsSummary,
