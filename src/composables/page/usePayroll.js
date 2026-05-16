@@ -342,8 +342,8 @@ export function usePayroll() {
         signal: controller.signal,
       })
 
-      payrollRunEmployees.value =
-        response.data.employees ?? response.data.data ?? response.data ?? []
+      const rawData = response.data.employees ?? response.data.data ?? response.data ?? []
+      payrollRunEmployees.value = Array.isArray(rawData) ? rawData : []
       payrollRunId.value = logId
       updateWorkflowStats()
       updateWorkflowStage()
