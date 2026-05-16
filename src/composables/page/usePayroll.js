@@ -3,29 +3,27 @@ import { api } from 'src/boot/axios'
 // import { useCompany } from 'src/composables/page/useCompany'
 import { BASE, authHeaders } from 'src/composables/utils/http'
 
-// Store abort controllers for request cancellation
-const abortControllers = new Map()
-
-const getAbortController = (key) => {
-  // Cancel any existing request with this key
-  const existing = abortControllers.get(key)
-  if (existing) {
-    existing.abort()
-    abortControllers.delete(key)
-  }
-  const controller = new AbortController()
-  abortControllers.set(key, controller)
-  return controller
-}
-
-const clearAbortController = (key) => {
-  abortControllers.delete(key)
-}
-
 export function usePayroll() {
   // const { companyId } = useCompany()
 
-  const payslips = ref([])
+  // ─── Abort controllers (per-instance — not shared across composable calls) ─
+  const abortControllers = new Map()
+
+  const getAbortController = (key) => {
+    const existing = abortControllers.get(key)
+    if (existing) {
+      existing.abort()
+      abortControllers.delete(key)
+    }
+    const controller = new AbortController()
+    abortControllers.set(key, controller)
+    return controller
+  }
+
+  const clearAbortController = (key) => {
+    abortControllers.delete(key)
+  }
+
   const allowanceTypes = ref([])
   const contracts = ref([])
   const contractTypes = ref([])
@@ -33,7 +31,6 @@ export function usePayroll() {
 
   // Per-operation loading states (prevents race conditions)
   const loadingStates = ref({
-    fetchingPayslips: false,
     fetchingAllowanceTypes: false,
     fetchingContracts: false,
     fetchingContractTypes: false,
@@ -41,6 +38,8 @@ export function usePayroll() {
     fetchingPayrollRunEmployees: false,
     fetchingDisbursementFundings: false,
     fetchingCustomMultipliers: false,
+    // Employee-side (Step 5)
+    fetchingEmployeePayslips: false,
   })
 
   // Per-operation saving states (prevents duplicate submissions)
@@ -57,6 +56,9 @@ export function usePayroll() {
     creatingPayrollRun: false,
     updatingCustomMultipliers: false,
     creatingCustomMultipliers: false,
+    // Employee-side actions (Steps 5, 6, 10)
+    acknowledgingPayslip: false,
+    confirmingMoneyReceived: false,
   })
 
   // Helper functions to get/set loading states
@@ -94,26 +96,6 @@ export function usePayroll() {
     disbursed: 0,
     completed: 0,
   })
-
-  // ─── Payslips ─────────────────────────────────────────────────────────────
-
-  async function fetchPayslips(logId = null, params = {}) {
-    if (!logId) return []
-    const controller = getAbortController('fetchPayslips')
-    setLoading('fetchingPayslips', true)
-    try {
-      const response = await api.get(`${BASE}/admin/disbursement-logs/${logId}/employees/`, {
-        params,
-        headers: authHeaders(),
-        signal: controller.signal,
-      })
-      payslips.value = response.data.employees ?? response.data.data ?? response.data ?? []
-      return payslips.value
-    } finally {
-      setLoading('fetchingPayslips', false)
-      clearAbortController('fetchPayslips')
-    }
-  }
 
   // ─── Hours breakdown ──────────────────────────────────────────────────────
 
@@ -274,6 +256,73 @@ export function usePayroll() {
     }
   }
 
+  // ─── Step 5: Employee Views Payslips ─────────────────────────────────────
+  // GET /employee/payslips/?company=<id>
+  // Returns a list of the authenticated employee's payslips.
+  const employeePayslips = ref([])
+
+  async function fetchEmployeePayslips(companyId) {
+    const controller = getAbortController('fetchEmployeePayslips')
+    setLoading('fetchingEmployeePayslips', true)
+    try {
+      const params = {}
+      if (companyId) params.company = companyId
+      const response = await api.get(`${BASE}/employee/payslips/`, {
+        params,
+        headers: authHeaders(),
+        signal: controller.signal,
+      })
+      const raw = response.data
+      employeePayslips.value = raw?.results ?? raw?.data ?? raw ?? []
+      return employeePayslips.value
+    } finally {
+      setLoading('fetchingEmployeePayslips', false)
+      clearAbortController('fetchEmployeePayslips')
+    }
+  }
+
+  // ─── Step 6: Employee Acknowledge Payslip ────────────────────────────────
+  // PATCH /employee/payslips/<id>/acknowledge/
+  // Header: X-Acknowledge-Source: app | web
+  // → Payslip: pending_review → ready_for_payment
+  //   review_status = acknowledged | payment_status = ready
+  async function acknowledgePayslip(payslipId, source = 'web') {
+    setSaving('acknowledgingPayslip', true)
+    try {
+      const response = await api.patch(
+        `${BASE}/employee/payslips/${payslipId}/acknowledge/`,
+        {},
+        {
+          headers: {
+            ...authHeaders(),
+            'X-Acknowledge-Source': source,
+          },
+        },
+      )
+      return response.data
+    } finally {
+      setSaving('acknowledgingPayslip', false)
+    }
+  }
+
+  // ─── Step 10: Employee Confirm Money Received (cash only) ─────────────────
+  // PATCH /employee/payslips/<id>/money-received/
+  // Guard: status=disbursed AND payment_status=ready
+  // → Payslip: completed | payment_status = complete
+  async function confirmMoneyReceived(payslipId) {
+    setSaving('confirmingMoneyReceived', true)
+    try {
+      const response = await api.patch(
+        `${BASE}/employee/payslips/${payslipId}/money-received/`,
+        {},
+        { headers: authHeaders() },
+      )
+      return response.data
+    } finally {
+      setSaving('confirmingMoneyReceived', false)
+    }
+  }
+
   // ─── Step 7: Add Disbursement Funding ────────────────────────────────────
   // POST /admin/disbursement-fundings/
   async function addDisbursementFunding(payload) {
@@ -333,7 +382,8 @@ export function usePayroll() {
     try {
       const params = {}
       if (statusFilter) {
-        params.status = Array.isArray(statusFilter) ? statusFilter : statusFilter
+        // Pass array as comma-joined string so the backend receives ?status=draft,pending_review
+        params.status = Array.isArray(statusFilter) ? statusFilter.join(',') : statusFilter
       }
 
       const response = await api.get(`${BASE}/admin/disbursement-logs/${logId}/employees/`, {
@@ -477,7 +527,9 @@ export function usePayroll() {
         headers: authHeaders(),
         signal: controller.signal,
       })
-      payrollRunsSummary.value = response.data.results ?? response.data.data ?? response.data ?? []
+      const raw = response.data
+      const extracted = raw?.results ?? raw?.data ?? raw ?? []
+      payrollRunsSummary.value = Array.isArray(extracted) ? extracted : []
       return payrollRunsSummary.value
     } finally {
       setLoading('fetchingPayrollRunsSummary', false)
@@ -553,7 +605,6 @@ export function usePayroll() {
 
   return {
     // state
-    payslips,
     allowanceTypes,
     contracts,
     contractTypes,
@@ -571,8 +622,6 @@ export function usePayroll() {
     // disbursement logs summary (replaces payroll-runs/summary)
     payrollRunsSummary,
     fetchPayrollRunsSummary,
-    // payslips / employees
-    fetchPayslips,
     // hours
     fetchHoursBreakdown,
     // allowance types
@@ -594,12 +643,19 @@ export function usePayroll() {
     createPayrollRun,
     // Step 4: bulk release for employee review
     bulkReleasePayslips,
+    // Step 5: employee view payslips
+    employeePayslips,
+    fetchEmployeePayslips,
+    // Step 6: employee acknowledge payslip
+    acknowledgePayslip,
     // Step 7: add funding to a disbursement log
     addDisbursementFunding,
     // Step 8: list fundings for a log
     fetchDisbursementFundings,
     // Step 9: disburse (cash → disbursed, bank → completed)
     disbursePayslips,
+    // Step 10: employee confirm money received (cash only)
+    confirmMoneyReceived,
     // Workflow helpers
     fetchPayrollRunEmployees,
     updateWorkflowStats,
