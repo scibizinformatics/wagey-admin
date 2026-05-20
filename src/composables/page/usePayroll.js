@@ -100,6 +100,7 @@ export function usePayroll() {
   // ─── Hours breakdown ──────────────────────────────────────────────────────
 
   async function fetchHoursBreakdown(employeeId, period) {
+    console.log('[usePayroll] fetchHoursBreakdown → request', { employeeId, period })
     const controller = getAbortController(`hoursBreakdown-${employeeId}`)
     try {
       const response = await api.get(`${BASE}/attendance/${employeeId}/hours-breakdown/`, {
@@ -107,7 +108,15 @@ export function usePayroll() {
         headers: authHeaders(),
         signal: controller.signal,
       })
+      console.log('[usePayroll] fetchHoursBreakdown ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] fetchHoursBreakdown ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       clearAbortController(`hoursBreakdown-${employeeId}`)
     }
@@ -116,6 +125,7 @@ export function usePayroll() {
   // ─── Allowance types ──────────────────────────────────────────────────────
 
   async function fetchAllowanceTypes() {
+    console.log('[usePayroll] fetchAllowanceTypes → request')
     const controller = getAbortController('fetchAllowanceTypes')
     setLoading('fetchingAllowanceTypes', true)
     try {
@@ -124,7 +134,15 @@ export function usePayroll() {
         signal: controller.signal,
       })
       allowanceTypes.value = response.data.data ?? response.data ?? []
+      console.log('[usePayroll] fetchAllowanceTypes ← response', allowanceTypes.value)
       return allowanceTypes.value
+    } catch (err) {
+      console.error('[usePayroll] fetchAllowanceTypes ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setLoading('fetchingAllowanceTypes', false)
       clearAbortController('fetchAllowanceTypes')
@@ -132,36 +150,63 @@ export function usePayroll() {
   }
 
   async function createAllowanceType(payload) {
+    console.log('[usePayroll] createAllowanceType → request', payload)
     setSaving('creatingAllowanceType', true)
     try {
       const response = await api.post(`${BASE}/payroll/admin/allowance-types/`, payload, {
         headers: authHeaders(),
       })
+      console.log('[usePayroll] createAllowanceType ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] createAllowanceType ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('creatingAllowanceType', false)
     }
   }
 
   async function updateAllowanceType(typeId, payload) {
+    console.log('[usePayroll] updateAllowanceType → request', { typeId, payload })
     setSaving('updatingAllowanceType', true)
     try {
       const response = await api.put(`${BASE}/payroll/admin/allowance-types/${typeId}/`, payload, {
         headers: authHeaders(),
       })
+      console.log('[usePayroll] updateAllowanceType ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] updateAllowanceType ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('updatingAllowanceType', false)
     }
   }
 
   async function deleteAllowanceType(typeId) {
+    console.log('[usePayroll] deleteAllowanceType → request', { typeId })
     setSaving('deletingAllowanceType', true)
     try {
       const response = await api.delete(`${BASE}/payroll/admin/allowance-types/${typeId}/`, {
         headers: authHeaders(),
       })
+      console.log('[usePayroll] deleteAllowanceType ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] deleteAllowanceType ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('deletingAllowanceType', false)
     }
@@ -170,6 +215,7 @@ export function usePayroll() {
   // ─── Employee contracts ───────────────────────────────────────────────────
 
   async function fetchContracts() {
+    console.log('[usePayroll] fetchContracts → request')
     const controller = getAbortController('fetchContracts')
     setLoading('fetchingContracts', true)
     try {
@@ -178,7 +224,15 @@ export function usePayroll() {
         signal: controller.signal,
       })
       contracts.value = response.data.data ?? response.data ?? []
+      console.log('[usePayroll] fetchContracts ← response', contracts.value)
       return contracts.value
+    } catch (err) {
+      console.error('[usePayroll] fetchContracts ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setLoading('fetchingContracts', false)
       clearAbortController('fetchContracts')
@@ -186,32 +240,53 @@ export function usePayroll() {
   }
 
   async function fetchContractTypes() {
+    console.log('[usePayroll] fetchContractTypes → request')
     const controller = getAbortController('fetchContractTypes')
+    setLoading('fetchingContractTypes', true)
     try {
       const response = await api.get(`${BASE}/contracts/contract-types/`, {
         headers: authHeaders(),
         signal: controller.signal,
       })
       contractTypes.value = response.data.data ?? response.data ?? []
+      console.log('[usePayroll] fetchContractTypes ← response', contractTypes.value)
       return contractTypes.value
+    } catch (err) {
+      console.error('[usePayroll] fetchContractTypes ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
+      setLoading('fetchingContractTypes', false)
       clearAbortController('fetchContractTypes')
     }
   }
 
   async function createContract(payload) {
+    console.log('[usePayroll] createContract → request', payload)
     setSaving('creatingContract', true)
     try {
       const response = await api.post(`${BASE}/contracts/employee-contracts/`, payload, {
         headers: authHeaders(),
       })
+      console.log('[usePayroll] createContract ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] createContract ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('creatingContract', false)
     }
   }
 
   async function updateContract(contractId, payload) {
+    console.log('[usePayroll] updateContract → request', { contractId, payload })
     setSaving('updatingContract', true)
     try {
       const response = await api.patch(
@@ -219,38 +294,67 @@ export function usePayroll() {
         payload,
         { headers: authHeaders() },
       )
+      console.log('[usePayroll] updateContract ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] updateContract ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('updatingContract', false)
     }
   }
 
   async function deleteContract(contractId) {
+    console.log('[usePayroll] deleteContract → request', { contractId })
     setSaving('deletingContract', true)
     try {
       const response = await api.delete(`${BASE}/contracts/employee-contracts/${contractId}/`, {
         headers: authHeaders(),
       })
+      console.log('[usePayroll] deleteContract ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] deleteContract ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('deletingContract', false)
     }
   }
 
   // ─── Step 4: Bulk Release Payslips for Review ─────────────────────────────
-  // POST /admin/payslips/bulk-release/
+  // PATCH /admin/payslips/bulk-release/
   // { disbursement_log_id, employee_ids }
   // → Payslip status: pending_review
   async function bulkReleasePayslips(disbursementLogId, employeeIds) {
-    setSaving('bulkReleasing', true)
     const ids = Array.isArray(employeeIds) ? employeeIds : [employeeIds]
+    console.log('[usePayroll] Step 4 bulkReleasePayslips → request', {
+      disbursementLogId,
+      employee_ids: ids,
+    })
+    setSaving('bulkReleasing', true)
     try {
       const response = await api.patch(
-        `${BASE}/admin/payslips/bulk-release/`,
+        `${BASE}/payroll/admin/payslips/bulk-release/`,
         { disbursement_log_id: disbursementLogId, employee_ids: ids },
         { headers: authHeaders() },
       )
+      console.log('[usePayroll] Step 4 bulkReleasePayslips ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] Step 4 bulkReleasePayslips ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('bulkReleasing', false)
     }
@@ -262,6 +366,7 @@ export function usePayroll() {
   const employeePayslips = ref([])
 
   async function fetchEmployeePayslips(companyId) {
+    console.log('[usePayroll] Step 5 fetchEmployeePayslips → request', { company: companyId })
     const controller = getAbortController('fetchEmployeePayslips')
     setLoading('fetchingEmployeePayslips', true)
     try {
@@ -274,7 +379,15 @@ export function usePayroll() {
       })
       const raw = response.data
       employeePayslips.value = raw?.results ?? raw?.data ?? raw ?? []
+      console.log('[usePayroll] Step 5 fetchEmployeePayslips ← response', employeePayslips.value)
       return employeePayslips.value
+    } catch (err) {
+      console.error('[usePayroll] Step 5 fetchEmployeePayslips ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setLoading('fetchingEmployeePayslips', false)
       clearAbortController('fetchEmployeePayslips')
@@ -287,6 +400,11 @@ export function usePayroll() {
   // → Payslip: pending_review → ready_for_payment
   //   review_status = acknowledged | payment_status = ready
   async function acknowledgePayslip(payslipId, source = 'web') {
+    console.log('[usePayroll] Step 6 acknowledgePayslip → request', {
+      payslipId,
+      source,
+      'X-Acknowledge-Source': source,
+    })
     setSaving('acknowledgingPayslip', true)
     try {
       const response = await api.patch(
@@ -299,7 +417,15 @@ export function usePayroll() {
           },
         },
       )
+      console.log('[usePayroll] Step 6 acknowledgePayslip ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] Step 6 acknowledgePayslip ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('acknowledgingPayslip', false)
     }
@@ -310,6 +436,7 @@ export function usePayroll() {
   // Guard: status=disbursed AND payment_status=ready
   // → Payslip: completed | payment_status = complete
   async function confirmMoneyReceived(payslipId) {
+    console.log('[usePayroll] Step 10 confirmMoneyReceived → request', { payslipId })
     setSaving('confirmingMoneyReceived', true)
     try {
       const response = await api.patch(
@@ -317,7 +444,15 @@ export function usePayroll() {
         {},
         { headers: authHeaders() },
       )
+      console.log('[usePayroll] Step 10 confirmMoneyReceived ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] Step 10 confirmMoneyReceived ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('confirmingMoneyReceived', false)
     }
@@ -326,12 +461,21 @@ export function usePayroll() {
   // ─── Step 7: Add Disbursement Funding ────────────────────────────────────
   // POST /admin/disbursement-fundings/
   async function addDisbursementFunding(payload) {
+    console.log('[usePayroll] Step 7 addDisbursementFunding → request', payload)
     setSaving('addingFunding', true)
     try {
-      const response = await api.post(`${BASE}/admin/disbursement-fundings/`, payload, {
+      const response = await api.post(`${BASE}/payroll/admin/disbursement-fundings/`, payload, {
         headers: authHeaders(),
       })
+      console.log('[usePayroll] Step 7 addDisbursementFunding ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] Step 7 addDisbursementFunding ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('addingFunding', false)
     }
@@ -340,15 +484,25 @@ export function usePayroll() {
   // ─── Step 8: List Fundings for a Disbursement Log ────────────────────────
   // GET /admin/disbursement-fundings/?disbursement_log_id=123
   async function fetchDisbursementFundings(disbursementLogId) {
+    console.log('[usePayroll] Step 8 fetchDisbursementFundings → request', { disbursementLogId })
     const controller = getAbortController('fetchDisbursementFundings')
     setLoading('fetchingDisbursementFundings', true)
     try {
-      const response = await api.get(`${BASE}/admin/disbursement-fundings/`, {
+      const response = await api.get(`${BASE}/payroll/admin/disbursement-fundings/`, {
         params: { disbursement_log_id: disbursementLogId },
         headers: authHeaders(),
         signal: controller.signal,
       })
-      return response.data.results ?? response.data.data ?? response.data ?? []
+      const result = response.data.results ?? response.data.data ?? response.data ?? []
+      console.log('[usePayroll] Step 8 fetchDisbursementFundings ← response', result)
+      return result
+    } catch (err) {
+      console.error('[usePayroll] Step 8 fetchDisbursementFundings ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setLoading('fetchingDisbursementFundings', false)
       clearAbortController('fetchDisbursementFundings')
@@ -360,23 +514,36 @@ export function usePayroll() {
   // { disbursement_log_id, employee_ids }
   // Cash → status: disbursed | Bank → status: completed
   async function disbursePayslips(disbursementLogId, employeeIds) {
-    setSaving('disbursing', true)
     const ids = Array.isArray(employeeIds) ? employeeIds : [employeeIds]
+    console.log('[usePayroll] Step 9 disbursePayslips → request', {
+      disbursementLogId,
+      employee_ids: ids,
+    })
+    setSaving('disbursing', true)
     try {
       const response = await api.patch(
-        `${BASE}/admin/disburse-payslips/`,
+        `${BASE}/payroll/admin/disburse-payslips/`,
         { disbursement_log_id: disbursementLogId, employee_ids: ids },
         { headers: authHeaders() },
       )
+      console.log('[usePayroll] Step 9 disbursePayslips ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] Step 9 disbursePayslips ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('disbursing', false)
     }
   }
 
   // ─── Workflow: Fetch Disbursement Log Employees ───────────────────────────
-  // Step 3: GET /admin/disbursement-logs/{id}/employees/
+  // Step 3: GET /payroll/admin/disbursement-logs/{id}/employees/
   async function fetchPayrollRunEmployees(logId, statusFilter = null) {
+    console.log('[usePayroll] Step 3 fetchPayrollRunEmployees → request', { logId, statusFilter })
     const controller = getAbortController('fetchPayrollRunEmployees')
     setLoading('fetchingPayrollRunEmployees', true)
     try {
@@ -386,18 +553,71 @@ export function usePayroll() {
         params.status = Array.isArray(statusFilter) ? statusFilter.join(',') : statusFilter
       }
 
-      const response = await api.get(`${BASE}/admin/disbursement-logs/${logId}/employees/`, {
-        params,
-        headers: authHeaders(),
-        signal: controller.signal,
+      const response = await api.get(
+        `${BASE}/payroll/admin/disbursement-logs/${logId}/employees/`,
+        {
+          params,
+          headers: authHeaders(),
+          signal: controller.signal,
+        },
+      )
+
+      // FIX: API returns a bare array [...] — check for that first before trying object keys.
+      // Priority: root array → employees (custom key) → results (DRF pagination) → data (legacy wrapper)
+      const rawData = Array.isArray(response.data)
+        ? response.data
+        : (response.data.employees ?? response.data.results ?? response.data.data ?? [])
+
+      console.debug('[usePayroll] Step 3 fetchPayrollRunEmployees ← raw response shape:', {
+        isArray: Array.isArray(response.data),
+        resolvedCount: Array.isArray(rawData) ? rawData.length : 'not an array',
+        sample: Array.isArray(rawData) ? rawData[0] : response.data,
       })
 
-      const rawData = response.data.employees ?? response.data.data ?? response.data ?? []
-      payrollRunEmployees.value = Array.isArray(rawData) ? rawData : []
+      // FIX: Normalize API field names → shape the template expects.
+      // API returns:      calculated, actual_net_pay, review_status_display
+      // Template expects: gross_pay,  net_pay,         status
+      payrollRunEmployees.value = Array.isArray(rawData)
+        ? rawData.map((emp) => ({
+            ...emp,
+            gross_pay: emp.gross_pay ?? emp.calculated ?? 0,
+            net_pay: emp.net_pay ?? emp.actual_net_pay ?? 0,
+            status: (() => {
+              const raw = emp.status ?? emp.review_status_display ?? 'draft'
+              const map = {
+                draft: 'draft',
+                pending: 'draft',
+                'Pending': 'draft',
+                pending_review: 'pending_review',
+                'Pending Review': 'pending_review',
+                ready_for_payment: 'ready_for_payment',
+                'Acknowledged': 'ready_for_payment',
+                disbursed: 'disbursed',
+                'Disbursed': 'disbursed',
+                completed: 'completed',
+                'Completed': 'completed',
+              }
+              return map[raw] ?? raw
+            })(),
+          }))
+        : []
       payrollRunId.value = logId
       updateWorkflowStats()
       updateWorkflowStage()
+      console.log('[usePayroll] Step 3 fetchPayrollRunEmployees ← response', {
+        count: payrollRunEmployees.value.length,
+        workflowStage: workflowStage.value,
+        workflowStats: workflowStats.value,
+        employees: payrollRunEmployees.value,
+      })
       return payrollRunEmployees.value
+    } catch (err) {
+      console.error('[usePayroll] Step 3 fetchPayrollRunEmployees ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setLoading('fetchingPayrollRunEmployees', false)
       clearAbortController('fetchPayrollRunEmployees')
@@ -489,8 +709,9 @@ export function usePayroll() {
         // Admin can bulk-release draft payslips
         return employees.filter((e) => e.status === 'draft')
       case 'pending_review':
-        // Waiting for employee to acknowledge — read-only for admin
-        return employees.filter((e) => e.status === 'pending_review')
+        // Waiting for employee to acknowledge — but those who already acknowledged
+        // (ready_for_payment) can be selectively disbursed early by the admin
+        return employees.filter((e) => e.status === 'ready_for_payment')
       case 'ready_for_payment':
         // Acknowledged by employee — admin can disburse
         return employees.filter((e) => e.status === 'ready_for_payment')
@@ -503,15 +724,15 @@ export function usePayroll() {
   }
 
   // ─── Workflow: Check if stage has auto-selection behavior ──────
-  // In pending_review, employees are auto-selected (read-only display)
-  function isStageAutoSelectable(currentStage) {
-    return currentStage === 'pending_review'
+  // pending_review: only truly-pending employees are locked/auto-shown;
+  // ready_for_payment employees within that stage are now selectable for early disbursal.
+  function isStageAutoSelectable() {
+    return false // no longer fully auto-selectable; per-employee logic handles locking
   }
 
   // ─── Workflow: Check if employee is in pre-approved state ───────
-  function isEmployeePreApproved(emp, currentStage) {
-    if (!isStageAutoSelectable(currentStage)) return false
-    return ['pending_review', 'ready_for_payment', 'disbursed', 'completed'].includes(emp.status)
+  function isEmployeePreApproved() {
+    return false // superseded by per-row checkbox logic in PayrollPage
   }
 
   // ─── Disbursement Logs Summary ────────────────────────────────────────────
@@ -519,27 +740,78 @@ export function usePayroll() {
   const payrollRunsSummary = ref([])
 
   async function fetchPayrollRunsSummary(params = {}) {
+    console.log('[usePayroll] Step 2 fetchPayrollRunsSummary → request', { params })
     const controller = getAbortController('fetchPayrollRunsSummary')
     setLoading('fetchingPayrollRunsSummary', true)
     try {
-      const response = await api.get(`${BASE}/admin/disbursement-logs/summary/`, {
+      const response = await api.get(`${BASE}/payroll/admin/disbursement-logs/summary/`, {
         params,
         headers: authHeaders(),
         signal: controller.signal,
       })
       const raw = response.data
+      console.debug('[usePayroll] Step 2 fetchPayrollRunsSummary ← raw response:', raw)
       const extracted = raw?.results ?? raw?.data ?? raw ?? []
-      payrollRunsSummary.value = Array.isArray(extracted) ? extracted : []
+      const backendList = Array.isArray(extracted) ? extracted : []
+
+      // ─── Smart merge: preserve optimistic runs until backend confirms them ─────
+      const backendMap = new Map(backendList.map((r) => [r.id, r]))
+      const merged = []
+
+      // 1. Keep existing optimistic runs that haven't been confirmed yet
+      for (const existing of payrollRunsSummary.value) {
+        if (existing.__optimistic && !backendMap.has(existing.id)) {
+          merged.push(existing)
+        }
+      }
+
+      // 2. Add/replace with real backend data (optimistic runs get superseded)
+      for (const run of backendList) {
+        merged.push(run)
+      }
+
+      payrollRunsSummary.value = merged
+      console.log('[usePayroll] Step 2 fetchPayrollRunsSummary ← merged list', {
+        count: merged.length,
+        runs: merged,
+      })
       return payrollRunsSummary.value
+    } catch (err) {
+      console.error('[usePayroll] Step 2 fetchPayrollRunsSummary ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      // ─── On 502 or any error, DO NOT wipe the list ────────────────────────────
+      // Preserve optimistic runs so the UI doesn't flicker empty while the
+      // backend recovers from a heavy POST operation.
+      throw err
     } finally {
       setLoading('fetchingPayrollRunsSummary', false)
       clearAbortController('fetchPayrollRunsSummary')
     }
   }
 
+  // ─── Retry helper with exponential backoff ──────────────────────────────────
+  async function retryWithBackoff(fn, { maxAttempts = 4, baseDelay = 5000 } = {}) {
+    let attempt = 0
+    while (attempt < maxAttempts) {
+      try {
+        return await fn()
+      } catch (err) {
+        if (attempt === maxAttempts - 1) throw err
+        const delay = baseDelay * Math.pow(2, attempt) // 5s, 10s, 20s, 40s
+        console.debug(`[usePayroll] Retry attempt ${attempt + 1}/${maxAttempts} after ${delay}ms`)
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        attempt++
+      }
+    }
+  }
+
   // ─── Custom Multipliers ───────────────────────────────────────────────────
 
   async function fetchCustomMultipliers(companyId) {
+    console.log('[usePayroll] fetchCustomMultipliers → request', { companyId })
     const controller = getAbortController('fetchCustomMultipliers')
     setLoading('fetchingCustomMultipliers', true)
     try {
@@ -550,7 +822,15 @@ export function usePayroll() {
       })
       const data = response.data.data ?? response.data ?? []
       customMultipliers.value = Array.isArray(data) ? (data[0] ?? null) : data
+      console.log('[usePayroll] fetchCustomMultipliers ← response', customMultipliers.value)
       return customMultipliers.value
+    } catch (err) {
+      console.error('[usePayroll] fetchCustomMultipliers ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setLoading('fetchingCustomMultipliers', false)
       clearAbortController('fetchCustomMultipliers')
@@ -558,6 +838,7 @@ export function usePayroll() {
   }
 
   async function createCustomMultipliers(payload) {
+    console.log('[usePayroll] createCustomMultipliers → request', payload)
     setSaving('creatingCustomMultipliers', true)
     try {
       const response = await api.post(
@@ -565,13 +846,22 @@ export function usePayroll() {
         payload,
         { headers: authHeaders() },
       )
+      console.log('[usePayroll] createCustomMultipliers ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] createCustomMultipliers ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('creatingCustomMultipliers', false)
     }
   }
 
   async function updateCustomMultipliers(companyId, payload) {
+    console.log('[usePayroll] updateCustomMultipliers → request', { companyId, payload })
     setSaving('updatingCustomMultipliers', true)
     try {
       const response = await api.patch(
@@ -579,7 +869,15 @@ export function usePayroll() {
         payload,
         { headers: authHeaders() },
       )
+      console.log('[usePayroll] updateCustomMultipliers ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] updateCustomMultipliers ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('updatingCustomMultipliers', false)
     }
@@ -592,12 +890,21 @@ export function usePayroll() {
   // { company_id, department_id, start_date, end_date, type }
   // Returns: { success, message, disbursement_log_id, generated_count }
   async function createPayrollRun(payload) {
+    console.log('[usePayroll] Step 1 createPayrollRun → request', payload)
     setSaving('creatingPayrollRun', true)
     try {
-      const response = await api.post(`${BASE}/admin/generate-payslip/`, payload, {
+      const response = await api.post(`${BASE}/payroll/admin/generate-payslip/`, payload, {
         headers: authHeaders(),
       })
+      console.log('[usePayroll] Step 1 createPayrollRun ← response', response.data)
       return response.data
+    } catch (err) {
+      console.error('[usePayroll] Step 1 createPayrollRun ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
     } finally {
       setSaving('creatingPayrollRun', false)
     }
@@ -663,5 +970,7 @@ export function usePayroll() {
     getActionableEmployees,
     isStageAutoSelectable,
     isEmployeePreApproved,
+    // Retry utility
+    retryWithBackoff,
   }
 }
