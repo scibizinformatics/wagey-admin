@@ -15,7 +15,7 @@ export function useAdminDepartments() {
   // ─── Dialog state ──────────────────────────────────────────────────────────
   const dialog = ref(false)
   const editing = ref(false)
-  const form = ref({ id: null, name: '', company: null })
+  const form = ref({ id: null, name: '', company: null, cost_center: null })
 
   // ─── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ export function useAdminDepartments() {
       return
     }
     editing.value = false
-    form.value = { id: null, name: '', company: companyId.value }
+    form.value = { id: null, name: '', company: companyId.value, cost_center: null }
     dialog.value = true
   }
 
@@ -62,6 +62,7 @@ export function useAdminDepartments() {
       id: department.id,
       name: department.name,
       company: department.company || companyId.value,
+      cost_center: department.cost_center ?? null,
     }
     dialog.value = true
   }
@@ -81,7 +82,11 @@ export function useAdminDepartments() {
 
     saving.value = true
     try {
-      const payload = { name: form.value.name.trim(), company: cId }
+      const payload = {
+        name: form.value.name.trim(),
+        company: cId,
+        cost_center: form.value.cost_center ?? null,
+      }
 
       if (editing.value) {
         await api.put(`${BASE}/organization/departments/${form.value.id}/`, payload, {
