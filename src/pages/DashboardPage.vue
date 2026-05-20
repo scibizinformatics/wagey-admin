@@ -248,7 +248,9 @@ const { employees, fetchEmployees } = useEmployees()
 
 const { attendanceData, loading: attendanceLoading, fetchAttendanceByDate } = useAttendance()
 
-const { payslips, loading: payrollLoading, fetchPayslips } = usePayroll()
+const { payrollRunsSummary, isLoading, fetchPayrollRunsSummary } = usePayroll()
+
+const payrollLoading = computed(() => isLoading('fetchingPayrollRunsSummary'))
 
 const { onDataUpdate } = useNotifications()
 
@@ -425,24 +427,24 @@ const statsCards = computed(() => {
 
 // ─── Payroll rows ─────────────────────────────────────────────────────────────
 const payrollRows = computed(() => {
-  const list = Array.isArray(payslips.value)
-    ? payslips.value
-    : Array.isArray(payslips.value?.data)
-      ? payslips.value.data
-      : Array.isArray(payslips.value?.results)
-        ? payslips.value.results
+  const list = Array.isArray(payrollRunsSummary.value)
+    ? payrollRunsSummary.value
+    : Array.isArray(payrollRunsSummary.value?.data)
+      ? payrollRunsSummary.value.data
+      : Array.isArray(payrollRunsSummary.value?.results)
+        ? payrollRunsSummary.value.results
         : []
   return list.slice(0, 10).map((p, i) => ({
     id: p.id ?? i,
-    group: p.payroll_group?.name ?? p.group_name ?? p.group ?? '-',
-    cycle: p.payroll_cycle?.name ?? p.cycle ?? '-',
-    type: p.payroll_type?.name ?? p.type ?? '-',
-    start: fmtDate(p.start_date ?? p.period_start),
-    end: fmtDate(p.end_date ?? p.period_end),
-    employees: p.employee_count ?? p.employees ?? '-',
+    group: p.name ?? '-',
+    cycle: p.period ?? '-',
+    type: 'Payroll Run',
+    start: p.period ? String(p.period).split(' - ')[0] : '-',
+    end: p.period ? String(p.period).split(' - ')[1] ?? '-' : '-',
+    employees: p.number_of_employee ?? p.employee_count ?? p.employees ?? '-',
     status: p.status ?? '-',
-    date: fmtDate(p.date_released ?? p.released_at),
-    amount: fmtCurrency(p.total_amount ?? p.net_pay ?? p.gross_pay),
+    date: fmtDate(p.created_at ?? p.date_released ?? p.released_at),
+    amount: fmtCurrency(p.total_net_pay ?? p.calculated_amount),
   }))
 })
 
@@ -558,25 +560,16 @@ onMounted(async () => {
     fetchAttendanceByDate(today()),
     fetchLeaveRequests(),
     fetchOvertimeRequests(),
-    // Pass cid if available; usePayroll will use /payroll/admin/{cid}/payslips/
-    // If cid is null it falls back to the base /payroll/ endpoint
-    fetchPayslips(cid),
+    fetchPayrollRunsSummary({ company_id: cid }),
     ...(cid ? [fetchCashAdvanceRequests(cid)] : []),
     fetchAnnouncements(),
     fetchSwapRequests({ company: cid }),
   ])
 
-  // If payslips came back empty and we have a cid, also try without it
-  // (some backends return data only from the non-admin endpoint for this role)
-  if (!Array.isArray(payslips.value) || payslips.value.length === 0) {
-    console.debug('[Dashboard] payslips empty, retrying without company ID')
-    await fetchPayslips(null)
-  }
-
   console.debug(
-    '[Dashboard] payslips value type:',
-    typeof payslips.value,
-    Array.isArray(payslips.value) ? `array(${payslips.value.length})` : payslips.value,
+    '[Dashboard] payroll runs summary type:',
+    typeof payrollRunsSummary.value,
+    Array.isArray(payrollRunsSummary.value) ? `array(${payrollRunsSummary.value.length})` : payrollRunsSummary.value,
   )
 
   pageLoading.value = false
