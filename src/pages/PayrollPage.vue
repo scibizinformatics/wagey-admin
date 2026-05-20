@@ -155,105 +155,119 @@
                   @click="toggleRunExpanded(run)"
                   style="cursor: pointer; user-select: none"
                 >
-                  <div class="run-header-left">
-                    <q-icon
-                      name="expand_more"
-                      :style="{
-                        transform: selectedRun?.id === run.id ? 'rotate(180deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.3s ease',
-                      }"
-                      size="20px"
-                      class="expand-icon"
-                    />
-                    <div class="run-name">{{ run.name }}</div>
-                    <div class="run-period text-caption text-grey-6">{{ run.period ?? '' }}</div>
-                  </div>
-
-                  <!-- Disbursement columns -->
-                  <div class="run-header-stats">
-                    <div class="run-stat-item">
-                      <span class="run-stat-label">Employees</span>
-                      <span class="run-stat-value">{{ run.number_of_employee ?? '—' }}</span>
-                    </div>
-                    <div class="run-stat-item">
-                      <span class="run-stat-label">Calculated</span>
-                      <span class="run-stat-value">{{
-                        formatCurrency(run.calculated_amount)
-                      }}</span>
-                    </div>
-                    <div class="run-stat-item">
-                      <span class="run-stat-label">Total Net Pay</span>
-                      <span class="run-stat-value">{{ formatCurrency(run.total_net_pay) }}</span>
-                    </div>
-                    <div class="run-stat-item">
-                      <span class="run-stat-label">Funded</span>
-                      <span class="run-stat-value">{{ formatCurrency(run.funded ?? 0) }}</span>
-                    </div>
-                    <div class="run-stat-item">
-                      <span class="run-stat-label">Released</span>
-                      <span class="run-stat-value">{{ formatCurrency(run.released ?? 0) }}</span>
-                    </div>
-                    <div class="run-stat-item">
-                      <span class="run-stat-label">Status</span>
-                      <q-badge
-                        :color="getStageColor(run.status)"
-                        :label="getStageLabel(run.status)"
+                  <!-- Single row: [chevron + name/date] ---- [stat cols] ---- [action btn] -->
+                  <div class="run-header-stats-row">
+                    <!-- LEFT: expand chevron + stacked name + date -->
+                    <div class="run-header-name-group">
+                      <q-icon
+                        name="expand_more"
+                        :style="{
+                          transform: selectedRun?.id === run.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.3s ease',
+                        }"
+                        size="18px"
+                        class="expand-icon"
                       />
+                      <div class="run-name-stack">
+                        <div class="run-name">
+                          {{ getRunBaseName(run) }}
+                          <q-badge
+                            v-if="run.__optimistic"
+                            color="orange"
+                            label="syncing…"
+                            class="q-ml-xs"
+                            style="font-size: 10px"
+                          >
+                            <q-tooltip>Waiting for server confirmation</q-tooltip>
+                          </q-badge>
+                        </div>
+                        <div class="run-period-tag" v-if="getRunPeriod(run)">
+                          {{ getRunPeriod(run) }}
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
-                  <div class="run-header-action">
-                    <!-- Draft: admin can bulk-release for employee review -->
-                    <q-btn
-                      v-if="
-                        run.status === 'pending' ||
-                        (selectedRun?.id === run.id && workflowStage === 'draft')
-                      "
-                      unelevated
-                      dense
-                      no-caps
-                      size="sm"
-                      icon="send"
-                      color="orange"
-                      label="Release"
-                      :loading="isSaving('bulkReleasing') && selectedRun?.id === run.id"
-                      @click.stop="bulkReleaseAll(run)"
-                    />
-                    <!-- Pending review: waiting for employees to acknowledge -->
-                    <q-chip
-                      v-else-if="run.status === 'pending_review'"
-                      dense
-                      color="orange"
-                      text-color="white"
-                      icon="hourglass_top"
-                      label="Awaiting Acknowledgement"
-                      style="font-size: 11px"
-                    />
-                    <!-- Ready for payment: admin can disburse (after funding) -->
-                    <q-btn
-                      v-else-if="run.status === 'ready_for_payment'"
-                      unelevated
-                      dense
-                      no-caps
-                      size="sm"
-                      icon="payments"
-                      color="teal"
-                      label="Disburse"
-                      :loading="isSaving('disbursing') && selectedRun?.id === run.id"
-                      @click.stop="selectAndDisburse(run)"
-                    />
-                    <!-- Disbursed/Completed -->
-                    <q-icon
-                      v-else-if="['disbursed', 'completed', 'closed'].includes(run.status)"
-                      name="task_alt"
-                      color="positive"
-                      size="22px"
-                    >
-                      <q-tooltip>{{ getStageLabel(run.status) }}</q-tooltip>
-                    </q-icon>
-                    <span v-else class="text-grey-5 text-caption">{{
-                      getStageLabel(run.status)
-                    }}</span>
+                    <!-- CENTER: stat columns -->
+                    <div class="run-header-stat-cols">
+                      <div class="run-header-stat-col">
+                        <span class="run-header-stat-label">Employees</span>
+                        <span class="run-header-stat-val">{{ run.number_of_employee ?? '—' }}</span>
+                      </div>
+                      <div class="run-header-stat-col">
+                        <span class="run-header-stat-label">Calculated</span>
+                        <span class="run-header-stat-val">{{
+                          formatCurrency(run.calculated_amount)
+                        }}</span>
+                      </div>
+                      <div class="run-header-stat-col">
+                        <span class="run-header-stat-label">Total Net Pay</span>
+                        <span class="run-header-stat-val">{{
+                          formatCurrency(run.total_net_pay)
+                        }}</span>
+                      </div>
+                      <div class="run-header-stat-col">
+                        <span class="run-header-stat-label">Funded</span>
+                        <span class="run-header-stat-val">{{
+                          formatCurrency(run.funded ?? 0)
+                        }}</span>
+                      </div>
+                      <div class="run-header-stat-col">
+                        <span class="run-header-stat-label">Released</span>
+                        <span class="run-header-stat-val">{{
+                          formatCurrency(run.released ?? 0)
+                        }}</span>
+                      </div>
+                      <div class="run-header-stat-col">
+                        <span class="run-header-stat-label">Status</span>
+                        <span class="run-header-stat-val">
+                          <span :class="['run-status-chip', `run-status-${run.status}`]">
+                            {{ getStageLabel(run.status) }}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- RIGHT: action button, always flush to the right edge -->
+                    <div class="run-header-action" @click.stop>
+                      <q-btn
+                        v-if="
+                          run.status === 'draft' ||
+                          (selectedRun?.id === run.id && workflowStage === 'draft')
+                        "
+                        unelevated
+                        no-caps
+                        size="sm"
+                        icon="send"
+                        color="orange"
+                        label="Release"
+                        class="run-action-btn"
+                        :loading="isSaving('bulkReleasing') && selectedRun?.id === run.id"
+                        @click="bulkReleaseAll(run)"
+                      />
+                      <div v-else-if="run.status === 'pending_review'" class="run-await-chip">
+                        <q-icon name="hourglass_top" size="13px" />
+                        <span>Awaiting Acknowledgement</span>
+                      </div>
+                      <q-btn
+                        v-else-if="run.status === 'ready_for_payment'"
+                        unelevated
+                        no-caps
+                        size="sm"
+                        icon="payments"
+                        color="teal"
+                        label="Disburse"
+                        class="run-action-btn"
+                        :loading="isSaving('disbursing') && selectedRun?.id === run.id"
+                        @click="selectAndDisburse(run)"
+                      />
+                      <div
+                        v-else-if="['disbursed', 'completed', 'closed'].includes(run.status)"
+                        class="run-done-chip"
+                      >
+                        <q-icon name="task_alt" size="14px" color="positive" />
+                        <span>{{ getStageLabel(run.status) }}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -291,10 +305,7 @@
                         label="Select All"
                         dense
                         @update:model-value="toggleSelectAll"
-                        :disable="
-                          getActionableEmployees(workflowStage).length === 0 ||
-                          ['pending_review'].includes(workflowStage)
-                        "
+                        :disable="getActionableEmployees(workflowStage).length === 0"
                         class="select-all-checkbox"
                       />
                       <!-- Step 4: Bulk Release (draft → pending_review) -->
@@ -331,6 +342,23 @@
                         :loading="isSaving('disbursing')"
                         @click="handleBulkDisburse"
                       />
+                      <!-- Early disbursal: pending_review stage but some employees already acknowledged -->
+                      <q-btn
+                        v-if="
+                          run.id === selectedRun?.id &&
+                          workflowStage === 'pending_review' &&
+                          selectedEmployees.length > 0
+                        "
+                        unelevated
+                        dense
+                        no-caps
+                        size="sm"
+                        icon="payments"
+                        color="teal"
+                        :label="`Disburse ${selectedEmployees.length === getActionableEmployees('pending_review').length ? 'All Acknowledged' : 'Selected'} (${selectedEmployees.length})`"
+                        :loading="isSaving('disbursing')"
+                        @click="handleBulkDisburse"
+                      />
                     </div>
                   </div>
 
@@ -343,11 +371,41 @@
                     <span style="font-size: 13px; color: #6b7280">Loading employees...</span>
                   </div>
 
+                  <!-- Early disbursal info banner: shown in pending_review when some already acknowledged -->
+                  <div
+                    v-if="
+                      run.id === selectedRun?.id &&
+                      workflowStage === 'pending_review' &&
+                      getActionableEmployees('pending_review').length > 0
+                    "
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 10px;
+                      padding: 10px 16px;
+                      background: #f0fdf4;
+                      border-left: 3px solid #14b8a6;
+                      margin: 8px 14px 0;
+                      border-radius: 6px;
+                      font-size: 13px;
+                      color: #0f766e;
+                    "
+                  >
+                    <q-icon name="payments" size="16px" color="teal" />
+                    <span>
+                      <strong
+                        >{{ getActionableEmployees('pending_review').length }} employee(s)</strong
+                      >
+                      have acknowledged their payslip and can be disbursed early. Select them
+                      individually or use <strong>Select All</strong> to release their salary now.
+                    </span>
+                  </div>
+
                   <!-- Virtual Scrolled Employees Table -->
                   <div class="employees-table-container" v-if="run.id === selectedRun?.id">
                     <!-- Table Header -->
                     <div class="employees-table-header">
-                      <div class="employees-th" style="width: 48px"></div>
+                      <div class="employees-th"></div>
                       <div class="employees-th">Employee</div>
                       <div class="employees-th">Status</div>
                       <div class="employees-th">Period</div>
@@ -355,9 +413,7 @@
                       <div class="employees-th">Gross Pay</div>
                       <div class="employees-th">Net Pay</div>
                       <div class="employees-th">Total Hours</div>
-                      <div class="employees-th" style="text-align: center; width: 80px">
-                        Actions
-                      </div>
+                      <div class="employees-th">Actions</div>
                     </div>
 
                     <!-- Virtual Scroll Container -->
@@ -378,28 +434,33 @@
                             }"
                             :key="`${selectedRun?.id || 'no-run'}-${emp.employee_id || emp.payslip_id || emp.id || 'idx'}-${emp.status || 'unknown'}`"
                           >
-                            <div class="employees-td" style="width: 48px; text-align: center">
-                              <!-- Auto-selected stages (released/acknowledged): show disabled checked checkbox with lock icon -->
+                            <div class="employees-td">
+                              <!-- Employees still awaiting acknowledgement — locked, not actionable -->
                               <q-checkbox
                                 v-if="
-                                  isAutoSelectStage && isEmployeePreApproved(emp, workflowStage)
+                                  workflowStage === 'pending_review' &&
+                                  emp.status === 'pending_review'
                                 "
-                                :model-value="true"
+                                :model-value="false"
                                 disable
                                 dense
-                                checked-icon="lock"
-                                color="positive"
+                                checked-icon="hourglass_top"
+                                color="orange"
                               >
-                                <q-tooltip>Pre-approved and locked</q-tooltip>
+                                <q-tooltip>Waiting for employee acknowledgement</q-tooltip>
                               </q-checkbox>
 
-                              <!-- Normal actionable checkbox for draft/admin/owner/funded stages -->
+                              <!-- Normal actionable checkbox for draft/ready_for_payment stages -->
                               <q-checkbox
                                 v-else-if="isEmployeeActionable(emp)"
                                 :model-value="isEmployeeSelected(emp.employee_id)"
                                 @update:model-value="toggleEmployeeSelection(emp.employee_id)"
                                 dense
-                              />
+                              >
+                                <q-tooltip v-if="workflowStage === 'pending_review'">
+                                  Acknowledged — select to disburse early
+                                </q-tooltip>
+                              </q-checkbox>
 
                               <!-- Completed/disbursement completed -->
                               <q-icon
@@ -468,10 +529,7 @@
                                 {{ emp.breakdown?.attendance?.total_hours_worked || 0 }}h
                               </div>
                             </div>
-                            <div
-                              class="employees-td actions-cell"
-                              style="text-align: center; width: 80px"
-                            >
+                            <div class="employees-td actions-cell">
                               <div class="workflow-actions-cell">
                                 <q-btn
                                   v-if="emp.lastError"
@@ -490,8 +548,111 @@
                                   dense
                                   icon="more_horiz"
                                   class="action-menu-btn"
-                                  @click.stop="openEmployeeMenu($event, emp)"
-                                />
+                                  @click.stop
+                                >
+                                  <!-- FIX: menu lives inside the button so Quasar anchors it correctly -->
+                                  <q-menu
+                                    anchor="bottom right"
+                                    self="top right"
+                                    class="action-dropdown"
+                                    @before-show="menuEmployee = emp"
+                                  >
+                                    <q-list dense style="min-width: 180px">
+                                      <q-item
+                                        v-if="menuEmployee?.status === 'draft'"
+                                        clickable
+                                        v-close-popup
+                                        @click="handleMenuAction('release')"
+                                        class="dropdown-item"
+                                      >
+                                        <q-item-section avatar>
+                                          <q-icon name="send" size="16px" color="orange" />
+                                        </q-item-section>
+                                        <q-item-section>Release for Review</q-item-section>
+                                      </q-item>
+                                      <q-item
+                                        v-if="menuEmployee?.status === 'pending_review'"
+                                        clickable
+                                        v-close-popup
+                                        @click="handleMenuAction('acknowledge')"
+                                        class="dropdown-item"
+                                      >
+                                        <q-item-section avatar>
+                                          <q-icon name="fact_check" size="16px" color="blue" />
+                                        </q-item-section>
+                                        <q-item-section>View &amp; Acknowledge</q-item-section>
+                                      </q-item>
+                                      <q-item
+                                        v-if="menuEmployee?.status === 'ready_for_payment'"
+                                        clickable
+                                        v-close-popup
+                                        @click="handleMenuAction('disburse')"
+                                        class="dropdown-item"
+                                      >
+                                        <q-item-section avatar>
+                                          <q-icon name="payments" size="16px" color="teal" />
+                                        </q-item-section>
+                                        <q-item-section>Disburse</q-item-section>
+                                      </q-item>
+                                      <q-item
+                                        v-if="
+                                          menuEmployee?.status === 'disbursed' &&
+                                          menuEmployee?.payment_method === 'cash'
+                                        "
+                                        clickable
+                                        v-close-popup
+                                        @click="handleMenuAction('markComplete')"
+                                        class="dropdown-item"
+                                      >
+                                        <q-item-section avatar>
+                                          <q-icon name="handshake" size="16px" color="positive" />
+                                        </q-item-section>
+                                        <q-item-section>Confirm Money Received</q-item-section>
+                                      </q-item>
+                                      <q-item
+                                        v-if="
+                                          menuEmployee?.status === 'disbursed' &&
+                                          menuEmployee?.payment_method !== 'cash'
+                                        "
+                                        disable
+                                        class="dropdown-item"
+                                      >
+                                        <q-item-section avatar>
+                                          <q-icon name="hourglass_top" size="16px" color="grey" />
+                                        </q-item-section>
+                                        <q-item-section class="text-grey-6"
+                                          >Processing bank transfer…</q-item-section
+                                        >
+                                      </q-item>
+                                      <q-separator
+                                        v-if="!['completed'].includes(menuEmployee?.status)"
+                                        spaced
+                                      />
+                                      <q-item
+                                        clickable
+                                        v-close-popup
+                                        @click="handleMenuAction('view')"
+                                        class="dropdown-item"
+                                      >
+                                        <q-item-section avatar>
+                                          <q-icon name="visibility" size="16px" />
+                                        </q-item-section>
+                                        <q-item-section>View details</q-item-section>
+                                      </q-item>
+                                      <q-item
+                                        clickable
+                                        v-close-popup
+                                        @click="handleMenuAction('download')"
+                                        class="dropdown-item"
+                                      >
+                                        <q-item-section avatar>
+                                          <q-icon name="description" size="16px" />
+                                        </q-item-section>
+                                        <q-item-section>Download payslip</q-item-section>
+                                      </q-item>
+                                    </q-list>
+                                  </q-menu>
+                                </q-btn>
                               </div>
                             </div>
                           </div>
@@ -1030,101 +1191,11 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-
-    <!-- ===================== SHARED GLOBAL EMPLOYEE MENU ===================== -->
-    <q-menu ref="employeeMenuRef" anchor="bottom right" self="top right" class="action-dropdown">
-      <q-list dense style="min-width: 180px">
-        <!-- Step 4: Release for Employee Review -->
-        <q-item
-          v-if="menuEmployee?.status === 'draft'"
-          clickable
-          v-close-popup
-          @click="handleMenuAction('release')"
-          class="dropdown-item"
-        >
-          <q-item-section avatar>
-            <q-icon name="send" size="16px" color="orange" />
-          </q-item-section>
-          <q-item-section>Release for Review</q-item-section>
-        </q-item>
-
-        <!-- Step 6: Acknowledge on behalf of employee (pending_review) -->
-        <q-item
-          v-if="menuEmployee?.status === 'pending_review'"
-          clickable
-          v-close-popup
-          @click="handleMenuAction('acknowledge')"
-          class="dropdown-item"
-        >
-          <q-item-section avatar>
-            <q-icon name="fact_check" size="16px" color="blue" />
-          </q-item-section>
-          <q-item-section>View &amp; Acknowledge</q-item-section>
-        </q-item>
-
-        <!-- Step 9: Disburse (employee has acknowledged) -->
-        <q-item
-          v-if="menuEmployee?.status === 'ready_for_payment'"
-          clickable
-          v-close-popup
-          @click="handleMenuAction('disburse')"
-          class="dropdown-item"
-        >
-          <q-item-section avatar>
-            <q-icon name="payments" size="16px" color="teal" />
-          </q-item-section>
-          <q-item-section>Disburse</q-item-section>
-        </q-item>
-
-        <!-- Step 10: Confirm money received (cash disbursed only) -->
-        <q-item
-          v-if="menuEmployee?.status === 'disbursed' && menuEmployee?.payment_method === 'cash'"
-          clickable
-          v-close-popup
-          @click="handleMenuAction('markComplete')"
-          class="dropdown-item"
-        >
-          <q-item-section avatar>
-            <q-icon name="handshake" size="16px" color="positive" />
-          </q-item-section>
-          <q-item-section>Confirm Money Received</q-item-section>
-        </q-item>
-
-        <!-- Step 10: Bank disbursed → auto-completed, no action needed -->
-        <q-item
-          v-if="menuEmployee?.status === 'disbursed' && menuEmployee?.payment_method !== 'cash'"
-          disable
-          class="dropdown-item"
-        >
-          <q-item-section avatar>
-            <q-icon name="hourglass_top" size="16px" color="grey" />
-          </q-item-section>
-          <q-item-section class="text-grey-6">Processing bank transfer…</q-item-section>
-        </q-item>
-
-        <q-separator v-if="!['completed'].includes(menuEmployee?.status)" spaced />
-
-        <!-- Common actions -->
-        <q-item clickable v-close-popup @click="handleMenuAction('view')" class="dropdown-item">
-          <q-item-section avatar>
-            <q-icon name="visibility" size="16px" />
-          </q-item-section>
-          <q-item-section>View details</q-item-section>
-        </q-item>
-
-        <q-item clickable v-close-popup @click="handleMenuAction('download')" class="dropdown-item">
-          <q-item-section avatar>
-            <q-icon name="description" size="16px" />
-          </q-item-section>
-          <q-item-section>Download payslip</q-item-section>
-        </q-item>
-      </q-list>
-    </q-menu>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useQuasar } from 'quasar'
@@ -1149,8 +1220,6 @@ const {
   fetchDisbursementFundings,
   disbursePayslips,
   fetchPayrollRunEmployees,
-  isStageAutoSelectable,
-  isEmployeePreApproved,
   createPayrollRun,
   // Step 5: employee view payslips
   //employeePayslips,//
@@ -1159,18 +1228,48 @@ const {
   acknowledgePayslip,
   // Step 10: employee confirm money received
   confirmMoneyReceived,
+  // Retry utility
+  retryWithBackoff,
 } = usePayroll()
 
 // ─── Departments (for the Add Disbursement dialog) ────────────────────────────
 const { departments, fetchDepartments } = useAdminDepartments()
+
+// ─── Resolve company ID (handles plain string and JSON object in storage) ─────
+function getResolvedCompanyId() {
+  const raw = companyId.value
+  if (raw && typeof raw !== 'object') {
+    const n = Number(raw)
+    if (!Number.isNaN(n) && n > 0) return n
+  }
+  // Fallback: try parsing localStorage keys that may hold JSON objects
+  const keys = ['selectedCompany', 'company_id', 'companyId']
+  for (const key of keys) {
+    const stored = localStorage.getItem(key)
+    if (!stored) continue
+    try {
+      const parsed = JSON.parse(stored)
+      const id = parsed?.id ?? parsed
+      const n = Number(id)
+      if (!Number.isNaN(n) && n > 0) return n
+    } catch {
+      const n = Number(stored)
+      if (!Number.isNaN(n) && n > 0) return n
+    }
+  }
+  console.warn('[PayrollPage] No valid company ID resolved')
+  return null
+}
 
 // ─── Always pass company_id to summary fetches ────────────────────────────────
 // fetchPayrollRunsSummary (from usePayroll) accepts a params object.
 // Wrapping it here means every call site automatically includes company_id
 // without having to remember to pass it manually everywhere.
 const fetchPayrollRunsSummary = (extraParams = {}) => {
-  const cid = Number(companyId.value)
-  return _fetchPayrollRunsSummary(cid ? { company_id: cid, ...extraParams } : extraParams)
+  const cid = getResolvedCompanyId()
+  const params = cid ? { company_id: cid, ...extraParams } : extraParams
+  console.debug('[PayrollPage] fetchPayrollRunsSummary params:', params)
+  return _fetchPayrollRunsSummary(params)
 }
 
 // ─── Tab State ───────────────────────────────────────────────────────────────
@@ -1253,16 +1352,22 @@ const submitFunding = async () => {
   }
   savingFunding.value = true
   try {
-    // Step 7: POST /admin/disbursement-fundings/
-    await addDisbursementFunding({
+    // Build payload — coerce amount to number and omit empty optional fields
+    const payload = {
       log: fundingForm.value.logId,
       date: fundingForm.value.date,
       type: fundingForm.value.type,
-      reference_num: fundingForm.value.reference,
-      source: fundingForm.value.source,
-      amount: fundingForm.value.amount,
-      notes: fundingForm.value.notes || '',
-    })
+      source_bank_name: fundingForm.value.source,
+      amount: Number(fundingForm.value.amount) || 0,
+    }
+    if (fundingForm.value.reference) {
+      payload.reference_num = fundingForm.value.reference
+    }
+    if (fundingForm.value.notes) {
+      payload.notes = fundingForm.value.notes
+    }
+    // Step 7: POST /payroll/admin/disbursement-fundings/
+    await addDisbursementFunding(payload)
     $q.notify({ type: 'positive', message: 'Funds added successfully!' })
     // Refresh funding history and summary for this log
     await onFundingLogChange(fundingForm.value.logId)
@@ -1318,8 +1423,7 @@ const createRunForm = ref({
 const createRunLoading = ref(false)
 
 const openCreateRunDialog = () => {
-  // Coerce to number so string "0" from useCompany is caught by the guard
-  const cid = Number(companyId.value)
+  const cid = getResolvedCompanyId()
   if (!cid) {
     $q.notify({ type: 'warning', message: 'Please select a company first' })
     return
@@ -1336,9 +1440,8 @@ const openCreateRunDialog = () => {
 }
 
 const submitCreatePayrollRun = async () => {
-  // Coerce both to number — guards against string "0" being treated as valid
-  const resolvedCompanyId = Number(companyId.value) || Number(createRunForm.value.company_id)
-  if (!resolvedCompanyId || !createRunForm.value.start_date || !createRunForm.value.end_date) {
+  const cid = getResolvedCompanyId()
+  if (!cid || !createRunForm.value.start_date || !createRunForm.value.end_date) {
     $q.notify({ type: 'warning', message: 'Please fill in Company, Start Date, and End Date.' })
     return
   }
@@ -1346,7 +1449,7 @@ const submitCreatePayrollRun = async () => {
     createRunLoading.value = true
     // Step 1: POST /admin/generate-payslip/
     const payload = {
-      company_id: resolvedCompanyId,
+      company_id: cid,
       start_date: createRunForm.value.start_date,
       end_date: createRunForm.value.end_date,
       type: createRunForm.value.type || 'salary',
@@ -1362,7 +1465,52 @@ const submitCreatePayrollRun = async () => {
       message: result?.message || `Generated ${result?.generated_count ?? 0} payslip(s)!`,
     })
     showCreateRunDialog.value = false
-    await fetchPayrollRunsSummary()
+
+    // ─── Optimistic UI update ─────────────────────────────────────────────
+    // The backend may have read-after-write lag. We immediately inject a
+    // synthetic run object so the user sees it right away, then retry the
+    // real summary fetch until the backend catches up.
+    const optimisticId = result?.disbursement_log_id ?? Date.now()
+    const optimisticRun = {
+      id: optimisticId,
+      name:
+        result?.name ??
+        `Payroll Run | ${payload.type} | ${payload.start_date} - ${payload.end_date}`,
+      period: `${payload.start_date} - ${payload.end_date}`,
+      status: 'draft',
+      status_display: 'Draft',
+      calculated_amount: '0.00',
+      total_net_pay: '0.00',
+      funded: '0.00',
+      released: '0.00',
+      number_of_employee: result?.generated_count ?? 0,
+      completed_employees_count: 0,
+      __optimistic: true,
+      __optimisticAt: Date.now(),
+    }
+    payrollRunsSummary.value = [optimisticRun, ...payrollRunsSummary.value]
+
+    // ─── Retry summary fetch with exponential backoff until backend confirms ──
+    try {
+      await retryWithBackoff(async () => {
+        await fetchPayrollRunsSummary()
+        // Smart merge in usePayroll replaces optimistic runs with real data.
+        // If the backend hasn't returned this ID yet, the optimistic run still
+        // exists and we throw to trigger another retry.
+        const confirmed = payrollRunsSummary.value.some(
+          (r) => r.id === optimisticId && !r.__optimistic,
+        )
+        if (!confirmed) throw new Error('Not yet synced')
+      })
+      console.debug('[PayrollPage] New run confirmed in summary')
+    } catch {
+      $q.notify({
+        type: 'warning',
+        message:
+          'Payroll run created, but the server summary is still updating. It will appear fully once the sync completes.',
+        timeout: 6000,
+      })
+    }
   } catch (err) {
     $q.notify({
       type: 'negative',
@@ -1374,9 +1522,19 @@ const submitCreatePayrollRun = async () => {
 }
 
 onMounted(async () => {
-  await fetchPayrollRunsSummary()
+  try {
+    await fetchPayrollRunsSummary()
+  } catch (err) {
+    console.error('[PayrollPage] Initial summary fetch failed:', err)
+    $q.notify({
+      type: 'warning',
+      message:
+        'Could not load payroll logs. The server may be busy. You can still create new runs.',
+      timeout: 6000,
+    })
+  }
   const firstRun = payrollRunsSummary.value?.[0]
-  if (firstRun) {
+  if (firstRun && !firstRun.__optimistic) {
     await loadRunEmployees(firstRun)
   }
 })
@@ -1390,6 +1548,14 @@ onUnmounted(() => {
 const selectedRun = ref(null)
 
 const loadRunEmployees = async (run) => {
+  // Skip optimistic runs — they don't have a real backend ID yet
+  if (run.__optimistic) {
+    console.log(
+      '[PayrollPage] loadRunEmployees skipped — run is still optimistic (not yet confirmed by backend)',
+      run.id,
+    )
+    return
+  }
   if (selectedRun.value && selectedRun.value.id === run.id) return
   selectedRun.value = run
   payrollRunId.value = run.id
@@ -1402,6 +1568,16 @@ const loadRunEmployees = async (run) => {
 
 // Toggle run expansion - click header to expand/collapse
 const toggleRunExpanded = async (run) => {
+  // Don't expand optimistic runs — they have no real backend ID yet
+  if (run.__optimistic) {
+    $q.notify({
+      type: 'info',
+      message: 'This run is still syncing with the server. Please wait a moment.',
+      timeout: 3000,
+    })
+    console.log('[PayrollPage] toggleRunExpanded blocked — run is optimistic (id:', run.id, ')')
+    return
+  }
   if (selectedRun.value?.id === run.id) {
     // Collapse — also clear payrollRunId so stale logId isn't used by row actions
     selectedRun.value = null
@@ -1467,7 +1643,6 @@ const filteredEmployees = computed(() => {
 const bulkReleaseAll = async (run) => {
   selectedRun.value = run
   payrollRunId.value = run.id
-  await fetchPayrollRunEmployees(run.id)
   const draftIds = payrollRunEmployees.value
     .filter((e) => e.status === 'draft')
     .map((e) => e.employee_id)
@@ -1533,24 +1708,12 @@ const selectAllActionable = () => {
   selectedEmployeeIds.value = new Set(actionable.map((e) => e.employee_id))
 }
 
-// Shared global menu state
-const employeeMenuRef = ref(null)
+// Per-row menu state — set via @before-show on the inline <q-menu>
 const menuEmployee = ref(null)
-
-const openEmployeeMenu = (event, employee) => {
-  menuEmployee.value = employee
-  // Use nextTick to ensure the menu updates before showing
-  nextTick(() => {
-    employeeMenuRef.value?.show(event)
-  })
-}
 
 const handleMenuAction = async (action) => {
   const emp = menuEmployee.value
   if (!emp) return
-
-  // Close menu first
-  employeeMenuRef.value?.hide()
 
   // Execute action based on type
   switch (action) {
@@ -1574,11 +1737,6 @@ const handleMenuAction = async (action) => {
       break
   }
 }
-
-// Auto-selection state for released+ stages - memoized
-const isAutoSelectStage = computed(() => {
-  return isStageAutoSelectable(workflowStage.value)
-})
 
 // Computed: Group employees by status (no mutations during render)
 const actionableEmployeesByStage = computed(() => {
@@ -1655,6 +1813,23 @@ const showDetailModal = ref(false)
 const selectedRecord = ref(null)
 
 const safeArray = (arr) => (Array.isArray(arr) ? arr : [])
+
+// Strips the trailing date range from a run name so we can show it separately.
+// e.g. "Veloso - Veloso | Salary | 2026-05-01 - 2026-05-31" → "Veloso - Veloso | Salary"
+const getRunBaseName = (run) => {
+  if (!run?.name) return '—'
+  // Remove the trailing date range from the name (e.g. "| 2026-05-01 - 2026-05-31")
+  return run.name.replace(/\s*\|?\s*\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\s*$/, '').trim()
+}
+
+const getRunPeriod = (run) => {
+  // Prefer the explicit period field
+  if (run?.period) return run.period
+  if (!run?.name) return ''
+  // Extract date range from the name itself
+  const match = run.name.match(/(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2})/)
+  return match ? match[1] : ''
+}
 
 // Cached dropdown options (computed once, not on every render)
 const runOptions = computed(() =>
@@ -2318,6 +2493,9 @@ const isEmployeeActionable = (emp) => {
   switch (stage) {
     case 'draft':
       return emp.status === 'draft'
+    case 'pending_review':
+      // Employees who already acknowledged can be disbursed early
+      return emp.status === 'ready_for_payment'
     case 'ready_for_payment':
       return emp.status === 'ready_for_payment'
     default:
@@ -2481,7 +2659,7 @@ const openAcknowledgeDialog = async (employee) => {
   // Step 5: fetch the employee's own payslip list to get full payslip details
   acknowledgeDialogLoading.value = true
   try {
-    const payslips = await fetchEmployeePayslips(companyId.value)
+    const payslips = await fetchEmployeePayslips(getResolvedCompanyId())
     // Merge full payslip data into acknowledgeTarget if we find a match
     const full = payslips.find((p) => p.id === employee.payslip_id)
     if (full) {
@@ -2566,19 +2744,6 @@ const handleBulkDisburse = async () => {
       })
     }
   })
-}
-
-const getStageColor = (status) => {
-  const colors = {
-    pending: 'grey',
-    draft: 'grey',
-    pending_review: 'orange',
-    ready_for_payment: 'teal',
-    disbursed: 'amber',
-    completed: 'positive',
-    closed: 'positive',
-  }
-  return colors[status] || 'grey'
 }
 
 const getStageLabel = (status) => {
@@ -2888,37 +3053,179 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .run-card-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 20px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e0e7ef;
-  flex-wrap: wrap;
+  display: block;
+  width: 100%;
+  background: #eef3fb;
+  border-bottom: 1px solid #d8e4f0;
   transition: all 0.2s ease;
 }
 
 .run-card-header:hover {
-  background: #f3f7fc;
+  background: #e6eef8;
 }
 
 .run-card-header.expanded {
-  background: #eff6ff;
+  background: #deeaf8;
   border-bottom-color: #bfdbfe;
+}
+
+/* Single row: name LEFT | stats CENTER | action RIGHT */
+.run-header-stats-row {
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  gap: 16px;
+  flex-wrap: nowrap;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* LEFT: chevron + name/date — grows to fill available space */
+.run-header-name-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Stacked name + period */
+.run-name-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* CENTER: stat columns — fixed size, don't grow or shrink */
+.run-header-stat-cols {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+}
+
+.run-header-stat-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 0 12px;
+  border-right: 1px solid #d1dce8;
+}
+
+.run-header-stat-col:first-child {
+  padding-left: 0;
+}
+
+.run-header-stat-col:last-of-type {
+  border-right: none;
+}
+
+.run-header-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #8a9ab5;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.run-header-stat-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.run-header-action {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding-left: 16px;
+  border-left: 1px solid #d1dce8;
+}
+
+.run-action-btn {
+  border-radius: 8px !important;
+  font-weight: 600;
+  padding: 0 18px !important;
+  height: 38px;
+}
+
+.run-await-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #92400e;
+}
+
+.run-done-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #166534;
+}
+
+.run-period-tag {
+  font-size: 11px;
+  font-weight: 400;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.run-status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.run-status-pending,
+.run-status-draft {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.run-status-pending_review {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.run-status-ready_for_payment {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.run-status-disbursed,
+.run-status-completed,
+.run-status-closed {
+  background: #f0fdf4;
+  color: #166534;
 }
 
 .expand-icon {
   flex-shrink: 0;
   color: #6b7280;
   transition: transform 0.3s ease;
-}
-
-.run-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
 }
 
 .run-name {
@@ -2928,6 +3235,7 @@ const retryEmployeeAction = async (emp) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .run-header-amounts {
@@ -2953,11 +3261,6 @@ const retryEmployeeAction = async (emp) => {
   font-size: 14px;
   font-weight: 600;
   color: #111827;
-}
-
-.run-header-action {
-  display: flex;
-  align-items: center;
 }
 
 /* ==============================
@@ -4341,31 +4644,65 @@ const retryEmployeeAction = async (emp) => {
   display: flex;
   background: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
-  padding: 12px 16px;
+  padding: 10px 16px;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  min-width: 760px;
 }
 
+/* Base cell — overridden per-column below */
 .employees-th {
-  flex: 1;
-  padding: 0 8px;
+  padding: 0 6px;
   text-align: left;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
 }
 
-.employees-th:first-child {
-  flex: 0 0 48px;
+/* Col 1 — checkbox */
+.employees-th:nth-child(1) {
+  flex: 0 0 44px;
+  padding: 0;
   text-align: center;
 }
-
-.employees-th:last-child {
-  flex: 0 0 80px;
+/* Col 2 — Employee name + ID */
+.employees-th:nth-child(2) {
+  flex: 2 1 160px;
+}
+/* Col 3 — Status badge */
+.employees-th:nth-child(3) {
+  flex: 0 0 90px;
+}
+/* Col 4 — Period */
+.employees-th:nth-child(4) {
+  flex: 1.8 1 140px;
+}
+/* Col 5 — Run */
+.employees-th:nth-child(5) {
+  flex: 0 0 56px;
+  text-align: center;
+}
+/* Col 6 — Gross Pay */
+.employees-th:nth-child(6) {
+  flex: 1.1 1 110px;
+}
+/* Col 7 — Net Pay */
+.employees-th:nth-child(7) {
+  flex: 1.1 1 110px;
+}
+/* Col 8 — Total Hours */
+.employees-th:nth-child(8) {
+  flex: 0 0 88px;
+  text-align: center;
+}
+/* Col 9 — Actions */
+.employees-th:nth-child(9) {
+  flex: 0 0 72px;
   text-align: center;
 }
 
@@ -4379,11 +4716,12 @@ const retryEmployeeAction = async (emp) => {
 
 .employees-table-row {
   display: flex;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid #f1f5f9;
   transition: background-color 0.2s;
-  min-height: 60px;
+  min-height: 56px;
   align-items: center;
+  min-width: 760px;
 }
 
 .employees-table-row:hover {
@@ -4398,9 +4736,9 @@ const retryEmployeeAction = async (emp) => {
   background-color: #fef2f2;
 }
 
+/* Base cell */
 .employees-td {
-  flex: 1;
-  padding: 0 8px;
+  padding: 0 6px;
   font-size: 13px;
   color: #334155;
   min-width: 0;
@@ -4409,15 +4747,48 @@ const retryEmployeeAction = async (emp) => {
   white-space: nowrap;
   display: flex;
   align-items: center;
+  flex: 1;
 }
 
-.employees-td:first-child {
-  flex: 0 0 48px;
+/* Col 1 — checkbox */
+.employees-td:nth-child(1) {
+  flex: 0 0 44px;
+  justify-content: center;
+  padding: 0;
+}
+/* Col 2 — Employee */
+.employees-td:nth-child(2) {
+  flex: 2 1 160px;
+}
+/* Col 3 — Status */
+.employees-td:nth-child(3) {
+  flex: 0 0 90px;
+}
+/* Col 4 — Period */
+.employees-td:nth-child(4) {
+  flex: 1.8 1 140px;
+}
+/* Col 5 — Run */
+.employees-td:nth-child(5) {
+  flex: 0 0 56px;
   justify-content: center;
 }
-
-.employees-td:last-child {
-  flex: 0 0 80px;
+/* Col 6 — Gross Pay */
+.employees-td:nth-child(6) {
+  flex: 1.1 1 110px;
+}
+/* Col 7 — Net Pay */
+.employees-td:nth-child(7) {
+  flex: 1.1 1 110px;
+}
+/* Col 8 — Total Hours */
+.employees-td:nth-child(8) {
+  flex: 0 0 88px;
+  justify-content: center;
+}
+/* Col 9 — Actions */
+.employees-td:nth-child(9) {
+  flex: 0 0 72px;
   justify-content: center;
 }
 
@@ -4428,43 +4799,15 @@ const retryEmployeeAction = async (emp) => {
   font-size: 14px;
 }
 
-/* Responsive adjustments for virtual table */
-@media (max-width: 1200px) {
-  .employees-th:nth-child(4),
-  .employees-th:nth-child(5),
-  .employees-td:nth-child(4),
-  .employees-td:nth-child(5) {
-    display: none;
-  }
+/* Scroll horizontally on small screens instead of hiding columns */
+.employees-table-container {
+  overflow-x: auto;
 }
 
 @media (max-width: 768px) {
-  .employees-table-header {
-    padding: 10px 12px;
-    font-size: 11px;
-  }
-
+  .employees-table-header,
   .employees-table-row {
-    padding: 10px 12px;
-  }
-
-  .employees-th:nth-child(7),
-  .employees-th:nth-child(8),
-  .employees-td:nth-child(7),
-  .employees-td:nth-child(8) {
-    display: none;
-  }
-}
-
-@media (max-width: 480px) {
-  .employees-th:not(:first-child):not(:nth-child(2)):not(:nth-child(3)):not(:last-child),
-  .employees-td:not(:first-child):not(:nth-child(2)):not(:nth-child(3)):not(:last-child) {
-    display: none;
-  }
-
-  .employees-th:nth-child(2),
-  .employees-td:nth-child(2) {
-    flex: 2;
+    min-width: 680px;
   }
 }
 </style>
