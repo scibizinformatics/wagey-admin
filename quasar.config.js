@@ -91,6 +91,7 @@ export default defineConfig((ctx) => {
             '/payroll/payroll-components',
             '/payroll/payroll-component-types',
             '/payroll/pay-structures',
+            '/payroll/cost-centers',
           ],
           target: apiBaseUrl,
           changeOrigin: true,
