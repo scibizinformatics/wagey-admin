@@ -1,5 +1,5 @@
 <template>
-  <div class="payroll-dashboard">
+  <q-page class="payroll-dashboard">
     <div class="dashboard-container">
       <!-- Header -->
       <div class="page-header">
@@ -85,11 +85,11 @@
         </div>
         <div class="stats-card">
           <div class="stats-icon-wrapper stats-icon-purple">
-            <q-icon name="schedule" class="stats-icon" />
+            <q-icon name="receipt_long" class="stats-icon" />
           </div>
           <div class="stats-content">
-            <div class="stats-amount">{{ totalHours }}h</div>
-            <div class="stats-label">Total Hours</div>
+            <div class="stats-amount">{{ totalPayrollRuns }}</div>
+            <div class="stats-label">Total Payroll Runs</div>
           </div>
         </div>
       </div>
@@ -229,8 +229,25 @@
 
                     <!-- RIGHT: action button, always flush to the right edge -->
                     <div class="run-header-action" @click.stop>
+                      <!-- Expanded draft run with a ready-for-payment employee selected → Disburse -->
                       <q-btn
                         v-if="
+                          selectedRun?.id === run.id &&
+                          workflowStage === 'draft' &&
+                          hasReadyForPaymentSelected
+                        "
+                        unelevated
+                        no-caps
+                        size="sm"
+                        icon="payments"
+                        color="teal"
+                        label="Disburse"
+                        class="run-action-btn"
+                        :loading="isSaving('disbursing') && selectedRun?.id === run.id"
+                        @click="selectAndDisburse(run)"
+                      />
+                      <q-btn
+                        v-else-if="
                           run.status === 'draft' ||
                           (selectedRun?.id === run.id && workflowStage === 'draft')
                         "
@@ -325,6 +342,24 @@
                         :loading="isSaving('bulkReleasing')"
                         @click="handleBulkAction"
                       />
+                      <!-- Early disbursal in draft stage: some employees already acknowledged while others are still draft -->
+                      <q-btn
+                        v-if="
+                          run.id === selectedRun?.id &&
+                          workflowStage === 'draft' &&
+                          getActionableEmployees('pending_review').length > 0 &&
+                          selectedEmployees.length > 0
+                        "
+                        unelevated
+                        dense
+                        no-caps
+                        size="sm"
+                        icon="payments"
+                        color="teal"
+                        label="Disburse Ready"
+                        :loading="isSaving('disbursing')"
+                        @click="handleBulkDisburse"
+                      />
                       <!-- Step 9: Disburse (ready_for_payment → disbursed/completed) -->
                       <q-btn
                         v-if="
@@ -398,6 +433,36 @@
                       >
                       have acknowledged their payslip and can be disbursed early. Select them
                       individually or use <strong>Select All</strong> to release their salary now.
+                    </span>
+                  </div>
+
+                  <!-- Early disbursal info banner: shown in draft when some employees already acknowledged while others are still draft -->
+                  <div
+                    v-if="
+                      run.id === selectedRun?.id &&
+                      workflowStage === 'draft' &&
+                      getActionableEmployees('pending_review').length > 0
+                    "
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 10px;
+                      padding: 10px 16px;
+                      background: #f0fdf4;
+                      border-left: 3px solid #14b8a6;
+                      margin: 8px 14px 0;
+                      border-radius: 6px;
+                      font-size: 13px;
+                      color: #0f766e;
+                    "
+                  >
+                    <q-icon name="payments" size="16px" color="teal" />
+                    <span>
+                      <strong
+                        >{{ getActionableEmployees('pending_review').length }} employee(s)</strong
+                      >
+                      have acknowledged their payslip and can be disbursed early. Select them
+                      individually to disburse their salary now.
                     </span>
                   </div>
 
@@ -583,7 +648,10 @@
                                         <q-item-section>View &amp; Acknowledge</q-item-section>
                                       </q-item>
                                       <q-item
-                                        v-if="menuEmployee?.status === 'ready_for_payment'"
+                                        v-if="
+                                          menuEmployee?.status === 'ready_for_payment' &&
+                                          menuEmployee?.review_status !== 'pending'
+                                        "
                                         clickable
                                         v-close-popup
                                         @click="handleMenuAction('disburse')"
@@ -683,15 +751,25 @@
 
         <!-- ===================== FUNDING TAB ===================== -->
         <q-tab-panel name="funding" class="tab-panel-funding">
-          <!-- Add Funds Form -->
-          <div class="funding-form-card" ref="fundingFormRef">
-            <div class="funding-form-header">
-              <h2 class="funding-form-title">Add funds</h2>
-            </div>
+          <div class="funding-layout">
+            <!-- LEFT: Add Funds Form -->
+            <div class="funding-form-card" ref="fundingFormRef">
+              <div class="funding-form-header">
+                <div class="funding-form-header-icon">
+                  <q-icon name="account_balance_wallet" size="18px" />
+                </div>
+                <div>
+                  <h2 class="funding-form-title">Add Funds</h2>
+                  <p class="funding-form-subtitle">
+                    Record a new funding entry for a disbursement log
+                  </p>
+                </div>
+              </div>
 
-            <div class="funding-form-grid">
-              <div class="funding-form-field funding-form-field-full">
-                <label class="funding-field-label">Log</label>
+              <div class="funding-divider" />
+
+              <div class="funding-section-label">Disbursement Log</div>
+              <div class="funding-form-field" style="margin-bottom: 16px">
                 <q-select
                   v-model="fundingForm.logId"
                   outlined
@@ -703,170 +781,219 @@
                   no-error-icon
                   @update:model-value="onFundingLogChange"
                 >
-                  <template v-slot:prepend><q-icon name="receipt_long" size="16px" /></template>
+                  <template v-slot:prepend
+                    ><q-icon name="receipt_long" size="16px" color="grey-6"
+                  /></template>
                 </q-select>
               </div>
 
-              <div class="funding-form-field">
-                <label class="funding-field-label">Date</label>
-                <q-input v-model="fundingForm.date" outlined dense type="date" no-error-icon />
-              </div>
+              <div class="funding-section-label">Payment Details</div>
+              <div class="funding-form-grid">
+                <div class="funding-form-field">
+                  <label class="funding-field-label">Date</label>
+                  <q-input v-model="fundingForm.date" outlined dense type="date" no-error-icon />
+                </div>
 
-              <div class="funding-form-field">
-                <label class="funding-field-label">Type</label>
-                <q-select
-                  v-model="fundingForm.type"
-                  outlined
-                  dense
-                  emit-value
-                  map-options
-                  :options="[
-                    { label: 'Check', value: 'check' },
-                    { label: 'Bank Transfer', value: 'bank_transfer' },
-                    { label: 'Cash', value: 'cash' },
-                    { label: 'GCash', value: 'gcash' },
-                  ]"
-                  no-error-icon
-                />
-              </div>
+                <div class="funding-form-field">
+                  <label class="funding-field-label">Type</label>
+                  <q-select
+                    v-model="fundingForm.type"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    :options="[
+                      { label: 'Check', value: 'check' },
+                      { label: 'Bank Transfer', value: 'bank_transfer' },
+                    ]"
+                    no-error-icon
+                  />
+                </div>
 
-              <div class="funding-form-field">
-                <label class="funding-field-label">Reference #</label>
-                <q-input
-                  v-model="fundingForm.reference"
-                  outlined
-                  dense
-                  placeholder="e.g. 125436345"
-                  no-error-icon
-                >
-                  <template v-slot:prepend
-                    ><span style="font-size: 13px; color: #9ca3af">#</span></template
+                <div class="funding-form-field">
+                  <label class="funding-field-label">Reference #</label>
+                  <q-input
+                    v-model="fundingForm.reference"
+                    outlined
+                    dense
+                    placeholder="e.g. 125436345"
+                    no-error-icon
                   >
-                </q-input>
-              </div>
+                    <template v-slot:prepend
+                      ><span style="font-size: 13px; color: #9ca3af">#</span></template
+                    >
+                  </q-input>
+                </div>
 
-              <div class="funding-form-field">
-                <label class="funding-field-label">Source</label>
-                <q-select
-                  v-model="fundingForm.source"
-                  outlined
-                  dense
-                  emit-value
-                  map-options
-                  :options="fundingSources"
-                  no-error-icon
-                />
-              </div>
+                <div class="funding-form-field">
+                  <label class="funding-field-label">Source</label>
+                  <q-select
+                    v-model="fundingForm.source"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    :options="fundingSources"
+                    :disable="!fundingForm.logId || fundingSources.length === 0"
+                    :placeholder="
+                      !fundingForm.logId
+                        ? 'Select a log first'
+                        : !payrollRunsSummary.find((r) => r.id === fundingForm.logId)?.department_id
+                          ? 'Log has no department'
+                          : fundingSources.length === 0
+                            ? 'No bank accounts found'
+                            : 'Select bank account'
+                    "
+                    no-error-icon
+                  />
+                </div>
 
-              <div class="funding-form-field">
-                <label class="funding-field-label">Amount</label>
-                <q-input
-                  v-model="fundingForm.amount"
-                  outlined
-                  dense
-                  type="number"
-                  placeholder="0.00"
-                  no-error-icon
-                >
-                  <template v-slot:prepend
-                    ><span style="font-size: 13px; font-weight: 600">₱</span></template
+                <div class="funding-form-field funding-form-field-full">
+                  <label class="funding-field-label">Amount</label>
+                  <q-input
+                    v-model="fundingForm.amount"
+                    outlined
+                    dense
+                    type="number"
+                    placeholder="0.00"
+                    no-error-icon
                   >
-                </q-input>
+                    <template v-slot:prepend
+                      ><span style="font-size: 13px; font-weight: 600; color: #374151"
+                        >₱</span
+                      ></template
+                    >
+                  </q-input>
+                </div>
               </div>
 
-              <div class="funding-form-field funding-form-field-full">
-                <label class="funding-field-label"
-                  >Notes <span style="color: #9ca3af">(optional)</span></label
-                >
+              <div class="funding-section-label" style="margin-top: 4px">
+                Notes <span class="funding-optional">(optional)</span>
+              </div>
+              <div class="funding-form-field" style="margin-bottom: 20px">
                 <q-input
                   v-model="fundingForm.notes"
                   outlined
                   dense
-                  placeholder="Add a note..."
+                  placeholder="Add a note about this funding entry..."
                   no-error-icon
+                />
+              </div>
+
+              <div class="funding-divider" />
+
+              <div class="funding-form-actions">
+                <q-btn
+                  unelevated
+                  color="primary"
+                  label="Add Funds"
+                  icon="add"
+                  no-caps
+                  :loading="savingFunding"
+                  @click="submitFunding"
+                  class="funding-submit-btn"
                 />
               </div>
             </div>
 
-            <div class="funding-form-actions">
-              <q-btn
-                unelevated
-                color="primary"
-                label="Add funds"
-                icon="add"
-                no-caps
-                :loading="savingFunding"
-                @click="submitFunding"
-              />
-            </div>
-          </div>
+            <!-- RIGHT: Funding History -->
+            <div class="funding-history-section">
+              <div class="funding-history-header">
+                <div class="funding-form-header-icon funding-history-icon">
+                  <q-icon name="history" size="18px" />
+                </div>
+                <div>
+                  <h3 class="funding-history-title">History</h3>
+                  <p class="funding-form-subtitle">
+                    {{
+                      fundingForm.logId
+                        ? 'Funding entries for selected log'
+                        : 'Select a log to view entries'
+                    }}
+                  </p>
+                </div>
+              </div>
 
-          <!-- Funding History (filtered by selected log) -->
-          <div class="funding-history-section">
-            <h3 class="funding-history-title">History</h3>
+              <div class="funding-divider" />
 
-            <div v-if="fundingHistoryLoading" class="loading-state">
-              <q-spinner color="primary" size="24px" />
-            </div>
+              <div v-if="fundingHistoryLoading" class="funding-empty-state">
+                <q-spinner color="primary" size="24px" />
+                <span class="funding-empty-text">Loading history...</span>
+              </div>
 
-            <div v-else-if="filteredFundingHistory.length === 0" class="loading-state">
-              <span class="text-grey-5">
-                {{
-                  fundingForm.logId
-                    ? 'No funding entries for this log yet'
-                    : 'Select a log above to see its funding history'
-                }}
-              </span>
-            </div>
+              <div v-else-if="filteredFundingHistory.length === 0" class="funding-empty-state">
+                <q-icon
+                  :name="fundingForm.logId ? 'inbox' : 'receipt_long'"
+                  size="36px"
+                  color="grey-4"
+                />
+                <span class="funding-empty-text">
+                  {{
+                    fundingForm.logId
+                      ? 'No funding entries for this log yet'
+                      : 'Select a log above to see its funding history'
+                  }}
+                </span>
+              </div>
 
-            <div v-else class="funding-history-table-wrap">
-              <table class="funding-history-table">
-                <thead>
-                  <tr>
-                    <th>Log</th>
-                    <th>Source</th>
-                    <th style="text-align: right">Amount</th>
-                    <th style="text-align: right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="entry in filteredFundingHistory" :key="entry.id">
-                    <td>
-                      <div class="fh-log-name">{{ entry.logName }}</div>
-                      <div class="fh-log-period">{{ entry.period }}</div>
-                    </td>
-                    <td class="fh-source">{{ entry.source }}</td>
-                    <td class="fh-amount" style="text-align: right">
-                      {{ formatCurrency(entry.amount) }}
-                    </td>
-                    <td class="fh-actions" style="text-align: right">
-                      <q-btn
-                        flat
-                        dense
-                        no-caps
-                        size="sm"
-                        label="View"
-                        color="primary"
-                        @click="viewFundingEntry(entry)"
-                      />
-                      <span class="fh-sep">|</span>
-                      <q-btn
-                        flat
-                        dense
-                        no-caps
-                        size="sm"
-                        label="Edit"
-                        color="grey-7"
-                        @click="editFundingEntry(entry)"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div v-else class="funding-history-table-wrap">
+                <table class="funding-history-table">
+                  <thead>
+                    <tr>
+                      <th>Log</th>
+                      <th>Source</th>
+                      <th style="text-align: right">Amount</th>
+                      <th style="text-align: right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="entry in filteredFundingHistory" :key="entry.id">
+                      <td>
+                        <div class="fh-log-name">{{ entry.logName }}</div>
+                        <div class="fh-log-period">{{ entry.period }}</div>
+                      </td>
+                      <td>
+                        <span class="fh-source-badge">{{ entry.source }}</span>
+                      </td>
+                      <td class="fh-amount" style="text-align: right">
+                        {{ formatCurrency(entry.amount) }}
+                      </td>
+                      <td class="fh-actions" style="text-align: right">
+                        <q-btn
+                          flat
+                          dense
+                          no-caps
+                          size="sm"
+                          label="View"
+                          color="primary"
+                          @click="viewFundingEntry(entry)"
+                        />
+                        <span class="fh-sep">|</span>
+                        <q-btn
+                          flat
+                          dense
+                          no-caps
+                          size="sm"
+                          label="Edit"
+                          color="grey-7"
+                          @click="editFundingEntry(entry)"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
 
-              <div class="funding-history-footer">
-                <q-btn flat no-caps size="sm" label="View all funding logs" color="primary" />
-                <span class="fh-page-info">Page 1 of {{ fundingTotalPages }}</span>
+                <div class="funding-history-footer">
+                  <q-btn
+                    flat
+                    no-caps
+                    size="sm"
+                    label="View all funding logs"
+                    color="primary"
+                    icon="open_in_new"
+                  />
+                  <span class="fh-page-info">Page 1 of {{ fundingTotalPages }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1191,7 +1318,7 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-  </div>
+  </q-page>
 </template>
 
 <script setup>
@@ -1202,6 +1329,7 @@ import { useQuasar } from 'quasar'
 import { usePayroll } from 'src/composables/page/usePayroll'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useAdminDepartments } from 'src/composables/admin/useAdminDepartments'
+import { useAdminCostCenters } from 'src/composables/admin/useAdminCostCenters'
 
 const $q = useQuasar()
 const { companyId } = useCompany()
@@ -1228,12 +1356,17 @@ const {
   acknowledgePayslip,
   // Step 10: employee confirm money received
   confirmMoneyReceived,
+  // Cost-center bank accounts by log
+  fetchDisbursementLogBankAccounts,
   // Retry utility
   retryWithBackoff,
 } = usePayroll()
 
 // ─── Departments (for the Add Disbursement dialog) ────────────────────────────
 const { departments, fetchDepartments } = useAdminDepartments()
+
+// ─── Cost Centers (for funding source bank accounts) ───────────────────────────
+const { costCenters, fetchCostCenters } = useAdminCostCenters()
 
 // ─── Resolve company ID (handles plain string and JSON object in storage) ─────
 function getResolvedCompanyId() {
@@ -1293,11 +1426,8 @@ const fundingForm = ref({
   notes: '',
 })
 
-// Funding sources list — extend from your company bank accounts as needed
-const fundingSources = ref([
-  { label: 'Bank of Commerce – Little Green Kitchen – 102436733', value: 'boc_lgk' },
-  { label: 'BDO – Little Green Kitchen – 987654321', value: 'bdo_lgk' },
-])
+// Funding sources — populated dynamically from the selected log's department cost center
+const fundingSources = ref([])
 
 // All funding history entries (loaded per log when log changes)
 const allFundingHistory = ref([])
@@ -1315,8 +1445,50 @@ const fundingTotalPages = computed(() =>
 const onFundingLogChange = async (logId) => {
   if (!logId) return
   fundingHistoryLoading.value = true
+  fundingSources.value = []
+  fundingForm.value.source = null
+
   try {
     const run = payrollRunsSummary.value.find((r) => r.id === logId)
+    console.log('[Funding] logId:', logId, 'run:', run)
+
+    // ─── Primary: use the dedicated endpoint ───────────────────────────────
+    const bankAccounts = await fetchDisbursementLogBankAccounts(logId)
+    console.log('[Funding] endpoint returned accounts:', bankAccounts)
+
+    if (bankAccounts.length > 0) {
+      // API returns { count, bank_accounts: [{ id, name }, ...] }
+      fundingSources.value = bankAccounts.map((b) => ({
+        label: b.name ?? 'Unnamed Account',
+        value: b.id,
+      }))
+      console.log('[Funding] built sources from endpoint:', fundingSources.value)
+    } else {
+      // ─── Fallback: manual lookup via department → cost center ────────────
+      console.warn('[Funding] Endpoint returned empty — falling back to manual lookup')
+      const departmentId = run?.department_id
+      const dept = departments.value.find((d) => String(d.id) === String(departmentId))
+      const costCenterId = dept?.cost_center
+      console.log('[Funding] fallback dept:', dept, 'costCenterId:', costCenterId)
+
+      if (costCenterId) {
+        const cc = costCenters.value.find((c) => String(c.id) === String(costCenterId))
+        const accounts = (cc?.bank_accounts ?? []).filter((b) => b.is_active !== false)
+        fundingSources.value = accounts.map((b) => {
+          const fullName = `${b.bank_name} – ${b.bank_account_name} – ${b.bank_account_number}`
+          return {
+            label: fullName,
+            value: b.id,
+          }
+        })
+        console.log('[Funding] built sources from fallback:', fundingSources.value)
+      } else if (!dept) {
+        console.warn('[Funding] No department found for run.department_id:', departmentId)
+      } else if (!costCenterId) {
+        console.warn('[Funding] Department found but has no cost_center:', dept)
+      }
+    }
+
     const entries = await fetchDisbursementFundings(logId)
     allFundingHistory.value = entries.map((h) => ({
       id: h.id,
@@ -1331,8 +1503,10 @@ const onFundingLogChange = async (logId) => {
       reference: h.reference_num ?? '',
       notes: h.notes ?? '',
     }))
-  } catch {
+  } catch (err) {
+    console.error('[Funding] Error loading funding data:', err)
     allFundingHistory.value = []
+    fundingSources.value = []
   } finally {
     fundingHistoryLoading.value = false
   }
@@ -1352,16 +1526,15 @@ const submitFunding = async () => {
   }
   savingFunding.value = true
   try {
-    // Build payload — coerce amount to number and omit empty optional fields
+    // Build payload — backend expects 'source' (not 'source_bank_name')
+    // and 'reference_num' is a required field (send empty string if blank)
     const payload = {
       log: fundingForm.value.logId,
       date: fundingForm.value.date,
       type: fundingForm.value.type,
-      source_bank_name: fundingForm.value.source,
+      source: fundingForm.value.source,
+      reference_num: fundingForm.value.reference || '',
       amount: Number(fundingForm.value.amount) || 0,
-    }
-    if (fundingForm.value.reference) {
-      payload.reference_num = fundingForm.value.reference
     }
     if (fundingForm.value.notes) {
       payload.notes = fundingForm.value.notes
@@ -1372,6 +1545,13 @@ const submitFunding = async () => {
     // Refresh funding history and summary for this log
     await onFundingLogChange(fundingForm.value.logId)
     await fetchPayrollRunsSummary()
+    // Re-sync selectedRun so the expanded log card shows the new funded amount immediately
+    const refreshedRun = payrollRunsSummary.value.find(
+      (r) => String(r.id) === String(fundingForm.value.logId),
+    )
+    if (refreshedRun) {
+      selectedRun.value = refreshedRun
+    }
     // Reset form (keep logId so history stays visible)
     const keepLogId = fundingForm.value.logId
     fundingForm.value = {
@@ -1485,10 +1665,23 @@ const submitCreatePayrollRun = async () => {
       released: '0.00',
       number_of_employee: result?.generated_count ?? 0,
       completed_employees_count: 0,
+      department_id: payload.department_id ?? null,
       __optimistic: true,
       __optimisticAt: Date.now(),
     }
     payrollRunsSummary.value = [optimisticRun, ...payrollRunsSummary.value]
+
+    // ─── Immediately expand the new run and load its employees ─────────────────
+    selectedRun.value = optimisticRun
+    payrollRunId.value = optimisticId
+    clearSelection()
+    selectAll.value = false
+    try {
+      await fetchPayrollRunEmployees(optimisticId)
+      selectedRunForData.value = optimisticId
+    } catch {
+      // Real errors already logged by composable
+    }
 
     // ─── Retry summary fetch with exponential backoff until backend confirms ──
     try {
@@ -1503,6 +1696,22 @@ const submitCreatePayrollRun = async () => {
         if (!confirmed) throw new Error('Not yet synced')
       })
       console.debug('[PayrollPage] New run confirmed in summary')
+      // Auto-expand the newly created run and load its employees
+      const confirmedRun = payrollRunsSummary.value.find(
+        (r) => r.id === optimisticId && !r.__optimistic,
+      )
+      if (confirmedRun) {
+        selectedRun.value = confirmedRun
+        payrollRunId.value = confirmedRun.id
+        clearSelection()
+        selectAll.value = false
+        try {
+          await fetchPayrollRunEmployees(confirmedRun.id)
+          selectedRunForData.value = confirmedRun.id
+        } catch {
+          // Real errors already logged by composable
+        }
+      }
     } catch {
       $q.notify({
         type: 'warning',
@@ -1522,6 +1731,25 @@ const submitCreatePayrollRun = async () => {
 }
 
 onMounted(async () => {
+  // Pre-load departments and cost centers so funding source dropdown works immediately
+  // Ensure companyId is resolved first — both composables depend on it
+  const resolvedCompanyId = getResolvedCompanyId()
+  if (resolvedCompanyId) {
+    try {
+      await Promise.all([fetchDepartments(), fetchCostCenters()])
+      console.log(
+        '[PayrollPage] Preloaded departments:',
+        departments.value.length,
+        'costCenters:',
+        costCenters.value.length,
+      )
+    } catch (err) {
+      console.error('[PayrollPage] Failed to preload departments/cost centers:', err)
+    }
+  } else {
+    console.warn('[PayrollPage] No companyId resolved — skipping department/cost center preload')
+  }
+
   try {
     await fetchPayrollRunsSummary()
   } catch (err) {
@@ -1548,14 +1776,6 @@ onUnmounted(() => {
 const selectedRun = ref(null)
 
 const loadRunEmployees = async (run) => {
-  // Skip optimistic runs — they don't have a real backend ID yet
-  if (run.__optimistic) {
-    console.log(
-      '[PayrollPage] loadRunEmployees skipped — run is still optimistic (not yet confirmed by backend)',
-      run.id,
-    )
-    return
-  }
   if (selectedRun.value && selectedRun.value.id === run.id) return
   selectedRun.value = run
   payrollRunId.value = run.id
@@ -1568,16 +1788,6 @@ const loadRunEmployees = async (run) => {
 
 // Toggle run expansion - click header to expand/collapse
 const toggleRunExpanded = async (run) => {
-  // Don't expand optimistic runs — they have no real backend ID yet
-  if (run.__optimistic) {
-    $q.notify({
-      type: 'info',
-      message: 'This run is still syncing with the server. Please wait a moment.',
-      timeout: 3000,
-    })
-    console.log('[PayrollPage] toggleRunExpanded blocked — run is optimistic (id:', run.id, ')')
-    return
-  }
   if (selectedRun.value?.id === run.id) {
     // Collapse — also clear payrollRunId so stale logId isn't used by row actions
     selectedRun.value = null
@@ -1588,8 +1798,13 @@ const toggleRunExpanded = async (run) => {
     payrollRunId.value = run.id
     clearSelection()
     selectAll.value = false
-    await fetchPayrollRunEmployees(run.id)
-    selectedRunForData.value = run.id
+    try {
+      await fetchPayrollRunEmployees(run.id)
+      selectedRunForData.value = run.id
+    } catch {
+      // Real (non-cancellation) errors are already logged by the composable.
+      // Prevent unhandled rejections from bubbling here.
+    }
   }
 }
 
@@ -1599,7 +1814,7 @@ const selectAndDisburse = async (run) => {
   payrollRunId.value = run.id
   await fetchPayrollRunEmployees(run.id)
   const readyCount = payrollRunEmployees.value.filter(
-    (e) => e.status === 'ready_for_payment',
+    (e) => e.status === 'ready_for_payment' && e.review_status !== 'pending',
   ).length
   if (!readyCount) {
     $q.notify({ type: 'warning', message: 'No employees are ready for payment yet' })
@@ -1607,6 +1822,11 @@ const selectAndDisburse = async (run) => {
   }
   await handleBulkDisburse()
   await fetchPayrollRunsSummary()
+  // Refresh selectedRun so the header status chip & action button update immediately
+  const refreshedRun = payrollRunsSummary.value.find((r) => String(r.id) === String(run.id))
+  if (refreshedRun) {
+    selectedRun.value = refreshedRun
+  }
 }
 
 const employeeSearchQuery = ref('')
@@ -1678,6 +1898,17 @@ const selectAll = ref(false)
 
 // Backward-compatible computed for template usage
 const selectedEmployees = computed(() => Array.from(selectedEmployeeIds.value))
+
+// True when the current selection includes at least one ready_for_payment employee
+const hasReadyForPaymentSelected = computed(() => {
+  if (!selectedEmployees.value.length) return false
+  return payrollRunEmployees.value.some(
+    (e) =>
+      selectedEmployeeIds.value.has(e.employee_id) &&
+      e.status === 'ready_for_payment' &&
+      e.review_status !== 'pending',
+  )
+})
 
 // Helper functions for Set-based selection
 const isEmployeeSelected = (id) => selectedEmployeeIds.value.has(id)
@@ -1840,19 +2071,19 @@ const departmentOptions = computed(() =>
   (departments.value ?? []).map((d) => ({ label: d.name, value: d.id })),
 )
 
-const totalEmployees = computed(() => safeArray(payrollData.value).length)
-const totalGrossPay = computed(() =>
-  safeArray(payrollData.value).reduce((sum, r) => sum + Number(r.gross_pay || 0), 0),
-)
-const totalNetPay = computed(() =>
-  safeArray(payrollData.value).reduce((sum, r) => sum + Number(r.net_pay || 0), 0),
-)
-const totalHours = computed(() =>
-  safeArray(payrollData.value).reduce(
-    (sum, r) => sum + Number(r.breakdown?.attendance?.total_hours_worked || 0),
+const totalEmployees = computed(() =>
+  safeArray(payrollRunsSummary.value).reduce(
+    (sum, r) => sum + Number(r.number_of_employee || 0),
     0,
   ),
 )
+const totalGrossPay = computed(() =>
+  safeArray(payrollRunsSummary.value).reduce((sum, r) => sum + Number(r.calculated_amount || 0), 0),
+)
+const totalNetPay = computed(() =>
+  safeArray(payrollRunsSummary.value).reduce((sum, r) => sum + Number(r.total_net_pay || 0), 0),
+)
+const totalPayrollRuns = computed(() => safeArray(payrollRunsSummary.value).length)
 
 const formatCurrency = (val) => {
   const n = Number(val ?? 0)
@@ -2492,12 +2723,16 @@ const isEmployeeActionable = (emp) => {
   const stage = workflowStage.value
   switch (stage) {
     case 'draft':
-      return emp.status === 'draft'
+      // Allow selection of both drafts (to release) AND ready employees (to disburse early)
+      // Guard: ready employees must not have review_status === 'pending'
+      if (emp.status === 'draft') return true
+      if (emp.status === 'ready_for_payment') return emp.review_status !== 'pending'
+      return false
     case 'pending_review':
       // Employees who already acknowledged can be disbursed early
-      return emp.status === 'ready_for_payment'
+      return emp.status === 'ready_for_payment' && emp.review_status !== 'pending'
     case 'ready_for_payment':
-      return emp.status === 'ready_for_payment'
+      return emp.status === 'ready_for_payment' && emp.review_status !== 'pending'
     default:
       return false
   }
@@ -2539,6 +2774,13 @@ const handleWorkflowAction = async (employee, action) => {
 
   // Step 9: disburse a single ready_for_payment employee
   if (action === 'disburse') {
+    if (employee.review_status === 'pending') {
+      $q.notify({
+        type: 'warning',
+        message: 'This employee is still under review and cannot be disbursed yet.',
+      })
+      return
+    }
     $q.dialog({
       title: 'Disburse',
       message: `Disburse payment for ${employee.employee_name || employee.employee}?`,
@@ -2710,9 +2952,16 @@ const handleBulkDisburse = async () => {
   }
   const readyIds =
     selectedEmployeeIds.value.size > 0
-      ? selectedEmployees.value
+      ? payrollRunEmployees.value
+          .filter(
+            (e) =>
+              selectedEmployeeIds.value.has(e.employee_id) &&
+              e.status === 'ready_for_payment' &&
+              e.review_status !== 'pending',
+          )
+          .map((e) => e.employee_id)
       : payrollRunEmployees.value
-          .filter((e) => e.status === 'ready_for_payment')
+          .filter((e) => e.status === 'ready_for_payment' && e.review_status !== 'pending')
           .map((e) => e.employee_id)
 
   if (!readyIds.length) {
@@ -2735,6 +2984,11 @@ const handleBulkDisburse = async () => {
       })
       await fetchPayrollRunEmployees(logId)
       await fetchPayrollRunsSummary()
+      // Refresh selectedRun so the header status chip & action button update immediately
+      const refreshedRun = payrollRunsSummary.value.find((r) => String(r.id) === String(logId))
+      if (refreshedRun) {
+        selectedRun.value = refreshedRun
+      }
       clearSelection()
       selectAll.value = false
     } catch (err) {
@@ -2754,7 +3008,7 @@ const getStageLabel = (status) => {
     ready_for_payment: 'Ready for Payment',
     disbursed: 'Disbursed',
     completed: 'Completed',
-    closed: 'Closed',
+    closed: 'Completed',
   }
   return labels[status] || status
 }
@@ -2814,7 +3068,7 @@ const retryEmployeeAction = async (emp) => {
 
 .tab-panel-logs,
 .tab-panel-funding {
-  padding: 0;
+  padding: 0 0 20px;
 }
 
 /* ==============================
@@ -2867,32 +3121,91 @@ const retryEmployeeAction = async (emp) => {
 }
 
 /* ==============================
+   FUNDING LAYOUT (two-column)
+============================== */
+.funding-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* ==============================
    FUNDING FORM CARD
 ============================== */
 .funding-form-card {
   background: #ffffff;
   border: 1px solid #e8ecf0;
   border-radius: 12px;
-  padding: 20px 24px;
-  margin-bottom: 20px;
+  padding: 20px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .funding-form-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
+.funding-form-header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #3b82f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.funding-history-icon {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
 .funding-form-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #111827;
   margin: 0;
 }
 
+.funding-form-subtitle {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 2px 0 0;
+}
+
+.funding-divider {
+  height: 1px;
+  background: #f1f3f5;
+  margin: 0 0 14px;
+}
+
+.funding-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.funding-optional {
+  font-weight: 400;
+  color: #9ca3af;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .funding-form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .funding-form-field {
@@ -2908,12 +3221,21 @@ const retryEmployeeAction = async (emp) => {
 .funding-field-label {
   font-size: 12px;
   font-weight: 500;
-  color: #6b7280;
+  color: #374151;
 }
 
 .funding-form-actions {
   display: flex;
   justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.funding-submit-btn {
+  border-radius: 8px !important;
+  font-weight: 500;
+  font-size: 13px;
+  padding: 0 18px;
+  height: 36px;
 }
 
 /* ==============================
@@ -2923,14 +3245,38 @@ const retryEmployeeAction = async (emp) => {
   background: #ffffff;
   border: 1px solid #e8ecf0;
   border-radius: 12px;
-  padding: 20px 24px;
+  padding: 20px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.funding-history-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .funding-history-title {
   font-size: 15px;
   font-weight: 600;
   color: #111827;
-  margin: 0 0 14px;
+  margin: 0;
+}
+
+.funding-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+  gap: 10px;
+}
+
+.funding-empty-text {
+  font-size: 13px;
+  color: #9ca3af;
+  text-align: center;
 }
 
 .funding-history-table-wrap {
@@ -2959,7 +3305,7 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .funding-history-table td {
-  padding: 9px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid #f1f3f5;
   color: #374151;
   vertical-align: middle;
@@ -2985,9 +3331,16 @@ const retryEmployeeAction = async (emp) => {
   margin-top: 1px;
 }
 
-.fh-source {
-  font-size: 12px;
-  color: #6b7280;
+.fh-source-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
 }
 
 .fh-amount {
@@ -3134,7 +3487,7 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .run-header-stat-val {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #111827;
 }
@@ -3229,7 +3582,7 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .run-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #111827;
   white-space: nowrap;
@@ -3258,7 +3611,7 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .run-amount-value {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #111827;
 }
@@ -3365,11 +3718,10 @@ const retryEmployeeAction = async (emp) => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 20px;
 }
 
 .stats-icon {
-  font-size: 22px;
+  font-size: 20px;
 }
 .stats-icon-blue {
   background: #eff6ff;
@@ -3544,8 +3896,8 @@ const retryEmployeeAction = async (emp) => {
 
 .table-title-section {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
 }
 
 .table-title {
@@ -3567,10 +3919,8 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .modern-table-container {
-  overflow: hidden;
+  overflow-x: auto;
   margin: 0 16px 16px;
-  border: 1px solid #e8ecf0;
-  border-radius: 10px;
 }
 
 .table-wrapper {
@@ -3589,14 +3939,14 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .table-header-cell {
-  padding: 11px 16px;
+  padding: 11px 16px !important;
   text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  color: #6b7280;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid #e8ecf0;
+  border-bottom: 1px solid #e8ecf0 !important;
   white-space: nowrap;
 }
 
@@ -3619,10 +3969,11 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .table-body-cell {
-  padding: 12px 16px;
+  padding: 12px 16px !important;
   color: #374151;
   font-size: 13px;
   vertical-align: middle;
+  border-bottom: 1px solid #f1f3f5 !important;
 }
 
 .highlight-row .table-body-cell {
@@ -3894,7 +4245,7 @@ const retryEmployeeAction = async (emp) => {
   min-width: 0;
 }
 .card-employee-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #111827;
   margin: 0 0 2px;
@@ -3947,7 +4298,7 @@ const retryEmployeeAction = async (emp) => {
   letter-spacing: 0.04em;
 }
 .pay-value {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #111827;
 }
@@ -3980,7 +4331,7 @@ const retryEmployeeAction = async (emp) => {
   text-transform: uppercase;
 }
 .hours-value {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #111827;
 }
@@ -4050,7 +4401,7 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .run-dialog-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: #111827;
   margin-bottom: 4px;
@@ -4364,7 +4715,7 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .modal-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: #111827;
 }
@@ -4375,6 +4726,7 @@ const retryEmployeeAction = async (emp) => {
 }
 .modal-close-btn {
   color: #9ca3af !important;
+  flex-shrink: 0;
 }
 .modal-close-btn:hover {
   background: #f3f4f6 !important;
@@ -4425,9 +4777,10 @@ const retryEmployeeAction = async (emp) => {
   margin-bottom: 4px;
 }
 .detail-card-value {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   color: #111827;
+  word-break: break-word;
 }
 
 .amount-green {
@@ -4463,8 +4816,8 @@ const retryEmployeeAction = async (emp) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 160px;
-  padding: 32px;
+  padding: 56px 20px;
+  gap: 14px;
 }
 
 .text-center {
@@ -4481,7 +4834,119 @@ const retryEmployeeAction = async (emp) => {
 /* ==============================
    RESPONSIVE
 ============================== */
+
+/* ---- 1440px and above: wide-screen optimisations ---- */
+@media (min-width: 1440px) {
+  .dashboard-container {
+    max-width: 1600px;
+    padding: 20px;
+  }
+
+  .stats-section {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  .stats-card {
+    padding: 20px 22px;
+  }
+
+  .stats-amount {
+    font-size: 30px;
+  }
+
+  .stats-label {
+    font-size: 13px;
+  }
+
+  .stats-icon-wrapper {
+    width: 52px;
+    height: 52px;
+  }
+
+  .stats-icon {
+    font-size: 24px;
+  }
+
+  .page-header {
+    padding: 18px 28px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  .header-search {
+    min-width: 280px;
+    max-width: 360px;
+  }
+
+  .export-btn {
+    height: 40px;
+    padding: 0 20px;
+    font-size: 14px;
+  }
+
+  .tabs-section {
+    padding: 12px 18px;
+  }
+
+  .tab-pill {
+    padding: 9px 18px;
+    font-size: 14px;
+  }
+
+  .run-header-stats-row {
+    padding: 16px 24px;
+  }
+
+  .run-header-stat-col {
+    padding: 0 16px;
+  }
+
+  .run-header-stat-label {
+    font-size: 11px;
+  }
+
+  .run-header-stat-val {
+    font-size: 15px;
+  }
+
+  .filters-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  .employees-panel-header {
+    padding: 14px 20px;
+  }
+
+  .table-header {
+    padding: 18px 24px;
+  }
+
+  .employees-table-header,
+  .employees-table-row {
+    padding: 12px 20px;
+    min-width: 900px;
+  }
+}
+
+/* ---- 1024px: medium screens / small laptops ---- */
 @media (max-width: 1024px) {
+  .dashboard-container {
+    max-width: 100%;
+    padding: 14px;
+  }
+
+  .funding-layout {
+    grid-template-columns: 1fr;
+  }
+
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
@@ -4491,19 +4956,83 @@ const retryEmployeeAction = async (emp) => {
     font-size: 24px;
   }
 
+  .stats-card {
+    padding: 14px 16px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  .header-search {
+    min-width: 180px;
+    max-width: 220px;
+  }
+
   .modern-table-container {
     margin: 0 14px 14px 14px;
   }
-}
 
-@media (max-width: 768px) {
-  .dashboard-container {
-    padding: 14px;
+  .filters-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
 
+  /* Stat columns inside run cards: hide lower-priority columns */
+  .run-header-stat-cols {
+    gap: 0;
+  }
+
+  .run-header-stat-col {
+    padding: 0 10px;
+  }
+
+  .run-header-stat-label {
+    font-size: 9px;
+  }
+
+  .run-header-stat-val {
+    font-size: 13px;
+  }
+
+  /* Hide "Funded" and "Released" columns on medium screens to reduce crowding */
+  .run-header-stat-col:nth-child(4),
+  .run-header-stat-col:nth-child(5) {
+    display: none;
+  }
+
+  .run-header-stats-row {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  /* Cards view */
+  .cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+
+  /* Employees panel actions wrap on smaller laptops */
+  .employees-panel-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .employee-search-input {
+    min-width: 150px !important;
+  }
+}
+
+/* ---- 768px: tablets ---- */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 12px;
+  }
+
+  /* Header */
   .page-header {
     padding: 12px 14px;
     margin-bottom: 12px;
+    border-radius: 10px;
   }
 
   .header-content {
@@ -4512,19 +5041,34 @@ const retryEmployeeAction = async (emp) => {
     gap: 10px;
   }
 
+  .header-left {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
   .header-actions {
     flex-direction: row;
     gap: 8px;
     flex-wrap: wrap;
+    width: 100%;
   }
 
   .header-search {
     max-width: 100%;
     width: 100%;
-    flex: 1;
+    flex: 1 1 120px;
     min-width: 0;
   }
 
+  .export-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    padding: 0 10px;
+  }
+
+  /* Stats */
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
@@ -4532,16 +5076,30 @@ const retryEmployeeAction = async (emp) => {
   }
 
   .stats-card {
-    padding: 14px;
+    padding: 12px 14px;
+    gap: 10px;
+    border-radius: 10px;
+  }
+
+  .stats-icon-wrapper {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
   }
 
   .stats-amount {
-    font-size: 22px;
+    font-size: 20px;
   }
 
+  .stats-label {
+    font-size: 11px;
+  }
+
+  /* Tabs */
   .tabs-section {
     padding: 8px 10px;
     margin-bottom: 12px;
+    border-radius: 10px;
   }
 
   .tab-pills {
@@ -4549,16 +5107,89 @@ const retryEmployeeAction = async (emp) => {
   }
 
   .tab-pill {
-    padding: 7px 11px;
+    padding: 7px 12px;
     font-size: 12px;
     flex: 1;
     justify-content: center;
   }
 
-  .filters-grid {
-    grid-template-columns: 1fr;
+  /* Run cards: stack stat cols below name on tablet */
+  .run-header-stats-row {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    gap: 10px;
   }
 
+  .run-header-name-group {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .run-header-stat-cols {
+    flex: 1 1 auto;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    /* Show all columns again in scroll mode */
+  }
+
+  .run-header-stat-col:nth-child(4),
+  .run-header-stat-col:nth-child(5) {
+    display: flex;
+  }
+
+  .run-header-stat-col {
+    padding: 0 8px;
+  }
+
+  .run-header-action {
+    flex: 0 0 auto;
+    padding-left: 10px;
+  }
+
+  .run-action-btn {
+    height: 32px;
+    padding: 0 12px !important;
+    font-size: 12px;
+  }
+
+  /* Await / done chips smaller */
+  .run-await-chip,
+  .run-done-chip {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  /* Employees panel */
+  .employees-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .employees-panel-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .employee-search-input {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Filters */
+  .filters-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .filters-card {
+    padding: 12px 14px;
+    border-radius: 10px;
+  }
+
+  /* Detail grid */
   .detail-grid-cards {
     grid-template-columns: 1fr;
   }
@@ -4567,17 +5198,32 @@ const retryEmployeeAction = async (emp) => {
     grid-column: span 1;
   }
 
+  /* Table */
   .modern-table-container {
     margin: 0 10px 10px;
   }
 
+  .table-header {
+    padding: 12px 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .table-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  /* Hours grid */
   .hours-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  /* Workflow stepper */
   .workflow-stepper {
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 12px;
     justify-content: center;
   }
 
@@ -4592,16 +5238,38 @@ const retryEmployeeAction = async (emp) => {
   .workflow-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
   }
 
+  /* Dialogs */
   .run-dialog-body {
     padding: 14px !important;
   }
+
+  /* Cards grid */
+  .cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+  }
+
+  /* Funding table footer */
+  .table-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .pagination-controls {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
+/* ---- 480px: small phones ---- */
 @media (max-width: 480px) {
   .dashboard-container {
-    padding: 10px;
+    padding: 8px;
   }
 
   .page-title {
@@ -4614,13 +5282,22 @@ const retryEmployeeAction = async (emp) => {
   }
 
   .stats-card {
-    padding: 12px;
+    padding: 10px 12px;
+    gap: 8px;
   }
 
   .stats-amount {
-    font-size: 20px;
+    font-size: 22px;
   }
 
+  .stats-icon-wrapper {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
+
+  /* Hide text labels in tab pills, show icons only */
   .tab-pill span:not(.tab-badge) {
     display: none;
   }
@@ -4629,8 +5306,60 @@ const retryEmployeeAction = async (emp) => {
     font-size: 16px;
   }
 
+  .tab-pill {
+    padding: 8px 14px;
+  }
+
+  /* Run cards: full-width vertical layout */
+  .run-header-stats-row {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .run-header-name-group {
+    width: 100%;
+  }
+
+  .run-header-stat-cols {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .run-header-action {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid #d1dce8;
+    padding-left: 0;
+    padding-top: 8px;
+    justify-content: flex-end;
+  }
+
+  .export-btn {
+    font-size: 11px;
+    height: 32px;
+  }
+
+  /* Cards grid: single column */
   .cards-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Employees panel */
+  .employees-panel-header {
+    padding: 8px 10px;
+  }
+
+  /* Table margins tighter */
+  .modern-table-container {
+    margin: 0 6px 10px;
+  }
+
+  .runs-list {
+    padding: 10px;
+    gap: 10px;
   }
 }
 
@@ -4643,13 +5372,13 @@ const retryEmployeeAction = async (emp) => {
 .employees-table-header {
   display: flex;
   background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 10px 16px;
+  border-bottom: 1px solid #e8ecf0;
+  padding: 11px 16px;
   font-weight: 600;
   font-size: 11px;
-  color: #64748b;
+  color: #6b7280;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
   min-width: 760px;
 }
 
@@ -4804,10 +5533,49 @@ const retryEmployeeAction = async (emp) => {
   overflow-x: auto;
 }
 
+/* Employees table horizontal scroll per breakpoint */
+@media (max-width: 1024px) {
+  .employees-table-header,
+  .employees-table-row {
+    min-width: 720px;
+  }
+}
+
 @media (max-width: 768px) {
   .employees-table-header,
   .employees-table-row {
-    min-width: 680px;
+    min-width: 640px;
+  }
+
+  /* Narrower employee name to fit tablet */
+  .employees-th:nth-child(2),
+  .employees-td:nth-child(2) {
+    flex: 1.5 1 130px;
+  }
+
+  /* Hide Period column on tablet — recover horizontal space */
+  .employees-th:nth-child(4),
+  .employees-td:nth-child(4) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .employees-table-header,
+  .employees-table-row {
+    min-width: 520px;
+  }
+
+  /* Hide Run column on mobile */
+  .employees-th:nth-child(5),
+  .employees-td:nth-child(5) {
+    display: none;
+  }
+
+  /* Compact the hours column */
+  .employees-th:nth-child(8),
+  .employees-td:nth-child(8) {
+    flex: 0 0 70px;
   }
 }
 </style>
