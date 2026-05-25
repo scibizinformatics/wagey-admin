@@ -20,8 +20,20 @@ export function usePayroll() {
     return controller
   }
 
-  const clearAbortController = (key) => {
-    abortControllers.delete(key)
+  const isCancelError = (err) => {
+    // Axios cancels its own requests when a newer one supersedes them.
+    // We should not treat these as user-facing errors.
+    return (
+      err?.name === 'CanceledError' || err?.name === 'AbortError' || err?.code === 'ERR_CANCELED'
+    )
+  }
+
+  const clearAbortController = (key, controller = null) => {
+    // Only delete if we are cleaning up the *same* controller instance.
+    // This prevents a slow finally-block from wiping a newer request's controller.
+    if (!controller || abortControllers.get(key) === controller) {
+      abortControllers.delete(key)
+    }
   }
 
   const allowanceTypes = ref([])
@@ -111,6 +123,9 @@ export function usePayroll() {
       console.log('[usePayroll] fetchHoursBreakdown ← response', response.data)
       return response.data
     } catch (err) {
+      if (isCancelError(err)) {
+        return
+      }
       console.error('[usePayroll] fetchHoursBreakdown ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
@@ -118,7 +133,7 @@ export function usePayroll() {
       })
       throw err
     } finally {
-      clearAbortController(`hoursBreakdown-${employeeId}`)
+      clearAbortController(`hoursBreakdown-${employeeId}`, controller)
     }
   }
 
@@ -137,6 +152,9 @@ export function usePayroll() {
       console.log('[usePayroll] fetchAllowanceTypes ← response', allowanceTypes.value)
       return allowanceTypes.value
     } catch (err) {
+      if (isCancelError(err)) {
+        return
+      }
       console.error('[usePayroll] fetchAllowanceTypes ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
@@ -145,7 +163,7 @@ export function usePayroll() {
       throw err
     } finally {
       setLoading('fetchingAllowanceTypes', false)
-      clearAbortController('fetchAllowanceTypes')
+      clearAbortController('fetchAllowanceTypes', controller)
     }
   }
 
@@ -227,6 +245,9 @@ export function usePayroll() {
       console.log('[usePayroll] fetchContracts ← response', contracts.value)
       return contracts.value
     } catch (err) {
+      if (isCancelError(err)) {
+        return
+      }
       console.error('[usePayroll] fetchContracts ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
@@ -235,7 +256,7 @@ export function usePayroll() {
       throw err
     } finally {
       setLoading('fetchingContracts', false)
-      clearAbortController('fetchContracts')
+      clearAbortController('fetchContracts', controller)
     }
   }
 
@@ -252,6 +273,9 @@ export function usePayroll() {
       console.log('[usePayroll] fetchContractTypes ← response', contractTypes.value)
       return contractTypes.value
     } catch (err) {
+      if (isCancelError(err)) {
+        return
+      }
       console.error('[usePayroll] fetchContractTypes ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
@@ -260,7 +284,7 @@ export function usePayroll() {
       throw err
     } finally {
       setLoading('fetchingContractTypes', false)
-      clearAbortController('fetchContractTypes')
+      clearAbortController('fetchContractTypes', controller)
     }
   }
 
@@ -382,6 +406,9 @@ export function usePayroll() {
       console.log('[usePayroll] Step 5 fetchEmployeePayslips ← response', employeePayslips.value)
       return employeePayslips.value
     } catch (err) {
+      if (isCancelError(err)) {
+        return
+      }
       console.error('[usePayroll] Step 5 fetchEmployeePayslips ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
@@ -390,7 +417,7 @@ export function usePayroll() {
       throw err
     } finally {
       setLoading('fetchingEmployeePayslips', false)
-      clearAbortController('fetchEmployeePayslips')
+      clearAbortController('fetchEmployeePayslips', controller)
     }
   }
 
@@ -497,6 +524,9 @@ export function usePayroll() {
       console.log('[usePayroll] Step 8 fetchDisbursementFundings ← response', result)
       return result
     } catch (err) {
+      if (isCancelError(err)) {
+        return
+      }
       console.error('[usePayroll] Step 8 fetchDisbursementFundings ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
@@ -505,7 +535,7 @@ export function usePayroll() {
       throw err
     } finally {
       setLoading('fetchingDisbursementFundings', false)
-      clearAbortController('fetchDisbursementFundings')
+      clearAbortController('fetchDisbursementFundings', controller)
     }
   }
 
@@ -577,6 +607,13 @@ export function usePayroll() {
       // FIX: Normalize API field names → shape the template expects.
       // API returns:      calculated, actual_net_pay, review_status_display
       // Template expects: gross_pay,  net_pay,         status
+      //
+      // Also: if the disbursement log itself is marked completed/closed,
+      // any employee still showing as "disbursed" is promoted to "completed"
+      // — the run is fully done, disbursement was successful.
+      const runRecord = payrollRunsSummary.value.find((r) => String(r.id) === String(logId))
+      const runIsCompleted = ['completed', 'closed'].includes(runRecord?.status)
+
       payrollRunEmployees.value = Array.isArray(rawData)
         ? rawData.map((emp) => ({
             ...emp,
@@ -587,17 +624,23 @@ export function usePayroll() {
               const map = {
                 draft: 'draft',
                 pending: 'draft',
-                'Pending': 'draft',
+                Pending: 'draft',
                 pending_review: 'pending_review',
                 'Pending Review': 'pending_review',
                 ready_for_payment: 'ready_for_payment',
-                'Acknowledged': 'ready_for_payment',
+                Acknowledged: 'ready_for_payment',
                 disbursed: 'disbursed',
-                'Disbursed': 'disbursed',
+                Disbursed: 'disbursed',
                 completed: 'completed',
-                'Completed': 'completed',
+                Completed: 'completed',
               }
-              return map[raw] ?? raw
+              const normalized = map[raw] ?? raw
+              // If the run is completed, promote any lingering "disbursed"
+              // employees to "completed" so the table reflects the true end state.
+              if (runIsCompleted && normalized === 'disbursed') {
+                return 'completed'
+              }
+              return normalized
             })(),
           }))
         : []
@@ -612,6 +655,9 @@ export function usePayroll() {
       })
       return payrollRunEmployees.value
     } catch (err) {
+      if (isCancelError(err)) {
+        return
+      }
       console.error('[usePayroll] Step 3 fetchPayrollRunEmployees ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
@@ -620,7 +666,7 @@ export function usePayroll() {
       throw err
     } finally {
       setLoading('fetchingPayrollRunEmployees', false)
-      clearAbortController('fetchPayrollRunEmployees')
+      clearAbortController('fetchPayrollRunEmployees', controller)
     }
   }
 
@@ -711,10 +757,16 @@ export function usePayroll() {
       case 'pending_review':
         // Waiting for employee to acknowledge — but those who already acknowledged
         // (ready_for_payment) can be selectively disbursed early by the admin
-        return employees.filter((e) => e.status === 'ready_for_payment')
+        // Guard: review_status must not be pending
+        return employees.filter(
+          (e) => e.status === 'ready_for_payment' && e.review_status !== 'pending',
+        )
       case 'ready_for_payment':
         // Acknowledged by employee — admin can disburse
-        return employees.filter((e) => e.status === 'ready_for_payment')
+        // Guard: review_status must not be pending
+        return employees.filter(
+          (e) => e.status === 'ready_for_payment' && e.review_status !== 'pending',
+        )
       case 'disbursed':
         // Cash disbursed — waiting for employee to confirm money received
         return employees.filter((e) => e.status === 'disbursed')
@@ -767,7 +819,17 @@ export function usePayroll() {
 
       // 2. Add/replace with real backend data (optimistic runs get superseded)
       for (const run of backendList) {
-        merged.push(run)
+        const existing = payrollRunsSummary.value.find((r) => String(r.id) === String(run.id))
+        const normalizedRun = {
+          ...existing, // preserve fields like department_id, __optimistic flags
+          ...run, // backend data overrides
+          department_id: run.department_id ?? existing?.department_id ?? null,
+        }
+        // Normalize backend status so a fully-finished run shows as "Completed"
+        if (normalizedRun.status === 'closed') {
+          normalizedRun.status = 'completed'
+        }
+        merged.push(normalizedRun)
       }
 
       payrollRunsSummary.value = merged
@@ -777,6 +839,9 @@ export function usePayroll() {
       })
       return payrollRunsSummary.value
     } catch (err) {
+      if (isCancelError(err)) {
+        return payrollRunsSummary.value
+      }
       console.error('[usePayroll] Step 2 fetchPayrollRunsSummary ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
@@ -788,7 +853,30 @@ export function usePayroll() {
       throw err
     } finally {
       setLoading('fetchingPayrollRunsSummary', false)
-      clearAbortController('fetchPayrollRunsSummary')
+      clearAbortController('fetchPayrollRunsSummary', controller)
+    }
+  }
+
+  // ─── Fetch cost-center bank accounts for a disbursement log ────────────────
+  // GET /payroll/admin/disbursement-logs/{id}/cost-center-bank-accounts/
+  // Response: { count: 2, bank_accounts: [{ id, name }, ...] }
+  async function fetchDisbursementLogBankAccounts(logId) {
+    console.log('[usePayroll] fetchDisbursementLogBankAccounts → request', { logId })
+    try {
+      const response = await api.get(
+        `${BASE}/payroll/admin/disbursement-logs/${logId}/cost-center-bank-accounts/`,
+        { headers: authHeaders() },
+      )
+      // API returns { count, bank_accounts: [...] }
+      const result = response.data.bank_accounts ?? response.data.data?.bank_accounts ?? []
+      console.log('[usePayroll] fetchDisbursementLogBankAccounts ← accounts', result)
+      return Array.isArray(result) ? result : []
+    } catch (err) {
+      console.error('[usePayroll] fetchDisbursementLogBankAccounts ✖ error', {
+        status: err?.response?.status,
+        message: err?.message,
+      })
+      return []
     }
   }
 
@@ -825,6 +913,9 @@ export function usePayroll() {
       console.log('[usePayroll] fetchCustomMultipliers ← response', customMultipliers.value)
       return customMultipliers.value
     } catch (err) {
+      if (isCancelError(err)) {
+        return
+      }
       console.error('[usePayroll] fetchCustomMultipliers ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
@@ -833,7 +924,7 @@ export function usePayroll() {
       throw err
     } finally {
       setLoading('fetchingCustomMultipliers', false)
-      clearAbortController('fetchCustomMultipliers')
+      clearAbortController('fetchCustomMultipliers', controller)
     }
   }
 
@@ -970,6 +1061,8 @@ export function usePayroll() {
     getActionableEmployees,
     isStageAutoSelectable,
     isEmployeePreApproved,
+    // Cost-center bank accounts by log
+    fetchDisbursementLogBankAccounts,
     // Retry utility
     retryWithBackoff,
   }
