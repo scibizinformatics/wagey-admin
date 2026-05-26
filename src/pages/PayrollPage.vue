@@ -234,7 +234,8 @@
                         v-if="
                           selectedRun?.id === run.id &&
                           workflowStage === 'draft' &&
-                          hasReadyForPaymentSelected
+                          hasReadyForPaymentSelected &&
+                          !isRunFullyDisbursed(run)
                         "
                         unelevated
                         no-caps
@@ -247,7 +248,7 @@
                         @click="selectAndDisburse(run)"
                       />
                       <q-btn
-                        v-else-if="selectedRun?.id === run.id && allEmployeesReadyForPayment"
+                        v-else-if="selectedRun?.id === run.id && allEmployeesReadyForPayment && !isRunFullyDisbursed(run)"
                         unelevated
                         no-caps
                         size="sm"
@@ -278,7 +279,7 @@
                         <span>Awaiting Acknowledgement</span>
                       </div>
                       <q-btn
-                        v-else-if="run.status === 'ready_for_payment'"
+                        v-else-if="run.status === 'ready_for_payment' && !isRunFullyDisbursed(run)"
                         unelevated
                         no-caps
                         size="sm"
@@ -293,8 +294,7 @@
                         v-else-if="['disbursed', 'completed', 'closed'].includes(run.status)"
                         class="run-done-chip"
                       >
-                        <q-icon name="task_alt" size="14px" color="positive" />
-                        <span>{{ getStageLabel(run.status) }}</span>
+                        <q-icon name="task_alt" size="18px" color="positive" />
                       </div>
                     </div>
                   </div>
@@ -485,8 +485,6 @@
                       <div class="employees-th"></div>
                       <div class="employees-th">Employee</div>
                       <div class="employees-th">Status</div>
-                      <div class="employees-th">Period</div>
-                      <div class="employees-th">Run</div>
                       <div class="employees-th">Gross Pay</div>
                       <div class="employees-th">Net Pay</div>
                       <div class="employees-th">Total Hours</div>
@@ -571,12 +569,6 @@
                               <q-tooltip v-if="emp.lastError" class="bg-negative">{{
                                 emp.lastError
                               }}</q-tooltip>
-                            </div>
-                            <div class="employees-td">
-                              <div class="period-badge">{{ emp.period || run.name || '—' }}</div>
-                            </div>
-                            <div class="employees-td">
-                              <div class="run-badge">#{{ run.id }}</div>
                             </div>
                             <div class="employees-td amount-cell">
                               <div class="amount-display">{{ formatCurrency(emp.gross_pay) }}</div>
@@ -1930,6 +1922,17 @@ const allEmployeesReadyForPayment = computed(() => {
     (e) => e.status === 'ready_for_payment' && e.review_status !== 'pending',
   )
 })
+
+// Check if run is fully disbursed (backend status OR all employees disbursed)
+const isRunFullyDisbursed = (run) => {
+  // Backend check: run-level status
+  if (['disbursed', 'completed', 'closed'].includes(run.status)) return true
+
+  // Frontend check: all employees disbursed
+  const employees = payrollRunEmployees.value
+  if (!employees || employees.length === 0) return false
+  return employees.every((e) => e.status === 'disbursed')
+}
 
 // Helper functions for Set-based selection
 const isEmployeeSelected = (id) => selectedEmployeeIds.value.has(id)
@@ -3544,14 +3547,11 @@ const retryEmployeeAction = async (emp) => {
 .run-done-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
+  justify-content: center;
+  padding: 6px 10px;
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #166534;
+  border-radius: 50%;
 }
 
 .run-period-tag {
@@ -5176,8 +5176,7 @@ const retryEmployeeAction = async (emp) => {
   /* Await / done chips smaller */
   .run-await-chip,
   .run-done-chip {
-    font-size: 11px;
-    padding: 4px 8px;
+    padding: 4px 6px;
   }
 
   /* Employees panel */
@@ -5400,7 +5399,7 @@ const retryEmployeeAction = async (emp) => {
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  min-width: 760px;
+  min-width: 700px;
 }
 
 /* Base cell — overridden per-column below */
@@ -5422,37 +5421,28 @@ const retryEmployeeAction = async (emp) => {
 }
 /* Col 2 — Employee name + ID */
 .employees-th:nth-child(2) {
-  flex: 2 1 160px;
+  flex: 3 1 220px;
 }
 /* Col 3 — Status badge */
 .employees-th:nth-child(3) {
-  flex: 0 0 90px;
+  flex: 0 0 120px;
 }
-/* Col 4 — Period */
+/* Col 4 — Gross Pay */
 .employees-th:nth-child(4) {
-  flex: 1.8 1 140px;
+  flex: 1.5 1 130px;
 }
-/* Col 5 — Run */
+/* Col 5 — Net Pay */
 .employees-th:nth-child(5) {
-  flex: 0 0 56px;
-  text-align: center;
+  flex: 1.5 1 130px;
 }
-/* Col 6 — Gross Pay */
+/* Col 6 — Total Hours */
 .employees-th:nth-child(6) {
-  flex: 1.1 1 110px;
-}
-/* Col 7 — Net Pay */
-.employees-th:nth-child(7) {
-  flex: 1.1 1 110px;
-}
-/* Col 8 — Total Hours */
-.employees-th:nth-child(8) {
-  flex: 0 0 88px;
+  flex: 0 0 100px;
   text-align: center;
 }
-/* Col 9 — Actions */
-.employees-th:nth-child(9) {
-  flex: 0 0 72px;
+/* Col 7 — Actions */
+.employees-th:nth-child(7) {
+  flex: 0 0 80px;
   text-align: center;
 }
 
@@ -5471,7 +5461,7 @@ const retryEmployeeAction = async (emp) => {
   transition: background-color 0.2s;
   min-height: 56px;
   align-items: center;
-  min-width: 760px;
+  min-width: 700px;
 }
 
 .employees-table-row:hover {
@@ -5508,36 +5498,27 @@ const retryEmployeeAction = async (emp) => {
 }
 /* Col 2 — Employee */
 .employees-td:nth-child(2) {
-  flex: 2 1 160px;
+  flex: 3 1 220px;
 }
 /* Col 3 — Status */
 .employees-td:nth-child(3) {
-  flex: 0 0 90px;
+  flex: 0 0 120px;
 }
-/* Col 4 — Period */
+/* Col 4 — Gross Pay */
 .employees-td:nth-child(4) {
-  flex: 1.8 1 140px;
+  flex: 1.5 1 130px;
 }
-/* Col 5 — Run */
+/* Col 5 — Net Pay */
 .employees-td:nth-child(5) {
-  flex: 0 0 56px;
-  justify-content: center;
+  flex: 1.5 1 130px;
 }
-/* Col 6 — Gross Pay */
+/* Col 6 — Total Hours */
 .employees-td:nth-child(6) {
-  flex: 1.1 1 110px;
-}
-/* Col 7 — Net Pay */
-.employees-td:nth-child(7) {
-  flex: 1.1 1 110px;
-}
-/* Col 8 — Total Hours */
-.employees-td:nth-child(8) {
-  flex: 0 0 88px;
+  flex: 0 0 100px;
   justify-content: center;
 }
-/* Col 9 — Actions */
-.employees-td:nth-child(9) {
+/* Col 7 — Actions */
+.employees-td:nth-child(7) {
   flex: 0 0 72px;
   justify-content: center;
 }
@@ -5565,37 +5546,37 @@ const retryEmployeeAction = async (emp) => {
 @media (max-width: 768px) {
   .employees-table-header,
   .employees-table-row {
-    min-width: 640px;
+    min-width: 600px;
   }
 
   /* Narrower employee name to fit tablet */
   .employees-th:nth-child(2),
   .employees-td:nth-child(2) {
-    flex: 1.5 1 130px;
+    flex: 2 1 140px;
   }
 
-  /* Hide Period column on tablet — recover horizontal space */
+  /* Compact Gross Pay column on tablet */
   .employees-th:nth-child(4),
   .employees-td:nth-child(4) {
-    display: none;
+    flex: 1.2 1 100px;
+  }
+
+  /* Compact Net Pay column on tablet */
+  .employees-th:nth-child(5),
+  .employees-td:nth-child(5) {
+    flex: 1.2 1 100px;
   }
 }
 
 @media (max-width: 480px) {
   .employees-table-header,
   .employees-table-row {
-    min-width: 520px;
+    min-width: 580px;
   }
 
-  /* Hide Run column on mobile */
-  .employees-th:nth-child(5),
-  .employees-td:nth-child(5) {
-    display: none;
-  }
-
-  /* Compact the hours column */
-  .employees-th:nth-child(8),
-  .employees-td:nth-child(8) {
+  /* Compact the hours column on mobile */
+  .employees-th:nth-child(6),
+  .employees-td:nth-child(6) {
     flex: 0 0 70px;
   }
 }
