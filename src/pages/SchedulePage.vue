@@ -1880,6 +1880,13 @@ const getTemplateById = (templateId) => {
 
 const getEmployeeName = (id) => users.value.find((u) => u.id === id)?.name || 'Unknown Employee'
 
+const isEmployeeTerminated = (emp) => {
+  if (emp.status?.toLowerCase() === 'terminated') return true
+  const empStatus = emp.companies?.[0]?.employment_status
+  if (empStatus?.toLowerCase() === 'terminated') return true
+  return false
+}
+
 // ─── Computed ─────────────────────────────────────────────────────────────────
 
 const totalShifts = computed(() => shifts.value.length)
@@ -1894,7 +1901,9 @@ const siteFilterOptions = computed(() => [
 const userOptions = computed(() => users.value.map((u) => ({ label: u.name, value: u.id })))
 
 const employeeOptions = computed(() =>
-  employees.value.map((emp) => ({ label: emp.full_name || emp.name, value: emp.id })),
+  employees.value
+    .filter((emp) => !isEmployeeTerminated(emp))
+    .map((emp) => ({ label: emp.full_name || emp.name, value: emp.id })),
 )
 
 const siteOptions = computed(() => sites.value.map((s) => ({ label: s.name, value: s.id })))
@@ -2280,11 +2289,13 @@ const fetchData = async () => {
     }
 
     const employeesData = mergeEmployeeData(fetchResults)
-    users.value = employees.value.map((emp) => ({
-      id: emp.id,
-      name: emp.full_name || emp.name || `Employee ${emp.id}`,
-      email: emp.email || '',
-    }))
+    users.value = employees.value
+      .filter((emp) => !isEmployeeTerminated(emp))
+      .map((emp) => ({
+        id: emp.id,
+        name: emp.full_name || emp.name || `Employee ${emp.id}`,
+        email: emp.email || '',
+      }))
     shifts.value = []
     // employeesData is already built by mergeEmployeeData above
     const weekStartStr = `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
