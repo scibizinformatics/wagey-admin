@@ -247,6 +247,18 @@
                         @click="selectAndDisburse(run)"
                       />
                       <q-btn
+                        v-else-if="selectedRun?.id === run.id && allEmployeesReadyForPayment"
+                        unelevated
+                        no-caps
+                        size="sm"
+                        icon="payments"
+                        color="teal"
+                        label="Disburse"
+                        class="run-action-btn"
+                        :loading="isSaving('disbursing') && selectedRun?.id === run.id"
+                        @click="selectAndDisburse(run)"
+                      />
+                      <q-btn
                         v-else-if="
                           run.status === 'draft' ||
                           (selectedRun?.id === run.id && workflowStage === 'draft')
@@ -1907,6 +1919,15 @@ const hasReadyForPaymentSelected = computed(() => {
       selectedEmployeeIds.value.has(e.employee_id) &&
       e.status === 'ready_for_payment' &&
       e.review_status !== 'pending',
+  )
+})
+
+// True when ALL employees in the expanded run are ready_for_payment
+const allEmployeesReadyForPayment = computed(() => {
+  const employees = payrollRunEmployees.value
+  if (!employees || employees.length === 0) return false
+  return employees.every(
+    (e) => e.status === 'ready_for_payment' && e.review_status !== 'pending',
   )
 })
 
