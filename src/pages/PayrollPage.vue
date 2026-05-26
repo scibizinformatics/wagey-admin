@@ -248,7 +248,11 @@
                         @click="selectAndDisburse(run)"
                       />
                       <q-btn
-                        v-else-if="selectedRun?.id === run.id && allEmployeesReadyForPayment && !isRunFullyDisbursed(run)"
+                        v-else-if="
+                          selectedRun?.id === run.id &&
+                          allEmployeesReadyForPayment &&
+                          !isRunFullyDisbursed(run)
+                        "
                         unelevated
                         no-caps
                         size="sm"
@@ -496,7 +500,7 @@
                       <q-virtual-scroll
                         :items="filteredEmployees"
                         virtual-scroll-slice-size="50"
-                        virtual-scroll-item-size="60"
+                        virtual-scroll-item-size="72"
                         class="employee-virtual-scroll"
                         style="max-height: 600px"
                       >
@@ -1918,9 +1922,7 @@ const hasReadyForPaymentSelected = computed(() => {
 const allEmployeesReadyForPayment = computed(() => {
   const employees = payrollRunEmployees.value
   if (!employees || employees.length === 0) return false
-  return employees.every(
-    (e) => e.status === 'ready_for_payment' && e.review_status !== 'pending',
-  )
+  return employees.every((e) => e.status === 'ready_for_payment' && e.review_status !== 'pending')
 })
 
 // Check if run is fully disbursed (backend status OR all employees disbursed)
@@ -4007,10 +4009,10 @@ const retryEmployeeAction = async (emp) => {
 .avatar-fallback {
   background: #e0e7ff !important;
   color: #4338ca !important;
-  font-weight: 600 !important;
-  min-width: 34px !important;
-  width: 34px !important;
-  height: 34px !important;
+  font-weight: 700 !important;
+  min-width: 40px !important;
+  width: 40px !important;
+  height: 40px !important;
   border-radius: 50% !important;
   display: flex !important;
   align-items: center !important;
@@ -4019,7 +4021,7 @@ const retryEmployeeAction = async (emp) => {
 }
 
 .avatar-fallback :deep(.q-avatar__content) {
-  font-size: 12px !important;
+  font-size: 13px !important;
   line-height: 1 !important;
 }
 
@@ -4033,27 +4035,29 @@ const retryEmployeeAction = async (emp) => {
 .employee-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .employee-details {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
 }
 
 .employee-name {
   font-weight: 600;
-  color: #111827;
-  font-size: 13px;
+  color: #0f172a;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .employee-id {
-  font-size: 11px;
-  color: #9ca3af;
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-family: monospace;
+  letter-spacing: 0.02em;
 }
 
 /* ==============================
@@ -4952,7 +4956,7 @@ const retryEmployeeAction = async (emp) => {
 
   .employees-table-header,
   .employees-table-row {
-    padding: 12px 20px;
+    padding: 16px 24px;
     min-width: 900px;
   }
 }
@@ -5391,20 +5395,20 @@ const retryEmployeeAction = async (emp) => {
 
 .employees-table-header {
   display: flex;
-  background: #f8fafc;
-  border-bottom: 1px solid #e8ecf0;
-  padding: 11px 16px;
-  font-weight: 600;
+  background: #f1f5f9;
+  border-bottom: 2px solid #e2e8f0;
+  padding: 14px 20px;
+  font-weight: 700;
   font-size: 11px;
-  color: #6b7280;
+  color: #475569;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   min-width: 700px;
 }
 
 /* Base cell — overridden per-column below */
 .employees-th {
-  padding: 0 6px;
+  padding: 0 12px;
   text-align: left;
   min-width: 0;
   overflow: hidden;
@@ -5425,7 +5429,7 @@ const retryEmployeeAction = async (emp) => {
 }
 /* Col 3 — Status badge */
 .employees-th:nth-child(3) {
-  flex: 0 0 120px;
+  flex: 0 0 165px;
 }
 /* Col 4 — Gross Pay */
 .employees-th:nth-child(4) {
@@ -5456,10 +5460,10 @@ const retryEmployeeAction = async (emp) => {
 
 .employees-table-row {
   display: flex;
-  padding: 10px 16px;
-  border-bottom: 1px solid #f1f5f9;
-  transition: background-color 0.2s;
-  min-height: 56px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #edf0f4;
+  transition: background-color 0.15s ease;
+  min-height: 72px;
   align-items: center;
   min-width: 700px;
 }
@@ -5478,9 +5482,9 @@ const retryEmployeeAction = async (emp) => {
 
 /* Base cell */
 .employees-td {
-  padding: 0 6px;
-  font-size: 13px;
-  color: #334155;
+  padding: 0 12px;
+  font-size: 13.5px;
+  color: #1e293b;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5502,7 +5506,8 @@ const retryEmployeeAction = async (emp) => {
 }
 /* Col 3 — Status */
 .employees-td:nth-child(3) {
-  flex: 0 0 120px;
+  flex: 0 0 165px;
+  overflow: visible;
 }
 /* Col 4 — Gross Pay */
 .employees-td:nth-child(4) {
