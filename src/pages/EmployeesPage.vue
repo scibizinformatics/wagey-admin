@@ -961,7 +961,7 @@
                 @update:model-value="onContractTypeChange"
               />
 
-              <!-- Row 2: Pay Type | Work Hours -->
+              <!-- Row 2: Pay Type | Payment Method -->
               <q-select
                 v-model="assignForm.pay_type"
                 :options="[
@@ -976,6 +976,17 @@
                 :disable="payTypeAutoFilled"
               />
 
+              <q-select
+                v-model="assignForm.payment_method"
+                :options="paymentMethodOptions"
+                label="Payment Method *"
+                outlined
+                dense
+                emit-value
+                map-options
+              />
+
+              <!-- Row 3: Work Hours / Month (auto-calculated) -->
               <q-input
                 v-model.number="assignForm.work_hours_per_week"
                 label="Work Hours / Month"
@@ -989,6 +1000,7 @@
                     : 'Editable — default 208 hrs/month'
                 "
                 :bg-color="assignForm.pay_type === 'daily' ? 'grey-2' : undefined"
+                class="col-span-2"
               />
 
               <!-- Row 3: Rate (full width with daily rate preview) -->
@@ -1059,6 +1071,64 @@
 
               <q-input v-model="assignForm.end_date" label="End Date" type="date" outlined dense />
 
+              <!-- Payroll Multipliers Section -->
+              <div class="col-span-2">
+                <div class="section-label">Payroll Multipliers</div>
+                <div class="multipliers-section">
+                  <div
+                    v-for="field in multiplierFields"
+                    :key="field.key"
+                    class="multiplier-row"
+                  >
+                    <div class="multiplier-info">
+                      <q-icon :name="field.icon" size="20px" class="multiplier-icon" />
+                      <div class="multiplier-details">
+                        <div class="multiplier-label">{{ field.label }}</div>
+                        <div class="multiplier-desc">{{ field.desc }}</div>
+                      </div>
+                    </div>
+                    <div class="multiplier-controls">
+                      <q-toggle
+                        :model-value="assignForm[`use_standard_${field.key}`]"
+                        @update:model-value="(val) => handleMultiplierToggle(field, val)"
+                        :label="assignForm[`use_standard_${field.key}`] ? 'Standard' : 'Custom'"
+                        color="primary"
+                        dense
+                      />
+                      <div class="multiplier-value-wrapper">
+                        <template v-if="assignForm[`use_standard_${field.key}`]">
+                          <span class="multiplier-value-display">
+                            × {{ getStandardMultiplierDisplay(field.key) }}
+                          </span>
+                          <span
+                            v-if="companyMultipliers?.[`${field.key}_multiplier`]"
+                            class="multiplier-source"
+                          >
+                            (company)
+                          </span>
+                          <span v-else class="multiplier-source">(legal default)</span>
+                        </template>
+                        <q-input
+                          v-else
+                          v-model.number="assignForm[`${field.key}_multiplier`]"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          outlined
+                          dense
+                          class="multiplier-input"
+                          placeholder="e.g. 1.50"
+                        >
+                          <template v-slot:prepend>
+                            <span class="multiplier-prefix">×</span>
+                          </template>
+                        </q-input>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Eligibilities (formal numbered list) -->
               <div v-if="selectedEligibilityObjectsData.length" class="col-span-2">
                 <div class="section-label">Eligibilities</div>
@@ -1126,8 +1196,15 @@ const { userRoles, fetchUserRoles } = useRolesAndPositions()
 const { sites: rawSites, fetchSites: fetchSitesApi } = useOrganization()
 const { companyId } = useCompany()
 
-const { assignDialog, assigning, assignForm, openAssignDialog, assignContract } =
-  useAdminContracts()
+const {
+  assignDialog,
+  assigning,
+  assignForm,
+  openAssignDialog,
+  assignContract,
+  PHILIPPINES_DEFAULT_MULTIPLIERS,
+  companyMultipliers,
+} = useAdminContracts()
 
 const {
   contractTypes: contractTypeOptions,
@@ -1203,6 +1280,99 @@ const computedDailyRate = computed(() => {
   const daily = (monthly / hours) * 8
   return daily.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 })
+
+// Payment method options
+const paymentMethodOptions = [
+  { label: 'Bank Transfer', value: 'bank_transfer' },
+  { label: 'Cash', value: 'cash' },
+]
+
+// Helper to get display value for a multiplier when in Standard mode
+const getStandardMultiplierDisplay = (fieldName) => {
+  const companyValue = companyMultipliers.value?.[`${fieldName}_multiplier`]
+  return companyValue ?? PHILIPPINES_DEFAULT_MULTIPLIERS[fieldName]
+}
+
+// Multiplier fields configuration for template rendering
+const multiplierFields = [
+  { key: 'overtime', label: 'Overtime', icon: 'schedule', desc: 'Work beyond 8 hours/day' },
+  { key: 'special_holiday', label: 'Special Holiday', icon: 'celebration', desc: 'Special non-working days' },
+  { key: 'regular_holiday', label: 'Regular Holiday', icon: 'event', desc: 'Regular holidays (double pay)' },
+  { key: 'night_diff', label: 'Night Differential', icon: 'nights_stay', desc: 'Work 10PM-6AM' },
+  { key: 'regular_holiday_ot', label: 'Regular Holiday OT', icon: 'event_note', desc: 'OT on regular holidays' },
+  { key: 'special_holiday_ot', label: 'Special Holiday OT', icon: 'event_busy', desc: 'OT on special holidays' },
+  { key: 'undertime', label: 'Undertime', icon: 'timer_off', desc: 'Hours not worked' },
+]
+
+// Warning modal for custom multipliers
+const showCustomMultiplierWarning = (fieldKey, fieldLabel, standardValue) => {
+  return new Promise((resolve) => {
+    const companyValue = companyMultipliers.value?.[`${fieldKey}_multiplier`]
+    const usedStandard = companyValue ?? standardValue
+
+    $q.dialog({
+      title: '⚠️ Warning: Custom Multiplier Selected',
+      message: `
+        <div style="margin-top: 12px;">
+          <p style="font-size: 15px; font-weight: 600; color: #1f2937; margin-bottom: 12px;">
+            ${fieldLabel}
+          </p>
+          <div style="background: #fef3c7; padding: 14px; border-radius: 8px; margin: 14px 0; border-left: 4px solid #f59e0b;">
+            <p style="margin: 0 0 10px 0; color: #92400e; font-size: 14px;">
+              <strong>Standard Rate:</strong> ×${usedStandard}
+              ${companyValue ? '<span style="font-size: 12px; color: #6b7280;">(company configured)</span>' : '<span style="font-size: 12px; color: #6b7280;">(Philippines Labor Code)</span>'}
+            </p>
+            <p style="margin: 0; color: #dc2626; font-size: 14px;">
+              <strong>Your Custom Rate:</strong> Enter value below
+            </p>
+          </div>
+          <p style="color: #6b7280; font-size: 13px; line-height: 1.5; margin-top: 14px;">
+            Custom multipliers override company standards and legal defaults. 
+            Ensure compliance with Philippines Labor Code (DOLE standards).
+          </p>
+          <p style="color: #92400e; font-size: 12px; margin-top: 10px; font-style: italic;">
+            ⚠️ This will be applied to payroll calculations for this employee.
+          </p>
+        </div>
+      `,
+      html: true,
+      class: 'custom-multiplier-warning-dialog',
+      cancel: {
+        label: 'Cancel (Use Standard)',
+        color: 'grey',
+        flat: true,
+      },
+      ok: {
+        label: 'Confirm Custom Rate',
+        color: 'warning',
+        unelevated: true,
+      },
+      persistent: true,
+    })
+      .onOk(() => resolve(true))
+      .onCancel(() => resolve(false))
+  })
+}
+
+// Handle multiplier toggle change with warning
+const handleMultiplierToggle = async (field, newValue) => {
+  // If switching to Custom (false), show warning
+  if (newValue === false) {
+    const standardValue = PHILIPPINES_DEFAULT_MULTIPLIERS[field.key]
+    const confirmed = await showCustomMultiplierWarning(field.key, field.label, standardValue)
+
+    if (confirmed) {
+      // User confirmed, allow the change
+      assignForm.value[`use_standard_${field.key}`] = false
+    } else {
+      // User cancelled, revert to Standard
+      assignForm.value[`use_standard_${field.key}`] = true
+    }
+  } else {
+    // Switching to Standard, no warning needed
+    assignForm.value[`use_standard_${field.key}`] = true
+  }
+}
 
 // Watch for eligibilityOptions to load and update selectedEligibilityObjectsData
 watch(
@@ -1946,25 +2116,43 @@ const filterEmployees = () => {
   sortEmployees()
 }
 
+const isTerminated = (emp) => getStatus(emp) === 'Terminated'
+
 const sortEmployees = () => {
   const sorted = [...filteredEmployees.value]
 
   switch (sortBy.value) {
     case 'Newest':
-      sorted.sort((a, b) => new Date(b.last_date_updated || 0) - new Date(a.last_date_updated || 0))
+      sorted.sort((a, b) => {
+        const aTerm = isTerminated(a) ? 1 : 0
+        const bTerm = isTerminated(b) ? 1 : 0
+        if (aTerm !== bTerm) return aTerm - bTerm
+        return new Date(b.last_date_updated || 0) - new Date(a.last_date_updated || 0)
+      })
       break
     case 'Oldest':
-      sorted.sort((a, b) => new Date(a.last_date_updated || 0) - new Date(b.last_date_updated || 0))
+      sorted.sort((a, b) => {
+        const aTerm = isTerminated(a) ? 1 : 0
+        const bTerm = isTerminated(b) ? 1 : 0
+        if (aTerm !== bTerm) return aTerm - bTerm
+        return new Date(a.last_date_updated || 0) - new Date(b.last_date_updated || 0)
+      })
       break
     case 'A-Z':
-      sorted.sort((a, b) =>
-        getFullName(a).toLowerCase().localeCompare(getFullName(b).toLowerCase()),
-      )
+      sorted.sort((a, b) => {
+        const aTerm = isTerminated(a) ? 1 : 0
+        const bTerm = isTerminated(b) ? 1 : 0
+        if (aTerm !== bTerm) return aTerm - bTerm
+        return getFullName(a).toLowerCase().localeCompare(getFullName(b).toLowerCase())
+      })
       break
     case 'Z-A':
-      sorted.sort((a, b) =>
-        getFullName(b).toLowerCase().localeCompare(getFullName(a).toLowerCase()),
-      )
+      sorted.sort((a, b) => {
+        const aTerm = isTerminated(a) ? 1 : 0
+        const bTerm = isTerminated(b) ? 1 : 0
+        if (aTerm !== bTerm) return aTerm - bTerm
+        return getFullName(b).toLowerCase().localeCompare(getFullName(a).toLowerCase())
+      })
       break
   }
 
@@ -2076,7 +2264,14 @@ watch(
   async (newId) => {
     if (newId && !initialised) {
       initialised = true
-      await Promise.all([fetchRoles(), fetchSites(), fetchContractTypes()])
+      await Promise.all([
+        fetchRoles(),
+        fetchSites(),
+        fetchContractTypes(),
+        fetchDepartments(),
+        fetchEligibilityOptions(),
+        fetchPositions(),
+      ])
       await fetchEmployees()
     }
   },
@@ -3188,5 +3383,114 @@ onMounted(async () => {
   font-size: 12.5px;
   color: #1e3a5f;
   font-weight: 500;
+}
+
+/* Payroll Multipliers Section */
+.multipliers-section {
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.multiplier-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.multiplier-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.multiplier-row:first-child {
+  padding-top: 0;
+}
+
+.multiplier-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.multiplier-icon {
+  color: #3b82f6;
+  background: #dbeafe;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.multiplier-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.multiplier-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.multiplier-desc {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.multiplier-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.multiplier-value-wrapper {
+  min-width: 100px;
+  text-align: right;
+}
+
+.multiplier-value-display {
+  font-size: 14px;
+  font-weight: 600;
+  color: #059669;
+}
+
+.multiplier-source {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-left: 4px;
+}
+
+.multiplier-input {
+  width: 90px;
+}
+
+.multiplier-input :deep(.q-field__control) {
+  height: 32px;
+}
+
+.multiplier-prefix {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Custom Multiplier Warning Dialog Styles */
+.custom-multiplier-warning-dialog .q-dialog__title {
+  color: #92400e;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.custom-multiplier-warning-dialog .q-dialog__message {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.custom-multiplier-warning-dialog .q-card {
+  max-width: 480px;
+  border-radius: 12px;
 }
 </style>
