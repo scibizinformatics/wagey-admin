@@ -1081,6 +1081,87 @@
                     </template>
                   </q-input>
                 </div>
+
+                <!-- Regular Holiday Overtime -->
+                <div class="multiplier-card">
+                  <div class="multiplier-card-header">
+                    <div class="multiplier-icon-wrap multiplier-icon--regular-ot">
+                      <q-icon name="event_note" size="20px" />
+                    </div>
+                    <div>
+                      <div class="multiplier-card-title">Regular Holiday OT</div>
+                      <div class="multiplier-card-desc">Overtime on regular holidays</div>
+                    </div>
+                  </div>
+                  <q-input
+                    v-model="multipliersForm.regular_holiday_ot_multiplier"
+                    outlined
+                    dense
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 2.60"
+                    class="multiplier-input"
+                  >
+                    <template v-slot:prepend>
+                      <span class="multiplier-prefix">×</span>
+                    </template>
+                  </q-input>
+                </div>
+
+                <!-- Special Holiday Overtime -->
+                <div class="multiplier-card">
+                  <div class="multiplier-card-header">
+                    <div class="multiplier-icon-wrap multiplier-icon--special-ot">
+                      <q-icon name="event_busy" size="20px" />
+                    </div>
+                    <div>
+                      <div class="multiplier-card-title">Special Holiday OT</div>
+                      <div class="multiplier-card-desc">Overtime on special holidays</div>
+                    </div>
+                  </div>
+                  <q-input
+                    v-model="multipliersForm.special_holiday_ot_multiplier"
+                    outlined
+                    dense
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 1.95"
+                    class="multiplier-input"
+                  >
+                    <template v-slot:prepend>
+                      <span class="multiplier-prefix">×</span>
+                    </template>
+                  </q-input>
+                </div>
+
+                <!-- Undertime -->
+                <div class="multiplier-card">
+                  <div class="multiplier-card-header">
+                    <div class="multiplier-icon-wrap multiplier-icon--undertime">
+                      <q-icon name="timer_off" size="20px" />
+                    </div>
+                    <div>
+                      <div class="multiplier-card-title">Undertime</div>
+                      <div class="multiplier-card-desc">Applied to undertime hours</div>
+                    </div>
+                  </div>
+                  <q-input
+                    v-model="multipliersForm.undertime_multiplier"
+                    outlined
+                    dense
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 0.50"
+                    class="multiplier-input"
+                  >
+                    <template v-slot:prepend>
+                      <span class="multiplier-prefix">×</span>
+                    </template>
+                  </q-input>
+                </div>
               </div>
             </div>
           </div>
@@ -2223,6 +2304,9 @@ const multipliersForm = ref({
   night_diff_multiplier: '',
   regular_holiday_multiplier: '',
   special_holiday_multiplier: '',
+  regular_holiday_ot_multiplier: '',
+  special_holiday_ot_multiplier: '',
+  undertime_multiplier: '',
 })
 
 async function loadMultipliers(companyId) {
@@ -2233,6 +2317,9 @@ async function loadMultipliers(companyId) {
       night_diff_multiplier: data.night_diff_multiplier ?? '',
       regular_holiday_multiplier: data.regular_holiday_multiplier ?? '',
       special_holiday_multiplier: data.special_holiday_multiplier ?? '',
+      regular_holiday_ot_multiplier: data.regular_holiday_ot_multiplier ?? '',
+      special_holiday_ot_multiplier: data.special_holiday_ot_multiplier ?? '',
+      undertime_multiplier: data.undertime_multiplier ?? '',
     }
   } else {
     multipliersForm.value = {
@@ -2240,8 +2327,22 @@ async function loadMultipliers(companyId) {
       night_diff_multiplier: '',
       regular_holiday_multiplier: '',
       special_holiday_multiplier: '',
+      regular_holiday_ot_multiplier: '',
+      special_holiday_ot_multiplier: '',
+      undertime_multiplier: '',
     }
   }
+}
+
+// Philippines Labor Code default multipliers for comparison
+const PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN = {
+  overtime: 1.25,
+  night_diff: 1.10,
+  regular_holiday: 2.00,
+  special_holiday: 1.30,
+  regular_holiday_ot: 2.60,
+  special_holiday_ot: 1.95,
+  undertime: 0.50,
 }
 
 async function saveMultipliers() {
@@ -2251,6 +2352,92 @@ async function saveMultipliers() {
     $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
     return
   }
+
+  // Build list of modified multipliers for warning dialog
+  const modifiedMultipliers = []
+  const multiplierFields = [
+    { key: 'overtime', label: 'Overtime', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.overtime },
+    { key: 'night_diff', label: 'Night Differential', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.night_diff },
+    { key: 'regular_holiday', label: 'Regular Holiday', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.regular_holiday },
+    { key: 'special_holiday', label: 'Special Holiday', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.special_holiday },
+    { key: 'regular_holiday_ot', label: 'Regular Holiday OT', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.regular_holiday_ot },
+    { key: 'special_holiday_ot', label: 'Special Holiday OT', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.special_holiday_ot },
+    { key: 'undertime', label: 'Undertime', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.undertime },
+  ]
+
+  multiplierFields.forEach((field) => {
+    const currentValue = multipliersForm.value[`${field.key}_multiplier`]
+    if (currentValue && currentValue !== '' && parseFloat(currentValue) !== field.default) {
+      modifiedMultipliers.push({
+        name: field.label,
+        current: parseFloat(currentValue),
+        standard: field.default,
+      })
+    }
+  })
+
+  // Show warning dialog if any multipliers differ from standard
+  if (modifiedMultipliers.length > 0) {
+    const modifiedListHtml = modifiedMultipliers
+      .map(
+        (m) => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #fde68a;">
+          <span style="font-weight: 500;">${m.name}</span>
+          <span>
+            <span style="text-decoration: line-through; color: #9ca3af; margin-right: 12px;">×${m.standard.toFixed(2)}</span>
+            <span style="color: #dc2626; font-weight: 600;">×${m.current.toFixed(2)}</span>
+          </span>
+        </div>
+      `,
+      )
+      .join('')
+
+    const confirmed = await new Promise((resolve) => {
+      $q.dialog({
+        title: '⚠️ Save Custom Company Multipliers?',
+        message: `
+          <div style="margin-top: 12px;">
+            <p style="color: #92400e; font-size: 15px; margin-bottom: 16px; font-weight: 600;">
+              You are setting company-wide custom multipliers
+            </p>
+            <p style="color: #6b7280; font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
+              These values will affect <strong>all employee payroll calculations</strong> and 
+              serve as "Standard" rates when creating new employee contracts.
+            </p>
+            <div style="background: #fef3c7; padding: 14px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 16px 0;">
+              <p style="margin: 0 0 12px 0; color: #92400e; font-weight: 600; font-size: 14px;">
+                Modified Values:
+              </p>
+              ${modifiedListHtml}
+            </div>
+            <p style="color: #dc2626; font-size: 13px; margin-top: 16px; font-style: italic;">
+              ⚠️ Ensure compliance with Philippines Labor Code (DOLE standards)
+            </p>
+          </div>
+        `,
+        html: true,
+        class: 'custom-multipliers-save-dialog',
+        cancel: {
+          label: 'Go Back & Edit',
+          color: 'grey',
+          flat: true,
+        },
+        ok: {
+          label: 'Save Custom Multipliers',
+          color: 'warning',
+          unelevated: true,
+        },
+        persistent: true,
+      })
+        .onOk(() => resolve(true))
+        .onCancel(() => resolve(false))
+    })
+
+    if (!confirmed) {
+      return // User cancelled, don't save
+    }
+  }
+
   const payload = {
     company: companyId.value,
     ...multipliersForm.value,
@@ -3497,6 +3684,21 @@ watch(activeTab, async (newTab) => {
   color: #16a34a;
 }
 
+.multiplier-icon--regular-ot {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.multiplier-icon--special-ot {
+  background: #fce7f3;
+  color: #db2777;
+}
+
+.multiplier-icon--undertime {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
 .multiplier-card-title {
   font-size: 14px;
   font-weight: 700;
@@ -3527,5 +3729,22 @@ watch(activeTab, async (newTab) => {
   font-weight: 700;
   color: #94a3b8;
   margin-right: 4px;
+}
+
+/* Custom Multipliers Save Warning Dialog */
+.custom-multipliers-save-dialog .q-dialog__title {
+  color: #92400e;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.custom-multipliers-save-dialog .q-dialog__message {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.custom-multipliers-save-dialog .q-card {
+  max-width: 520px;
+  border-radius: 12px;
 }
 </style>
