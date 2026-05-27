@@ -26,7 +26,7 @@ export default defineConfig((ctx) => {
     },
 
     build: {
-      vueRouterMode: 'history',
+      vueRouterMode: 'hash',
       esbuildTarget: {
         browser: ['es2022', 'firefox115', 'chrome115', 'safari14'],
         node: 'node20',
