@@ -872,6 +872,10 @@
                       ></template
                     >
                   </q-input>
+                  <div v-if="fundingForm.logId" class="funding-amount-helper">
+                    Total Gross Pay: {{ formatCurrency(selectedRunGrossPay) }} | Total Net Pay:
+                    {{ formatCurrency(selectedRunNetPay) }}
+                  </div>
                 </div>
               </div>
 
@@ -912,13 +916,7 @@
                 </div>
                 <div>
                   <h3 class="funding-history-title">History</h3>
-                  <p class="funding-form-subtitle">
-                    {{
-                      fundingForm.logId
-                        ? 'Funding entries for selected log'
-                        : 'Select a log to view entries'
-                    }}
-                  </p>
+                  <p class="funding-form-subtitle">All funding entries across logs</p>
                 </div>
               </div>
 
@@ -939,7 +937,7 @@
                   {{
                     fundingForm.logId
                       ? 'No funding entries for this log yet'
-                      : 'Select a log above to see its funding history'
+                      : 'No funding entries found'
                   }}
                 </span>
               </div>
@@ -1417,6 +1415,12 @@ const fetchPayrollRunsSummary = (extraParams = {}) => {
 const activeTab = ref('logs')
 const disbursementSearch = ref('')
 
+watch(activeTab, (tab) => {
+  if (tab === 'funding') {
+    loadAllFundingHistory()
+  }
+})
+
 // ─── Funding Tab State ────────────────────────────────────────────────────────
 const fundingFormRef = ref(null)
 const savingFunding = ref(false)
@@ -1437,22 +1441,65 @@ const fundingForm = ref({
 // Funding sources — populated dynamically from the selected log's department cost center
 const fundingSources = ref([])
 
-// All funding history entries (loaded per log when log changes)
+  // All funding history entries (loaded globally, filtered per log when selected)
 const allFundingHistory = ref([])
 
 const filteredFundingHistory = computed(() => {
-  if (!fundingForm.value.logId) return []
-  return allFundingHistory.value.filter((e) => e.logId === fundingForm.value.logId)
+  return allFundingHistory.value
 })
 
 const fundingTotalPages = computed(() =>
   Math.max(1, Math.ceil(filteredFundingHistory.value.length / fundingPageSize)),
 )
 
-// Step 8: fetch real funding entries for the selected disbursement log
-const onFundingLogChange = async (logId) => {
-  if (!logId) return
+// Computed totals for the currently selected payroll run (used in Add Funds form)
+const selectedRunGrossPay = computed(() => {
+  const run = payrollRunsSummary.value.find((r) => r.id === fundingForm.value.logId)
+  return Number(run?.calculated_amount ?? 0)
+})
+
+const selectedRunNetPay = computed(() => {
+  const run = payrollRunsSummary.value.find((r) => r.id === fundingForm.value.logId)
+  return Number(run?.total_net_pay ?? 0)
+})
+
+// Step 8: load all funding entries globally
+const loadAllFundingHistory = async () => {
   fundingHistoryLoading.value = true
+  try {
+    const entries = await fetchDisbursementFundings()
+    allFundingHistory.value = entries.map((h) => {
+      const run = payrollRunsSummary.value.find((r) => r.id === h.log)
+      return {
+        id: h.id,
+        logId: h.log,
+        logName: h.log_name ?? run?.name ?? '—',
+        period: run?.period ?? '',
+        source: h.source_bank_name ?? h.source ?? '—',
+        amount: Number(h.amount ?? 0),
+        date: h.date ?? '',
+        type: h.type ?? '',
+        type_display: h.type_display ?? h.type ?? '',
+        reference: h.reference_num ?? '',
+        notes: h.notes ?? '',
+      }
+    })
+  } catch (err) {
+    console.error('[Funding] Error loading all funding history:', err)
+    allFundingHistory.value = []
+  } finally {
+    fundingHistoryLoading.value = false
+  }
+}
+
+// Fetch bank accounts for the selected log (used by Add Funds form)
+const onFundingLogChange = async (logId) => {
+  if (!logId) {
+    fundingForm.value.amount = ''
+    fundingSources.value = []
+    fundingForm.value.source = null
+    return
+  }
   fundingSources.value = []
   fundingForm.value.source = null
 
@@ -1460,12 +1507,14 @@ const onFundingLogChange = async (logId) => {
     const run = payrollRunsSummary.value.find((r) => r.id === logId)
     console.log('[Funding] logId:', logId, 'run:', run)
 
+    // Auto-fill amount with total net pay of the selected run
+    fundingForm.value.amount = Number(run?.total_net_pay ?? 0) || ''
+
     // ─── Primary: use the dedicated endpoint ───────────────────────────────
     const bankAccounts = await fetchDisbursementLogBankAccounts(logId)
     console.log('[Funding] endpoint returned accounts:', bankAccounts)
 
     if (bankAccounts.length > 0) {
-      // API returns { count, bank_accounts: [{ id, name }, ...] }
       fundingSources.value = bankAccounts.map((b) => ({
         label: b.name ?? 'Unnamed Account',
         value: b.id,
@@ -1496,27 +1545,9 @@ const onFundingLogChange = async (logId) => {
         console.warn('[Funding] Department found but has no cost_center:', dept)
       }
     }
-
-    const entries = await fetchDisbursementFundings(logId)
-    allFundingHistory.value = entries.map((h) => ({
-      id: h.id,
-      logId: h.log,
-      logName: h.log_name ?? run?.name ?? '—',
-      period: run?.period ?? '',
-      source: h.source_bank_name ?? h.source ?? '—',
-      amount: Number(h.amount ?? 0),
-      date: h.date ?? '',
-      type: h.type ?? '',
-      type_display: h.type_display ?? h.type ?? '',
-      reference: h.reference_num ?? '',
-      notes: h.notes ?? '',
-    }))
   } catch (err) {
     console.error('[Funding] Error loading funding data:', err)
-    allFundingHistory.value = []
     fundingSources.value = []
-  } finally {
-    fundingHistoryLoading.value = false
   }
 }
 
@@ -1550,8 +1581,8 @@ const submitFunding = async () => {
     // Step 7: POST /payroll/admin/disbursement-fundings/
     await addDisbursementFunding(payload)
     $q.notify({ type: 'positive', message: 'Funds added successfully!' })
-    // Refresh funding history and summary for this log
-    await onFundingLogChange(fundingForm.value.logId)
+    // Refresh funding history and summary
+    await loadAllFundingHistory()
     await fetchPayrollRunsSummary()
     // Re-sync selectedRun so the expanded log card shows the new funded amount immediately
     const refreshedRun = payrollRunsSummary.value.find(
@@ -1760,6 +1791,8 @@ onMounted(async () => {
 
   try {
     await fetchPayrollRunsSummary()
+    // Pre-load all funding history so the Funding tab shows global entries immediately
+    await loadAllFundingHistory()
   } catch (err) {
     console.error('[PayrollPage] Initial summary fetch failed:', err)
     $q.notify({
@@ -3248,6 +3281,12 @@ const retryEmployeeAction = async (emp) => {
   font-size: 12px;
   font-weight: 500;
   color: #374151;
+}
+
+.funding-amount-helper {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 4px;
 }
 
 .funding-form-actions {
