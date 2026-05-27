@@ -32,7 +32,7 @@
                 <span class="panel-title">Current Payroll Status</span>
               </div>
             </div>
-            <div v-if="!payrollLoading && !payrollRows.length" class="empty-panel-state">
+            <div v-if="payrollLoading || !payrollRows.length" class="empty-panel-state">
               <div
                 class="eps-shimmer"
                 v-for="n in 4"
@@ -287,7 +287,6 @@ function resolvedCompanyId() {
 // ─── Payroll table columns ────────────────────────────────────────────────────
 const payrollColumns = [
   { name: 'group', label: 'Group Name', field: 'group', align: 'left' },
-  { name: 'cycle', label: 'Cycle', field: 'cycle', align: 'left' },
   { name: 'type', label: 'Type', field: 'type', align: 'left' },
   { name: 'start', label: 'Start', field: 'start', align: 'left' },
   { name: 'end', label: 'End', field: 'end', align: 'left' },
@@ -308,6 +307,16 @@ function fmtDate(str) {
   return isNaN(d)
     ? str
     : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function cleanGroupName(name) {
+  if (!name) return '-'
+  let cleaned = String(name)
+  // 1. Strip trailing date range patterns like "| 2026-05-01 - 2026-05-15"
+  cleaned = cleaned.replace(/\s*\|?\s*\d{4}[-/]\d{2}[-/]\d{2}\s*[-–]\s*\d{4}[-/]\d{2}[-/]\d{2}\s*$/, '')
+  // 2. Strip trailing type indicator like "| Salary" or "| Hourly"
+  cleaned = cleaned.replace(/\s*\|\s*\w+\s*$/, '')
+  return cleaned.trim() || '-'
 }
 
 function fmtTime(str) {
@@ -434,18 +443,42 @@ const payrollRows = computed(() => {
       : Array.isArray(payrollRunsSummary.value?.results)
         ? payrollRunsSummary.value.results
         : []
-  return list.slice(0, 10).map((p, i) => ({
-    id: p.id ?? i,
-    group: p.name ?? '-',
-    cycle: p.period ?? '-',
-    type: 'Payroll Run',
-    start: p.period ? String(p.period).split(' - ')[0] : '-',
-    end: p.period ? String(p.period).split(' - ')[1] ?? '-' : '-',
-    employees: p.number_of_employee ?? p.employee_count ?? p.employees ?? '-',
-    status: p.status ?? '-',
-    date: fmtDate(p.created_at ?? p.date_released ?? p.released_at),
-    amount: fmtCurrency(p.total_net_pay ?? p.calculated_amount),
-  }))
+  return list.slice(0, 10).map((p, i) => {
+    // Resolve start / end dates: prefer explicit fields, then split period, then extract from name
+    let startDate = '-'
+    let endDate = '-'
+    if (p.start_date && p.end_date) {
+      startDate = fmtDate(p.start_date)
+      endDate = fmtDate(p.end_date)
+    } else if (p.period) {
+      const parts = String(p.period).split(' - ')
+      startDate = parts[0] ?? '-'
+      endDate = parts[1] ?? '-'
+    } else if (p.name) {
+      // Fallback: extract date range embedded in the name (e.g. "Group | Type | 2026-05-01 - 2026-05-15")
+      const match = String(p.name).match(/(\d{4}[-/]\d{2}[-/]\d{2})\s*[-–]\s*(\d{4}[-/]\d{2}[-/]\d{2})/)
+      if (match) {
+        startDate = fmtDate(match[1])
+        endDate = fmtDate(match[2])
+      }
+    }
+
+    // Date Released: show only if the run was actually released
+    const releasedAt = p.released_at ?? p.date_released
+    const releaseDate = releasedAt ? fmtDate(releasedAt) : '-'
+
+    return {
+      id: p.id ?? i,
+      group: cleanGroupName(p.name),
+      type: p.type ? p.type.charAt(0).toUpperCase() + p.type.slice(1) : 'Payroll Run',
+      start: startDate,
+      end: endDate,
+      employees: p.number_of_employee ?? p.employee_count ?? p.employees ?? '-',
+      status: p.status ?? '-',
+      date: releaseDate,
+      amount: fmtCurrency(p.total_net_pay ?? p.calculated_amount),
+    }
+  })
 })
 
 // ─── Recent Activity ──────────────────────────────────────────────────────────
