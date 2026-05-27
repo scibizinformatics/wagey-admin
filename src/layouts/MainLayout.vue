@@ -337,16 +337,16 @@ const terrainBgUrl = terrainBg
 
 // ─── Nav links ────────────────────────────────────────────────────────────────
 const links = [
-  { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
-  { label: 'Employees', icon: 'groups', to: '/employees' },
+  { label: 'Dashboard', icon: 'dashboard', to: '/app' },
+  { label: 'Employees', icon: 'groups', to: '/app/employees' },
   { label: 'Attendance', icon: 'event_available', to: '/app/attendance' },
-  { label: 'Schedule', icon: 'calendar_month', to: '/schedule' },
-  { label: 'Payroll', icon: 'paid', to: '/payroll' },
-  { label: 'Requests', icon: 'mark_email_unread', to: '/requests' },
-  { label: 'Swap Requests', icon: 'swap_horiz', to: '/swap-requests' },
-  { label: 'Invite', icon: 'email', to: '/invite' },
-  { label: 'Announcement', icon: 'announcement', to: '/announcements' },
-  { label: 'Admin Settings', icon: 'settings', to: '/admin-settings' },
+  { label: 'Schedule', icon: 'calendar_month', to: '/app/schedule' },
+  { label: 'Payroll', icon: 'paid', to: '/app/payroll' },
+  { label: 'Requests', icon: 'mark_email_unread', to: '/app/requests' },
+  { label: 'Swap Requests', icon: 'swap_horiz', to: '/app/swap-requests' },
+  { label: 'Invite', icon: 'email', to: '/app/employees/invite' },
+  { label: 'Announcement', icon: 'announcement', to: '/app/announcements' },
+  { label: 'Admin Settings', icon: 'settings', to: '/app/admin-settings' },
 ]
 
 // ─── UI state ─────────────────────────────────────────────────────────────────
