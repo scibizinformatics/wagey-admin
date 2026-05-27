@@ -510,13 +510,18 @@ export function usePayroll() {
 
   // ─── Step 8: List Fundings for a Disbursement Log ────────────────────────
   // GET /admin/disbursement-fundings/?disbursement_log_id=123
-  async function fetchDisbursementFundings(disbursementLogId) {
+  // If disbursementLogId is omitted, returns all fundings.
+  async function fetchDisbursementFundings(disbursementLogId = null) {
     console.log('[usePayroll] Step 8 fetchDisbursementFundings → request', { disbursementLogId })
     const controller = getAbortController('fetchDisbursementFundings')
     setLoading('fetchingDisbursementFundings', true)
     try {
+      const params = {}
+      if (disbursementLogId) {
+        params.disbursement_log_id = disbursementLogId
+      }
       const response = await api.get(`${BASE}/payroll/admin/disbursement-fundings/`, {
-        params: { disbursement_log_id: disbursementLogId },
+        params,
         headers: authHeaders(),
         signal: controller.signal,
       })
