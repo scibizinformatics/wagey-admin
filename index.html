@@ -25,6 +25,29 @@
 
     <!-- Web Manifest -->
     <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- SPA redirect: map old alias paths to hash-based routes -->
+    <script>
+      (function () {
+        var path = location.pathname
+        var hash = location.hash
+        var redirectMap = {
+          '/dashboard': '/app',
+          '/employees': '/app/employees',
+          '/invite': '/app/employees/invite',
+          '/schedule': '/app/schedule',
+          '/requests': '/app/requests',
+          '/swap-requests': '/app/swap-requests',
+          '/payroll': '/app/payroll',
+          '/announcements': '/app/announcements',
+          '/admin-settings': '/app/admin-settings',
+        }
+        var target = redirectMap[path]
+        if (target && !hash) {
+          location.replace('/#' + target)
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="q-app"><!-- quasar:entry-point --></div>
