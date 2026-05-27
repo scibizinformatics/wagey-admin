@@ -77,7 +77,10 @@ const lastDataEvent = ref({
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const getToken = () => sessionStorage.getItem('authToken') || localStorage.getItem('access_token')
 const getCompanyId = () => {
-  const stored = localStorage.getItem('companyId') || localStorage.getItem('selectedCompany')
+  const stored =
+    localStorage.getItem('companyId') ||
+    localStorage.getItem('selectedCompany') ||
+    localStorage.getItem('company_id')
   if (!stored) return null
   try {
     const parsed = JSON.parse(stored)
