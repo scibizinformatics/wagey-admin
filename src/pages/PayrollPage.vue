@@ -8,9 +8,6 @@
             <h1 class="page-title">Disbursements</h1>
           </div>
           <div class="header-actions">
-            <q-btn flat round icon="refresh" class="refresh-btn" @click="fetchPayrollData">
-              <q-tooltip>Refresh</q-tooltip>
-            </q-btn>
             <q-input
               v-model="disbursementSearch"
               dense
@@ -2068,7 +2065,6 @@ const releaseBtnLabel = computed(() => {
 
 // Data — derived directly from payrollRunEmployees already in memory.
 // No second API call needed; eliminates the double-fetch freeze.
-const error = ref(null)
 const selectedRunForData = ref(null)
 
 const payrollData = computed(() =>
@@ -2085,18 +2081,6 @@ const payrollData = computed(() =>
     breakdown: r.breakdown ?? {},
   })),
 )
-
-// Keep fetchPayrollData as a no-op refresh that just re-loads run employees
-const fetchPayrollData = async () => {
-  const runId = selectedRunForData.value ?? null
-  if (!runId) return
-  try {
-    await fetchPayrollRunEmployees(runId)
-  } catch (err) {
-    error.value = err?.response?.data?.message ?? err?.message ?? 'Failed to fetch payroll data'
-    $q.notify({ type: 'negative', message: error.value, position: 'top', timeout: 5000 })
-  }
-}
 
 // Detail modal
 const showDetailModal = ref(false)
@@ -4915,14 +4899,6 @@ const retryEmployeeAction = async (emp) => {
     padding: 20px 22px;
   }
 
-  .stats-amount {
-    font-size: 30px;
-  }
-
-  .stats-label {
-    font-size: 13px;
-  }
-
   .stats-icon-wrapper {
     width: 52px;
     height: 52px;
@@ -4934,10 +4910,6 @@ const retryEmployeeAction = async (emp) => {
 
   .page-header {
     padding: 18px 28px;
-  }
-
-  .page-title {
-    font-size: 24px;
   }
 
   .header-search {
@@ -5016,16 +4988,8 @@ const retryEmployeeAction = async (emp) => {
     gap: 10px;
   }
 
-  .stats-amount {
-    font-size: 24px;
-  }
-
   .stats-card {
     padding: 14px 16px;
-  }
-
-  .page-title {
-    font-size: 19px;
   }
 
   .header-search {
@@ -5152,11 +5116,7 @@ const retryEmployeeAction = async (emp) => {
   }
 
   .stats-amount {
-    font-size: 20px;
-  }
-
-  .stats-label {
-    font-size: 11px;
+    font-size: 22px;
   }
 
   /* Tabs */
@@ -5350,7 +5310,11 @@ const retryEmployeeAction = async (emp) => {
   }
 
   .stats-amount {
-    font-size: 22px;
+    font-size: 20px;
+  }
+
+  .stats-label {
+    font-size: 11px;
   }
 
   .stats-icon-wrapper {
