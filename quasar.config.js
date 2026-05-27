@@ -10,6 +10,7 @@ const __dirname = dirname(__filename)
 export default defineConfig((ctx) => {
   // Resolve API base at build time — never reaches the browser as process.env
   const apiBaseUrl = process.env.API_BASE_URL || 'https://staging.wageyapp.com'
+  const wsUrl = process.env.VITE_WS_URL || 'wss://staging.wageyapp.com'
 
   return {
     eslint: {
@@ -42,6 +43,7 @@ export default defineConfig((ctx) => {
         chain.plugin('define-env').use(webpack.DefinePlugin, [
           {
             'process.env.API_BASE_URL': JSON.stringify(apiBaseUrl),
+            'process.env.VITE_WS_URL': JSON.stringify(wsUrl),
           },
         ])
       },
@@ -57,6 +59,13 @@ export default defineConfig((ctx) => {
           changeOrigin: true,
           secure: false,
           logLevel: 'debug',
+        },
+        {
+          context: ['/ws/notifications'],
+          target: apiBaseUrl,
+          changeOrigin: true,
+          secure: false,
+          ws: true,
         },
         {
           context: ['/user'],
