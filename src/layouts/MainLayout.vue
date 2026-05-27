@@ -521,6 +521,7 @@ function logout() {
 onMounted(async () => {
   await fetchCompanies()
   loadSavedCompany()
+  reconnect() // Re-connect WS now that companyId is resolved
   loadCurrentUser()
 })
 
