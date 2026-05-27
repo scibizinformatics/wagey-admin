@@ -26,26 +26,22 @@ const routes = [
         path: '',
         name: 'dashboard',
         component: DashboardPage,
-        alias: '/dashboard',
       },
       {
         path: 'employees',
         name: 'employees',
         component: EmployeesPage,
-        alias: '/employees',
       },
       {
         path: 'employees/invite',
         name: 'invite-employee',
         component: InvitePage,
-        alias: '/invite',
       },
       {
         path: 'employees/:id',
         name: 'employee-detail',
         component: () => import('components/EmployeeDetail.vue'),
         props: true,
-        alias: '/employees/:id',
       },
       {
         path: 'attendance',
@@ -56,43 +52,43 @@ const routes = [
         path: 'schedule',
         name: 'schedule',
         component: () => import('pages/SchedulePage.vue'),
-        alias: '/schedule',
       },
       {
         path: 'requests',
         name: 'requests',
         component: RequestPage,
-        alias: '/requests',
       },
       {
         path: 'swap-requests',
         name: 'swap-requests',
         component: () => import('pages/SwapRequestPage.vue'),
-        alias: '/swap-requests',
       },
       {
         path: 'payroll',
         name: 'payroll',
         component: () => import('pages/PayrollPage.vue'),
-        alias: '/payroll',
       },
       {
         path: 'announcements',
         name: 'announcements',
         component: () => import('pages/AnnouncementPage.vue'),
-        alias: '/announcements',
       },
       {
         path: 'admin-settings',
         name: 'admin-settings',
         component: () => import('pages/AdminSettingsPage.vue'),
-        alias: '/admin-settings',
         meta: {
           requiresAuth: true,
           requiresAdminRole: true,
         },
       },
     ],
+  },
+  // Catch-all for unknown routes — renders the 404 page inside the SPA
+  {
+    path: '/:pathMatch(.*)*',
+    component: () => import('pages/ErrorNotFound.vue'),
+    name: 'not-found',
   },
 ]
 
