@@ -14,7 +14,7 @@
         />
 
         <!-- Company Tabs -->
-        <div class="company-tabs-wrapper row no-wrap q-gutter-sm flex-1">
+        <div ref="tabsWrapperRef" class="company-tabs-wrapper row no-wrap">
           <div
             v-for="company in companyOptions"
             :key="company.siteId"
@@ -22,13 +22,20 @@
             :class="{ 'company-tab-active': selectedCompany === company.siteId }"
             @click="onCompanyChange(company.siteId)"
           >
-            <q-icon name="business" size="14px" class="q-mr-xs" />
-            <span>{{ company.siteName }}</span>
+            <img
+              v-if="company.logo"
+              :src="company.logo"
+              class="tab-logo"
+              @error="company.logo = null"
+            />
+            <q-icon v-else name="business" size="14px" class="q-mr-xs" />
+            <span class="tab-label">{{ company.siteName }}</span>
           </div>
           <div v-if="loadingCompanies" class="company-tab">
             <q-spinner size="14px" class="q-mr-xs" />
             <span>Loading...</span>
           </div>
+          <div v-if="showOverflowHint" class="tab-overflow-hint" />
         </div>
 
         <!-- Right side -->
@@ -316,7 +323,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 
@@ -353,6 +360,9 @@ const links = [
 const leftDrawerOpen = ref(true)
 const isMini = ref(false)
 const notifModal = ref(false)
+
+const tabsWrapperRef = ref(null)
+const showOverflowHint = ref(false)
 
 // ─── Company state ────────────────────────────────────────────────────────────
 const selectedCompany = ref(null)
@@ -456,6 +466,7 @@ async function fetchCompanies() {
     companyOptions.value = companiesData.map((company) => ({
       siteId: String(company.id),
       siteName: company.name || `Company ${company.id}`,
+      logo: company.logo || null,
     }))
   } catch (err) {
     $q.notify({
@@ -490,6 +501,14 @@ function onCompanyChange(siteId) {
   window.location.reload()
 }
 
+function updateOverflowHint() {
+  const el = tabsWrapperRef.value
+  if (!el) return
+  const hasOverflow = el.scrollWidth > el.clientWidth
+  const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1
+  showOverflowHint.value = hasOverflow && !atEnd
+}
+
 // ─── Current user ─────────────────────────────────────────────────────────────
 async function loadCurrentUser() {
   const cached = localStorage.getItem('cached_username')
@@ -520,13 +539,24 @@ function logout() {
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(async () => {
   await fetchCompanies()
+  await nextTick()
+  updateOverflowHint()
   loadSavedCompany()
   reconnect() // Re-connect WS now that companyId is resolved
   loadCurrentUser()
+
+  window.addEventListener('resize', updateOverflowHint)
+  if (tabsWrapperRef.value) {
+    tabsWrapperRef.value.addEventListener('scroll', updateOverflowHint)
+  }
 })
 
 onUnmounted(() => {
   cleanupNotifications()
+  window.removeEventListener('resize', updateOverflowHint)
+  if (tabsWrapperRef.value) {
+    tabsWrapperRef.value.removeEventListener('scroll', updateOverflowHint)
+  }
 })
 </script>
 
@@ -756,8 +786,14 @@ onUnmounted(() => {
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  max-width: 50%;
+  width: 470px;
   flex-shrink: 0;
+  position: relative;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  gap: 8px;
 }
 .company-tabs-wrapper::-webkit-scrollbar {
   display: none;
@@ -776,6 +812,23 @@ onUnmounted(() => {
   white-space: nowrap;
   transition: all 0.2s ease;
   user-select: none;
+  width: 150px;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+.company-tab .tab-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.tab-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: cover;
+  margin-right: 6px;
+  flex-shrink: 0;
 }
 .company-tab:hover {
   background: #e2e8f0;
@@ -786,6 +839,16 @@ onUnmounted(() => {
   color: #ffffff;
   border-color: #13283d;
   box-shadow: 0 2px 8px rgba(19, 40, 61, 0.3);
+}
+.tab-overflow-hint {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  pointer-events: none;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1));
+  z-index: 2;
 }
 .mobile-menu-btn {
   display: none;
