@@ -38,12 +38,6 @@ const routes = [
         component: InvitePage,
       },
       {
-        path: 'employees/:id',
-        name: 'employee-detail',
-        component: () => import('components/EmployeeDetail.vue'),
-        props: true,
-      },
-      {
         path: 'attendance',
         name: 'attendance',
         component: () => import('pages/AttendancePage.vue'),
