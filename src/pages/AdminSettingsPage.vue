@@ -52,81 +52,100 @@
             </div>
 
             <div class="modern-table-container">
-              <q-table
-                :rows="filteredCompanies"
-                :columns="companyColumns"
-                row-key="id"
-                :loading="loadingCompanies"
-                flat
-                no-data-label="No companies found"
-                class="settings-table"
-                hide-pagination
-                :rows-per-page-options="[0]"
-              >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Logo</q-th>
-                    <q-th class="table-header-cell">Company Name</q-th>
-                    <q-th class="table-header-cell actions-header">Actions</q-th>
-                  </q-tr>
-                </template>
-                <template v-slot:body="props">
-                  <q-tr class="table-body-row">
-                    <q-td class="table-body-cell">
-                      <q-avatar size="36px" v-if="props.row.logo">
-                        <img :src="props.row.logo" />
-                      </q-avatar>
-                      <q-avatar v-else size="36px" color="primary" text-color="white">
-                        <q-icon name="business" />
-                      </q-avatar>
-                    </q-td>
-                    <q-td class="table-body-cell">
-                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
-                    </q-td>
-                    <q-td class="table-body-cell actions-cell">
-                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                          <q-list dense style="min-width: 150px">
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="viewCompany(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="visibility" size="16px"
-                              /></q-item-section>
-                              <q-item-section>View Details</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="editCompany(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="edit" size="16px"
-                              /></q-item-section>
-                              <q-item-section>Edit Company</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item dropdown-item-danger"
-                              @click="deleteCompany(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="delete" size="16px" color="negative"
-                              /></q-item-section>
-                              <q-item-section>Delete</q-item-section>
-                            </q-item>
-                          </q-list>
-                        </q-menu>
-                      </q-btn>
-                    </q-td>
-                  </q-tr>
-                </template>
-              </q-table>
+              <template v-if="loadingCompanies">
+                <div class="table-skeleton">
+                  <div class="skeleton-header">
+                    <div class="skeleton-header-cell" style="flex: 0 0 48px">Logo</div>
+                    <div class="skeleton-header-cell">Company Name</div>
+                    <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
+                  </div>
+                  <div class="skeleton-row" v-for="n in 4" :key="n">
+                    <div class="skeleton-cell" style="flex: 0 0 48px">
+                      <q-skeleton type="circle" size="36px" />
+                    </div>
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell" style="flex: 0 0 60px">
+                      <q-skeleton type="text" width="40px" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <q-table
+                  :rows="filteredCompanies"
+                  :columns="companyColumns"
+                  row-key="id"
+                  flat
+                  no-data-label="No companies found"
+                  class="settings-table"
+                  hide-pagination
+                  :rows-per-page-options="[0]"
+                >
+                  <template v-slot:header>
+                    <q-tr class="table-header-row">
+                      <q-th class="table-header-cell">Logo</q-th>
+                      <q-th class="table-header-cell">Company Name</q-th>
+                      <q-th class="table-header-cell actions-header">Actions</q-th>
+                    </q-tr>
+                  </template>
+                  <template v-slot:body="props">
+                    <q-tr class="table-body-row">
+                      <q-td class="table-body-cell">
+                        <q-avatar size="36px" v-if="props.row.logo">
+                          <img :src="props.row.logo" />
+                        </q-avatar>
+                        <q-avatar v-else size="36px" color="primary" text-color="white">
+                          <q-icon name="business" />
+                        </q-avatar>
+                      </q-td>
+                      <q-td class="table-body-cell">
+                        <span class="item-name">{{ props.row.name }}</span>
+                      </q-td>
+                      <q-td class="table-body-cell actions-cell">
+                        <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                          <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                            <q-list dense style="min-width: 150px">
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="viewCompany(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="visibility" size="16px"
+                                /></q-item-section>
+                                <q-item-section>View Details</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="editCompany(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="edit" size="16px"
+                                /></q-item-section>
+                                <q-item-section>Edit Company</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item dropdown-item-danger"
+                                @click="deleteCompany(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="delete" size="16px" color="negative"
+                                /></q-item-section>
+                                <q-item-section>Delete</q-item-section>
+                              </q-item>
+                            </q-list>
+                          </q-menu>
+                        </q-btn>
+                      </q-td>
+                    </q-tr>
+                  </template>
+                </q-table>
+              </template>
             </div>
           </div>
         </q-tab-panel>
@@ -151,96 +170,117 @@
             </div>
 
             <div class="modern-table-container">
-              <q-table
-                :rows="filteredSites"
-                :columns="siteColumns"
-                row-key="id"
-                :loading="loadingSites"
-                flat
-                no-data-label="No sites found"
-                class="settings-table"
-                hide-pagination
-                :rows-per-page-options="[0]"
-              >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Site Name</q-th>
-                    <q-th class="table-header-cell">Address</q-th>
-                    <q-th class="table-header-cell">Ownership</q-th>
-                    <q-th class="table-header-cell">Status</q-th>
-                    <q-th class="table-header-cell actions-header">Actions</q-th>
-                  </q-tr>
-                </template>
-                <template v-slot:body="props">
-                  <q-tr class="table-body-row">
-                    <q-td class="table-body-cell">
-                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
-                    </q-td>
-                    <q-td class="table-body-cell">{{ props.row.location || 'N/A' }}</q-td>
-                    <q-td class="table-body-cell">
-                      <div
-                        :class="[
-                          'ownership-badge',
-                          props.row.ownership_type === 'owned' ? 'owned-badge' : 'leased-badge',
-                        ]"
-                      >
-                        {{ props.row.ownership_type || 'N/A' }}
-                      </div>
-                    </q-td>
-                    <q-td class="table-body-cell">
-                      <div
-                        :class="[
-                          'status-badge',
-                          props.row.is_active ? 'status-active' : 'status-inactive',
-                        ]"
-                      >
-                        {{ props.row.is_active ? 'Active' : 'Inactive' }}
-                      </div>
-                    </q-td>
-                    <q-td class="table-body-cell actions-cell">
-                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                          <q-list dense style="min-width: 150px">
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="viewSite(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="visibility" size="16px"
-                              /></q-item-section>
-                              <q-item-section>View Details</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="editSite(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="edit" size="16px"
-                              /></q-item-section>
-                              <q-item-section>Edit Site</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item dropdown-item-danger"
-                              @click="deleteSite(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="delete" size="16px" color="negative"
-                              /></q-item-section>
-                              <q-item-section>Delete</q-item-section>
-                            </q-item>
-                          </q-list>
-                        </q-menu>
-                      </q-btn>
-                    </q-td>
-                  </q-tr>
-                </template>
-              </q-table>
+              <template v-if="loadingSites">
+                <div class="table-skeleton">
+                  <div class="skeleton-header">
+                    <div class="skeleton-header-cell">Site Name</div>
+                    <div class="skeleton-header-cell">Address</div>
+                    <div class="skeleton-header-cell">Ownership</div>
+                    <div class="skeleton-header-cell">Status</div>
+                    <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
+                  </div>
+                  <div class="skeleton-row" v-for="n in 4" :key="n">
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" width="80px" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" width="60px" /></div>
+                    <div class="skeleton-cell" style="flex: 0 0 60px">
+                      <q-skeleton type="text" width="40px" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <q-table
+                  :rows="filteredSites"
+                  :columns="siteColumns"
+                  row-key="id"
+                  flat
+                  no-data-label="No sites found"
+                  class="settings-table"
+                  hide-pagination
+                  :rows-per-page-options="[0]"
+                >
+                  <template v-slot:header>
+                    <q-tr class="table-header-row">
+                      <q-th class="table-header-cell">Site Name</q-th>
+                      <q-th class="table-header-cell">Address</q-th>
+                      <q-th class="table-header-cell">Ownership</q-th>
+                      <q-th class="table-header-cell">Status</q-th>
+                      <q-th class="table-header-cell actions-header">Actions</q-th>
+                    </q-tr>
+                  </template>
+                  <template v-slot:body="props">
+                    <q-tr class="table-body-row">
+                      <q-td class="table-body-cell">
+                        <span class="item-name">{{ props.row.name }}</span>
+                      </q-td>
+                      <q-td class="table-body-cell">{{ props.row.location }}</q-td>
+                      <q-td class="table-body-cell">
+                        <div
+                          :class="[
+                            'ownership-badge',
+                            props.row.ownership_type === 'owned' ? 'owned-badge' : 'leased-badge',
+                          ]"
+                        >
+                          {{ props.row.ownership_type }}
+                        </div>
+                      </q-td>
+                      <q-td class="table-body-cell">
+                        <div
+                          :class="[
+                            'status-badge',
+                            props.row.is_active ? 'status-active' : 'status-inactive',
+                          ]"
+                        >
+                          {{ props.row.is_active ? 'Active' : 'Inactive' }}
+                        </div>
+                      </q-td>
+                      <q-td class="table-body-cell actions-cell">
+                        <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                          <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                            <q-list dense style="min-width: 150px">
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="viewSite(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="visibility" size="16px"
+                                /></q-item-section>
+                                <q-item-section>View Details</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="editSite(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="edit" size="16px"
+                                /></q-item-section>
+                                <q-item-section>Edit Site</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item dropdown-item-danger"
+                                @click="deleteSite(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="delete" size="16px" color="negative"
+                                /></q-item-section>
+                                <q-item-section>Delete</q-item-section>
+                              </q-item>
+                            </q-list>
+                          </q-menu>
+                        </q-btn>
+                      </q-td>
+                    </q-tr>
+                  </template>
+                </q-table>
+              </template>
             </div>
           </div>
         </q-tab-panel>
@@ -265,96 +305,113 @@
             </div>
 
             <div class="modern-table-container">
-              <q-table
-                :rows="filteredRoles"
-                :columns="roleColumns"
-                row-key="id"
-                :loading="loadingRoles"
-                flat
-                no-data-label="No roles found"
-                class="settings-table"
-                hide-pagination
-                :rows-per-page-options="[0]"
-              >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Role Name</q-th>
-                    <q-th class="table-header-cell">Permissions</q-th>
-                    <q-th class="table-header-cell actions-header">Actions</q-th>
-                  </q-tr>
-                </template>
-                <template v-slot:body="props">
-                  <q-tr class="table-body-row">
-                    <q-td class="table-body-cell">
-                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
-                    </q-td>
-                    <q-td class="table-body-cell">
-                      <div class="permissions-container">
-                        <q-chip
-                          v-for="(permission, index) in getActivePermissions(props.row).slice(0, 3)"
-                          :key="index"
-                          dense
-                          size="sm"
-                          color="blue-1"
-                          text-color="blue-8"
-                          :label="permission"
-                          class="permission-chip"
-                        />
-                        <q-chip
-                          v-if="getActivePermissions(props.row).length > 3"
-                          dense
-                          size="sm"
-                          color="grey-3"
-                          text-color="grey-8"
-                          :label="`+${getActivePermissions(props.row).length - 3}`"
-                          class="permission-chip"
-                        />
-                      </div>
-                    </q-td>
-                    <q-td class="table-body-cell actions-cell">
-                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                          <q-list dense style="min-width: 150px">
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="viewRole(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="visibility" size="16px"
-                              /></q-item-section>
-                              <q-item-section>View Details</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="editRole(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="edit" size="16px"
-                              /></q-item-section>
-                              <q-item-section>Edit Role</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item dropdown-item-danger"
-                              @click="deleteRole(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="delete" size="16px" color="negative"
-                              /></q-item-section>
-                              <q-item-section>Delete</q-item-section>
-                            </q-item>
-                          </q-list>
-                        </q-menu>
-                      </q-btn>
-                    </q-td>
-                  </q-tr>
-                </template>
-              </q-table>
+              <template v-if="loadingRoles">
+                <div class="table-skeleton">
+                  <div class="skeleton-header">
+                    <div class="skeleton-header-cell">Role Name</div>
+                    <div class="skeleton-header-cell">Permissions</div>
+                    <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
+                  </div>
+                  <div class="skeleton-row" v-for="n in 4" :key="n">
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" width="120px" /></div>
+                    <div class="skeleton-cell" style="flex: 0 0 60px">
+                      <q-skeleton type="text" width="40px" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <q-table
+                  :rows="filteredRoles"
+                  :columns="roleColumns"
+                  row-key="id"
+                  flat
+                  no-data-label="No roles found"
+                  class="settings-table"
+                  hide-pagination
+                  :rows-per-page-options="[0]"
+                >
+                  <template v-slot:header>
+                    <q-tr class="table-header-row">
+                      <q-th class="table-header-cell">Role Name</q-th>
+                      <q-th class="table-header-cell">Permissions</q-th>
+                      <q-th class="table-header-cell actions-header">Actions</q-th>
+                    </q-tr>
+                  </template>
+                  <template v-slot:body="props">
+                    <q-tr class="table-body-row">
+                      <q-td class="table-body-cell">
+                        <span class="item-name">{{ props.row.name }}</span>
+                      </q-td>
+                      <q-td class="table-body-cell">
+                        <div class="permissions-container">
+                          <q-chip
+                            v-for="(permission, index) in getActivePermissions(props.row).slice(0, 3)"
+                            :key="index"
+                            dense
+                            size="sm"
+                            color="blue-1"
+                            text-color="blue-8"
+                            :label="permission"
+                            class="permission-chip"
+                          />
+                          <q-chip
+                            v-if="getActivePermissions(props.row).length > 3"
+                            dense
+                            size="sm"
+                            color="grey-3"
+                            text-color="grey-8"
+                            :label="`+${getActivePermissions(props.row).length - 3}`"
+                            class="permission-chip"
+                          />
+                        </div>
+                      </q-td>
+                      <q-td class="table-body-cell actions-cell">
+                        <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                          <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                            <q-list dense style="min-width: 150px">
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="viewRole(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="visibility" size="16px"
+                                /></q-item-section>
+                                <q-item-section>View Details</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="editRole(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="edit" size="16px"
+                                /></q-item-section>
+                                <q-item-section>Edit Role</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item dropdown-item-danger"
+                                @click="deleteRole(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="delete" size="16px" color="negative"
+                                /></q-item-section>
+                                <q-item-section>Delete</q-item-section>
+                              </q-item>
+                            </q-list>
+                          </q-menu>
+                        </q-btn>
+                      </q-td>
+                    </q-tr>
+                  </template>
+                </q-table>
+              </template>
             </div>
           </div>
         </q-tab-panel>
@@ -397,99 +454,116 @@
                 </div>
 
                 <div class="modern-table-container">
-                  <q-table
-                    :rows="shiftTypeTemplates"
-                    :columns="recurringColumns"
-                    row-key="id"
-                    :loading="loadingShiftTypeTemplates"
-                    flat
-                    no-data-label="No shift templates found"
-                    class="settings-table"
-                    hide-pagination
-                    :rows-per-page-options="[0]"
-                  >
-                    <template v-slot:header>
-                      <q-tr class="table-header-row">
-                        <q-th class="table-header-cell" style="width: 40%">Name</q-th>
-                        <q-th class="table-header-cell text-center" style="width: 30%"
-                          >Shift Times</q-th
-                        >
-                        <q-th class="table-header-cell text-center" style="width: 15%"
-                          >Total Hours</q-th
-                        >
-                        <q-th
-                          class="table-header-cell text-center actions-header"
-                          style="width: 15%; text-align: center !important"
-                          >Actions</q-th
-                        >
-                      </q-tr>
-                    </template>
-                    <template v-slot:body="props">
-                      <q-tr class="table-body-row">
-                        <q-td class="table-body-cell" style="width: 40%">
-                          <span class="item-name">{{ props.row.name }}</span>
-                        </q-td>
-
-                        <q-td class="table-body-cell text-center" style="width: 30%">
-                          <div
-                            v-if="props.row.shifts_detail && props.row.shifts_detail.length"
-                            class="shifts-time-list"
+                  <template v-if="loadingShiftTypeTemplates">
+                    <div class="table-skeleton">
+                      <div class="skeleton-header">
+                        <div class="skeleton-header-cell" style="flex: 2">Name</div>
+                        <div class="skeleton-header-cell" style="flex: 1.5; text-align: center">Shift Times</div>
+                        <div class="skeleton-header-cell" style="flex: 0.75; text-align: center">Total Hours</div>
+                        <div class="skeleton-header-cell" style="flex: 0.75; text-align: center">Actions</div>
+                      </div>
+                      <div class="skeleton-row" v-for="n in 4" :key="n">
+                        <div class="skeleton-cell" style="flex: 2"><q-skeleton type="text" /></div>
+                        <div class="skeleton-cell" style="flex: 1.5"><q-skeleton type="text" width="100px" /></div>
+                        <div class="skeleton-cell" style="flex: 0.75"><q-skeleton type="text" width="50px" /></div>
+                        <div class="skeleton-cell" style="flex: 0.75"><q-skeleton type="text" width="40px" /></div>
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <q-table
+                      :rows="shiftTypeTemplates"
+                      :columns="recurringColumns"
+                      row-key="id"
+                      flat
+                      no-data-label="No shift templates found"
+                      class="settings-table"
+                      hide-pagination
+                      :rows-per-page-options="[0]"
+                    >
+                      <template v-slot:header>
+                        <q-tr class="table-header-row">
+                          <q-th class="table-header-cell" style="width: 40%">Name</q-th>
+                          <q-th class="table-header-cell text-center" style="width: 30%"
+                            >Shift Times</q-th
                           >
+                          <q-th class="table-header-cell text-center" style="width: 15%"
+                            >Total Hours</q-th
+                          >
+                          <q-th
+                            class="table-header-cell text-center actions-header"
+                            style="width: 15%; text-align: center !important"
+                            >Actions</q-th
+                          >
+                        </q-tr>
+                      </template>
+                      <template v-slot:body="props">
+                        <q-tr class="table-body-row">
+                          <q-td class="table-body-cell" style="width: 40%">
+                            <span class="item-name">{{ props.row.name }}</span>
+                          </q-td>
+
+                          <q-td class="table-body-cell text-center" style="width: 30%">
                             <div
-                              v-for="(shift, idx) in props.row.shifts_detail"
-                              :key="idx"
-                              class="shift-time-item"
+                              v-if="props.row.shifts_detail && props.row.shifts_detail.length"
+                              class="shifts-time-list"
                             >
-                              {{ formatTimeDisplay(shift.start_time) }} -
-                              {{ formatTimeDisplay(shift.end_time) }}
-                            </div>
-                          </div>
-                          <span v-else>—</span>
-                        </q-td>
-
-                        <q-td class="table-body-cell text-center" style="width: 15%">
-                          {{ calculateTotalHoursFromRow(props.row) }} hrs
-                        </q-td>
-
-                        <q-td class="table-body-cell text-center" style="width: 15%">
-                          <div class="flex justify-center items-center full-width">
-                            <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                              <q-menu
-                                anchor="bottom right"
-                                self="top right"
-                                class="action-dropdown"
+                              <div
+                                v-for="(shift, idx) in props.row.shifts_detail"
+                                :key="idx"
+                                class="shift-time-item"
                               >
-                                <q-list dense style="min-width: 150px">
-                                  <q-item
-                                    clickable
-                                    v-close-popup
-                                    class="dropdown-item"
-                                    @click="editShiftTypeTemplate(props.row)"
-                                  >
-                                    <q-item-section side
-                                      ><q-icon name="edit" size="16px"
-                                    /></q-item-section>
-                                    <q-item-section>Edit</q-item-section>
-                                  </q-item>
-                                  <q-item
-                                    clickable
-                                    v-close-popup
-                                    class="dropdown-item dropdown-item-danger"
-                                    @click="deleteShiftTypeTemplate(props.row)"
-                                  >
-                                    <q-item-section side
-                                      ><q-icon name="delete" size="16px" color="negative"
-                                    /></q-item-section>
-                                    <q-item-section>Delete</q-item-section>
-                                  </q-item>
-                                </q-list>
-                              </q-menu>
-                            </q-btn>
-                          </div>
-                        </q-td>
-                      </q-tr>
-                    </template>
-                  </q-table>
+                                {{ formatTimeDisplay(shift.start_time) }} -
+                                {{ formatTimeDisplay(shift.end_time) }}
+                              </div>
+                            </div>
+                            <span v-else>—</span>
+                          </q-td>
+
+                          <q-td class="table-body-cell text-center" style="width: 15%">
+                            {{ calculateTotalHoursFromRow(props.row) }} hrs
+                          </q-td>
+
+                          <q-td class="table-body-cell text-center" style="width: 15%">
+                            <div class="flex justify-center items-center full-width">
+                              <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                                <q-menu
+                                  anchor="bottom right"
+                                  self="top right"
+                                  class="action-dropdown"
+                                >
+                                  <q-list dense style="min-width: 150px">
+                                    <q-item
+                                      clickable
+                                      v-close-popup
+                                      class="dropdown-item"
+                                      @click="editShiftTypeTemplate(props.row)"
+                                    >
+                                      <q-item-section side
+                                        ><q-icon name="edit" size="16px"
+                                      /></q-item-section>
+                                      <q-item-section>Edit</q-item-section>
+                                    </q-item>
+                                    <q-item
+                                      clickable
+                                      v-close-popup
+                                      class="dropdown-item dropdown-item-danger"
+                                      @click="deleteShiftTypeTemplate(props.row)"
+                                    >
+                                      <q-item-section side
+                                        ><q-icon name="delete" size="16px" color="negative"
+                                      /></q-item-section>
+                                      <q-item-section>Delete</q-item-section>
+                                    </q-item>
+                                  </q-list>
+                                </q-menu>
+                              </q-btn>
+                            </div>
+                          </q-td>
+                        </q-tr>
+                      </template>
+                    </q-table>
+                  </template>
                 </div>
               </div>
             </q-tab-panel>
@@ -514,75 +588,94 @@
                 </div>
 
                 <div class="modern-table-container">
-                  <q-table
-                    :rows="weeklyShiftTemplates"
-                    :columns="weeklyTemplateColumns"
-                    row-key="id"
-                    :loading="loadingWeeklyTemplates"
-                    flat
-                    no-data-label="No weekly shift templates found"
-                    class="settings-table"
-                    hide-pagination
-                    :rows-per-page-options="[0]"
-                  >
-                    <template v-slot:header>
-                      <q-tr class="table-header-row">
-                        <q-th class="table-header-cell">Name</q-th>
-                        <q-th class="table-header-cell">Rules</q-th>
-                        <q-th class="table-header-cell">Created</q-th>
-                        <q-th class="table-header-cell actions-header">Actions</q-th>
-                      </q-tr>
-                    </template>
-                    <template v-slot:body="props">
-                      <q-tr class="table-body-row">
-                        <q-td class="table-body-cell">
-                          <span class="item-name">{{ props.row.name }}</span>
-                        </q-td>
-                        <q-td class="table-body-cell">
-                          {{
-                            Array.isArray(props.row.rules) ? props.row.rules.length + ' rules' : ''
-                          }}
-                        </q-td>
-                        <q-td class="table-body-cell">
-                          {{
-                            props.row.created_at
-                              ? new Date(props.row.created_at).toLocaleDateString()
-                              : ''
-                          }}
-                        </q-td>
-                        <q-td class="table-body-cell actions-cell">
-                          <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                            <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                              <q-list dense style="min-width: 150px">
-                                <q-item
-                                  clickable
-                                  v-close-popup
-                                  class="dropdown-item"
-                                  @click="editWeeklyTemplate(props.row)"
-                                >
-                                  <q-item-section side
-                                    ><q-icon name="edit" size="16px"
-                                  /></q-item-section>
-                                  <q-item-section>Edit</q-item-section>
-                                </q-item>
-                                <q-item
-                                  clickable
-                                  v-close-popup
-                                  class="dropdown-item dropdown-item-danger"
-                                  @click="deleteWeeklyTemplate(props.row)"
-                                >
-                                  <q-item-section side
-                                    ><q-icon name="delete" size="16px" color="negative"
-                                  /></q-item-section>
-                                  <q-item-section>Delete</q-item-section>
-                                </q-item>
-                              </q-list>
-                            </q-menu>
-                          </q-btn>
-                        </q-td>
-                      </q-tr>
-                    </template>
-                  </q-table>
+                  <template v-if="loadingWeeklyTemplates">
+                    <div class="table-skeleton">
+                      <div class="skeleton-header">
+                        <div class="skeleton-header-cell">Name</div>
+                        <div class="skeleton-header-cell">Rules</div>
+                        <div class="skeleton-header-cell">Created</div>
+                        <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
+                      </div>
+                      <div class="skeleton-row" v-for="n in 4" :key="n">
+                        <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                        <div class="skeleton-cell"><q-skeleton type="text" width="80px" /></div>
+                        <div class="skeleton-cell"><q-skeleton type="text" width="80px" /></div>
+                        <div class="skeleton-cell" style="flex: 0 0 60px">
+                          <q-skeleton type="text" width="40px" />
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <q-table
+                      :rows="weeklyShiftTemplates"
+                      :columns="weeklyTemplateColumns"
+                      row-key="id"
+                      flat
+                      no-data-label="No weekly shift templates found"
+                      class="settings-table"
+                      hide-pagination
+                      :rows-per-page-options="[0]"
+                    >
+                      <template v-slot:header>
+                        <q-tr class="table-header-row">
+                          <q-th class="table-header-cell">Name</q-th>
+                          <q-th class="table-header-cell">Rules</q-th>
+                          <q-th class="table-header-cell">Created</q-th>
+                          <q-th class="table-header-cell actions-header">Actions</q-th>
+                        </q-tr>
+                      </template>
+                      <template v-slot:body="props">
+                        <q-tr class="table-body-row">
+                          <q-td class="table-body-cell">
+                            <span class="item-name">{{ props.row.name }}</span>
+                          </q-td>
+                          <q-td class="table-body-cell">
+                            {{
+                              Array.isArray(props.row.rules) ? props.row.rules.length + ' rules' : ''
+                            }}
+                          </q-td>
+                          <q-td class="table-body-cell">
+                            {{
+                              props.row.created_at
+                                ? new Date(props.row.created_at).toLocaleDateString()
+                                : ''
+                            }}
+                          </q-td>
+                          <q-td class="table-body-cell actions-cell">
+                            <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                              <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                                <q-list dense style="min-width: 150px">
+                                  <q-item
+                                    clickable
+                                    v-close-popup
+                                    class="dropdown-item"
+                                    @click="editWeeklyTemplate(props.row)"
+                                  >
+                                    <q-item-section side
+                                      ><q-icon name="edit" size="16px"
+                                    /></q-item-section>
+                                    <q-item-section>Edit</q-item-section>
+                                  </q-item>
+                                  <q-item
+                                    clickable
+                                    v-close-popup
+                                    class="dropdown-item dropdown-item-danger"
+                                    @click="deleteWeeklyTemplate(props.row)"
+                                  >
+                                    <q-item-section side
+                                      ><q-icon name="delete" size="16px" color="negative"
+                                    /></q-item-section>
+                                    <q-item-section>Delete</q-item-section>
+                                  </q-item>
+                                </q-list>
+                              </q-menu>
+                            </q-btn>
+                          </q-td>
+                        </q-tr>
+                      </template>
+                    </q-table>
+                  </template>
                 </div>
               </div>
             </q-tab-panel>
@@ -609,76 +702,95 @@
             </div>
 
             <div class="modern-table-container">
-              <q-table
-                :rows="filteredDepartments"
-                :columns="departmentColumns"
-                row-key="id"
-                :loading="loadingDepartments"
-                flat
-                no-data-label="No departments found"
-                class="settings-table"
-                hide-pagination
-                :rows-per-page-options="[0]"
-              >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Department Name</q-th>
-                    <q-th class="table-header-cell">Description</q-th>
-                    <q-th class="table-header-cell">Date Created</q-th>
-                    <q-th class="table-header-cell actions-header">Actions</q-th>
-                  </q-tr>
-                </template>
-                <template v-slot:body="props">
-                  <q-tr class="table-body-row">
-                    <q-td class="table-body-cell">
-                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
-                    </q-td>
-                    <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
-                    <q-td class="table-body-cell">{{ formatDate(props.row.date_created) }}</q-td>
-                    <q-td class="table-body-cell actions-cell">
-                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                          <q-list dense style="min-width: 150px">
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="viewDepartment(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="visibility" size="16px"
-                              /></q-item-section>
-                              <q-item-section>View Details</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="editDepartment(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="edit" size="16px"
-                              /></q-item-section>
-                              <q-item-section>Edit Department</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item dropdown-item-danger"
-                              @click="deleteDepartment(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="delete" size="16px" color="negative"
-                              /></q-item-section>
-                              <q-item-section>Delete</q-item-section>
-                            </q-item>
-                          </q-list>
-                        </q-menu>
-                      </q-btn>
-                    </q-td>
-                  </q-tr>
-                </template>
-              </q-table>
+              <template v-if="loadingDepartments">
+                <div class="table-skeleton">
+                  <div class="skeleton-header">
+                    <div class="skeleton-header-cell">Department Name</div>
+                    <div class="skeleton-header-cell">Description</div>
+                    <div class="skeleton-header-cell">Date Created</div>
+                    <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
+                  </div>
+                  <div class="skeleton-row" v-for="n in 4" :key="n">
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" width="80px" /></div>
+                    <div class="skeleton-cell" style="flex: 0 0 60px">
+                      <q-skeleton type="text" width="40px" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <q-table
+                  :rows="filteredDepartments"
+                  :columns="departmentColumns"
+                  row-key="id"
+                  flat
+                  no-data-label="No departments found"
+                  class="settings-table"
+                  hide-pagination
+                  :rows-per-page-options="[0]"
+                >
+                  <template v-slot:header>
+                    <q-tr class="table-header-row">
+                      <q-th class="table-header-cell">Department Name</q-th>
+                      <q-th class="table-header-cell">Description</q-th>
+                      <q-th class="table-header-cell">Date Created</q-th>
+                      <q-th class="table-header-cell actions-header">Actions</q-th>
+                    </q-tr>
+                  </template>
+                  <template v-slot:body="props">
+                    <q-tr class="table-body-row">
+                      <q-td class="table-body-cell">
+                        <span class="item-name">{{ props.row.name }}</span>
+                      </q-td>
+                      <q-td class="table-body-cell">{{ props.row.description }}</q-td>
+                      <q-td class="table-body-cell">{{ formatDate(props.row.date_created) }}</q-td>
+                      <q-td class="table-body-cell actions-cell">
+                        <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                          <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                            <q-list dense style="min-width: 150px">
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="viewDepartment(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="visibility" size="16px"
+                                /></q-item-section>
+                                <q-item-section>View Details</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="editDepartment(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="edit" size="16px"
+                                /></q-item-section>
+                                <q-item-section>Edit Department</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item dropdown-item-danger"
+                                @click="deleteDepartment(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="delete" size="16px" color="negative"
+                                /></q-item-section>
+                                <q-item-section>Delete</q-item-section>
+                              </q-item>
+                            </q-list>
+                          </q-menu>
+                        </q-btn>
+                      </q-td>
+                    </q-tr>
+                  </template>
+                </q-table>
+              </template>
             </div>
           </div>
         </q-tab-panel>
@@ -703,76 +815,93 @@
             </div>
 
             <div class="modern-table-container">
-              <q-table
-                :rows="filteredPositions"
-                :columns="positionColumns"
-                row-key="id"
-                :loading="loadingPositions"
-                flat
-                no-data-label="No positions found"
-                class="settings-table"
-                hide-pagination
-                :rows-per-page-options="[0]"
-              >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Position Title</q-th>
-                    <q-th class="table-header-cell">Description</q-th>
-                    <q-th class="table-header-cell actions-header">Actions</q-th>
-                  </q-tr>
-                </template>
-                <template v-slot:body="props">
-                  <q-tr class="table-body-row">
-                    <q-td class="table-body-cell">
-                      <span class="item-name">{{
-                        props.row.title || props.row.name || 'N/A'
-                      }}</span>
-                    </q-td>
-                    <q-td class="table-body-cell">{{ props.row.description || 'N/A' }}</q-td>
-                    <q-td class="table-body-cell actions-cell">
-                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                          <q-list dense style="min-width: 150px">
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="viewPosition(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="visibility" size="16px"
-                              /></q-item-section>
-                              <q-item-section>View Details</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="editPosition(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="edit" size="16px"
-                              /></q-item-section>
-                              <q-item-section>Edit Position</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item dropdown-item-danger"
-                              @click="deletePosition(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="delete" size="16px" color="negative"
-                              /></q-item-section>
-                              <q-item-section>Delete</q-item-section>
-                            </q-item>
-                          </q-list>
-                        </q-menu>
-                      </q-btn>
-                    </q-td>
-                  </q-tr>
-                </template>
-              </q-table>
+              <template v-if="loadingPositions">
+                <div class="table-skeleton">
+                  <div class="skeleton-header">
+                    <div class="skeleton-header-cell">Position Title</div>
+                    <div class="skeleton-header-cell">Description</div>
+                    <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
+                  </div>
+                  <div class="skeleton-row" v-for="n in 4" :key="n">
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell" style="flex: 0 0 60px">
+                      <q-skeleton type="text" width="40px" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <q-table
+                  :rows="filteredPositions"
+                  :columns="positionColumns"
+                  row-key="id"
+                  flat
+                  no-data-label="No positions found"
+                  class="settings-table"
+                  hide-pagination
+                  :rows-per-page-options="[0]"
+                >
+                  <template v-slot:header>
+                    <q-tr class="table-header-row">
+                      <q-th class="table-header-cell">Position Title</q-th>
+                      <q-th class="table-header-cell">Description</q-th>
+                      <q-th class="table-header-cell actions-header">Actions</q-th>
+                    </q-tr>
+                  </template>
+                  <template v-slot:body="props">
+                    <q-tr class="table-body-row">
+                      <q-td class="table-body-cell">
+                        <span class="item-name">{{
+                          props.row.title || props.row.name
+                        }}</span>
+                      </q-td>
+                      <q-td class="table-body-cell">{{ props.row.description }}</q-td>
+                      <q-td class="table-body-cell actions-cell">
+                        <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                          <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                            <q-list dense style="min-width: 150px">
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="viewPosition(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="visibility" size="16px"
+                                /></q-item-section>
+                                <q-item-section>View Details</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="editPosition(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="edit" size="16px"
+                                /></q-item-section>
+                                <q-item-section>Edit Position</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item dropdown-item-danger"
+                                @click="deletePosition(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="delete" size="16px" color="negative"
+                                /></q-item-section>
+                                <q-item-section>Delete</q-item-section>
+                              </q-item>
+                            </q-list>
+                          </q-menu>
+                        </q-btn>
+                      </q-td>
+                    </q-tr>
+                  </template>
+                </q-table>
+              </template>
             </div>
           </div>
         </q-tab-panel>
@@ -797,76 +926,93 @@
             </div>
 
             <div class="modern-table-container">
-              <q-table
-                :rows="contractTypeDefinitions"
-                :columns="contractTypeColumns"
-                row-key="id"
-                :loading="loadingContractTypes"
-                flat
-                no-data-label="No contract types found"
-                class="settings-table"
-                hide-pagination
-                :rows-per-page-options="[0]"
-              >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Name</q-th>
-                    <q-th class="table-header-cell">Eligibilities</q-th>
-                    <q-th class="table-header-cell actions-header">Actions</q-th>
-                  </q-tr>
-                </template>
-                <template v-slot:body="props">
-                  <q-tr class="table-body-row">
-                    <q-td class="table-body-cell">
-                      <span class="item-name">{{ props.row.name }}</span>
-                    </q-td>
-                    <q-td class="table-body-cell">
-                      <div class="eligibility-badges">
-                        <q-chip
-                          v-for="el in props.row.eligibilities"
-                          :key="el"
-                          size="sm"
-                          color="primary"
-                          text-color="white"
-                        >
-                          {{ getEligibilityName(el) }}
-                        </q-chip>
-                        <span v-if="!props.row.eligibilities?.length" class="text-grey">None</span>
-                      </div>
-                    </q-td>
-                    <q-td class="table-body-cell actions-cell">
-                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                          <q-list dense style="min-width: 150px">
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="editContractType(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="edit" size="16px"
-                              /></q-item-section>
-                              <q-item-section>Edit</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item dropdown-item-danger"
-                              @click="deleteContractType(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="delete" size="16px" color="negative"
-                              /></q-item-section>
-                              <q-item-section>Delete</q-item-section>
-                            </q-item>
-                          </q-list>
-                        </q-menu>
-                      </q-btn>
-                    </q-td>
-                  </q-tr>
-                </template>
-              </q-table>
+              <template v-if="loadingContractTypes">
+                <div class="table-skeleton">
+                  <div class="skeleton-header">
+                    <div class="skeleton-header-cell">Name</div>
+                    <div class="skeleton-header-cell">Eligibilities</div>
+                    <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
+                  </div>
+                  <div class="skeleton-row" v-for="n in 4" :key="n">
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" width="120px" /></div>
+                    <div class="skeleton-cell" style="flex: 0 0 60px">
+                      <q-skeleton type="text" width="40px" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <q-table
+                  :rows="contractTypeDefinitions"
+                  :columns="contractTypeColumns"
+                  row-key="id"
+                  flat
+                  no-data-label="No contract types found"
+                  class="settings-table"
+                  hide-pagination
+                  :rows-per-page-options="[0]"
+                >
+                  <template v-slot:header>
+                    <q-tr class="table-header-row">
+                      <q-th class="table-header-cell">Name</q-th>
+                      <q-th class="table-header-cell">Eligibilities</q-th>
+                      <q-th class="table-header-cell actions-header">Actions</q-th>
+                    </q-tr>
+                  </template>
+                  <template v-slot:body="props">
+                    <q-tr class="table-body-row">
+                      <q-td class="table-body-cell">
+                        <span class="item-name">{{ props.row.name }}</span>
+                      </q-td>
+                      <q-td class="table-body-cell">
+                        <div class="eligibility-badges">
+                          <q-chip
+                            v-for="el in props.row.eligibilities"
+                            :key="el"
+                            size="sm"
+                            color="primary"
+                            text-color="white"
+                          >
+                            {{ getEligibilityName(el) }}
+                          </q-chip>
+                          <span v-if="!props.row.eligibilities?.length" class="text-grey">None</span>
+                        </div>
+                      </q-td>
+                      <q-td class="table-body-cell actions-cell">
+                        <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                          <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                            <q-list dense style="min-width: 150px">
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="editContractType(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="edit" size="16px"
+                                /></q-item-section>
+                                <q-item-section>Edit</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item dropdown-item-danger"
+                                @click="deleteContractType(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="delete" size="16px" color="negative"
+                                /></q-item-section>
+                                <q-item-section>Delete</q-item-section>
+                              </q-item>
+                            </q-list>
+                          </q-menu>
+                        </q-btn>
+                      </q-td>
+                    </q-tr>
+                  </template>
+                </q-table>
+              </template>
             </div>
           </div>
 
@@ -1187,97 +1333,116 @@
             </div>
 
             <div class="modern-table-container">
-              <q-table
-                :rows="filteredCostCenters"
-                :columns="costCenterColumns"
-                row-key="id"
-                :loading="loadingCostCenters"
-                flat
-                no-data-label="No cost centers found"
-                class="settings-table"
-                hide-pagination
-                :rows-per-page-options="[0]"
-              >
-                <template v-slot:header>
-                  <q-tr class="table-header-row">
-                    <q-th class="table-header-cell">Name</q-th>
-                    <q-th class="table-header-cell">Bank Accounts</q-th>
-                    <q-th class="table-header-cell">Status</q-th>
-                    <q-th class="table-header-cell actions-header">Actions</q-th>
-                  </q-tr>
-                </template>
-                <template v-slot:body="props">
-                  <q-tr class="table-body-row">
-                    <q-td class="table-body-cell">
-                      <span class="item-name">{{ props.row.name || 'N/A' }}</span>
-                    </q-td>
-                    <q-td class="table-body-cell">
-                      <div v-if="props.row.bank_accounts && props.row.bank_accounts.length">
-                        <q-chip
-                          v-for="(bank, idx) in props.row.bank_accounts.slice(0, 2)"
-                          :key="idx"
-                          dense
-                          size="sm"
-                          color="blue-1"
-                          text-color="blue-8"
-                          :label="bank.bank_name || bank.bank_account_name"
-                          class="permission-chip"
-                        />
-                        <q-chip
-                          v-if="props.row.bank_accounts.length > 2"
-                          dense
-                          size="sm"
-                          color="grey-3"
-                          text-color="grey-8"
-                          :label="`+${props.row.bank_accounts.length - 2}`"
-                          class="permission-chip"
-                        />
-                      </div>
-                      <span v-else class="text-grey-5">No bank accounts</span>
-                    </q-td>
-                    <q-td class="table-body-cell">
-                      <div
-                        :class="[
-                          'status-badge',
-                          props.row.is_active ? 'status-active' : 'status-inactive',
-                        ]"
-                      >
-                        {{ props.row.is_active ? 'Active' : 'Inactive' }}
-                      </div>
-                    </q-td>
-                    <q-td class="table-body-cell actions-cell">
-                      <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                        <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                          <q-list dense style="min-width: 150px">
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item"
-                              @click="editCostCenter(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="edit" size="16px"
-                              /></q-item-section>
-                              <q-item-section>Edit Cost Center</q-item-section>
-                            </q-item>
-                            <q-item
-                              clickable
-                              v-close-popup
-                              class="dropdown-item dropdown-item-danger"
-                              @click="deleteCostCenter(props.row)"
-                            >
-                              <q-item-section side
-                                ><q-icon name="delete" size="16px" color="negative"
-                              /></q-item-section>
-                              <q-item-section>Delete</q-item-section>
-                            </q-item>
-                          </q-list>
-                        </q-menu>
-                      </q-btn>
-                    </q-td>
-                  </q-tr>
-                </template>
-              </q-table>
+              <template v-if="loadingCostCenters">
+                <div class="table-skeleton">
+                  <div class="skeleton-header">
+                    <div class="skeleton-header-cell">Name</div>
+                    <div class="skeleton-header-cell">Bank Accounts</div>
+                    <div class="skeleton-header-cell">Status</div>
+                    <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
+                  </div>
+                  <div class="skeleton-row" v-for="n in 4" :key="n">
+                    <div class="skeleton-cell"><q-skeleton type="text" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" width="120px" /></div>
+                    <div class="skeleton-cell"><q-skeleton type="text" width="60px" /></div>
+                    <div class="skeleton-cell" style="flex: 0 0 60px">
+                      <q-skeleton type="text" width="40px" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <q-table
+                  :rows="filteredCostCenters"
+                  :columns="costCenterColumns"
+                  row-key="id"
+                  flat
+                  no-data-label="No cost centers found"
+                  class="settings-table"
+                  hide-pagination
+                  :rows-per-page-options="[0]"
+                >
+                  <template v-slot:header>
+                    <q-tr class="table-header-row">
+                      <q-th class="table-header-cell">Name</q-th>
+                      <q-th class="table-header-cell">Bank Accounts</q-th>
+                      <q-th class="table-header-cell">Status</q-th>
+                      <q-th class="table-header-cell actions-header">Actions</q-th>
+                    </q-tr>
+                  </template>
+                  <template v-slot:body="props">
+                    <q-tr class="table-body-row">
+                      <q-td class="table-body-cell">
+                        <span class="item-name">{{ props.row.name }}</span>
+                      </q-td>
+                      <q-td class="table-body-cell">
+                        <div v-if="props.row.bank_accounts && props.row.bank_accounts.length">
+                          <q-chip
+                            v-for="(bank, idx) in props.row.bank_accounts.slice(0, 2)"
+                            :key="idx"
+                            dense
+                            size="sm"
+                            color="blue-1"
+                            text-color="blue-8"
+                            :label="bank.bank_name || bank.bank_account_name"
+                            class="permission-chip"
+                          />
+                          <q-chip
+                            v-if="props.row.bank_accounts.length > 2"
+                            dense
+                            size="sm"
+                            color="grey-3"
+                            text-color="grey-8"
+                            :label="`+${props.row.bank_accounts.length - 2}`"
+                            class="permission-chip"
+                          />
+                        </div>
+                        <span v-else class="text-grey-5">No bank accounts</span>
+                      </q-td>
+                      <q-td class="table-body-cell">
+                        <div
+                          :class="[
+                            'status-badge',
+                            props.row.is_active ? 'status-active' : 'status-inactive',
+                          ]"
+                        >
+                          {{ props.row.is_active ? 'Active' : 'Inactive' }}
+                        </div>
+                      </q-td>
+                      <q-td class="table-body-cell actions-cell">
+                        <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                          <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                            <q-list dense style="min-width: 150px">
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item"
+                                @click="editCostCenter(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="edit" size="16px"
+                                /></q-item-section>
+                                <q-item-section>Edit Cost Center</q-item-section>
+                              </q-item>
+                              <q-item
+                                clickable
+                                v-close-popup
+                                class="dropdown-item dropdown-item-danger"
+                                @click="deleteCostCenter(props.row)"
+                              >
+                                <q-item-section side
+                                  ><q-icon name="delete" size="16px" color="negative"
+                                /></q-item-section>
+                                <q-item-section>Delete</q-item-section>
+                              </q-item>
+                            </q-list>
+                          </q-menu>
+                        </q-btn>
+                      </q-td>
+                    </q-tr>
+                  </template>
+                </q-table>
+              </template>
             </div>
           </div>
         </q-tab-panel>
@@ -2636,7 +2801,7 @@ function formatTimeDisplay(timeString) {
 
 // ─── Utility helpers ──────────────────────────────────────────────────────
 function formatDate(date) {
-  if (!date) return 'N/A'
+  if (!date) return ''
   return new Date(date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -3746,5 +3911,44 @@ watch(activeTab, async (newTab) => {
 .custom-multipliers-save-dialog .q-card {
   max-width: 520px;
   border-radius: 12px;
+}
+
+/* ── Table Skeleton Loading ── */
+.table-skeleton {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  overflow: hidden;
+}
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8f9fb;
+  border-bottom: 1px solid #e8ecf0;
+}
+.skeleton-header-cell {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f1f3f5;
+}
+.skeleton-row:last-child {
+  border-bottom: none;
+}
+.skeleton-cell {
+  flex: 1;
+  display: flex;
+  align-items: center;
 }
 </style>
