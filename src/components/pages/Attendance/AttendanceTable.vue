@@ -52,8 +52,8 @@
                 </q-card-section>
                 <q-card-section class="q-pt-none">
                   <div class="mobile-details">
-                    Time In: {{ formatTime(props.row.time_in) }}<br />
-                    Time Out: {{ formatTime(props.row.time_out) }}<br />
+                    Time In: {{ formatTime(props.row.time_in, props.row._timezone) }}<br />
+                    Time Out: {{ formatTime(props.row.time_out, props.row._timezone) }}<br />
                     Source: {{ formatSource(props.row.source) }}
                   </div>
                   <div class="mobile-selfies q-mt-md">
@@ -159,7 +159,7 @@
                   @click="$emit('edit-time', props.row, 'time_in')"
                   title="Click to edit"
                 >
-                  {{ props.row.time_in ? formatTime(props.row.time_in) : '--:--' }}
+                  {{ props.row.time_in ? formatTime(props.row.time_in, props.row._timezone) : '--:--' }}
                   <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
                 </div>
               </q-td>
@@ -191,7 +191,7 @@
                   @click="$emit('edit-time', props.row, 'time_out')"
                   title="Click to edit"
                 >
-                  {{ props.row.time_out ? formatTime(props.row.time_out) : '--:--' }}
+                  {{ props.row.time_out ? formatTime(props.row.time_out, props.row._timezone) : '--:--' }}
                   <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
                 </div>
               </q-td>
@@ -252,6 +252,7 @@
 
 <script setup>
 import { useQuasar } from 'quasar';
+import { formatInTimezone } from '@/composables/utils/timezone';
 
 const $q = useQuasar();
 
@@ -354,13 +355,10 @@ function formatSource(source) {
   return source.replace('_', ' ').toUpperCase();
 }
 
-function formatTime(dateTimeString) {
+function formatTime(dateTimeString, timezone) {
   if (!dateTimeString) return '-';
-  try {
-    return new Date(dateTimeString).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  } catch {
-    return '-';
-  }
+  const formatted = formatInTimezone(dateTimeString, timezone || undefined);
+  return formatted || '-';
 }
 </script>
 

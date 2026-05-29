@@ -148,10 +148,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { useEmployees } from '@/composables/page/useEmployees'
+import { toUTC, formatInTimezone } from '@/composables/utils/timezone'
 import { useOrganization } from '@/composables/page/useOrganization'
 import AttendanceStatsCards from '@/components/pages/Attendance/AttendanceStatsCards.vue'
 import AttendanceTable from '@/components/pages/Attendance/AttendanceTable.vue'
@@ -175,7 +176,7 @@ const {
   updateAttendance: updateAttendanceApi,
 } = useAttendance()
 
-const { employees, fetchEmployees } = useEmployees()
+const { employees, fetchEmployees, fetchEmployee } = useEmployees()
 const {
   sites: rawSites,
   costCenters: rawCostCenters,
@@ -270,6 +271,65 @@ const isAdmin = ref(false)
 const userData = JSON.parse(localStorage.getItem('user') || '{}')
 if (userData.role === 'admin') isAdmin.value = true
 
+// ─── Timezone cache ──────────────────────────────────────────────────────────────
+const employeeTimezoneCache = reactive({})
+const fetchedEmployees = ref({})
+
+function getEmployeeId(employee) {
+  if (!employee) return null
+  if (typeof employee === 'object') return employee.uuid || employee.id || employee.employee_id
+  return employee
+}
+
+function getTimezoneForEmployee(employee) {
+  const empId = getEmployeeId(employee)
+  if (!empId) return null
+  if (employeeTimezoneCache[empId]) return employeeTimezoneCache[empId]
+  if (typeof employee === 'object' && employee.timezone) {
+    employeeTimezoneCache[empId] = employee.timezone
+    return employee.timezone
+  }
+  const found = employees.value.find(e => e.uuid === empId || e.id === empId)
+  if (found?.timezone) {
+    employeeTimezoneCache[empId] = found.timezone
+    return found.timezone
+  }
+  return null
+}
+
+function triggerTimezoneFetch(data) {
+  const toFetch = []
+  for (const row of data) {
+    const empId = getEmployeeId(row.employee)
+    if (!empId) continue
+    if (employeeTimezoneCache[empId]) continue
+    if (typeof row.employee === 'object' && row.employee.timezone) {
+      employeeTimezoneCache[empId] = row.employee.timezone
+      continue
+    }
+    const found = employees.value.find(e => e.uuid === empId || e.id === empId)
+    if (found?.timezone) {
+      employeeTimezoneCache[empId] = found.timezone
+      continue
+    }
+    toFetch.push(empId)
+  }
+  for (const empId of toFetch) {
+    lazyFetchTimezone(empId)
+  }
+}
+
+async function lazyFetchTimezone(empId) {
+  if (fetchedEmployees.value[empId]) return
+  fetchedEmployees.value[empId] = true
+  try {
+    const detail = await fetchEmployee(empId)
+    if (detail?.timezone) {
+      employeeTimezoneCache[empId] = detail.timezone
+    }
+  } catch { /* timezone fetch failed, will use browser timezone */ }
+}
+
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const statsObj = computed(() => {
   const data = attendanceData.value
@@ -281,11 +341,17 @@ const statsObj = computed(() => {
 })
 
 const filteredAttendanceRows = computed(() => {
-  if (!employeeSearch.value || !employeeSearch.value.trim()) return attendanceData.value
-  const term = employeeSearch.value.trim().toLowerCase()
-  return attendanceData.value.filter((row) =>
-    getEmployeeName(row.employee).toLowerCase().includes(term),
-  )
+  let data = attendanceData.value
+  if (employeeSearch.value && employeeSearch.value.trim()) {
+    const term = employeeSearch.value.trim().toLowerCase()
+    data = data.filter((row) =>
+      getEmployeeName(row.employee).toLowerCase().includes(term),
+    )
+  }
+  return data.map((row) => ({
+    ...row,
+    _timezone: getTimezoneForEmployee(row.employee) || '',
+  }))
 })
 
 const totalPages = computed(() => {
@@ -381,6 +447,8 @@ async function fetchAttendanceData(params = {}) {
     if (data.length === 0) {
       showErrorNotification('No attendance records found for this period.')
     }
+
+    triggerTimezoneFetch(data)
   } catch (error) {
     showErrorNotification(
       error.response?.data?.detail ??
@@ -455,8 +523,14 @@ async function submitAttendance(record) {
     return
   }
 
-  const timeIn = new Date(`${record.date}T${record.time_in}:00`)
-  let timeOut = new Date(`${record.date}T${record.time_out}:00`)
+  const employeeId = getEmployeeId(record.employee)
+  const selectedEmp = employees.value.find(
+    (emp) => emp.id === employeeId || emp.uuid === employeeId,
+  )
+  const empTimezone = selectedEmp?.timezone || employeeTimezoneCache[employeeId]
+
+  const timeIn = new Date(toUTC(record.date, record.time_in, empTimezone))
+  let timeOut = new Date(toUTC(record.date, record.time_out, empTimezone))
   if (timeOut <= timeIn) timeOut.setDate(timeOut.getDate() + 1)
 
   if (record.date && !employeeSchedule.value && !loadingSchedule.value) {
@@ -476,10 +550,6 @@ async function submitAttendance(record) {
   creating.value = true
 
   try {
-    const selectedEmp = employees.value.find(
-      (emp) => emp.id === record.employee || emp.uuid === record.employee,
-    )
-
     if (!selectedEmp) {
       showErrorNotification('Employee not found.')
       return
@@ -533,7 +603,7 @@ function openInlineEdit(row, field) {
   inlineEdit.value = {
     record: row,
     field,
-    value: formatTimeForInput(currentValue),
+    value: formatTimeForInput(currentValue, getTimezoneForEmployee(row.employee)),
     date: row.date,
     employeeName: getEmployeeName(row.employee),
     saving: false,
@@ -554,7 +624,8 @@ async function saveInlineEdit() {
     const record = inlineEdit.value.record
     const field = inlineEdit.value.field
     const date = record.date
-    let newTimestamp = new Date(`${date}T${inlineEdit.value.value}:00`).toISOString()
+    const empTimezone = getTimezoneForEmployee(record.employee)
+    let newTimestamp = toUTC(date, inlineEdit.value.value, empTimezone)
 
     const existingTimeIn = field === 'time_in' ? newTimestamp : record.time_in
     const existingTimeOut = field === 'time_out' ? newTimestamp : record.time_out
@@ -663,19 +734,18 @@ async function updateAttendance(record) {
       return
     }
 
+    const empTimezone = selectedEmp?.timezone || employeeTimezoneCache[getEmployeeId(record.employee)]
+
     let timeInTimestamp = null
     let timeOutTimestamp = null
 
     if (record.time_in) {
-      timeInTimestamp = new Date(`${record.date}T${record.time_in}:00`).toISOString()
+      timeInTimestamp = toUTC(record.date, record.time_in, empTimezone)
     }
 
     if (record.time_out) {
-      let timeOutDate = new Date(`${record.date}T${record.time_out}:00`)
-      if (
-        record.time_in &&
-        timeOutDate <= new Date(`${record.date}T${record.time_in}:00`)
-      ) {
+      let timeOutDate = new Date(toUTC(record.date, record.time_out, empTimezone))
+      if (record.time_in && timeOutDate <= new Date(timeInTimestamp)) {
         timeOutDate.setDate(timeOutDate.getDate() + 1)
       }
       timeOutTimestamp = timeOutDate.toISOString()
@@ -840,13 +910,9 @@ function getEmployeePhoto(employee) {
   return found ? found.photo || found.image || found.profile_picture || found.profile_photo || found.avatar || found.picture || null : null
 }
 
-function formatTimeForInput(dateTimeString) {
+function formatTimeForInput(dateTimeString, timezone) {
   if (!dateTimeString) return ''
-  try {
-    return new Date(dateTimeString).toTimeString().slice(0, 5)
-  } catch {
-    return ''
-  }
+  return formatInTimezone(dateTimeString, timezone, '24h')
 }
 
 function formatScheduleTime(timeString) {
