@@ -5,10 +5,14 @@
  * - Listens on PORT (default 8000)
  */
 
-const http = require('http')
-const fs = require('fs')
-const path = require('path')
-const url = require('url')
+import http from 'http'
+import fs from 'fs'
+import path from 'path'
+import url from 'url'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const PORT = Number(process.env.PORT || 8000)
 const DIST_DIR = process.env.DIST_DIR || path.join(__dirname, 'dist', 'spa')
@@ -118,6 +122,5 @@ const server = http.createServer((req, res) => {
 })
 
 server.listen(PORT, '0.0.0.0', () => {
-   
   console.log(`Serving ${DIST_DIR} on http://0.0.0.0:${PORT}`)
 })
