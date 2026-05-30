@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
-import { useCompany } from 'src/composables/page/useCompany'
+import { useCompany, resolvedCompanyId } from 'src/composables/page/useCompany'
 import { BASE, authHeaders } from 'src/composables/utils/http'
 
 export function useAnnouncements() {
@@ -9,20 +9,6 @@ export function useAnnouncements() {
   const announcements = ref([])
   const loading = ref(false)
   const saving = ref(false)
-
-  // ─── Company ID helper ────────────────────────────────────────────────────
-  function resolvedCompanyId() {
-    if (companyId.value && typeof companyId.value !== 'object') return companyId.value
-
-    const stored = localStorage.getItem('selectedCompany')
-    if (!stored) return companyId.value
-    try {
-      const parsed = JSON.parse(stored)
-      return parsed?.id ?? parsed
-    } catch {
-      return stored
-    }
-  }
 
   // ─── Read ─────────────────────────────────────────────────────────────────
 
