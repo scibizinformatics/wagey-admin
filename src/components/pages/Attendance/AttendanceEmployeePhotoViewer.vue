@@ -1,5 +1,5 @@
 <template>
-  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent position="top">
+  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
     <q-card style="min-width: 400px">
       <q-card-section class="row items-center">
         <div class="text-h6">Employee Photo</div>
