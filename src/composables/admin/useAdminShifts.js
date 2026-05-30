@@ -107,23 +107,10 @@ export function useAdminShifts() {
       }
     }
     if (!Array.isArray(days) || days.length === 0) return 'N/A'
-    const map = {
-      monday: 'Mon',
-      tuesday: 'Tue',
-      wednesday: 'Wed',
-      thursday: 'Thu',
-      friday: 'Fri',
-      saturday: 'Sat',
-      sunday: 'Sun',
-      mon: 'Mon',
-      tue: 'Tue',
-      wed: 'Wed',
-      thu: 'Thu',
-      fri: 'Fri',
-      sat: 'Sat',
-      sun: 'Sun',
-    }
-    return days.map((d) => map[d.trim().toLowerCase()] || d.trim()).join(', ')
+    return days
+      .map((d) => ABBR_TO_FULL[d.trim().toLowerCase()] || d.trim())
+      .map((d) => d.charAt(0).toUpperCase() + d.slice(1, 3))
+      .join(', ')
   }
 
   // ─── Fetch shift templates ────────────────────────────────────────────────
@@ -167,12 +154,11 @@ export function useAdminShifts() {
       weeklyShiftTemplates.value = (response.data.data ?? response.data ?? []).map((s) => {
         if (Array.isArray(s.rules)) return s
         const weekdays = _parseWeekdayString(s.weekdays)
-        const rule = {
-          id: s.id,
-          weekday: weekdays[0] ?? null,
+        const rules = weekdays.map((day) => ({
+          weekday: day,
           shift_template: s.shift_template ?? null,
-        }
-        return { ...s, rules: [rule] }
+        }))
+        return { ...s, rules }
       })
       return weeklyShiftTemplates.value
     } catch (error) {
@@ -319,10 +305,10 @@ export function useAdminShifts() {
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/organization/shift-type-templates/${template.id}/`, {
+        await api.delete(`${BASE}/organization/recurring-schedules/${template.id}/`, {
           headers: authHeaders(),
         })
-        $q.notify({ type: 'positive', message: 'Shift template deleted successfully' })
+        $q.notify({ type: 'positive', message: 'Weekly shift template deleted successfully' })
         await fetchWeeklyShiftTemplates()
       } catch (error) {
         console.error('Error deleting weekly shift template:', error)
@@ -506,6 +492,12 @@ export function useAdminShifts() {
 
   // ─── Private helpers ───────────────────────────────────────────────────────
 
+  /** Map from abbreviated (Mon, Tue, …) to full lowercase weekday names. */
+  const ABBR_TO_FULL = {
+    mon: 'monday', tue: 'tuesday', wed: 'wednesday',
+    thu: 'thursday', fri: 'friday', sat: 'saturday', sun: 'sunday',
+  }
+
   function _parseWeekdayString(wd) {
     if (!wd) return []
     let days = wd
@@ -522,22 +514,15 @@ export function useAdminShifts() {
         : t.split(',')
     }
     const map = {
-      monday: 'Mon',
-      tuesday: 'Tue',
-      wednesday: 'Wed',
-      thursday: 'Thu',
-      friday: 'Fri',
-      saturday: 'Sat',
-      sunday: 'Sun',
-      mon: 'Mon',
-      tue: 'Tue',
-      wed: 'Wed',
-      thu: 'Thu',
-      fri: 'Fri',
-      sat: 'Sat',
-      sun: 'Sun',
+      monday: 'monday', tuesday: 'tuesday', wednesday: 'wednesday',
+      thursday: 'thursday', friday: 'friday', saturday: 'saturday',
+      sunday: 'sunday',
+      mon: 'monday', tue: 'tuesday', wed: 'wednesday',
+      thu: 'thursday', fri: 'friday', sat: 'saturday', sun: 'sunday',
+      Mon: 'monday', Tue: 'tuesday', Wed: 'wednesday',
+      Thu: 'thursday', Fri: 'friday', Sat: 'saturday', Sun: 'sunday',
     }
-    return Array.isArray(days) ? days.map((d) => map[d.trim().toLowerCase()] || d.trim()) : []
+    return Array.isArray(days) ? days.map((d) => map[d.trim()] || map[d.trim().toLowerCase()] || d.trim().toLowerCase()) : []
   }
 
   return {
