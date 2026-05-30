@@ -91,11 +91,23 @@ export function useAdminSites() {
   function openEditDialog(site) {
     editing.value = true
     form.value = {
-      ...site,
+      id: site.id,
+      name: site.name ?? '',
+      brand_name: site.brand_name ?? '',
+      otp_secret: site.otp_secret ?? '',
+      location: site.location ?? '',
+      latitude: site.latitude ?? '',
+      longitude: site.longitude ?? '',
+      radius_meters: site.radius_meters ?? 100,
+      ownership_type: site.ownership_type ?? 'owned',
+      is_active: site.is_active ?? true,
       requires_otp: site.requires_otp ?? false,
       allow_manual_attendance: site.allow_manual_attendance ?? true,
       allow_service_charge: site.allow_service_charge ?? true,
       multiply_nd_by_holiday: site.multiply_nd_by_holiday ?? false,
+      extended_shift_days: site.extended_shift_days ?? '',
+      company: site.company ?? companyId.value,
+      business_type: site.business_type ?? null,
     }
     dialog.value = true
   }
