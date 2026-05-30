@@ -69,6 +69,7 @@
           @assign="handleOpenAssignDialog"
           @terminate="confirmTerminate"
           @restore="confirmRestore"
+          @view-photo="viewEmployeePhoto"
         />
       </div>
     </div>
@@ -113,6 +114,8 @@
       @confirm="restoreEmployee"
     />
 
+    <AttendanceEmployeePhotoViewer v-model="showPhotoViewer" :image-url="selectedPhotoUrl" />
+
     <EmployeeAssignContractDialog
       v-model="assignDialog"
       :form="assignForm"
@@ -133,7 +136,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
@@ -152,6 +155,7 @@ import EmployeeViewModal from '@/components/pages/Employees/EmployeeViewModal.vu
 import EmployeeTerminateDialog from '@/components/pages/Employees/EmployeeTerminateDialog.vue'
 import EmployeeRestoreDialog from '@/components/pages/Employees/EmployeeRestoreDialog.vue'
 import EmployeeAssignContractDialog from '@/components/pages/Employees/EmployeeAssignContractDialog.vue'
+import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/AttendanceEmployeePhotoViewer.vue'
 
 const $q = useQuasar()
 
@@ -267,6 +271,8 @@ const employeeToTerminate = ref({})
 const employeeToRestore = ref({})
 const terminating = ref(false)
 const restoring = ref(false)
+const showPhotoViewer = ref(false)
+const selectedPhotoUrl = ref('')
 
 // Avatar
 const avatarFile = ref(null)
@@ -795,6 +801,11 @@ const openAddModal = () => {
   showAddModal.value = true
 }
 
+const viewEmployeePhoto = (employee) => {
+  selectedPhotoUrl.value = employee?.user?.picture_url || ''
+  showPhotoViewer.value = true
+}
+
 const viewEmployee = async (emp) => {
   const detailed = await fetchEmployeeDetails(emp.id)
   if (detailed) {
@@ -935,20 +946,7 @@ watch(companyId, (newId, oldId) => {
   }
 })
 
-onMounted(async () => {
-  if (companyId.value && !initialised) {
-    initialised = true
-    await Promise.all([
-      fetchRoles(),
-      fetchSites(),
-      fetchContractTypes(),
-      fetchEligibilityOptions(),
-      fetchPositions(),
-      fetchDepartments(),
-    ])
-    await fetchEmployees()
-  }
-})
+// Initial data load handled by {immediate: true} watcher above
 </script>
 
 <style scoped>
