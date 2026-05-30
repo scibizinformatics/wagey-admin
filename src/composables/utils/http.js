@@ -8,16 +8,13 @@ import { api } from 'boot/axios'
 export { api }
 
 /**
- * @deprecated Use `api` from 'boot/axios' instead.
- * Kept only for components not yet migrated to the axios instance.
+ * @deprecated No longer needed — the axios interceptor in `boot/axios.js`
+ * automatically attaches the Authorization header from the Pinia auth store
+ * to every request. This function is kept as a no-op for backward compatibility
+ * and will be removed in a future cleanup.
  */
 export function authHeaders() {
-  const token = localStorage.getItem('access_token')
-  if (!token) {
-    console.warn('[authHeaders] No auth token found in localStorage.')
-    return {}
-  }
-  return { Authorization: `Bearer ${token}` }
+  return {}
 }
 
 /**
