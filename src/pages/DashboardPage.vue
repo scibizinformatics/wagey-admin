@@ -27,14 +27,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watchEffect } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { usePayroll } from '@/composables/page/usePayroll'
 import { useRequests } from '@/composables/page/useRequests'
 import { useAnnouncements } from '@/composables/page/useAnnouncements'
 import { useSwapRequests } from '@/composables/page/useSwapRequests'
-import { useCompany } from '@/composables/page/useCompany'
+import { useCompany, resolvedCompanyId } from '@/composables/page/useCompany'
 import { useNotifications } from 'src/composables/useNotifications'
 
 import DashboardStatsRow from '@/components/pages/Dashboard/DashboardStatsRow.vue'
@@ -45,7 +45,7 @@ import AnnouncementsPanel from '@/components/pages/Dashboard/AnnouncementsPanel.
 import PendingSwapsPanel from '@/components/pages/Dashboard/PendingSwapsPanel.vue'
 
 // ─── Composables ─────────────────────────────────────────────────────────────
-const { companyId } = useCompany()
+useCompany()
 
 const { employees, fetchEmployees } = useEmployees()
 
@@ -74,18 +74,7 @@ const { swapRequests, loading: swapLoading, fetchSwapRequests } = useSwapRequest
 // ─── Page-level loading (true until the first critical batch resolves) ────────
 const pageLoading = ref(true)
 
-// ─── Resolve company ID (handles both plain string and JSON object in storage) ─
-function resolvedCompanyId() {
-  if (companyId.value && typeof companyId.value !== 'object') return companyId.value
-  try {
-    const stored = localStorage.getItem('selectedCompany')
-    if (!stored) return companyId.value
-    const parsed = JSON.parse(stored)
-    return parsed?.id ?? parsed
-  } catch {
-    return companyId.value
-  }
-}
+// Uses shared resolvedCompanyId() from useCompany.js
 
 // ─── Payroll table columns ────────────────────────────────────────────────────
 const payrollColumns = [
@@ -155,25 +144,6 @@ function getEmployeeName(record) {
 }
 
 // ─── Stats cards ──────────────────────────────────────────────────────────────
-
-// Debug watcher — remove once ID shapes are confirmed
-watchEffect(() => {
-  if (employees.value.length && attendanceData.value.length) {
-    const emp = employees.value[0]
-    const att = attendanceData.value[0]
-    console.debug('[Dashboard] employee ID fields:', {
-      id: emp?.id,
-      employee_id: emp?.employee_id,
-      user: emp?.user?.id,
-    })
-    console.debug('[Dashboard] attendance ID fields:', {
-      employee_id: att?.employee_id,
-      employee: att?.employee,
-      user_id: att?.user_id,
-      user: att?.user?.id ?? att?.user,
-    })
-  }
-})
 
 const statsCards = computed(() => {
   const todayStr = today()
@@ -391,22 +361,25 @@ onMounted(async () => {
   onDataUpdate('overtime', () => fetchOvertimeRequests())
   onDataUpdate('swap_request', () => fetchSwapRequests({ company: cid }))
 
+  // Batch 1 — critical for main panels
   await Promise.allSettled([
     fetchEmployees(),
     fetchAttendanceByDate(today()),
+    fetchPayrollRunsSummary({ company_id: cid }),
+  ])
+
+  // Batch 2 — secondary panels
+  await Promise.allSettled([
     fetchLeaveRequests(),
     fetchOvertimeRequests(),
-    fetchPayrollRunsSummary({ company_id: cid }),
-    ...(cid ? [fetchCashAdvanceRequests(cid)] : []),
     fetchAnnouncements(),
     fetchSwapRequests({ company: cid }),
   ])
 
-  console.debug(
-    '[Dashboard] payroll runs summary type:',
-    typeof payrollRunsSummary.value,
-    Array.isArray(payrollRunsSummary.value) ? `array(${payrollRunsSummary.value.length})` : payrollRunsSummary.value,
-  )
+  // Batch 3 — cash advance (optional)
+  if (cid) {
+    await Promise.allSettled([fetchCashAdvanceRequests(cid)])
+  }
 
   pageLoading.value = false
 })
