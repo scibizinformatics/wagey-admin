@@ -1,10 +1,5 @@
-import MainLayout from 'layouts/MainLayout.vue'
-import DashboardPage from 'pages/DashboardPage.vue'
-import EmployeesPage from 'pages/EmployeesPage.vue'
-import InvitePage from 'pages/InvitePage.vue'
-import LoginPage from 'pages/LoginPage.vue'
-import RequestPage from 'pages/RequestPage.vue'
 import AuthLayout from 'layouts/AuthLayout.vue'
+import MainLayout from 'layouts/MainLayout.vue'
 
 const routes = [
   {
@@ -14,7 +9,7 @@ const routes = [
       {
         path: '',
         name: 'login',
-        component: LoginPage,
+        component: () => import('pages/LoginPage.vue'),
       },
     ],
   },
@@ -25,17 +20,17 @@ const routes = [
       {
         path: '',
         name: 'dashboard',
-        component: DashboardPage,
+        component: () => import('pages/DashboardPage.vue'),
       },
       {
         path: 'employees',
         name: 'employees',
-        component: EmployeesPage,
+        component: () => import('pages/EmployeesPage.vue'),
       },
       {
         path: 'employees/invite',
         name: 'invite-employee',
-        component: InvitePage,
+        component: () => import('pages/InvitePage.vue'),
       },
       {
         path: 'attendance',
@@ -50,7 +45,7 @@ const routes = [
       {
         path: 'requests',
         name: 'requests',
-        component: RequestPage,
+        component: () => import('pages/RequestPage.vue'),
       },
       {
         path: 'swap-requests',
