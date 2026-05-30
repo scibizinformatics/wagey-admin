@@ -42,14 +42,14 @@
             <!-- Employee name + avatar + email merged cell -->
             <q-td key="name" :props="props" class="table-body-cell employee-name-cell">
               <div class="employee-info">
-                <q-avatar size="34px" v-if="props.row.user?.picture_url">
+                <q-avatar size="34px" v-if="props.row.user?.picture_url" class="clickable-avatar" @click="$emit('view-photo', props.row)">
                   <img
                     :src="props.row.user.picture_url"
                     :alt="getFullName(props.row)"
                     @error="handleImageError"
                   />
                 </q-avatar>
-                <q-avatar v-else size="34px" class="avatar-fallback">
+                <q-avatar v-else size="34px" class="avatar-fallback clickable-avatar" @click="$emit('view-photo', props.row)">
                   {{ getInitials(getFullName(props.row)) }}
                 </q-avatar>
                 <div class="employee-name-block">
@@ -394,6 +394,15 @@ const columns = [
 .avatar-fallback :deep(.q-avatar__content) {
   font-size: 12px !important;
   line-height: 1 !important;
+}
+
+.clickable-avatar {
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.clickable-avatar:hover {
+  transform: scale(1.08);
 }
 
 /* Role chip */
