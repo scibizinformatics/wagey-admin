@@ -7,11 +7,3 @@ export { useAdminDepartments } from './useAdminDepartments'
 export { useAdminPositions } from './useAdminPositions'
 export { useAdminContracts } from './useAdminContracts'
 export { useAdminContractTypes } from './useAdminContractTypes'
-export {
-  useAdminAllowanceTypes,
-  useAdminTaxBrackets,
-  useAdminCutoffPeriods,
-  useAdminPayrollGroups,
-  useAdminLaborRules,
-  useAdminPayStructures,
-} from './useAdminPayroll'
