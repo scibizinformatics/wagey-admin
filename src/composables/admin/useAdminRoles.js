@@ -150,13 +150,13 @@ export function useAdminRoles() {
         await api.patch(
           `${BASE}/user/user-roles/${form.value.id}/`,
           { name: form.value.name.trim(), permissions },
-          { headers: authHeaders(), params: { company: parseInt(cId) } },
+          { headers: authHeaders() },
         )
         $q.notify({ type: 'positive', message: 'Role updated successfully', position: 'top' })
       } else {
         await api.post(
           `${BASE}/user/user-roles/`,
-          { name: form.value.name.trim(), company: parseInt(cId), permissions },
+          { name: form.value.name.trim(), permissions },
           { headers: authHeaders() },
         )
         $q.notify({ type: 'positive', message: 'Role created successfully', position: 'top' })
