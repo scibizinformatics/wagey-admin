@@ -4,12 +4,6 @@ import { useQuasar } from 'quasar'
 import { BASE, authHeaders } from '@/composables/utils/http'
 
 let _cachedUserUuid = null
-const token = localStorage.getItem('token') || localStorage.getItem('access_token')
-fetch('/user/current-user-companies/', {
-  headers: { Authorization: `Bearer ${token}` },
-})
-  .then((r) => r.json())
-  .then((d) => console.log(JSON.stringify(d, null, 2)))
 async function fetchCurrentUserUuid() {
   if (_cachedUserUuid) return _cachedUserUuid
   try {
