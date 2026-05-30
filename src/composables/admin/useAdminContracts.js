@@ -185,7 +185,7 @@ export function useAdminContracts() {
       id: contract.id,
       employee_id: contract.employee_company || null,
       company_id: contract.employee_company || companyId.value,
-      contract_type_id: contract.contract_type_name || null,
+      contract_type_id: contract.contract_type_id ?? null,
       site_id: null,
       pay_structure: {
         position_id: null,
