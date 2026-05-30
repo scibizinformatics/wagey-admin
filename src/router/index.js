@@ -20,17 +20,12 @@ const router = createRouter({
   scrollBehavior: () => ({ left: 0, top: 0 }),
 })
 
-// Global guard for authentication + admin role check
+// Global guard for authentication check only
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login', query: { redirect: to.fullPath } })
-    return
-  }
-
-  if (to.meta.requiresAdminRole && !authStore.isAdmin) {
-    next({ name: 'dashboard' })
     return
   }
 

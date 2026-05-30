@@ -1,5 +1,6 @@
 import AuthLayout from 'layouts/AuthLayout.vue'
 import MainLayout from 'layouts/MainLayout.vue'
+import AdminSettingsPage from 'pages/AdminSettingsPage.vue'
 
 const routes = [
   {
@@ -65,11 +66,7 @@ const routes = [
       {
         path: 'admin-settings',
         name: 'admin-settings',
-        component: () => import('pages/AdminSettingsPage.vue'),
-        meta: {
-          requiresAuth: true,
-          requiresAdminRole: true,
-        },
+        component: AdminSettingsPage,
       },
     ],
   },
