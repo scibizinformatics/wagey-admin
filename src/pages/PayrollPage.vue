@@ -159,8 +159,6 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { useQuasar } from 'quasar'
 import { usePayroll } from 'src/composables/page/usePayroll'
 import { useCompany } from 'src/composables/page/useCompany'
@@ -756,12 +754,16 @@ const getPayPercentage = (value, max) => {
   return result
 }
 
-const exportToPDF = () => {
+const exportToPDF = async () => {
   const arr = safeArray(payrollData.value)
   if (!arr.length) {
     $q.notify({ type: 'warning', message: 'No payroll data to export' })
     return
   }
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ])
   const doc = new jsPDF()
   doc.setFontSize(14)
   doc.text('Payroll Report', 14, 20)
@@ -780,7 +782,7 @@ const exportToPDF = () => {
   $q.notify({ type: 'positive', message: 'Payroll exported as PDF!' })
 }
 
-const downloadPayslip = (record) => {
+const downloadPayslip = async (record) => {
   // Full payslip PDF generation preserved
   const rec = record ?? selectedRecord.value
   if (!rec) {
@@ -846,6 +848,8 @@ const downloadPayslip = (record) => {
   const thirteenthAccrual = Number(rec.thirteenth_month_accrual ?? rec.month_accrual ?? 0)
   const thirteenthYtd = Number(rec.thirteenth_month_ytd ?? rec.ytd_accrual ?? 0)
 
+  const jspdfModule = await import('jspdf')
+  const jsPDF = jspdfModule.jsPDF ?? jspdfModule.default
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const PW = 210
   const ML = 15
