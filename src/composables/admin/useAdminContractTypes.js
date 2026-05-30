@@ -38,6 +38,19 @@ export function useAdminContractTypes() {
     },
   )
 
+  const COMPANY_FIELD_ALIASES = ['company.id', 'company_id', 'company']
+
+  /** Resolve the company identifier from a contract type record. */
+  function resolveCompanyId(ct) {
+    for (const alias of COMPANY_FIELD_ALIASES) {
+      const parts = alias.split('.')
+      let val = ct
+      for (const key of parts) val = val?.[key]
+      if (val != null) return String(val)
+    }
+    return null
+  }
+
   async function fetchContractTypes() {
     if (!companyId.value) {
       contractTypes.value = []
@@ -51,21 +64,9 @@ export function useAdminContractTypes() {
       })
       const all = response.data.data ?? response.data ?? []
 
-      // Debug: log the first item to identify the company field name
-      if (all.length > 0) {
-        console.log('[ContractTypes] sample item:', JSON.stringify(all[0]))
-        console.log('[ContractTypes] current companyId:', companyId.value)
-      }
-
-      // Filter client-side — handles company as int, string, or nested object
-      contractTypes.value = all.filter((ct) => {
-        const ctCompany = ct.company?.id ?? ct.company ?? ct.company_id
-        return String(ctCompany) === String(companyId.value)
-      })
-
-      console.log(
-        `[ContractTypes] ${all.length} total -> ${contractTypes.value.length} for company ${companyId.value}`,
-      )
+      // Client-side safeguard for any records the server may have missed filtering
+      const cid = String(companyId.value)
+      contractTypes.value = all.filter((ct) => resolveCompanyId(ct) === cid)
       return contractTypes.value
     } catch (error) {
       console.error('Error fetching contract types:', error)
