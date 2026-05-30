@@ -501,6 +501,14 @@ function onCompanyChange(siteId) {
   window.location.reload()
 }
 
+function scrollToActiveTab() {
+  if (!tabsWrapperRef.value) return
+  const activeEl = tabsWrapperRef.value.querySelector('.company-tab-active')
+  if (activeEl) {
+    activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+  }
+}
+
 function updateOverflowHint() {
   const el = tabsWrapperRef.value
   if (!el) return
@@ -542,6 +550,8 @@ onMounted(async () => {
   await nextTick()
   updateOverflowHint()
   loadSavedCompany()
+  await nextTick()
+  scrollToActiveTab()
   reconnect() // Re-connect WS now that companyId is resolved
   loadCurrentUser()
 
@@ -835,10 +845,10 @@ onUnmounted(() => {
   color: #334155;
 }
 .company-tab-active {
-  background: #13283d;
+  background: #2563eb;
   color: #ffffff;
-  border-color: #13283d;
-  box-shadow: 0 2px 8px rgba(19, 40, 61, 0.3);
+  border-color: #2563eb;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 .tab-overflow-hint {
   position: absolute;
