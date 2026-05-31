@@ -140,9 +140,12 @@
     <PayrollDetailModal
       :show-detail-modal="showDetailModal"
       :record="selectedRecord"
+      :breakdown="selectedBreakdown"
+      :breakdown-loading="breakdownLoading"
       @update:show-detail-modal="showDetailModal = $event"
       @close="closeDetailModal"
       @download-payslip="downloadPayslip(selectedRecord)"
+      @download-daily-record="downloadDailyRecord"
     />
 
     <PayrollAcknowledgeDialog
@@ -164,6 +167,7 @@ import { usePayroll } from 'src/composables/page/usePayroll'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useAdminDepartments } from 'src/composables/admin/useAdminDepartments'
 import { useAdminCostCenters } from 'src/composables/admin/useAdminCostCenters'
+import { formatCurrency } from 'src/composables/utils/format'
 
 import PayrollStatsCards from 'src/components/pages/Payroll/PayrollStatsCards.vue'
 import PayrollRunCard from 'src/components/pages/Payroll/PayrollRunCard.vue'
@@ -195,6 +199,9 @@ const {
   confirmMoneyReceived,
   fetchDisbursementLogBankAccounts,
   retryWithBackoff,
+  selectedBreakdown,
+  breakdownLoading,
+  fetchPayslipBreakdown,
 } = usePayroll()
 
 const { departments, fetchDepartments } = useAdminDepartments()
@@ -601,7 +608,7 @@ const displayEmployees = computed(() => {
       _netPayFormatted: formatCurrency(netPay),
       _grossBarWidth: getPayPercentage(grossPay, maxGrossPayComputed.value),
       _netBarWidth: getPayPercentage(netPay, maxNetPayComputed.value),
-      _totalHours: emp.breakdown?.attendance?.total_hours_worked || 0,
+      _totalHours: emp.total_hours ?? 0,
     }
   })
 })
@@ -704,7 +711,7 @@ const payrollData = computed(() =>
     id: r.payslip_id ?? `payroll-${i}`, employee: r.employee_name ?? 'Unknown',
     employee_id: r.employee_id ?? null, period: r.period ?? null, run: selectedRunForData.value,
     gross_pay: Number(r.gross_pay ?? 0), total_deductions: Number(r.total_deductions ?? 0),
-    net_pay: Number(r.net_pay ?? 0), status: r.status ?? 'draft', breakdown: r.breakdown ?? {},
+    net_pay: Number(r.net_pay ?? 0), status: r.status ?? 'draft', totalHours: r.total_hours ?? 0,
   })),
 )
 
@@ -733,11 +740,6 @@ const totalNetPay = computed(() =>
 const totalPayrollRuns = computed(() => safeArray(payrollRunsSummary.value).length)
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
-const formatCurrency = (val) => {
-  const n = Number(val ?? 0)
-  return '\u20B1' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
 const getInitials = (name) => {
   if (!name) return '?'
   return name.toString().split(' ').map((n) => n.charAt(0)).join('').toUpperCase().slice(0, 2)
@@ -775,7 +777,7 @@ const exportToPDF = async () => {
     body: arr.map((r, i) => [
       i + 1, r.employee ?? 'N/A', r.period ?? '-', `#${r.run ?? ''}`,
       formatCurrency(r.gross_pay), formatCurrency(r.net_pay),
-      `${r.breakdown?.attendance?.total_hours_worked ?? 0}h`,
+      `${r.totalHours ?? 0}h`,
     ]),
   })
   doc.save(`Payroll_Report_${new Date().toISOString().split('T')[0]}.pdf`)
@@ -783,12 +785,40 @@ const exportToPDF = async () => {
 }
 
 const downloadPayslip = async (record) => {
-  // Full payslip PDF generation preserved
   const rec = record ?? selectedRecord.value
   if (!rec) {
     $q.notify({ type: 'negative', message: 'No record selected to download' })
     return
   }
+
+  // Fetch breakdown if not already loaded
+  let bd = selectedBreakdown.value
+  const payslipId = rec.payslip_id || rec.id
+  if (payslipId && (!bd || bd.payslip_id !== payslipId)) {
+    try {
+      bd = await fetchPayslipBreakdown(payslipId)
+    } catch {
+      bd = null
+    }
+  }
+
+  // Compute attendance fields from breakdown daily_records + summary
+  const summary = bd?.summary ?? {}
+  const dailyRecords = bd?.daily_records ?? []
+  const totalHoursW = summary.total_hours ?? 0
+  const otHours = summary.total_overtime_hours ?? 0
+  const regularHours = totalHoursW - otHours
+  const daysWorked = dailyRecords.filter((d) => d.total_hours > 0).length
+  const daysAbsent = dailyRecords.filter((d) => d.total_hours === 0 && !d.is_holiday).length
+  const holidayDays = dailyRecords.filter((d) => d.is_holiday).length
+  const ndHours = dailyRecords.reduce((sum, d) => {
+    const ndAmt = Number(d.night_diff_amount ?? 0)
+    const ndHrs = Number(d.night_diff_hours ?? 0)
+    return sum + (ndHrs || (ndAmt > 0 ? 1 : 0))
+  }, 0)
+  const vlUsed = 0
+  const slUsed = 0
+  const restDays = 0
   const employeeName = rec.employee_name ?? rec.employee ?? 'N/A'
   const employeeId = rec.employee_id ?? 'N/A'
   const position = rec.position ?? rec.job_title ?? '\u2014'
@@ -805,21 +835,13 @@ const downloadPayslip = async (record) => {
   const companyName = selectedRun.value?.company_name ?? rec.company_name ?? ''
   const companyAddress = selectedRun.value?.company_address ?? rec.company_address ?? ''
   const companyTin = selectedRun.value?.company_tin ?? rec.company_tin ?? ''
-  const bd = rec.breakdown ?? {}
-  const att = bd.attendance ?? {}
-  const daysWorked = att.days_worked ?? rec.days_worked ?? '\u2014'
-  const daysAbsent = att.days_absent ?? rec.days_absent ?? 0
-  const vlUsed = att.vacation_leave ?? rec.vacation_leave ?? 0
-  const slUsed = att.sick_leave ?? rec.sick_leave ?? 0
-  const totalHoursW = att.total_hours_worked ?? rec.total_hours_worked ?? 0
-  const otHours = att.overtime_hours ?? rec.overtime_hours ?? 0
-  const ndHours = att.night_diff_hours ?? rec.night_diff_hours ?? 0
-  const restDays = att.rest_days_worked ?? rec.rest_days_worked ?? 0
-  const holidayDays = att.holidays_worked ?? rec.holidays_worked ?? 0
-  const monthlyRate = Number(rec.monthly_rate ?? rec.rate ?? 0)
-  const dailyRate = Number(rec.daily_rate ?? (monthlyRate ? monthlyRate / 22 : 0))
-  const basicPay = Number(rec.basic_pay ?? rec.gross_pay ?? 0)
-  const earnings = Array.isArray(rec.earnings) ? rec.earnings : []
+  const daysWorkedStr = String(daysWorked) || '\u2014'
+  // Rate info — breakdown endpoint first, fall back to rec
+  const monthlyRate = Number(bd?.monthly_rate ?? rec.monthly_rate ?? rec.rate ?? 0)
+  const dailyRate = Number(bd?.daily_rate ?? rec.daily_rate ?? (monthlyRate ? monthlyRate / 22 : 0))
+  const basicPay = Number(bd?.basic_pay ?? rec.basic_pay ?? summary.total_gross_pay ?? 0)
+  // Earnings — breakdown endpoint first, fall back to rec
+  const earnings = Array.isArray(bd?.earnings) ? bd.earnings : (Array.isArray(rec.earnings) ? rec.earnings : [])
   const premiumItems = earnings.filter((e) => ['overtime', 'night_differential', 'holiday', 'rest_day'].includes(e.type))
   const allowances = earnings.filter((e) => e.type === 'allowance')
   const incentives = earnings.filter((e) => e.type === 'incentive')
@@ -827,26 +849,28 @@ const downloadPayslip = async (record) => {
   const overtimePay = premiumItems.find((e) => e.type === 'overtime')?.amount ?? Number(rec.overtime_pay ?? 0)
   const nightDiffPay = premiumItems.find((e) => e.type === 'night_differential')?.amount ?? Number(rec.night_diff_pay ?? 0)
   const holidayPay = premiumItems.find((e) => e.type === 'holiday')?.amount ?? Number(rec.holiday_pay ?? 0)
-  const grossPay = Number(rec.gross_pay ?? 0)
-  const deductions = Array.isArray(rec.deductions) ? rec.deductions : []
-  const withholdingTax = Number(rec.withholding_tax ?? deductions.find((d) => d.type === 'withholding_tax')?.amount ?? 0)
-  const sssContrib = Number(rec.sss ?? deductions.find((d) => d.type === 'sss')?.amount ?? 0)
-  const philhealth = Number(rec.philhealth ?? deductions.find((d) => d.type === 'philhealth')?.amount ?? 0)
-  const pagibig = Number(rec.pagibig ?? deductions.find((d) => d.type === 'pagibig')?.amount ?? 0)
-  const sssLoan = Number(rec.sss_loan ?? deductions.find((d) => d.type === 'sss_loan')?.amount ?? 0)
-  const pagibigLoan = Number(rec.pagibig_loan ?? deductions.find((d) => d.type === 'pagibig_loan')?.amount ?? 0)
-  const cashAdvance = Number(rec.cash_advance ?? deductions.find((d) => d.type === 'cash_advance')?.amount ?? 0)
-  const companyLoan = Number(rec.company_loan ?? deductions.find((d) => d.type === 'company_loan')?.amount ?? 0)
-  const absenceDeduct = Number(rec.absence_deduction ?? deductions.find((d) => d.type === 'absence')?.amount ?? (daysAbsent > 0 ? dailyRate * daysAbsent : 0))
-  const lateDeduct = Number(rec.late_deduction ?? deductions.find((d) => d.type === 'late')?.amount ?? 0)
-  const totalDeductions = Number(rec.total_deductions ?? grossPay - Number(rec.net_pay ?? 0))
-  const netPay = Number(rec.net_pay ?? 0)
-  const paymentMethod = rec.payment_method ?? rec.disbursement_type ?? '\u2014'
-  const paymentStatus = rec.status ?? '\u2014'
+  const grossPay = Number(bd?.summary?.total_gross_pay ?? rec.gross_pay ?? rec.calculated ?? 0)
+  // Deductions — breakdown endpoint first, fall back to rec
+  const deductions = Array.isArray(bd?.deductions) ? bd.deductions : (Array.isArray(rec.deductions) ? rec.deductions : [])
+  const withholdingTax = Number(deductions.find((d) => d.type === 'withholding_tax')?.amount ?? rec.withholding_tax ?? 0)
+  const sssContrib = Number(deductions.find((d) => d.type === 'sss')?.amount ?? rec.sss ?? 0)
+  const philhealth = Number(deductions.find((d) => d.type === 'philhealth')?.amount ?? rec.philhealth ?? 0)
+  const pagibig = Number(deductions.find((d) => d.type === 'pagibig')?.amount ?? rec.pagibig ?? 0)
+  const sssLoan = Number(deductions.find((d) => d.type === 'sss_loan')?.amount ?? rec.sss_loan ?? 0)
+  const pagibigLoan = Number(deductions.find((d) => d.type === 'pagibig_loan')?.amount ?? rec.pagibig_loan ?? 0)
+  const cashAdvance = Number(deductions.find((d) => d.type === 'cash_advance')?.amount ?? rec.cash_advance ?? 0)
+  const companyLoan = Number(deductions.find((d) => d.type === 'company_loan')?.amount ?? rec.company_loan ?? 0)
+  const absenceDeduct = Number(deductions.find((d) => d.type === 'absence')?.amount ?? rec.absence_deduction ?? (daysAbsent > 0 ? dailyRate * daysAbsent : 0))
+  const lateDeduct = Number(deductions.find((d) => d.type === 'late')?.amount ?? rec.late_deduction ?? 0)
+  const netPay = Number(bd?.summary?.total_net_pay ?? rec.net_pay ?? rec.actual_net_pay ?? 0)
+  const totalDeductions = Number(rec.total_deductions ?? (grossPay - netPay))
+  const paymentMethod = bd?.payment_method ?? rec.payment_method ?? rec.disbursement_type ?? rec.payment_method_display ?? '\u2014'
+  const paymentStatus = rec.status ?? rec.payment_status_display ?? '\u2014'
   const dateReleased = fmtDate(rec.released_at ?? rec.pay_date)
-  const loans = Array.isArray(rec.loans) ? rec.loans : companyLoan ? [{ type: 'Company Loan', total: rec.total_loan_amount ?? 0, deduction: companyLoan, balance: rec.loan_balance ?? 0 }] : []
-  const thirteenthAccrual = Number(rec.thirteenth_month_accrual ?? rec.month_accrual ?? 0)
-  const thirteenthYtd = Number(rec.thirteenth_month_ytd ?? rec.ytd_accrual ?? 0)
+  // Loans — breakdown endpoint first, fall back to rec
+  const loans = Array.isArray(bd?.loans) ? bd.loans : (Array.isArray(rec.loans) ? rec.loans : (companyLoan ? [{ type: 'Company Loan', total: rec.total_loan_amount ?? 0, deduction: companyLoan, balance: rec.loan_balance ?? 0 }] : []))
+  const thirteenthAccrual = Number(bd?.thirteenth_month_accrual ?? rec.thirteenth_month_accrual ?? rec.month_accrual ?? 0)
+  const thirteenthYtd = Number(bd?.thirteenth_month_ytd ?? rec.thirteenth_month_ytd ?? rec.ytd_accrual ?? 0)
 
   const jspdfModule = await import('jspdf')
   const jsPDF = jspdfModule.jsPDF ?? jspdfModule.default
@@ -903,7 +927,18 @@ const downloadPayslip = async (record) => {
   y = kv('Status', empStatus, y); y += 2; line(ML, y, MR); y += 5
 
   y = sectionTitle('Work Summary', y); y += 1
-  const workRows = [['Days Worked', String(daysWorked)], ['Days Absent', String(daysAbsent)], ['Vacation Leave (VL)', String(vlUsed)], ['Sick Leave (SL)', String(slUsed)], ['Total Hours Worked', `${totalHoursW}h`], ['Overtime Hours', `${otHours}h`], ['Night Differential Hrs', `${ndHours}h`], ['Rest Days Worked', String(restDays)], ['Holidays Worked', String(holidayDays)]]
+  const workRows = [
+    ['Days Worked', daysWorkedStr],
+    ['Days Absent', String(daysAbsent)],
+    ['Vacation Leave (VL)', String(vlUsed)],
+    ['Sick Leave (SL)', String(slUsed)],
+    ['Total Hours Worked', `${totalHoursW}h`],
+    ['Overtime Hours', `${otHours}h`],
+    ['Regular Hours', `${regularHours}h`],
+    ['Night Differential Hours', `${ndHours}h`],
+    ['Rest Days Worked', String(restDays)],
+    ['Holidays Worked', String(holidayDays)],
+  ]
   workRows.forEach(([l, v]) => { y = dotRow(l, v, y) })
   y += 2; line(ML, y, MR); y += 5
 
@@ -1020,14 +1055,157 @@ const downloadPayslip = async (record) => {
   $q.notify({ type: 'positive', message: `Payslip downloaded for ${employeeName}` })
 }
 
+// ─── Download Daily Record PDF ─────────────────────────────────────────────────
+const downloadDailyRecord = async () => {
+  const bd = selectedBreakdown.value
+  if (!bd?.daily_records?.length) {
+    $q.notify({ type: 'warning', message: 'No daily record data available' })
+    return
+  }
+
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ])
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const PW = 210
+  const ML = 14
+  const MR = 196
+  const topY = 20
+
+  // ─── Header ──────────────────────────────────────────────────────────────────
+  doc.setFillColor(37, 56, 120)
+  doc.rect(0, 0, PW, 22, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(14)
+  doc.setTextColor(255, 255, 255)
+  doc.text('DAILY TIME RECORD', PW / 2, 9, { align: 'center' })
+
+  const emp = selectedRecord.value
+  const log = bd.disbursement_log ?? {}
+  const period = `${log.start_date ?? ''} — ${log.end_date ?? ''}`.trim()
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.text(`Employee: ${emp?.employee ?? ''}`, PW / 2, 15, { align: 'center' })
+  doc.text(`ID: ${emp?.employee_id ?? ''}  |  Period: ${period || (emp?.period ?? '')}`, PW / 2, 19, { align: 'center' })
+
+  // ─── Table ───────────────────────────────────────────────────────────────────
+  const rows = bd.daily_records.map((dr) => {
+    const shift = dr.shifts_detail?.[0] ?? {}
+    const schedule = shift.schedule_start && shift.schedule_end
+      ? `${shift.schedule_start.slice(0, 5)}-${shift.schedule_end.slice(0, 5)}`
+      : '\u2014'
+    const logTime = shift.time_in && shift.time_out
+      ? `${shift.time_in.slice(0, 5)}-${shift.time_out.slice(0, 5)}`
+      : '\u2014'
+    const status = dr.is_holiday
+      ? dr.holiday_name
+      : dr.shift_count === 0
+        ? 'Rest'
+        : 'Work'
+    return [
+      dr.date?.slice(5) ?? dr.date,
+      schedule,
+      logTime,
+      `${dr.total_hours}h`,
+      status,
+    ]
+  })
+
+  autoTable(doc, {
+    startY: topY + 8,
+    head: [['Date', 'Schedule', 'Time Log', 'Hours', 'Status']],
+    body: rows,
+    headStyles: {
+      fillColor: [55, 65, 81],
+      fontSize: 8,
+      fontStyle: 'bold',
+      halign: 'center',
+    },
+    bodyStyles: { fontSize: 8, halign: 'center' },
+    columnStyles: {
+      0: { cellWidth: 26 },
+      1: { cellWidth: 24 },
+      2: { cellWidth: 24 },
+      3: { cellWidth: 16 },
+      4: { cellWidth: 20 },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 4) {
+        const val = data.cell.raw
+        if (val === 'Rest') {
+          data.cell.styles.textColor = [156, 163, 175]
+        } else if (val && val !== 'Work' && val !== '\u2014') {
+          data.cell.styles.textColor = [146, 64, 14]
+          data.cell.styles.fontStyle = 'bold'
+          data.cell.styles.fillColor = [254, 243, 199]
+        }
+      }
+    },
+  })
+
+  // ─── Summary Footer ──────────────────────────────────────────────────────────
+  const finalY = doc.lastAutoTable.finalY + 8
+  const summary = bd.summary ?? {}
+  const summaryLines = [
+    `Days Worked: ${summary.total_days ?? 0}`,
+    `Total Hours: ${summary.total_hours ?? 0}h`,
+  ]
+  if (summary.total_overtime_hours > 0) {
+    summaryLines.push(`Overtime: ${summary.total_overtime_hours}h`)
+  }
+  const holidayCount = bd.daily_records?.filter((d) => d.is_holiday).length ?? 0
+  if (holidayCount > 0) {
+    summaryLines.push(`Holidays: ${holidayCount}`)
+  }
+
+  doc.setFillColor(240, 244, 255)
+  doc.rect(ML, finalY, MR - ML, 8, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(37, 56, 120)
+  doc.text(summaryLines.join('  |  '), PW / 2, finalY + 5.5, { align: 'center' })
+
+  // ─── Footer ──────────────────────────────────────────────────────────────────
+  const pageCount = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(160, 160, 160)
+    doc.text(`Page ${i} of ${pageCount}`, PW / 2, 292, { align: 'center' })
+    doc.text('This is a system-generated daily time record.', PW / 2, 296, { align: 'center' })
+  }
+
+  const safeName = (emp?.employee ?? 'Employee').replace(/\s+/g, '_')
+  doc.save(`DailyRecord_${safeName}.pdf`)
+  $q.notify({ type: 'positive', message: 'Daily record downloaded' })
+}
+
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
-const viewDetails = (record) => {
+const viewDetails = async (record) => {
+  const payslipId = record.payslip_id || record.id
   selectedRecord.value = {
-    employee: record.employee_name || record.employee, employee_id: record.employee_id,
-    period: record.period, run: record.run ?? selectedRun.value?.id,
-    gross_pay: record.gross_pay, net_pay: record.net_pay, breakdown: record.breakdown,
+    employee: record.employee_name || record.employee,
+    employee_id: record.employee_id,
+    period: record.period,
+    run: record.run ?? selectedRun.value?.id,
+    gross_pay: record.gross_pay,
+    net_pay: record.net_pay,
+    payslip_id: payslipId,
   }
   showDetailModal.value = true
+  if (payslipId) {
+    breakdownLoading.value = true
+    try {
+      selectedBreakdown.value = await fetchPayslipBreakdown(payslipId)
+    } catch {
+      selectedBreakdown.value = null
+    } finally {
+      breakdownLoading.value = false
+    }
+  }
 }
 
 const closeDetailModal = () => {

@@ -51,29 +51,90 @@
             <div class="detail-card-value amount-red">{{ formatCurrency(record.gross_pay - record.net_pay) }}</div>
           </div>
         </div>
-        <div class="modal-section-title">Hours breakdown</div>
-        <div class="detail-grid-cards">
-          <div class="detail-card">
-            <div class="detail-card-label">Regular</div>
-            <div class="detail-card-value">{{ record.breakdown?.attendance?.regular_hours || 0 }}h</div>
+        <template v-if="breakdownLoading">
+          <div class="loading-section">
+            <q-spinner color="primary" size="24px" />
+            <span>Loading breakdown...</span>
           </div>
-          <div class="detail-card">
-            <div class="detail-card-label">Overtime</div>
-            <div class="detail-card-value amount-amber">{{ record.breakdown?.attendance?.overtime_hours || 0 }}h</div>
+        </template>
+        <template v-else-if="breakdown">
+          <div class="modal-section-title">Work summary</div>
+          <div class="detail-grid-cards">
+            <div class="detail-card">
+              <div class="detail-card-label">Total Days</div>
+              <div class="detail-card-value">{{ breakdown.summary?.total_days ?? 0 }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Total Hours</div>
+              <div class="detail-card-value">{{ breakdown.summary?.total_hours ?? 0 }}h</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Overtime Hours</div>
+              <div class="detail-card-value amount-amber">{{ breakdown.summary?.total_overtime_hours ?? 0 }}h</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-label">Undertime Hours</div>
+              <div class="detail-card-value amount-red">{{ breakdown.summary?.total_undertime_hours ?? 0 }}h</div>
+            </div>
           </div>
-          <div class="detail-card">
-            <div class="detail-card-label">Holiday</div>
-            <div class="detail-card-value amount-purple">{{ record.breakdown?.attendance?.holiday_hours || 0 }}h</div>
+
+          <div class="modal-section-title">Daily records</div>
+          <div class="daily-records-table">
+            <div class="dr-header">
+              <div class="dr-th dr-th-date">Date</div>
+              <div class="dr-th dr-th-hours">Hours</div>
+              <div class="dr-th dr-th-status">Status</div>
+            </div>
+            <div
+              v-for="(dr, i) in breakdown.daily_records"
+              :key="i"
+              class="dr-row"
+              :class="{
+                'dr-row-holiday': dr.is_holiday,
+                'dr-row-rest': dr.shift_count === 0 && !dr.is_holiday,
+                'dr-row-expanded': expandedDays.has(i),
+              }"
+            >
+              <div class="dr-td dr-td-date" @click="toggleDay(i)">
+                <q-icon :name="expandedDays.has(i) ? 'expand_less' : 'expand_more'" size="14px" class="expand-icon" />
+                {{ dr.date }}
+              </div>
+              <div class="dr-td dr-td-hours">{{ dr.total_hours }}h</div>
+              <div class="dr-td dr-td-status">
+                <span v-if="dr.is_holiday" class="holiday-badge">{{ dr.holiday_name }}</span>
+                <span v-else-if="dr.shift_count === 0" class="rest-label">Rest</span>
+                <span v-else class="work-label">Work</span>
+              </div>
+            </div>
+            <div v-for="(dr, i) in breakdown.daily_records" :key="'shifts-' + i">
+              <div v-if="expandedDays.has(i) && dr.shifts_detail?.length" class="shifts-detail">
+                <div v-for="(shift, si) in dr.shifts_detail" :key="si" class="shift-row">
+                  <q-icon name="schedule" size="14px" class="shift-icon" />
+                  <span class="shift-label">Schedule:</span>
+                  <span class="shift-value">{{ shift.schedule_start }} → {{ shift.schedule_end }}</span>
+                  <span class="shift-label">Log:</span>
+                  <span class="shift-value">{{ shift.time_in }} → {{ shift.time_out }}</span>
+                  <span class="shift-label">Hours:</span>
+                  <span class="shift-value">{{ shift.hours }}h</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="detail-card">
-            <div class="detail-card-label">Total</div>
-            <div class="detail-card-value">{{ record.breakdown?.attendance?.total_hours_worked || 0 }}h</div>
-          </div>
-        </div>
+        </template>
       </q-card-section>
 
       <q-card-actions align="right">
         <q-btn flat label="Close" @click="$emit('close')" class="dialog-btn" no-caps />
+        <q-btn
+          v-if="breakdown"
+          flat
+          color="secondary"
+          label="Download Daily Record"
+          icon="calendar_month"
+          @click="$emit('download-daily-record')"
+          class="dialog-btn"
+          no-caps
+        />
         <q-btn
           color="primary"
           label="Download Payslip"
@@ -87,16 +148,25 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import { formatCurrency } from 'src/composables/utils/format'
+
 defineProps({
   showDetailModal: { type: Boolean, default: false },
   record: { type: Object, default: null },
+  breakdown: { type: Object, default: null },
+  breakdownLoading: { type: Boolean, default: false },
 })
 
-defineEmits(['update:show-detail-modal', 'close', 'download-payslip'])
+defineEmits(['update:show-detail-modal', 'close', 'download-payslip', 'download-daily-record'])
 
-const formatCurrency = (val) => {
-  const n = Number(val ?? 0)
-  return '\u20B1' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const expandedDays = ref(new Set())
+
+const toggleDay = (index) => {
+  const next = new Set(expandedDays.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  expandedDays.value = next
 }
 </script>
 
@@ -214,6 +284,131 @@ const formatCurrency = (val) => {
 }
 .primary-btn { font-weight: 500; }
 
+.loading-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.daily-records-table {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 12px;
+  min-width: 320px;
+}
+
+.dr-header {
+  display: flex;
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dr-th {
+  flex: 1;
+  padding: 8px 6px;
+  text-align: right;
+  min-width: 50px;
+  white-space: nowrap;
+}
+
+.dr-th-date { text-align: left; flex: 1.4; }
+.dr-th-hours { flex: 0.6; text-align: center; }
+.dr-th-status { flex: 1; }
+
+.dr-row {
+  display: flex;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.1s;
+}
+
+.dr-row:hover { background: #f9fafb; }
+
+.dr-row-holiday {
+  background: #fefce8;
+}
+
+.dr-row-holiday:hover { background: #fef9c3; }
+
+.dr-row-rest {
+  background: #f9fafb;
+  color: #9ca3af;
+}
+
+.dr-row-rest .dr-td { color: #9ca3af; }
+
+.dr-td {
+  flex: 1;
+  padding: 7px 6px;
+  text-align: right;
+  color: #374151;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.dr-td-date {
+  text-align: left;
+  flex: 1.4;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dr-td-hours { flex: 0.6; text-align: center; }
+.dr-td-status { flex: 1; }
+
+.expand-icon {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.holiday-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.rest-label {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.work-label {
+  font-size: 10px;
+  color: #16a34a;
+}
+
+.shifts-detail {
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.shift-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 11px;
+}
+
+.shift-icon { color: #6b7280; }
+.shift-label { color: #9ca3af; }
+.shift-value { color: #374151; font-weight: 500; }
+
 @media (max-width: 768px) {
   .detail-grid-cards {
     grid-template-columns: 1fr;
@@ -221,5 +416,6 @@ const formatCurrency = (val) => {
   .detail-card-full {
     grid-column: span 1;
   }
+  .daily-records-table { min-width: 280px; }
 }
 </style>

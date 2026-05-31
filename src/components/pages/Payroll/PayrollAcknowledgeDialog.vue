@@ -80,6 +80,8 @@
 </template>
 
 <script setup>
+import { formatCurrency } from 'src/composables/utils/format'
+
 defineProps({
   showAcknowledgeDialog: { type: Boolean, default: false },
   target: { type: Object, default: null },
@@ -104,11 +106,6 @@ const statusLabel = (status) => {
 }
 
 defineEmits(['update:show-acknowledge-dialog', 'close', 'acknowledge-payslip'])
-
-const formatCurrency = (val) => {
-  const n = Number(val ?? 0)
-  return '\u20B1' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
 </script>
 
 <style scoped>

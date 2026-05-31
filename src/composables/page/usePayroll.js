@@ -52,6 +52,7 @@ export function usePayroll() {
     fetchingCustomMultipliers: false,
     // Employee-side (Step 5)
     fetchingEmployeePayslips: false,
+    fetchingPayslipBreakdown: false,
   })
 
   // Per-operation saving states (prevents duplicate submissions)
@@ -134,6 +135,37 @@ export function usePayroll() {
       throw err
     } finally {
       clearAbortController(`hoursBreakdown-${employeeId}`, controller)
+    }
+  }
+
+  const selectedBreakdown = ref(null)
+  const breakdownLoading = ref(false)
+
+  async function fetchPayslipBreakdown(payslipId) {
+    const controller = getAbortController(`payslipBreakdown-${payslipId}`)
+    setLoading('fetchingPayslipBreakdown', true)
+    breakdownLoading.value = true
+    try {
+      const response = await api.get(`${BASE}/payroll/admin/payslips/${payslipId}/breakdown/`, {
+        headers: authHeaders(),
+        signal: controller.signal,
+      })
+      selectedBreakdown.value = response.data
+      return response.data
+    } catch (err) {
+      if (isCancelError(err)) {
+        return
+      }
+      console.error('[usePayroll] fetchPayslipBreakdown ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
+    } finally {
+      setLoading('fetchingPayslipBreakdown', false)
+      breakdownLoading.value = false
+      clearAbortController(`payslipBreakdown-${payslipId}`, controller)
     }
   }
 
@@ -998,6 +1030,10 @@ export function usePayroll() {
     fetchPayrollRunsSummary,
     // hours
     fetchHoursBreakdown,
+    // payslip breakdown
+    selectedBreakdown,
+    breakdownLoading,
+    fetchPayslipBreakdown,
     // allowance types
     fetchAllowanceTypes,
     createAllowanceType,
