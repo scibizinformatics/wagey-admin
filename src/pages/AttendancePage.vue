@@ -1,6 +1,5 @@
 <template>
-  <q-page class="attendance-dashboard">
-    <div class="dashboard-container">
+  <PageShell>
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
@@ -81,7 +80,6 @@
         @prev-page="previousPage"
         @next-page="nextPage"
       />
-    </div>
 
     <!-- Date Range Picker Dialog -->
     <AttendanceDateRangePicker
@@ -144,10 +142,11 @@
       :saving="updating"
       @submit="updateAttendance"
     />
-  </q-page>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useAttendance } from '@/composables/page/useAttendance'
@@ -976,16 +975,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.attendance-dashboard {
-  background: #f4f6f9;
-  min-height: 100vh;
-  padding: 0;
-}
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-}
 .page-header {
   background: #ffffff;
   border-radius: 12px;
@@ -1068,7 +1057,6 @@ onMounted(async () => {
 .filter-input :deep(.q-field__control) { border-radius: 8px; }
 
 @media (max-width: 768px) {
-  .dashboard-container { padding: 14px; }
   .page-header { padding: 12px 14px; margin-bottom: 12px; }
   .header-content { flex-direction: column; align-items: stretch; gap: 10px; }
   .header-actions { justify-content: space-between; }
@@ -1076,7 +1064,6 @@ onMounted(async () => {
   .filters-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 }
 @media (max-width: 480px) {
-  .dashboard-container { padding: 10px; }
   .page-title { font-size: 18px; }
   .filters-card { padding: 10px; }
   .filters-header { flex-direction: column; align-items: flex-start; gap: 8px; }
