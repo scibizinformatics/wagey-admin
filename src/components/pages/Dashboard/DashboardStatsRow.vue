@@ -79,16 +79,16 @@ defineProps({
   flex-shrink: 0;
 }
 .tile-count {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   color: #111827;
   line-height: 1.1;
 }
 .tile-label {
-  font-size: 11px;
+  font-size: 12px;
   color: #6b7280;
   font-weight: 500;
-  margin-top: 1px;
+  margin-bottom: 2px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
