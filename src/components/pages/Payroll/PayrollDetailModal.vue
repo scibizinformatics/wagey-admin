@@ -88,25 +88,28 @@
             <div
               v-for="(dr, i) in breakdown.daily_records"
               :key="i"
-              class="dr-row"
-              :class="{
-                'dr-row-holiday': dr.is_holiday,
-                'dr-row-rest': dr.shift_count === 0 && !dr.is_holiday,
-                'dr-row-expanded': expandedDays.has(i),
-              }"
+              class="dr-row-wrapper"
             >
-              <div class="dr-td dr-td-date" @click="toggleDay(i)">
-                <q-icon :name="expandedDays.has(i) ? 'expand_less' : 'expand_more'" size="14px" class="expand-icon" />
-                {{ dr.date }}
+              <div
+                class="dr-row"
+                :class="{
+                  'dr-row-holiday': dr.is_holiday,
+                  'dr-row-rest': dr.shift_count === 0 && !dr.is_holiday,
+                  'dr-row-expanded': expandedDays.has(i),
+                }"
+                @click="toggleDay(i)"
+              >
+                <div class="dr-td dr-td-date">
+                  <q-icon :name="expandedDays.has(i) ? 'expand_less' : 'expand_more'" size="14px" class="expand-icon" />
+                  {{ dr.date }}
+                </div>
+                <div class="dr-td dr-td-hours">{{ dr.total_hours }}h</div>
+                <div class="dr-td dr-td-status">
+                  <span v-if="dr.is_holiday" class="holiday-badge">{{ dr.holiday_name }}</span>
+                  <span v-else-if="dr.shift_count === 0" class="rest-label">Rest</span>
+                  <span v-else class="work-label">Work</span>
+                </div>
               </div>
-              <div class="dr-td dr-td-hours">{{ dr.total_hours }}h</div>
-              <div class="dr-td dr-td-status">
-                <span v-if="dr.is_holiday" class="holiday-badge">{{ dr.holiday_name }}</span>
-                <span v-else-if="dr.shift_count === 0" class="rest-label">Rest</span>
-                <span v-else class="work-label">Work</span>
-              </div>
-            </div>
-            <div v-for="(dr, i) in breakdown.daily_records" :key="'shifts-' + i">
               <div v-if="expandedDays.has(i) && dr.shifts_detail?.length" class="shifts-detail">
                 <div v-for="(shift, si) in dr.shifts_detail" :key="si" class="shift-row">
                   <q-icon name="schedule" size="14px" class="shift-icon" />
@@ -324,10 +327,16 @@ const toggleDay = (index) => {
 .dr-th-hours { flex: 0.6; text-align: center; }
 .dr-th-status { flex: 1; }
 
+.dr-row-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
 .dr-row {
   display: flex;
   border-bottom: 1px solid #f3f4f6;
   transition: background 0.1s;
+  cursor: pointer;
 }
 
 .dr-row:hover { background: #f9fafb; }
@@ -345,6 +354,13 @@ const toggleDay = (index) => {
 
 .dr-row-rest .dr-td { color: #9ca3af; }
 
+.dr-row-expanded {
+  border-left: 3px solid #3b82f6;
+  background: #eff6ff;
+}
+
+.dr-row-expanded:hover { background: #dbeafe; }
+
 .dr-td {
   flex: 1;
   padding: 7px 6px;
@@ -357,7 +373,6 @@ const toggleDay = (index) => {
 .dr-td-date {
   text-align: left;
   flex: 1.4;
-  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 4px;
