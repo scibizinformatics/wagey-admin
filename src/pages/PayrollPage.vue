@@ -1,6 +1,5 @@
 <template>
-  <q-page class="payroll-dashboard">
-    <div class="dashboard-container">
+  <PageShell>
       <!-- Header -->
       <div class="page-header">
         <div class="header-content">
@@ -124,7 +123,6 @@
           </div>
         </q-tab-panel>
       </q-tab-panels>
-    </div>
 
     <PayrollCreateRunDialog
       :show-create-run-dialog="showCreateRunDialog"
@@ -157,10 +155,11 @@
       @close="showAcknowledgeDialog = false; acknowledgeTarget = null"
       @acknowledge-payslip="submitAcknowledge"
     />
-  </q-page>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { usePayroll } from 'src/composables/page/usePayroll'
@@ -1464,18 +1463,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.payroll-dashboard {
-  background: #f4f6f9;
-  min-height: 100vh;
-  padding: 0;
-}
-
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
 .page-header {
   background: #ffffff;
   border-radius: 12px;
@@ -1663,8 +1650,6 @@ onUnmounted(() => {
 }
 
 @media (min-width: 1440px) {
-  .dashboard-container { max-width: 1600px; padding: 20px; }
-  .page-header { padding: 18px 28px; }
   .header-search { min-width: 280px; max-width: 360px; }
   .export-btn { height: 40px; padding: 0 20px; font-size: 14px; }
   .tabs-section { padding: 12px 18px; }
@@ -1673,13 +1658,11 @@ onUnmounted(() => {
 }
 
 @media (max-width: 1024px) {
-  .dashboard-container { max-width: 100%; padding: 14px; }
   .funding-layout { grid-template-columns: 1fr; }
   .header-search { min-width: 180px; max-width: 220px; }
 }
 
 @media (max-width: 768px) {
-  .dashboard-container { padding: 12px; }
   .page-header { padding: 12px 14px; margin-bottom: 12px; border-radius: 10px; }
   .header-content { flex-direction: column; align-items: stretch; gap: 10px; }
   .header-left { display: flex; align-items: center; justify-content: space-between; }
@@ -1689,12 +1672,11 @@ onUnmounted(() => {
   .tabs-section { padding: 8px 10px; margin-bottom: 12px; border-radius: 10px; }
   .tab-pills { gap: 5px; }
   .tab-pill { padding: 7px 12px; font-size: 12px; flex: 1; justify-content: center; }
-  .table-header { padding: 12px 14px; flex-direction: column; align-items: flex-start; gap: 6px; }
+  .table-header { padding: 12px 14px; flex-direction: column; align-items: stretch; gap: 10px; }
   .runs-list { padding: 10px; gap: 10px; }
 }
 
 @media (max-width: 480px) {
-  .dashboard-container { padding: 8px; }
   .page-title { font-size: 18px; }
   .tab-pill span:not(.tab-badge) { display: none; }
   .tab-pill-icon { font-size: 16px; }
