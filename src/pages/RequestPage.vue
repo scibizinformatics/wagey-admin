@@ -145,7 +145,6 @@
 import PageShell from '@/components/layout/PageShell.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
-import axios from 'axios'
 import { api } from 'src/boot/axios'
 import RequestStatsCards from 'src/components/pages/Request/RequestStatsCards.vue'
 import RequestLeaveTable from 'src/components/pages/Request/RequestLeaveTable.vue'
@@ -302,14 +301,11 @@ const updateCaStats = () => {
 const fetchLeaveRequests = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('access_token')
-    if (!token) throw new Error('No access token found')
     const companyId = selectedCompany.value
     if (!companyId) throw new Error('No company selected')
-    const res = await axios.get(
-      `https://staging.wageyapp.com/attendance/leave-list/?company_id=${companyId}`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
+    const res = await api.get('/attendance/leave-list/', {
+      params: { company_id: companyId },
+    })
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
     leaveList.value = data.map((item) => ({
       id: item.id,
@@ -347,11 +343,8 @@ const fetchLeaveRequests = async () => {
 // ===== API: OVERTIME =====
 const fetchOvertimeCategories = async () => {
   try {
-    const token = localStorage.getItem('access_token')
-    if (!token) return
     const companyId = selectedCompany.value
-    const res = await axios.get('https://staging.wageyapp.com/payroll/overtime-categories/', {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await api.get('/payroll/overtime-categories/', {
       params: companyId ? { company_id: companyId } : {},
     })
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
@@ -362,14 +355,11 @@ const fetchOvertimeCategories = async () => {
 const fetchOvertimeRequests = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('access_token')
-    if (!token) throw new Error('No access token found')
     const companyId = selectedCompany.value
     if (!companyId) throw new Error('No company selected')
-    const res = await axios.get(
-      `https://staging.wageyapp.com/payroll/overtime-list/?company=${companyId}`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
+    const res = await api.get('/payroll/overtime-list/', {
+      params: { company: companyId },
+    })
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
     overtimeList.value = data.map((item) => ({
       id: item.id,
@@ -405,12 +395,9 @@ const fetchOvertimeRequests = async () => {
 const approveRequest = async (request) => {
   try {
     actionLoading.value = `approve-${request.id}`
-    const token = localStorage.getItem('access_token')
-    if (!token) throw new Error('No access token found')
-    await axios.patch(
-      `https://staging.wageyapp.com/attendance/leave-approval/${request.id}/`,
+    await api.patch(
+      `/attendance/leave-approval/${request.id}/`,
       { status: 'approved' },
-      { headers: { Authorization: `Bearer ${token}` } },
     )
     const index = leaveList.value.findIndex((r) => r.id === request.id)
     if (index !== -1) leaveList.value[index].status = 'approved'
@@ -449,12 +436,9 @@ const approveRequest = async (request) => {
 const rejectRequest = async (request) => {
   try {
     actionLoading.value = `reject-${request.id}`
-    const token = localStorage.getItem('access_token')
-    if (!token) throw new Error('No access token found')
-    await axios.patch(
-      `https://staging.wageyapp.com/attendance/leave-approval/${request.id}/`,
+    await api.patch(
+      `/attendance/leave-approval/${request.id}/`,
       { status: 'rejected' },
-      { headers: { Authorization: `Bearer ${token}` } },
     )
     const index = leaveList.value.findIndex((r) => r.id === request.id)
     if (index !== -1) leaveList.value[index].status = 'rejected'
@@ -505,18 +489,15 @@ const openOvertimeApproval = (row) => {
 const submitOvertimeApproval = async () => {
   try {
     overtimeSubmitting.value = true
-    const token = localStorage.getItem('access_token')
-    if (!token) throw new Error('No access token found')
     const payload = {
       approved_hours: String(overtimeApprovalData.value.approved_hours),
       category: overtimeApprovalData.value.category ?? 0,
       reason: overtimeApprovalData.value.reason || '',
       status: overtimeApprovalData.value.status,
     }
-    await axios.patch(
-      `https://staging.wageyapp.com/payroll/overtime-approve/${selectedOvertimeRequest.value.id}/`,
+    await api.patch(
+      `/payroll/overtime-approve/${selectedOvertimeRequest.value.id}/`,
       payload,
-      { headers: { Authorization: `Bearer ${token}` } },
     )
     const index = overtimeList.value.findIndex((r) => r.id === selectedOvertimeRequest.value.id)
     if (index !== -1) overtimeList.value[index].status = overtimeApprovalData.value.status
@@ -547,26 +528,12 @@ const openLeaveDetails = (request) => {
 }
 
 // ===== API: CASH ADVANCE =====
-const getAuthConfig = () => {
-  const token =
-    localStorage.getItem('authToken') ||
-    localStorage.getItem('access_token') ||
-    localStorage.getItem('token')
-  if (!token) throw new Error('No authentication token found')
-  return {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    params: selectedCompany.value ? { company_id: selectedCompany.value } : {},
-  }
-}
-
 const fetchCaRequests = async () => {
   loading.value = true
   try {
-    const config = getAuthConfig()
-    const res = await api.get(
-      `https://staging.wageyapp.com/cash_advance/admin/?company_id=${selectedCompany.value}`,
-      { headers: config.headers },
-    )
+    const res = await api.get('/cash_advance/admin/', {
+      params: { company_id: selectedCompany.value },
+    })
     let data = Array.isArray(res.data) ? res.data : res.data.results || []
     caRequests.value = data.map((req) => ({
       ...req,
@@ -595,15 +562,13 @@ const submitCaApproval = async () => {
     caSubmitting.value = true
     const requestId = selectedCaRequest.value.id
     if (!requestId) throw new Error('No valid ID found for this request')
-    const config = getAuthConfig()
     const payload = {
       status: caApprovalData.value.status,
       remarks: caApprovalData.value.remarks || '',
     }
     await api.patch(
-      `https://staging.wageyapp.com/cash_advance/admin/${requestId}/approval/`,
+      `/cash_advance/admin/${requestId}/approval/`,
       payload,
-      config,
     )
     caApprovalModal.value = false
     selectedCaRequest.value = null
