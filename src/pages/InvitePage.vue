@@ -1,6 +1,5 @@
 <template>
-  <q-page class="invite-dashboard">
-    <div class="dashboard-container">
+  <PageShell>
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
@@ -67,11 +66,11 @@
         :sent-to-email="sentToEmail"
         @send-another="sendAnother"
       />
-    </div>
-  </q-page>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useInvites } from '@/composables/page/useInvites'
@@ -216,18 +215,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.invite-dashboard {
-  background: #f4f6f9;
-  min-height: 100vh;
-  padding: 0;
-}
-
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
 .page-header {
   background: #ffffff;
   border-radius: 12px;
@@ -282,9 +269,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
-  .dashboard-container {
-    padding: 14px;
-  }
   .header-content {
     flex-direction: column;
     align-items: stretch;
@@ -301,9 +285,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 480px) {
-  .dashboard-container {
-    padding: 10px;
-  }
   .page-title {
     font-size: 18px;
   }
