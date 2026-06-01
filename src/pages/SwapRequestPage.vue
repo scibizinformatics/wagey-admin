@@ -1,6 +1,5 @@
 <template>
-  <q-page class="swap-dashboard">
-    <div class="dashboard-container">
+  <PageShell>
       <!-- Header -->
       <div class="page-header">
         <div class="header-content">
@@ -35,7 +34,6 @@
         @approve="approveRequest"
         @reject="rejectRequest"
       />
-    </div>
 
     <!-- View Modal -->
     <SwapRequestViewModal
@@ -44,10 +42,11 @@
       @approve="handleModalApprove"
       @reject="handleModalReject"
     />
-  </q-page>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useQuasar } from 'quasar'
 import { useSwapRequests } from '@/composables/page/useSwapRequests'
@@ -348,16 +347,6 @@ onActivated(async () => {
 </script>
 
 <style scoped>
-.swap-dashboard {
-  background: #f4f6f9;
-  min-height: 100vh;
-  padding: 0;
-}
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-}
 .page-header {
   background: #ffffff;
   border-radius: 12px;
@@ -404,22 +393,19 @@ onActivated(async () => {
 }
 .search-icon { color: #9ca3af; }
 @media (max-width: 1024px) {
-  .dashboard-container { padding: 16px; }
   .page-header { padding: 14px; }
   .header-content { flex-wrap: wrap; }
   .header-actions { width: 100%; justify-content: space-between; }
   .header-search { min-width: 200px; }
 }
 @media (max-width: 768px) {
-  .dashboard-container { padding: 16px; }
-  .page-header { padding: 16px; margin-bottom: 16px; }
+  .page-header { padding: 12px 14px; margin-bottom: 12px; }
   .header-content { flex-direction: column; align-items: stretch; }
   .header-actions { flex-direction: row; flex-wrap: wrap; gap: 8px; }
   .header-search { width: 100%; max-width: 100%; order: 3; }
 }
 @media (max-width: 480px) {
-  .dashboard-container { padding: 12px; }
   .page-header { padding: 12px; border-radius: 12px; }
-  .page-title { font-size: 20px; }
+  .page-title { font-size: 18px; }
 }
 </style>
