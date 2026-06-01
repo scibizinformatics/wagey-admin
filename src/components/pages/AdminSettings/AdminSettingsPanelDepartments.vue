@@ -139,3 +139,7 @@ onMounted(async () => {
   await fetchCostCenters()
 })
 </script>
+
+<style scoped>
+@import './AdminSettingsPanelShared.css';
+</style>
