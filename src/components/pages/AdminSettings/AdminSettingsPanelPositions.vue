@@ -124,3 +124,7 @@ const filteredPositions = computed(() => {
 
 onMounted(fetchPositions)
 </script>
+
+<style scoped>
+@import './AdminSettingsPanelShared.css';
+</style>
