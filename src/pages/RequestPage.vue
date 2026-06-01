@@ -1,6 +1,5 @@
 <template>
-  <q-page class="request-dashboard">
-    <div class="dashboard-container">
+  <PageShell>
       <!-- Header -->
       <div class="page-header">
         <div class="header-content">
@@ -106,7 +105,6 @@
           />
         </q-tab-panel>
       </q-tab-panels>
-    </div>
 
     <!-- Modals -->
     <RequestLeaveDetailModal
@@ -140,10 +138,11 @@
       @update:approval-data="overtimeApprovalData = $event"
       @submit="submitOvertimeApproval"
     />
-  </q-page>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import axios from 'axios'
@@ -693,16 +692,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.request-dashboard {
-  background: #f4f6f9;
-  min-height: 100vh;
-  padding: 0;
-}
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-}
 .page-header {
   background: #ffffff;
   border-radius: 12px;
@@ -808,7 +797,6 @@ onUnmounted(() => {
   padding: 0;
 }
 @media (max-width: 768px) {
-  .dashboard-container { padding: 14px; }
   .page-header { padding: 12px 14px; margin-bottom: 12px; }
   .header-content { flex-direction: column; align-items: stretch; gap: 10px; }
   .header-actions { flex-direction: row; gap: 8px; flex-wrap: wrap; }
@@ -818,7 +806,6 @@ onUnmounted(() => {
   .tab-pill { padding: 7px 11px; font-size: 12px; flex: 1; justify-content: center; }
 }
 @media (max-width: 480px) {
-  .dashboard-container { padding: 10px; }
   .page-title { font-size: 18px; }
   .tab-pill span:not(.tab-badge) { display: none; }
   .tab-pill-icon { font-size: 16px; }
