@@ -373,3 +373,7 @@ watch(siteDialog, (val) => {
 
 onMounted(fetchSites)
 </script>
+
+<style scoped>
+@import './AdminSettingsPanelShared.css';
+</style>
