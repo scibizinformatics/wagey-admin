@@ -380,3 +380,7 @@ onMounted(async () => {
   await fetchShiftTypeTemplates()
 })
 </script>
+
+<style scoped>
+@import './AdminSettingsPanelShared.css';
+</style>
