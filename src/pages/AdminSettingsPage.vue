@@ -1,6 +1,5 @@
 <template>
-  <q-page class="admin-dashboard">
-    <div class="dashboard-container">
+  <PageShell>
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
@@ -77,12 +76,12 @@
           <AdminSettingsPanelCostCenters :search-query="searchQuery" />
         </q-tab-panel>
       </q-tab-panels>
-    </div>
 
-  </q-page>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref } from 'vue'
 
 import AdminSettingsPanelCompanies from '@/components/pages/AdminSettings/AdminSettingsPanelCompanies.vue'
@@ -99,22 +98,7 @@ const activeTab = ref('companies')
 const searchQuery = ref('')
 </script>
 
-<style>
-/* ============================================
-   BASE LAYOUT
-   ============================================ */
-.admin-dashboard {
-  background: #f4f6f9;
-  min-height: 100vh;
-  padding: 0;
-}
-
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
+<style scoped>
 /* ============================================
    PAGE HEADER — matches EmployeesPage exactly
    ============================================ */
@@ -549,10 +533,6 @@ const searchQuery = ref('')
    RESPONSIVE — 1024px
    ============================================ */
 @media (max-width: 1024px) {
-  .dashboard-container {
-    padding: 14px;
-  }
-
   .page-header {
     padding: 14px;
   }
@@ -574,10 +554,6 @@ const searchQuery = ref('')
    RESPONSIVE — 768px (Tablet)
    ============================================ */
 @media (max-width: 768px) {
-  .dashboard-container {
-    padding: 12px;
-  }
-
   .page-header {
     padding: 14px;
     margin-bottom: 12px;
@@ -645,10 +621,6 @@ const searchQuery = ref('')
    RESPONSIVE — 480px (Small Mobile)
    ============================================ */
 @media (max-width: 480px) {
-  .dashboard-container {
-    padding: 10px;
-  }
-
   .page-header {
     padding: 12px;
     border-radius: 10px;
