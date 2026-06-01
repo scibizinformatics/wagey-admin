@@ -1,6 +1,5 @@
 ﻿<template>
-  <q-page class="employee-dashboard">
-    <div class="dashboard-container">
+  <PageShell>
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
@@ -72,7 +71,6 @@
           @view-photo="viewEmployeePhoto"
         />
       </div>
-    </div>
 
     <!-- Modals -->
     <EmployeeAddModal
@@ -132,10 +130,11 @@
       @multiplier-toggle="handleMultiplierToggle"
       @submit="assignContract(eligibilityOptions)"
     />
-  </q-page>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useEmployees } from '@/composables/page/useEmployees'
@@ -210,6 +209,8 @@ const employeeContracts = ref({})
 const payTypeAutoFilled = ref(false)
 
 function onContractTypeChange(contractTypeId) {
+  assignForm.value.contract_type_id = contractTypeId
+
   const selectedType = contractTypeOptions.value.find((ct) => ct.id === contractTypeId)
   if (selectedType && selectedType.eligibilities) {
     const eligs = eligibilityOptions.value.filter((el) => selectedType.eligibilities.includes(el.id))
@@ -951,23 +952,8 @@ watch(companyId, (newId, oldId) => {
 
 <style scoped>
 /* ==============================
-   BASE
-============================== */
-.employee-dashboard {
-  background: #f4f6f9;
-  min-height: 100vh;
-  padding: 0;
-}
-
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-/* ==============================
    HEADER
-============================== */
+   ============================== */
 .page-header {
   background: #ffffff;
   border-radius: 12px;
@@ -1062,10 +1048,6 @@ watch(companyId, (newId, oldId) => {
    RESPONSIVE
 ============================== */
 @media (max-width: 768px) {
-  .dashboard-container {
-    padding: 14px;
-  }
-
   .header-content {
     flex-direction: column;
     align-items: stretch;
@@ -1094,10 +1076,6 @@ watch(companyId, (newId, oldId) => {
 }
 
 @media (max-width: 480px) {
-  .dashboard-container {
-    padding: 10px;
-  }
-
   .page-title {
     font-size: 18px;
   }
