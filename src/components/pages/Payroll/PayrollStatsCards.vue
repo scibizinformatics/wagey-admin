@@ -122,23 +122,6 @@ defineProps({
   line-height: 1.1;
 }
 
-@media (min-width: 1440px) {
-  .stats-section {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-  }
-  .stats-card {
-    padding: 20px 22px;
-  }
-  .stats-icon-wrapper {
-    width: 52px;
-    height: 52px;
-  }
-  .stats-icon {
-    font-size: 24px;
-  }
-}
-
 @media (max-width: 1024px) {
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
