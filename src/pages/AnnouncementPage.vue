@@ -1,6 +1,5 @@
 <template>
-  <q-page class="announcement-dashboard">
-    <div class="dashboard-container">
+  <PageShell>
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
@@ -73,11 +72,11 @@
         :deleting="deleting"
         @confirm="confirmDeleteAction"
       />
-    </div>
-  </q-page>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref, computed, onMounted } from 'vue'
 import { api } from 'boot/axios'
 import { useQuasar } from 'quasar'
@@ -329,37 +328,24 @@ onMounted(fetchAnnouncements)
 </script>
 
 <style scoped>
-.announcement-dashboard {
-  background: #f4f6f9;
-  min-height: 100vh;
-  padding: 0;
-}
-
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
 .page-header {
   background: #ffffff;
   border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  margin-top: 16px;
+  padding: 14px 20px;
+  margin-bottom: 16px;
+  border: 1px solid #e8ecf0;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 600;
   color: #111827;
   margin: 0;
 }
@@ -384,9 +370,6 @@ onMounted(fetchAnnouncements)
 }
 
 @media (max-width: 1024px) {
-  .dashboard-container {
-    padding: 14px 16px;
-  }
   .header-search {
     min-width: 160px;
     max-width: 200px;
@@ -394,12 +377,8 @@ onMounted(fetchAnnouncements)
 }
 
 @media (max-width: 768px) {
-  .dashboard-container {
-    padding: 10px 12px;
-  }
   .page-header {
-    padding: 14px;
-    margin-top: 10px;
+    padding: 12px 14px;
     margin-bottom: 12px;
   }
   .header-content {
