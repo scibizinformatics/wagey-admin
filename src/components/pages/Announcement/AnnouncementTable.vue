@@ -200,9 +200,8 @@ const formatDate = (dateStr) => {
 .table-section {
   background: #ffffff;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e8ecf0;
   overflow: hidden;
-  margin-bottom: 20px;
 }
 
 .table-header {
