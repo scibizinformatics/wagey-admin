@@ -93,18 +93,57 @@ defineProps({
   margin-bottom: 2px;
 }
 .stats-amount {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   color: #111827;
   line-height: 1.1;
 }
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .stats-section {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
+  .stats-card {
+    padding: 14px 16px;
+  }
+  .stats-amount {
+    font-size: 24px;
+  }
+}
+@media (max-width: 768px) {
+  .stats-section {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .stats-card {
+    padding: 12px 14px;
+  }
+  .stats-icon-wrapper {
+    width: 38px;
+    height: 38px;
+  }
   .stats-amount {
     font-size: 22px;
+  }
+}
+@media (max-width: 480px) {
+  .stats-section {
+    gap: 6px;
+  }
+  .stats-card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .stats-icon-wrapper {
+    width: 32px;
+    height: 32px;
+  }
+  .stats-amount {
+    font-size: 20px;
+  }
+  .stats-label {
+    font-size: 11px;
   }
 }
 </style>
