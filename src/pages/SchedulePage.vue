@@ -1,6 +1,5 @@
 <template>
-  <q-page class="schedule-page">
-    <div class="dashboard-container">
+  <PageShell>
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
@@ -58,11 +57,12 @@
 
       <!-- Schedule Table -->
       <ScheduleTable
-        :users="filteredUsers"
+        :users="users"
         :shifts="shifts"
         :days="days"
         :leave-types="leaveTypes"
         :loading="isLoadingSchedule"
+        :loading-text="loadingMessage"
         :quick-action-loading="quickActionLoading"
         :assigning-day-off-id="assigningDayOffId"
         :sites="sites"
@@ -73,6 +73,45 @@
         @assign-dual-dayoff="assignDualDayOff"
         @quick-direct-assign="quickDirectAssign"
       />
+
+      <!-- Pagination Controls -->
+      <div class="pagination-bar">
+        <div class="pagination-info">
+          <span class="pagination-text">
+            Showing {{ ((schedulePage - 1) * schedulePageSize) + 1 }} –
+            {{ Math.min(schedulePage * schedulePageSize, schedulePagination.count) }}
+            of {{ schedulePagination.count }} employees
+          </span>
+          <q-select
+            v-model="schedulePageSize"
+            :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
+            option-label="label"
+            option-value="value"
+            emit-value
+            map-options
+            dense
+            outlined
+            class="page-size-select"
+            @update:model-value="onPageSizeChange"
+          />
+        </div>
+        <q-pagination
+          v-model="schedulePage"
+          :max="Math.ceil(schedulePagination.count / schedulePageSize)"
+          :max-pages="6"
+          boundary-numbers
+          direction-links
+          color="primary"
+          active-color="primary"
+          active-text-color="white"
+          icon-first="first_page"
+          icon-prev="chevron_left"
+          icon-next="chevron_right"
+          icon-last="last_page"
+          class="schedule-pagination"
+          @update:model-value="onPageChange"
+        />
+      </div>
 
       <!-- Add Schedule Modal -->
       <ScheduleAddModal
@@ -112,11 +151,11 @@
         @submit="handleReassignShift"
         @back-to-original="reassignData.shiftTemplateId = reassignData.originalTemplateId"
       />
-    </div>
-  </q-page>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useCompany } from '@/composables/page/useCompany'
@@ -141,6 +180,7 @@ const {
   applyLeaveForEmployee,
   fetchLeaveTypes: fetchLeaveTypesApi,
   fetchShiftTemplates: fetchShiftTemplatesApi,
+  schedulePagination,
 } = useSchedule()
 const {
   sites,
@@ -165,6 +205,14 @@ const viewMode = ref('table')
 const filters = ref({ site: null, employee: null })
 const searchTerm = ref('')
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+const schedulePage = ref(1)
+const schedulePageSize = ref(20)
+const pageSizeOptions = [10, 20, 50]
+
+const allSchedules = ref([])
+const scheduleCache = ref({})
+const loadingMessage = ref('Loading schedules...')
 
 const showAddModal = ref(false)
 const showQuickAddModal = ref(false)
@@ -241,6 +289,7 @@ const nextWeek = async () => {
   const newStart = new Date(selectedWeek.value.start)
   newStart.setDate(newStart.getDate() + 7)
   selectedWeek.value = getWeekRange(newStart)
+  schedulePage.value = 1
   await fetchData()
   fetchLeaves()
 }
@@ -249,7 +298,21 @@ const prevWeek = async () => {
   const newStart = new Date(selectedWeek.value.start)
   newStart.setDate(newStart.getDate() - 7)
   selectedWeek.value = getWeekRange(newStart)
+  schedulePage.value = 1
   await fetchData()
+  fetchLeaves()
+}
+
+const onPageChange = (newPage) => {
+  schedulePage.value = newPage
+  renderPage()
+  fetchLeaves()
+}
+
+const onPageSizeChange = (newSize) => {
+  schedulePageSize.value = newSize
+  schedulePage.value = 1
+  renderPage()
   fetchLeaves()
 }
 
@@ -272,7 +335,7 @@ const isEmployeeTerminated = (emp) => {
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const totalShifts = computed(() => shifts.value.length)
-const activeEmployees = computed(() => new Set(shifts.value.map((s) => s.userId)).size)
+const activeEmployees = computed(() => schedulePagination.value.count)
 const positionsCount = computed(() => new Set(shifts.value.map((s) => s.position)).size)
 
 const siteFilterOptions = computed(() => [
@@ -321,19 +384,24 @@ const recurringScheduleOptions = computed(() =>
   recurringSchedules.value.map((r) => ({ label: r.name, value: r.id })),
 )
 
-const filteredUsers = computed(() => {
-  return users.value.filter((u) => {
-    const matchEmployee = !filters.value.employee || u.id === filters.value.employee
-    const matchSearch = (u.name || '')
-      .toLowerCase()
-      .includes((searchTerm.value || '').toLowerCase())
-    const matchSite =
-      !filters.value.site ||
-      shifts.value.some((shift) => {
-        const shiftSiteId = typeof shift.site === 'number' ? shift.site : parseInt(shift.site)
-        const filterSiteId = typeof filters.value.site === 'number' ? filters.value.site : parseInt(filters.value.site)
-        return shift.userId === u.id && shiftSiteId === filterSiteId
+const filteredAllSchedules = computed(() => {
+  return allSchedules.value.filter((empData) => {
+    const employee = empData.employee || empData
+    const fullName = employee.full_name || employee.name || ''
+    const empId = employee.id || empData.id
+
+    const matchEmployee = !filters.value.employee || empId == filters.value.employee
+    const matchSearch = fullName.toLowerCase().includes((searchTerm.value || '').toLowerCase())
+    const matchSite = !filters.value.site || (() => {
+      const schedules = empData.schedules || empData.schedule || empData.schedule_list || []
+      if (!Array.isArray(schedules)) return false
+      return schedules.some((s) => {
+        const sSite = typeof s.site === 'number' ? s.site : parseInt(s.site)
+        const fSite = typeof filters.value.site === 'number' ? filters.value.site : parseInt(filters.value.site)
+        return sSite === fSite
       })
+    })()
+
     return matchEmployee && matchSearch && matchSite
   })
 })
@@ -345,6 +413,15 @@ watch(
     filteredEmployeeOptions.value = newOptions
   },
   { immediate: true },
+)
+
+watch(
+  () => ({ search: searchTerm.value, employee: filters.value.employee, site: filters.value.site }),
+  () => {
+    schedulePage.value = 1
+    renderPage()
+    fetchLeaves()
+  },
 )
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -467,8 +544,121 @@ const fetchLeaves = () => {
   })
 }
 
+const renderPage = () => {
+  const start = (schedulePage.value - 1) * schedulePageSize.value
+  const end = start + schedulePageSize.value
+  const employeesData = filteredAllSchedules.value.slice(start, end)
+
+  users.value = employeesData
+    .filter((emp) => !isEmployeeTerminated(emp.employee || emp))
+    .map((emp) => ({
+      id: emp.employee?.id || emp.id,
+      name: emp.employee?.full_name || emp.full_name || emp.name || `Employee ${emp.id}`,
+      email: emp.employee?.email || emp.email || '',
+    }))
+
+  shifts.value = []
+  const ws = selectedWeek.value.start
+  const weekStartStr = `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
+  const weekStartLocal = new Date(weekStartStr + 'T00:00:00')
+  const weekEndLocal = new Date(weekStartLocal)
+  weekEndLocal.setDate(weekEndLocal.getDate() + 6)
+
+  employeesData.forEach((empData) => {
+    const employee =
+      empData.employee && typeof empData.employee === 'object'
+        ? empData.employee
+        : empData.id
+          ? empData
+          : null
+    if (!employee?.id) return
+    const scheduleList = empData.schedules || empData.schedule || empData.schedule_list || []
+    const parsedSchedules =
+      typeof scheduleList === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(scheduleList)
+            } catch {
+              return []
+            }
+          })()
+        : scheduleList
+    if (!Array.isArray(parsedSchedules) || parsedSchedules.length === 0) return
+    parsedSchedules.forEach((schedule, sIndex) => {
+      if (!schedule.date) return
+      const scheduleDateStr = schedule.date.substring(0, 10)
+      const scheduleDate = new Date(scheduleDateStr + 'T00:00:00')
+      const daysDiff = Math.round(
+        (scheduleDate.getTime() - weekStartLocal.getTime()) / (1000 * 60 * 60 * 24),
+      )
+      if (daysDiff < 0 || daysDiff >= 7) return
+      const isDayOffShift =
+        schedule.is_off === true ||
+        schedule.is_day_off === true ||
+        schedule.status === 'day_off' ||
+        schedule.shift_type_name?.toLowerCase().includes('day off')
+      const startTime = isDayOffShift
+        ? null
+        : schedule.actual_start_time?.substring(0, 5) ||
+          schedule.start_time?.substring(0, 5) ||
+          null
+      const endTime = isDayOffShift
+        ? null
+        : schedule.actual_end_time?.substring(0, 5) ||
+          schedule.end_time?.substring(0, 5) ||
+          null
+      let shiftTypeId = schedule.shift_type || null
+      let shiftTypeName = isDayOffShift ? 'Day Off' : schedule.shift_type_name || null
+      if (!isDayOffShift && !shiftTypeName && startTime) {
+        const match =
+          shiftTypes.value.find((st) => {
+            const stStart = st.default_start_time?.substring(0, 5)
+            const stEnd = st.default_end_time?.substring(0, 5)
+            return stStart === startTime && stEnd === endTime
+          }) ||
+          shiftTypes.value.find((st) => st.default_start_time?.substring(0, 5) === startTime)
+        if (match) {
+          shiftTypeId = shiftTypeId || match.id
+          shiftTypeName = match.name
+        }
+      }
+      if (shiftTypeId && !shiftTypeName) {
+        shiftTypeName = shiftTypes.value.find((st) => st.id === shiftTypeId)?.name || null
+      }
+      const resolvedAssignmentId =
+        schedule.employee_assignment_id || schedule.assignment_id || null
+      shifts.value.push({
+        id: `${schedule.id}-${sIndex}`,
+        assignmentId: resolvedAssignmentId,
+        userId: employee.id,
+        day: daysDiff,
+        startTime,
+        endTime,
+        position: shiftTypeName || (startTime ? `${startTime}–${endTime}` : 'Shift'),
+        shiftTypeId,
+        shiftTemplateId: schedule.shift_template || schedule.shift_template_id || null,
+        site: schedule.site || null,
+        siteName: schedule.site_name || null,
+        department: schedule.department || null,
+        status: schedule.status || 'active',
+        date: scheduleDateStr,
+        is_off: isDayOffShift,
+      })
+    })
+  })
+
+  schedulePagination.value = {
+    page: schedulePage.value,
+    page_size: schedulePageSize.value,
+    count: filteredAllSchedules.value.length,
+    next: null,
+    previous: null,
+  }
+}
+
 const fetchData = async () => {
   isLoadingSchedule.value = true
+  loadingMessage.value = 'Loading schedules...'
   try {
     const token = localStorage.getItem('access_token')
     const cId = normalizeCompanyId()
@@ -483,146 +673,90 @@ const fetchData = async () => {
     const weekEnd = selectedWeek.value.end
     const fmt = (d) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    const fetchResults = [await fetchScheduleByDateRange(fmt(ws), fmt(weekEnd))]
-    const mergeEmployeeData = (results) => {
-      const map = new Map()
-      results.forEach((rawResult) => {
-        const list = Array.isArray(rawResult)
-          ? rawResult
-          : Array.isArray(rawResult?.results)
-            ? rawResult.results
-            : Array.isArray(rawResult?.data)
-              ? rawResult.data
-              : rawResult
-                ? [rawResult]
-                : []
-        list.forEach((empData) => {
-          const empId = empData.employee?.id || empData.id
-          if (!empId) return
-          if (map.has(empId)) {
-            const existing = map.get(empId)
-            const newSchedules = empData.schedules || empData.schedule || empData.schedule_list || []
-            const existingSchedules = existing.schedules || []
-            existing.schedules = [...existingSchedules, ...newSchedules]
-          } else {
-            map.set(empId, {
-              ...empData,
-              schedules: [
-                ...(empData.schedules || empData.schedule || empData.schedule_list || []),
-              ],
-            })
-          }
+    const weekKey = fmt(ws)
+
+    if (scheduleCache.value[weekKey]) {
+      allSchedules.value = scheduleCache.value[weekKey]
+    } else {
+      const allResults = []
+      let page = 1
+      let hasMore = true
+
+      const mergeEmployeeData = (results) => {
+        const map = new Map()
+        results.forEach((rawResult) => {
+          const list = Array.isArray(rawResult)
+            ? rawResult
+            : Array.isArray(rawResult?.results)
+              ? rawResult.results
+              : Array.isArray(rawResult?.data)
+                ? rawResult.data
+                : rawResult
+                  ? [rawResult]
+                  : []
+          list.forEach((empData) => {
+            const empId = empData.employee?.id || empData.id
+            if (!empId) return
+            if (map.has(empId)) {
+              const existing = map.get(empId)
+              const newSchedules = empData.schedules || empData.schedule || empData.schedule_list || []
+              const existingSchedules = existing.schedules || []
+              existing.schedules = [...existingSchedules, ...newSchedules]
+            } else {
+              map.set(empId, {
+                ...empData,
+                schedules: [
+                  ...(empData.schedules || empData.schedule || empData.schedule_list || []),
+                ],
+              })
+            }
+          })
         })
+        return Array.from(map.values())
+      }
+
+      while (hasMore) {
+        loadingMessage.value = `Loading page ${page}...`
+        const response = await fetchScheduleByDateRange(fmt(ws), fmt(weekEnd), {
+          page: page,
+          page_size: 10,
+        })
+        const merged = mergeEmployeeData([response])
+        allResults.push(...merged)
+        hasMore = schedulePagination.value.next !== null
+        page++
+      }
+
+      const getFirstName = (fullName) => {
+        if (!fullName) return ''
+        return fullName.trim().split(' ')[0].toLowerCase()
+      }
+
+      allResults.sort((a, b) => {
+        const nameA = getFirstName(a.employee?.full_name || a.full_name)
+        const nameB = getFirstName(b.employee?.full_name || b.full_name)
+        return nameA.localeCompare(nameB)
       })
-      return Array.from(map.values())
+
+      scheduleCache.value[weekKey] = allResults
+      allSchedules.value = allResults
     }
-    const employeesData = mergeEmployeeData(fetchResults)
-    users.value = employees.value
-      .filter((emp) => !isEmployeeTerminated(emp))
-      .map((emp) => ({
-        id: emp.id,
-        name: emp.full_name || emp.name || `Employee ${emp.id}`,
-        email: emp.email || '',
-      }))
-    shifts.value = []
-    const weekStartStr = `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
-    const weekStartLocal = new Date(weekStartStr + 'T00:00:00')
-    const weekEndLocal = new Date(weekStartLocal)
-    weekEndLocal.setDate(weekEndLocal.getDate() + 6)
-    employeesData.forEach((empData) => {
-      const employee =
-        empData.employee && typeof empData.employee === 'object'
-          ? empData.employee
-          : empData.id
-            ? empData
-            : null
-      if (!employee?.id) return
-      const scheduleList = empData.schedules || empData.schedule || empData.schedule_list || []
-      const parsedSchedules =
-        typeof scheduleList === 'string'
-          ? (() => {
-              try {
-                return JSON.parse(scheduleList)
-              } catch {
-                return []
-              }
-            })()
-          : scheduleList
-      if (!Array.isArray(parsedSchedules) || parsedSchedules.length === 0) return
-      parsedSchedules.forEach((schedule, sIndex) => {
-        if (!schedule.date) return
-        const scheduleDateStr = schedule.date.substring(0, 10)
-        const scheduleDate = new Date(scheduleDateStr + 'T00:00:00')
-        const daysDiff = Math.round(
-          (scheduleDate.getTime() - weekStartLocal.getTime()) / (1000 * 60 * 60 * 24),
-        )
-        if (daysDiff < 0 || daysDiff >= 7) return
-        const isDayOffShift =
-          schedule.is_off === true ||
-          schedule.is_day_off === true ||
-          schedule.status === 'day_off' ||
-          schedule.shift_type_name?.toLowerCase().includes('day off')
-        const startTime = isDayOffShift
-          ? null
-          : schedule.actual_start_time?.substring(0, 5) ||
-            schedule.start_time?.substring(0, 5) ||
-            null
-        const endTime = isDayOffShift
-          ? null
-          : schedule.actual_end_time?.substring(0, 5) ||
-            schedule.end_time?.substring(0, 5) ||
-            null
-        let shiftTypeId = schedule.shift_type || null
-        let shiftTypeName = isDayOffShift ? 'Day Off' : schedule.shift_type_name || null
-        if (!isDayOffShift && !shiftTypeName && startTime) {
-          const match =
-            shiftTypes.value.find((st) => {
-              const stStart = st.default_start_time?.substring(0, 5)
-              const stEnd = st.default_end_time?.substring(0, 5)
-              return stStart === startTime && stEnd === endTime
-            }) ||
-            shiftTypes.value.find((st) => st.default_start_time?.substring(0, 5) === startTime)
-          if (match) {
-            shiftTypeId = shiftTypeId || match.id
-            shiftTypeName = match.name
-          }
-        }
-        if (shiftTypeId && !shiftTypeName) {
-          shiftTypeName = shiftTypes.value.find((st) => st.id === shiftTypeId)?.name || null
-        }
-        const resolvedAssignmentId =
-          schedule.employee_assignment_id || schedule.assignment_id || null
-        shifts.value.push({
-          id: `${schedule.id}-${sIndex}`,
-          assignmentId: resolvedAssignmentId,
-          userId: employee.id,
-          day: daysDiff,
-          startTime,
-          endTime,
-          position: shiftTypeName || (startTime ? `${startTime}–${endTime}` : 'Shift'),
-          shiftTypeId,
-          shiftTemplateId: schedule.shift_template || schedule.shift_template_id || null,
-          site: schedule.site || null,
-          siteName: schedule.site_name || null,
-          department: schedule.department || null,
-          status: schedule.status || 'active',
-          date: scheduleDateStr,
-          is_off: isDayOffShift,
-        })
-      })
-    })
+
+    renderPage()
+
     $q.notify({
       type: shifts.value.length ? 'positive' : 'info',
-      message: shifts.value.length
-        ? `Loaded ${shifts.value.length} schedules`
+      message: allSchedules.value.length
+        ? `Loaded ${allSchedules.value.length} employees`
         : 'No schedules found for the selected week.',
-      timeout: shifts.value.length ? 2000 : 3000,
+      timeout: allSchedules.value.length ? 2000 : 3000,
     })
   } catch (e) {
     console.error('FETCH ERROR:', e)
     $q.notify({ type: 'negative', message: 'Failed to load schedules', timeout: 5000 })
   } finally {
     isLoadingSchedule.value = false
+    loadingMessage.value = 'Loading schedules...'
   }
 }
 
@@ -1157,16 +1291,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.schedule-page {
-  background: #f4f6f9;
-  min-height: 100vh;
-  padding: 0;
-}
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-}
 .page-header {
   background: #ffffff;
   border-radius: 12px;
@@ -1235,18 +1359,68 @@ onMounted(async () => {
   padding: 0 16px;
 }
 @media (max-width: 1024px) {
-  .dashboard-container { padding: 14px; }
   .header-content { flex-wrap: wrap; gap: 12px; }
   .title-section { width: 100%; }
   .header-actions { width: 100%; justify-content: flex-end; }
   .header-search { max-width: 100%; flex: 1; }
 }
 @media (max-width: 768px) {
-  .dashboard-container { padding: 12px; }
   .header-actions { flex-direction: column; }
   .header-search, .add-btn { width: 100%; max-width: 100%; }
 }
 @media (max-width: 480px) {
   .page-title { font-size: 18px; }
+}
+
+/* Pagination Bar */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  padding: 12px 20px;
+  margin-top: 16px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pagination-text {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+.page-size-select {
+  min-width: 120px;
+}
+.page-size-select :deep(.q-field__control) {
+  border-radius: 8px;
+}
+.schedule-pagination :deep(.q-btn) {
+  font-weight: 600;
+  border-radius: 8px;
+  min-width: 32px;
+  min-height: 32px;
+}
+.schedule-pagination :deep(.q-btn--active) {
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+@media (max-width: 768px) {
+  .pagination-bar {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+  .pagination-info {
+    justify-content: center;
+  }
 }
 </style>
