@@ -132,3 +132,7 @@ onMounted(async () => {
   await fetchEligibilities()
 })
 </script>
+
+<style scoped>
+@import './AdminSettingsPanelShared.css';
+</style>
