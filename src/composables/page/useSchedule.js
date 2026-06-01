@@ -9,6 +9,13 @@ export function useSchedule() {
   const schedules = ref([])
   const loading = ref(false)
   const saving = ref(false)
+  const schedulePagination = ref({
+    page: 1,
+    page_size: 20,
+    count: 0,
+    next: null,
+    previous: null,
+  })
 
   // ─── Monthly schedule grid ────────────────────────────────────────────────
 
@@ -44,8 +51,15 @@ export function useSchedule() {
         params: { company: companyId.value, start_date: startDate, end_date: endDate, ...params },
         headers: authHeaders(),
       })
-      const data = response.data.data ?? response.data ?? []
-      schedules.value = Array.isArray(data) ? data : []
+      const data = response.data ?? {}
+      schedules.value = Array.isArray(data.results) ? data.results : []
+      schedulePagination.value = {
+        page: params.page || 1,
+        page_size: params.page_size || 20,
+        count: data.count || 0,
+        next: data.next || null,
+        previous: data.previous || null,
+      }
       return schedules.value
     } finally {
       loading.value = false
@@ -258,6 +272,7 @@ export function useSchedule() {
     schedules,
     loading,
     saving,
+    schedulePagination,
     // methods
     fetchMonthlySchedules,
     fetchScheduleByDateRange,
