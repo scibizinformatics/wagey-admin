@@ -174,3 +174,7 @@ const filteredCompanies = computed(() => {
 
 onMounted(fetchCompanies)
 </script>
+
+<style scoped>
+@import './AdminSettingsPanelShared.css';
+</style>
