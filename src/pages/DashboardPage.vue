@@ -1,9 +1,7 @@
 <template>
-  <div class="dashboard-page">
+  <PageShell full-height flex-column>
     <!-- Global loading overlay -->
     <q-inner-loading :showing="pageLoading" color="primary" />
-
-    <div class="dashboard-inner">
       <!-- Top Stats Row -->
       <DashboardStatsRow :stats-cards="statsCards" :page-loading="pageLoading" />
 
@@ -22,11 +20,11 @@
           <PendingSwapsPanel :pending-swaps="pendingSwaps" :loading="swapLoading" />
         </div>
       </div>
-    </div>
-  </div>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '@/components/layout/PageShell.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { useAttendance } from '@/composables/page/useAttendance'
@@ -386,24 +384,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* ── Base ── */
-.dashboard-page {
-  background: #f4f6f9;
-  height: 100vh;
-  overflow: hidden;
-  padding: 0;
-}
-.dashboard-inner {
-  height: 100vh;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  box-sizing: border-box;
-}
-
 /* ── Layout ── */
 .main-grid {
   display: grid;
@@ -440,11 +420,6 @@ onMounted(async () => {
 @media (max-width: 768px) {
   .col-side {
     grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 480px) {
-  .dashboard-inner {
-    padding: 12px;
   }
 }
 </style>
