@@ -2,7 +2,7 @@
   <div class="content-section">
     <div v-if="loading" class="schedule-loading-overlay">
       <q-spinner color="primary" size="48px" />
-      <div class="schedule-loading-text">Loading schedules...</div>
+      <div class="schedule-loading-text">{{ props.loadingText }}</div>
     </div>
     <template v-else>
       <div class="table-view">
@@ -182,6 +182,7 @@ const props = defineProps({
   assigningDayOffId: { type: String, default: null },
   sites: { type: Array, default: () => [] },
   shiftTypes: { type: Array, default: () => [] },
+  loadingText: { type: String, default: 'Loading schedules...' },
 });
 
 defineEmits([
