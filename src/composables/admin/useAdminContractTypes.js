@@ -165,7 +165,7 @@ export function useAdminContractTypes() {
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/organization/contract-types/${contractType.id}/`, {
+        await api.delete(`${BASE}/organization/contract-types/${contractType.id}/delete/`, {
           headers: authHeaders(),
         })
         $q.notify({ type: 'positive', message: 'Contract type deleted successfully' })
