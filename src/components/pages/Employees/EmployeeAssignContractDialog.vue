@@ -228,6 +228,7 @@ const props = defineProps({
 const paymentMethodOptions = [
   { label: 'Bank Transfer', value: 'bank_transfer' },
   { label: 'Cash', value: 'cash' },
+  { label: 'Paytaca', value: 'paytaca' },
 ]
 
 const multiplierFields = [
