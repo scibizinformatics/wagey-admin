@@ -32,7 +32,6 @@
           <template v-slot:header>
             <q-tr class="table-header-row">
               <q-th class="table-header-cell">Department Name</q-th>
-              <q-th class="table-header-cell">Description</q-th>
               <q-th class="table-header-cell">Date Created</q-th>
               <q-th class="table-header-cell actions-header">Actions</q-th>
             </q-tr>
@@ -40,7 +39,6 @@
           <template v-slot:body="props">
             <q-tr class="table-body-row">
               <q-td class="table-body-cell"><span class="item-name">{{ props.row.name }}</span></q-td>
-              <q-td class="table-body-cell">{{ props.row.description }}</q-td>
               <q-td class="table-body-cell">{{ formatDate(props.row.date_created) }}</q-td>
               <q-td class="table-body-cell actions-cell">
                 <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
@@ -116,12 +114,11 @@ const {
   deleteDepartment,
 } = useAdminDepartments()
 
-const departmentColumns = ref([
-  { name: 'name', label: 'Department Name', field: 'name', align: 'left' },
-  { name: 'description', label: 'Description', field: 'description', align: 'left' },
-  { name: 'date_created', label: 'Date Created', field: 'date_created', align: 'left' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-])
+  const departmentColumns = ref([
+    { name: 'name', label: 'Department Name', field: 'name', align: 'left' },
+    { name: 'date_created', label: 'Date Created', field: 'date_created', align: 'left' },
+    { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+  ])
 
 const filteredDepartments = computed(() => {
   if (!props.searchQuery) return departments.value
