@@ -1,5 +1,4 @@
 // Admin Settings composables — one import to rule them all
-export { useAdminCompanies } from './useAdminCompanies'
 export { useAdminSites } from './useAdminSites'
 export { useAdminRoles } from './useAdminRoles'
 export { useAdminShifts } from './useAdminShifts'

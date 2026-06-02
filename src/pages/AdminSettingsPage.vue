@@ -17,7 +17,6 @@
           indicator-color="primary"
           align="left"
         >
-          <q-tab name="companies" label="Companies" class="settings-tab" />
           <q-tab name="sites" label="Sites" class="settings-tab" />
           <q-tab name="roles" label="Permissions" class="settings-tab" />
           <q-tab name="shifts" label="Shifts" class="settings-tab" />
@@ -31,11 +30,6 @@
 
       <!-- Tab Panels -->
       <q-tab-panels v-model="activeTab" animated class="transparent-panels">
-        <!-- ===================== COMPANIES ===================== -->
-        <q-tab-panel name="companies" class="q-pa-none">
-          <AdminSettingsPanelCompanies :search-query="searchQuery" />
-        </q-tab-panel>
-
         <!-- ===================== SITES ===================== -->
         <q-tab-panel name="sites" class="q-pa-none">
           <AdminSettingsPanelSites :search-query="searchQuery" />
@@ -84,7 +78,6 @@
 import PageShell from '@/components/layout/PageShell.vue'
 import { ref } from 'vue'
 
-import AdminSettingsPanelCompanies from '@/components/pages/AdminSettings/AdminSettingsPanelCompanies.vue'
 import AdminSettingsPanelSites from '@/components/pages/AdminSettings/AdminSettingsPanelSites.vue'
 import AdminSettingsPanelRoles from '@/components/pages/AdminSettings/AdminSettingsPanelRoles.vue'
 import AdminSettingsPanelShifts from '@/components/pages/AdminSettings/AdminSettingsPanelShifts.vue'
@@ -94,7 +87,7 @@ import AdminSettingsPanelContractTypes from '@/components/pages/AdminSettings/Ad
 import AdminSettingsPanelCustomMultipliers from '@/components/pages/AdminSettings/AdminSettingsPanelCustomMultipliers.vue'
 import AdminSettingsPanelCostCenters from '@/components/pages/AdminSettings/AdminSettingsPanelCostCenters.vue'
 
-const activeTab = ref('companies')
+const activeTab = ref('sites')
 const searchQuery = ref('')
 </script>
 
