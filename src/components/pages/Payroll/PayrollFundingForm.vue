@@ -119,6 +119,7 @@ defineEmits(['update:log-id', 'update:form', 'submit-funding'])
 const typeOptions = [
   { label: 'Check', value: 'check' },
   { label: 'Bank Transfer', value: 'bank_transfer' },
+  { label: 'Paytaca', value: 'paytaca' },
 ]
 </script>
 
