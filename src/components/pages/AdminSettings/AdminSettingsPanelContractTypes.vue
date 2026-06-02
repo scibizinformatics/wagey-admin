@@ -39,8 +39,13 @@
               <q-td class="table-body-cell"><span class="item-name">{{ props.row.name }}</span></q-td>
               <q-td class="table-body-cell">
                 <div class="eligibility-badges">
-                  <q-chip v-for="el in props.row.eligibilities" :key="el" size="sm" color="primary" text-color="white">{{ getEligibilityName(el) }}</q-chip>
-                  <span v-if="!props.row.eligibilities?.length" class="text-grey">None</span>
+                  <template v-if="props.row.eligibility_details?.length">
+                    <q-chip v-for="el in props.row.eligibility_details" :key="el.id" size="sm" color="primary" text-color="white">{{ el.name }}</q-chip>
+                  </template>
+                  <template v-else>
+                    <q-chip v-for="el in props.row.eligibilities" :key="el" size="sm" color="primary" text-color="white">{{ getEligibilityName(el) }}</q-chip>
+                  </template>
+                  <span v-if="!(props.row.eligibility_details?.length || props.row.eligibilities?.length)" class="text-grey">None</span>
                 </div>
               </q-td>
               <q-td class="table-body-cell actions-cell">
@@ -81,7 +86,19 @@
           <q-input v-model="contractTypeForm.name" label="Name *" outlined dense class="q-mb-md" />
           <q-select v-model="contractTypeForm.pay_type" :options="[{ label: 'Monthly', value: 'monthly' }, { label: 'Daily', value: 'daily' }]" label="Pay Type" outlined dense emit-value map-options class="q-mb-md" />
           <q-input v-if="contractTypeForm.pay_type === 'daily'" v-model.number="contractTypeForm.work_hours_per_week" label="Work Hours Per Week" outlined dense type="number" min="0" max="48" :rules="[(val) => !val || val <= 48 || 'Maximum is 48 hours']" class="q-mb-md" />
-          <q-select v-model="contractTypeForm.eligibilities" :options="eligibilityOptions" label="Eligibilities" outlined dense multiple use-chips emit-value map-options />
+          <div class="text-subtitle2 q-mb-xs">Eligibilities</div>
+          <q-separator class="q-mb-md" />
+          <div class="row">
+            <div v-for="opt in eligibilityOptions" :key="opt.value" class="col-6 q-mb-sm">
+              <q-checkbox
+                :model-value="contractTypeForm.eligibilities.includes(opt.value)"
+                @update:model-value="toggleEligibility(opt.value, $event)"
+                :label="opt.label"
+                :disable="opt.disable"
+                dense
+              />
+            </div>
+          </div>
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
@@ -93,7 +110,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 
 const {
@@ -118,9 +135,54 @@ const contractTypeColumns = ref([
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ])
 
+const flexibleId = computed(() => eligibilities.value.find((e) => e.name === 'Work Hours Flexible')?.id)
+const strictId = computed(() => eligibilities.value.find((e) => e.name === 'Work Hours Strict')?.id)
+
 const eligibilityOptions = computed(() =>
-  eligibilities.value.map((e) => ({ label: e.name, value: e.id })),
+  eligibilities.value.map((e) => {
+    const isSelected = contractTypeForm.value.eligibilities.includes(e.id)
+    const otherSelected =
+      e.id === flexibleId.value
+        ? contractTypeForm.value.eligibilities.includes(strictId.value)
+        : e.id === strictId.value
+          ? contractTypeForm.value.eligibilities.includes(flexibleId.value)
+          : false
+    return {
+      label: e.name,
+      value: e.id,
+      disable: otherSelected && !isSelected,
+    }
+  }),
 )
+
+watch(
+  () => contractTypeForm.value.eligibilities,
+  (newVal, oldVal) => {
+    if (!flexibleId.value || !strictId.value) return
+    const hasFlexible = newVal.includes(flexibleId.value)
+    const hasStrict = newVal.includes(strictId.value)
+    if (hasFlexible && hasStrict) {
+      const hadFlexible = oldVal?.includes(flexibleId.value)
+      const hadStrict = oldVal?.includes(strictId.value)
+      if (hadFlexible && !hadStrict) {
+        contractTypeForm.value.eligibilities = newVal.filter((id) => id !== strictId.value)
+      } else if (!hadFlexible && hadStrict) {
+        contractTypeForm.value.eligibilities = newVal.filter((id) => id !== flexibleId.value)
+      } else {
+        contractTypeForm.value.eligibilities = newVal.filter((id) => id !== strictId.value)
+      }
+    }
+  },
+)
+
+function toggleEligibility(id, checked) {
+  const current = contractTypeForm.value.eligibilities
+  if (checked) {
+    contractTypeForm.value.eligibilities = [...current, id]
+  } else {
+    contractTypeForm.value.eligibilities = current.filter((eid) => eid !== id)
+  }
+}
 
 const getEligibilityName = (id) => {
   const el = eligibilities.value.find((e) => e.id === id)
