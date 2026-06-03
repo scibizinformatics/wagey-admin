@@ -237,6 +237,7 @@ $white: #ffffff;
   justify-content: center;
   background: $blue-pale;
   height: 100vh;
+  min-height: 600px;
   overflow: hidden;
   padding: 1.25rem;
 
