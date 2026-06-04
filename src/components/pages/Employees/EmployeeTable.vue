@@ -1,11 +1,5 @@
 <template>
   <div class="table-section">
-    <div class="table-header">
-      <h2 class="table-title">Employee Overview</h2>
-      <div class="table-actions">
-        <slot name="filters" />
-      </div>
-    </div>
 
     <!-- Employee Table -->
     <div class="modern-table-container">
