@@ -73,7 +73,7 @@
     </div>
 
     <q-dialog v-model="siteDialog" persistent @before-show="onDialogOpen">
-      <q-card class="admin-modal-card" style="max-width: 620px; width: 620px">
+      <q-card class="admin-modal-card admin-modal-card--md">
         <q-card-section class="admin-modal-header">
           <div class="modal-title-section">
             <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"><q-icon name="location_on" size="22px" /></q-avatar>
@@ -376,4 +376,262 @@ onMounted(fetchSites)
 
 <style scoped>
 @import './AdminSettingsPanelShared.css';
+
+/* ── Table Section ── */
+.table-section {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.table-section .q-table__bottom {
+  display: none !important;
+}
+
+.table-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+}
+
+.table-title-section {
+  flex: 1;
+}
+
+.table-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 2px 0;
+}
+
+.table-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.add-btn {
+  height: 36px;
+  border-radius: 8px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+/* ── Table Styles ── */
+.modern-table-container {
+  overflow-x: auto;
+  max-height: 480px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-radius: 12px !important;
+}
+
+.modern-table-container::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-table {
+  background: transparent !important;
+}
+
+.table-header-cell {
+  background: #f8fafc;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
+  text-align: left !important;
+}
+
+.table-body-row {
+  transition: background 0.15s ease;
+}
+
+.table-body-row:hover .table-body-cell {
+  background: #f9fafb;
+}
+
+.table-body-cell {
+  background: #ffffff;
+  font-size: 13px;
+  color: #374151;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
+  vertical-align: middle;
+  text-align: left !important;
+  min-height: 48px;
+}
+
+.table-body-row:last-child .table-body-cell {
+  border-bottom: none !important;
+}
+
+.item-name {
+  font-weight: 600;
+  color: #111827;
+  font-size: 13px;
+}
+
+.actions-header {
+  text-align: center !important;
+  width: 60px;
+}
+
+.actions-cell {
+  text-align: center !important;
+  width: 60px;
+}
+
+.actions-header .q-table__sort-icon,
+.actions-header span {
+  text-align: center !important;
+  justify-content: center !important;
+}
+
+/* ── Table Skeleton Loading ── */
+.table-skeleton {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  overflow: hidden;
+}
+
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8f9fb;
+  border-bottom: 1px solid #e8ecf0;
+}
+
+.skeleton-header-cell {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.skeleton-row:last-child {
+  border-bottom: none;
+}
+
+.skeleton-cell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1024px) {
+  .table-title {
+    font-size: 16px;
+  }
+
+  .modern-table-container {
+    margin: 0 12px 12px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .table-actions {
+    width: 100%;
+  }
+
+  .add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modern-table-container {
+    margin: 0 10px 10px 10px;
+    overflow-x: auto;
+  }
+
+  .settings-table {
+    min-width: 700px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .actions-cell {
+    width: 90px;
+    min-width: 90px;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-section {
+    border-radius: 10px;
+  }
+
+  .table-title {
+    font-size: 15px;
+  }
+
+  .table-subtitle {
+    font-size: 11px;
+  }
+
+  .modern-table-container {
+    margin: 0 8px 8px 8px;
+  }
+
+  .settings-table {
+    min-width: 600px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    font-size: 11px;
+    padding: 8px 6px;
+  }
+
+  .status-badge,
+  .ownership-badge {
+    font-size: 10px;
+    padding: 3px 7px;
+  }
+}
 </style>
