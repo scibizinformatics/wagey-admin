@@ -21,8 +21,17 @@ function resolvedCompanyId() {
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw)
-    return parsed?.id ?? parsed
+    const id = parsed?.id ?? parsed
+    if (id == null || id === '') {
+      console.warn('[resolvedCompanyId] Parsed company ID is empty:', raw)
+      return null
+    }
+    return id
   } catch {
+    if (raw == null || raw === '') {
+      console.warn('[resolvedCompanyId] Raw company ID is empty')
+      return null
+    }
     return raw
   }
 }

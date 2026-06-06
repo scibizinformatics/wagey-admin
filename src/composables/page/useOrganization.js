@@ -197,10 +197,15 @@ export function useOrganization() {
   // ─── Companies ────────────────────────────────────────────────────────────
 
   async function fetchCompanies() {
-    const response = await api.get(`${BASE}/organization/companies/`, {
-      headers: authHeaders(),
-    })
-    return response.data.data ?? response.data ?? []
+    try {
+      const response = await api.get(`${BASE}/organization/companies/`, {
+        headers: authHeaders(),
+      })
+      return response.data.data ?? response.data ?? []
+    } catch (error) {
+      console.error('[fetchCompanies] failed:', error)
+      throw error
+    }
   }
 
   async function createCompany(formData) {

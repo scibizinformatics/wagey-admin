@@ -78,12 +78,14 @@ export default defineConfig((ctx) => {
           target: apiBaseUrl,
           changeOrigin: true,
           secure: false,
+          logLevel: 'debug',
         },
         {
           context: ['/communication'],
           target: apiBaseUrl,
           changeOrigin: true,
           secure: false,
+          logLevel: 'debug',
         },
         {
           context: ['/attendance'],

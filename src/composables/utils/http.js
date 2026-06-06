@@ -14,7 +14,8 @@ export { api }
  * and will be removed in a future cleanup.
  */
 export function authHeaders() {
-  return {}
+  const token = localStorage.getItem('access_token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 /**

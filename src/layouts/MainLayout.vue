@@ -469,9 +469,18 @@ async function fetchCompanies() {
       logo: company.logo || null,
     }))
   } catch (err) {
+    const data = err.response?.data
+    console.error('[fetchCompanies] backend error:', data)
+    let msg = 'Failed to load companies'
+    if (data && typeof data === 'object') {
+      const first = Object.values(data)[0]
+      msg = Array.isArray(first) ? first[0] : data.detail || data.message || msg
+    } else if (typeof data === 'string' && !data.startsWith('<')) {
+      msg = data
+    }
     $q.notify({
       type: 'negative',
-      message: err.response?.data?.message || 'Failed to load companies',
+      message: msg,
       position: 'top',
     })
   } finally {
@@ -546,7 +555,13 @@ function logout() {
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  await fetchCompanies()
+  const token = localStorage.getItem('access_token')
+  if (!token) {
+    console.warn('[MainLayout] No access_token found; skipping fetchCompanies')
+    loadingCompanies.value = false
+  } else {
+    await fetchCompanies()
+  }
   await nextTick()
   updateOverflowHint()
   loadSavedCompany()

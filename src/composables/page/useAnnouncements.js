@@ -21,6 +21,9 @@ export function useAnnouncements() {
       })
       announcements.value = response.data.data ?? response.data ?? []
       return announcements.value
+    } catch (error) {
+      console.error('[fetchAnnouncements] failed:', error)
+      throw error
     } finally {
       loading.value = false
     }
