@@ -196,6 +196,10 @@ export function useOrganization() {
 
   // ─── Companies ────────────────────────────────────────────────────────────
 
+  /**
+   * Fetch companies for the authenticated user.
+   * @returns {Promise<Array<{id:number|string,name:string,logo:string|null,country:string,country_name:string}>>}
+   */
   async function fetchCompanies() {
     try {
       const response = await api.get(`${BASE}/organization/companies/`, {
