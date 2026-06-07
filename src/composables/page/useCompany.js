@@ -1,4 +1,5 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useCompanyStore } from 'src/stores/company'
 
 const KEYS = ['selectCompany', 'selectedCompany', 'company_id', 'companyId']
 
@@ -39,12 +40,19 @@ function resolvedCompanyId() {
 export { resolvedCompanyId }
 
 export function useCompany() {
-  const companyId = ref(resolvedCompanyId())
+  const store = useCompanyStore()
+
+  // Keep the legacy companyId ref for compatibility, but back it with the store
+  const companyId = ref(store.companyId || resolvedCompanyId())
+
+  // Full company object from store
+  const company = computed(() => store.company)
 
   /** Re-read from storage (useful after login / company switch). */
   function refreshCompanyId() {
-    companyId.value = resolvedCompanyId()
+    store.hydrate()
+    companyId.value = store.companyId || resolvedCompanyId()
   }
 
-  return { companyId, refreshCompanyId }
+  return { companyId, company, refreshCompanyId }
 }
