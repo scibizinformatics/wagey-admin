@@ -30,6 +30,7 @@ export function useAuth() {
   /**
    * Fetch the list of companies associated with the logged-in user.
    * @param {string} token – JWT access token returned from login
+   * @returns {Promise<Array<{id:number|string,name:string,logo:string|null,country:string,country_name:string}>>}
    */
   async function fetchUserCompanies(token) {
     const response = await api.get(`${BASE}/organization/companies/`, {
@@ -42,6 +43,7 @@ export function useAuth() {
    * Fetch companies linked to the currently authenticated user.
    * Used during login to resolve company/account context.
    * @param {string} token – JWT access token returned from login
+   * @returns {Promise<Array<{id:number|string,name:string,logo:string|null,country:string,country_name:string}>>}
    */
   async function fetchCurrentUserCompanies(token) {
     const response = await api.get(`${BASE}/user/current-user-companies/`, {
