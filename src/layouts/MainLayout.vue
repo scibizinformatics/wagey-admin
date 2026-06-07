@@ -330,6 +330,7 @@ import { useQuasar } from 'quasar'
 // ─── Composables ──────────────────────────────────────────────────────────────
 import { useOrganization } from '@/composables/page/useOrganization'
 import { useNotifications } from '@/composables/useNotifications'
+import { useCompanyStore } from '@/stores/company'
 
 import wageyLogo from 'src/assets/wagey_icon(White).png'
 import terrainBg from 'src/assets/terrain.svg'
@@ -450,6 +451,7 @@ async function handleMarkAllRead() {
 
 // ─── Companies ────────────────────────────────────────────────────────────────
 const { fetchCompanies: fetchCompaniesFromOrg } = useOrganization()
+const companyStore = useCompanyStore()
 
 async function fetchCompanies() {
   loadingCompanies.value = true
@@ -467,7 +469,10 @@ async function fetchCompanies() {
       siteId: String(company.id),
       siteName: company.name || `Company ${company.id}`,
       logo: company.logo || null,
+      country: company.country || '',
+      country_name: company.country_name || '',
     }))
+    companyStore.setCompanies(companiesData)
   } catch (err) {
     const data = err.response?.data
     console.error('[fetchCompanies] backend error:', data)
@@ -489,14 +494,32 @@ async function fetchCompanies() {
 }
 
 function setSelectedCompany(siteId) {
+  const match = companyOptions.value.find((opt) => String(opt.siteId) === String(siteId))
   selectedCompany.value = String(siteId)
-  localStorage.setItem('selectedCompany', String(siteId))
+  if (match) {
+    companyStore.setCompany({
+      id: match.siteId,
+      name: match.siteName,
+      logo: match.logo,
+      country: match.country,
+      country_name: match.country_name,
+    })
+  } else {
+    companyStore.setCompany({
+      id: String(siteId),
+      name: '',
+      logo: null,
+      country: '',
+      country_name: '',
+    })
+  }
 }
 
 function loadSavedCompany() {
-  const saved = localStorage.getItem('selectedCompany')
-  if (saved) {
-    const match = companyOptions.value.find((opt) => String(opt.siteId) === String(saved))
+  companyStore.hydrate()
+  const savedCompany = companyStore.company
+  if (savedCompany) {
+    const match = companyOptions.value.find((opt) => String(opt.siteId) === String(savedCompany.id))
     if (match) {
       selectedCompany.value = String(match.siteId)
       return
@@ -547,8 +570,8 @@ async function loadCurrentUser() {
 // ─── Logout ───────────────────────────────────────────────────────────────────
 function logout() {
   cleanupNotifications()
+  companyStore.clear()
   localStorage.removeItem('access_token')
-  localStorage.removeItem('selectedCompany')
   localStorage.removeItem('username')
   router.push({ name: 'login' }).then(() => window.location.reload())
 }
