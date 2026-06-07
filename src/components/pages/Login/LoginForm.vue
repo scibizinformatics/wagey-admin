@@ -104,12 +104,14 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'boot/auth'
+import { useCompanyStore } from '@/stores/company'
 import { useAuth } from '@/composables/page/useAuth'
 
 const router = useRouter()
 const route = useRoute()
 const $q = useQuasar()
 const authStore = useAuthStore()
+const companyStore = useCompanyStore()
 
 const { loading, login, fetchCurrentUserCompanies } = useAuth()
 
@@ -179,6 +181,16 @@ const handleLogin = async () => {
       showErrorNotification('Failed to get account UUID after login.')
       return
     }
+
+    // Store full company object with country context
+    const companyPayload = {
+      id: companyId,
+      name: firstCompany.company?.name || firstCompany.name || '',
+      logo: firstCompany.company?.logo || firstCompany.logo || null,
+      country: firstCompany.company?.country || firstCompany.country || '',
+      country_name: firstCompany.company?.country_name || firstCompany.country_name || '',
+    }
+    companyStore.setCompany(companyPayload)
 
     localStorage.setItem('account_uuid', accountUuid)
     localStorage.setItem('user_id', userId)
