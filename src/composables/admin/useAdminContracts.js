@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
+import { useCompanyStore } from 'src/stores/company'
 import { usePayroll } from 'src/composables/page/usePayroll'
 import { BASE, authHeaders } from 'src/composables/utils/http'
 
@@ -19,6 +20,7 @@ export const PHILIPPINES_DEFAULT_MULTIPLIERS = {
 export function useAdminContracts() {
   const $q = useQuasar()
   const { companyId } = useCompany()
+  const companyStore = useCompanyStore()
   const { fetchCustomMultipliers } = usePayroll()
 
   const contracts = ref([])
@@ -95,7 +97,7 @@ export function useAdminContracts() {
         position_id: null,
         pay_type: 'monthly',
         rate: '',
-        currency: 'PHP',
+        currency: companyStore.currency,
         effective_from: '',
         effective_to: null,
       },
@@ -191,7 +193,7 @@ export function useAdminContracts() {
         position_id: null,
         pay_type: 'monthly',
         rate: '',
-        currency: 'PHP',
+        currency: companyStore.currency,
         effective_from: '',
         effective_to: null,
       },
