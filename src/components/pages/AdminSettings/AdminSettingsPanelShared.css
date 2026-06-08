@@ -612,6 +612,10 @@
   text-align: left !important;
 }
 
+.table-header-cell :deep(*) {
+  color: #6b7280 !important;
+}
+
 .table-body-row {
   transition: background 0.15s ease;
 }
