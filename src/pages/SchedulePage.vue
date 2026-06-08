@@ -394,7 +394,7 @@ const filteredAllSchedules = computed(() => {
     const matchSearch = fullName.toLowerCase().includes((searchTerm.value || '').toLowerCase())
     const matchSite = !filters.value.site || (() => {
       const schedules = empData.schedules || empData.schedule || empData.schedule_list || []
-      if (!Array.isArray(schedules)) return false
+      if (!Array.isArray(schedules) || schedules.length === 0) return true
       return schedules.some((s) => {
         const sSite = typeof s.site === 'number' ? s.site : parseInt(s.site)
         const fSite = typeof filters.value.site === 'number' ? filters.value.site : parseInt(filters.value.site)
@@ -735,6 +735,23 @@ const fetchData = async () => {
       allResults.sort((a, b) => {
         const nameA = getFirstName(a.employee?.full_name || a.full_name)
         const nameB = getFirstName(b.employee?.full_name || b.full_name)
+        return nameA.localeCompare(nameB)
+      })
+
+      const existingIds = new Set(allResults.map((r) => r.employee?.id || r.id))
+      employees.value.forEach((emp) => {
+        if (!existingIds.has(emp.id) && !isEmployeeTerminated(emp)) {
+          allResults.push({
+            ...emp,
+            employee: emp,
+            schedules: [],
+          })
+        }
+      })
+
+      allResults.sort((a, b) => {
+        const nameA = (a.employee?.full_name || a.full_name || '').trim().toLowerCase()
+        const nameB = (b.employee?.full_name || b.full_name || '').trim().toLowerCase()
         return nameA.localeCompare(nameB)
       })
 
