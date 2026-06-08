@@ -264,7 +264,6 @@ const columns = [
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #f1f3f5;
   flex-wrap: wrap;
   gap: 10px;
 }
