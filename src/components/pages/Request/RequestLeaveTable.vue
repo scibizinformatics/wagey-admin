@@ -214,9 +214,13 @@ const getLeaveStatusClass = (request) => {
 .table-body-cell {
   font-size: 13px;
   color: #374151;
-  padding: 13px 16px !important;
+  padding: 12px 16px !important;
   border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle !important;
+}
+
+.table-body-row:last-child .table-body-cell {
+  border-bottom: none !important;
 }
 .employee-info { display: flex; align-items: center; gap: 10px; }
 .employee-name-cell { font-weight: 500; }
