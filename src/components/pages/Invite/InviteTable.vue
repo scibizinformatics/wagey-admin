@@ -247,6 +247,10 @@ const formatDate = (dateString) => {
   vertical-align: middle;
 }
 
+.table-body-row:last-child .table-body-cell {
+  border-bottom: none !important;
+}
+
 .sl-cell {
   color: #9ca3af;
   font-size: 12px !important;

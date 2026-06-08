@@ -249,7 +249,7 @@ const formatDate = (dateStr) => {
 }
 
 .modern-table-container {
-  padding: 0 0 8px;
+  overflow-x: auto;
 }
 
 .announcement-table {
@@ -261,12 +261,13 @@ const formatDate = (dateStr) => {
 }
 
 .table-header-cell {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 12px 16px;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
 }
 
 .table-body-row:hover {
@@ -278,11 +279,15 @@ const formatDate = (dateStr) => {
 }
 
 .table-body-cell {
-  padding: 12px 16px;
+  padding: 12px 16px !important;
   font-size: 13px;
   color: #374151;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle;
+}
+
+.table-body-row:last-child .table-body-cell {
+  border-bottom: none !important;
 }
 
 .col-title { min-width: 160px; }
