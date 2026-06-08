@@ -296,16 +296,41 @@
                 menu-anchor="bottom left"
                 menu-self="top left"
               >
-                <q-list dense>
+                <q-list dense style="min-width: 220px">
                   <q-item
                     v-for="template in shiftTypeTemplates"
                     :key="template.id"
                     clickable
                     v-close-popup
                     @click="rule.shift_template = template.id"
-                    style="min-height: 28px; padding: 4px 8px"
+                    style="padding: 8px 12px"
                   >
-                    <q-item-section style="font-size: 11px">{{ template.name }}</q-item-section>
+                    <q-item-section>
+                      <div class="template-name">{{ template.name }}</div>
+                      <template
+                        v-for="(shift, idx) in getTemplateShifts(template.id)"
+                        :key="idx"
+                      >
+                        <div class="dropdown-shift-time">
+                          {{ formatTimeDisplay(shift.start_time) }} -
+                          {{ formatTimeDisplay(shift.end_time) }}
+                        </div>
+                        <div
+                          class="dropdown-shift-site"
+                          v-if="getSiteNameById(shift.site?.id || shift.site_id)"
+                        >
+                          <q-icon name="location_on" size="9px" />
+                          {{ getSiteNameById(shift.site?.id || shift.site_id) }}
+                        </div>
+                        <div
+                          v-if="idx < getTemplateShifts(template.id).length - 1"
+                          class="dropdown-shift-separator"
+                        />
+                      </template>
+                      <div class="dropdown-shift-hours">
+                        {{ getShiftHoursDisplayForTemplate(template) }}
+                      </div>
+                    </q-item-section>
                   </q-item>
                 </q-list>
               </q-btn-dropdown>
@@ -319,9 +344,9 @@
                     {{ formatTimeDisplay(shift.start_time) }} -
                     {{ formatTimeDisplay(shift.end_time) }}
                   </div>
-                  <div class="shift-site" v-if="getSiteNameById(shift.site_id)">
+                  <div class="shift-site" v-if="getSiteNameById(shift.site?.id || shift.site_id)">
                     <q-icon name="location_on" size="9px" />
-                    {{ getSiteNameById(shift.site_id) }}
+                    {{ getSiteNameById(shift.site?.id || shift.site_id) }}
                   </div>
                   <div
                     v-if="idx < getTemplateShifts(rule.shift_template).length - 1"
@@ -594,16 +619,28 @@ function formatTimeDisplay(timeString) {
   return `${hour12}:${minutes} ${ampm}`
 }
 
+function _shiftTimes(shift) {
+  return {
+    start: shift.start_time || shift.default_start_time,
+    end: shift.end_time || shift.default_end_time,
+  }
+}
+
+function _shiftSiteId(shift) {
+  return shift.site?.id || shift.site_id
+}
+
 function calculateTotalHoursFromRow(row) {
   const shifts = parseShifts(row.shifts_detail)
   if (!shifts || !shifts.length) return 0
   let totalMinutes = 0
   for (const shift of shifts) {
-    if (shift.default_start_time && shift.default_end_time) {
-      const start = new Date(`2000-01-01T${shift.default_start_time}`)
-      let end = new Date(`2000-01-01T${shift.default_end_time}`)
-      if (end < start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000)
-      totalMinutes += (end - start) / (1000 * 60)
+    const { start, end } = _shiftTimes(shift)
+    if (start && end) {
+      const startDt = new Date(`2000-01-01T${start}`)
+      let endDt = new Date(`2000-01-01T${end}`)
+      if (endDt < startDt) endDt = new Date(endDt.getTime() + 24 * 60 * 60 * 1000)
+      totalMinutes += (endDt - startDt) / (1000 * 60)
     }
   }
   let breakMinutes = 0
@@ -613,10 +650,12 @@ function calculateTotalHoursFromRow(row) {
     for (let i = 1; i < shifts.length; i++) {
       const prevShift = shifts[i - 1]
       const currentShift = shifts[i]
-      if (prevShift.site_id !== currentShift.site_id) continue
-      if (prevShift.default_end_time && currentShift.default_start_time) {
-        let prevEnd = new Date(`2000-01-01T${prevShift.default_end_time}`)
-        let currStart = new Date(`2000-01-01T${currentShift.default_start_time}`)
+      if (_shiftSiteId(prevShift) !== _shiftSiteId(currentShift)) continue
+      const prev = _shiftTimes(prevShift)
+      const curr = _shiftTimes(currentShift)
+      if (prev.end && curr.start) {
+        let prevEnd = new Date(`2000-01-01T${prev.end}`)
+        let currStart = new Date(`2000-01-01T${curr.start}`)
         if (currStart < prevEnd) currStart = new Date(currStart.getTime() + 24 * 60 * 60 * 1000)
         const gapMinutes = (currStart - prevEnd) / (1000 * 60)
         if (gapMinutes > 0) breakMinutes += gapMinutes
@@ -652,8 +691,8 @@ function getTemplateShifts(templateId) {
 
 function getSiteNameById(siteId) {
   if (!siteId) return null
-  const id = typeof siteId === 'number' ? siteId : parseInt(siteId)
-  return sites.value.find((s) => s.id === id)?.name || null
+  const id = Number(siteId)
+  return sites.value.find((s) => Number(s.id) === id)?.name || null
 }
 
 function calculateBreakHoursFromRow(row) {
@@ -661,11 +700,12 @@ function calculateBreakHoursFromRow(row) {
   if (!shifts || !shifts.length) return 0
   let totalMinutes = 0
   for (const shift of shifts) {
-    if (shift.default_start_time && shift.default_end_time) {
-      const start = new Date(`2000-01-01T${shift.default_start_time}`)
-      let end = new Date(`2000-01-01T${shift.default_end_time}`)
-      if (end < start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000)
-      totalMinutes += (end - start) / (1000 * 60)
+    const { start, end } = _shiftTimes(shift)
+    if (start && end) {
+      const startDt = new Date(`2000-01-01T${start}`)
+      let endDt = new Date(`2000-01-01T${end}`)
+      if (endDt < startDt) endDt = new Date(endDt.getTime() + 24 * 60 * 60 * 1000)
+      totalMinutes += (endDt - startDt) / (1000 * 60)
     }
   }
   let breakMinutes = 0
@@ -675,10 +715,12 @@ function calculateBreakHoursFromRow(row) {
     for (let i = 1; i < shifts.length; i++) {
       const prevShift = shifts[i - 1]
       const currentShift = shifts[i]
-      if (prevShift.site_id !== currentShift.site_id) continue
-      if (prevShift.default_end_time && currentShift.default_start_time) {
-        let prevEnd = new Date(`2000-01-01T${prevShift.default_end_time}`)
-        let currStart = new Date(`2000-01-01T${currentShift.default_start_time}`)
+      if (_shiftSiteId(prevShift) !== _shiftSiteId(currentShift)) continue
+      const prev = _shiftTimes(prevShift)
+      const curr = _shiftTimes(currentShift)
+      if (prev.end && curr.start) {
+        let prevEnd = new Date(`2000-01-01T${prev.end}`)
+        let currStart = new Date(`2000-01-01T${curr.start}`)
         if (currStart < prevEnd) currStart = new Date(currStart.getTime() + 24 * 60 * 60 * 1000)
         const gapMinutes = (currStart - prevEnd) / (1000 * 60)
         if (gapMinutes > 0) breakMinutes += gapMinutes
@@ -690,6 +732,11 @@ function calculateBreakHoursFromRow(row) {
 
 function getShiftHoursDisplay(rule) {
   const template = getTemplateById(rule.shift_template)
+  if (!template) return ''
+  return getShiftHoursDisplayForTemplate(template)
+}
+
+function getShiftHoursDisplayForTemplate(template) {
   if (!template) return ''
   const totalHours = calculateTotalHoursFromRow(template)
   const breakHours = calculateBreakHoursFromRow(template)
@@ -911,5 +958,46 @@ onMounted(async () => {
   padding: 2px 8px;
   border-radius: 4px;
   display: inline-block;
+}
+
+/* Dropdown preview styles */
+.template-name {
+  font-weight: 600;
+  font-size: 12px;
+  color: #1e40af;
+  margin-bottom: 4px;
+}
+
+.dropdown-shift-time {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e40af;
+  line-height: 1.3;
+}
+
+.dropdown-shift-site {
+  font-size: 10px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  line-height: 1.3;
+}
+
+.dropdown-shift-hours {
+  font-size: 10px;
+  color: #3b82f6;
+  line-height: 1.3;
+  margin-top: 4px;
+}
+
+.dropdown-shift-separator {
+  border-top: 1px dashed #c4b5fd;
+  margin: 2px 0;
+}
+
+/* Separator between dropdown items */
+.q-list > .q-item:not(:last-child) {
+  border-bottom: 1px solid #e5e7eb;
 }
 </style>
