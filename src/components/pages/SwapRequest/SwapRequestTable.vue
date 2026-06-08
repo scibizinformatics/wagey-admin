@@ -292,7 +292,7 @@ const getApprovalProgressText = (request) => {
   gap: 16px;
 }
 .loading-text { color: #64748b; font-size: 14px; font-weight: 500; }
-.modern-table-container { overflow: hidden; margin: 0 16px 16px 16px; }
+.modern-table-container { overflow-x: auto; }
 .swap-table {
   background: white;
   border-radius: 10px;
@@ -329,11 +329,15 @@ const getApprovalProgressText = (request) => {
 .table-body-cell {
   font-size: 13px;
   color: #374151;
-  padding: 13px 16px !important;
+  padding: 12px 16px !important;
   border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle !important;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.table-body-row:last-child .table-body-cell {
+  border-bottom: none !important;
 }
 .employee-info { display: flex; align-items: center; gap: 6px; overflow: hidden; }
 .employee-name {
