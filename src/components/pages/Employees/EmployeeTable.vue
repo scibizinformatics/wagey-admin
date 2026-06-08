@@ -321,6 +321,10 @@ const columns = [
   background: #f9fafb;
 }
 
+.table-body-row:last-child .table-body-cell {
+  border-bottom: none !important;
+}
+
 .table-body-cell {
   font-size: 13px;
   color: #374151;
@@ -482,7 +486,7 @@ const columns = [
 /* Action menu */
 .actions-cell {
   text-align: center !important;
-  width: 60px;
+  width: 80px;
 }
 
 .action-menu-btn {

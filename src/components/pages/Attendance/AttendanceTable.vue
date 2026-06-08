@@ -399,7 +399,6 @@ function formatTime(dateTimeString, timezone) {
 .header-btn:hover { background: #f3f4f6 !important; }
 .modern-table-container {
   overflow-x: auto;
-  margin: 0 16px 16px 16px;
 }
 .table-wrapper { overflow-x: visible; overflow-y: visible; }
 .attendance-table {
@@ -425,7 +424,7 @@ function formatTime(dateTimeString, timezone) {
   color: #6b7280 !important;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 11px 10px !important;
+  padding: 11px 16px !important;
   border-bottom: 1px solid #e8ecf0 !important;
   white-space: nowrap;
   overflow: hidden;
@@ -436,12 +435,16 @@ function formatTime(dateTimeString, timezone) {
 .table-body-cell {
   font-size: 13px !important;
   color: #374151;
-  padding: 10px 10px !important;
+  padding: 12px 16px !important;
   border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.table-body-row:last-child .table-body-cell {
+  border-bottom: none !important;
 }
 .employee-info { display: flex; align-items: center; gap: 10px; }
 .employee-name {
