@@ -365,7 +365,7 @@ function formatTime(dateTimeString, timezone) {
 <style scoped>
 .table-section {
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: 0;
   border: 1px solid #e8ecf0;
   overflow: hidden;
 }
