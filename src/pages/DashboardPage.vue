@@ -10,6 +10,7 @@
         <!-- Left Column -->
         <div class="col-main">
           <PayrollStatusPanel :rows="payrollRows" :columns="payrollColumns" :loading="payrollLoading" />
+          <QuickActionsPanel />
           <RecentActivityPanel :activities="recentActivities" :loading="attendanceLoading || requestsLoading" />
         </div>
 
@@ -41,6 +42,7 @@ import RecentActivityPanel from '@/components/pages/Dashboard/RecentActivityPane
 import NotificationsPanel from '@/components/pages/Dashboard/NotificationsPanel.vue'
 import AnnouncementsPanel from '@/components/pages/Dashboard/AnnouncementsPanel.vue'
 import PendingSwapsPanel from '@/components/pages/Dashboard/PendingSwapsPanel.vue'
+import QuickActionsPanel from '@/components/pages/Dashboard/QuickActionsPanel.vue'
 
 // ─── Composables ─────────────────────────────────────────────────────────────
 useCompany()
