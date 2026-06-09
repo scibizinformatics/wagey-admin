@@ -307,11 +307,13 @@ const loadAllFundingHistory = async () => {
 
 const onFundingLogChange = async (logId) => {
   if (!logId) {
+    fundingForm.value.logId = null
     fundingForm.value.amount = ''
     fundingSources.value = []
     fundingForm.value.source = null
     return
   }
+  fundingForm.value.logId = logId
   fundingSources.value = []
   fundingForm.value.source = null
   try {
