@@ -33,20 +33,6 @@
             map-options
           />
         </div>
-        <q-select
-          :model-value="viewMode"
-          @update:model-value="$emit('update:viewMode', $event)"
-          :options="[
-            { label: 'Table View', value: 'table' },
-            { label: 'Card View', value: 'cards' },
-          ]"
-          outlined
-          dense
-          emit-value
-          map-options
-          class="view-select"
-          label="Sort by"
-        />
         <div class="week-nav">
           <q-btn flat round icon="chevron_left" @click="$emit('prev-week')" class="nav-btn" size="sm" />
           <div class="week-display">
@@ -66,14 +52,13 @@ const props = defineProps({
   filters: { type: Object, default: () => ({ site: null, employee: null }) },
   siteFilterOptions: { type: Array, default: () => [] },
   userOptions: { type: Array, default: () => [] },
-  viewMode: { type: String, default: 'table' },
   selectedWeek: {
     type: Object,
     default: () => ({ start: new Date(), end: new Date() }),
   },
 });
 
-const emit = defineEmits(['update:filters', 'update:viewMode', 'prev-week', 'next-week']);
+const emit = defineEmits(['update:filters', 'prev-week', 'next-week']);
 
 const weekStartStr = computed(() =>
   props.selectedWeek.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -149,8 +134,5 @@ function updateFilter(key, value) {
   color: #374151;
   min-width: 160px;
   text-align: center;
-}
-.view-select {
-  min-width: 140px;
 }
 </style>
