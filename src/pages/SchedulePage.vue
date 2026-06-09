@@ -436,6 +436,9 @@ function parseShifts(shiftsData) {
   return []
 }
 
+const fmtDate = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
 const filterEmployeeOptions = (val, update) => {
   update(() => {
     filteredEmployeeOptions.value = !val
@@ -998,6 +1001,7 @@ const addSchedule = async () => {
       selectedWeek.value = getWeekRange(targetDate)
     }
     await new Promise((r) => setTimeout(r, 1200))
+    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
     await fetchData()
     fetchLeaves()
     const scheduleLabel = n.scheduleType === 'recurring' ? 'Recurring schedule' : 'Schedule'
@@ -1059,6 +1063,7 @@ const quickAddSchedule = async () => {
     })
     showQuickAddModal.value = false
     quickAdd.value = { userId: null, day: null, shifts: [], leaveType: null }
+    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
     setTimeout(async () => {
       await fetchData()
       fetchLeaves()
@@ -1096,6 +1101,7 @@ const handleReassignShift = async () => {
         icon: 'check_circle',
         timeout: 3000,
       })
+      delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
       fetchData()
     } else {
       const templateId = parseInt(r.shiftTemplateId)
@@ -1115,6 +1121,7 @@ const handleReassignShift = async () => {
         icon: 'check_circle',
         timeout: 3000,
       })
+      delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
       fetchData()
     }
     showReassignModal.value = false
@@ -1155,6 +1162,7 @@ const assignDayOff = async (element) => {
       icon: 'event_busy',
       timeout: 3000,
     })
+    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
     setTimeout(async () => {
       await fetchData()
       fetchLeaves()
@@ -1191,6 +1199,7 @@ const assignDualDayOff = async (mergedElement) => {
       icon: 'event_busy',
       timeout: 3000,
     })
+    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
     setTimeout(async () => {
       await fetchData()
       fetchLeaves()
@@ -1268,6 +1277,7 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
         timeout: 3000,
       })
     }
+    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
     setTimeout(async () => {
       await fetchData()
       fetchLeaves()
