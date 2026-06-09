@@ -49,7 +49,6 @@
         v-model:filters="filters"
         :site-filter-options="siteFilterOptions"
         :user-options="userOptions"
-        v-model:view-mode="viewMode"
         :selected-week="selectedWeek"
         @prev-week="prevWeek"
         @next-week="nextWeek"
@@ -201,7 +200,6 @@ const shifts = ref([])
 const isReassigning = ref(false)
 const isLoadingSchedule = ref(false)
 const userTimezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
-const viewMode = ref('table')
 const filters = ref({ site: null, employee: null })
 const searchTerm = ref('')
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
