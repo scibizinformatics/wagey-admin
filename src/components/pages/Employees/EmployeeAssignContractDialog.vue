@@ -114,7 +114,7 @@
               option-value="id"
               emit-value
               map-options
-              label="Department"
+              label="Department *"
               outlined
               dense
               clearable
@@ -138,52 +138,6 @@
               outlined
               dense
             />
-
-            <!-- Payroll Multipliers Section -->
-            <div class="col-span-2">
-              <div class="section-label">Payroll Multipliers</div>
-              <div class="multipliers-section">
-                <div v-for="field in multiplierFields" :key="field.key" class="multiplier-row">
-                  <div class="multiplier-info">
-                    <q-icon :name="field.icon" size="20px" class="multiplier-icon" />
-                    <div class="multiplier-details">
-                      <div class="multiplier-label">{{ field.label }}</div>
-                      <div class="multiplier-desc">{{ field.desc }}</div>
-                    </div>
-                  </div>
-                  <div class="multiplier-controls">
-                    <q-toggle
-                      :model-value="form[`use_standard_${field.key}`]"
-                      @update:model-value="$emit('multiplierToggle', { field, value: $event })"
-                      :label="form[`use_standard_${field.key}`] ? 'Standard' : 'Custom'"
-                      color="primary"
-                      dense
-                    />
-                    <div class="multiplier-value-wrapper">
-                      <template v-if="form[`use_standard_${field.key}`]">
-                        <span class="multiplier-value-display">× {{ getStandardDisplay(field.key) }}</span>
-                        <span v-if="companyMultipliers?.[`${field.key}_multiplier`]" class="multiplier-source">(company)</span>
-                        <span v-else class="multiplier-source">(legal default)</span>
-                      </template>
-                      <q-input
-                        v-else
-                        :model-value="form[`${field.key}_multiplier`]"
-                        @update:model-value="$emit('update:field', { field: `${field.key}_multiplier`, value: $event })"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        outlined
-                        dense
-                        class="multiplier-input"
-                        placeholder="e.g. 1.50"
-                      >
-                        <template v-slot:prepend><span class="multiplier-prefix">×</span></template>
-                      </q-input>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             <!-- Eligibilities -->
             <div v-if="eligibilityObjects.length" class="col-span-2">
@@ -218,8 +172,6 @@ const props = defineProps({
   contractTypeOptions: { type: Array, default: () => [] },
   positions: { type: Array, default: () => [] },
   departments: { type: Array, default: () => [] },
-  companyMultipliers: { type: Object, default: () => ({}) },
-  phDefaultMultipliers: { type: Object, default: () => ({}) },
   eligibilityObjects: { type: Array, default: () => [] },
 })
 
@@ -231,16 +183,6 @@ const paymentMethodOptions = [
   { label: 'Paytaca', value: 'paytaca' },
 ]
 
-const multiplierFields = [
-  { key: 'overtime', label: 'Overtime', icon: 'schedule', desc: 'Work beyond 8 hours/day' },
-  { key: 'special_holiday', label: 'Special Holiday', icon: 'celebration', desc: 'Special non-working days' },
-  { key: 'regular_holiday', label: 'Regular Holiday', icon: 'event', desc: 'Regular holidays (double pay)' },
-  { key: 'night_diff', label: 'Night Differential', icon: 'nights_stay', desc: 'Work 10PM-6AM' },
-  { key: 'regular_holiday_ot', label: 'Regular Holiday OT', icon: 'event_note', desc: 'OT on regular holidays' },
-  { key: 'special_holiday_ot', label: 'Special Holiday OT', icon: 'event_busy', desc: 'OT on special holidays' },
-  { key: 'undertime', label: 'Undertime', icon: 'timer_off', desc: 'Hours not worked' },
-]
-
 const dailyRate = computed(() => {
   const monthly = parseFloat(props.form.rate) || 0
   const hours = parseFloat(props.form.work_hours_per_week) || 208
@@ -249,10 +191,6 @@ const dailyRate = computed(() => {
   return daily.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 })
 
-const getStandardDisplay = (fieldKey) => {
-  const companyValue = props.companyMultipliers?.[`${fieldKey}_multiplier`]
-  return companyValue ?? props.phDefaultMultipliers[fieldKey]
-}
 </script>
 
 <style scoped>

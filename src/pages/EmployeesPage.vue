@@ -122,12 +122,9 @@
       :contract-type-options="contractTypeOptions"
       :positions="positions"
       :departments="departments"
-      :company-multipliers="companyMultipliers"
-      :ph-default-multipliers="PHILIPPINES_DEFAULT_MULTIPLIERS"
       :eligibility-objects="selectedEligibilityObjectsData"
       @update:field="updateAssignField"
       @contract-type-change="onContractTypeChange"
-      @multiplier-toggle="handleMultiplierToggle"
       @submit="assignContract(eligibilityOptions)"
     />
   </PageShell>
@@ -183,8 +180,6 @@ const {
   assignForm,
   openAssignDialog,
   assignContract,
-  PHILIPPINES_DEFAULT_MULTIPLIERS,
-  companyMultipliers,
 } = useAdminContracts()
 
 const {
@@ -874,49 +869,6 @@ const cancelAdd = () => {
 
 const updateAssignField = ({ field, value }) => {
   assignForm.value[field] = value
-}
-
-const showCustomMultiplierWarning = (fieldKey, fieldLabel, standardValue) => {
-  return new Promise((resolve) => {
-    const companyValue = companyMultipliers.value?.[`${fieldKey}_multiplier`]
-    const usedStandard = companyValue ?? standardValue
-
-    $q.dialog({
-      title: '⚠️ Warning: Custom Multiplier Selected',
-      message: `
-        <div style="margin-top: 12px;">
-          <p style="font-size: 15px; font-weight: 600; color: #1f2937; margin-bottom: 12px;">${fieldLabel}</p>
-          <div style="background: #fef3c7; padding: 14px; border-radius: 8px; margin: 14px 0; border-left: 4px solid #f59e0b;">
-            <p style="margin: 0 0 10px 0; color: #92400e; font-size: 14px;"><strong>Standard Rate:</strong> ×${usedStandard} ${companyValue ? '<span style="font-size: 12px; color: #6b7280;">(company configured)</span>' : '<span style="font-size: 12px; color: #6b7280;">(Philippines Labor Code)</span>'}</p>
-            <p style="margin: 0; color: #dc2626; font-size: 14px;"><strong>Your Custom Rate:</strong> Enter value below</p>
-          </div>
-          <p style="color: #6b7280; font-size: 13px; line-height: 1.5; margin-top: 14px;">Custom multipliers override company standards and legal defaults. Ensure compliance with Philippines Labor Code (DOLE standards).</p>
-          <p style="color: #92400e; font-size: 12px; margin-top: 10px; font-style: italic;">⚠️ This will be applied to payroll calculations for this employee.</p>
-        </div>
-      `,
-      html: true,
-      class: 'custom-multiplier-warning-dialog',
-      cancel: { label: 'Cancel (Use Standard)', color: 'grey', flat: true },
-      ok: { label: 'Confirm Custom Rate', color: 'warning', unelevated: true },
-      persistent: true,
-    })
-      .onOk(() => resolve(true))
-      .onCancel(() => resolve(false))
-  })
-}
-
-const handleMultiplierToggle = async (field, newValue) => {
-  if (newValue === false) {
-    const standardValue = PHILIPPINES_DEFAULT_MULTIPLIERS[field.key]
-    const confirmed = await showCustomMultiplierWarning(field.key, field.label, standardValue)
-    if (confirmed) {
-      assignForm.value[`use_standard_${field.key}`] = false
-    } else {
-      assignForm.value[`use_standard_${field.key}`] = true
-    }
-  } else {
-    assignForm.value[`use_standard_${field.key}`] = true
-  }
 }
 
 watch(sortBy, () => { sortEmployees() })
