@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <PageShell>
       <!-- Header -->
       <div class="page-header">
@@ -83,13 +83,175 @@
         </q-tab-panel>
 
         <q-tab-panel name="overtime" class="tab-panel-content">
-          <RequestOvertimeTable
-            :rows="filteredOvertimeRequests"
-            :loading="loading"
-            :status-filter="statusFilter"
-            @update:status-filter="statusFilter = $event"
-            @view-approve="openOvertimeApproval"
-          />
+          <!-- Summary Cards -->
+          <div class="overtime-summary-section">
+            <div class="section-header">
+              <span class="section-title">Payroll Run Overtime Summary</span>
+              <span class="section-count">{{ overtimeSummary.length }} runs</span>
+            </div>
+
+            <div v-if="overtimeSummary.length" class="overtime-summary-list">
+              <div
+                v-for="log in overtimeSummary"
+                :key="log.id"
+                :class="['overtime-summary-card', { active: selectedDisbursementLog === log.id }]"
+                @click="selectDisbursementLog(log.id)"
+              >
+                <div class="summary-card-header">
+                  <div class="summary-card-name-group">
+                    <q-icon
+                      name="expand_more"
+                      :style="{ transform: selectedDisbursementLog === log.id ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease' }"
+                      size="18px"
+                      class="expand-icon"
+                    />
+                    <div class="summary-name-stack">
+                      <div class="summary-name">{{ getBaseName(log.name) }}</div>
+                      <div class="summary-period" v-if="getPeriodFromName(log.name)">
+                        {{ getPeriodFromName(log.name) }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="summary-stat-cols">
+                    <div class="summary-stat-col">
+                      <span class="summary-stat-label">Total OT</span>
+                      <span class="summary-stat-val">{{ log.overtime_total_count }}</span>
+                    </div>
+                    <div class="summary-stat-col">
+                      <span class="summary-stat-label">Approved</span>
+                      <span class="summary-stat-val">{{ log.overtime_approved_count }}</span>
+                    </div>
+                    <div class="summary-stat-col">
+                      <span class="summary-stat-label">Pending</span>
+                      <span class="summary-stat-val">{{ log.overtime_total_count - log.overtime_approved_count }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Expanded Panel with Overtime Requests Table -->
+                <div v-if="selectedDisbursementLog === log.id" class="overtime-panel-wrapper">
+                  <div class="overtime-panel">
+                    <div class="overtime-panel-header">
+                      <div class="panel-title">
+                        <q-icon name="schedule" size="16px" color="primary" />
+                        <span>Overtime Requests</span>
+                        <span class="panel-count">{{ overtimeRequests.length }}</span>
+                      </div>
+                      <div class="panel-actions">
+                        <q-input
+                          v-model="overtimeSearch"
+                          dense outlined
+                          placeholder="Search employees..."
+                          class="overtime-search-input"
+                          clearable
+                        >
+                          <template v-slot:prepend>
+                            <q-icon name="search" size="16px" />
+                          </template>
+                        </q-input>
+                        <q-select
+                          v-model="overtimeStatusFilter"
+                          :options="[{ label: 'All Status', value: 'all' }, { label: 'Pending', value: 'pending' }, { label: 'Approved', value: 'approved' }, { label: 'Rejected', value: 'rejected' }]"
+                          option-label="label"
+                          option-value="value"
+                          emit-value
+                          map-options
+                          label="Filter by Status"
+                          class="overtime-status-filter"
+                          dense outlined
+                          clearable
+                        >
+                          <template v-slot:prepend>
+                            <q-icon name="filter_list" />
+                          </template>
+                        </q-select>
+                      </div>
+                    </div>
+
+                    <div v-if="overtimeLoading" class="overtime-panel-loading">
+                      <q-spinner color="primary" size="20px" />
+                      <span>Loading overtime requests...</span>
+                    </div>
+
+                    <div v-else-if="filteredOvertimeRequests.length === 0" class="overtime-panel-empty">
+                      <q-icon name="search_off" size="48px" color="grey-4" />
+                      <div class="empty-title">No overtime requests found</div>
+                      <div class="empty-subtitle">Try adjusting your search or filters</div>
+                    </div>
+
+                    <div v-else class="overtime-table-container">
+                      <q-table
+                        :rows="filteredOvertimeRequests"
+                        :columns="otColumns"
+                        row-key="id"
+                        flat
+                        hide-pagination
+                        :rows-per-page-options="[0]"
+                        class="overtime-table"
+                      >
+                        <template v-slot:header="props">
+                          <q-tr class="table-header-row" :props="props">
+                            <q-th key="employeeName" :props="props" class="table-header-cell">Employee</q-th>
+                            <q-th key="type" :props="props" class="table-header-cell">Type</q-th>
+                            <q-th key="dates" :props="props" class="table-header-cell">Date</q-th>
+                            <q-th key="hours" :props="props" class="table-header-cell">Hours</q-th>
+                            <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
+                            <q-th key="actions" :props="props" class="table-header-cell">Actions</q-th>
+                          </q-tr>
+                        </template>
+                        <template v-slot:body="props">
+                          <q-tr class="table-body-row" :props="props">
+                            <q-td key="employeeName" :props="props" class="table-body-cell">
+                              <div class="employee-info">
+                                <q-avatar size="28px" color="primary" text-color="white">
+                                  {{ props.row.employeeName ? props.row.employeeName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?' }}
+                                </q-avatar>
+                                <span class="employee-name">{{ props.row.employeeName }}</span>
+                              </div>
+                            </q-td>
+                            <q-td key="type" :props="props" class="table-body-cell">
+                              <div class="type-badge">{{ props.row.categoryName }}</div>
+                            </q-td>
+                            <q-td key="dates" :props="props" class="table-body-cell">
+                              <div class="date-text">{{ props.row.date ? new Date(props.row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A' }}</div>
+                            </q-td>
+                            <q-td key="hours" :props="props" class="table-body-cell">
+                              <div class="hours-text">{{ props.row.hours }}h</div>
+                            </q-td>
+                            <q-td key="status" :props="props" class="table-body-cell">
+                              <div :class="['status-badge', `status-${props.row.status}`]">
+                                {{ props.row.status ? props.row.status.charAt(0).toUpperCase() + props.row.status.slice(1) : 'N/A' }}
+                              </div>
+                            </q-td>
+                            <q-td key="actions" :props="props" class="table-body-cell">
+                              <div class="action-buttons">
+                                <q-btn flat round icon="visibility" size="sm" class="action-btn view-btn" @click="openOvertimeApproval(props.row)">
+                                  <q-tooltip>View / Approve</q-tooltip>
+                                </q-btn>
+                                <q-btn
+                                  v-if="props.row.status === 'pending'"
+                                  flat round icon="edit" size="sm"
+                                  class="action-btn approve-btn"
+                                  @click="openOvertimeApproval(props.row)"
+                                >
+                                  <q-tooltip>Approve / Reject</q-tooltip>
+                                </q-btn>
+                              </div>
+                            </q-td>
+                          </q-tr>
+                        </template>
+                      </q-table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="overtime-empty-state">
+              <span class="text-grey-5">No payroll runs with overtime data found</span>
+            </div>
+          </div>
         </q-tab-panel>
 
         <q-tab-panel name="cash_advance" class="tab-panel-content">
@@ -148,7 +310,6 @@ import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import RequestStatsCards from 'src/components/pages/Request/RequestStatsCards.vue'
 import RequestLeaveTable from 'src/components/pages/Request/RequestLeaveTable.vue'
-import RequestOvertimeTable from 'src/components/pages/Request/RequestOvertimeTable.vue'
 import RequestCashAdvanceTable from 'src/components/pages/Request/RequestCashAdvanceTable.vue'
 import RequestLeaveDetailModal from 'src/components/pages/Request/RequestLeaveDetailModal.vue'
 import RequestCaApprovalModal from 'src/components/pages/Request/RequestCaApprovalModal.vue'
@@ -182,8 +343,13 @@ const selectedLeaveRequest = ref(null)
 const showLeaveDetails = ref(false)
 
 // ===== OVERTIME STATE =====
-const overtimeList = ref([])
+const overtimeSummary = ref([])
 const overtimeCategories = ref([])
+const selectedDisbursementLog = ref(null)
+const overtimeRequests = ref([])
+const overtimeLoading = ref(false)
+const overtimeSearch = ref('')
+const overtimeStatusFilter = ref('all')
 const showOvertimeApproval = ref(false)
 const selectedOvertimeRequest = ref(null)
 const overtimeApprovalData = ref({
@@ -215,31 +381,15 @@ const leaveStats = computed(() => ({
 }))
 
 const overtimeStats = computed(() => ({
-  total: overtimeList.value.length,
-  pending: overtimeList.value.filter((r) => r.status === 'pending').length,
-  approved: overtimeList.value.filter((r) => r.status === 'approved').length,
-  rejected: overtimeList.value.filter((r) => r.status === 'rejected').length,
+  total: overtimeSummary.value.reduce((sum, log) => sum + (log.overtime_total_count || 0), 0),
+  pending: overtimeSummary.value.reduce((sum, log) => sum + ((log.overtime_total_count || 0) - (log.overtime_approved_count || 0)), 0),
+  approved: overtimeSummary.value.reduce((sum, log) => sum + (log.overtime_approved_count || 0), 0),
+  rejected: 0,
 }))
 
 // ===== FILTERED LISTS =====
 const filteredLeaveRequests = computed(() => {
   let filtered = [...leaveList.value]
-  if (statusFilter.value && statusFilter.value !== 'all' && statusFilter.value !== null) {
-    filtered = filtered.filter((r) => r.status === statusFilter.value)
-  }
-  if (searchTerm.value.trim()) {
-    const search = searchTerm.value.toLowerCase()
-    filtered = filtered.filter(
-      (r) =>
-        r.employeeName?.toLowerCase().includes(search) ||
-        (r.reason && r.reason.toLowerCase().includes(search)),
-    )
-  }
-  return filtered
-})
-
-const filteredOvertimeRequests = computed(() => {
-  let filtered = [...overtimeList.value]
   if (statusFilter.value && statusFilter.value !== 'all' && statusFilter.value !== null) {
     filtered = filtered.filter((r) => r.status === statusFilter.value)
   }
@@ -269,6 +419,34 @@ const filteredCaRequests = computed(() => {
   }
   return list
 })
+
+const selectDisbursementLog = (id) => {
+  const isSame = selectedDisbursementLog.value === id
+  selectedDisbursementLog.value = isSame ? null : id
+  if (!isSame && id) {
+    fetchOvertimeRequests(id)
+  }
+}
+
+const getPeriodFromName = (name) => {
+  if (!name) return ''
+  const match = name.match(/(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2})/)
+  return match ? match[1] : ''
+}
+
+const getBaseName = (name) => {
+  if (!name) return '\u2014'
+  return name.replace(/\s*\|?\s*\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\s*$/, '').trim()
+}
+
+const otColumns = [
+  { name: 'employeeName', label: 'Employee', field: 'employeeName', align: 'left' },
+  { name: 'type', label: 'Type', field: 'categoryName', align: 'left' },
+  { name: 'dates', label: 'Date', field: 'date', align: 'left' },
+  { name: 'hours', label: 'Hours', field: 'hours', align: 'left' },
+  { name: 'status', label: 'Status', field: 'status', align: 'center' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
 
 // ===== CASH ADVANCE HELPERS =====
 const extractEmployeeName = (request) => {
@@ -352,16 +530,32 @@ const fetchOvertimeCategories = async () => {
   } catch { /* non-critical, fail silently */ }
 }
 
-const fetchOvertimeRequests = async () => {
-  loading.value = true
+const fetchOvertimeSummary = async () => {
   try {
     const companyId = selectedCompany.value
-    if (!companyId) throw new Error('No company selected')
-    const res = await api.get('/payroll/overtime-list/', {
+    if (!companyId) return
+    const res = await api.get('/payroll/admin/disbursement-logs/overtime-summary/', {
       params: { company: companyId },
     })
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
-    overtimeList.value = data.map((item) => ({
+    overtimeSummary.value = data
+  } catch (e) {
+    console.error('Failed to fetch overtime summary', e)
+  }
+}
+
+const fetchOvertimeRequests = async (logId) => {
+  overtimeLoading.value = true
+  try {
+    const companyId = selectedCompany.value
+    if (!companyId) throw new Error('No company selected')
+    const params = { company: companyId }
+    if (logId) {
+      params.disbursement_log_id = logId
+    }
+    const res = await api.get('/payroll/overtime-list/', { params })
+    const data = Array.isArray(res.data) ? res.data : res.data.results || []
+    overtimeRequests.value = data.map((item) => ({
       id: item.id,
       employeeName:
         typeof item.employee === 'object'
@@ -387,9 +581,72 @@ const fetchOvertimeRequests = async () => {
         'Failed to fetch overtime requests.'
     $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
   } finally {
-    loading.value = false
+    overtimeLoading.value = false
   }
 }
+
+const openOvertimeApproval = (row) => {
+  selectedOvertimeRequest.value = row
+  overtimeApprovalData.value = {
+    approved_hours: row.hours || '',
+    category: row.category || null,
+    reason: '',
+    status: 'approved',
+  }
+  showOvertimeApproval.value = true
+}
+
+const submitOvertimeApproval = async () => {
+  try {
+    overtimeSubmitting.value = true
+    const payload = {
+      approved_hours: String(overtimeApprovalData.value.approved_hours),
+      category: overtimeApprovalData.value.category ?? 0,
+      reason: overtimeApprovalData.value.reason || '',
+      status: overtimeApprovalData.value.status,
+    }
+    await api.patch(
+      `/payroll/overtime-approve/${selectedOvertimeRequest.value.id}/`,
+      payload,
+    )
+    const index = overtimeRequests.value.findIndex((r) => r.id === selectedOvertimeRequest.value.id)
+    if (index !== -1) overtimeRequests.value[index].status = overtimeApprovalData.value.status
+    showOvertimeApproval.value = false
+    selectedOvertimeRequest.value = null
+    $q.notify({
+      type: 'positive',
+      message: 'Overtime request updated successfully',
+      icon: 'check_circle',
+      position: 'top',
+    })
+  } catch (e) {
+    const errorMessage = Array.isArray(e.response?.data)
+      ? e.response.data[0]
+      : e.response?.data?.message ||
+        e.response?.data?.detail ||
+        e.message ||
+        'Failed to update overtime request.'
+    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+  } finally {
+    overtimeSubmitting.value = false
+  }
+}
+
+const filteredOvertimeRequests = computed(() => {
+  let filtered = [...overtimeRequests.value]
+  if (overtimeStatusFilter.value && overtimeStatusFilter.value !== 'all') {
+    filtered = filtered.filter((r) => r.status === overtimeStatusFilter.value)
+  }
+  if (overtimeSearch.value.trim()) {
+    const search = overtimeSearch.value.toLowerCase()
+    filtered = filtered.filter(
+      (r) =>
+        r.employeeName?.toLowerCase().includes(search) ||
+        (r.reason && r.reason.toLowerCase().includes(search)),
+    )
+  }
+  return filtered
+})
 
 // ===== LEAVE: APPROVE / REJECT =====
 const approveRequest = async (request) => {
@@ -471,54 +728,6 @@ const rejectRequest = async (request) => {
     $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
   } finally {
     actionLoading.value = null
-  }
-}
-
-// ===== OVERTIME: APPROVE MODAL =====
-const openOvertimeApproval = (row) => {
-  selectedOvertimeRequest.value = row
-  overtimeApprovalData.value = {
-    approved_hours: row.hours || '',
-    category: row.category || null,
-    reason: '',
-    status: 'approved',
-  }
-  showOvertimeApproval.value = true
-}
-
-const submitOvertimeApproval = async () => {
-  try {
-    overtimeSubmitting.value = true
-    const payload = {
-      approved_hours: String(overtimeApprovalData.value.approved_hours),
-      category: overtimeApprovalData.value.category ?? 0,
-      reason: overtimeApprovalData.value.reason || '',
-      status: overtimeApprovalData.value.status,
-    }
-    await api.patch(
-      `/payroll/overtime-approve/${selectedOvertimeRequest.value.id}/`,
-      payload,
-    )
-    const index = overtimeList.value.findIndex((r) => r.id === selectedOvertimeRequest.value.id)
-    if (index !== -1) overtimeList.value[index].status = overtimeApprovalData.value.status
-    showOvertimeApproval.value = false
-    selectedOvertimeRequest.value = null
-    $q.notify({
-      type: 'positive',
-      message: 'Overtime request updated successfully',
-      icon: 'check_circle',
-      position: 'top',
-    })
-  } catch (e) {
-    const errorMessage = Array.isArray(e.response?.data)
-      ? e.response.data[0]
-      : e.response?.data?.message ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to update overtime request.'
-    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
-  } finally {
-    overtimeSubmitting.value = false
   }
 }
 
@@ -609,7 +818,8 @@ const handleRefresh = () => {
   if (activeTab.value === 'cash_advance') {
     fetchCaRequests()
   } else if (activeTab.value === 'overtime') {
-    fetchOvertimeRequests()
+    fetchOvertimeSummary()
+    fetchOvertimeCategories()
   } else {
     fetchLeaveRequests()
   }
@@ -621,7 +831,8 @@ watch(activeTab, (newTab) => {
   if (newTab === 'cash_advance') {
     fetchCaRequests()
   } else if (newTab === 'overtime') {
-    fetchOvertimeRequests()
+    fetchOvertimeSummary()
+    fetchOvertimeCategories()
   } else {
     fetchLeaveRequests()
   }
@@ -629,8 +840,9 @@ watch(activeTab, (newTab) => {
 
 // Re-fetch all data when selected company changes
 watch(selectedCompany, () => {
+  selectedDisbursementLog.value = null
   fetchLeaveRequests()
-  fetchOvertimeRequests()
+  fetchOvertimeSummary()
   fetchOvertimeCategories()
   fetchCaRequests()
 })
@@ -646,7 +858,7 @@ window.addEventListener('storage', syncCompany)
 
 onMounted(() => {
   fetchLeaveRequests()
-  fetchOvertimeRequests()
+  fetchOvertimeSummary()
   fetchOvertimeCategories()
   fetchCaRequests()
 })
@@ -775,4 +987,350 @@ onUnmounted(() => {
   .tab-pill span:not(.tab-badge) { display: none; }
   .tab-pill-icon { font-size: 16px; }
 }
+
+/* Overtime Summary Section */
+.overtime-summary-section {
+  margin-bottom: 16px;
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+.section-count {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+.overtime-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.overtime-summary-card {
+  background: #eef3fb;
+  border: 1px solid #d8e4f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+.overtime-summary-card:hover {
+  background: #e6eef8;
+  border-color: #bfdbfe;
+}
+.overtime-summary-card.active {
+  background: #deeaf8;
+  border-color: #93c5fd;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+}
+.summary-card-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  gap: 16px;
+  flex-wrap: nowrap;
+  width: 100%;
+  box-sizing: border-box;
+}
+.summary-card-name-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.summary-name-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+.summary-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.summary-period {
+  font-size: 11px;
+  font-weight: 400;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.summary-stat-cols {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+}
+.summary-stat-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 0 12px;
+  border-right: 1px solid #d1dce8;
+}
+.summary-stat-col:first-child {
+  padding-left: 0;
+}
+.summary-stat-col:last-of-type {
+  border-right: none;
+}
+.summary-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #8a9ab5;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.summary-stat-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+.overtime-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+}
+.expand-icon {
+  flex-shrink: 0;
+  color: #6b7280;
+  transition: transform 0.3s ease;
+}
+
+@media (max-width: 1024px) {
+  .summary-stat-col { padding: 0 10px; }
+  .summary-stat-label { font-size: 9px; }
+  .summary-stat-val { font-size: 13px; }
+  .summary-card-header { padding: 12px 16px; gap: 12px; }
+}
+
+@media (max-width: 768px) {
+  .summary-card-header { flex-wrap: wrap; padding: 12px 14px; gap: 10px; }
+  .summary-card-name-group { flex: 1 1 100%; min-width: 0; }
+  .summary-stat-cols { flex: 1 1 auto; overflow-x: auto; padding-bottom: 2px; }
+  .summary-stat-col { padding: 0 8px; }
+}
+
+@media (max-width: 480px) {
+  .summary-card-header { flex-direction: column; align-items: flex-start; padding: 10px 12px; gap: 8px; }
+  .summary-card-name-group { width: 100%; }
+  .summary-stat-cols { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+/* Expanded Panel Styles */
+.overtime-panel-wrapper {
+  border-top: 1px solid #d1dce8;
+  background: #f8fafc;
+}
+.overtime-panel {
+  padding: 16px 20px;
+}
+.overtime-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+.panel-count {
+  background: #eef3fb;
+  color: #3b82f6;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.panel-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.overtime-search-input {
+  min-width: 180px;
+  max-width: 220px;
+}
+.overtime-status-filter {
+  min-width: 160px;
+  max-width: 200px;
+}
+.overtime-panel-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 24px;
+  font-size: 13px;
+  color: #6b7280;
+}
+.overtime-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 8px;
+  text-align: center;
+}
+.overtime-table-container {
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e8ecf0;
+  overflow: hidden;
+}
+.overtime-table {
+  background: #ffffff;
+  width: 100%;
+}
+.table-header-row {
+  background: #f8fafc;
+}
+.table-header-cell {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid #e8ecf0 !important;
+  vertical-align: middle !important;
+}
+.table-body-row {
+  transition: background 0.15s ease;
+}
+.table-body-row:hover {
+  background: #f9fafb;
+}
+.table-body-cell {
+  font-size: 13px;
+  color: #374151;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
+  vertical-align: middle !important;
+}
+.employee-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.employee-name {
+  font-weight: 600;
+  color: #111827;
+  font-size: 13px;
+}
+.type-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.date-text {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+}
+.hours-text {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 600;
+}
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.status-pending {
+  background: #fffbeb;
+  color: #92400e;
+}
+.status-approved {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+.status-rejected {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+}
+.action-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.view-btn {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+.view-btn:hover {
+  background: #dbeafe;
+}
+.approve-btn {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+.approve-btn:hover {
+  background: #dcfce7;
+}
+
+@media (max-width: 768px) {
+  .overtime-panel { padding: 12px 14px; }
+  .overtime-panel-header { flex-direction: column; align-items: stretch; }
+  .panel-actions { width: 100%; }
+  .overtime-search-input { max-width: 100%; width: 100%; }
+  .overtime-status-filter { max-width: 100%; width: 100%; }
+  .panel-actions .q-field { width: 100%; }
+}
 </style>
+

@@ -401,7 +401,7 @@ const editFundingEntry = (entry) => {
 
 // ─── Create Run Dialog ───────────────────────────────────────────────────────
 const showCreateRunDialog = ref(false)
-const createRunForm = ref({ company_id: '', department_id: null, start_date: '', end_date: '', type: 'salary' })
+const createRunForm = ref({ company_id: '', department_id: null, start_date: '', end_date: '', type: 'cash_advance' })
 const createRunLoading = ref(false)
 
 const openCreateRunDialog = () => {
@@ -410,7 +410,7 @@ const openCreateRunDialog = () => {
     $q.notify({ type: 'warning', message: 'Please select a company first' })
     return
   }
-  createRunForm.value = { company_id: cid, department_id: null, start_date: '', end_date: '', type: 'salary' }
+  createRunForm.value = { company_id: cid, department_id: null, start_date: '', end_date: '', type: 'cash_advance' }
   showCreateRunDialog.value = true
   fetchDepartments(cid)
 }
@@ -425,7 +425,7 @@ const onCreateRun = async (form) => {
     createRunLoading.value = true
     const payload = {
       company_id: cid, start_date: form.start_date, end_date: form.end_date,
-      type: form.type || 'salary',
+      type: form.type || 'cash_advance',
     }
     const deptId = Number(form.department_id)
     if (deptId) payload.department_id = deptId

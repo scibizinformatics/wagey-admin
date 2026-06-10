@@ -24,8 +24,10 @@
             emit-value
             map-options
             :options="[
-              { label: 'Salary', value: 'salary' },
               { label: '13th Month', value: '13th_month' },
+              { label: 'Cash Loan', value: 'cash_loan' },
+              { label: 'Cash Advance', value: 'cash_advance' },
+              { label: 'Service Charge', value: 'service_charge' },
             ]"
             no-error-icon
           >
