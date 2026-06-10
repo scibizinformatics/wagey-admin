@@ -1,22 +1,31 @@
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
+import { usePayroll } from 'src/composables/page/usePayroll'
 import { BASE, authHeaders } from 'src/composables/utils/http'
+import { PHILIPPINES_DEFAULT_MULTIPLIERS } from './useAdminContracts.js'
 
 export function useAdminContractTypes() {
   const $q = useQuasar()
   const { companyId } = useCompany()
+  const { fetchCustomMultipliers } = usePayroll()
 
   const contractTypes = ref([])
   const eligibilities = ref([])
   const loading = ref(false)
   const saving = ref(false)
 
+  // Company multipliers for Standard toggle option
+  const companyMultipliers = ref(null)
+
   const dialog = ref(false)
   const editing = ref(false)
   const selectedContractType = ref(null)
   const form = ref(_emptyForm())
+
+  const flexibleId = computed(() => eligibilities.value.find((e) => e.name === 'Work Hours Flexible')?.id)
+  const strictId = computed(() => eligibilities.value.find((e) => e.name === 'Work Hours Strict')?.id)
 
   function _emptyForm() {
     return {
@@ -25,7 +34,26 @@ export function useAdminContractTypes() {
       company: null,
       pay_type: 'monthly',
       work_hours_per_week: null,
+      work_hours_type: null,
       eligibilities: [],
+
+      // Multiplier toggles (true = show text box with value)
+      use_standard_overtime: true,
+      use_standard_special_holiday: true,
+      use_standard_regular_holiday: true,
+      use_standard_night_diff: true,
+      use_standard_regular_holiday_ot: true,
+      use_standard_special_holiday_ot: true,
+      use_standard_undertime: true,
+
+      // Custom multiplier values (used when toggle is true / visible)
+      overtime_multiplier: null,
+      special_holiday_multiplier: null,
+      regular_holiday_multiplier: null,
+      night_diff_multiplier: null,
+      regular_holiday_ot_multiplier: null,
+      special_holiday_ot_multiplier: null,
+      undertime_multiplier: null,
     }
   }
 
@@ -34,6 +62,23 @@ export function useAdminContractTypes() {
     (newVal) => {
       if (newVal === 'monthly') {
         form.value.work_hours_per_week = null
+      }
+    },
+  )
+
+  watch(
+    () => form.value.work_hours_type,
+    (newVal) => {
+      if (!flexibleId.value || !strictId.value) return
+      const current = form.value.eligibilities.filter(
+        (id) => id !== flexibleId.value && id !== strictId.value,
+      )
+      if (newVal === 'flexible') {
+        form.value.eligibilities = [...current, flexibleId.value]
+      } else if (newVal === 'strict') {
+        form.value.eligibilities = [...current, strictId.value]
+      } else {
+        form.value.eligibilities = current
       }
     },
   )
@@ -90,27 +135,117 @@ export function useAdminContractTypes() {
     }
   }
 
-  function openDialog() {
+  async function fetchCompanyMultipliersForForm() {
+    try {
+      const data = await fetchCustomMultipliers(companyId.value)
+      companyMultipliers.value = data
+      return data
+    } catch (error) {
+      console.error('Error fetching company multipliers:', error)
+      companyMultipliers.value = null
+      return null
+    }
+  }
+
+  function getMultiplierValue(fieldName, useStandard, customValue) {
+    if (useStandard) {
+      // Text box is visible; use the custom value from the text box
+      return customValue ?? PHILIPPINES_DEFAULT_MULTIPLIERS[fieldName]
+    }
+    // Text box is hidden; use the standard/company value
+    const companyValue = companyMultipliers.value?.[`${fieldName}_multiplier`]
+    return companyValue ?? PHILIPPINES_DEFAULT_MULTIPLIERS[fieldName]
+  }
+
+  async function openDialog() {
     if (!companyId.value) {
       $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
       return
     }
+    await fetchCompanyMultipliersForForm()
+    if (!eligibilities.value.length) {
+      await fetchEligibilities()
+    }
     editing.value = false
     form.value = _emptyForm()
     form.value.company = companyId.value
+
+    // Pre-fill multipliers with standard values
+    const multiplierKeys = [
+      'overtime',
+      'special_holiday',
+      'regular_holiday',
+      'night_diff',
+      'regular_holiday_ot',
+      'special_holiday_ot',
+      'undertime',
+    ]
+    for (const key of multiplierKeys) {
+      const standardValue = getMultiplierValue(key, false, null)
+      form.value[`${key}_multiplier`] = standardValue
+    }
+
+    // Pre-select all non-work-hours eligibilities
+    const otherEligibilities = eligibilities.value
+      .filter((e) => {
+        if (e.name === 'Work Hours Flexible' || e.name === 'Work Hours Strict') return false
+        if (e.name === 'Overtime Eligible') return false
+        if (e.name === 'Overtime Converted to CTO') return false
+        return true
+      })
+      .map((e) => e.id)
+
+    // Add Overtime Eligible by default
+    const overtimeEligibleId = eligibilities.value.find((e) => e.name === 'Overtime Eligible')?.id
+    const initialEligibilities = overtimeEligibleId ? [overtimeEligibleId, ...otherEligibilities] : otherEligibilities
+    form.value.eligibilities = initialEligibilities
+
     dialog.value = true
   }
 
-  function editContractType(contractType) {
+  async function editContractType(contractType) {
     editing.value = true
     selectedContractType.value = contractType
+    if (!companyMultipliers.value) {
+      await fetchCompanyMultipliersForForm()
+    }
+    const multiplierKeys = [
+      'overtime',
+      'special_holiday',
+      'regular_holiday',
+      'night_diff',
+      'regular_holiday_ot',
+      'special_holiday_ot',
+      'undertime',
+    ]
+    const multiplierFields = {}
+    multiplierKeys.forEach((key) => {
+      const companyVal = companyMultipliers.value?.[`${key}_multiplier`]
+      const standardVal = companyVal ?? PHILIPPINES_DEFAULT_MULTIPLIERS[key]
+      const ctVal = contractType[`${key}_multiplier`]
+      // Show text box with the actual value (standard or custom)
+      multiplierFields[`use_standard_${key}`] = true
+      multiplierFields[`${key}_multiplier`] = ctVal ?? standardVal
+    })
+
+    // Determine work_hours_type from existing eligibilities
+    const currentEligibilities = contractType.eligibilities ?? []
+    let workHoursType = null
+    if (flexibleId.value && currentEligibilities.includes(flexibleId.value)) {
+      workHoursType = 'flexible'
+    } else if (strictId.value && currentEligibilities.includes(strictId.value)) {
+      workHoursType = 'strict'
+    }
+
     form.value = {
       id: contractType.id,
       name: contractType.name,
       company: contractType.company,
       pay_type: contractType.pay_type ?? 'monthly',
       work_hours_per_week: contractType.work_hours_per_week ?? null,
-      eligibilities: contractType.eligibilities ?? [],
+      work_hours_type: workHoursType,
+      eligibilities: currentEligibilities,
+      ...multiplierFields,
     }
     dialog.value = true
   }
@@ -121,6 +256,35 @@ export function useAdminContractTypes() {
       return
     }
 
+    // Resolve and validate multipliers
+    const multiplierKeys = [
+      'overtime',
+      'special_holiday',
+      'regular_holiday',
+      'night_diff',
+      'regular_holiday_ot',
+      'special_holiday_ot',
+      'undertime',
+    ]
+    const multiplierPayload = {}
+    for (const key of multiplierKeys) {
+      const value = getMultiplierValue(
+        key,
+        form.value[`use_standard_${key}`],
+        form.value[`${key}_multiplier`]
+      )
+      const num = Number(value)
+      if (isNaN(num) || num < 0) {
+        $q.notify({
+          type: 'negative',
+          message: `${key.replace(/_/g, ' ')} multiplier must be a valid number ≥ 0`,
+          position: 'top',
+        })
+        return
+      }
+      multiplierPayload[`${key}_multiplier`] = num
+    }
+
     saving.value = true
     try {
       const payload = {
@@ -129,6 +293,7 @@ export function useAdminContractTypes() {
         pay_type: form.value.pay_type,
         work_hours_per_week: form.value.work_hours_per_week,
         eligibilities: form.value.eligibilities,
+        ...multiplierPayload,
       }
 
       if (editing.value) {
@@ -192,5 +357,9 @@ export function useAdminContractTypes() {
     editContractType,
     saveContractType,
     deleteContractType,
+    // Exposed for multiplier UI
+    companyMultipliers,
+    PHILIPPINES_DEFAULT_MULTIPLIERS,
+    getMultiplierValue,
   }
 }
