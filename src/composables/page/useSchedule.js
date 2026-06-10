@@ -190,6 +190,26 @@ export function useSchedule() {
   }
 
   /**
+   * Fetch schedules for a single employee in a date range.
+   * @param {string} startDate - YYYY-MM-DD
+   * @param {string} endDate   - YYYY-MM-DD
+   * @param {string|number} employeeId
+   */
+  async function fetchEmployeeSchedule(startDate, endDate, employeeId) {
+    const response = await api.get(`${BASE}/organization/schedules/company/monthly/`, {
+      params: {
+        company: companyId.value,
+        start_date: startDate,
+        end_date: endDate,
+        employee_id: employeeId,
+        page_size: 100,
+      },
+      headers: authHeaders(),
+    })
+    return response.data ?? {}
+  }
+
+  /**
    * Assign employees to a recurring schedule by expanding the template rules
    * into individual dated entries and posting to the existing /assign/ endpoint.
    *
@@ -285,5 +305,6 @@ export function useSchedule() {
     deleteLeave,
     fetchShiftTemplates,
     assignRecurringSchedule,
+    fetchEmployeeSchedule,
   }
 }

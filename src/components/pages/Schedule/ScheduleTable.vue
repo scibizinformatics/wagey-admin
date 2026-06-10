@@ -26,6 +26,12 @@
                       <span class="avatar-text">{{ getInitials(user.name) }}</span>
                     </q-avatar>
                     <span class="employee-name">{{ user.name }}</span>
+                    <q-spinner
+                      v-if="refreshingRowUserId === user.id"
+                      color="primary"
+                      size="14px"
+                      class="row-refresh-spinner"
+                    />
                   </div>
                 </td>
                 <td v-for="(day, dayIdx) in days" :key="dayIdx" class="schedule-cell">
@@ -183,6 +189,7 @@ const props = defineProps({
   sites: { type: Array, default: () => [] },
   shiftTypes: { type: Array, default: () => [] },
   loadingText: { type: String, default: 'Loading schedules...' },
+  refreshingRowUserId: { type: [Number, String], default: null },
 });
 
 defineEmits([
@@ -574,6 +581,10 @@ function formatTimeWithTimezone(time) {
   background: #ffedd5 !important;
   border-color: #fdba74 !important;
 }
+.row-refresh-spinner {
+  margin-left: 6px;
+}
+
 @media (min-width: 1440px) {
   .schedule-table th,
   .employee-cell,

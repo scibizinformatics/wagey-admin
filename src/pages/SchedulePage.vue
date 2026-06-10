@@ -64,6 +64,7 @@
         :loading-text="loadingMessage"
         :quick-action-loading="quickActionLoading"
         :assigning-day-off-id="assigningDayOffId"
+        :refreshing-row-user-id="refreshingRowUserId"
         :sites="sites"
         :shift-types="shiftTypes"
         @open-quick-add="openQuickAddModal"
@@ -173,6 +174,7 @@ const $q = useQuasar()
 const { companyId } = useCompany()
 const {
   fetchScheduleByDateRange,
+  fetchEmployeeSchedule,
   assignShift,
   reassignShift: reassignShiftApi,
   assignDayOff: assignDayOffApi,
@@ -219,6 +221,7 @@ const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
 const assigningDayOffId = ref(null)
 const quickActionLoading = ref(null)
+const refreshingRowUserId = ref(null)
 const leaveTypes = ref([])
 const shiftTemplates = ref([])
 const addConflictWarning = ref(false)
@@ -657,6 +660,87 @@ const renderPage = () => {
   }
 }
 
+const mergeEmployeeData = (results) => {
+  const map = new Map()
+  results.forEach((rawResult) => {
+    const list = Array.isArray(rawResult)
+      ? rawResult
+      : Array.isArray(rawResult?.results)
+        ? rawResult.results
+        : Array.isArray(rawResult?.data)
+          ? rawResult.data
+          : rawResult
+            ? [rawResult]
+            : []
+    list.forEach((empData) => {
+      const empId = empData.employee?.id || empData.id
+      if (!empId) return
+      if (map.has(empId)) {
+        const existing = map.get(empId)
+        const newSchedules = empData.schedules || empData.schedule || empData.schedule_list || []
+        const existingSchedules = existing.schedules || []
+        existing.schedules = [...existingSchedules, ...newSchedules]
+      } else {
+        map.set(empId, {
+          ...empData,
+          schedules: [
+            ...(empData.schedules || empData.schedule || empData.schedule_list || []),
+          ],
+        })
+      }
+    })
+  })
+  return Array.from(map.values())
+}
+
+const refreshSingleEmployee = async (userId) => {
+  refreshingRowUserId.value = userId
+  try {
+    const { start, end } = selectedWeek.value
+    const fmt = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const response = await fetchEmployeeSchedule(fmt(start), fmt(end), userId)
+    const merged = mergeEmployeeData([response])
+    if (merged.length === 0) return
+
+    const updatedEmp = merged.find((e) => (e.employee?.id || e.id) == userId)
+    if (!updatedEmp) {
+      console.warn('Employee not found in refresh response, falling back to full refresh')
+      await fetchData()
+      return
+    }
+
+    const empId = updatedEmp.employee?.id || updatedEmp.id
+    const weekKey = fmt(start)
+
+    const idx = allSchedules.value.findIndex((e) => (e.employee?.id || e.id) == empId)
+    if (idx !== -1) {
+      allSchedules.value.splice(idx, 1, {
+        ...allSchedules.value[idx],
+        ...updatedEmp,
+        schedules: updatedEmp.schedules || updatedEmp.schedule || updatedEmp.schedule_list || [],
+      })
+    }
+
+    if (scheduleCache.value[weekKey]) {
+      const cacheIdx = scheduleCache.value[weekKey].findIndex(
+        (e) => (e.employee?.id || e.id) == empId,
+      )
+      if (cacheIdx !== -1) {
+        scheduleCache.value[weekKey].splice(cacheIdx, 1, allSchedules.value[idx])
+      }
+    }
+
+    renderPage()
+    fetchLeaves()
+  } catch (e) {
+    console.error('Refresh single employee failed:', e)
+    await fetchData()
+  } finally {
+    setTimeout(() => { refreshingRowUserId.value = null }, 600)
+  }
+}
+
 const fetchData = async () => {
   isLoadingSchedule.value = true
   loadingMessage.value = 'Loading schedules...'
@@ -682,39 +766,6 @@ const fetchData = async () => {
       const allResults = []
       let page = 1
       let hasMore = true
-
-      const mergeEmployeeData = (results) => {
-        const map = new Map()
-        results.forEach((rawResult) => {
-          const list = Array.isArray(rawResult)
-            ? rawResult
-            : Array.isArray(rawResult?.results)
-              ? rawResult.results
-              : Array.isArray(rawResult?.data)
-                ? rawResult.data
-                : rawResult
-                  ? [rawResult]
-                  : []
-          list.forEach((empData) => {
-            const empId = empData.employee?.id || empData.id
-            if (!empId) return
-            if (map.has(empId)) {
-              const existing = map.get(empId)
-              const newSchedules = empData.schedules || empData.schedule || empData.schedule_list || []
-              const existingSchedules = existing.schedules || []
-              existing.schedules = [...existingSchedules, ...newSchedules]
-            } else {
-              map.set(empId, {
-                ...empData,
-                schedules: [
-                  ...(empData.schedules || empData.schedule || empData.schedule_list || []),
-                ],
-              })
-            }
-          })
-        })
-        return Array.from(map.values())
-      }
 
       while (hasMore) {
         loadingMessage.value = `Loading page ${page}...`
@@ -1063,11 +1114,7 @@ const quickAddSchedule = async () => {
     })
     showQuickAddModal.value = false
     quickAdd.value = { userId: null, day: null, shifts: [], leaveType: null }
-    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
-    setTimeout(async () => {
-      await fetchData()
-      fetchLeaves()
-    }, 500)
+    await refreshSingleEmployee(userId)
   } catch (error) {
     handleScheduleError(error)
   } finally {
@@ -1101,8 +1148,7 @@ const handleReassignShift = async () => {
         icon: 'check_circle',
         timeout: 3000,
       })
-      delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
-      fetchData()
+      await refreshSingleEmployee(r.currentEmployee)
     } else {
       const templateId = parseInt(r.shiftTemplateId)
       const template = shiftTemplates.value.find((t) => t.id === templateId)
@@ -1121,8 +1167,7 @@ const handleReassignShift = async () => {
         icon: 'check_circle',
         timeout: 3000,
       })
-      delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
-      fetchData()
+      await refreshSingleEmployee(r.currentEmployee)
     }
     showReassignModal.value = false
   } catch (error) {
@@ -1162,11 +1207,7 @@ const assignDayOff = async (element) => {
       icon: 'event_busy',
       timeout: 3000,
     })
-    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
-    setTimeout(async () => {
-      await fetchData()
-      fetchLeaves()
-    }, 1500)
+    await refreshSingleEmployee(element.userId)
   } catch (error) {
     $q.notify({
       type: 'negative',
@@ -1199,11 +1240,7 @@ const assignDualDayOff = async (mergedElement) => {
       icon: 'event_busy',
       timeout: 3000,
     })
-    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
-    setTimeout(async () => {
-      await fetchData()
-      fetchLeaves()
-    }, 1500)
+    await refreshSingleEmployee(mergedElement.userId)
   } catch (error) {
     $q.notify({
       type: 'negative',
@@ -1277,11 +1314,7 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
         timeout: 3000,
       })
     }
-    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
-    setTimeout(async () => {
-      await fetchData()
-      fetchLeaves()
-    }, 500)
+    await refreshSingleEmployee(userId)
   } catch (error) {
     $q.notify({
       type: 'negative',
