@@ -18,7 +18,7 @@ export default defineConfig((ctx) => {
       errors: true,
     },
 
-    boot: ['pinia', 'auth', 'axios'],
+    boot: ['pinia', 'auth', 'axios', 'suppressExtensionErrors'],
     css: ['app.scss'],
     extras: ['roboto-font', 'material-icons'],
 
