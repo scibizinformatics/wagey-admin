@@ -37,16 +37,7 @@ export function useAdminContractTypes() {
       work_hours_type: null,
       eligibilities: [],
 
-      // Multiplier toggles (true = show text box with value)
-      use_standard_overtime: true,
-      use_standard_special_holiday: true,
-      use_standard_regular_holiday: true,
-      use_standard_night_diff: true,
-      use_standard_regular_holiday_ot: true,
-      use_standard_special_holiday_ot: true,
-      use_standard_undertime: true,
-
-      // Custom multiplier values (used when toggle is true / visible)
+      // Custom multiplier values
       overtime_multiplier: null,
       special_holiday_multiplier: null,
       regular_holiday_multiplier: null,
@@ -147,16 +138,6 @@ export function useAdminContractTypes() {
     }
   }
 
-  function getMultiplierValue(fieldName, useStandard, customValue) {
-    if (useStandard) {
-      // Text box is visible; use the custom value from the text box
-      return customValue ?? PHILIPPINES_DEFAULT_MULTIPLIERS[fieldName]
-    }
-    // Text box is hidden; use the standard/company value
-    const companyValue = companyMultipliers.value?.[`${fieldName}_multiplier`]
-    return companyValue ?? PHILIPPINES_DEFAULT_MULTIPLIERS[fieldName]
-  }
-
   async function openDialog() {
     if (!companyId.value) {
       $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
@@ -170,7 +151,7 @@ export function useAdminContractTypes() {
     form.value = _emptyForm()
     form.value.company = companyId.value
 
-    // Pre-fill multipliers with standard values
+    // Pre-fill multipliers with company default or DOLE default
     const multiplierKeys = [
       'overtime',
       'special_holiday',
@@ -181,24 +162,34 @@ export function useAdminContractTypes() {
       'undertime',
     ]
     for (const key of multiplierKeys) {
-      const standardValue = getMultiplierValue(key, false, null)
-      form.value[`${key}_multiplier`] = standardValue
+      const companyVal = companyMultipliers.value?.[`${key}_multiplier`]
+      form.value[`${key}_multiplier`] = companyVal ?? PHILIPPINES_DEFAULT_MULTIPLIERS[key]
     }
 
-    // Pre-select all non-work-hours eligibilities
+    // Excluded from generic loop (have dedicated checkboxes)
+    const dedicatedEligibilityNames = [
+      'Overtime Eligible',
+      'Overtime Converted to CTO',
+      'Holiday Pay',
+      'Undertime Deduction',
+      'Night Differential Eligible',
+    ]
+
+    // Pre-select all non-work-hours, non-dedicated eligibilities
     const otherEligibilities = eligibilities.value
       .filter((e) => {
         if (e.name === 'Work Hours Flexible' || e.name === 'Work Hours Strict') return false
-        if (e.name === 'Overtime Eligible') return false
-        if (e.name === 'Overtime Converted to CTO') return false
+        if (dedicatedEligibilityNames.includes(e.name)) return false
         return true
       })
       .map((e) => e.id)
 
-    // Add Overtime Eligible by default
-    const overtimeEligibleId = eligibilities.value.find((e) => e.name === 'Overtime Eligible')?.id
-    const initialEligibilities = overtimeEligibleId ? [overtimeEligibleId, ...otherEligibilities] : otherEligibilities
-    form.value.eligibilities = initialEligibilities
+    // Pre-select dedicated eligibilities by default
+    const preSelectIds = eligibilities.value
+      .filter((e) => dedicatedEligibilityNames.includes(e.name))
+      .map((e) => e.id)
+
+    form.value.eligibilities = [...preSelectIds, ...otherEligibilities]
 
     dialog.value = true
   }
@@ -223,8 +214,6 @@ export function useAdminContractTypes() {
       const companyVal = companyMultipliers.value?.[`${key}_multiplier`]
       const standardVal = companyVal ?? PHILIPPINES_DEFAULT_MULTIPLIERS[key]
       const ctVal = contractType[`${key}_multiplier`]
-      // Show text box with the actual value (standard or custom)
-      multiplierFields[`use_standard_${key}`] = true
       multiplierFields[`${key}_multiplier`] = ctVal ?? standardVal
     })
 
@@ -268,12 +257,7 @@ export function useAdminContractTypes() {
     ]
     const multiplierPayload = {}
     for (const key of multiplierKeys) {
-      const value = getMultiplierValue(
-        key,
-        form.value[`use_standard_${key}`],
-        form.value[`${key}_multiplier`]
-      )
-      const num = Number(value)
+      const num = Number(form.value[`${key}_multiplier`])
       if (isNaN(num) || num < 0) {
         $q.notify({
           type: 'negative',
@@ -357,9 +341,7 @@ export function useAdminContractTypes() {
     editContractType,
     saveContractType,
     deleteContractType,
-    // Exposed for multiplier UI
     companyMultipliers,
     PHILIPPINES_DEFAULT_MULTIPLIERS,
-    getMultiplierValue,
   }
 }
