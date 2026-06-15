@@ -52,14 +52,24 @@
                 </div>
               </q-td>
               <q-td class="table-body-cell multipliers-cell">
-                <div class="multiplier-summary">
-                  <span class="multiplier-chip" title="Overtime">OT: ×{{ props.row.overtime_multiplier ?? '-' }}</span>
-                  <span class="multiplier-chip" title="Regular Holiday">RH: ×{{ props.row.regular_holiday_multiplier ?? '-' }}</span>
-                  <span class="multiplier-chip" title="Special Holiday">SH: ×{{ props.row.special_holiday_multiplier ?? '-' }}</span>
-                  <span class="multiplier-chip" title="Night Differential">ND: ×{{ props.row.night_diff_multiplier ?? '-' }}</span>
-                  <span class="multiplier-chip" title="Regular Holiday OT">RH-OT: ×{{ props.row.regular_holiday_ot_multiplier ?? '-' }}</span>
-                  <span class="multiplier-chip" title="Special Holiday OT">SH-OT: ×{{ props.row.special_holiday_ot_multiplier ?? '-' }}</span>
-                  <span class="multiplier-chip" title="Undertime">UT: ×{{ props.row.undertime_multiplier ?? '-' }}</span>
+                <div class="multiplier-badges">
+                  <q-chip
+                    v-for="item in [
+                      { label: 'Overtime', value: props.row.overtime_multiplier },
+                      { label: 'Regular Holiday', value: props.row.regular_holiday_multiplier },
+                      { label: 'Special Holiday', value: props.row.special_holiday_multiplier },
+                      { label: 'Night Differential', value: props.row.night_diff_multiplier },
+                      { label: 'Regular Holiday OT', value: props.row.regular_holiday_ot_multiplier },
+                      { label: 'Special Holiday OT', value: props.row.special_holiday_ot_multiplier },
+                      { label: 'Undertime', value: props.row.undertime_multiplier },
+                    ]"
+                    :key="item.label"
+                    size="sm"
+                    color="primary"
+                    text-color="white"
+                  >
+                    {{ item.label }}: ×{{ item.value ?? '-' }}
+                  </q-chip>
                 </div>
               </q-td>
               <q-td class="table-body-cell actions-cell">
@@ -125,11 +135,35 @@
                 dense
               />
             </div>
-            <div class="col-6 q-mb-sm" v-if="ctoId && contractTypeForm.pay_type === 'daily'">
+            <div class="col-6 q-mb-sm" v-if="ctoId && contractTypeForm.pay_type === 'monthly'">
               <q-checkbox
                 :model-value="contractTypeForm.eligibilities.includes(ctoId)"
                 @update:model-value="toggleEligibility(ctoId, $event)"
                 label="Overtime Converted to CTO"
+                dense
+              />
+            </div>
+            <div class="col-6 q-mb-sm" v-if="holidayPayId">
+              <q-checkbox
+                :model-value="contractTypeForm.eligibilities.includes(holidayPayId)"
+                @update:model-value="toggleEligibility(holidayPayId, $event)"
+                label="Holiday Pay"
+                dense
+              />
+            </div>
+            <div class="col-6 q-mb-sm" v-if="undertimeId">
+              <q-checkbox
+                :model-value="contractTypeForm.eligibilities.includes(undertimeId)"
+                @update:model-value="toggleEligibility(undertimeId, $event)"
+                label="Undertime Deduction"
+                dense
+              />
+            </div>
+            <div class="col-6 q-mb-sm" v-if="nightDiffId">
+              <q-checkbox
+                :model-value="contractTypeForm.eligibilities.includes(nightDiffId)"
+                @update:model-value="toggleEligibility(nightDiffId, $event)"
+                label="Night Differential Eligible"
                 dense
               />
             </div>
@@ -146,7 +180,7 @@
           <div class="text-subtitle2 q-mb-xs q-mt-md">Payroll Multipliers</div>
           <q-separator class="q-mb-md" />
           <div class="multipliers-section">
-            <div v-for="field in multiplierFields" :key="field.key" class="multiplier-row">
+            <div v-for="field in visibleMultiplierFields" :key="field.key" class="multiplier-row">
               <div class="multiplier-info">
                 <q-icon :name="field.icon" size="20px" class="multiplier-icon" />
                 <div class="multiplier-details">
@@ -155,15 +189,8 @@
                 </div>
               </div>
               <div class="multiplier-controls">
-                <q-toggle
-                  :model-value="contractTypeForm[`use_standard_${field.key}`]"
-                  @update:model-value="toggleMultiplier(field.key, $event)"
-                  color="primary"
-                  dense
-                />
                 <div class="multiplier-value-wrapper">
                   <q-input
-                    v-if="contractTypeForm[`use_standard_${field.key}`]"
                     v-model="contractTypeForm[`${field.key}_multiplier`]"
                     type="number"
                     step="0.01"
@@ -174,7 +201,7 @@
                     placeholder="e.g. 1.50"
                   >
                     <template v-slot:prepend>
-                      <span class="multiplier-badge">×</span>
+                      <span class="multiplier-badge" @click="clearMultiplier(field.key)">×</span>
                     </template>
                   </q-input>
                 </div>
@@ -184,7 +211,65 @@
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-          <q-btn color="primary" label="Save" :loading="savingContractType" @click="saveContractType" />
+          <q-btn color="primary" label="Save" :loading="savingContractType" @click="handleSave" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <q-dialog v-model="showGovWarning" persistent>
+      <q-card class="admin-modal-card" style="max-width: 520px">
+        <q-card-section class="admin-modal-header">
+          <div class="modal-title-section">
+            <q-avatar size="44px" color="negative" text-color="white">
+              <q-icon name="warning" size="22px" />
+            </q-avatar>
+            <div>
+              <div class="admin-modal-title">Government Compliance Warning</div>
+              <div class="admin-modal-subtitle">Government Mandated Multiplier Requirements</div>
+            </div>
+          </div>
+          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+        </q-card-section>
+        <q-card-section class="admin-modal-content">
+          <div class="text-body2 q-mb-md">
+            The following multipliers are set for this contract type. Values below government minimums may violate regulatory requirements.
+          </div>
+          <q-list dense class="gov-violations-list">
+            <q-item v-for="item in govViolations" :key="item.key" class="gov-violation-item">
+              <q-item-section>
+                <div class="row items-center no-wrap">
+                  <q-icon
+                    :name="item.isViolation ? 'error' : 'check_circle'"
+                    :color="item.isViolation ? 'negative' : 'positive'"
+                    size="20px"
+                    class="q-mr-sm"
+                  />
+                  <div>
+                    <div class="text-weight-bold" style="font-size: 13px">{{ item.label }}</div>
+                    <div class="text-caption text-grey">
+                      Current:
+                      <span :class="item.isViolation ? 'text-negative text-weight-bold' : ''">
+                        ×{{ item.currentValue.toFixed(2) }}
+                      </span>
+                      &nbsp;|&nbsp; Minimum: ×{{ item.minStandard.toFixed(2) }}
+                    </div>
+                  </div>
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <q-banner class="gov-banner q-mt-md" rounded>
+            <template v-slot:avatar>
+              <q-icon name="info" color="orange-8" />
+            </template>
+            <div class="text-caption text-grey-8">
+              <strong>Legal Notice:</strong> Setting multipliers below government standards may expose your company to penalties, back-pay claims, and labor disputes. Ensure compliance with regulations.
+            </div>
+          </q-banner>
+        </q-card-section>
+        <q-card-actions align="right" class="admin-modal-footer">
+          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+          <q-btn color="negative" label="I Understand, Proceed" @click="confirmGovSave" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -213,6 +298,53 @@ const {
   PHILIPPINES_DEFAULT_MULTIPLIERS,
 } = useAdminContractTypes()
 
+const GOV_MINIMUM_MULTIPLIERS = {
+  overtime: 1.25,
+  special_holiday: 1.30,
+  regular_holiday: 2.00,
+  night_diff: 1.10,
+  regular_holiday_ot: 2.60,
+  special_holiday_ot: 1.69,
+  undertime: 1.00,
+}
+
+const showGovWarning = ref(false)
+const govViolations = ref([])
+
+const checkGovCompliance = () => {
+  const items = []
+  let hasAnyEnabled = false
+
+  for (const field of multiplierFields) {
+    if (!isMultiplierVisible(field.key)) continue
+    hasAnyEnabled = true
+    const currentValue = parseFloat(contractTypeForm.value[`${field.key}_multiplier`]) || 0
+    const minStandard = GOV_MINIMUM_MULTIPLIERS[field.key]
+    items.push({
+      ...field,
+      currentValue,
+      minStandard,
+      isViolation: currentValue < minStandard,
+    })
+  }
+
+  govViolations.value = items
+  return hasAnyEnabled
+}
+
+const handleSave = () => {
+  if (!checkGovCompliance()) {
+    saveContractType()
+    return
+  }
+  showGovWarning.value = true
+}
+
+const confirmGovSave = () => {
+  showGovWarning.value = false
+  saveContractType()
+}
+
 const contractTypeColumns = ref([
   { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
   { name: 'eligibilities', label: 'Eligibilities', field: 'eligibilities', align: 'left' },
@@ -222,13 +354,23 @@ const contractTypeColumns = ref([
 
 const overtimeId = computed(() => eligibilities.value.find((e) => e.name === 'Overtime Eligible')?.id)
 const ctoId = computed(() => eligibilities.value.find((e) => e.name === 'Overtime Converted to CTO')?.id)
+const holidayPayId = computed(() => eligibilities.value.find((e) => e.name === 'Holiday Pay')?.id)
+const undertimeId = computed(() => eligibilities.value.find((e) => e.name === 'Undertime Deduction')?.id)
+const nightDiffId = computed(() => eligibilities.value.find((e) => e.name === 'Night Differential Eligible')?.id)
+
+const dedicatedEligibilityNames = [
+  'Overtime Eligible',
+  'Overtime Converted to CTO',
+  'Holiday Pay',
+  'Undertime Deduction',
+  'Night Differential Eligible',
+]
 
 const eligibilityOptions = computed(() =>
   eligibilities.value
     .filter((e) => {
       if (e.name === 'Work Hours Flexible' || e.name === 'Work Hours Strict') return false
-      if (e.name === 'Overtime Eligible') return false
-      if (e.name === 'Overtime Converted to CTO') return false
+      if (dedicatedEligibilityNames.includes(e.name)) return false
       return true
     })
     .map((e) => ({
@@ -241,9 +383,40 @@ function toggleEligibility(id, checked) {
   const current = contractTypeForm.value.eligibilities
   if (checked) {
     contractTypeForm.value.eligibilities = [...current, id]
+
+    // Pre-fill associated multiplier(s) with default when eligibility is checked
+    const eligibilityToMultipliers = {}
+    if (overtimeId.value) eligibilityToMultipliers[overtimeId.value] = ['overtime']
+    if (holidayPayId.value) eligibilityToMultipliers[holidayPayId.value] = ['regular_holiday', 'special_holiday', 'regular_holiday_ot', 'special_holiday_ot']
+    if (undertimeId.value) eligibilityToMultipliers[undertimeId.value] = ['undertime']
+    if (nightDiffId.value) eligibilityToMultipliers[nightDiffId.value] = ['night_diff']
+
+    const keys = eligibilityToMultipliers[id]
+    if (keys) {
+      for (const key of keys) {
+        if (contractTypeForm.value[`${key}_multiplier`] == null || contractTypeForm.value[`${key}_multiplier`] === '') {
+          contractTypeForm.value[`${key}_multiplier`] = getStandardDisplay(key)
+        }
+      }
+    }
   } else {
     contractTypeForm.value.eligibilities = current.filter((eid) => eid !== id)
   }
+}
+
+function isMultiplierVisible(fieldKey) {
+  const map = {
+    overtime: overtimeId,
+    regular_holiday_ot: holidayPayId,
+    special_holiday_ot: holidayPayId,
+    regular_holiday: holidayPayId,
+    special_holiday: holidayPayId,
+    night_diff: nightDiffId,
+    undertime: undertimeId,
+  }
+  const eligibilityId = map[fieldKey]?.value
+  if (!eligibilityId) return true
+  return contractTypeForm.value.eligibilities.includes(eligibilityId)
 }
 
 const multiplierFields = [
@@ -256,6 +429,10 @@ const multiplierFields = [
   { key: 'undertime', label: 'Undertime', icon: 'timer_off', desc: 'Hours not worked' },
 ]
 
+const visibleMultiplierFields = computed(() =>
+  multiplierFields.filter((f) => isMultiplierVisible(f.key)),
+)
+
 const getStandardDisplay = (fieldKey) => {
   const companyValue = companyMultipliers?.value?.[`${fieldKey}_multiplier`]
   return companyValue ?? PHILIPPINES_DEFAULT_MULTIPLIERS[fieldKey]
@@ -267,10 +444,10 @@ watch(
     if (!overtimeId.value || !ctoId.value) return
     const hasOvertime = newVal.includes(overtimeId.value)
     const hasCto = newVal.includes(ctoId.value)
-    const isDaily = contractTypeForm.value.pay_type === 'daily'
+    const isMonthly = contractTypeForm.value.pay_type === 'monthly'
 
-    // Overtime is checked but CTO is not -> auto-check CTO (only when daily)
-    if (hasOvertime && !hasCto && isDaily) {
+    // Overtime is checked but CTO is not -> auto-check CTO (only when monthly)
+    if (hasOvertime && !hasCto && isMonthly) {
       contractTypeForm.value.eligibilities = [...newVal, ctoId.value]
       return
     }
@@ -288,15 +465,15 @@ watch(
   (newVal) => {
     if (!ctoId.value) return
     const current = contractTypeForm.value.eligibilities
-    // If switched to monthly, remove CTO from eligibilities
-    if (newVal === 'monthly') {
+    // If switched to daily, remove CTO from eligibilities
+    if (newVal === 'daily') {
       if (current.includes(ctoId.value)) {
         contractTypeForm.value.eligibilities = current.filter((id) => id !== ctoId.value)
       }
       return
     }
-    // If switched to daily, auto-check CTO if Overtime is checked
-    if (newVal === 'daily') {
+    // If switched to monthly, auto-check CTO if Overtime is checked
+    if (newVal === 'monthly') {
       if (overtimeId.value && current.includes(overtimeId.value) && !current.includes(ctoId.value)) {
         contractTypeForm.value.eligibilities = [...current, ctoId.value]
       }
@@ -305,11 +482,8 @@ watch(
   { immediate: true },
 )
 
-const toggleMultiplier = (fieldKey, newValue) => {
-  contractTypeForm.value[`use_standard_${fieldKey}`] = newValue
-  if (newValue && (contractTypeForm.value[`${fieldKey}_multiplier`] == null || contractTypeForm.value[`${fieldKey}_multiplier`] === '')) {
-    contractTypeForm.value[`${fieldKey}_multiplier`] = getStandardDisplay(fieldKey)
-  }
+const clearMultiplier = (fieldKey) => {
+  contractTypeForm.value[`${fieldKey}_multiplier`] = null
 }
 
 const getEligibilityName = (id) => {
@@ -334,33 +508,20 @@ onMounted(async () => {
   gap: 4px;
 }
 
-.multiplier-summary {
+.multiplier-badges {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 4px;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.multiplier-chip {
-  font-size: 11px;
-  color: #374151;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  padding: 2px 6px;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .multipliers-header {
-  width: 340px;
-  min-width: 340px;
+  width: 460px;
+  min-width: 460px;
 }
 
 .multipliers-cell {
-  width: 340px;
-  min-width: 340px;
+  width: 460px;
+  min-width: 460px;
   overflow: hidden;
 }
 
@@ -485,11 +646,33 @@ onMounted(async () => {
   font-size: 13px;
   border-radius: 6px;
   margin-right: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.multiplier-badge:hover {
+  background: #dc2626;
 }
 
 .multiplier-input.modern-input :deep(.q-field__prepend) {
   padding-right: 0;
   padding-left: 8px;
+}
+
+.gov-violations-list {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 4px 0;
+}
+
+.gov-violation-item {
+  min-height: 40px;
+}
+
+.gov-banner {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
 }
 
 @media (max-width: 768px) {
