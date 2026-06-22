@@ -91,6 +91,8 @@
         :loading="loading"
         :contracts="employeeContracts"
         :company-id="companyId"
+        :positions="positions"
+        :departments="departments"
         @view="viewEmployee"
         @edit="editEmployee"
         @assign="handleOpenAssignDialog"
@@ -190,6 +192,8 @@
       :departments="departments"
       :eligibility-objects="selectedEligibilityObjectsData"
       :is-renewing="isRenewing"
+      :all-eligibility-options="eligibilityOptions"
+      :contribution-options="contributions"
       @update:field="updateAssignField"
       @contract-type-change="onContractTypeChange"
       @submit="handleAssignSubmit"
@@ -261,6 +265,8 @@ const {
   fetchContractTypes,
   eligibilities: eligibilityOptions,
   fetchEligibilities: fetchEligibilityOptions,
+  contributions,
+  fetchContributions,
 } = useAdminContractTypes()
 
 const { positions, fetchPositions } = useAdminPositions()
@@ -768,6 +774,9 @@ async function handleOpenAssignDialog(employee) {
   if (!holidayTypes.value.length) {
     await fetchHolidayTypes()
   }
+  if (!contributions.value.length) {
+    await fetchContributions()
+  }
   await openAssignDialog(employee)
 
   // Sync eligibility display when pre-filled from existing contract
@@ -784,6 +793,7 @@ async function handleBulkAssignDialog() {
   if (!eligibilityOptions.value.length) await fetchEligibilityOptions()
   if (!positions.value.length) await fetchPositions()
   if (!holidayTypes.value.length) await fetchHolidayTypes()
+  if (!contributions.value.length) await fetchContributions()
 
   bulkAssignEmployeeIds.value = selectedEmployees.value.map((e) => e.id)
   payTypeAutoFilled.value = false
@@ -1227,6 +1237,7 @@ watch(
         fetchEligibilityOptions(),
         fetchPositions(),
         fetchHolidayTypes(),
+        fetchContributions(),
       ])
       await fetchEmployees()
     }
