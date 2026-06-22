@@ -142,13 +142,105 @@
               map-options
             />
 
-            <!-- Eligibilities -->
-            <div v-if="eligibilityObjects.length" class="col-span-2">
+            <!-- Eligibilities (renew: checkboxes, create: readonly list) -->
+            <div v-if="isRenewing" class="col-span-2">
+              <div class="section-label">Eligibilities</div>
+              <div class="checkbox-grid">
+                <q-checkbox
+                  v-if="overtimeId"
+                  :model-value="form.eligibilities.includes(overtimeId)"
+                  @update:model-value="toggleEligibility(overtimeId, $event)"
+                  label="Overtime Eligible" dense
+                />
+                <q-checkbox
+                  v-if="ctoId && form.pay_type === 'monthly'"
+                  :model-value="form.eligibilities.includes(ctoId)"
+                  @update:model-value="toggleEligibility(ctoId, $event)"
+                  label="Overtime Converted to CTO" dense
+                />
+                <q-checkbox
+                  v-if="holidayPayId"
+                  :model-value="form.eligibilities.includes(holidayPayId)"
+                  @update:model-value="toggleEligibility(holidayPayId, $event)"
+                  label="Holiday Pay" dense
+                />
+                <q-checkbox
+                  v-if="undertimeId"
+                  :model-value="form.eligibilities.includes(undertimeId)"
+                  @update:model-value="toggleEligibility(undertimeId, $event)"
+                  label="Undertime Deduction" dense
+                />
+                <q-checkbox
+                  v-if="nightDiffId"
+                  :model-value="form.eligibilities.includes(nightDiffId)"
+                  @update:model-value="toggleEligibility(nightDiffId, $event)"
+                  label="Night Differential Eligible" dense
+                />
+                <q-checkbox
+                  v-if="contributionsEligId"
+                  :model-value="form.eligibilities.includes(contributionsEligId)"
+                  @update:model-value="toggleEligibility(contributionsEligId, $event)"
+                  label="Contributions" dense
+                />
+                <q-checkbox
+                  v-for="opt in otherEligibilityOptions"
+                  :key="opt.id"
+                  :model-value="form.eligibilities.includes(opt.id)"
+                  @update:model-value="toggleEligibility(opt.id, $event)"
+                  :label="opt.name" dense
+                />
+              </div>
+            </div>
+            <div v-else-if="eligibilityObjects.length" class="col-span-2">
               <div class="section-label">Eligibilities</div>
               <div class="eligibility-formal-list">
                 <div v-for="(el, index) in eligibilityObjects" :key="el.id" class="eligibility-formal-item">
                   <span class="eligibility-number">{{ index + 1 }}</span>
                   <span class="eligibility-name">{{ el.name }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contributions (renew only) -->
+            <div v-if="isRenewing && contributionOptions.length" class="col-span-2">
+              <div class="section-label">Contributions</div>
+              <div class="checkbox-grid">
+                <q-checkbox
+                  v-for="item in contributionOptions"
+                  :key="item.id"
+                  :model-value="form.contributions?.includes(item.id)"
+                  @update:model-value="toggleContribution(item.id, $event)"
+                  :label="item.name" dense
+                />
+              </div>
+            </div>
+
+            <!-- Multipliers (renew only) -->
+            <div v-if="isRenewing && visibleMultiplierFields.length" class="col-span-2">
+              <div class="section-label">Payroll Multipliers</div>
+              <div class="multipliers-section">
+                <div v-for="field in visibleMultiplierFields" :key="field.key" class="multiplier-row">
+                  <div class="multiplier-info">
+                    <q-icon :name="field.icon" size="20px" class="multiplier-icon" />
+                    <div class="multiplier-details">
+                      <div class="multiplier-label">{{ field.label }}</div>
+                      <div class="multiplier-desc">{{ field.desc }}</div>
+                    </div>
+                  </div>
+                  <div class="multiplier-controls">
+                    <div class="multiplier-value-wrapper">
+                      <q-input
+                        :model-value="form[field.key]"
+                        @update:model-value="$emit('update:field', { field: field.key, value: $event })"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        outlined dense
+                        class="multiplier-input"
+                        placeholder="e.g. 1.50"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -176,6 +268,8 @@ const props = defineProps({
   departments: { type: Array, default: () => [] },
   eligibilityObjects: { type: Array, default: () => [] },
   isRenewing: { type: Boolean, default: false },
+  allEligibilityOptions: { type: Array, default: () => [] },
+  contributionOptions: { type: Array, default: () => [] },
 })
 
 const selectedContractType = computed(() =>
@@ -224,6 +318,65 @@ const dailyRate = computed(() => {
   const daily = (monthly / monthlyHours) * 8
   return daily.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 })
+
+// ── Renew mode: eligibility/contribution/multiplier helpers ──────────────
+
+const overtimeId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Overtime Eligible')?.id)
+const ctoId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Overtime Converted to CTO')?.id)
+const holidayPayId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Holiday Pay')?.id)
+const undertimeId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Undertime Deduction')?.id)
+const nightDiffId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Night Differential Eligible')?.id)
+const contributionsEligId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Contributions')?.id)
+
+const dedicatedEligibilityNames = [
+  'Overtime Eligible', 'Overtime Converted to CTO', 'Holiday Pay',
+  'Undertime Deduction', 'Night Differential Eligible', 'Contributions',
+  'Work Hours Flexible', 'Work Hours Strict',
+]
+
+const otherEligibilityOptions = computed(() =>
+  props.allEligibilityOptions.filter((e) => !dedicatedEligibilityNames.includes(e.name)),
+)
+
+function toggleEligibility(id, checked) {
+  const current = [...props.form.eligibilities]
+  const value = checked ? [...current, id] : current.filter((e) => e !== id)
+  props.$emit('update:field', { field: 'eligibilities', value })
+}
+
+function toggleContribution(id, checked) {
+  const current = [...(props.form.contributions || [])]
+  const value = checked ? [...current, id] : current.filter((c) => c !== id)
+  props.$emit('update:field', { field: 'contributions', value })
+}
+
+const multiplierFields = [
+  { key: 'overtime_multiplier', label: 'Overtime', icon: 'timer', desc: 'OT rate (e.g. 1.25×)' },
+  { key: 'special_holiday_multiplier', label: 'Special Holiday', icon: 'celebration', desc: 'Special holiday rate (e.g. 1.30×)' },
+  { key: 'regular_holiday_multiplier', label: 'Regular Holiday', icon: 'event', desc: 'Regular holiday rate (e.g. 2.00×)' },
+  { key: 'night_diff_multiplier', label: 'Night Diff', icon: 'nights_stay', desc: 'Night differential rate (e.g. 1.10×)' },
+  { key: 'regular_holiday_ot_multiplier', label: 'Regular Holiday OT', icon: 'event_note', desc: 'Regular holiday OT rate (e.g. 2.60×)' },
+  { key: 'special_holiday_ot_multiplier', label: 'Special Holiday OT', icon: 'star', desc: 'Special holiday OT rate (e.g. 1.95×)' },
+  { key: 'undertime_multiplier', label: 'Undertime', icon: 'remove_circle', desc: 'Undertime deduction (e.g. 0.50×)' },
+]
+
+function isMultiplierVisible(key) {
+  const eligs = props.form.eligibilities
+  switch (key) {
+    case 'overtime_multiplier': return overtimeId.value && eligs.includes(overtimeId.value)
+    case 'special_holiday_multiplier':
+    case 'regular_holiday_multiplier':
+    case 'special_holiday_ot_multiplier':
+    case 'regular_holiday_ot_multiplier': return holidayPayId.value && eligs.includes(holidayPayId.value)
+    case 'night_diff_multiplier': return nightDiffId.value && eligs.includes(nightDiffId.value)
+    case 'undertime_multiplier': return undertimeId.value && eligs.includes(undertimeId.value)
+    default: return true
+  }
+}
+
+const visibleMultiplierFields = computed(() =>
+  multiplierFields.filter((f) => isMultiplierVisible(f.key)),
+)
 
 </script>
 
@@ -419,6 +572,21 @@ const dailyRate = computed(() => {
   font-weight: 500;
 }
 
+/* Checkbox grid for renew sections */
+.checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.checkbox-grid :deep(.q-checkbox) {
+  width: calc(50% - 6px);
+}
+
 /* Multipliers */
 .multipliers-section {
   margin-top: 8px;
@@ -572,6 +740,9 @@ const dailyRate = computed(() => {
   }
   .eligibility-formal-list {
     grid-template-columns: 1fr;
+  }
+  .checkbox-grid :deep(.q-checkbox) {
+    width: 100%;
   }
   .multiplier-controls {
     flex-direction: column;
