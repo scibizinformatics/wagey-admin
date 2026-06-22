@@ -15,7 +15,7 @@ export function useAdminDepartments() {
   // ─── Dialog state ──────────────────────────────────────────────────────────
   const dialog = ref(false)
   const editing = ref(false)
-  const form = ref({ id: null, name: '', company: null, cost_center: null })
+  const form = ref({ id: null, name: '', company: null, cost_center: null, policies: [] })
 
   // ─── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ export function useAdminDepartments() {
       return
     }
     editing.value = false
-    form.value = { id: null, name: '', company: companyId.value, cost_center: null }
+    form.value = { id: null, name: '', company: companyId.value, cost_center: null, policies: [] }
     dialog.value = true
   }
 
@@ -63,6 +63,7 @@ export function useAdminDepartments() {
       name: department.name,
       company: department.company || companyId.value,
       cost_center: department.cost_center ?? null,
+      policies: department.policies ? [...department.policies] : [],
     }
     dialog.value = true
   }
@@ -86,6 +87,8 @@ export function useAdminDepartments() {
         name: form.value.name.trim(),
         company: cId,
         cost_center: form.value.cost_center ?? null,
+        policies: form.value.policies,
+        date_created: new Date().toISOString(),
       }
 
       if (editing.value) {
