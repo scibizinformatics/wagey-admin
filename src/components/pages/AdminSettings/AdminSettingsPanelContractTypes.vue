@@ -6,87 +6,143 @@
         <p class="table-subtitle">Manage contract type definitions</p>
       </div>
       <div class="table-actions">
-        <q-btn color="primary" label="Add Contract Type" icon="add" class="add-btn" @click="openContractTypeDialog" />
+        <q-btn
+          color="primary"
+          label="Add Contract Type"
+          icon="add"
+          class="add-btn"
+          @click="openContractTypeDialog"
+        />
       </div>
     </div>
 
-    <div class="modern-table-container">
+    <div class="modern-table-container" :style="{ '--table-min-width': tableMinWidth + 'px' }">
       <template v-if="loadingContractTypes">
         <div class="table-skeleton">
           <div class="skeleton-header">
             <div class="skeleton-header-cell">Name</div>
-            <div class="skeleton-header-cell">Eligibilities</div>
-            <div class="skeleton-header-cell">Multipliers</div>
+            <div
+              class="skeleton-header-cell"
+              v-for="n in 6"
+              :key="n"
+              style="width: 50px; min-width: 50px"
+            ></div>
             <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
           </div>
           <div class="skeleton-row" v-for="n in 4" :key="n">
             <div class="skeleton-cell"><q-skeleton type="text" /></div>
-            <div class="skeleton-cell"><q-skeleton type="text" width="120px" /></div>
-            <div class="skeleton-cell"><q-skeleton type="text" width="180px" /></div>
-            <div class="skeleton-cell" style="flex: 0 0 60px"><q-skeleton type="text" width="40px" /></div>
+            <div
+              class="skeleton-cell"
+              v-for="m in 10"
+              :key="m"
+              style="width: 50px; min-width: 50px"
+            >
+              <q-skeleton type="text" />
+            </div>
+            <div class="skeleton-cell" style="flex: 0 0 60px">
+              <q-skeleton type="text" width="40px" />
+            </div>
           </div>
         </div>
       </template>
       <template v-else>
-        <q-table :rows="contractTypeDefinitions" :columns="contractTypeColumns" row-key="id" flat no-data-label="No contract types found" class="settings-table" hide-pagination :rows-per-page-options="[0]">
+        <q-table
+          :rows="contractTypeDefinitions"
+          :columns="tableColumns"
+          row-key="id"
+          flat
+          no-data-label="No contract types found"
+          class="settings-table spreadsheet-table"
+          hide-pagination
+          :rows-per-page-options="[0]"
+        >
           <template v-slot:header>
+            <q-tr class="group-header-row">
+              <q-th
+                v-for="g in tableGroups"
+                :key="g.label"
+                class="group-header-cell"
+                :colspan="g.cols.length"
+                :class="{ 'group-start': g.start, 'group-end': g.end }"
+              >
+                {{ g.label }}
+              </q-th>
+            </q-tr>
             <q-tr class="table-header-row">
-              <q-th class="table-header-cell">Name</q-th>
-              <q-th class="table-header-cell">Eligibilities</q-th>
-              <q-th class="table-header-cell multipliers-header">Multipliers</q-th>
-              <q-th class="table-header-cell actions-header">Actions</q-th>
+              <q-th
+                v-for="col in tableColumns"
+                :key="col.name"
+                class="table-header-cell"
+                :class="{
+                  'group-first': col.groupFirst,
+                  'col-elig': col.type === 'eligibility' || col.type === 'contribution',
+                  'col-mult': col.type === 'multiplier',
+                }"
+              >
+                <span class="header-label">{{ col.label }}</span>
+                <q-tooltip
+                  v-if="col.tooltip"
+                  anchor="top middle"
+                  self="bottom middle"
+                  :offset="[0, 4]"
+                >
+                  {{ col.tooltip }}
+                </q-tooltip>
+              </q-th>
             </q-tr>
           </template>
           <template v-slot:body="props">
             <q-tr class="table-body-row">
-              <q-td class="table-body-cell"><span class="item-name">{{ props.row.name }}</span></q-td>
-              <q-td class="table-body-cell">
-                <div class="eligibility-badges">
-                  <template v-if="props.row.eligibility_details?.length">
-                    <q-chip v-for="el in props.row.eligibility_details" :key="el.id" size="sm" color="primary" text-color="white">{{ el.name }}</q-chip>
-                  </template>
-                  <template v-else>
-                    <q-chip v-for="el in props.row.eligibilities" :key="el" size="sm" color="primary" text-color="white">{{ getEligibilityName(el) }}</q-chip>
-                  </template>
-                  <span v-if="!(props.row.eligibility_details?.length || props.row.eligibilities?.length)" class="text-grey">None</span>
-                </div>
-              </q-td>
-              <q-td class="table-body-cell multipliers-cell">
-                <div class="multiplier-badges">
-                  <q-chip
-                    v-for="item in [
-                      { label: 'Overtime', value: props.row.overtime_multiplier },
-                      { label: 'Regular Holiday', value: props.row.regular_holiday_multiplier },
-                      { label: 'Special Holiday', value: props.row.special_holiday_multiplier },
-                      { label: 'Night Differential', value: props.row.night_diff_multiplier },
-                      { label: 'Regular Holiday OT', value: props.row.regular_holiday_ot_multiplier },
-                      { label: 'Special Holiday OT', value: props.row.special_holiday_ot_multiplier },
-                      { label: 'Undertime', value: props.row.undertime_multiplier },
-                    ]"
-                    :key="item.label"
-                    size="sm"
-                    color="primary"
-                    text-color="white"
-                  >
-                    {{ item.label }}: ×{{ item.value ?? '-' }}
-                  </q-chip>
-                </div>
-              </q-td>
-              <q-td class="table-body-cell actions-cell">
-                <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                  <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                    <q-list dense style="min-width: 150px">
-                      <q-item clickable v-close-popup class="dropdown-item" @click="editContractType(props.row)">
-                        <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
-                        <q-item-section>Edit</q-item-section>
-                      </q-item>
-                      <q-item clickable v-close-popup class="dropdown-item dropdown-item-danger" @click="deleteContractType(props.row)">
-                        <q-item-section side><q-icon name="delete" size="16px" color="negative" /></q-item-section>
-                        <q-item-section>Delete</q-item-section>
-                      </q-item>
-                    </q-list>
-                  </q-menu>
-                </q-btn>
+              <q-td
+                v-for="col in tableColumns"
+                :key="col.name"
+                class="table-body-cell"
+                :class="{
+                  'group-first': col.groupFirst,
+                  'col-elig': col.type === 'eligibility' || col.type === 'contribution',
+                  'col-mult': col.type === 'multiplier',
+                }"
+              >
+                <template v-if="col.type === 'name'">
+                  <span class="item-name" :title="props.row.name">{{ props.row.name }}</span>
+                </template>
+                <template v-else-if="col.type === 'eligibility'">
+                  <span v-if="hasRowEligibility(props.row, col.id)" class="check-mark">✓</span>
+                </template>
+                <template v-else-if="col.type === 'contribution'">
+                  <span v-if="hasRowContribution(props.row, col.id)" class="check-mark">✓</span>
+                </template>
+                <template v-else-if="col.type === 'multiplier'">
+                  <span class="mult-value">{{ formatMultiplier(props.row[col.field]) }}</span>
+                </template>
+                <template v-else-if="col.type === 'actions'">
+                  <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                    <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                      <q-list dense style="min-width: 150px">
+                        <q-item
+                          clickable
+                          v-close-popup
+                          class="dropdown-item"
+                          @click="editContractType(props.row)"
+                        >
+                          <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
+                          <q-item-section>Edit</q-item-section>
+                        </q-item>
+                        <q-item
+                          clickable
+                          v-close-popup
+                          class="dropdown-item dropdown-item-danger"
+                          @click="deleteContractType(props.row)"
+                        >
+                          <q-item-section side
+                            ><q-icon name="delete" size="16px" color="negative"
+                          /></q-item-section>
+                          <q-item-section>Delete</q-item-section>
+                        </q-item>
+                      </q-list>
+                    </q-menu>
+                  </q-btn>
+                </template>
               </q-td>
             </q-tr>
           </template>
@@ -98,9 +154,13 @@
       <q-card class="admin-modal-card">
         <q-card-section class="admin-modal-header">
           <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"><q-icon name="description" size="22px" /></q-avatar>
+            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+              ><q-icon name="description" size="22px"
+            /></q-avatar>
             <div>
-              <div class="admin-modal-title">{{ editingContractType ? 'Edit' : 'Add' }} Contract Type</div>
+              <div class="admin-modal-title">
+                {{ editingContractType ? 'Edit' : 'Add' }} Contract Type
+              </div>
               <div class="admin-modal-subtitle">Manage contract type definitions</div>
             </div>
           </div>
@@ -108,8 +168,31 @@
         </q-card-section>
         <q-card-section class="admin-modal-content">
           <q-input v-model="contractTypeForm.name" label="Name *" outlined dense class="q-mb-md" />
-          <q-select v-model="contractTypeForm.pay_type" :options="[{ label: 'Monthly', value: 'monthly' }, { label: 'Daily', value: 'daily' }]" label="Pay Type" outlined dense emit-value map-options class="q-mb-md" />
-          <q-input v-if="contractTypeForm.pay_type === 'daily'" v-model.number="contractTypeForm.work_hours_per_week" label="Work Hours Per Week" outlined dense type="number" min="0" max="48" :rules="[(val) => !val || val <= 48 || 'Maximum is 48 hours']" class="q-mb-md" />
+          <q-select
+            v-model="contractTypeForm.pay_type"
+            :options="[
+              { label: 'Monthly', value: 'monthly' },
+              { label: 'Daily', value: 'daily' },
+            ]"
+            label="Pay Type"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-md"
+          />
+          <q-input
+            v-if="contractTypeForm.pay_type === 'daily'"
+            v-model.number="contractTypeForm.work_hours_per_week"
+            label="Work Hours Per Week"
+            outlined
+            dense
+            type="number"
+            min="0"
+            max="48"
+            :rules="[(val) => !val || val <= 48 || 'Maximum is 48 hours']"
+            class="q-mb-md"
+          />
           <div class="text-subtitle2 q-mb-xs">Eligibilities</div>
           <q-separator class="q-mb-md" />
           <q-select
@@ -167,6 +250,14 @@
                 dense
               />
             </div>
+            <div class="col-6 q-mb-sm" v-if="hasContributionsId">
+              <q-checkbox
+                :model-value="contractTypeForm.eligibilities.includes(hasContributionsId)"
+                @update:model-value="toggleEligibility(hasContributionsId, $event)"
+                label="Contributions"
+                dense
+              />
+            </div>
             <div v-for="opt in eligibilityOptions" :key="opt.value" class="col-6 q-mb-sm">
               <q-checkbox
                 :model-value="contractTypeForm.eligibilities.includes(opt.value)"
@@ -176,6 +267,46 @@
               />
             </div>
           </div>
+
+          <template
+            v-if="
+              !hasContributionsId || contractTypeForm.eligibilities.includes(hasContributionsId)
+            "
+          >
+            <div class="text-subtitle2 q-mb-xs q-mt-md">Contributions</div>
+            <q-separator class="q-mb-md" />
+            <div class="row">
+              <div v-for="item in contributions" :key="item.id" class="col-6 q-mb-sm">
+                <q-checkbox
+                  :model-value="contractTypeForm.contributions.includes(item.id)"
+                  @update:model-value="toggleContribution(item.id, $event)"
+                  :label="item.name"
+                  dense
+                />
+              </div>
+            </div>
+          </template>
+
+          <template v-if="holidayPayId && contractTypeForm.eligibilities.includes(holidayPayId)">
+            <div class="text-subtitle2 q-mb-xs q-mt-md">Holiday</div>
+            <q-separator class="q-mb-md" />
+            <div class="row">
+              <div class="col-6 q-mb-sm">
+                <q-checkbox
+                  v-model="contractTypeForm.special_holiday_enabled"
+                  label="Special Holiday"
+                  dense
+                />
+              </div>
+              <div class="col-6 q-mb-sm">
+                <q-checkbox
+                  v-model="contractTypeForm.regular_holiday_enabled"
+                  label="Regular Holiday"
+                  dense
+                />
+              </div>
+            </div>
+          </template>
 
           <div class="text-subtitle2 q-mb-xs q-mt-md">Payroll Multipliers</div>
           <q-separator class="q-mb-md" />
@@ -232,7 +363,8 @@
         </q-card-section>
         <q-card-section class="admin-modal-content">
           <div class="text-body2 q-mb-md">
-            The following multipliers are set for this contract type. Values below government minimums may violate regulatory requirements.
+            The following multipliers are set for this contract type. Values below government
+            minimums may violate regulatory requirements.
           </div>
           <q-list dense class="gov-violations-list">
             <q-item v-for="item in govViolations" :key="item.key" class="gov-violation-item">
@@ -263,7 +395,9 @@
               <q-icon name="info" color="orange-8" />
             </template>
             <div class="text-caption text-grey-8">
-              <strong>Legal Notice:</strong> Setting multipliers below government standards may expose your company to penalties, back-pay claims, and labor disputes. Ensure compliance with regulations.
+              <strong>Legal Notice:</strong> Setting multipliers below government standards may
+              expose your company to penalties, back-pay claims, and labor disputes. Ensure
+              compliance with regulations.
             </div>
           </q-banner>
         </q-card-section>
@@ -283,6 +417,7 @@ import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes
 const {
   contractTypes: contractTypeDefinitions,
   eligibilities,
+  contributions,
   loading: loadingContractTypes,
   saving: savingContractType,
   dialog: contractTypeDialog,
@@ -290,6 +425,7 @@ const {
   form: contractTypeForm,
   fetchContractTypes: fetchContractTypeDefs,
   fetchEligibilities,
+  fetchContributions,
   openDialog: openContractTypeDialog,
   editContractType,
   saveContractType,
@@ -300,12 +436,12 @@ const {
 
 const GOV_MINIMUM_MULTIPLIERS = {
   overtime: 1.25,
-  special_holiday: 1.30,
-  regular_holiday: 2.00,
-  night_diff: 1.10,
-  regular_holiday_ot: 2.60,
+  special_holiday: 1.3,
+  regular_holiday: 2.0,
+  night_diff: 1.1,
+  regular_holiday_ot: 2.6,
   special_holiday_ot: 1.69,
-  undertime: 1.00,
+  undertime: 1.0,
 }
 
 const showGovWarning = ref(false)
@@ -314,12 +450,17 @@ const govViolations = ref([])
 const checkGovCompliance = () => {
   const items = []
   let hasAnyEnabled = false
+  let allStandard = true
 
   for (const field of multiplierFields) {
     if (!isMultiplierVisible(field.key)) continue
     hasAnyEnabled = true
     const currentValue = parseFloat(contractTypeForm.value[`${field.key}_multiplier`]) || 0
     const minStandard = GOV_MINIMUM_MULTIPLIERS[field.key]
+    const dovStandard = PHILIPPINES_DEFAULT_MULTIPLIERS[field.key]
+    if (currentValue !== dovStandard) {
+      allStandard = false
+    }
     items.push({
       ...field,
       currentValue,
@@ -329,11 +470,12 @@ const checkGovCompliance = () => {
   }
 
   govViolations.value = items
-  return hasAnyEnabled
+  return { hasAnyEnabled, allStandard }
 }
 
 const handleSave = () => {
-  if (!checkGovCompliance()) {
+  const { hasAnyEnabled, allStandard } = checkGovCompliance()
+  if (!hasAnyEnabled || allStandard) {
     saveContractType()
     return
   }
@@ -345,18 +487,168 @@ const confirmGovSave = () => {
   saveContractType()
 }
 
-const contractTypeColumns = ref([
-  { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
-  { name: 'eligibilities', label: 'Eligibilities', field: 'eligibilities', align: 'left' },
-  { name: 'multipliers', label: 'Multipliers', field: 'multipliers', align: 'left' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-])
+const MULTIPLIER_COLUMNS = [
+  { key: 'overtime', label: 'OT', fullLabel: 'Overtime' },
+  { key: 'regular_holiday', label: 'RH', fullLabel: 'Regular Holiday' },
+  { key: 'special_holiday', label: 'SH', fullLabel: 'Special Holiday' },
+  { key: 'night_diff', label: 'ND', fullLabel: 'Night Differential' },
+  { key: 'regular_holiday_ot', label: 'ROT', fullLabel: 'Regular Holiday OT' },
+  { key: 'special_holiday_ot', label: 'SOT', fullLabel: 'Special Holiday OT' },
+  { key: 'undertime', label: 'UT', fullLabel: 'Undertime' },
+]
 
-const overtimeId = computed(() => eligibilities.value.find((e) => e.name === 'Overtime Eligible')?.id)
-const ctoId = computed(() => eligibilities.value.find((e) => e.name === 'Overtime Converted to CTO')?.id)
+const COLUMN_ABBREVIATIONS = {
+  'Overtime Eligible': 'OT',
+  'Overtime Converted to CTO': 'CTO',
+  'Holiday Pay': 'HOL',
+  'Undertime Deduction': 'UTD',
+  'Night Differential Eligible': 'ND',
+  Contributions: 'CONT',
+  '13th Month': '13TH',
+  Taxable: 'TAX',
+}
+
+function getContributionShort(name) {
+  const lower = name.toLowerCase()
+  if (lower.includes('sss') || lower.includes('social')) return 'S'
+  if (lower.includes('philhealth')) return 'H'
+  if (lower.includes('pagibig') || lower.includes('pag-ibig')) return 'P'
+  return name.length > 7 ? name.substring(0, 7) : name
+}
+
+function getShortName(name) {
+  if (COLUMN_ABBREVIATIONS[name]) return COLUMN_ABBREVIATIONS[name]
+  const cleaned = name
+    .replace(/ (Eligible|Pay|Deduction|Fee|Contribution)$/gi, '')
+    .replace(/^Employee /i, '')
+  if (cleaned.length <= 5) return cleaned.toUpperCase()
+  const words = cleaned.split(/\s+/)
+  if (words.length >= 2) {
+    return words
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 5)
+  }
+  return cleaned.substring(0, 5).toUpperCase()
+}
+
+function hasRowEligibility(row, eligibilityId) {
+  if (row.eligibility_details?.length) {
+    return row.eligibility_details.some((el) => el.id === eligibilityId)
+  }
+  return row.eligibilities?.includes(eligibilityId) ?? false
+}
+
+function hasRowContribution(row, contributionId) {
+  if (row.contribution_details?.length) {
+    return row.contribution_details.some((c) => c.id === contributionId)
+  }
+  return row.contributions?.includes(contributionId) ?? false
+}
+
+function formatMultiplier(value) {
+  if (value == null || value === '') return '-'
+  const num = Number(value)
+  return isNaN(num) ? '-' : num.toFixed(2)
+}
+
+const tableColumns = computed(() => {
+  const cols = [
+    { name: 'name', label: 'Name', type: 'name', group: null, tooltip: null, sortable: true },
+  ]
+  let prevGroup = null
+  function push(col) {
+    col.groupFirst = col.group && col.group !== prevGroup
+    prevGroup = col.group
+    cols.push(col)
+  }
+  for (const el of eligibilities.value) {
+    if (el.name === 'Work Hours Flexible' || el.name === 'Work Hours Strict') continue
+    push({
+      name: `el_${el.id}`,
+      label: getShortName(el.name),
+      type: 'eligibility',
+      group: 'Eligibilities',
+      id: el.id,
+      tooltip: el.name,
+    })
+  }
+  for (const c of contributions.value) {
+    const short = getContributionShort(c.name)
+    push({
+      name: `contrib_${c.id}`,
+      label: short,
+      type: 'contribution',
+      group: 'Contributions',
+      id: c.id,
+      tooltip: c.name,
+    })
+  }
+  for (const mc of MULTIPLIER_COLUMNS) {
+    push({
+      name: `mult_${mc.key}`,
+      label: mc.label,
+      type: 'multiplier',
+      group: 'Multipliers',
+      field: `${mc.key}_multiplier`,
+      tooltip: mc.fullLabel,
+    })
+  }
+  cols.push({ name: 'actions', label: '', type: 'actions', group: null, tooltip: null })
+  return cols
+})
+
+// Column widths must stay in sync with the CSS widths set on
+// .col-elig / .col-mult / :first-child / :last-child below.
+const NAME_COL_WIDTH = 180
+const NARROW_COL_WIDTH = 38 // eligibility / contribution columns
+const MULT_COL_WIDTH = 40 // multiplier columns
+const ACTIONS_COL_WIDTH = 52
+
+const tableMinWidth = computed(() =>
+  tableColumns.value.reduce((total, col) => {
+    if (col.type === 'name') return total + NAME_COL_WIDTH
+    if (col.type === 'actions') return total + ACTIONS_COL_WIDTH
+    if (col.type === 'multiplier') return total + MULT_COL_WIDTH
+    return total + NARROW_COL_WIDTH // eligibility / contribution
+  }, 0),
+)
+
+const tableGroups = computed(() => {
+  const groups = []
+  let current = null
+  let first = true
+  for (const col of tableColumns.value) {
+    if (first || col.group !== current) {
+      if (!first) groups[groups.length - 1].end = true
+      groups.push({ label: col.group || '', cols: [col], start: true, end: false })
+      current = col.group
+      first = false
+    } else {
+      groups[groups.length - 1].cols.push(col)
+    }
+  }
+  if (groups.length) groups[groups.length - 1].end = true
+  return groups
+})
+
+const overtimeId = computed(
+  () => eligibilities.value.find((e) => e.name === 'Overtime Eligible')?.id,
+)
+const ctoId = computed(
+  () => eligibilities.value.find((e) => e.name === 'Overtime Converted to CTO')?.id,
+)
 const holidayPayId = computed(() => eligibilities.value.find((e) => e.name === 'Holiday Pay')?.id)
-const undertimeId = computed(() => eligibilities.value.find((e) => e.name === 'Undertime Deduction')?.id)
-const nightDiffId = computed(() => eligibilities.value.find((e) => e.name === 'Night Differential Eligible')?.id)
+const undertimeId = computed(
+  () => eligibilities.value.find((e) => e.name === 'Undertime Deduction')?.id,
+)
+const nightDiffId = computed(
+  () => eligibilities.value.find((e) => e.name === 'Night Differential Eligible')?.id,
+)
+const hasContributionsId = computed(
+  () => eligibilities.value.find((e) => e.name === 'Contributions')?.id,
+)
 
 const dedicatedEligibilityNames = [
   'Overtime Eligible',
@@ -364,6 +656,7 @@ const dedicatedEligibilityNames = [
   'Holiday Pay',
   'Undertime Deduction',
   'Night Differential Eligible',
+  'Contributions',
 ]
 
 const eligibilityOptions = computed(() =>
@@ -387,20 +680,47 @@ function toggleEligibility(id, checked) {
     // Pre-fill associated multiplier(s) with default when eligibility is checked
     const eligibilityToMultipliers = {}
     if (overtimeId.value) eligibilityToMultipliers[overtimeId.value] = ['overtime']
-    if (holidayPayId.value) eligibilityToMultipliers[holidayPayId.value] = ['regular_holiday', 'special_holiday', 'regular_holiday_ot', 'special_holiday_ot']
+    if (holidayPayId.value)
+      eligibilityToMultipliers[holidayPayId.value] = [
+        'regular_holiday',
+        'special_holiday',
+        'regular_holiday_ot',
+        'special_holiday_ot',
+      ]
     if (undertimeId.value) eligibilityToMultipliers[undertimeId.value] = ['undertime']
     if (nightDiffId.value) eligibilityToMultipliers[nightDiffId.value] = ['night_diff']
 
     const keys = eligibilityToMultipliers[id]
     if (keys) {
       for (const key of keys) {
-        if (contractTypeForm.value[`${key}_multiplier`] == null || contractTypeForm.value[`${key}_multiplier`] === '') {
+        if (
+          contractTypeForm.value[`${key}_multiplier`] == null ||
+          contractTypeForm.value[`${key}_multiplier`] === ''
+        ) {
           contractTypeForm.value[`${key}_multiplier`] = getStandardDisplay(key)
         }
       }
     }
+
+    if (holidayPayId.value && id === holidayPayId.value) {
+      contractTypeForm.value.special_holiday_enabled = true
+      contractTypeForm.value.regular_holiday_enabled = true
+    }
   } else {
     contractTypeForm.value.eligibilities = current.filter((eid) => eid !== id)
+    if (hasContributionsId.value && id === hasContributionsId.value) {
+      contractTypeForm.value.contributions = []
+    }
+  }
+}
+
+function toggleContribution(id, checked) {
+  if (checked) {
+    contractTypeForm.value.contributions = [...contractTypeForm.value.contributions, id]
+  } else {
+    contractTypeForm.value.contributions = contractTypeForm.value.contributions.filter(
+      (c) => c !== id,
+    )
   }
 }
 
@@ -416,16 +736,43 @@ function isMultiplierVisible(fieldKey) {
   }
   const eligibilityId = map[fieldKey]?.value
   if (!eligibilityId) return true
-  return contractTypeForm.value.eligibilities.includes(eligibilityId)
+  if (!contractTypeForm.value.eligibilities.includes(eligibilityId)) return false
+
+  if (fieldKey === 'special_holiday' || fieldKey === 'special_holiday_ot')
+    return contractTypeForm.value.special_holiday_enabled
+  if (fieldKey === 'regular_holiday' || fieldKey === 'regular_holiday_ot')
+    return contractTypeForm.value.regular_holiday_enabled
+
+  return true
 }
 
 const multiplierFields = [
   { key: 'overtime', label: 'Overtime', icon: 'schedule', desc: 'Work beyond 8 hours/day' },
-  { key: 'special_holiday', label: 'Special Holiday', icon: 'celebration', desc: 'Special non-working days' },
-  { key: 'regular_holiday', label: 'Regular Holiday', icon: 'event', desc: 'Regular holidays (double pay)' },
+  {
+    key: 'special_holiday',
+    label: 'Special Holiday',
+    icon: 'celebration',
+    desc: 'Special non-working days',
+  },
+  {
+    key: 'regular_holiday',
+    label: 'Regular Holiday',
+    icon: 'event',
+    desc: 'Regular holidays (double pay)',
+  },
   { key: 'night_diff', label: 'Night Differential', icon: 'nights_stay', desc: 'Work 10PM-6AM' },
-  { key: 'regular_holiday_ot', label: 'Regular Holiday OT', icon: 'event_note', desc: 'OT on regular holidays' },
-  { key: 'special_holiday_ot', label: 'Special Holiday OT', icon: 'event_busy', desc: 'OT on special holidays' },
+  {
+    key: 'regular_holiday_ot',
+    label: 'Regular Holiday OT',
+    icon: 'event_note',
+    desc: 'OT on regular holidays',
+  },
+  {
+    key: 'special_holiday_ot',
+    label: 'Special Holiday OT',
+    icon: 'event_busy',
+    desc: 'OT on special holidays',
+  },
   { key: 'undertime', label: 'Undertime', icon: 'timer_off', desc: 'Hours not worked' },
 ]
 
@@ -474,7 +821,11 @@ watch(
     }
     // If switched to monthly, auto-check CTO if Overtime is checked
     if (newVal === 'monthly') {
-      if (overtimeId.value && current.includes(overtimeId.value) && !current.includes(ctoId.value)) {
+      if (
+        overtimeId.value &&
+        current.includes(overtimeId.value) &&
+        !current.includes(ctoId.value)
+      ) {
         contractTypeForm.value.eligibilities = [...current, ctoId.value]
       }
     }
@@ -486,14 +837,10 @@ const clearMultiplier = (fieldKey) => {
   contractTypeForm.value[`${fieldKey}_multiplier`] = null
 }
 
-const getEligibilityName = (id) => {
-  const el = eligibilities.value.find((e) => e.id === id)
-  return el?.name || 'Unknown'
-}
-
 onMounted(async () => {
   await fetchContractTypeDefs()
   await fetchEligibilities()
+  await fetchContributions()
 })
 </script>
 
@@ -502,27 +849,252 @@ onMounted(async () => {
 
 /* ── Component-Specific Styles ── */
 
-.eligibility-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+.table-section {
+  width: 0;
+  min-width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-.multiplier-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+.modern-table-container {
+  overflow-x: auto;
+  width: 0;
+  min-width: 100%;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
-.multipliers-header {
-  width: 460px;
-  min-width: 460px;
+/* Visible scrollbar so the horizontal scroll is discoverable */
+.modern-table-container::-webkit-scrollbar {
+  height: 10px;
 }
 
-.multipliers-cell {
-  width: 460px;
-  min-width: 460px;
+.modern-table-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.modern-table-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+
+.modern-table-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.spreadsheet-table {
+  width: 100%;
+  min-width: 100%;
+}
+
+.spreadsheet-table :deep(.q-table__card) {
+  box-shadow: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: visible;
+}
+
+.spreadsheet-table :deep(.q-table__container) {
+  overflow: visible;
+}
+
+/* The real horizontal scroll happens on .modern-table-container; this just
+   needs to not clip and let the table grow to its natural width */
+.spreadsheet-table :deep(.q-table__middle) {
+  overflow: visible;
+}
+
+.spreadsheet-table :deep(.q-table__middle > table),
+.spreadsheet-table :deep(.q-table__middle > .q-table) {
+  width: auto;
+  min-width: max(var(--table-min-width, 1200px), 100%);
+  border-collapse: collapse;
+  white-space: nowrap;
+  table-layout: fixed;
+}
+
+/* ── Group header row ── */
+
+.spreadsheet-table :deep(.group-header-row th) {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #334155;
+  background: #f1f5f9;
+  border-bottom: 2px solid #cbd5e1;
+  padding: 5px 4px;
+  text-align: center;
+}
+
+.spreadsheet-table :deep(.group-header-row th:first-child) {
+  text-align: left;
+  padding-left: 10px;
+  border-right: 2px solid #cbd5e1;
+}
+
+.spreadsheet-table :deep(.group-header-row th.group-end) {
+  border-right: none;
+}
+
+/* vertical group separators */
+.spreadsheet-table :deep(.group-header-row th:not(.group-end)) {
+  border-right: 2px solid #cbd5e1;
+}
+
+/* ── Column header row ── */
+
+.spreadsheet-table :deep(.table-header-row th) {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #475569 !important;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding: 4px 2px !important;
+  text-align: center !important;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.spreadsheet-table :deep(.table-header-row th.col-elig) {
+  min-width: 38px;
+  width: 38px;
+  padding: 4px 2px !important;
+  font-size: 10px !important;
+}
+
+.spreadsheet-table :deep(.table-header-row th.col-mult) {
+  min-width: 40px;
+  width: 40px;
+  padding: 4px 2px !important;
+}
+
+.spreadsheet-table :deep(.table-header-row th:first-child) {
+  text-align: left !important;
+  min-width: 180px;
+  width: 180px;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #f8fafc;
   overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 2px solid #e2e8f0;
+}
+
+.spreadsheet-table :deep(.table-header-row th:last-child) {
+  min-width: 52px;
+  max-width: 52px;
+  width: 52px;
+  padding: 2px !important;
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: #f8fafc;
+}
+
+.header-label {
+  cursor: help;
+  border-bottom: 1px dashed #94a3b8;
+}
+
+/* ── Body cells ── */
+
+.spreadsheet-table :deep(.q-table tbody td) {
+  text-align: center !important;
+  padding: 4px 2px !important;
+  font-size: 12px;
+  border-bottom: 1px solid #f1f5f9 !important;
+  vertical-align: middle;
+  min-width: 0;
+}
+
+.spreadsheet-table :deep(.q-table tbody td.col-elig) {
+  min-width: 38px;
+  width: 38px;
+  padding: 4px 2px !important;
+}
+
+.spreadsheet-table :deep(.q-table tbody td.col-mult) {
+  min-width: 40px;
+  width: 40px;
+  padding: 4px 2px !important;
+}
+
+.spreadsheet-table :deep(.q-table tbody td:first-child) {
+  text-align: left !important;
+  min-width: 180px;
+  width: 180px;
+  padding: 6px 12px !important;
+  font-size: 12px;
+  color: #1e293b;
+  font-weight: 500;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 2px solid #e2e8f0;
+}
+
+.spreadsheet-table :deep(.q-table tbody td:last-child) {
+  min-width: 52px;
+  max-width: 52px;
+  width: 52px;
+  padding: 2px !important;
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: #fff;
+  text-align: center !important;
+}
+
+/* hover highlight for sticky cells too */
+.spreadsheet-table :deep(.q-table tbody tr:hover td:first-child),
+.spreadsheet-table :deep(.q-table tbody tr:hover td:last-child) {
+  background-color: #f8fafc;
+}
+
+.spreadsheet-table :deep(.q-table tbody tr:last-child td) {
+  border-bottom: none;
+}
+
+/* ── Group column separators in body (adds left border to first col of each group except name) ── */
+
+.spreadsheet-table :deep(.q-table tbody td.group-first:not(:nth-child(2))) {
+  border-left: 2px solid #e2e8f0;
+}
+
+/* ── Checkmark and multiplier styles ── */
+
+.action-menu-btn {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+}
+
+.action-menu-btn :deep(.q-icon) {
+  font-size: 18px;
+}
+
+.check-mark {
+  color: #16a34a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mult-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
 }
 
 .multipliers-section {
