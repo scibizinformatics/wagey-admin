@@ -65,8 +65,6 @@
       <AttendanceTable
         :rows="filteredAttendanceRows"
         :loading="loading"
-        :page="pagination.page"
-        :total-pages="totalPages"
         :cost-center-filter="filters.cost_center"
         @update:cost-center-filter="(val) => (filters.cost_center = val)"
         :cost-center-options="costCenterOptions"
@@ -77,9 +75,46 @@
         @view-photo="viewEmployeePhoto"
         @edit-time="openInlineEdit"
         @edit-cost-center="openCostCenterInlineEdit"
-        @prev-page="previousPage"
-        @next-page="nextPage"
       />
+
+      <!-- Pagination Controls -->
+      <div class="pagination-bar" v-if="pagination.rowsNumber > 0">
+        <div class="pagination-info">
+          <span class="pagination-text">
+            Showing {{ ((pagination.page - 1) * pagination.rowsPerPage) + 1 }} –
+            {{ Math.min(pagination.page * pagination.rowsPerPage, pagination.rowsNumber) }}
+            of {{ pagination.rowsNumber }} records
+          </span>
+          <q-select
+            :model-value="pagination.rowsPerPage"
+            :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
+            option-label="label"
+            option-value="value"
+            emit-value
+            map-options
+            dense
+            outlined
+            class="page-size-select"
+            @update:model-value="onRowsPerPageChange"
+          />
+        </div>
+        <q-pagination
+          :model-value="pagination.page"
+          :max="totalPages"
+          :max-pages="6"
+          boundary-numbers
+          direction-links
+          color="primary"
+          active-color="primary"
+          active-text-color="white"
+          icon-first="first_page"
+          icon-prev="chevron_left"
+          icon-next="chevron_right"
+          icon-last="last_page"
+          class="schedule-pagination"
+          @update:model-value="onPageChange"
+        />
+      </div>
 
     <!-- Date Range Picker Dialog -->
     <AttendanceDateRangePicker
@@ -233,6 +268,8 @@ const pagination = ref({
   rowsPerPage: 25,
   rowsNumber: 0,
 })
+
+const pageSizeOptions = [10, 25, 50]
 
 const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -861,18 +898,15 @@ function filterEmployees(val, update) {
   })
 }
 
-function previousPage() {
-  if (pagination.value.page > 1) {
-    pagination.value.page--
-    fetchAttendanceData()
-  }
+function onPageChange(newPage) {
+  pagination.value.page = newPage
+  fetchAttendanceData()
 }
 
-function nextPage() {
-  if (pagination.value.page < totalPages.value) {
-    pagination.value.page++
-    fetchAttendanceData()
-  }
+function onRowsPerPageChange(newSize) {
+  pagination.value.rowsPerPage = newSize
+  pagination.value.page = 1
+  fetchAttendanceData()
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1056,12 +1090,61 @@ onMounted(async () => {
 .date-nav-input { width: 175px; }
 .filter-input :deep(.q-field__control) { border-radius: 8px; }
 
+/* Pagination Bar */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  padding: 12px 20px;
+  margin-top: 16px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pagination-text {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+.page-size-select {
+  min-width: 120px;
+}
+.page-size-select :deep(.q-field__control) {
+  border-radius: 8px;
+}
+.schedule-pagination :deep(.q-btn) {
+  font-weight: 600;
+  border-radius: 8px;
+  min-width: 32px;
+  min-height: 32px;
+}
+.schedule-pagination :deep(.q-btn--active) {
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
 @media (max-width: 768px) {
   .page-header { padding: 12px 14px; margin-bottom: 12px; }
   .header-content { flex-direction: column; align-items: stretch; gap: 10px; }
   .header-actions { justify-content: space-between; }
   .header-search { min-width: auto; max-width: 100%; width: 100%; }
   .filters-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .pagination-bar {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+  .pagination-info {
+    justify-content: center;
+  }
 }
 @media (max-width: 480px) {
   .page-title { font-size: 18px; }
