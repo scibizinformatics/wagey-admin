@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
@@ -39,6 +39,9 @@ export function useAdminContracts() {
   const assigning = ref(false)
   const assignForm = ref(_emptyAssignForm())
   const contractAssigned = ref(null)
+  const holidayTypes = ref([])
+  const activeContract = ref(null)
+  const isRenewing = computed(() => !!activeContract.value)
 
   function resetContractAssigned() {
     contractAssigned.value = null
@@ -49,15 +52,16 @@ export function useAdminContracts() {
       employee_id: employeeId,
       company_id: null,
       contract_type_id: null,
-      pay_type: 'monthly',
+      pay_type: null,
       payment_method: 'bank_transfer',
       rate: '',
       work_hours_per_week: null,
       position: null,
       department: null,
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() + 1,
       eligibilities: [],
-      start_date: '',
-      end_date: '',
+      holiday_pay_types: [],
     }
   }
 
@@ -140,6 +144,65 @@ export function useAdminContracts() {
     } catch (error) {
       console.error('Error fetching contract types:', error)
     }
+  }
+
+  async function fetchHolidayTypes() {
+    try {
+      const response = await api.get(`${BASE}/attendance/holiday-types/`, {
+        headers: authHeaders(),
+      })
+      holidayTypes.value = response.data.data ?? response.data ?? []
+      return holidayTypes.value
+    } catch (error) {
+      console.error('Error fetching holiday types:', error)
+      holidayTypes.value = []
+    }
+  }
+
+  async function fetchActiveContract(employeeId) {
+    try {
+      const response = await api.get(
+        `${BASE}/user/employee/${companyId.value}/${employeeId}/active-contract/`,
+        { headers: authHeaders() },
+      )
+      return response.data ?? null
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        console.error('Error fetching active contract:', error)
+      }
+      return null
+    }
+  }
+
+  function parseEligibilities(raw) {
+    if (!raw) return []
+    if (Array.isArray(raw)) return raw
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed) ? parsed : []
+      } catch {
+        return raw
+          .split(',')
+          .map((s) => parseInt(s.trim(), 10))
+          .filter((n) => !isNaN(n))
+      }
+    }
+    return []
+  }
+
+  function matchContractTypeByMultipliers(multipliers) {
+    if (!multipliers || !contractTypes.value.length) return null
+    const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
+      'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+    for (const ct of contractTypes.value) {
+      const match = mKeys.every((key) => {
+        if (!multipliers[key] && !ct[key]) return true
+        return String(multipliers[key] ?? '') === String(ct[key] ?? '')
+      })
+      if (match) return ct.id
+    }
+    return null
   }
 
   // ─── Dialog helpers ────────────────────────────────────────────────────────
@@ -256,6 +319,27 @@ export function useAdminContracts() {
 
     assignForm.value = _emptyAssignForm(employee.id)
     assignForm.value.company_id = companyId.value
+    activeContract.value = null
+
+    const existing = await fetchActiveContract(employee.id)
+    if (existing) {
+      activeContract.value = existing
+      assignForm.value.pay_type = existing.pay_type ?? null
+      assignForm.value.payment_method = existing.payment_method ?? 'bank_transfer'
+      assignForm.value.rate = existing.rate ?? ''
+      assignForm.value.work_hours_per_week = existing.work_hours_per_week ?? null
+      assignForm.value.position = existing.position ?? null
+      assignForm.value.department = existing.department ?? null
+      assignForm.value.year = existing.year ?? new Date().getFullYear()
+      assignForm.value.month = existing.month ?? new Date().getMonth() + 1
+      assignForm.value.eligibilities = parseEligibilities(existing.eligibilities)
+      assignForm.value.holiday_pay_types = existing.holiday_pay_types ?? []
+      const matchedId = matchContractTypeByMultipliers(existing)
+      if (matchedId) {
+        assignForm.value.contract_type_id = matchedId
+      }
+    }
+
     assignDialog.value = true
   }
 
@@ -265,30 +349,29 @@ export function useAdminContracts() {
       !assignForm.value.company_id ||
       !assignForm.value.contract_type_id ||
       !assignForm.value.pay_type ||
-      !assignForm.value.rate ||
-      !assignForm.value.start_date
+      !assignForm.value.rate
     ) {
       $q.notify({
         type: 'negative',
-        message: 'Please fill all required fields (Contract Type, Pay Type, Rate, Start Date, Department)',
+        message: 'Please fill all required fields (Contract Type, Pay Type, Rate, Department)',
         position: 'top',
       })
       return
     }
 
     const rateNum = parseFloat(assignForm.value.rate)
-    if (isNaN(rateNum) || rateNum < 500) {
-      $q.notify({ type: 'negative', message: 'Rate must be at least ₱500', position: 'top' })
+    if (isNaN(rateNum) || rateNum < 100) {
+      $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
       return
     }
 
     const hoursNum = assignForm.value.work_hours_per_week
       ? Number(assignForm.value.work_hours_per_week)
       : null
-    if (hoursNum !== null && (hoursNum <= 0 || hoursNum > 500)) {
+    if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
       $q.notify({
         type: 'negative',
-        message: 'Work hours must be between 1 and 500',
+        message: 'Work hours must be between 8 and 48',
         position: 'top',
       })
       return
@@ -311,24 +394,34 @@ export function useAdminContracts() {
         work_hours_per_week: hoursNum,
         position: assignForm.value.position ? Number(assignForm.value.position) : null,
         department: Number(assignForm.value.department),
-        start_date: assignForm.value.start_date || null,
-        end_date: assignForm.value.end_date || null,
+        year: assignForm.value.year ? Number(assignForm.value.year) : null,
+        month: assignForm.value.month ? Number(assignForm.value.month) : null,
         eligibilities: assignForm.value.eligibilities ?? [],
+        holiday_pay_types: assignForm.value.holiday_pay_types ?? [],
       }
 
       // Remove null/undefined optional fields
       if (!payload.work_hours_per_week) delete payload.work_hours_per_week
       if (!payload.position) delete payload.position
-      if (!payload.end_date) delete payload.end_date
 
       console.log('Payload to send:', payload)
 
-      await api.post(`${BASE}/user/employment-contracts/create/`, payload, {
-        headers: authHeaders(),
-      })
-      $q.notify({ type: 'positive', message: 'Contract assigned successfully', position: 'top' })
+      if (activeContract.value) {
+        await api.post(
+          `${BASE}/user/employee/${payload.company_id}/${payload.employee_id}/renew-contract/`,
+          payload,
+          { headers: authHeaders() },
+        )
+        $q.notify({ type: 'positive', message: 'Contract renewed successfully', position: 'top' })
+      } else {
+        await api.post(`${BASE}/user/employment-contracts/create/`, payload, {
+          headers: authHeaders(),
+        })
+        $q.notify({ type: 'positive', message: 'Contract assigned successfully', position: 'top' })
+      }
       contractAssigned.value = assignForm.value.employee_id
       assignDialog.value = false
+      activeContract.value = null
     } catch (error) {
       console.error('Error assigning contract:', error)
       console.error('Response data:', JSON.stringify(error.response?.data, null, 2))
@@ -347,6 +440,68 @@ export function useAdminContracts() {
     } finally {
       assigning.value = false
     }
+  }
+
+  // ─── Bulk Assign Contract ──────────────────────────────────────────────────
+
+  async function bulkAssignContract(employeeIds) {
+    const rateNum = parseFloat(assignForm.value.rate)
+    if (isNaN(rateNum) || rateNum < 100) {
+      $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
+      return { successCount: 0, failCount: 0 }
+    }
+
+    const hoursNum = assignForm.value.work_hours_per_week
+      ? Number(assignForm.value.work_hours_per_week)
+      : null
+    if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
+      $q.notify({ type: 'negative', message: 'Work hours must be between 8 and 48', position: 'top' })
+      return { successCount: 0, failCount: 0 }
+    }
+
+    if (!assignForm.value.department) {
+      $q.notify({ type: 'negative', message: 'Department is required', position: 'top' })
+      return { successCount: 0, failCount: 0 }
+    }
+
+    assigning.value = true
+    let successCount = 0
+    let failCount = 0
+
+    for (const empId of employeeIds) {
+      try {
+        const payload = {
+          employee_id: empId,
+          company_id: assignForm.value.company_id || companyId.value,
+          contract_type_id: assignForm.value.contract_type_id,
+          pay_type: assignForm.value.pay_type,
+          payment_method: assignForm.value.payment_method || 'bank_transfer',
+          rate: String(rateNum),
+        work_hours_per_week: hoursNum,
+        position: assignForm.value.position ? Number(assignForm.value.position) : null,
+        department: Number(assignForm.value.department),
+        year: assignForm.value.year ? Number(assignForm.value.year) : null,
+        month: assignForm.value.month ? Number(assignForm.value.month) : null,
+        eligibilities: assignForm.value.eligibilities ?? [],
+        holiday_pay_types: assignForm.value.holiday_pay_types ?? [],
+      }
+        if (!payload.work_hours_per_week) delete payload.work_hours_per_week
+        if (!payload.position) delete payload.position
+
+        await api.post(`${BASE}/user/employment-contracts/create/`, payload, {
+          headers: authHeaders(),
+        })
+        successCount++
+      } catch {
+        failCount++
+      }
+    }
+
+    assigning.value = false
+    assignDialog.value = false
+    contractAssigned.value = true
+
+    return { successCount, failCount }
   }
 
   // ─── Delete ────────────────────────────────────────────────────────────────
@@ -384,6 +539,7 @@ export function useAdminContracts() {
     payTypeOptions,
     fetchContracts,
     fetchContractTypes,
+    fetchHolidayTypes,
     openDialog,
     openEditDialog,
     viewContract,
@@ -395,8 +551,13 @@ export function useAdminContracts() {
     assignForm,
     openAssignDialog,
     assignContract,
+    bulkAssignContract,
     contractAssigned,
     resetContractAssigned,
+    holidayTypes,
+    activeContract,
+    isRenewing,
+    fetchActiveContract,
     // Exposed for component use
     PHILIPPINES_DEFAULT_MULTIPLIERS,
   }
