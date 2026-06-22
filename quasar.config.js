@@ -106,6 +106,7 @@ export default defineConfig((ctx) => {
             '/payroll/overtime-list',
             '/payroll/overtime-categories',
             '/payroll/overtime-approve',
+            '/payroll/contributions',
           ],
           target: apiBaseUrl,
           changeOrigin: true,
