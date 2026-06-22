@@ -1,12 +1,7 @@
 <template>
   <div class="table-section">
-
     <!-- Employee Table -->
     <div class="modern-table-container">
-      <!-- Centered loading spinner overlay -->
-      <div v-if="loading" class="table-spinner-overlay">
-        <q-spinner-oval color="primary" size="52px" />
-      </div>
       <q-table
         :rows="employees"
         :columns="columns"
@@ -17,33 +12,58 @@
         class="loan-table"
         hide-pagination
         :rows-per-page-options="[0]"
+        selection="multiple"
+        :selected="selected"
+        @update:selected="(val) => $emit('update:selected', val)"
       >
-        <!-- suppress default loading bar -->
-        <template v-slot:loading></template>
-
         <template v-slot:header="props">
           <q-tr class="table-header-row">
+            <q-th auto-width>
+              <q-checkbox
+                :model-value="props.selected"
+                :indeterminate="props.selected === 'some'"
+                @update:model-value="
+                  () => $emit('update:selected', selected.length > 0 ? [] : [...employees])
+                "
+                size="sm"
+              />
+            </q-th>
             <q-th key="name" :props="props" class="table-header-cell">Employee</q-th>
             <q-th key="role" :props="props" class="table-header-cell">Role</q-th>
             <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
             <q-th key="contract" :props="props" class="table-header-cell">Contract</q-th>
-            <q-th key="actions" :props="props" class="table-header-cell table-header-actions">Actions</q-th>
+            <q-th key="actions" :props="props" class="table-header-cell table-header-actions"
+              >Actions</q-th
+            >
           </q-tr>
         </template>
 
         <template v-slot:body="props">
           <q-tr class="table-body-row">
+            <q-td auto-width>
+              <q-checkbox v-model="props.selected" :val="props.row" size="sm" />
+            </q-td>
             <!-- Employee name + avatar + email merged cell -->
             <q-td key="name" :props="props" class="table-body-cell employee-name-cell">
               <div class="employee-info">
-                <q-avatar size="34px" v-if="props.row.user?.picture_url" class="clickable-avatar" @click="$emit('view-photo', props.row)">
+                <q-avatar
+                  size="34px"
+                  v-if="props.row.user?.picture_url"
+                  class="clickable-avatar"
+                  @click="$emit('view-photo', props.row)"
+                >
                   <img
                     :src="props.row.user.picture_url"
                     :alt="getFullName(props.row)"
                     @error="handleImageError"
                   />
                 </q-avatar>
-                <q-avatar v-else size="34px" class="avatar-fallback clickable-avatar" @click="$emit('view-photo', props.row)">
+                <q-avatar
+                  v-else
+                  size="34px"
+                  class="avatar-fallback clickable-avatar"
+                  @click="$emit('view-photo', props.row)"
+                >
                   {{ getInitials(getFullName(props.row)) }}
                 </q-avatar>
                 <div class="employee-name-block">
@@ -82,8 +102,15 @@
               <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                 <q-menu anchor="bottom right" self="top right" class="action-dropdown">
                   <q-list dense style="min-width: 150px">
-                    <q-item clickable v-close-popup @click="$emit('view', props.row)" class="dropdown-item">
-                      <q-item-section avatar><q-icon name="visibility" size="16px" /></q-item-section>
+                    <q-item
+                      clickable
+                      v-close-popup
+                      @click="$emit('view', props.row)"
+                      class="dropdown-item"
+                    >
+                      <q-item-section avatar
+                        ><q-icon name="visibility" size="16px"
+                      /></q-item-section>
                       <q-item-section>View details</q-item-section>
                     </q-item>
                     <q-item
@@ -103,10 +130,12 @@
                       :disable="getStatus(props.row) === 'Terminated'"
                       class="dropdown-item"
                     >
-                      <q-item-section avatar><q-icon name="assignment" size="16px" /></q-item-section>
-                      <q-item-section>Assign Contract</q-item-section>
+                      <q-item-section avatar
+                        ><q-icon name="assignment" size="16px"
+                      /></q-item-section>
+                      <q-item-section>{{ getContract(props.row) !== 'No Contract' ? 'Renew Contract' : 'Assign Contract' }}</q-item-section>
                     </q-item>
-                    <q-separator />
+                    <q-separator v-if="getStatus(props.row) !== 'Terminated'" />
                     <q-item
                       v-if="getStatus(props.row) !== 'Terminated'"
                       clickable
@@ -116,16 +145,6 @@
                     >
                       <q-item-section avatar><q-icon name="block" size="16px" /></q-item-section>
                       <q-item-section>Terminate</q-item-section>
-                    </q-item>
-                    <q-item
-                      v-else
-                      clickable
-                      v-close-popup
-                      @click="$emit('restore', props.row)"
-                      class="dropdown-item dropdown-item-restore"
-                    >
-                      <q-item-section avatar><q-icon name="restore" size="16px" /></q-item-section>
-                      <q-item-section>Restore</q-item-section>
                     </q-item>
                   </q-list>
                 </q-menu>
@@ -153,9 +172,8 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   contracts: { type: Object, default: () => ({}) },
   companyId: { type: [Number, String], default: null },
+  selected: { type: Array, default: () => [] },
 })
-
-
 
 /* ─── Helper Functions ─────────────────────────────────────────────────────── */
 
@@ -283,7 +301,6 @@ const columns = [
 
 .modern-table-container {
   overflow-x: auto;
-  min-height: 420px;
   position: relative;
 }
 
@@ -558,21 +575,6 @@ const columns = [
   font-size: 13px;
   color: #9ca3af;
   margin-bottom: 16px;
-}
-
-/* Table loading */
-.table-spinner-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  background: rgba(255, 255, 255, 0.75);
 }
 
 @media (max-width: 768px) {
