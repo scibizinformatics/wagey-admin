@@ -16,13 +16,13 @@
           <div class="skeleton-header">
             <div class="skeleton-header-cell">Department Name</div>
             <div class="skeleton-header-cell">Description</div>
-            <div class="skeleton-header-cell">Date Created</div>
+            <div class="skeleton-header-cell">Policies</div>
             <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
           </div>
           <div class="skeleton-row" v-for="n in 4" :key="n">
             <div class="skeleton-cell"><q-skeleton type="text" /></div>
             <div class="skeleton-cell"><q-skeleton type="text" /></div>
-            <div class="skeleton-cell"><q-skeleton type="text" width="80px" /></div>
+            <div class="skeleton-cell"><q-skeleton type="text" /></div>
             <div class="skeleton-cell" style="flex: 0 0 60px"><q-skeleton type="text" width="40px" /></div>
           </div>
         </div>
@@ -32,14 +32,14 @@
           <template v-slot:header>
             <q-tr class="table-header-row">
               <q-th class="table-header-cell">Department Name</q-th>
-              <q-th class="table-header-cell">Date Created</q-th>
+              <q-th class="table-header-cell">Policies</q-th>
               <q-th class="table-header-cell actions-header">Actions</q-th>
             </q-tr>
           </template>
           <template v-slot:body="props">
             <q-tr class="table-body-row">
               <q-td class="table-body-cell"><span class="item-name">{{ props.row.name }}</span></q-td>
-              <q-td class="table-body-cell">{{ formatDate(props.row.date_created) }}</q-td>
+              <q-td class="table-body-cell">{{ getPolicyNames(props.row.policies) }}</q-td>
               <q-td class="table-body-cell actions-cell">
                 <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                   <q-menu anchor="bottom right" self="top right" class="action-dropdown">
@@ -76,9 +76,10 @@
         </q-card-section>
         <q-card-section class="admin-modal-content">
           <q-input v-model="departmentForm.name" label="Department Name *" outlined dense class="q-mb-md" />
-          <q-select v-model="departmentForm.cost_center" :options="costCenters" option-value="id" option-label="name" emit-value map-options label="Cost Center (optional)" outlined dense clearable>
+          <q-select v-model="departmentForm.cost_center" :options="costCenters" option-value="id" option-label="name" emit-value map-options label="Cost Center (optional)" outlined dense clearable class="q-mt-md">
             <template v-slot:prepend><q-icon name="account_balance" size="18px" /></template>
           </q-select>
+          <q-select v-model="departmentForm.policies" :options="policies" option-value="id" option-label="name" label="Policies" outlined dense multiple use-chips clearable class="q-mt-md" />
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
@@ -93,12 +94,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
 import { useAdminCostCenters } from '@/composables/admin/useAdminCostCenters'
+import { useAdminDepartmentPolicies } from '@/composables/admin/useAdminDepartmentPolicies'
 
 const props = defineProps({
   searchQuery: { type: String, default: '' },
 })
 
 const { costCenters, fetchCostCenters } = useAdminCostCenters()
+const { policies, fetchDepartmentPolicies } = useAdminDepartmentPolicies()
 
 const {
   departments,
@@ -114,9 +117,17 @@ const {
   deleteDepartment,
 } = useAdminDepartments()
 
+const getPolicyNames = (ids) => {
+  if (!ids?.length) return '—'
+  return ids.map((id) => {
+    const p = policies.value.find((p) => p.id === id)
+    return p ? p.name : id
+  }).join(', ')
+}
+
   const departmentColumns = ref([
     { name: 'name', label: 'Department Name', field: 'name', align: 'left' },
-    { name: 'date_created', label: 'Date Created', field: 'date_created', align: 'left' },
+    { name: 'policies', label: 'Policies', field: 'policies', align: 'left' },
     { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
   ])
 
@@ -126,14 +137,10 @@ const filteredDepartments = computed(() => {
   return departments.value.filter((d) => (d.name || '').toLowerCase().includes(q))
 })
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return ''
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
 onMounted(async () => {
   await fetchDepartments()
   await fetchCostCenters()
+  await fetchDepartmentPolicies()
 })
 </script>
 
