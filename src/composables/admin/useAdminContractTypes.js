@@ -13,6 +13,7 @@ export function useAdminContractTypes() {
 
   const contractTypes = ref([])
   const eligibilities = ref([])
+  const contributions = ref([])
   const loading = ref(false)
   const saving = ref(false)
 
@@ -24,8 +25,12 @@ export function useAdminContractTypes() {
   const selectedContractType = ref(null)
   const form = ref(_emptyForm())
 
-  const flexibleId = computed(() => eligibilities.value.find((e) => e.name === 'Work Hours Flexible')?.id)
-  const strictId = computed(() => eligibilities.value.find((e) => e.name === 'Work Hours Strict')?.id)
+  const flexibleId = computed(
+    () => eligibilities.value.find((e) => e.name === 'Work Hours Flexible')?.id,
+  )
+  const strictId = computed(
+    () => eligibilities.value.find((e) => e.name === 'Work Hours Strict')?.id,
+  )
 
   function _emptyForm() {
     return {
@@ -36,6 +41,7 @@ export function useAdminContractTypes() {
       work_hours_per_week: null,
       work_hours_type: null,
       eligibilities: [],
+      contributions: [],
 
       // Custom multiplier values
       overtime_multiplier: null,
@@ -45,6 +51,10 @@ export function useAdminContractTypes() {
       regular_holiday_ot_multiplier: null,
       special_holiday_ot_multiplier: null,
       undertime_multiplier: null,
+
+      // Holiday sub-option toggles
+      special_holiday_enabled: true,
+      regular_holiday_enabled: true,
     }
   }
 
@@ -126,6 +136,20 @@ export function useAdminContractTypes() {
     }
   }
 
+  async function fetchContributions() {
+    try {
+      const response = await api.get(`${BASE}/payroll/contributions/${companyId.value}/`, {
+        headers: authHeaders(),
+      })
+      const data = response.data.data ?? response.data ?? []
+      contributions.value = Array.isArray(data) ? data : []
+      return contributions.value
+    } catch (error) {
+      console.error('Error fetching contributions:', error)
+      contributions.value = []
+    }
+  }
+
   async function fetchCompanyMultipliersForForm() {
     try {
       const data = await fetchCustomMultipliers(companyId.value)
@@ -146,6 +170,9 @@ export function useAdminContractTypes() {
     await fetchCompanyMultipliersForForm()
     if (!eligibilities.value.length) {
       await fetchEligibilities()
+    }
+    if (!contributions.value.length) {
+      await fetchContributions()
     }
     editing.value = false
     form.value = _emptyForm()
@@ -173,6 +200,7 @@ export function useAdminContractTypes() {
       'Holiday Pay',
       'Undertime Deduction',
       'Night Differential Eligible',
+      'Contributions',
     ]
 
     // Pre-select all non-work-hours, non-dedicated eligibilities
@@ -234,7 +262,10 @@ export function useAdminContractTypes() {
       work_hours_per_week: contractType.work_hours_per_week ?? null,
       work_hours_type: workHoursType,
       eligibilities: currentEligibilities,
+      contributions: contractType.contributions ?? [],
       ...multiplierFields,
+      special_holiday_enabled: contractType.special_holiday_enabled ?? true,
+      regular_holiday_enabled: contractType.regular_holiday_enabled ?? true,
     }
     dialog.value = true
   }
@@ -277,11 +308,14 @@ export function useAdminContractTypes() {
         pay_type: form.value.pay_type,
         work_hours_per_week: form.value.work_hours_per_week,
         eligibilities: form.value.eligibilities,
+        contributions: form.value.contributions,
+        special_holiday_enabled: form.value.special_holiday_enabled,
+        regular_holiday_enabled: form.value.regular_holiday_enabled,
         ...multiplierPayload,
       }
 
       if (editing.value) {
-        await api.patch(`${BASE}/organization/contract-types/${form.value.id}/`, payload, {
+        await api.patch(`${BASE}/organization/contract-types/${form.value.id}/update/`, payload, {
           headers: authHeaders(),
         })
         $q.notify({ type: 'positive', message: 'Contract type updated successfully' })
@@ -329,6 +363,7 @@ export function useAdminContractTypes() {
   return {
     contractTypes,
     eligibilities,
+    contributions,
     loading,
     saving,
     dialog,
@@ -337,6 +372,7 @@ export function useAdminContractTypes() {
     form,
     fetchContractTypes,
     fetchEligibilities,
+    fetchContributions,
     openDialog,
     editContractType,
     saveContractType,
