@@ -1,76 +1,143 @@
 ﻿<template>
   <PageShell>
-      <!-- Header Section -->
-      <div class="page-header">
-        <div class="header-content">
-          <h1 class="page-title">Employees</h1>
-          <div class="header-actions">
-            <q-btn
-              color="primary"
-              label="Add Employee"
-              icon="add"
-              class="add-employee-btn"
-              unelevated
-              @click="openAddModal"
-            />
-            <q-input
-              v-model="searchTerm"
-              placeholder="Search employees..."
-              class="header-search"
-              dense
-              outlined
-              @update:model-value="filterEmployees"
-            >
-              <template v-slot:prepend>
-                <q-icon name="search" class="search-icon" />
-              </template>
-            </q-input>
-          </div>
+    <!-- Header Section -->
+    <div class="page-header">
+      <div class="header-content">
+        <h1 class="page-title">Employees</h1>
+        <div class="header-actions">
+          <q-btn
+            color="primary"
+            label="Add Employee"
+            icon="add"
+            class="add-employee-btn"
+            unelevated
+            @click="openAddModal"
+          />
+          <q-input
+            v-model="searchTerm"
+            placeholder="Search employees..."
+            class="header-search"
+            dense
+            outlined
+            @update:model-value="filterEmployees"
+          >
+            <template v-slot:prepend>
+              <q-icon name="search" class="search-icon" />
+            </template>
+          </q-input>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <EmployeeStatsCards :stats="employeeStats" />
+
+    <!-- Main Table Section -->
+    <div class="table-section">
+      <div class="table-header">
+        <h2 class="table-title">Employee Overview</h2>
+        <div class="table-actions">
+          <q-select
+            v-model="selectedSite"
+            :options="sites"
+            option-label="label"
+            option-value="value"
+            emit-value
+            map-options
+            label="Filter by Site"
+            class="site-select"
+            dense
+            outlined
+            clearable
+            @update:model-value="filterEmployees"
+          >
+            <template v-slot:prepend>
+              <q-icon name="location_on" />
+            </template>
+          </q-select>
         </div>
       </div>
 
-      <!-- Stats Cards -->
-      <EmployeeStatsCards :stats="employeeStats" />
-
-      <!-- Main Table Section -->
-      <div class="table-section">
-        <div class="table-header">
-          <h2 class="table-title">Employee Overview</h2>
-          <div class="table-actions">
-            <q-select
-              v-model="selectedSite"
-              :options="sites"
-              option-label="label"
-              option-value="value"
-              emit-value
-              map-options
-              label="Filter by Site"
-              class="site-select"
-              dense
-              outlined
-              clearable
-              @update:model-value="filterEmployees"
-            >
-              <template v-slot:prepend>
-                <q-icon name="location_on" />
-              </template>
-            </q-select>
+      <div v-if="selectedEmployees.length > 0" class="selection-bar">
+        <div class="selection-bar-content">
+          <div class="selection-info">
+            <q-icon name="check_circle" size="20px" color="primary" />
+            <span class="selection-text">{{ selectedEmployees.length }} selected</span>
+          </div>
+          <div class="selection-actions">
+            <q-btn
+              unelevated
+              color="primary"
+              icon="assignment"
+              label="Assign Contract"
+              class="add-employee-btn"
+              @click="handleBulkAssignDialog"
+            />
+            <q-btn
+              unelevated
+              color="negative"
+              icon="block"
+              label="Terminate"
+              class="add-employee-btn"
+              @click="handleBulkTerminateDialog"
+            />
+            <q-btn flat dense label="Clear" @click="selectedEmployees = []" />
           </div>
         </div>
+      </div>
+      <EmployeeTable
+        v-model:selected="selectedEmployees"
+        :employees="paginatedEmployees"
+        :loading="loading"
+        :contracts="employeeContracts"
+        :company-id="companyId"
+        @view="viewEmployee"
+        @edit="editEmployee"
+        @assign="handleOpenAssignDialog"
+        @terminate="confirmTerminate"
+        @restore="confirmRestore"
+        @view-photo="viewEmployeePhoto"
+      />
+    </div>
 
-        <EmployeeTable
-          :employees="filteredEmployees"
-          :loading="loading"
-          :contracts="employeeContracts"
-          :company-id="companyId"
-          @view="viewEmployee"
-          @edit="editEmployee"
-          @assign="handleOpenAssignDialog"
-          @terminate="confirmTerminate"
-          @restore="confirmRestore"
-          @view-photo="viewEmployeePhoto"
+    <!-- Pagination Controls -->
+    <div class="pagination-bar" v-if="filteredEmployees.length > 0">
+      <div class="pagination-info">
+        <span class="pagination-text">
+          Showing {{ (employeePage - 1) * employeePageSize + 1 }} –
+          {{ Math.min(employeePage * employeePageSize, filteredEmployees.length) }}
+          of {{ filteredEmployees.length }} employees
+        </span>
+        <q-select
+          v-model="employeePageSize"
+          :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
+          option-label="label"
+          option-value="value"
+          emit-value
+          map-options
+          dense
+          outlined
+          class="page-size-select"
+          @update:model-value="onPageSizeChange"
         />
       </div>
+      <q-pagination
+        v-model="employeePage"
+        :max="totalPages"
+        :max-pages="6"
+        boundary-numbers
+        direction-links
+        color="primary"
+        active-color="primary"
+        active-text-color="white"
+        icon-first="first_page"
+        icon-prev="chevron_left"
+        icon-next="chevron_right"
+        icon-last="last_page"
+        class="schedule-pagination"
+        @update:model-value="onPageChange"
+      />
+    </div>
 
     <!-- Modals -->
     <EmployeeAddModal
@@ -118,14 +185,14 @@
       v-model="assignDialog"
       :form="assignForm"
       :assigning="assigning"
-      :pay-type-auto-filled="payTypeAutoFilled"
       :contract-type-options="contractTypeOptions"
       :positions="positions"
       :departments="departments"
       :eligibility-objects="selectedEligibilityObjectsData"
+      :is-renewing="isRenewing"
       @update:field="updateAssignField"
       @contract-type-change="onContractTypeChange"
-      @submit="assignContract(eligibilityOptions)"
+      @submit="handleAssignSubmit"
     />
   </PageShell>
 </template>
@@ -180,6 +247,13 @@ const {
   assignForm,
   openAssignDialog,
   assignContract,
+  bulkAssignContract,
+  contractAssigned,
+  resetContractAssigned,
+  holidayTypes,
+  fetchHolidayTypes,
+  activeContract,
+  isRenewing,
 } = useAdminContracts()
 
 const {
@@ -202,33 +276,56 @@ const sites = ref([])
 const selectedSite = ref(null)
 const employeeContracts = ref({})
 const payTypeAutoFilled = ref(false)
+const selectedEmployees = ref([])
+const bulkAssignEmployeeIds = ref([])
+// Pagination state
+const employeePage = ref(1)
+const employeePageSize = ref(20)
+const pageSizeOptions = [10, 20, 50]
 
 function onContractTypeChange(contractTypeId) {
   assignForm.value.contract_type_id = contractTypeId
 
   const selectedType = contractTypeOptions.value.find((ct) => ct.id === contractTypeId)
   if (selectedType && selectedType.eligibilities) {
-    const eligs = eligibilityOptions.value.filter((el) => selectedType.eligibilities.includes(el.id))
+    const eligs = eligibilityOptions.value.filter((el) =>
+      selectedType.eligibilities.includes(el.id),
+    )
     selectedEligibilityObjectsData.value = eligs
     assignForm.value.eligibilities = [...selectedType.eligibilities]
   } else {
     selectedEligibilityObjectsData.value = []
     assignForm.value.eligibilities = []
   }
-  if (selectedType && selectedType.pay_type) {
+  if (selectedType?.pay_type) {
     assignForm.value.pay_type = selectedType.pay_type
-    payTypeAutoFilled.value = true
   } else {
-    payTypeAutoFilled.value = false
+    assignForm.value.pay_type = null
   }
   if (assignForm.value.pay_type === 'daily') {
     assignForm.value.work_hours_per_week = 8
   } else {
-    assignForm.value.work_hours_per_week = 208
+    assignForm.value.work_hours_per_week = 48
   }
-  if (!assignForm.value.rate || assignForm.value.rate < 500) {
-    assignForm.value.rate = 500
+  if (!assignForm.value.rate || assignForm.value.rate < 100) {
+    assignForm.value.rate = 100
   }
+
+  // Derive holiday_pay_types from contract type flags
+  const codes = []
+  if (selectedType) {
+    const matchCode = (flag, hint) => {
+      if (!flag) return
+      const ht = holidayTypes.value.find(
+        (h) =>
+          h.code?.toLowerCase().includes(hint) || h.name?.toLowerCase().includes(hint),
+      )
+      if (ht?.code) codes.push(ht.code)
+    }
+    matchCode(selectedType.regular_holiday_enabled, 'regular')
+    matchCode(selectedType.special_holiday_enabled, 'special')
+  }
+  assignForm.value.holiday_pay_types = codes
 }
 
 watch(
@@ -237,10 +334,10 @@ watch(
     if (newType === 'daily') {
       assignForm.value.work_hours_per_week = 8
     } else if (newType === 'monthly') {
-      assignForm.value.work_hours_per_week = 208
+      assignForm.value.work_hours_per_week = 48
     }
-    if (!assignForm.value.rate || assignForm.value.rate < 500) {
-      assignForm.value.rate = 500
+    if (!assignForm.value.rate || assignForm.value.rate < 100) {
+      assignForm.value.rate = 100
     }
   },
 )
@@ -255,6 +352,26 @@ watch(
   },
   { deep: true },
 )
+
+watch(contractAssigned, (newVal) => {
+  if (newVal) {
+    fetchEmployees()
+    resetContractAssigned()
+  }
+})
+
+watch(
+  () => filteredEmployees.value?.length ?? 0,
+  () => {
+    employeePage.value = 1
+  },
+)
+
+watch(assignDialog, (open) => {
+  if (!open && bulkAssignEmployeeIds.value.length > 0) {
+    bulkAssignEmployeeIds.value = []
+  }
+})
 
 // Modal states
 const showAddModal = ref(false)
@@ -313,6 +430,20 @@ const employeeStats = computed(() => {
   return { total, active, terminated }
 })
 
+const totalPages = computed(
+  () => Math.ceil((filteredEmployees.value?.length ?? 0) / employeePageSize.value) || 1,
+)
+
+const paginatedEmployees = computed(() => {
+  if (!filteredEmployees.value) return []
+  const start = (employeePage.value - 1) * employeePageSize.value
+  return filteredEmployees.value.slice(start, start + employeePageSize.value)
+})
+
+const selectedActiveEmployees = computed(() =>
+  selectedEmployees.value.filter((emp) => getStatus(emp) === 'Active'),
+)
+
 // ─── Helper Functions ─────────────────────────────────────────────────────────
 
 const getFullName = (employee) => {
@@ -369,7 +500,11 @@ const fetchEmployees = async () => {
     sortEmployees()
     fetchContracts(list)
   } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail ?? 'Failed to fetch employees', position: 'top' })
+    $q.notify({
+      type: 'negative',
+      message: err.response?.data?.detail ?? 'Failed to fetch employees',
+      position: 'top',
+    })
   }
 }
 
@@ -402,7 +537,11 @@ const fetchContracts = async (employeeList, batchSize = 15) => {
 }
 
 const fetchRoles = async () => {
-  try { await fetchUserRoles() } catch { /* silent */ }
+  try {
+    await fetchUserRoles()
+  } catch {
+    /* silent */
+  }
 }
 
 const fetchSites = async () => {
@@ -417,7 +556,11 @@ const fetchSites = async () => {
     ]
   } catch (err) {
     sites.value = [{ label: 'All Sites', value: null }]
-    $q.notify({ type: 'warning', message: err.response?.data?.detail ?? 'Could not load sites. Showing all employees.', position: 'top' })
+    $q.notify({
+      type: 'warning',
+      message: err.response?.data?.detail ?? 'Could not load sites. Showing all employees.',
+      position: 'top',
+    })
   }
 }
 
@@ -486,10 +629,18 @@ async function addEmployee(formData) {
             filteredEmployees.value = [...employees.value]
           }
         }
-        $q.notify({ type: 'positive', message: 'Employee and profile picture added successfully!', position: 'top' })
+        $q.notify({
+          type: 'positive',
+          message: 'Employee and profile picture added successfully!',
+          position: 'top',
+        })
       } catch {
         await fetchEmployees()
-        $q.notify({ type: 'warning', message: 'Employee created but profile picture upload failed', position: 'top' })
+        $q.notify({
+          type: 'warning',
+          message: 'Employee created but profile picture upload failed',
+          position: 'top',
+        })
       } finally {
         uploadingAvatar.value = false
       }
@@ -503,7 +654,14 @@ async function addEmployee(formData) {
   } catch (error) {
     $q.notify({
       type: 'negative',
-      message: error.response?.data?.message || error.response?.data?.detail || error.response?.data?.error || Object.entries(error.response?.data || {}).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' | ') || 'Failed to add employee',
+      message:
+        error.response?.data?.message ||
+        error.response?.data?.detail ||
+        error.response?.data?.error ||
+        Object.entries(error.response?.data || {})
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+          .join(' | ') ||
+        'Failed to add employee',
       position: 'top',
       timeout: 5000,
     })
@@ -518,7 +676,11 @@ const saveEmployee = async (formData) => {
     const formattedEmergency = formatPhilippinePhone(formData.emergency_contact)
 
     if (!formattedPhone) {
-      return $q.notify({ type: 'warning', message: 'Invalid phone number format. Please use +639XXXXXXXXX or 09XXXXXXXXX.', position: 'top' })
+      return $q.notify({
+        type: 'warning',
+        message: 'Invalid phone number format. Please use +639XXXXXXXXX or 09XXXXXXXXX.',
+        position: 'top',
+      })
     }
 
     const payload = {
@@ -545,7 +707,10 @@ const saveEmployee = async (formData) => {
     if (editAvatarFile.value && selectedEmployee.value.id) {
       try {
         uploadingAvatar.value = true
-        const uploadResponse = await uploadEmployeeAvatar(selectedEmployee.value.id, editAvatarFile.value)
+        const uploadResponse = await uploadEmployeeAvatar(
+          selectedEmployee.value.id,
+          editAvatarFile.value,
+        )
         await fetchEmployees()
         const picture_url = uploadResponse?.user?.picture_url || uploadResponse?.picture_url || null
         if (picture_url) {
@@ -556,7 +721,11 @@ const saveEmployee = async (formData) => {
           }
         }
       } catch {
-        $q.notify({ type: 'warning', message: 'Employee updated but profile picture upload failed', position: 'top' })
+        $q.notify({
+          type: 'warning',
+          message: 'Employee updated but profile picture upload failed',
+          position: 'top',
+        })
         const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
         if (index !== -1) employees.value[index] = updatedEmployee
         filteredEmployees.value = [...employees.value]
@@ -571,10 +740,18 @@ const saveEmployee = async (formData) => {
       sortEmployees()
     }
 
-    $q.notify({ type: 'positive', message: `Employee ${getFullName(selectedEmployee.value)} updated successfully.`, position: 'top' })
+    $q.notify({
+      type: 'positive',
+      message: `Employee ${getFullName(selectedEmployee.value)} updated successfully.`,
+      position: 'top',
+    })
     showEditModal.value = false
   } catch (error) {
-    $q.notify({ type: 'negative', message: error.response?.data?.detail ?? 'Failed to update employee', position: 'top' })
+    $q.notify({
+      type: 'negative',
+      message: error.response?.data?.detail ?? 'Failed to update employee',
+      position: 'top',
+    })
   }
 }
 
@@ -588,8 +765,128 @@ async function handleOpenAssignDialog(employee) {
   if (!positions.value.length) {
     await fetchPositions()
   }
+  if (!holidayTypes.value.length) {
+    await fetchHolidayTypes()
+  }
+  await openAssignDialog(employee)
+
+  // Sync eligibility display when pre-filled from existing contract
+  if (activeContract.value && assignForm.value.eligibilities.length) {
+    const eligs = eligibilityOptions.value.filter((el) =>
+      assignForm.value.eligibilities.includes(el.id),
+    )
+    selectedEligibilityObjectsData.value = eligs
+  }
+}
+
+async function handleBulkAssignDialog() {
+  if (!contractTypeOptions.value.length) await fetchContractTypes()
+  if (!eligibilityOptions.value.length) await fetchEligibilityOptions()
+  if (!positions.value.length) await fetchPositions()
+  if (!holidayTypes.value.length) await fetchHolidayTypes()
+
+  bulkAssignEmployeeIds.value = selectedEmployees.value.map((e) => e.id)
   payTypeAutoFilled.value = false
-  openAssignDialog(employee)
+
+  assignForm.value = {
+    employee_id: null,
+    company_id: companyId.value,
+    contract_type_id: null,
+    pay_type: 'monthly',
+    payment_method: 'bank_transfer',
+    rate: '',
+    work_hours_per_week: 48,
+    position: null,
+    department: null,
+    eligibilities: [],
+    year: new Date().getFullYear(),
+    month: new Date().getMonth() + 1,
+    holiday_pay_types: [],
+    start_date: '',
+    end_date: '',
+  }
+  assignDialog.value = true
+}
+
+async function handleAssignSubmit() {
+  if (bulkAssignEmployeeIds.value.length > 0) {
+    const ids = [...bulkAssignEmployeeIds.value]
+    bulkAssignEmployeeIds.value = []
+    const { successCount, failCount } = await bulkAssignContract(ids)
+    selectedEmployees.value = []
+    if (successCount > 0) {
+      $q.notify({
+        type: 'positive',
+        message: `Contract assigned to ${successCount} employee(s)`,
+        position: 'top',
+      })
+    }
+    if (failCount > 0) {
+      $q.notify({ type: 'warning', message: `${failCount} assignment(s) failed`, position: 'top' })
+    }
+  } else {
+    await assignContract()
+  }
+}
+
+async function handleBulkTerminateDialog() {
+  const active = selectedActiveEmployees.value
+  if (active.length === 0) {
+    $q.notify({ type: 'warning', message: 'No active employees selected', position: 'top' })
+    return
+  }
+
+  $q.dialog({
+    title: `Terminate ${active.length} employee${active.length > 1 ? 's' : ''}?`,
+    message:
+      'These employees will be marked as Terminated and lose system access. This can be reversed.',
+    cancel: { label: 'Cancel', flat: true },
+    persistent: true,
+    ok: { label: 'Terminate', color: 'negative', unelevated: true },
+  }).onOk(async () => {
+    const ids = active.map((e) => e.id)
+    const { successCount, failCount } = await bulkTerminateEmployees(ids)
+    selectedEmployees.value = []
+    if (successCount > 0) {
+      $q.notify({
+        type: 'positive',
+        message: `${successCount} employee(s) terminated`,
+        position: 'top',
+      })
+    }
+    if (failCount > 0) {
+      $q.notify({ type: 'warning', message: `${failCount} termination(s) failed`, position: 'top' })
+    }
+  })
+}
+
+async function bulkTerminateEmployees(employeeIds) {
+  let successCount = 0
+  let failCount = 0
+
+  for (const empId of employeeIds) {
+    try {
+      const emp = employees.value.find((e) => e.id === empId)
+      const cid = emp?.companies?.[0]?.company_id
+      const payload = cid
+        ? { companies: [{ company_id: cid, employment_status: 'terminated' }] }
+        : {}
+      const response = await terminateEmployeeApi(empId, payload)
+
+      const idx = employees.value.findIndex((e) => e.id === empId)
+      if (idx !== -1) {
+        employees.value[idx] = { ...response, is_active: false, status: 'terminated' }
+      }
+      successCount++
+    } catch {
+      failCount++
+    }
+  }
+
+  filteredEmployees.value = [...employees.value]
+  sortEmployees()
+
+  return { successCount, failCount }
 }
 
 const resetAddForm = () => {
@@ -644,11 +941,22 @@ const terminateEmployee = async () => {
     filteredEmployees.value = [...employees.value]
     sortEmployees()
 
-    $q.notify({ type: 'positive', message: `Employee ${getFullName(employeeToTerminate.value)} has been terminated`, position: 'top' })
+    $q.notify({
+      type: 'positive',
+      message: `Employee ${getFullName(employeeToTerminate.value)} has been terminated`,
+      position: 'top',
+    })
     showTerminateDialog.value = false
     employeeToTerminate.value = {}
   } catch (error) {
-    $q.notify({ type: 'negative', message: error.response?.data?.detail ?? error.response?.data?.message ?? 'Failed to terminate employee', position: 'top' })
+    $q.notify({
+      type: 'negative',
+      message:
+        error.response?.data?.detail ??
+        error.response?.data?.message ??
+        'Failed to terminate employee',
+      position: 'top',
+    })
   } finally {
     terminating.value = false
   }
@@ -673,11 +981,22 @@ const restoreEmployee = async () => {
     filteredEmployees.value = [...employees.value]
     sortEmployees()
 
-    $q.notify({ type: 'positive', message: `Employee ${getFullName(employeeToRestore.value)} has been restored successfully.`, position: 'top' })
+    $q.notify({
+      type: 'positive',
+      message: `Employee ${getFullName(employeeToRestore.value)} has been restored successfully.`,
+      position: 'top',
+    })
     showRestoreDialog.value = false
     employeeToRestore.value = {}
   } catch (error) {
-    $q.notify({ type: 'negative', message: error.response?.data?.detail ?? error.response?.data?.message ?? 'Failed to restore employee', position: 'top' })
+    $q.notify({
+      type: 'negative',
+      message:
+        error.response?.data?.detail ??
+        error.response?.data?.message ??
+        'Failed to restore employee',
+      position: 'top',
+    })
   } finally {
     restoring.value = false
   }
@@ -686,14 +1005,18 @@ const restoreEmployee = async () => {
 const handleAvatarSelect = (file) => {
   avatarFile.value = file
   const reader = new FileReader()
-  reader.onload = (e) => { avatarPreview.value = e.target.result }
+  reader.onload = (e) => {
+    avatarPreview.value = e.target.result
+  }
   reader.readAsDataURL(file)
 }
 
 const handleEditAvatarSelect = (file) => {
   editAvatarFile.value = file
   const reader = new FileReader()
-  reader.onload = (e) => { editAvatarPreview.value = e.target.result }
+  reader.onload = (e) => {
+    editAvatarPreview.value = e.target.result
+  }
   reader.readAsDataURL(file)
 }
 
@@ -705,6 +1028,15 @@ const removeAvatar = () => {
 const removeEditAvatar = () => {
   editAvatarFile.value = null
   editAvatarPreview.value = null
+}
+
+const onPageChange = (newPage) => {
+  employeePage.value = newPage
+}
+
+const onPageSizeChange = (newSize) => {
+  employeePageSize.value = newSize
+  employeePage.value = 1
 }
 
 const filterEmployees = () => {
@@ -725,9 +1057,15 @@ const filterEmployees = () => {
 
   if (selectedSite.value !== null) {
     filtered = filtered.filter((emp) => {
-      const empSiteId = emp.site_id || emp.site?.id || emp.companies?.[0]?.site_id || emp.companies?.[0]?.site?.id || emp.user_site?.id
+      const empSiteId =
+        emp.site_id ||
+        emp.site?.id ||
+        emp.companies?.[0]?.site_id ||
+        emp.companies?.[0]?.site?.id ||
+        emp.user_site?.id
       const employeeSite = typeof empSiteId === 'number' ? empSiteId : parseInt(empSiteId)
-      const filterSite = typeof selectedSite.value === 'number' ? selectedSite.value : parseInt(selectedSite.value)
+      const filterSite =
+        typeof selectedSite.value === 'number' ? selectedSite.value : parseInt(selectedSite.value)
       return employeeSite === filterSite
     })
   }
@@ -871,7 +1209,9 @@ const updateAssignField = ({ field, value }) => {
   assignForm.value[field] = value
 }
 
-watch(sortBy, () => { sortEmployees() })
+watch(sortBy, () => {
+  sortEmployees()
+})
 
 let initialised = false
 watch(
@@ -886,6 +1226,7 @@ watch(
         fetchDepartments(),
         fetchEligibilityOptions(),
         fetchPositions(),
+        fetchHolidayTypes(),
       ])
       await fetchEmployees()
     }
@@ -1024,6 +1365,12 @@ watch(companyId, (newId, oldId) => {
   .site-select {
     width: 100%;
   }
+
+  .selection-bar-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1047,5 +1394,86 @@ watch(companyId, (newId, oldId) => {
 .custom-multiplier-warning-dialog .q-card {
   max-width: 480px;
   border-radius: 12px;
+}
+
+/* Selection Bar */
+.selection-bar {
+  padding: 10px 20px;
+  background: #eff6ff;
+  border-bottom: 1px solid #bfdbfe;
+}
+.selection-bar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.selection-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.selection-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d4ed8;
+}
+.selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Pagination Bar */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf0;
+  padding: 12px 20px;
+  margin-top: 16px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pagination-text {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+.page-size-select {
+  min-width: 120px;
+}
+.page-size-select :deep(.q-field__control) {
+  border-radius: 8px;
+}
+.schedule-pagination :deep(.q-btn) {
+  font-weight: 600;
+  border-radius: 8px;
+  min-width: 32px;
+  min-height: 32px;
+}
+.schedule-pagination :deep(.q-btn--active) {
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+@media (max-width: 768px) {
+  .pagination-bar {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+  .pagination-info {
+    justify-content: center;
+  }
 }
 </style>
