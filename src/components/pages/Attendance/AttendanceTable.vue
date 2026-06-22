@@ -223,29 +223,6 @@
         </q-table>
       </div>
 
-      <div class="table-footer">
-        <div class="footer-info">
-          <span class="total-label">Total</span>
-          <span class="total-records">{{ rows.length }} Records</span>
-        </div>
-        <div class="pagination-controls">
-          <q-btn
-            flat
-            icon="chevron_left"
-            class="pagination-btn"
-            :disable="page === 1"
-            @click="$emit('prev-page')"
-          />
-          <span class="page-info">Page {{ page }} of {{ totalPages }}</span>
-          <q-btn
-            flat
-            icon="chevron_right"
-            class="pagination-btn"
-            :disable="page === totalPages"
-            @click="$emit('next-page')"
-          />
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -259,8 +236,6 @@ const $q = useQuasar();
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
-  page: { type: Number, default: 1 },
-  totalPages: { type: Number, default: 1 },
   costCenterFilter: { type: [String, Number], default: '' },
   costCenterOptions: { type: Array, default: () => [] },
   optionsLoading: { type: Boolean, default: false },
@@ -274,8 +249,6 @@ defineEmits([
   'view-photo',
   'edit-time',
   'edit-cost-center',
-  'prev-page',
-  'next-page',
 ]);
 
 const columns = [
@@ -538,23 +511,6 @@ function formatTime(dateTimeString, timezone) {
 .employment-status-contractual { background: #dbeafe; color: #1e40af; }
 .employment-status-parttime { background: #ede9fe; color: #5b21b6; }
 .employment-status-default { background: #f1f5f9; color: #475569; }
-.table-footer {
-  background: #f8fafc;
-  padding: 14px 16px;
-  border-top: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.footer-info { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-.total-label { font-size: 13px; font-weight: 600; color: #ef4444; }
-.total-records { font-size: 13px; font-weight: 600; color: #374151; }
-.pagination-controls { display: flex; align-items: center; gap: 12px; }
-.pagination-btn { color: #64748b; padding: 4px; width: 32px; height: 32px; }
-.pagination-btn:hover:not(:disabled) { background: #f1f5f9; }
-.page-info { font-size: 13px; color: #374151; font-weight: 500; }
 .mobile-card {
   border-radius: 12px;
   border: 1px solid #e2e8f0;
@@ -585,8 +541,5 @@ function formatTime(dateTimeString, timezone) {
   .selfie-thumbnail { width: 28px; height: 28px; }
   .employee-avatar { width: 26px !important; height: 26px !important; }
   .source-mini-badge { font-size: 9px; padding: 2px 4px; }
-  .table-footer { flex-direction: column; align-items: stretch; gap: 10px; }
-  .footer-info { justify-content: center; }
-  .pagination-controls { justify-content: center; }
 }
 </style>
