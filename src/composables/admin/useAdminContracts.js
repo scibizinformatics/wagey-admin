@@ -62,6 +62,7 @@ export function useAdminContracts() {
       month: new Date().getMonth() + 1,
       eligibilities: [],
       holiday_pay_types: [],
+      contributions: [],
     }
   }
 
@@ -176,7 +177,7 @@ export function useAdminContracts() {
 
   function parseEligibilities(raw) {
     if (!raw) return []
-    if (Array.isArray(raw)) return raw
+    if (Array.isArray(raw)) return raw.map((item) => item.id ?? item)
     if (typeof raw === 'string') {
       try {
         const parsed = JSON.parse(raw)
@@ -334,6 +335,12 @@ export function useAdminContracts() {
       assignForm.value.month = existing.month ?? new Date().getMonth() + 1
       assignForm.value.eligibilities = parseEligibilities(existing.eligibilities)
       assignForm.value.holiday_pay_types = existing.holiday_pay_types ?? []
+      assignForm.value.contributions = existing.contributions?.map((c) => c.id ?? c) ?? []
+      const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
+        'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+      for (const key of mKeys) {
+        assignForm.value[key] = existing[key] ?? null
+      }
       const matchedId = matchContractTypeByMultipliers(existing)
       if (matchedId) {
         assignForm.value.contract_type_id = matchedId
@@ -344,65 +351,110 @@ export function useAdminContracts() {
   }
 
   async function assignContract() {
-    if (
-      !assignForm.value.employee_id ||
-      !assignForm.value.company_id ||
-      !assignForm.value.contract_type_id ||
-      !assignForm.value.pay_type ||
-      !assignForm.value.rate
-    ) {
+    if (!assignForm.value.employee_id || !assignForm.value.company_id) {
       $q.notify({
         type: 'negative',
-        message: 'Please fill all required fields (Contract Type, Pay Type, Rate, Department)',
+        message: 'Employee and company are required',
         position: 'top',
       })
       return
     }
 
-    const rateNum = parseFloat(assignForm.value.rate)
-    if (isNaN(rateNum) || rateNum < 100) {
-      $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
-      return
-    }
-
-    const hoursNum = assignForm.value.work_hours_per_week
-      ? Number(assignForm.value.work_hours_per_week)
-      : null
-    if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
-      $q.notify({
-        type: 'negative',
-        message: 'Work hours must be between 8 and 48',
-        position: 'top',
-      })
-      return
-    }
-
-    if (!assignForm.value.department) {
-      $q.notify({ type: 'negative', message: 'Department is required', position: 'top' })
-      return
+    if (activeContract.value) {
+      // ── Renew ── all fields optional, only validate if present
+      if (assignForm.value.rate) {
+        const rateNum = parseFloat(assignForm.value.rate)
+        if (isNaN(rateNum) || rateNum < 100) {
+          $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
+          return
+        }
+      }
+      if (assignForm.value.work_hours_per_week) {
+        const hoursNum = Number(assignForm.value.work_hours_per_week)
+        if (hoursNum < 8 || hoursNum > 48) {
+          $q.notify({ type: 'negative', message: 'Work hours must be between 8 and 48', position: 'top' })
+          return
+        }
+      }
+    } else {
+      // ── Create ── strict validation
+      if (
+        !assignForm.value.contract_type_id ||
+        !assignForm.value.pay_type ||
+        !assignForm.value.rate
+      ) {
+        $q.notify({
+          type: 'negative',
+          message: 'Please fill all required fields (Contract Type, Pay Type, Rate, Department)',
+          position: 'top',
+        })
+        return
+      }
+      const rateNum = parseFloat(assignForm.value.rate)
+      if (isNaN(rateNum) || rateNum < 100) {
+        $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
+        return
+      }
+      const hoursNum = assignForm.value.work_hours_per_week
+        ? Number(assignForm.value.work_hours_per_week)
+        : null
+      if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
+        $q.notify({ type: 'negative', message: 'Work hours must be between 8 and 48', position: 'top' })
+        return
+      }
+      if (!assignForm.value.department) {
+        $q.notify({ type: 'negative', message: 'Department is required', position: 'top' })
+        return
+      }
     }
 
     assigning.value = true
     try {
+      const rateNum = assignForm.value.rate ? parseFloat(assignForm.value.rate) : null
+      const hoursNum = assignForm.value.work_hours_per_week
+        ? Number(assignForm.value.work_hours_per_week)
+        : null
+
       const payload = {
         employee_id: assignForm.value.employee_id,
         company_id: assignForm.value.company_id || companyId.value,
-        contract_type_id: assignForm.value.contract_type_id,
-        pay_type: assignForm.value.pay_type,
-        payment_method: assignForm.value.payment_method || 'bank_transfer',
-        rate: String(rateNum),
-        work_hours_per_week: hoursNum,
-        position: assignForm.value.position ? Number(assignForm.value.position) : null,
-        department: Number(assignForm.value.department),
         year: assignForm.value.year ? Number(assignForm.value.year) : null,
         month: assignForm.value.month ? Number(assignForm.value.month) : null,
-        eligibilities: assignForm.value.eligibilities ?? [],
-        holiday_pay_types: assignForm.value.holiday_pay_types ?? [],
       }
 
-      // Remove null/undefined optional fields
-      if (!payload.work_hours_per_week) delete payload.work_hours_per_week
-      if (!payload.position) delete payload.position
+      if (activeContract.value) {
+        // ── Renew payload ──
+        if (assignForm.value.contract_type_id) payload.contract_type_id = assignForm.value.contract_type_id
+        if (assignForm.value.pay_type) payload.pay_type = assignForm.value.pay_type
+        if (assignForm.value.payment_method) payload.payment_method = assignForm.value.payment_method
+        if (rateNum) payload.rate = String(rateNum)
+        if (hoursNum) payload.work_hours_per_week = hoursNum
+        if (assignForm.value.position) payload.position = Number(assignForm.value.position)
+        if (assignForm.value.department) payload.department = Number(assignForm.value.department)
+        payload.eligibilities = assignForm.value.eligibilities ?? []
+        payload.holiday_pay_types = assignForm.value.holiday_pay_types ?? []
+        if (assignForm.value.contributions?.length) payload.contributions = assignForm.value.contributions.map((c) => c.id ?? c)
+
+        const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
+          'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+        for (const key of mKeys) {
+          if (activeContract.value[key]) payload[key] = String(activeContract.value[key])
+        }
+      } else {
+        // ── Create payload ──
+        payload.contract_type_id = assignForm.value.contract_type_id
+        payload.pay_type = assignForm.value.pay_type
+        payload.payment_method = assignForm.value.payment_method || 'bank_transfer'
+        payload.rate = String(rateNum)
+        if (hoursNum) payload.work_hours_per_week = hoursNum
+        if (assignForm.value.position) payload.position = Number(assignForm.value.position)
+        payload.department = Number(assignForm.value.department)
+        payload.eligibilities = assignForm.value.eligibilities ?? []
+        payload.holiday_pay_types = assignForm.value.holiday_pay_types ?? []
+
+        if (!payload.work_hours_per_week) delete payload.work_hours_per_week
+        if (!payload.position) delete payload.position
+      }
 
       console.log('Payload to send:', payload)
 
