@@ -7,8 +7,8 @@
             <q-icon name="assignment" size="22px" />
           </q-avatar>
           <div>
-            <div class="modal-title">Assign Contract</div>
-            <div class="modal-subtitle">Fill in the employment contract details</div>
+            <div class="modal-title">{{ isRenewing ? 'Renew Contract' : 'Assign Contract' }}</div>
+            <div class="modal-subtitle">{{ isRenewing ? 'Update the existing employment contract' : 'Fill in the employment contract details' }}</div>
           </div>
         </div>
         <q-btn icon="close" flat round dense class="modal-close-btn" @click="$emit('update:modelValue', false)" />
@@ -19,7 +19,7 @@
           <div class="section-title">Contract Details</div>
           <div class="form-grid">
             <!-- Contract Type -->
-            <q-select
+            <q-select v-if="!isRenewing"
               :model-value="form.contract_type_id"
               @update:model-value="$emit('contractTypeChange', $event)"
               :options="contractTypeOptions"
@@ -33,19 +33,18 @@
               class="col-span-2"
             />
 
-            <!-- Row 2: Pay Type | Payment Method -->
-            <q-select
-              :model-value="form.pay_type"
-              @update:model-value="$emit('update:field', { field: 'pay_type', value: $event })"
-              :options="[{ label: 'Monthly', value: 'monthly' }, { label: 'Daily', value: 'daily' }]"
-              label="Pay Type *"
+            <!-- Row 2: Pay Type -->
+            <q-input
+              v-if="selectedContractType?.pay_type"
+              :model-value="payTypeLabel"
+              label="Pay Type"
               outlined
               dense
-              emit-value
-              map-options
-              :disable="payTypeAutoFilled"
+              readonly
+              class="col-span-2"
             />
 
+            <!-- Row 3: Payment Method | Work Hours Per Week -->
             <q-select
               :model-value="form.payment_method"
               @update:model-value="$emit('update:field', { field: 'payment_method', value: $event })"
@@ -55,20 +54,19 @@
               dense
               emit-value
               map-options
+              :class="{ 'col-span-2': !selectedContractType?.pay_type }"
             />
 
-            <!-- Row 3: Work Hours / Month -->
             <q-input
+              v-if="selectedContractType?.pay_type"
               :model-value="form.work_hours_per_week"
               @update:model-value="$emit('update:field', { field: 'work_hours_per_week', value: $event })"
-              label="Work Hours / Month"
+              label="Work Hours Per Week"
               type="number"
               outlined
               dense
-              :readonly="form.pay_type === 'daily'"
-              :hint="form.pay_type === 'daily' ? 'Fixed at 8 hrs/day' : 'Editable — default 208 hrs/month'"
-              :bg-color="form.pay_type === 'daily' ? 'grey-2' : undefined"
-              class="col-span-2"
+              :hint="'Min 8, max 48 hours per week'"
+              :rules="[(val) => !val || (val >= 8 && val <= 48) || 'Must be between 8 and 48 hours']"
             />
 
             <!-- Row 3: Rate -->
@@ -81,13 +79,14 @@
                 outlined
                 dense
                 prefix="₱"
-                :rules="[(val) => !val || val >= 500 || 'Minimum rate is ₱500']"
-                :hint="form.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate (min ₱500)'"
+                @wheel.prevent
+                :rules="[(val) => !val || val >= 100 || 'Minimum rate is ₱100']"
+                :hint="form.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate (min ₱100)'"
               />
-              <div v-if="form.pay_type === 'monthly' && form.rate >= 500 && form.work_hours_per_week > 0" class="daily-rate-preview">
+              <div v-if="form.pay_type === 'monthly' && form.rate >= 100 && form.work_hours_per_week > 0" class="daily-rate-preview">
                 <span class="daily-rate-label">Equivalent Daily Rate</span>
                 <span class="daily-rate-value">₱{{ dailyRate }}</span>
-                <span class="daily-rate-formula">based on {{ form.work_hours_per_week }} hrs/month</span>
+                <span class="daily-rate-formula">based on {{ form.work_hours_per_week }} hrs/week</span>
               </div>
             </div>
 
@@ -120,23 +119,27 @@
               clearable
             />
 
-            <!-- Row 5: Start Date | End Date -->
-            <q-input
-              :model-value="form.start_date"
-              @update:model-value="$emit('update:field', { field: 'start_date', value: $event })"
-              label="Start Date *"
-              type="date"
+            <!-- Row: Year | Month -->
+            <q-select
+              :model-value="form.year"
+              @update:model-value="$emit('update:field', { field: 'year', value: $event })"
+              :options="yearOptions"
+              label="Year *"
               outlined
               dense
+              emit-value
+              map-options
             />
 
-            <q-input
-              :model-value="form.end_date"
-              @update:model-value="$emit('update:field', { field: 'end_date', value: $event })"
-              label="End Date"
-              type="date"
+            <q-select
+              :model-value="form.month"
+              @update:model-value="$emit('update:field', { field: 'month', value: $event })"
+              :options="monthOptions"
+              label="Month *"
               outlined
               dense
+              emit-value
+              map-options
             />
 
             <!-- Eligibilities -->
@@ -154,7 +157,7 @@
 
         <div class="form-actions">
           <q-btn flat label="Cancel" class="cancel-btn" @click="$emit('update:modelValue', false)" />
-          <q-btn unelevated label="Assign Contract" class="submit-btn" :loading="assigning" @click="$emit('submit')" />
+          <q-btn unelevated :label="isRenewing ? 'Renew Contract' : 'Assign Contract'" class="submit-btn" :loading="assigning" @click="$emit('submit')" />
         </div>
       </q-card-section>
     </q-card>
@@ -168,11 +171,20 @@ const props = defineProps({
   modelValue: { type: Boolean, default: false },
   form: { type: Object, required: true },
   assigning: { type: Boolean, default: false },
-  payTypeAutoFilled: { type: Boolean, default: false },
   contractTypeOptions: { type: Array, default: () => [] },
   positions: { type: Array, default: () => [] },
   departments: { type: Array, default: () => [] },
   eligibilityObjects: { type: Array, default: () => [] },
+  isRenewing: { type: Boolean, default: false },
+})
+
+const selectedContractType = computed(() =>
+  props.contractTypeOptions.find((ct) => ct.id === props.form.contract_type_id),
+)
+
+const payTypeLabel = computed(() => {
+  if (!selectedContractType.value?.pay_type) return ''
+  return selectedContractType.value.pay_type === 'monthly' ? 'Monthly' : 'Daily'
 })
 
 
@@ -183,11 +195,33 @@ const paymentMethodOptions = [
   { label: 'Paytaca', value: 'paytaca' },
 ]
 
+const currentYear = new Date().getFullYear()
+const yearOptions = Array.from({ length: 2100 - currentYear + 1 }, (_, i) => ({
+  label: String(currentYear + i),
+  value: currentYear + i,
+}))
+
+const monthOptions = [
+  { label: 'January', value: 1 },
+  { label: 'February', value: 2 },
+  { label: 'March', value: 3 },
+  { label: 'April', value: 4 },
+  { label: 'May', value: 5 },
+  { label: 'June', value: 6 },
+  { label: 'July', value: 7 },
+  { label: 'August', value: 8 },
+  { label: 'September', value: 9 },
+  { label: 'October', value: 10 },
+  { label: 'November', value: 11 },
+  { label: 'December', value: 12 },
+]
+
 const dailyRate = computed(() => {
   const monthly = parseFloat(props.form.rate) || 0
-  const hours = parseFloat(props.form.work_hours_per_week) || 208
-  if (monthly <= 0 || hours <= 0) return '0.00'
-  const daily = (monthly / hours) * 8
+  const weeklyHours = parseFloat(props.form.work_hours_per_week) || 48
+  if (monthly <= 0 || weeklyHours <= 0) return '0.00'
+  const monthlyHours = weeklyHours * (52 / 12)
+  const daily = (monthly / monthlyHours) * 8
   return daily.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 })
 
@@ -544,5 +578,16 @@ const dailyRate = computed(() => {
     gap: 6px;
     align-items: flex-start;
   }
+}
+
+/* Hide number input spinners */
+.modal-content :deep(input[type=number])::-webkit-outer-spin-button,
+.modal-content :deep(input[type=number])::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.modal-content :deep(input[type=number]) {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 </style>
