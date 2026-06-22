@@ -30,6 +30,8 @@
             </q-th>
             <q-th key="name" :props="props" class="table-header-cell">Employee</q-th>
             <q-th key="role" :props="props" class="table-header-cell">Role</q-th>
+            <q-th key="position" :props="props" class="table-header-cell">Position</q-th>
+            <q-th key="department" :props="props" class="table-header-cell">Department</q-th>
             <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
             <q-th key="contract" :props="props" class="table-header-cell">Contract</q-th>
             <q-th key="actions" :props="props" class="table-header-cell table-header-actions"
@@ -77,6 +79,14 @@
 
             <q-td key="role" :props="props" class="table-body-cell">
               <span class="role-chip">{{ getRole(props.row) }}</span>
+            </q-td>
+
+            <q-td key="position" :props="props" class="table-body-cell">
+              <span class="position-text">{{ getPosition(props.row) }}</span>
+            </q-td>
+
+            <q-td key="department" :props="props" class="table-body-cell">
+              <span class="department-text">{{ getDepartment(props.row) }}</span>
             </q-td>
 
             <q-td key="status" :props="props" class="table-body-cell">
@@ -173,6 +183,8 @@ const props = defineProps({
   contracts: { type: Object, default: () => ({}) },
   companyId: { type: [Number, String], default: null },
   selected: { type: Array, default: () => [] },
+  positions: { type: Array, default: () => [] },
+  departments: { type: Array, default: () => [] },
 })
 
 /* ─── Helper Functions ─────────────────────────────────────────────────────── */
@@ -245,6 +257,40 @@ const getStatusClass = (employee) => {
   return 'status-default'
 }
 
+const getEmployeeContract = (employee) => {
+  if (!employee || !props.companyId) return null
+  const companyContracts = props.contracts[props.companyId]
+  if (!companyContracts) return null
+  const contract = companyContracts[employee.id]
+  if (!contract) return null
+  if (Array.isArray(contract) && contract.length > 0) return contract[0]
+  if (contract?.pay_type) return contract
+  if (contract?.contract) return contract.contract
+  return null
+}
+
+const getPosition = (employee) => {
+  const contract = getEmployeeContract(employee)
+  if (!contract) return 'N/A'
+  if (contract.position_name) return contract.position_name
+  if (contract.position) {
+    const pos = props.positions.find((p) => Number(p.id) === Number(contract.position))
+    if (pos) return pos.name
+  }
+  return 'N/A'
+}
+
+const getDepartment = (employee) => {
+  const contract = getEmployeeContract(employee)
+  if (!contract) return 'N/A'
+  if (contract.department_name) return contract.department_name
+  if (contract.department) {
+    const dept = props.departments.find((d) => Number(d.id) === Number(contract.department))
+    if (dept) return dept.name
+  }
+  return 'N/A'
+}
+
 const getInitials = (name) =>
   name && name !== 'N/A'
     ? name
@@ -263,6 +309,8 @@ const handleImageError = (event) => {
 const columns = [
   { name: 'name', label: 'Employee', field: (row) => getFullName(row), align: 'left' },
   { name: 'role', label: 'Role', field: (row) => getRole(row), align: 'left' },
+  { name: 'position', label: 'Position', field: (row) => getPosition(row), align: 'left' },
+  { name: 'department', label: 'Department', field: (row) => getDepartment(row), align: 'left' },
   { name: 'status', label: 'Status', field: (row) => getStatus(row), align: 'left' },
   { name: 'contract', label: 'Contract', field: (row) => getContract(row), align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
