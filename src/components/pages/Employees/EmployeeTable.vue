@@ -143,7 +143,11 @@
                       <q-item-section avatar
                         ><q-icon name="assignment" size="16px"
                       /></q-item-section>
-                      <q-item-section>{{ getContract(props.row) !== 'No Contract' ? 'Renew Contract' : 'Assign Contract' }}</q-item-section>
+                      <q-item-section>{{
+                        getContract(props.row) !== 'No Contract'
+                          ? 'Renew Contract'
+                          : 'Assign Contract'
+                      }}</q-item-section>
                     </q-item>
                     <q-separator v-if="getStatus(props.row) !== 'Terminated'" />
                     <q-item
@@ -320,25 +324,24 @@ const columns = [
 <style scoped>
 .table-section {
   background: #ffffff;
-  border-radius: 0;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
 }
 
 .table-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 14px 24px;
   flex-wrap: wrap;
   gap: 10px;
 }
 
 .table-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: #475569;
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .table-actions {
@@ -357,7 +360,20 @@ const columns = [
   min-width: 700px;
 }
 
-/* Table header */
+.loan-table,
+.loan-table :deep(.q-table__container),
+.loan-table :deep(.q-table__card),
+.loan-table.q-table__container,
+.loan-table :deep(.q-table__bottom-border),
+.loan-table :deep(.q-table__top),
+.loan-table :deep(.q-table__bottom),
+.loan-table :deep(.q-table) {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* ── Table header ── */
 .table-header-row {
   background: #f8fafc;
 }
@@ -365,24 +381,24 @@ const columns = [
 .table-header-cell {
   font-size: 11px !important;
   font-weight: 600 !important;
-  color: #6b7280 !important;
+  color: #94a3b8 !important;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 11px 16px !important;
-  border-bottom: 1px solid #e8ecf0 !important;
+  letter-spacing: 0.06em;
+  padding: 8px 14px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
 }
 
 .table-header-actions {
   text-align: center !important;
 }
 
-/* Table body */
+/* ── Table body ── */
 .table-body-row {
-  transition: background 0.15s ease;
+  transition: background 0.12s ease;
 }
 
 .table-body-row:hover .table-body-cell {
-  background: #f9fafb;
+  background: #f8fafc;
 }
 
 .table-body-row:last-child .table-body-cell {
@@ -391,13 +407,13 @@ const columns = [
 
 .table-body-cell {
   font-size: 13px;
-  color: #374151;
-  padding: 12px 16px !important;
+  color: #334155;
+  padding: 9px 14px !important;
   border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle;
 }
 
-/* Employee info cell */
+/* ── Employee cell ── */
 .employee-name-cell {
   min-width: 200px;
 }
@@ -411,13 +427,13 @@ const columns = [
 .employee-name-block {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 
 .employee-name {
-  font-weight: 600;
-  color: #111827;
+  font-weight: 500;
+  color: #0f172a;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -426,7 +442,7 @@ const columns = [
 
 .email-link {
   font-size: 11px;
-  color: #6b7280;
+  color: #94a3b8;
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
@@ -434,18 +450,18 @@ const columns = [
 }
 
 .email-link:hover {
-  color: #3b82f6;
+  color: #6366f1;
   text-decoration: underline;
 }
 
-/* Avatar fallback */
+/* ── Avatar ── */
 .avatar-fallback {
-  background: #e0e7ff !important;
+  background: #eef2ff !important;
   color: #4338ca !important;
   font-weight: 600 !important;
-  min-width: 34px !important;
-  width: 34px !important;
-  height: 34px !important;
+  min-width: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
   border-radius: 50% !important;
   display: flex !important;
   align-items: center !important;
@@ -454,8 +470,9 @@ const columns = [
 }
 
 .avatar-fallback :deep(.q-avatar__content) {
-  font-size: 12px !important;
+  font-size: 11px !important;
   line-height: 1 !important;
+  font-weight: 600 !important;
 }
 
 .clickable-avatar {
@@ -467,117 +484,128 @@ const columns = [
   transform: scale(1.08);
 }
 
-/* Role chip */
+/* ── Role chip ── */
 .role-chip {
   display: inline-block;
-  padding: 3px 9px;
-  border-radius: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
   font-size: 11px;
   font-weight: 500;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #e5e7eb;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
   white-space: nowrap;
 }
 
-/* Status badge */
+/* ── Position / department text ── */
+.position-text,
+.department-text {
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* ── Status badge ── */
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
   border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .status-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .status-active {
-  background: #f0fdf4;
-  color: #16a34a;
+  background: #d1fae5;
+  color: #065f46;
 }
 
 .status-active .status-dot {
-  background: #22c55e;
+  background: #10b981;
 }
 
 .status-terminated {
-  background: #fef2f2;
-  color: #dc2626;
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .status-terminated .status-dot {
-  background: #ef4444;
+  background: #f87171;
 }
 
 .status-default {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 .status-default .status-dot {
-  background: #9ca3af;
+  background: #94a3b8;
 }
 
-/* Contract badge */
+/* ── Contract badge ── */
 .contract-badge {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
+  text-transform: capitalize;
 }
 
 .contract-active {
-  background: #eff6ff;
-  color: #2563eb;
+  background: #eef2ff;
+  color: #3730a3;
 }
 
 .contract-none {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: #f8fafc;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+  font-weight: 500;
 }
 
-/* Action menu */
+/* ── Actions ── */
 .actions-cell {
   text-align: center !important;
-  width: 80px;
+  width: 60px;
 }
 
 .action-menu-btn {
-  color: #6b7280 !important;
-  border-radius: 6px !important;
+  color: #94a3b8 !important;
+  border-radius: 8px !important;
 }
 
 .action-menu-btn:hover {
-  background: #f3f4f6 !important;
-  color: #374151 !important;
+  background: #f1f5f9 !important;
+  color: #334155 !important;
 }
 
 .action-dropdown {
-  border-radius: 8px !important;
-  border: 1px solid #e5e7eb !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+  border-radius: 10px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08) !important;
 }
 
 .dropdown-item {
   font-size: 13px !important;
-  color: #374151 !important;
+  color: #334155 !important;
   min-height: 36px !important;
   padding: 0 12px !important;
+  border-radius: 6px !important;
 }
 
 .dropdown-item:hover {
-  background: #f9fafb !important;
+  background: #f8fafc !important;
 }
 
 .dropdown-item-danger {
@@ -596,33 +624,58 @@ const columns = [
   background: #f0fdf4 !important;
 }
 
-/* Empty state */
+/* ── Empty state ── */
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 56px 20px;
+  padding: 60px 20px;
   text-align: center;
 }
 
 .empty-state-icon {
-  color: #d1d5db;
-  margin-bottom: 12px;
+  color: #cbd5e1;
+  margin-bottom: 14px;
 }
 
 .empty-state-title {
   font-size: 15px;
-  font-weight: 600;
-  color: #374151;
+  font-weight: 500;
+  color: #334155;
   margin-bottom: 6px;
 }
 
 .empty-state-sub {
   font-size: 13px;
-  color: #9ca3af;
+  color: #94a3b8;
   margin-bottom: 16px;
+}
+
+@media (max-width: 1440px) {
+  .loan-table {
+    min-width: 680px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .modern-table-container {
+    overflow-x: auto;
+  }
+
+  .loan-table {
+    min-width: 640px;
+  }
+
+  .table-header-cell,
+  .table-body-cell {
+    padding: 8px 12px !important;
+  }
+
+  .employee-name-cell {
+    min-width: 170px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -644,7 +697,7 @@ const columns = [
 @media (max-width: 480px) {
   .table-header-cell,
   .table-body-cell {
-    padding: 10px 10px !important;
+    padding: 10px 12px !important;
     font-size: 12px;
   }
 }
