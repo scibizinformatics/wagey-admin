@@ -8,7 +8,13 @@
           </q-avatar>
           <div>
             <div class="modal-title">{{ isRenewing ? 'Renew Contract' : 'Assign Contract' }}</div>
-            <div class="modal-subtitle">{{ isRenewing ? 'Update the existing employment contract' : 'Fill in the employment contract details' }}</div>
+            <div v-if="isRenewing && employeeName" class="modal-subtitle">
+              Renewing contract
+              <q-chip dense outline size="12px" icon="person" class="employee-chip">
+                {{ employeeName }}
+              </q-chip>
+            </div>
+            <div v-else class="modal-subtitle">Fill in the employment contract details</div>
           </div>
         </div>
         <q-btn icon="close" flat round dense class="modal-close-btn" @click="$emit('update:modelValue', false)" />
@@ -259,10 +265,13 @@
 <script setup>
 import { computed } from 'vue'
 
+const emit = defineEmits(['update:modelValue', 'update:field', 'contractTypeChange', 'submit'])
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   form: { type: Object, required: true },
   assigning: { type: Boolean, default: false },
+  employee: { type: Object, default: null },
   contractTypeOptions: { type: Array, default: () => [] },
   positions: { type: Array, default: () => [] },
   departments: { type: Array, default: () => [] },
@@ -310,6 +319,15 @@ const monthOptions = [
   { label: 'December', value: 12 },
 ]
 
+const employeeName = computed(() => {
+  if (!props.employee) return ''
+  return (
+    `${props.employee.user?.first_name || ''} ${props.employee.user?.last_name || ''}`.trim() ||
+    props.employee.user?.username ||
+    'N/A'
+  )
+})
+
 const dailyRate = computed(() => {
   const monthly = parseFloat(props.form.rate) || 0
   const weeklyHours = parseFloat(props.form.work_hours_per_week) || 48
@@ -341,13 +359,13 @@ const otherEligibilityOptions = computed(() =>
 function toggleEligibility(id, checked) {
   const current = [...props.form.eligibilities]
   const value = checked ? [...current, id] : current.filter((e) => e !== id)
-  props.$emit('update:field', { field: 'eligibilities', value })
+  emit('update:field', { field: 'eligibilities', value })
 }
 
 function toggleContribution(id, checked) {
   const current = [...(props.form.contributions || [])]
   const value = checked ? [...current, id] : current.filter((c) => c !== id)
-  props.$emit('update:field', { field: 'contributions', value })
+  emit('update:field', { field: 'contributions', value })
 }
 
 const multiplierFields = [
@@ -456,6 +474,13 @@ const visibleMultiplierFields = computed(() =>
 .modal-content::-webkit-scrollbar-thumb {
   background: #e2e8f0;
   border-radius: 4px;
+}
+
+.employee-chip {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #1e3a5f !important;
+  font-weight: 600;
+  margin-left: 4px;
 }
 
 .modal-content :deep(.q-field__control) {
