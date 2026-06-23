@@ -1,47 +1,45 @@
 <template>
-  <div class="stats-section">
-    <div class="stats-card total-card">
-      <div class="stats-icon-wrapper">
-        <q-icon name="people" class="stats-icon" />
+  <div class="stats-bar">
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-total"></span>
+        Total Records
       </div>
-      <div class="stats-content">
-        <q-skeleton v-if="loading" type="text" class="text-h5" />
-        <div v-else class="stats-amount">{{ stats.total }}</div>
-        <div class="stats-label">Total Records</div>
-      </div>
+      <q-skeleton v-if="loading" type="text" width="40px" class="stats-segment-value" />
+      <div v-else class="stats-segment-value">{{ stats.total }}</div>
     </div>
 
-    <div class="stats-card pending-card">
-      <div class="stats-icon-wrapper">
-        <q-icon name="phone_android" class="stats-icon" />
+    <div class="stats-divider"></div>
+
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-app"></span>
+        App
       </div>
-      <div class="stats-content">
-        <q-skeleton v-if="loading" type="text" class="text-h5" />
-        <div v-else class="stats-amount">{{ stats.app }}</div>
-        <div class="stats-label">App</div>
-      </div>
+      <q-skeleton v-if="loading" type="text" width="40px" class="stats-segment-value" />
+      <div v-else class="stats-segment-value">{{ stats.app }}</div>
     </div>
 
-    <div class="stats-card approved-card">
-      <div class="stats-icon-wrapper">
-        <q-icon name="computer" class="stats-icon" />
+    <div class="stats-divider"></div>
+
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-terminal"></span>
+        Terminal
       </div>
-      <div class="stats-content">
-        <q-skeleton v-if="loading" type="text" class="text-h5" />
-        <div v-else class="stats-amount">{{ stats.terminal }}</div>
-        <div class="stats-label">Terminal</div>
-      </div>
+      <q-skeleton v-if="loading" type="text" width="40px" class="stats-segment-value" />
+      <div v-else class="stats-segment-value">{{ stats.terminal }}</div>
     </div>
 
-    <div class="stats-card scheduled-card">
-      <div class="stats-icon-wrapper">
-        <q-icon name="schedule" class="stats-icon" />
+    <div class="stats-divider"></div>
+
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-system"></span>
+        System
       </div>
-      <div class="stats-content">
-        <q-skeleton v-if="loading" type="text" class="text-h5" />
-        <div v-else class="stats-amount">{{ stats.system }}</div>
-        <div class="stats-label">System</div>
-      </div>
+      <q-skeleton v-if="loading" type="text" width="40px" class="stats-segment-value" />
+      <div v-else class="stats-segment-value">{{ stats.system }}</div>
     </div>
   </div>
 </template>
@@ -58,148 +56,104 @@ defineProps({
       terminal: 0,
     }),
   },
-});
+})
 </script>
 
 <style scoped>
-.stats-section {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.stats-card {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 16px 18px;
-  border: 1px solid #e8ecf0;
+.stats-bar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-width: 0;
-  transition: box-shadow 0.2s ease;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f3f5;
+  padding: 10px 24px;
+  gap: 0;
 }
 
-.stats-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
-}
-
-.stats-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+.stats-segment {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+}
+
+.stats-divider {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 20px;
   flex-shrink: 0;
 }
 
-.stats-icon {
-  font-size: 20px;
-}
-
-.stats-content {
-  min-width: 0;
-}
-
-.stats-label {
+.stats-segment-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 2px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: #94a3b8;
+  white-space: nowrap;
 }
 
-.stats-amount {
-  font-size: 28px;
-  font-weight: 700;
-  color: #111827;
-  line-height: 1.1;
+.stats-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-/* Stat card color variants */
-.total-card .stats-icon-wrapper,
-.personal-card .stats-icon-wrapper {
-  background: #eff6ff;
-  color: #3b82f6;
+.stats-dot-total {
+  background: #6366f1;
+}
+.stats-dot-app {
+  background: #ca8a04;
+}
+.stats-dot-terminal {
+  background: #22c55e;
+}
+.stats-dot-system {
+  background: #8b5cf6;
 }
 
-.pending-card .stats-icon-wrapper {
-  background: #fefce8;
-  color: #ca8a04;
+.stats-segment-value {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
 }
 
-.approved-card .stats-icon-wrapper,
-.active-card .stats-icon-wrapper,
-.business-card .stats-icon-wrapper {
-  background: #f0fdf4;
-  color: #22c55e;
-}
-
-.scheduled-card .stats-icon-wrapper,
-.custom-card .stats-icon-wrapper {
-  background: #f5f3ff;
-  color: #8b5cf6;
+@media (max-width: 1440px) {
+  .stats-bar {
+    padding: 10px 20px;
+  }
+  .stats-divider {
+    margin: 0 16px;
+  }
 }
 
 @media (max-width: 1024px) {
-  .stats-section {
-    grid-template-columns: repeat(2, 1fr);
+  .stats-bar {
+    padding: 10px 16px;
+    flex-wrap: wrap;
     gap: 10px;
   }
-  .stats-card {
-    padding: 14px 16px;
+  .stats-divider {
+    margin: 0 12px;
   }
-  .stats-amount {
-    font-size: 24px;
+  .stats-segment-value {
+    font-size: 14px;
   }
 }
 
 @media (max-width: 768px) {
-  .stats-section {
-    grid-template-columns: repeat(2, 1fr);
+  .stats-bar {
+    flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 12px;
+    padding: 10px 16px;
   }
-  .stats-card {
-    padding: 12px 14px;
-    gap: 10px;
-  }
-  .stats-icon-wrapper {
-    width: 38px;
-    height: 38px;
-  }
-  .stats-icon {
-    font-size: 18px;
-  }
-  .stats-amount {
-    font-size: 22px;
-  }
-}
-
-@media (max-width: 480px) {
-  .stats-section {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
-  .stats-card {
-    padding: 10px 12px;
-    gap: 8px;
-  }
-  .stats-icon-wrapper {
-    width: 32px;
-    height: 32px;
-  }
-  .stats-icon {
-    font-size: 16px;
-  }
-  .stats-amount {
-    font-size: 20px;
-  }
-  .stats-label {
-    font-size: 11px;
+  .stats-divider {
+    display: none;
   }
 }
 </style>
