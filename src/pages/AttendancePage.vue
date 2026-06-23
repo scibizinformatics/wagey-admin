@@ -1,19 +1,13 @@
 <template>
   <PageShell>
+    <div class="attendance-card">
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
-          <h1 class="page-title">Attendance</h1>
+          <div class="header-titles">
+            <h1 class="page-title">Attendance</h1>
+          </div>
           <div class="header-actions">
-            <q-btn
-              unelevated
-              color="primary"
-              icon="add"
-              label="Add Attendance"
-              class="add-attendance-btn"
-              no-caps
-              @click="openAddDialog"
-            />
             <q-input
               v-model="employeeSearch"
               placeholder="Search by employee name..."
@@ -26,6 +20,14 @@
                 <q-icon name="search" class="search-icon" />
               </template>
             </q-input>
+            <q-btn
+              unelevated
+              icon="add"
+              label="Add Attendance"
+              class="add-employee-btn header-add-btn"
+              no-caps
+              @click="openAddDialog"
+            />
           </div>
         </div>
       </div>
@@ -35,53 +37,76 @@
 
       <!-- Filters Section -->
       <div class="filters-section">
-        <div class="filters-card">
-          <div class="filters-header">
-            <h3 class="filters-title">Filter Records</h3>
-            <div class="filters-header-actions">
-              <div class="date-nav-wrapper">
-                <q-btn flat round dense icon="chevron_left" class="date-nav-btn" @click="goToPreviousDay" />
-                <q-input
-                  dense
-                  outlined
-                  v-model="currentDate"
-                  type="date"
-                  class="filter-input date-nav-input"
-                  @update:model-value="onDateNavChange"
-                >
-                  <template v-slot:prepend>
-                    <q-icon name="event" />
-                  </template>
-                </q-input>
-                <q-btn flat round dense icon="chevron_right" class="date-nav-btn" @click="goToNextDay" :disable="currentDate >= today" />
-              </div>
-              <q-btn flat dense icon="clear_all" label="Clear All" @click="clearAllFilters" class="clear-btn" size="sm" />
+        <div class="filters-header">
+          <h3 class="filters-title">Filter Records</h3>
+          <div class="filters-header-actions">
+            <div class="date-nav-wrapper">
+              <q-btn
+                flat
+                round
+                dense
+                icon="chevron_left"
+                class="date-nav-btn"
+                @click="goToPreviousDay"
+              />
+              <q-input
+                dense
+                outlined
+                v-model="currentDate"
+                type="date"
+                class="filter-input date-nav-input"
+                @update:model-value="onDateNavChange"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="event" />
+                </template>
+              </q-input>
+              <q-btn
+                flat
+                round
+                dense
+                icon="chevron_right"
+                class="date-nav-btn"
+                @click="goToNextDay"
+                :disable="currentDate >= today"
+              />
             </div>
+            <q-btn
+              flat
+              dense
+              icon="clear_all"
+              label="Clear All"
+              @click="clearAllFilters"
+              class="clear-btn"
+              size="sm"
+            />
           </div>
         </div>
       </div>
 
       <!-- Main Table Section -->
-      <AttendanceTable
-        :rows="filteredAttendanceRows"
-        :loading="loading"
-        :cost-center-filter="filters.cost_center"
-        @update:cost-center-filter="(val) => (filters.cost_center = val)"
-        :cost-center-options="costCenterOptions"
-        :options-loading="filtersLoading"
-        :employees="employees"
-        @refresh="fetchAttendanceData()"
-        @view-selfie="viewSelfie"
-        @view-photo="viewEmployeePhoto"
-        @edit-time="openInlineEdit"
-        @edit-cost-center="openCostCenterInlineEdit"
-      />
+      <div class="table-block">
+        <AttendanceTable
+          :rows="filteredAttendanceRows"
+          :loading="loading"
+          :cost-center-filter="filters.cost_center"
+          @update:cost-center-filter="(val) => (filters.cost_center = val)"
+          :cost-center-options="costCenterOptions"
+          :options-loading="filtersLoading"
+          :employees="employees"
+          @refresh="fetchAttendanceData()"
+          @view-selfie="viewSelfie"
+          @view-photo="viewEmployeePhoto"
+          @edit-time="openInlineEdit"
+          @edit-cost-center="openCostCenterInlineEdit"
+        />
+      </div>
 
       <!-- Pagination Controls -->
       <div class="pagination-bar" v-if="pagination.rowsNumber > 0">
         <div class="pagination-info">
           <span class="pagination-text">
-            Showing {{ ((pagination.page - 1) * pagination.rowsPerPage) + 1 }} –
+            Showing {{ (pagination.page - 1) * pagination.rowsPerPage + 1 }} –
             {{ Math.min(pagination.page * pagination.rowsPerPage, pagination.rowsNumber) }}
             of {{ pagination.rowsNumber }} records
           </span>
@@ -115,7 +140,7 @@
           @update:model-value="onPageChange"
         />
       </div>
-
+    </div>
     <!-- Date Range Picker Dialog -->
     <AttendanceDateRangePicker
       v-model="showDatePicker"
@@ -124,7 +149,11 @@
     />
 
     <!-- Selfie Viewer Dialog -->
-    <AttendanceSelfieViewer v-model="showSelfieDialog" :image-url="selectedSelfie" :title="selfieDialogTitle" />
+    <AttendanceSelfieViewer
+      v-model="showSelfieDialog"
+      :image-url="selectedSelfie"
+      :title="selfieDialogTitle"
+    />
 
     <!-- Add Attendance Dialog -->
     <AttendanceAddDialog
@@ -143,7 +172,10 @@
     />
 
     <!-- Employee Photo Viewer Dialog -->
-    <AttendanceEmployeePhotoViewer v-model="showEmployeePhotoDialog" :image-url="selectedEmployeePhoto" />
+    <AttendanceEmployeePhotoViewer
+      v-model="showEmployeePhotoDialog"
+      :image-url="selectedEmployeePhoto"
+    />
 
     <!-- Inline Time Edit Dialog -->
     <AttendanceInlineEditDialog
@@ -325,7 +357,7 @@ function getTimezoneForEmployee(employee) {
     employeeTimezoneCache[empId] = employee.timezone
     return employee.timezone
   }
-  const found = employees.value.find(e => e.uuid === empId || e.id === empId)
+  const found = employees.value.find((e) => e.uuid === empId || e.id === empId)
   if (found?.timezone) {
     employeeTimezoneCache[empId] = found.timezone
     return found.timezone
@@ -343,7 +375,7 @@ function triggerTimezoneFetch(data) {
       employeeTimezoneCache[empId] = row.employee.timezone
       continue
     }
-    const found = employees.value.find(e => e.uuid === empId || e.id === empId)
+    const found = employees.value.find((e) => e.uuid === empId || e.id === empId)
     if (found?.timezone) {
       employeeTimezoneCache[empId] = found.timezone
       continue
@@ -363,7 +395,9 @@ async function lazyFetchTimezone(empId) {
     if (detail?.timezone) {
       employeeTimezoneCache[empId] = detail.timezone
     }
-  } catch { /* timezone fetch failed, will use browser timezone */ }
+  } catch {
+    /* timezone fetch failed, will use browser timezone */
+  }
 }
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
@@ -380,9 +414,7 @@ const filteredAttendanceRows = computed(() => {
   let data = attendanceData.value
   if (employeeSearch.value && employeeSearch.value.trim()) {
     const term = employeeSearch.value.trim().toLowerCase()
-    data = data.filter((row) =>
-      getEmployeeName(row.employee).toLowerCase().includes(term),
-    )
+    data = data.filter((row) => getEmployeeName(row.employee).toLowerCase().includes(term))
   }
   return data.map((row) => ({
     ...row,
@@ -649,7 +681,14 @@ function openInlineEdit(row, field) {
 
 function closeInlineEdit() {
   showInlineEditDialog.value = false
-  inlineEdit.value = { record: null, field: '', value: '', date: '', employeeName: '', saving: false }
+  inlineEdit.value = {
+    record: null,
+    field: '',
+    value: '',
+    date: '',
+    employeeName: '',
+    saving: false,
+  }
 }
 
 async function saveInlineEdit() {
@@ -687,7 +726,8 @@ async function saveInlineEdit() {
     await fetchAttendanceData()
   } catch (error) {
     const data = error.response?.data
-    const msg = typeof data === 'string' ? data : (data?.detail ?? data?.message ?? 'Failed to update')
+    const msg =
+      typeof data === 'string' ? data : (data?.detail ?? data?.message ?? 'Failed to update')
     showErrorNotification(msg)
   } finally {
     inlineEdit.value.saving = false
@@ -718,7 +758,13 @@ function openCostCenterInlineEdit(row) {
 
 function closeCostCenterInlineEdit() {
   showCostCenterInlineDialog.value = false
-  costCenterInlineEdit.value = { record: null, value: null, date: '', employeeName: '', saving: false }
+  costCenterInlineEdit.value = {
+    record: null,
+    value: null,
+    date: '',
+    employeeName: '',
+    saving: false,
+  }
 }
 
 async function saveCostCenterInlineEdit() {
@@ -770,7 +816,8 @@ async function updateAttendance(record) {
       return
     }
 
-    const empTimezone = selectedEmp?.timezone || employeeTimezoneCache[getEmployeeId(record.employee)]
+    const empTimezone =
+      selectedEmp?.timezone || employeeTimezoneCache[getEmployeeId(record.employee)]
 
     let timeInTimestamp = null
     let timeOutTimestamp = null
@@ -913,16 +960,28 @@ function onRowsPerPageChange(newSize) {
 function getEmployeeName(employee) {
   if (!employee) return 'Unknown Employee'
   if (typeof employee === 'number' || typeof employee === 'string') {
-    const found = employees.value.find((emp) => emp.id === employee || emp.id === parseInt(employee))
+    const found = employees.value.find(
+      (emp) => emp.id === employee || emp.id === parseInt(employee),
+    )
     if (found) {
-      const fullName = `${found.first_name || found.firstName || ''} ${found.last_name || found.lastName || ''}`.trim()
+      const fullName =
+        `${found.first_name || found.firstName || ''} ${found.last_name || found.lastName || ''}`.trim()
       return fullName || found.name || found.username || found.email || 'Unknown Employee'
     }
     return `Employee #${employee}`
   }
   if (typeof employee === 'object') {
-    const fullName = `${employee.first_name || employee.firstName || employee.firstname || ''} ${employee.last_name || employee.lastName || employee.lastname || ''}`.trim()
-    return fullName || employee.name || employee.fullName || employee.full_name || employee.username || employee.email || 'Unknown Employee'
+    const fullName =
+      `${employee.first_name || employee.firstName || employee.firstname || ''} ${employee.last_name || employee.lastName || employee.lastname || ''}`.trim()
+    return (
+      fullName ||
+      employee.name ||
+      employee.fullName ||
+      employee.full_name ||
+      employee.username ||
+      employee.email ||
+      'Unknown Employee'
+    )
   }
   return 'Unknown Employee'
 }
@@ -937,10 +996,26 @@ function viewEmployeePhoto(employee) {
 function getEmployeePhoto(employee) {
   if (!employee) return null
   if (typeof employee === 'object') {
-    return employee.photo || employee.image || employee.profile_picture || employee.profile_photo || employee.avatar || employee.picture || null
+    return (
+      employee.photo ||
+      employee.image ||
+      employee.profile_picture ||
+      employee.profile_photo ||
+      employee.avatar ||
+      employee.picture ||
+      null
+    )
   }
   const found = employees.value.find((emp) => emp.id === employee || emp.uuid === employee)
-  return found ? found.photo || found.image || found.profile_picture || found.profile_photo || found.avatar || found.picture || null : null
+  return found
+    ? found.photo ||
+        found.image ||
+        found.profile_picture ||
+        found.profile_photo ||
+        found.avatar ||
+        found.picture ||
+        null
+    : null
 }
 
 function formatTimeForInput(dateTimeString, timezone) {
@@ -1009,12 +1084,22 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-header {
+/* ==============================
+   WRAPPER
+   ============================== */
+.attendance-card {
   background: #ffffff;
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
+  border-radius: 16px;
   border: 1px solid #e8ecf0;
+  overflow: hidden;
+}
+
+/* ==============================
+   HEADER
+   ============================== */
+.page-header {
+  padding: 8px 24px;
+  border-bottom: 1px solid #f1f3f5;
 }
 .header-content {
   display: flex;
@@ -1025,8 +1110,9 @@ onMounted(async () => {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: #0f172a;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 .header-actions {
   display: flex;
@@ -1034,51 +1120,68 @@ onMounted(async () => {
   align-items: center;
   flex-wrap: wrap;
 }
-.add-attendance-btn {
-  height: 36px;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 8px !important;
-  text-transform: none;
-  white-space: nowrap;
-  padding: 0 16px;
-}
 .header-search {
-  min-width: 280px;
+  min-width: 220px;
   max-width: 280px;
 }
 .header-search :deep(.q-field__control) {
-  border-radius: 8px;
+  border-radius: 10px;
   height: 36px;
+  background: #f8fafc;
+  border-color: #e2e8f0;
 }
-.search-icon { color: #9ca3af; }
+.header-search :deep(.q-field__control:hover) {
+  border-color: #cbd5e1;
+}
+.search-icon {
+  color: #94a3b8;
+}
+.add-employee-btn {
+  height: 36px;
+  border-radius: 10px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
+}
+.header-add-btn {
+  background: #1e1b4b !important;
+  color: #eef2ff !important;
+}
+.header-add-btn:hover {
+  background: #2d2a6b !important;
+}
 
-.filters-section { margin-bottom: 16px; }
-.filters-card {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  padding: 16px 20px;
+/* ==============================
+   FILTERS SECTION
+   ============================== */
+.filters-section {
+  border-bottom: 1px solid #f1f3f5;
 }
 .filters-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  padding: 10px 24px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.filters-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .filters-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.filters-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
-}
 .clear-btn {
-  color: #6b7280 !important;
+  color: #94a3b8 !important;
   font-size: 12px;
 }
 .date-nav-wrapper {
@@ -1086,20 +1189,29 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
 }
-.date-nav-btn { color: #64748b; flex-shrink: 0; }
-.date-nav-input { width: 175px; }
-.filter-input :deep(.q-field__control) { border-radius: 8px; }
+.date-nav-btn {
+  color: #64748b;
+  flex-shrink: 0;
+}
+.date-nav-input {
+  width: 175px;
+}
+.filter-input :deep(.q-field__control) {
+  border-radius: 10px;
+  height: 34px;
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
 
-/* Pagination Bar */
+/* ==============================
+   PAGINATION BAR
+   ============================== */
 .pagination-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  padding: 12px 20px;
-  margin-top: 16px;
+  border-top: 1px solid #f1f3f5;
+  padding: 10px 24px;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -1110,32 +1222,97 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 .pagination-text {
-  font-size: 14px;
-  color: #374151;
-  font-weight: 500;
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 400;
 }
 .page-size-select {
   min-width: 120px;
 }
 .page-size-select :deep(.q-field__control) {
   border-radius: 8px;
+  border-color: #e2e8f0;
 }
 .schedule-pagination :deep(.q-btn) {
-  font-weight: 600;
+  font-weight: 500;
   border-radius: 8px;
   min-width: 32px;
   min-height: 32px;
+  font-size: 13px;
 }
 .schedule-pagination :deep(.q-btn--active) {
-  font-weight: 700;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  font-weight: 600;
 }
+
+/* ==============================
+   RESPONSIVE
+   ============================== */
+@media (max-width: 1440px) {
+  .attendance-card {
+    border-radius: 14px;
+  }
+  .page-header {
+    padding: 8px 20px;
+  }
+  .filters-header,
+  .pagination-bar {
+    padding: 10px 20px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    padding: 8px 16px;
+  }
+  .page-title {
+    font-size: 19px;
+  }
+  .header-search {
+    min-width: 180px;
+  }
+  .filters-header,
+  .pagination-bar {
+    padding: 10px 16px;
+  }
+  .pagination-info {
+    gap: 10px;
+  }
+  .date-nav-input {
+    width: 150px;
+  }
+}
+
 @media (max-width: 768px) {
-  .page-header { padding: 12px 14px; margin-bottom: 12px; }
-  .header-content { flex-direction: column; align-items: stretch; gap: 10px; }
-  .header-actions { justify-content: space-between; }
-  .header-search { min-width: auto; max-width: 100%; width: 100%; }
-  .filters-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .header-search,
+  .add-employee-btn {
+    width: 100%;
+    max-width: 100%;
+  }
+  .filters-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .filters-header-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .date-nav-wrapper {
+    width: 100%;
+  }
+  .date-nav-input {
+    width: 100%;
+  }
   .pagination-bar {
     flex-direction: column;
     align-items: center;
@@ -1146,10 +1323,22 @@ onMounted(async () => {
     justify-content: center;
   }
 }
+
 @media (max-width: 480px) {
-  .page-title { font-size: 18px; }
-  .filters-card { padding: 10px; }
-  .filters-header { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .filters-header-actions { width: 100%; justify-content: space-between; }
+  .page-title {
+    font-size: 18px;
+  }
+  .filters-header-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .date-nav-wrapper {
+    justify-content: stretch;
+    width: 100%;
+  }
+  .date-nav-input {
+    width: 100%;
+  }
 }
 </style>
