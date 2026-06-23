@@ -290,10 +290,6 @@ function formatTimeWithTimezone(time) {
 
 <style scoped>
 .content-section {
-  background: #ffffff;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid #e8ecf0;
 }
 .schedule-loading-overlay {
   display: flex;
@@ -310,8 +306,6 @@ function formatTimeWithTimezone(time) {
 }
 .table-wrapper {
   overflow-x: auto;
-  border: 1px solid #e8ecf0;
-  border-radius: 10px;
 }
 .schedule-table {
   width: 100%;
