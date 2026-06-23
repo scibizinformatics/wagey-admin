@@ -1,9 +1,10 @@
 <template>
   <PageShell>
+    <div class="schedule-card">
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
-          <div class="title-section">
+          <div class="header-titles">
             <h1 class="page-title">Schedule</h1>
             <div class="timezone-badge">
               <q-icon name="schedule" size="14px" />
@@ -12,11 +13,10 @@
           </div>
           <div class="header-actions">
             <q-btn
-              color="primary"
               icon="add"
               label="Add Schedule"
               @click="openAddModal"
-              class="add-btn"
+              class="add-btn header-add-btn"
               unelevated
               no-caps
             />
@@ -112,6 +112,7 @@
           @update:model-value="onPageChange"
         />
       </div>
+    </div>
 
       <!-- Add Schedule Modal -->
       <ScheduleAddModal
@@ -1349,30 +1350,45 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-header {
+/* ==============================
+   WRAPPER
+   ============================== */
+.schedule-card {
   background: #ffffff;
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
+  border-radius: 16px;
   border: 1px solid #e8ecf0;
+  overflow: hidden;
 }
+
+/* ==============================
+   HEADER
+   ============================== */
+.page-header {
+  padding: 8px 24px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
 }
-.title-section {
+
+.header-titles {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: #0f172a;
   margin: 0;
+  letter-spacing: -0.02em;
 }
+
 .timezone-badge {
   display: inline-flex;
   align-items: center;
@@ -1386,99 +1402,176 @@ onMounted(async () => {
   color: #1d4ed8;
   white-space: nowrap;
 }
+
 .timezone-badge .q-icon {
   font-size: 13px;
   color: #3b82f6;
 }
+
 .header-actions {
   display: flex;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
 }
+
 .header-search {
   min-width: 220px;
   max-width: 280px;
 }
+
 .header-search :deep(.q-field__control) {
-  border-radius: 8px;
+  border-radius: 10px;
   height: 36px;
+  background: #f8fafc;
+  border-color: #e2e8f0;
 }
+
+.header-search :deep(.q-field__control:hover) {
+  border-color: #cbd5e1;
+}
+
 .search-icon {
-  color: #9ca3af;
+  color: #94a3b8;
 }
+
 .add-btn {
   height: 36px;
-  border-radius: 8px !important;
+  border-radius: 10px;
   font-weight: 500;
-  font-size: 13px;
   text-transform: none;
   white-space: nowrap;
   padding: 0 16px;
-}
-@media (max-width: 1024px) {
-  .header-content { flex-wrap: wrap; gap: 12px; }
-  .title-section { width: 100%; }
-  .header-actions { width: 100%; justify-content: flex-end; }
-  .header-search { max-width: 100%; flex: 1; }
-}
-@media (max-width: 768px) {
-  .header-actions { flex-direction: column; }
-  .header-search, .add-btn { width: 100%; max-width: 100%; }
-}
-@media (max-width: 480px) {
-  .page-title { font-size: 18px; }
+  font-size: 13px;
 }
 
-/* Pagination Bar */
+.header-add-btn {
+  background: #1e1b4b !important;
+  color: #eef2ff !important;
+}
+
+.header-add-btn:hover {
+  background: #2d2a6b !important;
+}
+
+/* ==============================
+   PAGINATION BAR
+   ============================== */
 .pagination-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  padding: 12px 20px;
-  margin-top: 16px;
+  border-top: 1px solid #f1f3f5;
+  padding: 10px 24px;
   gap: 16px;
   flex-wrap: wrap;
 }
+
 .pagination-info {
   display: flex;
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
 }
+
 .pagination-text {
-  font-size: 14px;
-  color: #374151;
-  font-weight: 500;
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 400;
 }
+
 .page-size-select {
   min-width: 120px;
 }
+
 .page-size-select :deep(.q-field__control) {
   border-radius: 8px;
+  border-color: #e2e8f0;
 }
+
 .schedule-pagination :deep(.q-btn) {
-  font-weight: 600;
+  font-weight: 500;
   border-radius: 8px;
   min-width: 32px;
   min-height: 32px;
+  font-size: 13px;
 }
+
 .schedule-pagination :deep(.q-btn--active) {
-  font-weight: 700;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  font-weight: 600;
 }
+
+/* ==============================
+   RESPONSIVE
+   ============================== */
+@media (max-width: 1440px) {
+  .schedule-card {
+    border-radius: 14px;
+  }
+
+  .page-header {
+    padding: 8px 20px;
+  }
+
+  .pagination-bar {
+    padding: 10px 20px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    padding: 8px 16px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  .header-search {
+    min-width: 180px;
+  }
+
+  .pagination-bar {
+    padding: 10px 16px;
+  }
+
+  .pagination-info {
+    gap: 10px;
+  }
+}
+
 @media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .header-search,
+  .add-btn {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .pagination-bar {
     flex-direction: column;
     align-items: center;
     text-align: center;
     gap: 10px;
   }
+
   .pagination-info {
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 18px;
   }
 }
 </style>
