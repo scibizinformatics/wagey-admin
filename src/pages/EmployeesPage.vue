@@ -1,144 +1,123 @@
 ﻿<template>
   <PageShell>
-    <!-- Header Section -->
-    <div class="page-header">
-      <div class="header-content">
-        <h1 class="page-title">Employees</h1>
-        <div class="header-actions">
-          <q-btn
-            color="primary"
-            label="Add Employee"
-            icon="add"
-            class="add-employee-btn"
-            unelevated
-            @click="openAddModal"
-          />
-          <q-input
-            v-model="searchTerm"
-            placeholder="Search employees..."
-            class="header-search"
-            dense
-            outlined
-            @update:model-value="filterEmployees"
-          >
-            <template v-slot:prepend>
-              <q-icon name="search" class="search-icon" />
-            </template>
-          </q-input>
+    <div class="employees-card">
+      <!-- Header Section -->
+      <div class="page-header">
+        <div class="header-content">
+          <div class="header-titles">
+            <h1 class="page-title">Employees</h1>
+          </div>
+          <div class="header-actions">
+            <q-input
+              v-model="searchTerm"
+              placeholder="Search employees..."
+              class="header-search"
+              dense
+              outlined
+              @update:model-value="filterEmployees"
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" class="search-icon" />
+              </template>
+            </q-input>
+            <q-btn
+              label="Add employee"
+              icon="add"
+              class="add-employee-btn header-add-btn"
+              unelevated
+              @click="openAddModal"
+            />
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Stats Cards -->
-    <EmployeeStatsCards :stats="employeeStats" />
+      <!-- Stats Cards -->
+      <EmployeeStatsCards :stats="employeeStats" />
 
-    <!-- Main Table Section -->
-    <div class="table-section">
-      <div class="table-header">
-        <h2 class="table-title">Employee Overview</h2>
-        <div class="table-actions">
+      <!-- Main Table Section -->
+      <div class="table-block">
+        <div v-if="selectedEmployees.length > 0" class="selection-bar">
+          <div class="selection-bar-content">
+            <div class="selection-info">
+              <q-icon name="check_circle" size="20px" color="primary" />
+              <span class="selection-text">{{ selectedEmployees.length }} selected</span>
+            </div>
+            <div class="selection-actions">
+              <q-btn
+                unelevated
+                color="primary"
+                icon="assignment"
+                label="Assign Contract"
+                class="add-employee-btn"
+                @click="handleBulkAssignDialog"
+              />
+              <q-btn
+                unelevated
+                color="negative"
+                icon="block"
+                label="Terminate"
+                class="add-employee-btn"
+                @click="handleBulkTerminateDialog"
+              />
+              <q-btn flat dense label="Clear" @click="selectedEmployees = []" />
+            </div>
+          </div>
+        </div>
+        <EmployeeTable
+          v-model:selected="selectedEmployees"
+          :employees="paginatedEmployees"
+          :loading="loading"
+          :contracts="employeeContracts"
+          :company-id="companyId"
+          :positions="positions"
+          :departments="departments"
+          @view="viewEmployee"
+          @edit="editEmployee"
+          @assign="handleOpenAssignDialog"
+          @terminate="confirmTerminate"
+          @restore="confirmRestore"
+          @view-photo="viewEmployeePhoto"
+        />
+      </div>
+
+      <!-- Pagination Controls -->
+      <div class="pagination-bar" v-if="filteredEmployees.length > 0">
+        <div class="pagination-info">
+          <span class="pagination-text">
+            Showing {{ (employeePage - 1) * employeePageSize + 1 }} –
+            {{ Math.min(employeePage * employeePageSize, filteredEmployees.length) }}
+            of {{ filteredEmployees.length }} employees
+          </span>
           <q-select
-            v-model="selectedSite"
-            :options="sites"
+            v-model="employeePageSize"
+            :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
             option-label="label"
             option-value="value"
             emit-value
             map-options
-            label="Filter by Site"
-            class="site-select"
             dense
             outlined
-            clearable
-            @update:model-value="filterEmployees"
-          >
-            <template v-slot:prepend>
-              <q-icon name="location_on" />
-            </template>
-          </q-select>
+            class="page-size-select"
+            @update:model-value="onPageSizeChange"
+          />
         </div>
-      </div>
-
-      <div v-if="selectedEmployees.length > 0" class="selection-bar">
-        <div class="selection-bar-content">
-          <div class="selection-info">
-            <q-icon name="check_circle" size="20px" color="primary" />
-            <span class="selection-text">{{ selectedEmployees.length }} selected</span>
-          </div>
-          <div class="selection-actions">
-            <q-btn
-              unelevated
-              color="primary"
-              icon="assignment"
-              label="Assign Contract"
-              class="add-employee-btn"
-              @click="handleBulkAssignDialog"
-            />
-            <q-btn
-              unelevated
-              color="negative"
-              icon="block"
-              label="Terminate"
-              class="add-employee-btn"
-              @click="handleBulkTerminateDialog"
-            />
-            <q-btn flat dense label="Clear" @click="selectedEmployees = []" />
-          </div>
-        </div>
-      </div>
-      <EmployeeTable
-        v-model:selected="selectedEmployees"
-        :employees="paginatedEmployees"
-        :loading="loading"
-        :contracts="employeeContracts"
-        :company-id="companyId"
-        :positions="positions"
-        :departments="departments"
-        @view="viewEmployee"
-        @edit="editEmployee"
-        @assign="handleOpenAssignDialog"
-        @terminate="confirmTerminate"
-        @restore="confirmRestore"
-        @view-photo="viewEmployeePhoto"
-      />
-    </div>
-
-    <!-- Pagination Controls -->
-    <div class="pagination-bar" v-if="filteredEmployees.length > 0">
-      <div class="pagination-info">
-        <span class="pagination-text">
-          Showing {{ (employeePage - 1) * employeePageSize + 1 }} –
-          {{ Math.min(employeePage * employeePageSize, filteredEmployees.length) }}
-          of {{ filteredEmployees.length }} employees
-        </span>
-        <q-select
-          v-model="employeePageSize"
-          :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
-          option-label="label"
-          option-value="value"
-          emit-value
-          map-options
-          dense
-          outlined
-          class="page-size-select"
-          @update:model-value="onPageSizeChange"
+        <q-pagination
+          v-model="employeePage"
+          :max="totalPages"
+          :max-pages="6"
+          boundary-numbers
+          direction-links
+          color="primary"
+          active-color="primary"
+          active-text-color="white"
+          icon-first="first_page"
+          icon-prev="chevron_left"
+          icon-next="chevron_right"
+          icon-last="last_page"
+          class="schedule-pagination"
+          @update:model-value="onPageChange"
         />
       </div>
-      <q-pagination
-        v-model="employeePage"
-        :max="totalPages"
-        :max-pages="6"
-        boundary-numbers
-        direction-links
-        color="primary"
-        active-color="primary"
-        active-text-color="white"
-        icon-first="first_page"
-        icon-prev="chevron_left"
-        icon-next="chevron_right"
-        icon-last="last_page"
-        class="schedule-pagination"
-        @update:model-value="onPageChange"
-      />
     </div>
 
     <!-- Modals -->
@@ -187,6 +166,7 @@
       v-model="assignDialog"
       :form="assignForm"
       :assigning="assigning"
+      :employee="selectedAssignEmployee"
       :contract-type-options="contractTypeOptions"
       :positions="positions"
       :departments="departments"
@@ -284,6 +264,7 @@ const employeeContracts = ref({})
 const payTypeAutoFilled = ref(false)
 const selectedEmployees = ref([])
 const bulkAssignEmployeeIds = ref([])
+const selectedAssignEmployee = ref(null)
 // Pagination state
 const employeePage = ref(1)
 const employeePageSize = ref(20)
@@ -323,8 +304,7 @@ function onContractTypeChange(contractTypeId) {
     const matchCode = (flag, hint) => {
       if (!flag) return
       const ht = holidayTypes.value.find(
-        (h) =>
-          h.code?.toLowerCase().includes(hint) || h.name?.toLowerCase().includes(hint),
+        (h) => h.code?.toLowerCase().includes(hint) || h.name?.toLowerCase().includes(hint),
       )
       if (ht?.code) codes.push(ht.code)
     }
@@ -374,8 +354,11 @@ watch(
 )
 
 watch(assignDialog, (open) => {
-  if (!open && bulkAssignEmployeeIds.value.length > 0) {
-    bulkAssignEmployeeIds.value = []
+  if (!open) {
+    if (bulkAssignEmployeeIds.value.length > 0) {
+      bulkAssignEmployeeIds.value = []
+    }
+    selectedAssignEmployee.value = null
   }
 })
 
@@ -777,6 +760,7 @@ async function handleOpenAssignDialog(employee) {
   if (!contributions.value.length) {
     await fetchContributions()
   }
+  selectedAssignEmployee.value = employee
   await openAssignDialog(employee)
 
   // Sync eligibility display when pre-filled from existing contract
@@ -1256,14 +1240,21 @@ watch(companyId, (newId, oldId) => {
 
 <style scoped>
 /* ==============================
+   WRAPPER
+   ============================== */
+.employees-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e8ecf0;
+  overflow: hidden;
+}
+
+/* ==============================
    HEADER
    ============================== */
 .page-header {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
-  border: 1px solid #e8ecf0;
+  padding: 8px 24px;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .header-content {
@@ -1273,10 +1264,23 @@ watch(companyId, (newId, oldId) => {
   gap: 12px;
 }
 
+.header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: #94a3b8;
   margin: 0;
 }
 
@@ -1288,22 +1292,28 @@ watch(companyId, (newId, oldId) => {
 }
 
 .header-search {
-  min-width: 200px;
-  max-width: 260px;
+  min-width: 220px;
+  max-width: 280px;
 }
 
-.header-search .q-field__control {
-  border-radius: 8px;
+.header-search :deep(.q-field__control) {
+  border-radius: 10px;
   height: 36px;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.header-search :deep(.q-field__control:hover) {
+  border-color: #cbd5e1;
 }
 
 .search-icon {
-  color: #9ca3af;
+  color: #94a3b8;
 }
 
 .add-employee-btn {
   height: 36px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 500;
   text-transform: none;
   white-space: nowrap;
@@ -1311,45 +1321,133 @@ watch(companyId, (newId, oldId) => {
   font-size: 13px;
 }
 
+.header-add-btn {
+  background: #1e1b4b !important;
+  color: #eef2ff !important;
+}
+
+.header-add-btn:hover {
+  background: #2d2a6b !important;
+}
+
 /* ==============================
    TABLE SECTION
 ============================== */
-.table-section {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
+.table-block {
 }
 
-.table-header {
+/* ==============================
+   SELECTION BAR
+============================== */
+.selection-bar {
+  padding: 10px 24px;
+  background: #f0f4ff;
+  border-bottom: 1px solid #c7d2fe;
+}
+.selection-bar-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  gap: 12px;
   flex-wrap: wrap;
-  gap: 10px;
 }
-
-.table-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
-}
-
-.table-actions {
+.selection-info {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
+}
+.selection-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #3730a3;
+}
+.selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.site-select {
-  min-width: 180px;
+/* ==============================
+   PAGINATION BAR
+============================== */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #f1f3f5;
+  padding: 10px 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pagination-text {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 400;
+}
+.page-size-select {
+  min-width: 120px;
+}
+.page-size-select :deep(.q-field__control) {
+  border-radius: 8px;
+  border-color: #e2e8f0;
+}
+.schedule-pagination :deep(.q-btn) {
+  font-weight: 500;
+  border-radius: 8px;
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 13px;
+}
+.schedule-pagination :deep(.q-btn--active) {
+  font-weight: 600;
 }
 
 /* ==============================
    RESPONSIVE
 ============================== */
+@media (max-width: 1440px) {
+  .employees-card {
+    border-radius: 14px;
+  }
+
+  .page-header {
+    padding: 8px 20px;
+  }
+
+  .pagination-bar {
+    padding: 10px 20px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    padding: 8px 16px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  .header-search {
+    min-width: 180px;
+  }
+
+  .selection-bar,
+  .pagination-bar {
+    padding: 10px 16px;
+  }
+
+  .pagination-info {
+    gap: 10px;
+  }
+}
+
 @media (max-width: 768px) {
   .header-content {
     flex-direction: column;
@@ -1367,20 +1465,20 @@ watch(companyId, (newId, oldId) => {
     max-width: 100%;
   }
 
-  .table-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .site-select {
-    width: 100%;
-  }
-
   .selection-bar-content {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+
+  .pagination-bar {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+  .pagination-info {
+    justify-content: center;
   }
 }
 
@@ -1396,95 +1494,12 @@ watch(companyId, (newId, oldId) => {
   font-weight: 600;
   font-size: 18px;
 }
-
 .custom-multiplier-warning-dialog .q-dialog__message {
   font-size: 14px;
   line-height: 1.5;
 }
-
 .custom-multiplier-warning-dialog .q-card {
   max-width: 480px;
   border-radius: 12px;
-}
-
-/* Selection Bar */
-.selection-bar {
-  padding: 10px 20px;
-  background: #eff6ff;
-  border-bottom: 1px solid #bfdbfe;
-}
-.selection-bar-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.selection-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.selection-text {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1d4ed8;
-}
-.selection-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Pagination Bar */
-.pagination-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  padding: 12px 20px;
-  margin-top: 16px;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.pagination-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.pagination-text {
-  font-size: 14px;
-  color: #374151;
-  font-weight: 500;
-}
-.page-size-select {
-  min-width: 120px;
-}
-.page-size-select :deep(.q-field__control) {
-  border-radius: 8px;
-}
-.schedule-pagination :deep(.q-btn) {
-  font-weight: 600;
-  border-radius: 8px;
-  min-width: 32px;
-  min-height: 32px;
-}
-.schedule-pagination :deep(.q-btn--active) {
-  font-weight: 700;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
-}
-@media (max-width: 768px) {
-  .pagination-bar {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 10px;
-  }
-  .pagination-info {
-    justify-content: center;
-  }
 }
 </style>
