@@ -1,33 +1,5 @@
 <template>
   <div class="table-section">
-    <div class="table-header">
-      <h2 class="table-title">Attendance Overview</h2>
-      <div class="table-actions">
-        <q-btn flat round icon="refresh" class="header-btn" @click="$emit('refresh')" />
-        <q-select
-          dense
-          outlined
-          label="Filter by Cost Center"
-          :model-value="costCenterFilter"
-          @update:model-value="$emit('update:costCenterFilter', $event)"
-          :options="costCenterOptions"
-          :loading="optionsLoading"
-          class="site-filter-dropdown"
-          clearable
-          map-options
-          emit-value
-          behavior="menu"
-          menu-anchor="bottom left"
-          menu-self="top left"
-          style="min-width: 180px"
-        >
-          <template v-slot:prepend>
-            <q-icon name="account_balance_wallet" />
-          </template>
-        </q-select>
-      </div>
-    </div>
-
     <div class="modern-table-container">
       <div class="table-wrapper">
         <q-table
@@ -85,15 +57,29 @@
 
           <template v-slot:header="props">
             <q-tr :props="props" class="table-header-row">
-              <q-th key="employee" :props="props" class="table-header-cell employee-col">Employee</q-th>
-              <q-th key="work_type" :props="props" class="table-header-cell employment-status-col">Work Type</q-th>
-              <q-th key="cost_center" :props="props" class="table-header-cell cost-center-col">Cost Center</q-th>
+              <q-th key="employee" :props="props" class="table-header-cell employee-col"
+                >Employee</q-th
+              >
+              <q-th key="work_type" :props="props" class="table-header-cell employment-status-col"
+                >Work Type</q-th
+              >
+              <q-th key="cost_center" :props="props" class="table-header-cell cost-center-col"
+                >Cost Center</q-th
+              >
               <q-th key="time_in" :props="props" class="table-header-cell time-col">Time In</q-th>
-              <q-th key="time_in_photo" :props="props" class="table-header-cell photo-col">Photo</q-th>
-              <q-th key="time_in_source" :props="props" class="table-header-cell source-mini-col">In Source</q-th>
+              <q-th key="time_in_photo" :props="props" class="table-header-cell photo-col"
+                >Photo</q-th
+              >
+              <q-th key="time_in_source" :props="props" class="table-header-cell source-mini-col"
+                >In Source</q-th
+              >
               <q-th key="time_out" :props="props" class="table-header-cell time-col">Time Out</q-th>
-              <q-th key="time_out_photo" :props="props" class="table-header-cell photo-col">Photo</q-th>
-              <q-th key="time_out_source" :props="props" class="table-header-cell source-mini-col">Out Source</q-th>
+              <q-th key="time_out_photo" :props="props" class="table-header-cell photo-col"
+                >Photo</q-th
+              >
+              <q-th key="time_out_source" :props="props" class="table-header-cell source-mini-col"
+                >Out Source</q-th
+              >
             </q-tr>
           </template>
 
@@ -136,15 +122,17 @@
                   @click="$emit('edit-cost-center', props.row)"
                   title="Click to edit cost center"
                 >
-                  <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
-                    <div style="display: flex; align-items: center;">
+                  <div
+                    style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px"
+                  >
+                    <div style="display: flex; align-items: center">
                       <q-icon name="account_balance_wallet" size="12px" class="q-mr-xs" />
                       {{ getCostCenterName(props.row.cost_center) || 'None' }}
                       <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
                     </div>
                     <div
                       v-if="props.row.site"
-                      style="display: flex; align-items: center; font-size: 11px; color: #6b7280;"
+                      style="display: flex; align-items: center; font-size: 11px; color: #6b7280"
                     >
                       <q-icon name="location_on" size="11px" class="q-mr-xs" />
                       {{ getSiteName(props.row.site) }}
@@ -159,7 +147,9 @@
                   @click="$emit('edit-time', props.row, 'time_in')"
                   title="Click to edit"
                 >
-                  {{ props.row.time_in ? formatTime(props.row.time_in, props.row._timezone) : '--:--' }}
+                  {{
+                    props.row.time_in ? formatTime(props.row.time_in, props.row._timezone) : '--:--'
+                  }}
                   <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
                 </div>
               </q-td>
@@ -191,7 +181,11 @@
                   @click="$emit('edit-time', props.row, 'time_out')"
                   title="Click to edit"
                 >
-                  {{ props.row.time_out ? formatTime(props.row.time_out, props.row._timezone) : '--:--' }}
+                  {{
+                    props.row.time_out
+                      ? formatTime(props.row.time_out, props.row._timezone)
+                      : '--:--'
+                  }}
                   <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
                 </div>
               </q-td>
@@ -222,16 +216,15 @@
           </template>
         </q-table>
       </div>
-
     </div>
   </div>
 </template>
 
 <script setup>
-import { useQuasar } from 'quasar';
-import { formatInTimezone } from '@/composables/utils/timezone';
+import { useQuasar } from 'quasar'
+import { formatInTimezone } from '@/composables/utils/timezone'
 
-const $q = useQuasar();
+const $q = useQuasar()
 
 const props = defineProps({
   rows: { type: Array, default: () => [] },
@@ -240,7 +233,7 @@ const props = defineProps({
   costCenterOptions: { type: Array, default: () => [] },
   optionsLoading: { type: Boolean, default: false },
   employees: { type: Array, default: () => [] },
-});
+})
 
 defineEmits([
   'refresh',
@@ -249,112 +242,174 @@ defineEmits([
   'view-photo',
   'edit-time',
   'edit-cost-center',
-]);
+])
 
 const columns = [
   { name: 'employee', label: 'Employee', align: 'left', field: 'employee', sortable: true },
   { name: 'work_type', label: 'Work Type', align: 'left', field: 'work_type', sortable: true },
-  { name: 'cost_center', label: 'Cost Center', align: 'left', field: 'cost_center', sortable: false },
+  {
+    name: 'cost_center',
+    label: 'Cost Center',
+    align: 'left',
+    field: 'cost_center',
+    sortable: false,
+  },
   { name: 'time_in', label: 'Time In', align: 'center', field: 'time_in', sortable: true },
-  { name: 'time_in_photo', label: 'Photo', align: 'center', field: 'time_in_selfie', sortable: false },
+  {
+    name: 'time_in_photo',
+    label: 'Photo',
+    align: 'center',
+    field: 'time_in_selfie',
+    sortable: false,
+  },
   { name: 'time_in_source', label: 'In Source', align: 'center', field: 'source', sortable: false },
   { name: 'time_out', label: 'Time Out', align: 'center', field: 'time_out', sortable: true },
-  { name: 'time_out_photo', label: 'Photo', align: 'center', field: 'time_out_selfie', sortable: false },
-  { name: 'time_out_source', label: 'Out Source', align: 'center', field: 'source', sortable: false },
-];
+  {
+    name: 'time_out_photo',
+    label: 'Photo',
+    align: 'center',
+    field: 'time_out_selfie',
+    sortable: false,
+  },
+  {
+    name: 'time_out_source',
+    label: 'Out Source',
+    align: 'center',
+    field: 'source',
+    sortable: false,
+  },
+]
 
 function getSiteName(site) {
-  if (!site) return '';
-  let name = typeof site === 'object' ? site.name || site.site_name || site.title || '' : String(site);
-  name = name.replace(/\s*\(.*?\)\s*/g, '').trim();
-  const dashIndex = name.indexOf('-');
-  return dashIndex !== -1 ? name.substring(0, dashIndex).trim() : name;
+  if (!site) return ''
+  let name =
+    typeof site === 'object' ? site.name || site.site_name || site.title || '' : String(site)
+  name = name.replace(/\s*\(.*?\)\s*/g, '').trim()
+  const dashIndex = name.indexOf('-')
+  return dashIndex !== -1 ? name.substring(0, dashIndex).trim() : name
 }
 
 function getCostCenterName(costCenter) {
-  if (!costCenter) return '';
-  if (typeof costCenter === 'object') return costCenter.name || costCenter.cost_center_name || '';
-  return String(costCenter);
+  if (!costCenter) return ''
+  if (typeof costCenter === 'object') return costCenter.name || costCenter.cost_center_name || ''
+  return String(costCenter)
 }
 
 function getEmployeeName(employee) {
-  if (!employee) return 'Unknown Employee';
+  if (!employee) return 'Unknown Employee'
   if (typeof employee === 'number' || typeof employee === 'string') {
-    const found = props.employees.find((emp) => emp.id === employee || emp.id === parseInt(employee));
+    const found = props.employees.find(
+      (emp) => emp.id === employee || emp.id === parseInt(employee),
+    )
     if (found) {
-      const fullName = `${found.first_name || found.firstName || ''} ${found.last_name || found.lastName || ''}`.trim();
-      return fullName || found.name || found.username || found.email || 'Unknown Employee';
+      const fullName =
+        `${found.first_name || found.firstName || ''} ${found.last_name || found.lastName || ''}`.trim()
+      return fullName || found.name || found.username || found.email || 'Unknown Employee'
     }
-    return `Employee #${employee}`;
+    return `Employee #${employee}`
   }
   if (typeof employee === 'object') {
-    const fullName = `${employee.first_name || employee.firstName || employee.firstname || ''} ${employee.last_name || employee.lastName || employee.lastname || ''}`.trim();
-    return fullName || employee.name || employee.fullName || employee.full_name || employee.username || employee.email || 'Unknown Employee';
+    const fullName =
+      `${employee.first_name || employee.firstName || employee.firstname || ''} ${employee.last_name || employee.lastName || employee.lastname || ''}`.trim()
+    return (
+      fullName ||
+      employee.name ||
+      employee.fullName ||
+      employee.full_name ||
+      employee.username ||
+      employee.email ||
+      'Unknown Employee'
+    )
   }
-  return 'Unknown Employee';
+  return 'Unknown Employee'
 }
 
 function getEmployeePhoto(employee) {
-  if (!employee) return null;
+  if (!employee) return null
   if (typeof employee === 'object') {
-    return employee.photo || employee.image || employee.profile_picture || employee.profile_photo || employee.avatar || employee.picture || null;
+    return (
+      employee.photo ||
+      employee.image ||
+      employee.profile_picture ||
+      employee.profile_photo ||
+      employee.avatar ||
+      employee.picture ||
+      null
+    )
   }
-  const found = props.employees.find((emp) => emp.id === employee || emp.uuid === employee);
-  return found ? found.photo || found.image || found.profile_picture || found.profile_photo || found.avatar || found.picture || null : null;
+  const found = props.employees.find((emp) => emp.id === employee || emp.uuid === employee)
+  return found
+    ? found.photo ||
+        found.image ||
+        found.profile_picture ||
+        found.profile_photo ||
+        found.avatar ||
+        found.picture ||
+        null
+    : null
 }
 
 function getSourceClass(source) {
   switch (source) {
-    case 'qr_scan': return 'source-qr';
-    case 'manual': return 'source-manual';
-    case 'auto_login': return 'source-auto';
-    default: return 'source-default';
+    case 'qr_scan':
+      return 'source-qr'
+    case 'manual':
+      return 'source-manual'
+    case 'auto_login':
+      return 'source-auto'
+    default:
+      return 'source-default'
   }
 }
 
 function getEmploymentStatusClass(status) {
-  if (!status) return '';
+  if (!status) return ''
   switch (status.toLowerCase()) {
-    case 'regular': return 'employment-status-regular';
-    case 'probationary': return 'employment-status-probationary';
-    case 'contractual': return 'employment-status-contractual';
-    case 'part-time': return 'employment-status-parttime';
-    default: return 'employment-status-default';
+    case 'regular':
+      return 'employment-status-regular'
+    case 'probationary':
+      return 'employment-status-probationary'
+    case 'contractual':
+      return 'employment-status-contractual'
+    case 'part-time':
+      return 'employment-status-parttime'
+    default:
+      return 'employment-status-default'
   }
 }
 
 function formatSource(source) {
-  if (!source) return '-';
-  return source.replace('_', ' ').toUpperCase();
+  if (!source) return '-'
+  return source.replace('_', ' ').toUpperCase()
 }
 
 function formatTime(dateTimeString, timezone) {
-  if (!dateTimeString) return '-';
-  const formatted = formatInTimezone(dateTimeString, timezone || undefined);
-  return formatted || '-';
+  if (!dateTimeString) return '-'
+  const formatted = formatInTimezone(dateTimeString, timezone || undefined)
+  return formatted || '-'
 }
 </script>
 
 <style scoped>
 .table-section {
   background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
 }
 .table-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 10px 24px;
   flex-wrap: wrap;
   gap: 10px;
+  border-bottom: 1px solid #f1f3f5;
 }
 .table-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: #475569;
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .table-actions {
   display: flex;
@@ -368,46 +423,60 @@ function formatTime(dateTimeString, timezone) {
   height: 36px;
   border-radius: 8px !important;
 }
-.header-btn:hover { background: #f3f4f6 !important; }
+.header-btn:hover {
+  background: #f3f4f6 !important;
+}
 .modern-table-container {
   overflow-x: auto;
+  border-radius: 0;
 }
-.table-wrapper { overflow-x: visible; overflow-y: visible; }
+.table-wrapper {
+  overflow-x: visible;
+  overflow-y: visible;
+}
 .attendance-table {
   background: white;
   width: 100%;
-  table-layout: fixed;
+  min-width: 700px;
 }
+.attendance-table,
+.attendance-table :deep(.q-table__container),
+.attendance-table :deep(.q-table__card),
+.attendance-table.q-table__container,
 .attendance-table :deep(.q-table__bottom-border),
-.attendance-table :deep(thead tr:last-child th),
 .attendance-table :deep(.q-table__top),
-.attendance-table :deep(.q-table__bottom) { border: none !important; }
-.attendance-table :deep(.q-table) { border-bottom: none !important; }
-.employee-col { width: 15%; }
-.cost-center-col { width: 10%; }
-.time-col { width: 9%; }
-.photo-col { width: 6%; }
-.source-mini-col { width: 8%; }
-.employment-status-col { width: 9%; }
-.table-header-row { background: #f8fafc; }
+.attendance-table :deep(.q-table__bottom),
+.attendance-table :deep(.q-table) {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.table-header-row {
+  background: #f8fafc;
+}
 .table-header-cell {
   font-size: 11px !important;
   font-weight: 600 !important;
-  color: #6b7280 !important;
+  color: #94a3b8 !important;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 11px 16px !important;
-  border-bottom: 1px solid #e8ecf0 !important;
+  letter-spacing: 0.06em;
+  padding: 8px 14px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.table-body-row { transition: background 0.15s ease; }
-.table-body-row:hover .table-body-cell { background: #f9fafb; }
+.table-body-row {
+  transition: background 0.15s ease;
+}
+.table-body-row:hover .table-body-cell {
+  background: #f8fafc;
+}
 .table-body-cell {
-  font-size: 13px !important;
-  color: #374151;
-  padding: 12px 16px !important;
+  font-size: 13px;
+  color: #334155;
+  padding: 9px 14px !important;
   border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle;
   white-space: nowrap;
@@ -418,7 +487,11 @@ function formatTime(dateTimeString, timezone) {
 .table-body-row:last-child .table-body-cell {
   border-bottom: none !important;
 }
-.employee-info { display: flex; align-items: center; gap: 10px; }
+.employee-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .employee-name {
   font-size: 13px;
   font-weight: 600;
@@ -438,10 +511,26 @@ function formatTime(dateTimeString, timezone) {
   font-size: 12px !important;
   flex-shrink: 0;
 }
-.clickable-avatar { cursor: pointer; transition: all 0.2s ease; border: 2px solid transparent; }
-.clickable-avatar:hover { transform: scale(1.1); border-color: #3b82f6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
-.avatar-image { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-.avatar-initials { font-weight: 600; font-size: 14px; }
+.clickable-avatar {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+.clickable-avatar:hover {
+  transform: scale(1.1);
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.avatar-initials {
+  font-weight: 600;
+  font-size: 14px;
+}
 .time-badge {
   display: inline-flex;
   align-items: center;
@@ -455,12 +544,34 @@ function formatTime(dateTimeString, timezone) {
   white-space: nowrap;
   min-width: 80px;
 }
-.time-badge.has-time.time-in { background: #dcfce7; color: #166534; }
-.time-badge.has-time.time-out { background: #fef2f2; color: #991b1b; }
-.time-editable { cursor: pointer; transition: all 0.15s ease; user-select: none; }
-.time-editable:hover { filter: brightness(0.93); transform: scale(1.04); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
-.edit-icon { opacity: 1; transition: opacity 0.15s ease; color: inherit; }
-.selfie-container { display: flex; justify-content: center; align-items: center; }
+.time-badge.has-time.time-in {
+  background: #dcfce7;
+  color: #166534;
+}
+.time-badge.has-time.time-out {
+  background: #fef2f2;
+  color: #991b1b;
+}
+.time-editable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.time-editable:hover {
+  filter: brightness(0.93);
+  transform: scale(1.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.edit-icon {
+  opacity: 1;
+  transition: opacity 0.15s ease;
+  color: inherit;
+}
+.selfie-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 .selfie-thumbnail {
   width: 34px;
   height: 34px;
@@ -470,8 +581,16 @@ function formatTime(dateTimeString, timezone) {
   border: 2px solid #e2e8f0;
   transition: all 0.2s ease;
 }
-.selfie-thumbnail:hover { transform: scale(1.1); border-color: #3b82f6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
-.no-photo { font-size: 13px; color: #94a3b8; font-weight: 500; }
+.selfie-thumbnail:hover {
+  transform: scale(1.1);
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+.no-photo {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
 .source-mini-badge {
   display: inline-flex;
   align-items: center;
@@ -482,10 +601,22 @@ function formatTime(dateTimeString, timezone) {
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
-.source-qr { background: #f3e8ff; color: #7c3aed; }
-.source-manual { background: #dbeafe; color: #2563eb; }
-.source-auto { background: #dcfce7; color: #16a34a; }
-.source-default { background: #f1f5f9; color: #64748b; }
+.source-qr {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+.source-manual {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.source-auto {
+  background: #dcfce7;
+  color: #16a34a;
+}
+.source-default {
+  background: #f1f5f9;
+  color: #64748b;
+}
 .cost-center-badge {
   display: inline-flex;
   align-items: center;
@@ -506,40 +637,132 @@ function formatTime(dateTimeString, timezone) {
   font-weight: 500;
   text-transform: capitalize;
 }
-.employment-status-regular { background: #d1fae5; color: #065f46; }
-.employment-status-probationary { background: #fef3c7; color: #92400e; }
-.employment-status-contractual { background: #dbeafe; color: #1e40af; }
-.employment-status-parttime { background: #ede9fe; color: #5b21b6; }
-.employment-status-default { background: #f1f5f9; color: #475569; }
+.employment-status-regular {
+  background: #d1fae5;
+  color: #065f46;
+}
+.employment-status-probationary {
+  background: #fef3c7;
+  color: #92400e;
+}
+.employment-status-contractual {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.employment-status-parttime {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+.employment-status-default {
+  background: #f1f5f9;
+  color: #475569;
+}
 .mobile-card {
   border-radius: 12px;
   border: 1px solid #e2e8f0;
   transition: all 0.2s ease;
 }
-.mobile-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
-.mobile-employee { font-size: 16px; font-weight: 600; color: #1a202c; }
-.mobile-date { font-size: 14px; color: #64748b; margin-top: 4px; }
-.mobile-details { font-size: 13px; color: #4b5563; line-height: 1.4; }
-.mobile-selfies { display: flex; gap: 12px; flex-wrap: wrap; }
-.mobile-selfie-item { display: flex; align-items: center; gap: 8px; }
-.mobile-selfie-label { font-size: 12px; font-weight: 500; color: #64748b; }
-.mobile-selfie-img { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; cursor: pointer; border: 2px solid #e2e8f0; }
-.mobile-selfie-img:hover { border-color: #3b82f6; }
+.mobile-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.mobile-employee {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a202c;
+}
+.mobile-date {
+  font-size: 14px;
+  color: #64748b;
+  margin-top: 4px;
+}
+.mobile-details {
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.4;
+}
+.mobile-selfies {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mobile-selfie-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-selfie-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+.mobile-selfie-img {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  object-fit: cover;
+  cursor: pointer;
+  border: 2px solid #e2e8f0;
+}
+.mobile-selfie-img:hover {
+  border-color: #3b82f6;
+}
+
 @media (max-width: 1024px) {
-  .table-header-cell { font-size: 11px; padding: 10px 4px; }
-  .table-body-cell { font-size: 11px; padding: 8px 4px; }
-  .modern-table-container { margin: 0 14px 14px 14px; }
+  .table-header-cell {
+    font-size: 11px;
+    padding: 10px 4px;
+  }
+  .table-body-cell {
+    font-size: 11px;
+    padding: 8px 4px;
+  }
+  .modern-table-container {
+    overflow-x: auto;
+  }
 }
 @media (max-width: 768px) {
-  .table-header { flex-direction: column; align-items: stretch; gap: 10px; }
-  .table-actions { width: 100%; flex-direction: row; justify-content: space-between; }
-  .modern-table-container { margin: 0 10px 10px 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .table-wrapper { overflow-x: visible; }
-  .attendance-table { width: 100%; }
-  .table-header-cell { font-size: 10px; padding: 8px 3px; white-space: normal; word-break: break-word; }
-  .table-body-cell { font-size: 10px; padding: 7px 3px; }
-  .selfie-thumbnail { width: 28px; height: 28px; }
-  .employee-avatar { width: 26px !important; height: 26px !important; }
-  .source-mini-badge { font-size: 9px; padding: 2px 4px; }
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .table-actions {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+  .modern-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-wrapper {
+    overflow-x: visible;
+  }
+  .attendance-table {
+    width: 100%;
+  }
+  .table-header-cell {
+    font-size: 10px;
+    padding: 8px 3px;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .table-body-cell {
+    font-size: 10px;
+    padding: 7px 3px;
+  }
+  .selfie-thumbnail {
+    width: 28px;
+    height: 28px;
+  }
+  .employee-avatar {
+    width: 26px !important;
+    height: 26px !important;
+  }
+  .source-mini-badge {
+    font-size: 9px;
+    padding: 2px 4px;
+  }
 }
 </style>
