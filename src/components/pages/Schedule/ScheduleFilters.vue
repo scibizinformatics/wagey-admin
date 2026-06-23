@@ -74,11 +74,8 @@ function updateFilter(key, value) {
 
 <style scoped>
 .controls-section {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 16px;
-  border: 1px solid #e8ecf0;
+  border-bottom: 1px solid #f1f3f5;
+  padding: 10px 24px;
 }
 .controls-top {
   display: flex;
