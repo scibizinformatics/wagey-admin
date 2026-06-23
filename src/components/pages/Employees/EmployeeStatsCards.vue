@@ -1,39 +1,40 @@
 <template>
-  <div class="stats-section">
-    <div class="stats-card stats-total">
-      <div class="stats-icon-wrapper stats-icon-blue">
-        <q-icon name="people" />
+  <div class="stats-bar">
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-total"></span>
+        Total Employees
       </div>
-      <div class="stats-content">
-        <div class="stats-label">Total Employees</div>
-        <div class="stats-amount">{{ stats.total }}</div>
-        <div class="stats-delta stats-delta-neutral">All time</div>
+      <div class="stats-segment-value">{{ stats.total }}</div>
+    </div>
+
+    <div class="stats-divider"></div>
+
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-active"></span>
+        Active
+      </div>
+      <div class="stats-segment-value">
+        {{ stats.active }}
+        <span class="stats-segment-percent percent-active">
+          {{ stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0 }}%
+        </span>
       </div>
     </div>
 
-    <div class="stats-card stats-active">
-      <div class="stats-icon-wrapper stats-icon-green">
-        <q-icon name="check_circle" />
-      </div>
-      <div class="stats-content">
-        <div class="stats-label">Active</div>
-        <div class="stats-amount">{{ stats.active }}</div>
-        <div class="stats-delta stats-delta-positive">
-          {{ stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0 }}% of total
-        </div>
-      </div>
-    </div>
+    <div class="stats-divider"></div>
 
-    <div class="stats-card stats-terminated">
-      <div class="stats-icon-wrapper stats-icon-red">
-        <q-icon name="remove_circle" />
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-terminated"></span>
+        Terminated
       </div>
-      <div class="stats-content">
-        <div class="stats-label">Terminated</div>
-        <div class="stats-amount">{{ stats.terminated }}</div>
-        <div class="stats-delta stats-delta-negative">
-          {{ stats.total > 0 ? Math.round((stats.terminated / stats.total) * 100) : 0 }}% of total
-        </div>
+      <div class="stats-segment-value">
+        {{ stats.terminated }}
+        <span class="stats-segment-percent percent-terminated">
+          {{ stats.total > 0 ? Math.round((stats.terminated / stats.total) * 100) : 0 }}%
+        </span>
       </div>
     </div>
   </div>
@@ -50,109 +51,109 @@ defineProps({
 </script>
 
 <style scoped>
-.stats-section {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.stats-card {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 16px 18px;
-  border: 1px solid #e8ecf0;
+.stats-bar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-width: 0;
-  transition: box-shadow 0.2s ease;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f3f5;
+  padding: 10px 24px;
+  gap: 0;
 }
 
-.stats-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
-}
-
-.stats-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+.stats-segment {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+}
+
+.stats-divider {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 20px;
   flex-shrink: 0;
-  font-size: 20px;
 }
 
-.stats-icon-blue {
-  background: #eff6ff;
-  color: #3b82f6;
-}
-.stats-icon-green {
-  background: #f0fdf4;
-  color: #22c55e;
-}
-.stats-icon-red {
-  background: #fef2f2;
-  color: #ef4444;
-}
-
-.stats-content {
-  min-width: 0;
-}
-
-.stats-label {
+.stats-segment-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 2px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: #94a3b8;
+  white-space: nowrap;
 }
 
-.stats-amount {
-  font-size: 28px;
-  font-weight: 700;
-  color: #111827;
-  line-height: 1.1;
+.stats-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.stats-delta {
-  font-size: 12px;
-  margin-top: 3px;
+.stats-dot-total {
+  background: #6366f1;
+}
+.stats-dot-active {
+  background: #10b981;
+}
+.stats-dot-terminated {
+  background: #f87171;
+}
+
+.stats-segment-value {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.stats-segment-percent {
+  font-size: 11px;
   font-weight: 500;
 }
 
-.stats-delta-positive {
-  color: #22c55e;
+.percent-active {
+  color: #10b981;
 }
-.stats-delta-negative {
-  color: #ef4444;
-}
-.stats-delta-neutral {
-  color: #9ca3af;
+.percent-terminated {
+  color: #f87171;
 }
 
-@media (max-width: 900px) {
-  .stats-section {
-    grid-template-columns: repeat(3, 1fr);
+@media (max-width: 1440px) {
+  .stats-bar {
+    padding: 10px 20px;
+  }
+  .stats-divider {
+    margin: 0 16px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .stats-bar {
+    padding: 10px 16px;
+    flex-wrap: wrap;
     gap: 10px;
   }
-  .stats-amount {
-    font-size: 22px;
+  .stats-divider {
+    margin: 0 12px;
+  }
+  .stats-segment-value {
+    font-size: 14px;
   }
 }
 
 @media (max-width: 768px) {
-  .stats-section {
-    grid-template-columns: 1fr;
-    gap: 10px;
+  .stats-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 16px;
   }
-}
-
-@media (max-width: 480px) {
-  .stats-amount {
-    font-size: 20px;
+  .stats-divider {
+    display: none;
   }
 }
 </style>
