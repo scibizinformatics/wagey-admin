@@ -57,52 +57,30 @@
             </q-input>
           </div>
 
-          <q-select
-            filled
-            dense
-            :model-value="record.site_id"
-            @update:model-value="updateField('site_id', $event)"
-            :options="siteOptions"
-            label="Site"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
-            clearable
-            :loading="optionsLoading"
-            class="form-field q-mb-sm"
-            behavior="menu"
-            menu-anchor="bottom left"
-            menu-self="top left"
-          >
-            <template v-slot:prepend>
-              <q-icon name="location_on" size="xs" />
-            </template>
-            <template v-slot:no-option>
-              <q-item>
-                <q-item-section class="text-grey">No sites found</q-item-section>
-              </q-item>
-            </template>
-          </q-select>
-
           <q-banner
-            v-if="schedule && record.employee && record.date"
+            v-if="schedule && schedule.length > 0 && record.employee && record.date"
             dense
             rounded
-            class="schedule-banner bg-blue-1"
+            :class="schedule.length > 1 ? 'schedule-banner bg-deep-purple-1' : 'schedule-banner bg-blue-1'"
           >
             <template v-slot:avatar>
-              <q-icon name="schedule" color="primary" />
+              <q-icon :name="schedule.length > 1 ? 'alt_route' : 'schedule'" :color="schedule.length > 1 ? 'deep-purple' : 'primary'" />
             </template>
             <div class="schedule-compact">
-              <div class="schedule-compact-row">
-                <span class="text-weight-medium">{{ schedule.employee_name }}</span>
-                <q-badge :color="statusColor(schedule.status)">{{ schedule.status }}</q-badge>
-              </div>
-              <div class="schedule-compact-row text-caption text-grey-7">
-                <span>{{ schedule.site }} • {{ schedule.position }}</span>
-                <span>{{ schedule.shift_start }} - {{ schedule.shift_end }}</span>
-              </div>
+              <template v-for="(s, idx) in schedule" :key="idx">
+                <div class="schedule-compact-row">
+                  <span v-if="schedule.length > 1" class="text-caption text-weight-medium text-deep-purple">
+                    Shift {{ idx + 1 }}
+                  </span>
+                  <span v-else class="text-weight-medium">{{ s.employee_name }}</span>
+                  <q-badge :color="statusColor(s.status)">{{ s.status }}</q-badge>
+                </div>
+                <div class="schedule-compact-row text-caption text-grey-7">
+                  <span>{{ s.site }} • {{ s.position }}</span>
+                  <span>{{ s.shift_start }} - {{ s.shift_end }}</span>
+                </div>
+                <q-separator v-if="idx < schedule.length - 1" class="q-my-xs" />
+              </template>
             </div>
           </q-banner>
 
@@ -201,10 +179,9 @@ const $q = useQuasar();
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   record: { type: Object, default: () => ({}) },
-  siteOptions: { type: Array, default: () => [] },
   costCenterOptions: { type: Array, default: () => [] },
   employeeOptions: { type: Array, default: () => [] },
-  schedule: { type: Object, default: null },
+  schedule: { type: Array, default: () => [] },
   scheduleLoading: { type: Boolean, default: false },
   optionsLoading: { type: Boolean, default: false },
   saving: { type: Boolean, default: false },
