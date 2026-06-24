@@ -159,7 +159,6 @@
     <AttendanceAddDialog
       v-model="showAddDialog"
       v-model:record="newRecord"
-      :site-options="siteOptions"
       :cost-center-options="costCenterOptions"
       :employee-options="employeeOptions"
       :schedule="employeeSchedule"
@@ -290,6 +289,7 @@ const creating = ref(false)
 const employeeSchedule = ref(null)
 const loadingSchedule = ref(false)
 const scheduleError = ref(null)
+const consumedAssignments = ref({})
 
 const showEmployeePhotoDialog = ref(false)
 const selectedEmployeePhoto = ref('')
@@ -327,7 +327,6 @@ const editingRecord = ref(null)
 // Add form
 const newRecord = ref({
   employee: '',
-  site_id: '',
   cost_center_id: '',
   date: '',
   time_in: '',
@@ -474,18 +473,19 @@ async function fetchEmployeeSchedule(employeeId, date) {
   employeeSchedule.value = null
 
   try {
-    const scheduleData = await fetchScheduleFromComposable(employeeId, date)
-    if (scheduleData) {
-      employeeSchedule.value = {
-        employee_id: scheduleData.employee_id,
-        employee_name: scheduleData.employee_name,
-        position: scheduleData.position_name,
-        site: scheduleData.site_name,
-        date: scheduleData.schedule_date,
-        shift_start: formatScheduleTime(scheduleData.start_time),
-        shift_end: formatScheduleTime(scheduleData.end_time),
-        status: scheduleData.status,
-      }
+    const schedulesList = await fetchScheduleFromComposable(employeeId, date)
+    if (schedulesList && schedulesList.length > 0) {
+      employeeSchedule.value = schedulesList.map((s) => ({
+        employee_id: s.employee_id,
+        employee_name: s.employee_name,
+        position: s.position_name,
+        site: s.site_name,
+        date: s.schedule_date,
+        shift_start: formatScheduleTime(s.start_time),
+        shift_end: formatScheduleTime(s.end_time),
+        status: s.status,
+        assignment_id: s.employee_assignment_id ?? s.assignment_id ?? null,
+      }))
     } else {
       employeeSchedule.value = null
     }
@@ -508,9 +508,9 @@ async function fetchAttendanceData(params = {}) {
       ...params,
     }
 
-    const data = await fetchAttendanceByDate(currentDate.value, extraParams)
+    const { data, total } = await fetchAttendanceByDate(currentDate.value, extraParams)
     attendanceData.value = [...data]
-    pagination.value.rowsNumber = data.length
+    pagination.value.rowsNumber = total
 
     if (data.length === 0) {
       showErrorNotification('No attendance records found for this period.')
@@ -601,7 +601,7 @@ async function submitAttendance(record) {
   let timeOut = new Date(toUTC(record.date, record.time_out, empTimezone))
   if (timeOut <= timeIn) timeOut.setDate(timeOut.getDate() + 1)
 
-  if (record.date && !employeeSchedule.value && !loadingSchedule.value) {
+  if (record.date && (!employeeSchedule.value || employeeSchedule.value.length === 0) && !loadingSchedule.value) {
     try {
       await $q.dialog({
         title: 'No Schedule Found',
@@ -630,13 +630,21 @@ async function submitAttendance(record) {
       return
     }
 
+    const scheduleList = employeeSchedule.value ?? []
+    const scheduleKey = `${employeeUUID}_${record.date}`
+    const consumed = consumedAssignments.value[scheduleKey] ?? []
+    const firstUnconsumed = scheduleList.find(
+      (s) => s.assignment_id != null && !consumed.includes(s.assignment_id),
+    )
+    const activeAssignmentId = firstUnconsumed?.assignment_id ?? null
+
     await logAttendance({
       source: 'manual',
       time_in_source: 'manual',
       employee_id: employeeUUID,
       timestamp: timeIn.toISOString(),
-      ...(record.site_id && { site_id: record.site_id }),
       ...(record.cost_center_id != null && { cost_center: record.cost_center_id }),
+      ...(activeAssignmentId != null && { assignment_id: activeAssignmentId }),
     })
 
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -646,9 +654,16 @@ async function submitAttendance(record) {
       time_out_source: 'manual',
       employee_id: employeeUUID,
       timestamp: timeOut.toISOString(),
-      ...(record.site_id && { site_id: record.site_id }),
       ...(record.cost_center_id != null && { cost_center: record.cost_center_id }),
+      ...(activeAssignmentId != null && { assignment_id: activeAssignmentId }),
     })
+
+    if (activeAssignmentId != null) {
+      consumedAssignments.value = {
+        ...consumedAssignments.value,
+        [scheduleKey]: [...consumed, activeAssignmentId],
+      }
+    }
 
     showSuccessNotification('Attendance recorded successfully!')
     closeAddDialog()
@@ -864,7 +879,6 @@ async function updateAttendance(record) {
 function openAddDialog() {
   newRecord.value = {
     employee: '',
-    site_id: '',
     cost_center_id: '',
     date: currentDate.value || today,
     time_in: '',
@@ -881,7 +895,6 @@ function closeAddDialog() {
   showAddDialog.value = false
   newRecord.value = {
     employee: '',
-    site_id: '',
     cost_center_id: '',
     date: '',
     time_in: '',
@@ -1168,9 +1181,9 @@ onMounted(async () => {
   gap: 10px;
 }
 .filters-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
