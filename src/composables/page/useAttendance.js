@@ -52,10 +52,25 @@ export function useAttendance() {
       const url = `${BASE}/attendance/company/${companyId.value}/${year}/${month}/`
       const response = await api.get(url, { params: { date, ...params } })
 
-      const data = Array.isArray(response.data) ? response.data : (response.data.data ?? [])
+      const res = response.data
+      let data, total
+
+      if (Array.isArray(res)) {
+        data = res
+        total = res.length
+      } else if (res.results) {
+        data = res.results
+        total = res.count ?? res.results.length
+      } else if (res.data) {
+        data = Array.isArray(res.data) ? res.data : []
+        total = res.total ?? data.length
+      } else {
+        data = []
+        total = 0
+      }
 
       attendanceData.value = data
-      return data
+      return { data, total }
     } finally {
       loading.value = false
     }
@@ -75,7 +90,7 @@ export function useAttendance() {
       ? response.data
       : (response.data.data ?? response.data.schedules ?? [])
 
-    return list.find((s) => s.employee_id === employeeId) ?? null
+    return list.filter((s) => s.employee_id === employeeId)
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────
