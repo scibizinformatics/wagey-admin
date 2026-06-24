@@ -162,6 +162,6 @@ const filteredCostCenters = computed(() => {
 onMounted(fetchCostCenters)
 </script>
 
-<style scoped>
-@import './AdminSettingsPanelShared.css';
+<style scoped lang="scss">
+@import './AdminSettingsPanelShared.scss';
 </style>
