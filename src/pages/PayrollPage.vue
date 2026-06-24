@@ -1,29 +1,7 @@
 <template>
   <PageShell>
-      <!-- Header -->
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-left">
-            <h1 class="page-title">Disbursements</h1>
-          </div>
-          <div class="header-actions">
-            <q-input v-model="disbursementSearch" dense outlined placeholder="Search disbursements..." class="header-search" clearable>
-              <template v-slot:prepend><q-icon name="search" class="search-icon" /></template>
-            </q-input>
-            <q-btn v-if="activeTab === 'logs'" unelevated icon="add" label="Add Disbursements" color="positive" class="export-btn" no-caps @click="openCreateRunDialog" />
-            <q-btn v-if="activeTab === 'funding'" unelevated icon="add" label="Add Funds" color="primary" class="export-btn" no-caps @click="scrollToFundingForm" />
-            <q-btn unelevated icon="file_download" label="Export All" color="primary" class="export-btn" no-caps @click="exportToPDF" />
-          </div>
-        </div>
-      </div>
-
-      <PayrollStatsCards
-        :total-employees="totalEmployees"
-        :total-gross-pay="formatCurrency(totalGrossPay)"
-        :total-net-pay="formatCurrency(totalNetPay)"
-        :total-payroll-runs="totalPayrollRuns"
-      />
-
+    <div class="payroll-card">
+      <!-- Tabs Section - moved to top -->
       <div class="tabs-section">
         <div class="tab-pills">
           <button :class="['tab-pill', { active: activeTab === 'logs' }]" @click="activeTab = 'logs'">
@@ -37,6 +15,18 @@
         </div>
       </div>
 
+      <!-- Header (title only) -->
+      <div class="page-header">
+        <h1 class="page-title">Disbursements</h1>
+      </div>
+
+      <PayrollStatsCards
+        :total-employees="totalEmployees"
+        :total-gross-pay="formatCurrency(totalGrossPay)"
+        :total-net-pay="formatCurrency(totalNetPay)"
+        :total-payroll-runs="totalPayrollRuns"
+      />
+
       <q-tab-panels v-model="activeTab" animated class="tab-panels">
         <q-tab-panel name="logs" class="tab-panel-content">
           <div class="table-section">
@@ -45,7 +35,14 @@
                 <h2 class="table-title">Logs</h2>
                 <div class="table-info">{{ payrollRunsSummary.length }} runs</div>
               </div>
-              <q-btn flat round icon="refresh" class="header-btn" @click="fetchPayrollRunsSummary()" :loading="isLoading('fetchingPayrollRunsSummary')" />
+              <div class="table-header-actions">
+                <q-btn flat round icon="refresh" class="header-btn" @click="fetchPayrollRunsSummary()" :loading="isLoading('fetchingPayrollRunsSummary')" />
+                <q-input v-model="disbursementSearch" dense outlined placeholder="Search disbursements..." class="header-search" clearable>
+                  <template v-slot:prepend><q-icon name="search" class="search-icon" /></template>
+                </q-input>
+                <q-btn unelevated icon="add" label="Add Disbursements" class="export-btn header-add-btn" no-caps @click="openCreateRunDialog" />
+                <q-btn unelevated icon="file_download" label="Export All" color="primary" class="export-btn" no-caps @click="exportToPDF" />
+              </div>
             </div>
 
             <div v-if="isLoading('fetchingPayrollRunsSummary')" class="loading-state">
@@ -123,6 +120,7 @@
           </div>
         </q-tab-panel>
       </q-tab-panels>
+    </div>
 
     <PayrollCreateRunDialog
       :show-create-run-dialog="showCreateRunDialog"
@@ -342,13 +340,6 @@ const onFundingLogChange = async (logId) => {
     console.error('[Funding] Error loading funding data:', err)
     fundingSources.value = []
   }
-}
-
-const scrollToFundingForm = () => {
-  activeTab.value = 'funding'
-  setTimeout(() => {
-    fundingFormRef.value?.$el?.scrollIntoView({ behavior: 'smooth' })
-  }, 100)
 }
 
 const submitFunding = async () => {
@@ -1465,65 +1456,22 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.page-header {
+/* ==============================
+   WRAPPER - matches employees-card
+   ============================== */
+.payroll-card {
   background: #ffffff;
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
+  border-radius: 16px;
   border: 1px solid #e8ecf0;
+  overflow: hidden;
 }
 
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.header-search {
-  min-width: 200px;
-  max-width: 260px;
-  flex: 1;
-}
-
-.header-search :deep(.q-field__control) {
-  border-radius: 8px;
-  height: 36px;
-}
-
-.search-icon {
-  color: #9ca3af;
-}
-
-.export-btn {
-  height: 36px;
-  border-radius: 8px !important;
-  font-weight: 500;
-  font-size: 13px;
-  text-transform: none;
-  padding: 0 16px;
-}
-
+/* ==============================
+   TABS SECTION (now at top)
+   ============================== */
 .tabs-section {
-  background: #ffffff;
-  border-radius: 12px;
-  margin-bottom: 16px;
-  border: 1px solid #e8ecf0;
   padding: 10px 14px;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .tab-pills {
@@ -1565,6 +1513,25 @@ onUnmounted(() => {
   font-size: 15px;
 }
 
+/* ==============================
+   HEADER (title only)
+   ============================== */
+.page-header {
+  padding: 8px 24px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+/* ==============================
+   TAB PANELS
+   ============================== */
 .tab-panels {
   background: transparent;
 }
@@ -1577,10 +1544,10 @@ onUnmounted(() => {
   padding: 0;
 }
 
+/* ==============================
+   TABLE SECTION
+   ============================== */
 .table-section {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
   overflow: hidden;
 }
 
@@ -1588,10 +1555,10 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid #f1f3f5;
   flex-wrap: wrap;
-  gap: 8px;
 }
 
 .table-title-section {
@@ -1612,6 +1579,55 @@ onUnmounted(() => {
   color: #9ca3af;
 }
 
+.table-header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.header-search {
+  min-width: 200px;
+  max-width: 260px;
+  flex: 1;
+}
+
+.header-search :deep(.q-field__control) {
+  border-radius: 10px;
+  height: 36px;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.header-search :deep(.q-field__control:hover) {
+  border-color: #cbd5e1;
+}
+
+.search-icon {
+  color: #94a3b8;
+}
+
+.export-btn {
+  height: 36px;
+  border-radius: 10px !important;
+  font-weight: 500;
+  font-size: 13px;
+  text-transform: none;
+  padding: 0 16px;
+}
+
+.header-add-btn {
+  background: #1e1b4b !important;
+  color: #eef2ff !important;
+}
+
+.header-add-btn:hover {
+  background: #2d2a6b !important;
+}
+
+/* ==============================
+   RUNS LIST
+   ============================== */
 .runs-list {
   display: flex;
   flex-direction: column;
@@ -1644,11 +1660,27 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
+/* ==============================
+   FUNDING TAB
+   ============================== */
 .funding-layout {
   display: grid;
   grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+  padding: 16px;
+}
+
+/* ==============================
+   RESPONSIVE
+   ============================== */
+@media (max-width: 1440px) {
+  .payroll-card {
+    border-radius: 14px;
+  }
+  .page-header {
+    padding: 8px 20px;
+  }
 }
 
 @media (min-width: 1440px) {
@@ -1662,19 +1694,19 @@ onUnmounted(() => {
 @media (max-width: 1024px) {
   .funding-layout { grid-template-columns: 1fr; }
   .header-search { min-width: 180px; max-width: 220px; }
+  .page-title { font-size: 19px; }
 }
 
 @media (max-width: 768px) {
-  .page-header { padding: 12px 14px; margin-bottom: 12px; border-radius: 10px; }
-  .header-content { flex-direction: column; align-items: stretch; gap: 10px; }
-  .header-left { display: flex; align-items: center; justify-content: space-between; }
-  .header-actions { flex-direction: row; gap: 8px; flex-wrap: wrap; width: 100%; }
+  .page-header { padding: 8px 16px; }
   .header-search { max-width: 100%; width: 100%; flex: 1 1 120px; min-width: 0; }
   .export-btn { flex: 1 1 auto; min-width: 0; font-size: 12px; padding: 0 10px; }
-  .tabs-section { padding: 8px 10px; margin-bottom: 12px; border-radius: 10px; }
+  .tabs-section { padding: 8px 10px; }
   .tab-pills { gap: 5px; }
   .tab-pill { padding: 7px 12px; font-size: 12px; flex: 1; justify-content: center; }
-  .table-header { padding: 12px 14px; flex-direction: column; align-items: stretch; gap: 10px; }
+  .table-header { padding: 12px 14px; }
+  .table-header-actions { flex: 1; justify-content: flex-end; }
+  .funding-layout { padding: 10px; }
   .runs-list { padding: 10px; gap: 10px; }
 }
 
