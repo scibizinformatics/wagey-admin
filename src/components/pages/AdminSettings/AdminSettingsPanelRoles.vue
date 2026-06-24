@@ -135,6 +135,6 @@ const filteredRoles = computed(() => {
 onMounted(fetchRoles)
 </script>
 
-<style scoped>
-@import './AdminSettingsPanelShared.css';
+<style scoped lang="scss">
+@import './AdminSettingsPanelShared.scss';
 </style>
