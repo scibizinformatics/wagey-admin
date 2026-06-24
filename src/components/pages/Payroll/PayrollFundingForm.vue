@@ -98,8 +98,8 @@
     <div class="funding-divider" />
 
     <div class="funding-form-actions">
-      <q-btn unelevated color="primary" label="Add Funds" icon="add" no-caps :loading="savingFunding"
-        @click="$emit('submit-funding')" class="funding-submit-btn" />
+      <q-btn unelevated label="Add Funds" icon="add" no-caps :loading="savingFunding"
+        @click="$emit('submit-funding')" class="funding-submit-btn header-add-btn" />
     </div>
   </div>
 </template>
@@ -223,10 +223,19 @@ const typeOptions = [
 }
 
 .funding-submit-btn {
-  border-radius: 8px !important;
+  border-radius: 10px !important;
   font-weight: 500;
   font-size: 13px;
   padding: 0 18px;
   height: 36px;
+}
+
+.header-add-btn {
+  background: #1e1b4b !important;
+  color: #eef2ff !important;
+}
+
+.header-add-btn:hover {
+  background: #2d2a6b !important;
 }
 </style>
