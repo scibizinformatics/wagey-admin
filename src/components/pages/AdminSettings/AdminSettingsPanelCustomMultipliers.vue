@@ -300,8 +300,8 @@ onMounted(async () => {
 })
 </script>
 
-<style scoped>
-@import './AdminSettingsPanelShared.css';
+<style scoped lang="scss">
+@import './AdminSettingsPanelShared.scss';
 .multipliers-body {
   padding: 24px;
 }
