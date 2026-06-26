@@ -103,12 +103,12 @@
       </div>
 
       <!-- Pagination Controls -->
-      <div class="pagination-bar" v-if="pagination.rowsNumber > 0">
+      <div class="pagination-bar" v-if="filteredTotal > 0 || pagination.rowsNumber > 0">
         <div class="pagination-info">
           <span class="pagination-text">
             Showing {{ (pagination.page - 1) * pagination.rowsPerPage + 1 }} –
-            {{ Math.min(pagination.page * pagination.rowsPerPage, pagination.rowsNumber) }}
-            of {{ pagination.rowsNumber }} records
+            {{ Math.min(pagination.page * pagination.rowsPerPage, filteredTotal) }}
+            of {{ filteredTotal }} records
           </span>
           <q-select
             :model-value="pagination.rowsPerPage"
@@ -401,7 +401,11 @@ async function lazyFetchTimezone(empId) {
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const statsObj = computed(() => {
-  const data = attendanceData.value
+  const data = attendanceData.value.filter((row) => {
+    if (!currentDate.value) return true
+    const recordDate = row.date || row.attendance_date || row.log_date
+    return recordDate === currentDate.value
+  })
   const total = data.length
   const app = data.filter((item) => item.source === 'app').length
   const terminal = data.filter((item) => item.source === 'terminal').length
@@ -411,6 +415,12 @@ const statsObj = computed(() => {
 
 const filteredAttendanceRows = computed(() => {
   let data = attendanceData.value
+  if (currentDate.value) {
+    data = data.filter((row) => {
+      const recordDate = row.date || row.attendance_date || row.log_date
+      return recordDate === currentDate.value
+    })
+  }
   if (employeeSearch.value && employeeSearch.value.trim()) {
     const term = employeeSearch.value.trim().toLowerCase()
     data = data.filter((row) => getEmployeeName(row.employee).toLowerCase().includes(term))
@@ -421,8 +431,10 @@ const filteredAttendanceRows = computed(() => {
   }))
 })
 
+const filteredTotal = computed(() => filteredAttendanceRows.value.length)
+
 const totalPages = computed(() => {
-  return Math.ceil(pagination.value.rowsNumber / pagination.value.rowsPerPage) || 1
+  return Math.ceil(filteredTotal.value / pagination.value.rowsPerPage) || 1
 })
 
 // ─── Date navigation ──────────────────────────────────────────────────────────
@@ -512,8 +524,13 @@ async function fetchAttendanceData(params = {}) {
     attendanceData.value = [...data]
     pagination.value.rowsNumber = total
 
-    if (data.length === 0) {
-      showErrorNotification('No attendance records found for this period.')
+    const dateFilteredCount = data.filter((row) => {
+      const recordDate = row.date || row.attendance_date || row.log_date
+      return recordDate === currentDate.value
+    }).length
+
+    if (dateFilteredCount === 0) {
+      showErrorNotification('No attendance records found for this date.')
     }
 
     triggerTimezoneFetch(data)
@@ -911,14 +928,18 @@ function clearAllFilters() {
   filters.value = { date_from: today, date_to: today, cost_center: '' }
   currentDate.value = today
   pagination.value.page = 1
+  fetchAttendanceData()
 }
 
 function applyDateRange(range) {
   if (range && range.from && range.to) {
     filters.value.date_from = range.from
     filters.value.date_to = range.to
+    currentDate.value = range.from
   }
   showDatePicker.value = false
+  pagination.value.page = 1
+  fetchAttendanceData()
 }
 
 function filterEmployees(val, update) {
@@ -1066,12 +1087,11 @@ function showErrorNotification(message) {
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────
 watch(
-  filters,
+  () => filters.value.cost_center,
   () => {
     pagination.value.page = 1
     fetchAttendanceData()
   },
-  { deep: true },
 )
 
 watch(
