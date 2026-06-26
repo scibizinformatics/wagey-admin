@@ -49,11 +49,6 @@ const routes = [
         component: () => import('pages/RequestPage.vue'),
       },
       {
-        path: 'swap-requests',
-        name: 'swap-requests',
-        component: () => import('pages/SwapRequestPage.vue'),
-      },
-      {
         path: 'payroll',
         name: 'payroll',
         component: () => import('pages/PayrollPage.vue'),
