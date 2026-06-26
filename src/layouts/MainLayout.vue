@@ -351,7 +351,6 @@ const links = [
   { label: 'Schedule', icon: 'calendar_month', to: '/app/schedule' },
   { label: 'Payroll', icon: 'paid', to: '/app/payroll' },
   { label: 'Requests', icon: 'mark_email_unread', to: '/app/requests' },
-  { label: 'Swap Requests', icon: 'swap_horiz', to: '/app/swap-requests' },
   { label: 'Invite', icon: 'email', to: '/app/employees/invite' },
   { label: 'Announcement', icon: 'announcement', to: '/app/announcements' },
   { label: 'Admin Settings', icon: 'settings', to: '/app/admin-settings' },
