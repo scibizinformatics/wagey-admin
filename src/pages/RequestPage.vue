@@ -1,42 +1,6 @@
 ﻿<template>
   <PageShell>
-      <!-- Header -->
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-left">
-            <h1 class="page-title">Requests</h1>
-          </div>
-          <div class="header-actions">
-            <q-btn
-              round flat icon="refresh"
-              class="refresh-btn"
-              @click="handleRefresh"
-              :loading="loading"
-            >
-              <q-tooltip>Refresh</q-tooltip>
-            </q-btn>
-            <q-input
-              v-model="searchTerm"
-              placeholder="Search requests..."
-              class="header-search"
-              dense outlined
-            >
-              <template v-slot:prepend>
-                <q-icon name="search" class="search-icon" />
-              </template>
-            </q-input>
-          </div>
-        </div>
-      </div>
-
-      <!-- Stats -->
-      <RequestStatsCards
-        :active-tab="activeTab"
-        :leave-stats="leaveStats"
-        :overtime-stats="overtimeStats"
-        :ca-statistics="caStatistics"
-      />
-
+    <div class="payroll-card">
       <!-- Tabs -->
       <div class="tabs-section">
         <div class="tab-pills">
@@ -67,6 +31,41 @@
         </div>
       </div>
 
+      <!-- Header -->
+      <div class="page-header">
+        <div class="page-header-content">
+          <h1 class="page-title">Requests</h1>
+          <div class="page-header-actions">
+            <q-btn
+              round flat icon="refresh"
+              class="refresh-btn"
+              @click="handleRefresh"
+              :loading="loading"
+            >
+              <q-tooltip>Refresh</q-tooltip>
+            </q-btn>
+            <q-input
+              v-model="searchTerm"
+              placeholder="Search requests..."
+              class="header-search"
+              dense outlined
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" class="search-icon" />
+              </template>
+            </q-input>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <RequestStatsCards
+        :active-tab="activeTab"
+        :leave-stats="leaveStats"
+        :overtime-stats="overtimeStats"
+        :ca-statistics="caStatistics"
+      />
+
       <!-- Tab Panels -->
       <q-tab-panels v-model="activeTab" animated class="tab-panels">
         <q-tab-panel name="leave" class="tab-panel-content">
@@ -83,11 +82,12 @@
         </q-tab-panel>
 
         <q-tab-panel name="overtime" class="tab-panel-content">
-          <!-- Summary Cards -->
-          <div class="overtime-summary-section">
-            <div class="section-header">
-              <span class="section-title">Payroll Run Overtime Summary</span>
-              <span class="section-count">{{ overtimeSummary.length }} runs</span>
+          <div class="payroll-card">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Payroll Run Overtime Summary</h2>
+                <div class="table-info">{{ overtimeSummary.length }} runs</div>
+              </div>
             </div>
 
             <div v-if="overtimeSummary.length" class="overtime-summary-list">
@@ -335,6 +335,7 @@
       v-model="showOvertimeDetail"
       :request="selectedOvertimeRow"
     />
+    </div>
   </PageShell>
 </template>
 
@@ -957,13 +958,10 @@ onUnmounted(() => {
 
 <style scoped>
 .page-header {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
-  border: 1px solid #e8ecf0;
+  padding: 8px 24px;
+  border-bottom: 1px solid #f1f3f5;
 }
-.header-content {
+.page-header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -975,7 +973,7 @@ onUnmounted(() => {
   color: #111827;
   margin: 0;
 }
-.header-actions {
+.page-header-actions {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -1002,11 +1000,8 @@ onUnmounted(() => {
 }
 .search-icon { color: #9ca3af; }
 .tabs-section {
-  background: #ffffff;
-  border-radius: 12px;
-  margin-bottom: 16px;
-  border: 1px solid #e8ecf0;
   padding: 10px 14px;
+  border-bottom: 1px solid #f1f3f5;
 }
 .tab-pills {
   display: flex;
@@ -1061,11 +1056,11 @@ onUnmounted(() => {
   padding: 0;
 }
 @media (max-width: 768px) {
-  .page-header { padding: 12px 14px; margin-bottom: 12px; }
-  .header-content { flex-direction: column; align-items: stretch; gap: 10px; }
-  .header-actions { flex-direction: row; gap: 8px; flex-wrap: wrap; }
+  .page-header { padding: 12px 14px; }
+  .page-header-content { flex-direction: column; align-items: stretch; gap: 10px; }
+  .page-header-actions { flex-direction: row; gap: 8px; flex-wrap: wrap; }
   .header-search { max-width: 100%; width: 100%; flex: 1; min-width: 0; }
-  .tabs-section { padding: 8px 10px; margin-bottom: 12px; }
+  .tabs-section { padding: 8px 10px; }
   .tab-pills { gap: 5px; }
   .tab-pill { padding: 7px 11px; font-size: 12px; flex: 1; justify-content: center; }
 }
@@ -1075,48 +1070,66 @@ onUnmounted(() => {
   .tab-pill-icon { font-size: 16px; }
 }
 
-/* Overtime Summary Section */
-.overtime-summary-section {
-  margin-bottom: 16px;
+/* Overtime Section - Payroll Card */
+.payroll-card {
+  background: #ffffff;
+  border-radius: 0 0 16px 16px;
+  border: 1px solid #e8ecf0;
+  overflow: hidden;
 }
-.section-header {
+.table-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 4px;
-  margin-bottom: 12px;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f3f5;
+  flex-wrap: wrap;
 }
-.section-title {
-  font-size: 14px;
+.table-title-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.table-title {
+  font-size: 15px;
   font-weight: 600;
-  color: #374151;
+  color: #111827;
+  margin: 0;
 }
-.section-count {
+.table-info {
   font-size: 12px;
-  color: #6b7280;
-  font-weight: 500;
+  color: #9ca3af;
+}
+.table-header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.header-search {
+  min-width: 200px;
+  max-width: 260px;
 }
 .overtime-summary-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
+  padding: 16px;
 }
 .overtime-summary-card {
-  background: #eef3fb;
-  border: 1px solid #d8e4f0;
-  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #e0e7ef;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
   overflow: hidden;
 }
 .overtime-summary-card:hover {
-  background: #e6eef8;
-  border-color: #bfdbfe;
+  background: #eef3fb;
 }
 .overtime-summary-card.active {
-  background: #deeaf8;
-  border-color: #93c5fd;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  background: #ffffff;
 }
 .summary-card-header {
   display: flex;
@@ -1126,6 +1139,12 @@ onUnmounted(() => {
   flex-wrap: nowrap;
   width: 100%;
   box-sizing: border-box;
+  border-bottom: 1px solid #d8e4f0;
+  background: #eef3fb;
+}
+.overtime-summary-card.active .summary-card-header {
+  border-bottom-color: #bfdbfe;
+  background: #deeaf8;
 }
 .summary-card-name-group {
   display: flex;
@@ -1293,7 +1312,7 @@ onUnmounted(() => {
 }
 .overtime-table-container {
   background: #ffffff;
-  border-radius: 8px;
+  border-radius: 0 0 8px 8px;
   border: 1px solid #e8ecf0;
   overflow: hidden;
 }
