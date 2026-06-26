@@ -51,10 +51,12 @@
             <q-tr class="table-body-row">
               <q-td class="table-body-cell employee-name-cell">
                 <div class="employee-info">
-                  <q-avatar size="32px" :color="getAvatarColor(props.row.employee_name)" text-color="white">
+                  <q-avatar size="34px" class="avatar-fallback">
                     {{ getInitials(props.row.employee_name) }}
                   </q-avatar>
-                  <span class="employee-name">{{ props.row.employee_name }}</span>
+                  <div class="employee-name-block">
+                    <span class="employee-name">{{ props.row.employee_name }}</span>
+                  </div>
                 </div>
               </q-td>
               <q-td class="table-body-cell amount-cell">
@@ -65,6 +67,7 @@
               <q-td class="table-body-cell">{{ props.row.request_date }}</q-td>
               <q-td class="table-body-cell">
                 <div :class="['status-badge', getCaStatusClass(props.row.status)]">
+                  <span class="status-dot"></span>
                   {{ capitalizeStatus(props.row.status) }}
                 </div>
               </q-td>
@@ -81,19 +84,20 @@
                 />
               </q-td>
               <q-td class="table-body-cell actions-cell">
-                <div class="action-buttons">
-                  <q-btn flat round icon="visibility" size="sm" class="action-btn view-btn" @click="$emit('view', props.row)">
-                    <q-tooltip>View Details</q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    v-if="props.row.status === 'pending'"
-                    flat round icon="edit" size="sm"
-                    class="action-btn edit-btn"
-                    @click="$emit('approve', props.row)"
-                  >
-                    <q-tooltip>Approve/Reject</q-tooltip>
-                  </q-btn>
-                </div>
+                <q-btn flat round dense icon="more_horiz" class="action-menu-btn" @click.stop>
+                  <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                    <q-list dense style="min-width: 160px">
+                      <q-item clickable v-close-popup @click="$emit('view', props.row)" class="dropdown-item">
+                        <q-item-section avatar><q-icon name="visibility" size="16px" /></q-item-section>
+                        <q-item-section>View Details</q-item-section>
+                      </q-item>
+                      <q-item v-if="props.row.status === 'pending'" clickable v-close-popup @click="$emit('approve', props.row)" class="dropdown-item">
+                        <q-item-section avatar><q-icon name="check" size="16px" color="positive" /></q-item-section>
+                        <q-item-section>Approve/Reject</q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-menu>
+                </q-btn>
               </q-td>
             </q-tr>
           </template>
@@ -108,7 +112,6 @@
 </template>
 
 <script setup>
-const AVATAR_COLORS = ['primary', 'secondary', 'accent', 'purple', 'deep-orange']
 
 defineProps({
   rows: Array,
@@ -153,119 +156,176 @@ const getRepaymentClass = (method) => {
   if (method === 'automatic') return 'repayment-automatic'
   return 'repayment-default'
 }
-const getAvatarColor = (name) => {
-  if (!name) return AVATAR_COLORS[0]
-  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
-}
 </script>
 
 <style scoped>
 .table-section {
   background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
 }
 .table-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 14px 24px;
   flex-wrap: wrap;
   gap: 10px;
 }
 .table-title-section { min-width: 0; }
 .table-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: #475569;
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .table-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .filter-select { min-width: 160px; }
-.modern-table-container { overflow: hidden; margin: 0 16px 16px 16px; }
-.cash-advance-table { background: #ffffff; width: 100%; table-layout: fixed; }
+.modern-table-container { overflow-x: auto; position: relative; }
+.cash-advance-table { width: 100%; min-width: 700px; }
+
+.cash-advance-table,
+.cash-advance-table :deep(.q-table__container),
+.cash-advance-table :deep(.q-table__card),
+.cash-advance-table.q-table__container,
+.cash-advance-table :deep(.q-table__bottom-border),
+.cash-advance-table :deep(.q-table__top),
+.cash-advance-table :deep(.q-table__bottom),
+.cash-advance-table :deep(.q-table) {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
 .table-header-row { background: #f8fafc; }
+
 .table-header-cell {
   font-size: 11px !important;
   font-weight: 600 !important;
-  color: #6b7280 !important;
+  color: #94a3b8 !important;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 11px 16px !important;
-  border-bottom: 1px solid #e8ecf0 !important;
-  vertical-align: middle !important;
-}
-.table-header-actions { text-align: center !important; }
-.table-body-row { transition: background 0.15s ease; }
-.table-body-row:hover .table-body-cell { background: #f9fafb; }
-.table-body-cell {
-  font-size: 13px;
-  color: #374151;
-  padding: 12px 16px !important;
+  letter-spacing: 0.06em;
+  padding: 8px 14px !important;
   border-bottom: 1px solid #f1f3f5 !important;
   vertical-align: middle !important;
 }
+.table-header-actions { text-align: center !important; }
+
+.table-body-row { transition: background 0.12s ease; }
+.table-body-row:hover .table-body-cell { background: #f8fafc; }
 
 .table-body-row:last-child .table-body-cell {
   border-bottom: none !important;
 }
+
+.table-body-cell {
+  font-size: 13px;
+  color: #334155;
+  padding: 9px 14px !important;
+  border-bottom: 1px solid #f1f3f5 !important;
+  vertical-align: middle !important;
+}
+
 .employee-info { display: flex; align-items: center; gap: 10px; }
-.employee-name-cell { font-weight: 500; }
+.employee-name-cell { min-width: 200px; }
+.employee-name-block { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .employee-name {
-  font-weight: 600;
-  color: #111827;
+  font-weight: 500;
+  color: #0f172a;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.avatar-fallback {
+  background: #eef2ff !important;
+  color: #4338ca !important;
+  font-weight: 600 !important;
+  min-width: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  font-size: 11px !important;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
   border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 .status-pending { background: #fffbeb; color: #92400e; }
-.status-approved { background: #f0fdf4; color: #16a34a; }
-.status-rejected { background: #fef2f2; color: #dc2626; }
-.status-default { background: #f3f4f6; color: #6b7280; }
+.status-pending .status-dot { background: #f59e0b; }
+.status-approved { background: #d1fae5; color: #065f46; }
+.status-approved .status-dot { background: #10b981; }
+.status-rejected { background: #fee2e2; color: #991b1b; }
+.status-rejected .status-dot { background: #f87171; }
+.status-default { background: #f1f5f9; color: #64748b; }
+.status-default .status-dot { background: #94a3b8; }
+
 .repayment-badge {
   display: inline-block;
-  padding: 3px 9px;
-  border-radius: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
   font-size: 11px;
   font-weight: 500;
-  border: 1px solid #e5e7eb;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
 }
 .repayment-manual { background: #fffbeb; color: #92400e; border-color: #fde68a; }
 .repayment-automatic { background: #f0fdf4; color: #065f46; border-color: #bbf7d0; }
-.repayment-default { background: #f3f4f6; color: #6b7280; }
-.amount-value { font-weight: 600; color: #111827; }
+.repayment-default { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+
+.amount-value { font-weight: 600; color: #0f172a; }
 .amount-cell { font-size: 13px; }
+
 .actions-cell {
   text-align: center !important;
-  width: 120px;
-  min-width: 120px;
-  vertical-align: middle !important;
+  width: 72px;
+  min-width: 72px;
 }
-.action-buttons { display: flex; gap: 4px; justify-content: center; align-items: center; }
-.action-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  border-radius: 6px;
+.action-menu-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 8px;
+  color: #94a3b8;
   transition: all 0.15s ease;
-  flex-shrink: 0;
 }
-.view-btn { background: #eff6ff; color: #3b82f6; }
-.view-btn:hover { background: #dbeafe; }
-.edit-btn { background: #fffbeb; color: #d97706; }
-.edit-btn:hover { background: #fef3c7; }
+.action-menu-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+.action-dropdown {
+  border-radius: 10px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 8px 24px rgba(15,23,42,0.08) !important;
+}
+.dropdown-item {
+  font-size: 13px !important;
+  color: #334155 !important;
+  min-height: 36px !important;
+  padding: 0 12px !important;
+  border-radius: 6px !important;
+}
+
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -274,7 +334,7 @@ const getAvatarColor = (name) => {
   padding: 60px 20px;
   gap: 16px;
 }
-.loading-text { font-size: 14px; color: #6b7280; }
+.loading-text { font-size: 14px; color: #94a3b8; }
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -284,23 +344,27 @@ const getAvatarColor = (name) => {
   gap: 8px;
   text-align: center;
 }
-.empty-icon { color: #d1d5db; margin-bottom: 6px; }
-.empty-title { font-size: 15px; font-weight: 600; color: #374151; }
-.empty-subtitle { font-size: 13px; color: #9ca3af; }
+.empty-icon { color: #cbd5e1; margin-bottom: 6px; }
+.empty-title { font-size: 15px; font-weight: 500; color: #334155; }
+.empty-subtitle { font-size: 13px; color: #94a3b8; }
+
+@media (max-width: 1440px) {
+  .cash-advance-table { min-width: 680px; }
+}
 @media (max-width: 1024px) {
-  .modern-table-container { margin: 0 14px 14px 14px; }
-  .table-header-cell, .table-body-cell { padding: 10px 10px !important; font-size: 12px; }
+  .modern-table-container { overflow-x: auto; }
+  .table-header-cell, .table-body-cell { padding: 8px 12px !important; font-size: 12px; }
+  .employee-name-cell { min-width: 170px; }
   .filter-select { min-width: 140px; }
 }
 @media (max-width: 768px) {
   .table-header { flex-direction: column; align-items: stretch; gap: 10px; }
   .table-actions { width: 100%; }
   .filter-select { width: 100%; min-width: unset; }
-  .modern-table-container { margin: 0 10px 10px 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .cash-advance-table { min-width: 750px; }
+  .modern-table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cash-advance-table { min-width: 700px; }
 }
 @media (max-width: 480px) {
-  .table-header-cell, .table-body-cell { padding: 10px 10px !important; font-size: 12px; }
-  .action-btn { width: 28px; height: 28px; min-width: 28px; }
+  .table-header-cell, .table-body-cell { padding: 10px 12px !important; font-size: 12px; }
 }
 </style>
