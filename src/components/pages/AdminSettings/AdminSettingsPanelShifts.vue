@@ -922,6 +922,19 @@ onMounted(async () => {
   font-size: 15px;
 }
 
+@media (min-width: 1440px) {
+  .tab-pill { padding: 9px 18px; font-size: 14px; }
+}
+@media (max-width: 768px) {
+  .tab-pills { gap: 5px; }
+  .tab-pill { padding: 7px 12px; font-size: 12px; flex: 1; justify-content: center; }
+}
+@media (max-width: 480px) {
+  .tab-pill span:not(.tab-badge) { display: none; }
+  .tab-pill { padding: 8px 14px; }
+  .tab-pill-icon { font-size: 16px; }
+}
+
 @media (max-width: 1023px) {
   .weekly-template-modal {
     width: 640px;
