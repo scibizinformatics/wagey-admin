@@ -1073,9 +1073,12 @@ onUnmounted(() => {
 /* Overtime Section - Payroll Card */
 .payroll-card {
   background: #ffffff;
-  border-radius: 0 0 16px 16px;
+  border-radius: 16px;
   border: 1px solid #e8ecf0;
   overflow: hidden;
+}
+.tab-panels .payroll-card {
+  border-radius: 0 0 16px 16px;
 }
 .table-header {
   display: flex;
@@ -1427,20 +1430,11 @@ onUnmounted(() => {
   border-radius: 6px;
   transition: all 0.15s ease;
   flex-shrink: 0;
+  background: #102335;
+  color: #ffffff;
 }
-.view-btn {
-  background: #eff6ff;
-  color: #3b82f6;
-}
-.view-btn:hover {
-  background: #dbeafe;
-}
-.approve-btn {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-.approve-btn:hover {
-  background: #dcfce7;
+.action-btn:hover {
+  background: #193d5c;
 }
 .hours-input {
   max-width: 90px;
