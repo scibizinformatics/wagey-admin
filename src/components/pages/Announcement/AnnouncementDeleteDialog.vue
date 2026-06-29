@@ -62,7 +62,7 @@ defineEmits(['update:modelValue', 'confirm'])
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px !important;
-  background: #fafafa;
+  background: #102335;
 }
 
 .modal-title-section {
@@ -85,7 +85,7 @@ defineEmits(['update:modelValue', 'confirm'])
 .modal-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
+  color: #ffffff;
 }
 
 .modal-subtitle {
@@ -94,7 +94,11 @@ defineEmits(['update:modelValue', 'confirm'])
 }
 
 .modal-close-btn {
-  color: #9ca3af;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
 }
 
 .modal-content {

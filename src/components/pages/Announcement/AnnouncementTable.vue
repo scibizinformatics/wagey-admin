@@ -1,9 +1,6 @@
 <template>
-  <div class="table-section">
-    <div class="table-header">
-      <div class="table-title-section">
-        <h2 class="table-title">Announcement Overview</h2>
-      </div>
+  <div class="table-wrapper">
+    <div class="filter-bar">
       <q-select
         :model-value="typeFilter"
         :options="typeOptions"
@@ -197,26 +194,13 @@ const formatDate = (dateStr) => {
 </script>
 
 <style scoped>
-.table-section {
-  background: #ffffff;
-  border-radius: 0;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
+.table-wrapper {
 }
 
-.table-header {
+.filter-bar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.table-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
+  padding: 12px 24px;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .type-select {
@@ -396,16 +380,18 @@ const formatDate = (dateStr) => {
 }
 
 .edit-btn {
-  color: #3b82f6;
+  color: #ffffff;
+  background: #102335;
 }
 .edit-btn:hover {
-  background: #dbeafe;
+  background: #193d5c;
 }
 .delete-btn {
-  color: #ef4444;
+  color: #ffffff;
+  background: #102335;
 }
 .delete-btn:hover {
-  background: #fecaca;
+  background: #193d5c;
 }
 
 @media (max-width: 1024px) {
@@ -424,14 +410,6 @@ const formatDate = (dateStr) => {
 }
 
 @media (max-width: 768px) {
-  .table-header {
-    padding: 12px;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .table-title {
-    font-size: 15px;
-  }
   .type-select {
     width: 100%;
     min-width: unset;

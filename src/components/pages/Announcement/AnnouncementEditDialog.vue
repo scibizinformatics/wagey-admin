@@ -50,7 +50,7 @@
                 map-options
               />
               <div class="toggle-row">
-                <q-toggle v-model="localForm.is_active" label="Active" color="primary" />
+                <q-toggle v-model="localForm.is_active" label="Active" color="primary" class="brand-toggle" />
                 <q-toggle
                   v-model="localForm.target_everyone"
                   label="Send to Everyone"
@@ -247,7 +247,7 @@ watch(
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px !important;
-  background: #fafafa;
+  background: #102335;
 }
 
 .modal-title-section {
@@ -258,8 +258,8 @@ watch(
 
 .modal-icon {
   font-size: 28px;
-  color: #3b82f6;
-  background: #dbeafe;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
   padding: 8px;
   border-radius: 10px;
 }
@@ -267,7 +267,7 @@ watch(
 .modal-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1a202c;
+  color: #ffffff;
 }
 
 .modal-subtitle {
@@ -276,7 +276,11 @@ watch(
 }
 
 .modal-close-btn {
-  color: #9ca3af;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
 }
 
 .modal-content {
@@ -359,5 +363,11 @@ watch(
     margin: 8px;
     max-width: calc(100vw - 16px);
   }
+}
+.brand-toggle.q-toggle--active .q-toggle__track {
+  background: rgba(16, 35, 53, 0.5) !important;
+}
+.brand-toggle.q-toggle--active .q-toggle__thumb:after {
+  background: #102335 !important;
 }
 </style>
