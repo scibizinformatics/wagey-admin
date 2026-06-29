@@ -148,7 +148,7 @@ const getAvatarColor = (name) => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px !important;
-  background: #ffffff;
+  background: #102335;
 }
 .modal-title-section {
   display: flex;
@@ -156,10 +156,10 @@ const getAvatarColor = (name) => {
   gap: 12px;
 }
 .modal-avatar { flex-shrink: 0; }
-.modal-title { font-size: 16px; font-weight: 600; color: #111827; }
-.modal-subtitle { font-size: 12px; color: #6b7280; margin-top: 2px; }
-.modal-close-btn { color: #9ca3af !important; flex-shrink: 0; }
-.modal-close-btn:hover { background: #f3f4f6 !important; color: #374151 !important; }
+.modal-title { font-size: 16px; font-weight: 600; color: #ffffff; }
+.modal-subtitle { font-size: 12px; color: rgba(255, 255, 255, 0.8); margin-top: 2px; }
+.modal-close-btn { color: rgba(255, 255, 255, 0.8) !important; flex-shrink: 0; }
+.modal-close-btn:hover { background: rgba(255, 255, 255, 0.15) !important; color: #ffffff !important; }
 .modal-content { padding: 20px !important; overflow-y: auto; flex: 1; }
 .modal-footer {
   padding: 14px 20px;
