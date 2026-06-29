@@ -1,18 +1,13 @@
 <template>
   <PageShell>
+    <div class="invite-card">
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
-          <h1 class="page-title">Employee Invitations</h1>
+          <div class="header-titles">
+            <h1 class="page-title">Employee Invitations</h1>
+          </div>
           <div class="header-actions">
-            <q-btn
-              color="primary"
-              label="Invite Employee"
-              icon="add"
-              class="add-employee-btn"
-              unelevated
-              @click="showInviteModal = true"
-            />
             <q-input
               v-model="searchTerm"
               placeholder="Search invitations..."
@@ -25,6 +20,13 @@
                 <q-icon name="search" class="search-icon" />
               </template>
             </q-input>
+            <q-btn
+              label="Invite Employee"
+              icon="add"
+              class="add-employee-btn header-add-btn"
+              unelevated
+              @click="showInviteModal = true"
+            />
           </div>
         </div>
       </div>
@@ -43,29 +45,30 @@
         :user-role-options="userRoleOptions"
         @refresh="loadInvitations"
       />
+    </div>
 
-      <!-- Invite Modal -->
-      <InviteInviteModal
-        v-model="showInviteModal"
-        :user-role-options="userRoleOptions"
-        :loading-roles="loadingRoles"
-        :saving="saving"
-        @send="sendInvitation"
-      />
+    <!-- Invite Modal -->
+    <InviteInviteModal
+      v-model="showInviteModal"
+      :user-role-options="userRoleOptions"
+      :loading-roles="loadingRoles"
+      :saving="saving"
+      @send="sendInvitation"
+    />
 
-      <!-- View Invitation Modal -->
-      <InviteViewModal
-        v-model="showViewModal"
-        :invitation="selectedInvitation"
-        :user-role-options="userRoleOptions"
-      />
+    <!-- View Invitation Modal -->
+    <InviteViewModal
+      v-model="showViewModal"
+      :invitation="selectedInvitation"
+      :user-role-options="userRoleOptions"
+    />
 
-      <!-- Success Dialog -->
-      <InviteSuccessDialog
-        v-model="showSuccessDialog"
-        :sent-to-email="sentToEmail"
-        @send-another="sendAnother"
-      />
+    <!-- Success Dialog -->
+    <InviteSuccessDialog
+      v-model="showSuccessDialog"
+      :sent-to-email="sentToEmail"
+      @send-another="sendAnother"
+    />
   </PageShell>
 </template>
 
@@ -215,12 +218,22 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-header {
+/* ==============================
+   WRAPPER
+   ============================== */
+.invite-card {
   background: #ffffff;
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
+  border-radius: 16px;
   border: 1px solid #e8ecf0;
+  overflow: hidden;
+}
+
+/* ==============================
+   HEADER
+   ============================== */
+.page-header {
+  padding: 8px 24px;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .header-content {
@@ -230,11 +243,18 @@ onMounted(async () => {
   gap: 12px;
 }
 
+.header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: #0f172a;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .header-actions {
@@ -245,22 +265,28 @@ onMounted(async () => {
 }
 
 .header-search {
-  min-width: 200px;
-  max-width: 260px;
+  min-width: 220px;
+  max-width: 280px;
 }
 
-.header-search .q-field__control {
-  border-radius: 8px;
+.header-search :deep(.q-field__control) {
+  border-radius: 10px;
   height: 36px;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.header-search :deep(.q-field__control:hover) {
+  border-color: #cbd5e1;
 }
 
 .search-icon {
-  color: #9ca3af;
+  color: #94a3b8;
 }
 
 .add-employee-btn {
   height: 36px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 500;
   text-transform: none;
   white-space: nowrap;
@@ -268,15 +294,53 @@ onMounted(async () => {
   font-size: 13px;
 }
 
+.header-add-btn {
+  background: #102335 !important;
+  color: #ffffff !important;
+}
+
+.header-add-btn:hover {
+  background: #193d5c !important;
+}
+
+/* ==============================
+   RESPONSIVE
+   ============================== */
+@media (max-width: 1440px) {
+  .invite-card {
+    border-radius: 14px;
+  }
+
+  .page-header {
+    padding: 8px 20px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    padding: 8px 16px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  .header-search {
+    min-width: 180px;
+  }
+}
+
 @media (max-width: 768px) {
   .header-content {
     flex-direction: column;
     align-items: stretch;
   }
+
   .header-actions {
     flex-direction: column;
     gap: 8px;
   }
+
   .header-search,
   .add-employee-btn {
     width: 100%;
