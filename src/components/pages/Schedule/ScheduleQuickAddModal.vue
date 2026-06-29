@@ -121,17 +121,24 @@ function onSubmit() {
   flex-direction: column;
 }
 .modal-header {
-  background: #ffffff;
-  border-bottom: 1px solid #e8ecf0;
+  background: #102335;
+  border-bottom: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
 }
+.modal-header .q-btn {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.modal-header .q-btn:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+}
 .modal-title {
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: #ffffff;
 }
 .modal-body {
   padding: 20px;
@@ -184,10 +191,16 @@ function onSubmit() {
   border-top: 1px solid #f1f3f5;
 }
 .cancel-btn {
-  color: #6b7280;
+  background: #102335;
+  color: #ffffff;
+  padding: 6px 16px;
+  border-radius: 8px !important;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
 }
 .submit-btn {
-  background: #3b82f6;
+  background: #102335 !important;
   color: white;
   padding: 6px 16px;
   border-radius: 8px !important;
@@ -196,7 +209,10 @@ function onSubmit() {
   text-transform: none;
 }
 .submit-btn:hover {
-  background: #2563eb;
+  background: #193d5c !important;
+}
+.cancel-btn:hover {
+  background: #193d5c;
 }
 .quick-info {
   display: flex;

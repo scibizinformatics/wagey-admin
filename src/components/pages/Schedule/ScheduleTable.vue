@@ -573,7 +573,6 @@ function formatTimeWithTimezone(time) {
 }
 .cell-btn-dayoff:hover {
   background: #ffedd5 !important;
-  border-color: #fdba74 !important;
 }
 .row-refresh-spinner {
   margin-left: 6px;
