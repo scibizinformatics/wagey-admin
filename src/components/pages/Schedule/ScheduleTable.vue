@@ -1,12 +1,10 @@
 <template>
   <div class="content-section">
-    <div v-if="loading" class="schedule-loading-overlay">
-      <q-spinner color="primary" size="48px" />
-      <div class="schedule-loading-text">{{ props.loadingText }}</div>
-    </div>
-    <template v-else>
-      <div class="table-view">
-        <div class="table-wrapper">
+    <div class="table-view">
+      <div class="table-wrapper" :class="{ 'is-loading': loading }">
+        <div v-if="loading" class="schedule-loading-overlay">
+          <q-spinner color="primary" size="48px" />
+        </div>
           <table class="schedule-table">
             <thead>
               <tr>
@@ -173,8 +171,7 @@
           </table>
         </div>
       </div>
-    </template>
-  </div>
+    </div>
 </template>
 
 <script setup>
@@ -188,7 +185,6 @@ const props = defineProps({
   assigningDayOffId: { type: String, default: null },
   sites: { type: Array, default: () => [] },
   shiftTypes: { type: Array, default: () => [] },
-  loadingText: { type: String, default: 'Loading schedules...' },
   refreshingRowUserId: { type: [Number, String], default: null },
 });
 
@@ -291,21 +287,22 @@ function formatTimeWithTimezone(time) {
 <style scoped>
 .content-section {
 }
-.schedule-loading-overlay {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  gap: 16px;
-}
-.schedule-loading-text {
-  font-size: 14px;
-  color: #6b7280;
-  font-weight: 500;
-}
 .table-wrapper {
   overflow-x: auto;
+  position: relative;
+  min-height: 100px;
+}
+.table-wrapper.is-loading {
+  min-height: 200px;
+}
+.schedule-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.7);
+  z-index: 10;
 }
 .schedule-table {
   width: 100%;
