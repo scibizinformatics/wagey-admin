@@ -1029,10 +1029,10 @@ onUnmounted(() => {
   color: #374151;
 }
 .tab-pill.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: #102335;
+  border-color: #102335;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3);
 }
 .tab-pill-icon { font-size: 15px; }
 .tab-badge {
@@ -1055,6 +1055,9 @@ onUnmounted(() => {
 .tab-panel-content {
   padding: 0;
 }
+@media (min-width: 1440px) {
+  .tab-pill { padding: 9px 18px; font-size: 14px; }
+}
 @media (max-width: 768px) {
   .page-header { padding: 12px 14px; }
   .page-header-content { flex-direction: column; align-items: stretch; gap: 10px; }
@@ -1062,11 +1065,12 @@ onUnmounted(() => {
   .header-search { max-width: 100%; width: 100%; flex: 1; min-width: 0; }
   .tabs-section { padding: 8px 10px; }
   .tab-pills { gap: 5px; }
-  .tab-pill { padding: 7px 11px; font-size: 12px; flex: 1; justify-content: center; }
+  .tab-pill { padding: 7px 12px; font-size: 12px; flex: 1; justify-content: center; }
 }
 @media (max-width: 480px) {
   .page-title { font-size: 18px; }
   .tab-pill span:not(.tab-badge) { display: none; }
+  .tab-pill { padding: 8px 14px; }
   .tab-pill-icon { font-size: 16px; }
 }
 
