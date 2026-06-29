@@ -358,7 +358,7 @@
             </div>
           </div>
           <div class="q-mt-md">
-            <q-toggle v-model="weeklyTemplateForm.is_active" label="Active" color="primary" />
+            <q-toggle v-model="weeklyTemplateForm.is_active" label="Active" color="primary" class="brand-toggle" />
           </div>
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
@@ -366,6 +366,7 @@
           <q-btn
             color="primary"
             label="Save"
+            class="admin-save-btn"
             :loading="savingWeeklyTemplate"
             @click="saveWeeklyTemplate"
           />
@@ -853,14 +854,13 @@ onMounted(async () => {
   justify-content: center;
   min-height: 24px !important;
   height: 24px !important;
-  color: #1d4ed8;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  color: #ffffff;
+  background: #102335;
+  border: none;
   width: 100%;
 }
 .schedule-btn:hover {
-  background: #dbeafe !important;
-  border-color: #93c5fd !important;
+  background: #193d5c !important;
 }
 .schedule-btn :deep(.q-btn__content) {
   gap: 3px;
@@ -879,11 +879,8 @@ onMounted(async () => {
 }
 
 .tabs-section {
-  background: #ffffff;
-  border-radius: 12px;
-  margin-bottom: 16px;
-  border: 1px solid #e8ecf0;
   padding: 10px 14px;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .tab-pills {
@@ -915,10 +912,10 @@ onMounted(async () => {
 }
 
 .tab-pill.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: #102335;
+  border-color: #102335;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3);
 }
 
 .tab-pill-icon {

@@ -342,7 +342,7 @@
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-          <q-btn color="primary" label="Save" :loading="savingContractType" @click="handleSave" />
+          <q-btn color="primary" label="Save" class="admin-save-btn" :loading="savingContractType" @click="handleSave" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -1212,7 +1212,7 @@ onMounted(async () => {
   justify-content: center;
   width: 24px;
   height: 24px;
-  background: #3b82f6;
+  background: #102335;
   color: white;
   font-weight: 700;
   font-size: 13px;
@@ -1220,6 +1220,9 @@ onMounted(async () => {
   margin-right: 4px;
   cursor: pointer;
   user-select: none;
+}
+.multiplier-badge:hover {
+  background: #193d5c;
 }
 
 .multiplier-badge:hover {

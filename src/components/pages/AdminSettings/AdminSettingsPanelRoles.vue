@@ -89,7 +89,7 @@
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-          <q-btn color="primary" :label="editingRole ? 'Update Role' : 'Save Role'" :loading="savingRole" @click="saveRole" />
+          <q-btn color="primary" :label="editingRole ? 'Update Role' : 'Save Role'" class="admin-save-btn" :loading="savingRole" @click="saveRole" />
         </q-card-actions>
       </q-card>
     </q-dialog>

@@ -83,7 +83,7 @@
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-          <q-btn color="primary" :label="editingDepartment ? 'Update' : 'Save'" :loading="savingDepartment" @click="saveDepartment" />
+          <q-btn color="primary" :label="editingDepartment ? 'Update' : 'Save'" class="admin-save-btn" :loading="savingDepartment" @click="saveDepartment" />
         </q-card-actions>
       </q-card>
     </q-dialog>

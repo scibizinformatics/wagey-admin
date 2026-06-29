@@ -93,7 +93,7 @@
               </q-input>
             </div>
             <div class="col-12">
-              <q-toggle v-model="costCenterForm.is_active" label="Active" color="primary" />
+              <q-toggle v-model="costCenterForm.is_active" label="Active" color="primary" class="brand-toggle" />
             </div>
           </div>
           <div class="form-section-label">Bank Accounts</div>
@@ -108,14 +108,14 @@
               <div class="col-12 col-sm-6"><q-input v-model="bank.bank_name" label="Bank Name" outlined dense /></div>
               <div class="col-12 col-sm-6"><q-input v-model="bank.bank_account_name" label="Account Name" outlined dense /></div>
               <div class="col-12 col-sm-6"><q-input v-model="bank.bank_account_number" label="Account Number" outlined dense /></div>
-              <div class="col-12 col-sm-6 flex items-center"><q-toggle v-model="bank.is_active" label="Active" color="primary" dense /></div>
+              <div class="col-12 col-sm-6 flex items-center"><q-toggle v-model="bank.is_active" label="Active" color="primary" dense class="brand-toggle" /></div>
             </div>
           </div>
           <q-btn flat color="primary" icon="add" label="Add Bank Account" class="q-mb-sm" @click="addBankAccount" />
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-          <q-btn color="primary" :label="editingCostCenter ? 'Update' : 'Save'" :loading="savingCostCenter" @click="saveCostCenter" />
+          <q-btn color="primary" :label="editingCostCenter ? 'Update' : 'Save'" class="admin-save-btn" :loading="savingCostCenter" @click="saveCostCenter" />
         </q-card-actions>
       </q-card>
     </q-dialog>

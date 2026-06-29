@@ -135,35 +135,35 @@
           <div class="form-section-label">Site Settings</div>
           <div class="toggles-grid q-mb-sm">
             <div class="toggle-item">
-              <q-toggle v-model="siteForm.is_active" color="primary" />
+              <q-toggle v-model="siteForm.is_active" color="primary" class="brand-toggle" />
               <div class="toggle-label-group">
                 <span class="toggle-label">Active</span>
                 <span class="toggle-hint">Site is currently operational</span>
               </div>
             </div>
             <div class="toggle-item">
-              <q-toggle v-model="siteForm.requires_otp" color="primary" />
+              <q-toggle v-model="siteForm.requires_otp" color="primary" class="brand-toggle" />
               <div class="toggle-label-group">
                 <span class="toggle-label">Requires OTP</span>
                 <span class="toggle-hint">Enable OTP verification</span>
               </div>
             </div>
             <div class="toggle-item">
-              <q-toggle v-model="siteForm.allow_manual_attendance" color="primary" />
+              <q-toggle v-model="siteForm.allow_manual_attendance" color="primary" class="brand-toggle" />
               <div class="toggle-label-group">
                 <span class="toggle-label">Manual Attendance</span>
                 <span class="toggle-hint">Allow manual clock-in/out</span>
               </div>
             </div>
             <div class="toggle-item">
-              <q-toggle v-model="siteForm.allow_service_charge" color="primary" />
+              <q-toggle v-model="siteForm.allow_service_charge" color="primary" class="brand-toggle" />
               <div class="toggle-label-group">
                 <span class="toggle-label">Service Charge</span>
                 <span class="toggle-hint">Include service charge</span>
               </div>
             </div>
             <div class="toggle-item">
-              <q-toggle v-model="siteForm.multiply_nd_by_holiday" color="primary" />
+              <q-toggle v-model="siteForm.multiply_nd_by_holiday" color="primary" class="brand-toggle" />
               <div class="toggle-label-group">
                 <span class="toggle-label">Multiply ND by Holiday</span>
                 <span class="toggle-hint">Apply holiday multiplier</span>
@@ -184,7 +184,7 @@
 
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-          <q-btn color="primary" :label="editingSite ? 'Update Site' : 'Save Site'" :loading="savingSite" @click="saveSite" />
+          <q-btn color="primary" :label="editingSite ? 'Update Site' : 'Save Site'" class="admin-save-btn" :loading="savingSite" @click="saveSite" />
         </q-card-actions>
       </q-card>
     </q-dialog>
