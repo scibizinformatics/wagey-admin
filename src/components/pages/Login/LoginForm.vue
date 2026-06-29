@@ -562,8 +562,8 @@ $white: #ffffff;
 // ─── Sign In button ──────────────────────────────────────
 .sign-in-btn {
   width: 100%;
-  background: $blue-deep;
-  color: $white;
+  background: #102335;
+  color: #ffffff;
   border-radius: 10px;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -597,7 +597,7 @@ $white: #ffffff;
   }
 
   &:hover:not(.disabled) {
-    background: $blue-mid;
+    background: #193d5c;
     box-shadow: 0 8px 24px rgba(22, 72, 160, 0.32);
     transform: translateY(-1px);
 
