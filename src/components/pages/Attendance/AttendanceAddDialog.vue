@@ -11,8 +11,6 @@
         <q-btn flat round dense icon="close" @click="$emit('update:modelValue', false)" v-close-popup />
       </q-card-section>
 
-      <q-separator />
-
       <q-card-section class="compact-dialog-body">
         <q-form @submit.prevent="onSubmit" class="compact-form">
           <div class="form-row">
@@ -161,9 +159,10 @@
           color="primary"
           label="Save"
           icon="check"
+          class="primary-btn"
           @click="onSubmit"
           :loading="saving"
-          :disable="!record.employee || !record.time_in || !record.time_out"
+          :disable="!record.employee || !record.time_in || !record.time_out || saving"
         />
       </q-card-actions>
     </q-card>
@@ -259,16 +258,24 @@ watch(() => props.record.date, (newDate) => {
   align-items: flex-start;
   padding: 16px 20px;
   gap: 12px;
+  background: #102335;
+}
+.compact-dialog-header .q-btn {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.compact-dialog-header .q-btn:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.15) !important;
 }
 .dialog-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1a202c;
+  color: #ffffff;
   line-height: 1.3;
 }
 .dialog-subtitle {
   font-size: 13px;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.8);
   margin-top: 2px;
 }
 .compact-dialog-body {
@@ -320,6 +327,13 @@ watch(() => props.record.date, (newDate) => {
 }
 .compact-dialog-actions {
   padding: 12px 20px;
+}
+.primary-btn {
+  background: #102335 !important;
+  color: white;
+}
+.primary-btn:hover {
+  background: #193d5c !important;
 }
 @media (max-width: 768px) {
   .compact-dialog-card { max-width: 95vw; margin: 12px; }

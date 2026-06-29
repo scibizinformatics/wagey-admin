@@ -11,8 +11,6 @@
         <q-btn flat round dense icon="close" @click="$emit('update:modelValue', false)" />
       </q-card-section>
 
-      <q-separator />
-
       <q-card-section class="q-pt-md q-pb-md">
         <q-input
           filled
@@ -40,6 +38,7 @@
           label="Save"
           icon="check"
           size="sm"
+          class="primary-btn"
           @click="$emit('save')"
           :loading="saving"
           :disable="!value"
@@ -73,16 +72,31 @@ defineEmits(['update:modelValue', 'update:value', 'save']);
   justify-content: space-between;
   align-items: flex-start;
   padding: 14px 16px;
+  background: #102335;
+}
+.inline-edit-header .q-btn {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.inline-edit-header .q-btn:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.15) !important;
 }
 .dialog-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1a202c;
+  color: #ffffff;
   line-height: 1.3;
 }
 .dialog-subtitle {
   font-size: 13px;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.8) !important;
   margin-top: 2px;
+}
+.primary-btn {
+  background: #102335 !important;
+  color: white;
+}
+.primary-btn:hover {
+  background: #193d5c !important;
 }
 </style>

@@ -133,8 +133,11 @@ function onSubmit() {
   font-size: 13px;
 }
 .primary-btn {
-  background: #3b82f6;
+  background: #102335 !important;
   color: white;
+}
+.primary-btn:hover {
+  background: #193d5c !important;
 }
 @media (max-width: 768px) {
   .edit-dialog-card { max-width: 95vw; }
