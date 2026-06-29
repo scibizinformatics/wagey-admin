@@ -1,39 +1,40 @@
 <template>
-  <div class="stats-section">
-    <div class="stats-card">
-      <div class="stats-icon-wrapper stats-icon-blue">
-        <q-icon name="mail" />
+  <div class="stats-bar">
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-total"></span>
+        Total Invitations
       </div>
-      <div class="stats-content">
-        <div class="stats-label">Total Invitations</div>
-        <div class="stats-amount">{{ total }}</div>
-        <div class="stats-delta stats-delta-neutral">All time</div>
+      <div class="stats-segment-value">{{ total }}</div>
+    </div>
+
+    <div class="stats-divider"></div>
+
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-used"></span>
+        Used
+      </div>
+      <div class="stats-segment-value">
+        {{ used }}
+        <span class="stats-segment-percent percent-used">
+          {{ total > 0 ? Math.round((used / total) * 100) : 0 }}%
+        </span>
       </div>
     </div>
 
-    <div class="stats-card">
-      <div class="stats-icon-wrapper stats-icon-yellow">
-        <q-icon name="schedule" />
-      </div>
-      <div class="stats-content">
-        <div class="stats-label">Unused</div>
-        <div class="stats-amount">{{ unused }}</div>
-        <div class="stats-delta stats-delta-neutral">
-          {{ total > 0 ? Math.round((unused / total) * 100) : 0 }}% of total
-        </div>
-      </div>
-    </div>
+    <div class="stats-divider"></div>
 
-    <div class="stats-card">
-      <div class="stats-icon-wrapper stats-icon-green">
-        <q-icon name="check_circle" />
+    <div class="stats-segment">
+      <div class="stats-segment-label">
+        <span class="stats-dot stats-dot-unused"></span>
+        Unused
       </div>
-      <div class="stats-content">
-        <div class="stats-label">Used</div>
-        <div class="stats-amount">{{ used }}</div>
-        <div class="stats-delta stats-delta-positive">
-          {{ total > 0 ? Math.round((used / total) * 100) : 0 }}% of total
-        </div>
+      <div class="stats-segment-value">
+        {{ unused }}
+        <span class="stats-segment-percent percent-unused">
+          {{ total > 0 ? Math.round((unused / total) * 100) : 0 }}%
+        </span>
       </div>
     </div>
   </div>
@@ -48,103 +49,91 @@ defineProps({
 </script>
 
 <style scoped>
-.stats-section {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.stats-card {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 16px 18px;
-  border: 1px solid #e8ecf0;
+.stats-bar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-width: 0;
-  transition: box-shadow 0.2s ease;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f3f5;
+  padding: 10px 24px;
+  gap: 0;
 }
 
-.stats-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
-}
-
-.stats-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+.stats-segment {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+}
+
+.stats-divider {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 20px;
   flex-shrink: 0;
-  font-size: 20px;
 }
 
-.stats-icon-blue {
-  background: #eff6ff;
-  color: #3b82f6;
-}
-.stats-icon-yellow {
-  background: #fffbeb;
-  color: #f59e0b;
-}
-.stats-icon-green {
-  background: #f0fdf4;
-  color: #22c55e;
-}
-
-.stats-content {
-  min-width: 0;
-}
-
-.stats-label {
+.stats-segment-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 2px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: #94a3b8;
+  white-space: nowrap;
 }
 
-.stats-amount {
-  font-size: 28px;
+.stats-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.stats-dot-total {
+  background: #6366f1;
+}
+.stats-dot-used {
+  background: #10b981;
+}
+.stats-dot-unused {
+  background: #f59e0b;
+}
+
+.stats-segment-value {
+  font-size: 18px;
   font-weight: 700;
-  color: #111827;
-  line-height: 1.1;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.stats-delta {
+.stats-segment-percent {
   font-size: 12px;
-  margin-top: 3px;
   font-weight: 500;
 }
 
-.stats-delta-positive {
-  color: #22c55e;
+.percent-used {
+  color: #10b981;
 }
-.stats-delta-neutral {
-  color: #9ca3af;
-}
-
-@media (max-width: 900px) {
-  .stats-section {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-  }
+.percent-unused {
+  color: #f59e0b;
 }
 
 @media (max-width: 768px) {
-  .stats-section {
-    grid-template-columns: 1fr;
-    gap: 10px;
+  .stats-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 16px;
   }
-}
-
-@media (max-width: 480px) {
-  .stats-amount {
-    font-size: 22px;
+  .stats-divider {
+    width: 100%;
+    height: 1px;
+    margin: 0;
+  }
+  .stats-segment {
+    justify-content: space-between;
   }
 }
 </style>

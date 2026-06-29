@@ -145,7 +145,7 @@ const formatDate = (dateString) => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px !important;
-  background: #2563eb !important;
+  background: #102335 !important;
   border-bottom: none !important;
 }
 

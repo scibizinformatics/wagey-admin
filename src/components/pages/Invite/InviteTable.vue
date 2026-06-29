@@ -1,114 +1,95 @@
 <template>
-  <div class="table-section">
-    <div class="table-header">
-      <h2 class="table-title">Invitation Overview</h2>
-      <div class="table-actions">
-        <q-btn
-          flat
-          dense
-          round
-          icon="refresh"
-          class="refresh-btn"
-          :loading="loading"
-          @click="$emit('refresh')"
-        >
-          <q-tooltip>Refresh</q-tooltip>
-        </q-btn>
-      </div>
-    </div>
+  <div class="modern-table-container">
+    <q-table
+      :rows="rows"
+      :columns="columns"
+      row-key="id"
+      flat
+      :loading="loading"
+      no-data-label="No invitations found"
+      class="loan-table"
+      hide-pagination
+      :rows-per-page-options="[0]"
+    >
+      <template v-slot:loading>
+        <q-inner-loading showing color="primary" />
+      </template>
 
-    <div class="modern-table-container">
-      <q-table
-        :rows="rows"
-        :columns="columns"
-        row-key="id"
-        flat
-        :loading="loading"
-        no-data-label="No invitations found"
-        class="loan-table"
-        hide-pagination
-        :rows-per-page-options="[0]"
-      >
-        <template v-slot:loading>
-          <q-inner-loading showing color="primary" />
-        </template>
+      <template v-slot:header>
+        <q-tr class="table-header-row">
+          <q-th class="table-header-cell th-sl">#</q-th>
+          <q-th class="table-header-cell th-email">Email Address</q-th>
+          <q-th class="table-header-cell th-company">Company</q-th>
+          <q-th class="table-header-cell th-role">Role</q-th>
+          <q-th class="table-header-cell th-code">Invitation Code</q-th>
+          <q-th class="table-header-cell th-status">Status</q-th>
+          <q-th class="table-header-cell th-used">Used</q-th>
+          <q-th class="table-header-cell th-created">Created</q-th>
+          <q-th class="table-header-cell th-expires">Expires</q-th>
+        </q-tr>
+      </template>
 
-        <template v-slot:header>
-          <q-tr class="table-header-row">
-            <q-th class="table-header-cell th-sl">#</q-th>
-            <q-th class="table-header-cell th-email">Email Address</q-th>
-            <q-th class="table-header-cell th-company">Company</q-th>
-            <q-th class="table-header-cell th-role">Role</q-th>
-            <q-th class="table-header-cell th-code">Invitation Code</q-th>
-            <q-th class="table-header-cell th-status">Status</q-th>
-            <q-th class="table-header-cell th-used">Used</q-th>
-            <q-th class="table-header-cell th-created">Created</q-th>
-            <q-th class="table-header-cell th-expires">Expires</q-th>
-          </q-tr>
-        </template>
+      <template v-slot:body="props">
+        <q-tr class="table-body-row">
+          <q-td class="table-body-cell sl-cell td-sl">
+            {{ String(props.rowIndex + 1).padStart(2, '0') }}.
+          </q-td>
 
-        <template v-slot:body="props">
-          <q-tr class="table-body-row">
-            <q-td class="table-body-cell sl-cell td-sl">
-              {{ String(props.rowIndex + 1).padStart(2, '0') }}.
-            </q-td>
-
-            <q-td class="table-body-cell email-name-cell td-email">
-              <div class="employee-info">
-                <q-avatar size="34px" class="avatar-fallback">
-                  {{ getInitials(props.row.email) }}
-                </q-avatar>
-                <span class="employee-name">{{ props.row.email }}</span>
-              </div>
-            </q-td>
-
-            <q-td class="table-body-cell td-company">
-              {{ props.row.company || 'N/A' }}
-            </q-td>
-
-            <q-td class="table-body-cell td-role">
-              <span class="role-chip">{{ getRoleLabel(props.row.role ?? props.row.user_role) }}</span>
-            </q-td>
-
-            <q-td class="table-body-cell td-code">
-              <code class="code-text">{{ props.row.code || 'N/A' }}</code>
-            </q-td>
-
-            <q-td class="table-body-cell td-status">
-              <div :class="['status-badge', getStatusClass(props.row.status)]">
-                <span class="status-dot"></span>
-                {{ props.row.status || 'Pending' }}
-              </div>
-            </q-td>
-
-            <q-td class="table-body-cell td-used">
-              <div :class="['status-badge', props.row.is_used ? 'status-active' : 'status-unused']">
-                <span class="status-dot"></span>
-                {{ props.row.is_used ? 'Used' : 'Unused' }}
-              </div>
-            </q-td>
-
-            <q-td class="table-body-cell td-created">
-              {{ formatDate(props.row.created_at) }}
-            </q-td>
-
-            <q-td class="table-body-cell td-expires">
-              {{ formatDate(props.row.expires_at) }}
-            </q-td>
-          </q-tr>
-        </template>
-
-        <template v-slot:no-data>
-          <div class="empty-state">
-            <q-icon name="mail_outline" size="48px" class="empty-state-icon" />
-            <div class="empty-state-title">No invitations found</div>
-            <div class="empty-state-sub">
-              Try adjusting your search or send a new invitation.
+          <q-td class="table-body-cell email-name-cell td-email">
+            <div class="employee-info">
+              <q-avatar size="34px" class="avatar-fallback">
+                {{ getInitials(props.row.email) }}
+              </q-avatar>
+              <span class="employee-name">{{ props.row.email }}</span>
             </div>
+          </q-td>
+
+          <q-td class="table-body-cell td-company">
+            {{ props.row.company || 'N/A' }}
+          </q-td>
+
+          <q-td class="table-body-cell td-role">
+            <span class="role-chip">{{ getRoleLabel(props.row.role ?? props.row.user_role) }}</span>
+          </q-td>
+
+          <q-td class="table-body-cell td-code">
+            <code class="code-text">{{ props.row.code || 'N/A' }}</code>
+          </q-td>
+
+          <q-td class="table-body-cell td-status">
+            <div :class="['status-badge', getStatusClass(props.row.status)]">
+              <span class="status-dot"></span>
+              {{ props.row.status || 'Pending' }}
+            </div>
+          </q-td>
+
+          <q-td class="table-body-cell td-used">
+            <div :class="['status-badge', props.row.is_used ? 'status-active' : 'status-unused']">
+              <span class="status-dot"></span>
+              {{ props.row.is_used ? 'Used' : 'Unused' }}
+            </div>
+          </q-td>
+
+          <q-td class="table-body-cell td-created">
+            {{ formatDate(props.row.created_at) }}
+          </q-td>
+
+          <q-td class="table-body-cell td-expires">
+            {{ formatDate(props.row.expires_at) }}
+          </q-td>
+        </q-tr>
+      </template>
+
+      <template v-slot:no-data>
+        <div class="empty-state">
+          <q-icon name="mail_outline" size="48px" class="empty-state-icon" />
+          <div class="empty-state-title">No invitations found</div>
+          <div class="empty-state-sub">
+            Try adjusting your search or send a new invitation.
           </div>
-        </template>
-      </q-table>
-    </div>
+        </div>
+      </template>
+    </q-table>
   </div>
 </template>
 
@@ -167,45 +148,6 @@ const formatDate = (dateString) => {
 </script>
 
 <style scoped>
-.table-section {
-  background: #ffffff;
-  border-radius: 0;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
-}
-
-.table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.table-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
-}
-
-.table-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.refresh-btn {
-  color: #6b7280 !important;
-  border-radius: 6px !important;
-}
-
-.refresh-btn:hover {
-  background: #f3f4f6 !important;
-  color: #374151 !important;
-}
-
 .modern-table-container {
   overflow-x: auto;
 }
@@ -444,13 +386,6 @@ const formatDate = (dateString) => {
 .empty-state-sub {
   font-size: 13px;
   color: #9ca3af;
-}
-
-@media (max-width: 768px) {
-  .table-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
 }
 
 @media (max-width: 480px) {
