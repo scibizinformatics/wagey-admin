@@ -212,6 +212,9 @@
 </template>
 
 <script setup>
+import { api } from 'src/boot/axios'
+import { BASE } from 'src/composables/utils/http'
+import { useCompany } from '@/composables/page/useCompany'
 import PageShell from '@/components/layout/PageShell.vue'
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
@@ -230,6 +233,8 @@ import AttendanceCostCenterEditDialog from '@/components/pages/Attendance/Attend
 import AttendanceEditDialog from '@/components/pages/Attendance/AttendanceEditDialog.vue'
 
 const $q = useQuasar()
+
+const { companyId } = useCompany()
 
 // ─── Composables ──────────────────────────────────────────────────────────────
 const {
@@ -599,6 +604,8 @@ async function fetchEmployeeDetails() {
 
 // ─── Submit attendance (add) ──────────────────────────────────────────────────
 async function submitAttendance(record) {
+  if (creating.value) return
+
   if (!record.employee) {
     showErrorNotification('Please select an employee')
     return
@@ -634,6 +641,8 @@ async function submitAttendance(record) {
 
   creating.value = true
 
+  let timeInRecordId = null
+
   try {
     if (!selectedEmp) {
       showErrorNotification('Employee not found.')
@@ -655,7 +664,7 @@ async function submitAttendance(record) {
     )
     const activeAssignmentId = firstUnconsumed?.assignment_id ?? null
 
-    await logAttendance({
+    const timeInResult = await logAttendance({
       source: 'manual',
       time_in_source: 'manual',
       employee_id: employeeUUID,
@@ -664,7 +673,7 @@ async function submitAttendance(record) {
       ...(activeAssignmentId != null && { assignment_id: activeAssignmentId }),
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    timeInRecordId = timeInResult?.id
 
     await logAttendance({
       source: 'manual',
@@ -686,6 +695,11 @@ async function submitAttendance(record) {
     closeAddDialog()
     await fetchAttendanceData()
   } catch (error) {
+    if (timeInRecordId != null) {
+      try {
+        await api.delete(`${BASE}/attendance/log/${companyId.value}/${timeInRecordId}/`)
+      } catch { /* rollback failure is non-critical */ }
+    }
     const data = error.response?.data
     const msg =
       typeof data === 'string'
@@ -1179,11 +1193,11 @@ onMounted(async () => {
   font-size: 13px;
 }
 .header-add-btn {
-  background: #1e1b4b !important;
-  color: #eef2ff !important;
+  background: #102335 !important;
+  color: #ffffff !important;
 }
 .header-add-btn:hover {
-  background: #2d2a6b !important;
+  background: #193d5c !important;
 }
 
 /* ==============================
