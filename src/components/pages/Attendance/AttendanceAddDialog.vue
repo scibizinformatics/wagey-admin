@@ -115,10 +115,9 @@
               dense
               :model-value="record.time_out"
               @update:model-value="updateField('time_out', $event)"
-              label="Time Out *"
+              label="Time Out"
               type="time"
               class="form-field"
-              :rules="[(val) => !!val || 'Required']"
             >
               <template v-slot:prepend>
                 <q-icon name="logout" size="xs" />
@@ -162,7 +161,7 @@
           class="primary-btn"
           @click="onSubmit"
           :loading="saving"
-          :disable="!record.employee || !record.time_in || !record.time_out || saving"
+          :disable="!record.employee || !record.time_in || saving"
         />
       </q-card-actions>
     </q-card>
