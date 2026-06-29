@@ -15,9 +15,16 @@
         </div>
       </div>
 
-      <!-- Header (title only) -->
+      <!-- Header with Export All -->
       <div class="page-header">
-        <h1 class="page-title">Disbursements</h1>
+        <div class="header-content">
+          <div class="header-titles">
+            <h1 class="page-title">Disbursements</h1>
+          </div>
+          <div class="header-actions">
+            <q-btn unelevated icon="file_download" label="Export All" color="primary" class="export-btn" no-caps @click="exportToPDF" />
+          </div>
+        </div>
       </div>
 
       <PayrollStatsCards
@@ -36,12 +43,16 @@
                 <div class="table-info">{{ payrollRunsSummary.length }} runs</div>
               </div>
               <div class="table-header-actions">
-                <q-btn flat round icon="refresh" class="header-btn" @click="fetchPayrollRunsSummary()" :loading="isLoading('fetchingPayrollRunsSummary')" />
+                <q-btn flat round icon="refresh" class="header-btn" @click="fetchRunsForCutoff()" :loading="isLoading('fetchingPayrollRunsSummary')" />
                 <q-input v-model="disbursementSearch" dense outlined placeholder="Search disbursements..." class="header-search" clearable>
                   <template v-slot:prepend><q-icon name="search" class="search-icon" /></template>
                 </q-input>
                 <q-btn unelevated icon="add" label="Add Disbursements" class="export-btn header-add-btn" no-caps @click="openCreateRunDialog" />
-                <q-btn unelevated icon="file_download" label="Export All" color="primary" class="export-btn" no-caps @click="exportToPDF" />
+                <div class="cutoff-nav">
+                  <q-btn flat round icon="chevron_left" @click="prevCutoff" class="nav-btn" size="sm" />
+                  <div class="cutoff-display">{{ cutoffStartStr }} – {{ cutoffEndStr }}</div>
+                  <q-btn flat round icon="chevron_right" @click="nextCutoff" class="nav-btn" size="sm" />
+                </div>
               </div>
             </div>
 
@@ -234,6 +245,61 @@ const fetchPayrollRunsSummary = (extraParams = {}) => {
   const params = cid ? { company_id: cid, ...extraParams } : extraParams
   console.debug('[PayrollPage] fetchPayrollRunsSummary params:', params)
   return _fetchPayrollRunsSummary(params)
+}
+
+// ─── Cut-off Period Navigation ───────────────────────────────────────────────
+function getCutoffRange(date = new Date()) {
+  const d = new Date(date)
+  const year = d.getFullYear()
+  const month = d.getMonth()
+  const day = d.getDate()
+  let start, end
+  if (day <= 15) {
+    start = new Date(year, month, 1)
+    end = new Date(year, month, 15, 23, 59, 59, 999)
+  } else {
+    start = new Date(year, month, 16)
+    end = new Date(year, month + 1, 0, 23, 59, 59, 999)
+  }
+  return { start, end }
+}
+
+const selectedCutoff = ref(getCutoffRange())
+
+const cutoffStartStr = computed(() =>
+  selectedCutoff.value.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+)
+const cutoffEndStr = computed(() =>
+  selectedCutoff.value.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+)
+
+function formatDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function fetchRunsForCutoff() {
+  const cid = getResolvedCompanyId()
+  if (!cid) return
+  fetchPayrollRunsSummary({
+    start_date: formatDate(selectedCutoff.value.start),
+    end_date: formatDate(selectedCutoff.value.end),
+  })
+}
+
+function prevCutoff() {
+  const current = selectedCutoff.value
+  const prevEnd = new Date(current.start)
+  prevEnd.setDate(prevEnd.getDate() - 1)
+  selectedCutoff.value = getCutoffRange(prevEnd)
+  fetchRunsForCutoff()
+}
+
+function nextCutoff() {
+  const current = selectedCutoff.value
+  const nextStart = new Date(current.end)
+  nextStart.setDate(nextStart.getDate() + 1)
+  selectedCutoff.value = getCutoffRange(nextStart)
+  fetchRunsForCutoff()
 }
 
 // ─── Tab State ───────────────────────────────────────────────────────────────
@@ -1440,7 +1506,7 @@ onMounted(async () => {
     catch (err) { console.error('[PayrollPage] Failed to preload departments/cost centers:', err) }
   }
   try {
-    await fetchPayrollRunsSummary()
+    await fetchRunsForCutoff()
     await loadAllFundingHistory()
   } catch (err) {
     console.error('[PayrollPage] Initial summary fetch failed:', err)
@@ -1503,10 +1569,10 @@ onUnmounted(() => {
 }
 
 .tab-pill.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: #102335;
+  border-color: #102335;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3);
 }
 
 .tab-pill-icon {
@@ -1514,11 +1580,31 @@ onUnmounted(() => {
 }
 
 /* ==============================
-   HEADER (title only)
+   HEADER
    ============================== */
 .page-header {
   padding: 8px 24px;
   border-bottom: 1px solid #f1f3f5;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-titles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {
@@ -1623,6 +1709,39 @@ onUnmounted(() => {
 
 .header-add-btn:hover {
   background: #193d5c !important;
+}
+
+/* ==============================
+   CUTOFF NAV
+   ============================== */
+.cutoff-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e8ecf0;
+}
+
+.cutoff-nav .nav-btn {
+  color: #6b7280 !important;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px !important;
+}
+
+.cutoff-nav .nav-btn:hover {
+  background: #f3f4f6 !important;
+}
+
+.cutoff-display {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  min-width: 160px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 /* ==============================
