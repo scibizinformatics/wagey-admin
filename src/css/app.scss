@@ -22,6 +22,10 @@ $warning-light: #fef3c7;
 $danger: #ef4444;
 $danger-light: #fee2e2;
 
+// Brand Dark Color
+$brand-dark: #102335;
+$brand-dark-hover: #193d5c;
+
 // Neutral Gray Scale
 $gray-50: #f9fafb;
 $gray-100: #f3f4f6;
@@ -341,7 +345,7 @@ $separator-size: 1px;
   box-shadow: $shadow-md;
 }
 
-@mixin button-style($bg-color: $primary, $text-color: white) {
+@mixin button-style($bg-color: $brand-dark, $text-color: white) {
   background-color: $bg-color;
   color: $text-color;
   border: none;
@@ -431,25 +435,7 @@ $separator-size: 1px;
   border-spacing: 0 !important;
 }
 
-.settings-table thead tr:first-child th:first-child,
-.settings-table .table-header-row:first-child .table-header-cell:first-child {
-  border-top-left-radius: 12px !important;
-}
 
-.settings-table thead tr:first-child th:last-child,
-.settings-table .table-header-row:first-child .table-header-cell:last-child {
-  border-top-right-radius: 12px !important;
-}
-
-.settings-table tbody tr:last-child td:first-child,
-.settings-table .table-body-row:last-child .table-body-cell:first-child {
-  border-bottom-left-radius: 12px !important;
-}
-
-.settings-table tbody tr:last-child td:last-child,
-.settings-table .table-body-row:last-child .table-body-cell:last-child {
-  border-bottom-right-radius: 12px !important;
-}
 
 // ============================================================================
 // DRAWER OVERRIDE
@@ -522,5 +508,37 @@ $separator-size: 1px;
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+// ========================================================================
+// GLOBAL BRAND COLOR OVERRIDES
+// ========================================================================
+
+// All Quasar primary buttons use brand-dark
+.q-btn--primary:not(.q-btn--flat):not(.q-btn--outline) {
+  background: $brand-dark !important;
+
+  &:hover {
+    background: $brand-dark-hover !important;
+  }
+}
+
+// Flat primary buttons get brand-dark text
+.q-btn--primary.q-btn--flat {
+  color: $brand-dark !important;
+
+  &:hover {
+    background: rgba($brand-dark, 0.08) !important;
+  }
+}
+
+// Outline primary buttons get brand-dark border/text
+.q-btn--primary.q-btn--outline {
+  border-color: $brand-dark !important;
+  color: $brand-dark !important;
+
+  &:hover {
+    background: rgba($brand-dark, 0.08) !important;
   }
 }
