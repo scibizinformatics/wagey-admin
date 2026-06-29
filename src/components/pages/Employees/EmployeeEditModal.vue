@@ -200,7 +200,7 @@ const submit = () => {
 }
 
 .modal-header {
-  background: #2563eb !important;
+  background: #102335 !important;
   border-bottom: none !important;
   display: flex;
   justify-content: space-between;
@@ -319,8 +319,8 @@ const submit = () => {
 }
 
 .cancel-btn {
-  color: #6b7280;
-  border: 1px solid #e2e8f0 !important;
+  background: #102335 !important;
+  color: #ffffff !important;
   border-radius: 10px !important;
   font-weight: 500 !important;
   text-transform: none !important;
@@ -328,10 +328,10 @@ const submit = () => {
   min-height: 38px !important;
 }
 .cancel-btn:hover {
-  background: #f1f5f9 !important;
+  background: #193d5c !important;
 }
 .submit-btn {
-  background: #2563eb !important;
+  background: #102335 !important;
   color: white;
   border-radius: 10px !important;
   font-weight: 600 !important;
@@ -340,8 +340,8 @@ const submit = () => {
   padding: 0 22px !important;
 }
 .submit-btn:hover {
-  background: #1d4ed8 !important;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+  background: #193d5c !important;
+  box-shadow: 0 4px 12px rgba(16, 35, 53, 0.3) !important;
 }
 
 /* Avatar upload */

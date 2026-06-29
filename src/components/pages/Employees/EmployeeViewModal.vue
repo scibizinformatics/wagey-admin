@@ -154,7 +154,7 @@ const close = () => emit('update:modelValue', false)
 }
 
 .modal-header {
-  background: #2563eb !important;
+  background: #102335 !important;
   border-bottom: none !important;
   display: flex;
   justify-content: space-between;
@@ -194,7 +194,7 @@ const close = () => emit('update:modelValue', false)
 }
 
 .view-tabs {
-  background: #2563eb;
+  background: #102335;
   padding: 0 20px;
   font-size: 13px;
 }

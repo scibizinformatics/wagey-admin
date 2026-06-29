@@ -52,7 +52,7 @@ const fullName = computed(() => {
 }
 
 .confirm-header-success {
-  background: #2563eb !important;
+  background: #102335 !important;
 }
 
 .confirm-icon-wrap {
@@ -87,8 +87,8 @@ const fullName = computed(() => {
 }
 
 .cancel-btn {
-  color: #6b7280;
-  border: 1px solid #e2e8f0 !important;
+  background: #102335 !important;
+  color: #ffffff !important;
   border-radius: 10px !important;
   font-weight: 500 !important;
   text-transform: none !important;
@@ -96,7 +96,7 @@ const fullName = computed(() => {
   min-height: 38px !important;
 }
 .cancel-btn:hover {
-  background: #f1f5f9 !important;
+  background: #193d5c !important;
 }
 
 @media (max-width: 768px) {
