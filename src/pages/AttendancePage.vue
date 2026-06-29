@@ -610,8 +610,8 @@ async function submitAttendance(record) {
     showErrorNotification('Please select an employee')
     return
   }
-  if (!record.time_in || !record.time_out) {
-    showErrorNotification('Please enter both time in and time out')
+  if (!record.time_in) {
+    showErrorNotification('Please enter a time in')
     return
   }
 
@@ -622,8 +622,11 @@ async function submitAttendance(record) {
   const empTimezone = selectedEmp?.timezone || employeeTimezoneCache[employeeId]
 
   const timeIn = new Date(toUTC(record.date, record.time_in, empTimezone))
-  let timeOut = new Date(toUTC(record.date, record.time_out, empTimezone))
-  if (timeOut <= timeIn) timeOut.setDate(timeOut.getDate() + 1)
+  let timeOut = null
+  if (record.time_out) {
+    timeOut = new Date(toUTC(record.date, record.time_out, empTimezone))
+    if (timeOut <= timeIn) timeOut.setDate(timeOut.getDate() + 1)
+  }
 
   if (record.date && (!employeeSchedule.value || employeeSchedule.value.length === 0) && !loadingSchedule.value) {
     try {
@@ -673,15 +676,15 @@ async function submitAttendance(record) {
       ...(activeAssignmentId != null && { assignment_id: activeAssignmentId }),
     })
 
-    timeInRecordId = timeInResult?.id
+    timeInRecordId = timeInResult?.id ?? timeInResult?.data?.id
 
-    await logAttendance({
+    await updateAttendanceApi(timeInRecordId, {
+      time_in: timeIn.toISOString(),
+      time_out: timeOut?.toISOString() ?? null,
+      time_in_source: 'manual',
+      time_out_source: record.time_out ? 'manual' : null,
       source: 'manual',
-      time_out_source: 'manual',
-      employee_id: employeeUUID,
-      timestamp: timeOut.toISOString(),
       ...(record.cost_center_id != null && { cost_center: record.cost_center_id }),
-      ...(activeAssignmentId != null && { assignment_id: activeAssignmentId }),
     })
 
     if (activeAssignmentId != null) {
