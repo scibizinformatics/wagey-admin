@@ -61,7 +61,7 @@
         :days="days"
         :leave-types="leaveTypes"
         :loading="isLoadingSchedule"
-        :loading-text="loadingMessage"
+
         :quick-action-loading="quickActionLoading"
         :assigning-day-off-id="assigningDayOffId"
         :refreshing-row-user-id="refreshingRowUserId"
@@ -157,7 +157,7 @@
 
 <script setup>
 import PageShell from '@/components/layout/PageShell.vue'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
 import { useCompany } from '@/composables/page/useCompany'
 import { useSchedule } from '@/composables/page/useSchedule'
@@ -213,7 +213,7 @@ const pageSizeOptions = [10, 20, 50]
 
 const allSchedules = ref([])
 const scheduleCache = ref({})
-const loadingMessage = ref('Loading schedules...')
+
 
 const showAddModal = ref(false)
 const showQuickAddModal = ref(false)
@@ -440,8 +440,6 @@ function parseShifts(shiftsData) {
   return []
 }
 
-const fmtDate = (d) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 const filterEmployeeOptions = (val, update) => {
   update(() => {
@@ -744,7 +742,7 @@ const refreshSingleEmployee = async (userId) => {
 
 const fetchData = async () => {
   isLoadingSchedule.value = true
-  loadingMessage.value = 'Loading schedules...'
+  await nextTick()
   try {
     const token = localStorage.getItem('access_token')
     const cId = normalizeCompanyId()
@@ -769,7 +767,6 @@ const fetchData = async () => {
       let hasMore = true
 
       while (hasMore) {
-        loadingMessage.value = `Loading page ${page}...`
         const response = await fetchScheduleByDateRange(fmt(ws), fmt(weekEnd), {
           page: page,
           page_size: 10,
@@ -826,7 +823,6 @@ const fetchData = async () => {
     $q.notify({ type: 'negative', message: 'Failed to load schedules', timeout: 5000 })
   } finally {
     isLoadingSchedule.value = false
-    loadingMessage.value = 'Loading schedules...'
   }
 }
 
@@ -1053,7 +1049,7 @@ const addSchedule = async () => {
       selectedWeek.value = getWeekRange(targetDate)
     }
     await new Promise((r) => setTimeout(r, 1200))
-    delete scheduleCache.value[fmtDate(selectedWeek.value.start)]
+    scheduleCache.value = {}
     await fetchData()
     fetchLeaves()
     const scheduleLabel = n.scheduleType === 'recurring' ? 'Recurring schedule' : 'Schedule'
