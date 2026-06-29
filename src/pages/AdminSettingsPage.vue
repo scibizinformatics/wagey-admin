@@ -1,14 +1,8 @@
 <template>
   <PageShell>
-      <!-- Header Section -->
-      <div class="page-header">
-        <div class="header-content">
-          <h1 class="page-title">Admin Settings</h1>
-        </div>
-      </div>
-
+    <div class="admin-card">
       <!-- Tabs Navigation -->
-      <div class="tabs-wrapper">
+      <div class="tabs-section">
         <q-tabs
           v-model="activeTab"
           dense
@@ -70,6 +64,7 @@
           <AdminSettingsPanelCostCenters :search-query="searchQuery" />
         </q-tab-panel>
       </q-tab-panels>
+    </div>
 
   </PageShell>
 </template>
@@ -92,39 +87,21 @@ const searchQuery = ref('')
 </script>
 
 <style scoped>
-.page-header {
+.admin-card {
   background: #ffffff;
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
+  border-radius: 16px;
   border: 1px solid #e8ecf0;
+  overflow: hidden;
 }
 
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
-}
-
-.tabs-wrapper {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  margin-bottom: 16px;
+.tabs-section {
+  padding: 0 24px;
+  border-bottom: 1px solid #f1f3f5;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .settings-tabs {
-  padding: 0 8px;
   min-width: max-content;
 }
 
@@ -141,37 +118,21 @@ const searchQuery = ref('')
   background: transparent;
 }
 
-@media (max-width: 1024px) {
-  .page-header {
-    padding: 14px;
+@media (max-width: 1440px) {
+  .admin-card {
+    border-radius: 14px;
   }
+}
 
-  .page-title {
-    font-size: 18px;
+@media (max-width: 1024px) {
+  .tabs-section {
+    padding: 0 16px;
   }
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    padding: 14px;
-    margin-bottom: 12px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-}
-
-@media (max-width: 480px) {
-  .page-header {
-    padding: 12px;
-    border-radius: 10px;
-  }
-
-  .page-title {
-    font-size: 17px;
+  .tabs-section {
+    padding: 0 12px;
   }
 }
 </style>
