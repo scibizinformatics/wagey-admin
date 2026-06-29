@@ -1,19 +1,13 @@
 <template>
   <PageShell>
+    <div class="announcement-card">
       <!-- Header Section -->
       <div class="page-header">
         <div class="header-content">
-          <div class="header-left">
+          <div class="header-titles">
             <h1 class="page-title">Announcements</h1>
           </div>
           <div class="header-actions">
-            <q-btn
-              color="primary"
-              label="New Announcement"
-              icon="add"
-              class="add-announcement-btn"
-              @click="openCreateDialog"
-            />
             <q-input
               v-model="searchQuery"
               placeholder="Search announcements..."
@@ -25,6 +19,13 @@
                 <q-icon name="search" class="search-icon" />
               </template>
             </q-input>
+            <q-btn
+              label="New Announcement"
+              icon="add"
+              class="add-announcement-btn header-add-btn"
+              unelevated
+              @click="openCreateDialog"
+            />
           </div>
         </div>
       </div>
@@ -48,30 +49,31 @@
         :roles="roles"
         @update:type-filter="typeFilter = $event"
       />
+    </div>
 
-      <!-- Create / Edit Dialog -->
-      <AnnouncementEditDialog
-        v-model="showDialog"
-        :editing-announcement="editingAnnouncement"
-        :saving="saving"
-        :positions="positions"
-        :users="users"
-        :roles="roles"
-        :loading-positions="loadingPositions"
-        :loading-users="loadingUsers"
-        :loading-roles="loadingRoles"
-        :type-select-options="typeSelectOptions"
-        @save="saveAnnouncement"
-        @toggle-target-everyone="onTargetEveryoneToggle"
-      />
+    <!-- Create / Edit Dialog -->
+    <AnnouncementEditDialog
+      v-model="showDialog"
+      :editing-announcement="editingAnnouncement"
+      :saving="saving"
+      :positions="positions"
+      :users="users"
+      :roles="roles"
+      :loading-positions="loadingPositions"
+      :loading-users="loadingUsers"
+      :loading-roles="loadingRoles"
+      :type-select-options="typeSelectOptions"
+      @save="saveAnnouncement"
+      @toggle-target-everyone="onTargetEveryoneToggle"
+    />
 
-      <!-- Delete Confirmation Dialog -->
-      <AnnouncementDeleteDialog
-        v-model="showDeleteDialog"
-        :announcement-title="announcementToDelete?.title || ''"
-        :deleting="deleting"
-        @confirm="confirmDeleteAction"
-      />
+    <!-- Delete Confirmation Dialog -->
+    <AnnouncementDeleteDialog
+      v-model="showDeleteDialog"
+      :announcement-title="announcementToDelete?.title || ''"
+      :deleting="deleting"
+      @confirm="confirmDeleteAction"
+    />
   </PageShell>
 </template>
 
@@ -328,12 +330,22 @@ onMounted(fetchAnnouncements)
 </script>
 
 <style scoped>
-.page-header {
+/* ==============================
+   WRAPPER
+   ============================== */
+.announcement-card {
   background: #ffffff;
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
+  border-radius: 16px;
   border: 1px solid #e8ecf0;
+  overflow: hidden;
+}
+
+/* ==============================
+   HEADER
+   ============================== */
+.page-header {
+  padding: 8px 24px;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .header-content {
@@ -343,65 +355,114 @@ onMounted(fetchAnnouncements)
   gap: 12px;
 }
 
+.header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: #0f172a;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .header-actions {
   display: flex;
+  gap: 10px;
   align-items: center;
-  gap: 12px;
-}
-
-.add-announcement-btn {
-  min-width: 170px;
+  flex-wrap: wrap;
 }
 
 .header-search {
-  min-width: 240px;
-  max-width: 320px;
+  min-width: 220px;
+  max-width: 280px;
+}
+
+.header-search :deep(.q-field__control) {
+  border-radius: 10px;
+  height: 36px;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.header-search :deep(.q-field__control:hover) {
+  border-color: #cbd5e1;
 }
 
 .search-icon {
-  color: #9ca3af;
+  color: #94a3b8;
+}
+
+.add-announcement-btn {
+  height: 36px;
+  border-radius: 10px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.header-add-btn {
+  background: #102335 !important;
+  color: #ffffff !important;
+}
+
+.header-add-btn:hover {
+  background: #193d5c !important;
+}
+
+/* ==============================
+   RESPONSIVE
+   ============================== */
+@media (max-width: 1440px) {
+  .announcement-card {
+    border-radius: 14px;
+  }
+
+  .page-header {
+    padding: 8px 20px;
+  }
 }
 
 @media (max-width: 1024px) {
+  .page-header {
+    padding: 8px 16px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
   .header-search {
-    min-width: 160px;
-    max-width: 200px;
+    min-width: 180px;
   }
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    padding: 12px 14px;
-    margin-bottom: 12px;
-  }
   .header-content {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
   }
-  .page-title {
-    font-size: 18px;
-  }
+
   .header-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 8px;
   }
+
+  .header-search,
   .add-announcement-btn {
-    flex: 1 1 auto;
-    min-width: 140px;
-  }
-  .header-search {
-    flex: 2 1 160px;
-    min-width: 140px;
+    width: 100%;
     max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 18px;
   }
 }
 </style>
