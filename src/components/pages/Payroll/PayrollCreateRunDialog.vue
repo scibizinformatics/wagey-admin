@@ -109,7 +109,7 @@ const form = props.createRunForm
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px !important;
-  background: #ffffff;
+  background: #102335;
 }
 
 .modal-title-section {
@@ -119,8 +119,8 @@ const form = props.createRunForm
 }
 
 .modal-avatar-icon {
-  background: #eff6ff !important;
-  color: #3b82f6 !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
   border-radius: 10px !important;
   flex-shrink: 0;
 }
@@ -128,20 +128,20 @@ const form = props.createRunForm
 .modal-title {
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: #ffffff;
 }
 .modal-subtitle {
   font-size: 12px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.8);
   margin-top: 2px;
 }
 .modal-close-btn {
-  color: #9ca3af !important;
+  color: rgba(255, 255, 255, 0.8) !important;
   flex-shrink: 0;
 }
 .modal-close-btn:hover {
-  background: #f3f4f6 !important;
-  color: #374151 !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
 }
 
 .modal-content {
