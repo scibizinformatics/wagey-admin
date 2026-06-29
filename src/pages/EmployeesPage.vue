@@ -1322,12 +1322,12 @@ watch(companyId, (newId, oldId) => {
 }
 
 .header-add-btn {
-  background: #1e1b4b !important;
-  color: #eef2ff !important;
+  background: #102335 !important;
+  color: #ffffff !important;
 }
 
 .header-add-btn:hover {
-  background: #2d2a6b !important;
+  background: #193d5c !important;
 }
 
 /* ==============================
