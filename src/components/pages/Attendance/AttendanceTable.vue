@@ -63,8 +63,8 @@
               <q-th key="work_type" :props="props" class="table-header-cell employment-status-col"
                 >Work Type</q-th
               >
-              <q-th key="cost_center" :props="props" class="table-header-cell cost-center-col"
-                >Cost Center</q-th
+              <q-th key="shift_name" :props="props" class="table-header-cell shift-name-col"
+                >Shift Name</q-th
               >
               <q-th key="time_in" :props="props" class="table-header-cell time-col">Time In</q-th>
               <q-th key="time_in_photo" :props="props" class="table-header-cell photo-col"
@@ -88,20 +88,26 @@
               <q-td key="employee" :props="props" class="table-body-cell employee-col">
                 <div class="employee-info">
                   <q-avatar
-                    size="32px"
-                    class="employee-avatar clickable-avatar"
+                    v-if="getEmployeePhoto(props.row.employee)"
+                    size="34px"
+                    class="clickable-avatar"
                     @click="$emit('view-photo', props.row.employee)"
                   >
                     <img
-                      v-if="getEmployeePhoto(props.row.employee)"
                       :src="getEmployeePhoto(props.row.employee)"
                       alt="Employee Photo"
                       class="avatar-image"
                       loading="lazy"
+                      @error="handleImageError"
                     />
-                    <span v-else class="avatar-initials">
-                      {{ getEmployeeName(props.row.employee).charAt(0) }}
-                    </span>
+                  </q-avatar>
+                  <q-avatar
+                    v-else
+                    size="34px"
+                    class="avatar-fallback clickable-avatar"
+                    @click="$emit('view-photo', props.row.employee)"
+                  >
+                    {{ getInitials(getEmployeeName(props.row.employee)) }}
                   </q-avatar>
                   <span class="employee-name">{{ getEmployeeName(props.row.employee) }}</span>
                 </div>
@@ -116,29 +122,10 @@
                 </div>
                 <span v-else class="no-photo">-</span>
               </q-td>
-              <q-td key="cost_center" :props="props" class="table-body-cell cost-center-col">
-                <div
-                  class="cost-center-badge time-editable"
-                  @click="$emit('edit-cost-center', props.row)"
-                  title="Click to edit cost center"
-                >
-                  <div
-                    style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px"
-                  >
-                    <div style="display: flex; align-items: center">
-                      <q-icon name="account_balance_wallet" size="12px" class="q-mr-xs" />
-                      {{ getCostCenterName(props.row.cost_center) || 'None' }}
-                      <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
-                    </div>
-                    <div
-                      v-if="props.row.site"
-                      style="display: flex; align-items: center; font-size: 11px; color: #6b7280"
-                    >
-                      <q-icon name="location_on" size="11px" class="q-mr-xs" />
-                      {{ getSiteName(props.row.site) }}
-                    </div>
-                  </div>
-                </div>
+              <q-td key="shift_name" :props="props" class="table-body-cell shift-name-col">
+                <span class="shift-name-badge">
+                  {{ props.row.employee_assignment?.schedule?.shift_type?.name || '-' }}
+                </span>
               </q-td>
               <q-td key="time_in" :props="props" class="table-body-cell time-col">
                 <div
@@ -241,19 +228,12 @@ defineEmits([
   'view-selfie',
   'view-photo',
   'edit-time',
-  'edit-cost-center',
 ])
 
 const columns = [
   { name: 'employee', label: 'Employee', align: 'left', field: 'employee', sortable: true },
   { name: 'work_type', label: 'Work Type', align: 'left', field: 'work_type', sortable: true },
-  {
-    name: 'cost_center',
-    label: 'Cost Center',
-    align: 'left',
-    field: 'cost_center',
-    sortable: false,
-  },
+  { name: 'shift_name', label: 'Shift Name', align: 'left', field: row => row.employee_assignment?.schedule?.shift_type?.name || '-', sortable: false },
   { name: 'time_in', label: 'Time In', align: 'center', field: 'time_in', sortable: true },
   {
     name: 'time_in_photo',
@@ -279,21 +259,6 @@ const columns = [
     sortable: false,
   },
 ]
-
-function getSiteName(site) {
-  if (!site) return ''
-  let name =
-    typeof site === 'object' ? site.name || site.site_name || site.title || '' : String(site)
-  name = name.replace(/\s*\(.*?\)\s*/g, '').trim()
-  const dashIndex = name.indexOf('-')
-  return dashIndex !== -1 ? name.substring(0, dashIndex).trim() : name
-}
-
-function getCostCenterName(costCenter) {
-  if (!costCenter) return ''
-  if (typeof costCenter === 'object') return costCenter.name || costCenter.cost_center_name || ''
-  return String(costCenter)
-}
 
 function getEmployeeName(employee) {
   if (!employee) return 'Unknown Employee'
@@ -347,6 +312,21 @@ function getEmployeePhoto(employee) {
         found.picture ||
         null
     : null
+}
+
+const getInitials = (name) =>
+  name && name !== 'Unknown Employee'
+    ? name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : '?'
+
+const handleImageError = (event) => {
+  event.target.src = ''
+  event.target.style.display = 'none'
 }
 
 function getSourceClass(source) {
@@ -427,7 +407,6 @@ function formatTime(dateTimeString, timezone) {
   background: #f3f4f6 !important;
 }
 .modern-table-container {
-  overflow-x: auto;
   border-radius: 0;
 }
 .table-wrapper {
@@ -450,6 +429,12 @@ function formatTime(dateTimeString, timezone) {
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+}
+.attendance-table :deep(thead) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
 }
 
 .table-header-row {
@@ -501,35 +486,39 @@ function formatTime(dateTimeString, timezone) {
   max-width: 140px;
   display: block;
 }
-.employee-avatar {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
-  font-weight: 600;
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
-  font-size: 12px !important;
-  flex-shrink: 0;
+.avatar-fallback {
+  background: #eef2ff !important;
+  color: #4338ca !important;
+  font-weight: 600 !important;
+  min-width: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
 }
+
+.avatar-fallback :deep(.q-avatar__content) {
+  font-size: 11px !important;
+  line-height: 1 !important;
+  font-weight: 600 !important;
+}
+
 .clickable-avatar {
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid transparent;
+  transition: transform 0.15s ease;
 }
 .clickable-avatar:hover {
-  transform: scale(1.1);
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transform: scale(1.08);
 }
+
 .avatar-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
   border-radius: 50%;
-}
-.avatar-initials {
-  font-weight: 600;
-  font-size: 14px;
 }
 .time-badge {
   display: inline-flex;
@@ -616,17 +605,6 @@ function formatTime(dateTimeString, timezone) {
 .source-default {
   background: #f1f5f9;
   color: #64748b;
-}
-.cost-center-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
 }
 .employment-status-badge {
   display: inline-flex;
@@ -756,7 +734,7 @@ function formatTime(dateTimeString, timezone) {
     width: 28px;
     height: 28px;
   }
-  .employee-avatar {
+  .avatar-fallback {
     width: 26px !important;
     height: 26px !important;
   }

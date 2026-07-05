@@ -66,18 +66,26 @@
             </template>
             <div class="schedule-compact">
               <template v-for="(s, idx) in schedule" :key="idx">
-                <div class="schedule-compact-row">
-                  <span v-if="schedule.length > 1" class="text-caption text-weight-medium text-deep-purple">
-                    Shift {{ idx + 1 }}
-                  </span>
-                  <span v-else class="text-weight-medium">{{ s.employee_name }}</span>
-                  <q-badge :color="statusColor(s.status)">{{ s.status }}</q-badge>
+                <div
+                  class="schedule-compact-block"
+                  :class="{ 'shift-disabled': isRecorded(s), 'shift-selected': record.selected_assignment_id != null && record.selected_assignment_id === s.assignment_id }"
+                  @click="selectShift(s)"
+                >
+                  <div class="schedule-compact-row">
+                    <span
+                      class="shift-label"
+                      :class="{ 'shift-label--selected': record.selected_assignment_id != null && record.selected_assignment_id === s.assignment_id }"
+                    >
+                      {{ schedule.length > 1 ? `Shift ${idx + 1}` : s.employee_name }}
+                    </span>
+                    <q-badge v-if="isRecorded(s)" color="grey">Already recorded</q-badge>
+                    <q-badge v-else :color="statusColor(s.status)">{{ s.status }}</q-badge>
+                  </div>
+                  <div class="schedule-compact-row text-caption text-grey-7">
+                    <span>{{ s.site }} • {{ s.position }}</span>
+                    <span>{{ s.shift_start }} - {{ s.shift_end }}</span>
+                  </div>
                 </div>
-                <div class="schedule-compact-row text-caption text-grey-7">
-                  <span>{{ s.site }} • {{ s.position }}</span>
-                  <span>{{ s.shift_start }} - {{ s.shift_end }}</span>
-                </div>
-                <q-separator v-if="idx < schedule.length - 1" class="q-my-xs" />
               </template>
             </div>
           </q-banner>
@@ -161,7 +169,7 @@
           class="primary-btn"
           @click="onSubmit"
           :loading="saving"
-          :disable="!record.employee || !record.time_in || saving"
+          :disable="!record.employee || !record.time_in || saving || selectionRequired"
         />
       </q-card-actions>
     </q-card>
@@ -183,6 +191,7 @@ const props = defineProps({
   scheduleLoading: { type: Boolean, default: false },
   optionsLoading: { type: Boolean, default: false },
   saving: { type: Boolean, default: false },
+  recordedAssignments: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(['update:modelValue', 'update:record', 'submit', 'filter-employees', 'fetch-schedule']);
@@ -219,6 +228,24 @@ function updateField(field, value) {
   emit('update:record', { ...props.record, [field]: value });
 }
 
+function isRecorded(s) {
+  return s.assignment_id && props.recordedAssignments.includes(s.assignment_id);
+}
+
+function selectShift(s) {
+  if (isRecorded(s) || s.assignment_id == null) return;
+  updateField('selected_assignment_id', s.assignment_id);
+}
+
+const selectionRequired = computed(() => {
+  if (props.schedule && props.schedule.length > 1) {
+    const allMissingAssignmentId = props.schedule.every((s) => s.assignment_id == null);
+    if (allMissingAssignmentId) return false;
+    return !props.record.selected_assignment_id;
+  }
+  return false;
+});
+
 function filterEmployees(val, update) {
   emit('filter-employees', val, update);
 }
@@ -243,6 +270,12 @@ watch(() => props.record.date, (newDate) => {
     emit('fetch-schedule', props.record.employee, newDate);
   }
 });
+
+watch(() => props.schedule, (sched) => {
+  if (sched && sched.length === 1 && sched[0].assignment_id) {
+    updateField('selected_assignment_id', sched[0].assignment_id);
+  }
+}, { immediate: true });
 </script>
 
 <style scoped>
@@ -302,8 +335,51 @@ watch(() => props.record.date, (newDate) => {
 .schedule-compact {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   font-size: 13px;
+}
+.schedule-compact-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+.schedule-compact-block:hover:not(.shift-disabled):not(.shift-selected) {
+  background: #f5f7fa;
+}
+.schedule-compact-block.shift-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f3f4f6;
+}
+.schedule-compact-block.shift-selected {
+  background: #102335;
+  border: 1px solid #102335;
+  box-shadow: 0 2px 6px rgba(16, 35, 53, 0.25);
+}
+.schedule-compact-block.shift-selected .shift-label--selected {
+  color: #ffffff;
+  font-weight: 700;
+}
+.schedule-compact-block.shift-selected .schedule-compact-row.text-caption {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.schedule-compact-block.shift-selected:hover {
+  background: #102335;
+}
+.shift-label {
+  font-weight: 500;
+  font-size: 13px;
+  color: #374151;
+}
+.shift-label--selected {
+  font-weight: 700;
+  color: #102335;
 }
 .schedule-compact-row {
   display: flex;

@@ -98,7 +98,6 @@
           @view-selfie="viewSelfie"
           @view-photo="viewEmployeePhoto"
           @edit-time="openInlineEdit"
-          @edit-cost-center="openCostCenterInlineEdit"
         />
       </div>
 
@@ -165,6 +164,7 @@
       :schedule-loading="loadingSchedule"
       :options-loading="filtersLoading"
       :saving="creating"
+      :recorded-assignments="alreadyRecordedAssignments"
       @submit="submitAttendance"
       @filter-employees="filterEmployees"
       @fetch-schedule="fetchEmployeeSchedule"
@@ -185,18 +185,6 @@
       :date="inlineEdit.date"
       :saving="inlineEdit.saving"
       @save="saveInlineEdit"
-    />
-
-    <!-- Inline Cost Center Edit Dialog -->
-    <AttendanceCostCenterEditDialog
-      v-model="showCostCenterInlineDialog"
-      v-model:value="costCenterInlineEdit.value"
-      :employee-name="costCenterInlineEdit.employeeName"
-      :date="costCenterInlineEdit.date"
-      :cost-center-options="costCenterOptions"
-      :loading="filtersLoading"
-      :saving="costCenterInlineEdit.saving"
-      @save="saveCostCenterInlineEdit"
     />
 
     <!-- Edit Attendance Dialog -->
@@ -229,7 +217,6 @@ import AttendanceSelfieViewer from '@/components/pages/Attendance/AttendanceSelf
 import AttendanceAddDialog from '@/components/pages/Attendance/AttendanceAddDialog.vue'
 import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/AttendanceEmployeePhotoViewer.vue'
 import AttendanceInlineEditDialog from '@/components/pages/Attendance/AttendanceInlineEditDialog.vue'
-import AttendanceCostCenterEditDialog from '@/components/pages/Attendance/AttendanceCostCenterEditDialog.vue'
 import AttendanceEditDialog from '@/components/pages/Attendance/AttendanceEditDialog.vue'
 
 const $q = useQuasar()
@@ -276,16 +263,6 @@ const inlineEdit = ref({
   saving: false,
 })
 
-// Inline cost center edit state
-const showCostCenterInlineDialog = ref(false)
-const costCenterInlineEdit = ref({
-  record: null,
-  value: null,
-  date: '',
-  employeeName: '',
-  saving: false,
-})
-
 // Loading states
 const updating = ref(false)
 const creating = ref(false)
@@ -294,7 +271,6 @@ const creating = ref(false)
 const employeeSchedule = ref(null)
 const loadingSchedule = ref(false)
 const scheduleError = ref(null)
-const consumedAssignments = ref({})
 
 const showEmployeePhotoDialog = ref(false)
 const selectedEmployeePhoto = ref('')
@@ -337,11 +313,26 @@ const newRecord = ref({
   time_in: '',
   time_out: '',
   source: 'admin',
+  selected_assignment_id: null,
+})
+
+const alreadyRecordedAssignments = computed(() => {
+  if (!newRecord.value.employee || !newRecord.value.date) return []
+  const employeeId = getEmployeeId(newRecord.value.employee)
+  return attendanceData.value
+    .filter((a) => {
+      const aEmp = a.employee?.id ?? a.employee?.uuid ?? a.employee_uuid ?? a.employee
+      return String(aEmp) === String(employeeId)
+    })
+    .map((a) => a.assignment_id)
+    .filter(Boolean)
 })
 
 const isAdmin = ref(false)
 const userData = JSON.parse(localStorage.getItem('user') || '{}')
 if (userData.role === 'admin') isAdmin.value = true
+
+const createdBy = userData.employee_uuid || null
 
 // ─── Timezone cache ──────────────────────────────────────────────────────────────
 const employeeTimezoneCache = reactive({})
@@ -492,7 +483,8 @@ async function fetchEmployeeSchedule(employeeId, date) {
   try {
     const schedulesList = await fetchScheduleFromComposable(employeeId, date)
     if (schedulesList && schedulesList.length > 0) {
-      employeeSchedule.value = schedulesList.map((s) => ({
+      const sortedList = schedulesList.sort((a, b) => a.start_time.localeCompare(b.start_time))
+      employeeSchedule.value = sortedList.map((s) => ({
         employee_id: s.employee_id,
         employee_name: s.employee_name,
         position: s.position_name,
@@ -501,7 +493,7 @@ async function fetchEmployeeSchedule(employeeId, date) {
         shift_start: formatScheduleTime(s.start_time),
         shift_end: formatScheduleTime(s.end_time),
         status: s.status,
-        assignment_id: s.employee_assignment_id ?? s.assignment_id ?? null,
+        assignment_id: s.id ?? s.employee_assignment_id ?? s.assignment_id ?? null,
       }))
     } else {
       employeeSchedule.value = null
@@ -512,6 +504,15 @@ async function fetchEmployeeSchedule(employeeId, date) {
     employeeSchedule.value = null
   } finally {
     loadingSchedule.value = false
+  }
+}
+
+async function hasScheduleForEmployeeDate(employeeId, date) {
+  try {
+    const schedules = await fetchScheduleFromComposable(employeeId, date)
+    return schedules && schedules.length > 0
+  } catch {
+    return false
   }
 }
 
@@ -629,22 +630,18 @@ async function submitAttendance(record) {
   }
 
   if (record.date && (!employeeSchedule.value || employeeSchedule.value.length === 0) && !loadingSchedule.value) {
-    try {
-      await $q.dialog({
-        title: 'No Schedule Found',
-        message:
-          'This employee does not have a schedule for the selected date. Do you want to proceed anyway?',
-        cancel: true,
-        persistent: true,
-      })
-    } catch {
-      return
-    }
+    await $q.dialog({
+      title: 'Not Allowed',
+      message: 'Not allowed to add an attendance, add a schedule first',
+      persistent: true,
+      ok: { label: 'OK', color: 'primary' },
+    })
+    return
   }
 
   creating.value = true
 
-  let timeInRecordId = null
+  let recordId = null
 
   try {
     if (!selectedEmp) {
@@ -659,48 +656,33 @@ async function submitAttendance(record) {
       return
     }
 
-    const scheduleList = employeeSchedule.value ?? []
-    const scheduleKey = `${employeeUUID}_${record.date}`
-    const consumed = consumedAssignments.value[scheduleKey] ?? []
-    const firstUnconsumed = scheduleList.find(
-      (s) => s.assignment_id != null && !consumed.includes(s.assignment_id),
-    )
-    const activeAssignmentId = firstUnconsumed?.assignment_id ?? null
-
-    const timeInResult = await logAttendance({
-      source: 'manual',
-      time_in_source: 'manual',
-      employee_id: employeeUUID,
-      timestamp: timeIn.toISOString(),
-      ...(record.cost_center_id != null && { cost_center: record.cost_center_id }),
-      ...(activeAssignmentId != null && { assignment_id: activeAssignmentId }),
-    })
-
-    timeInRecordId = timeInResult?.id ?? timeInResult?.data?.id
-
-    await updateAttendanceApi(timeInRecordId, {
-      time_in: timeIn.toISOString(),
-      time_out: timeOut?.toISOString() ?? null,
-      time_in_source: 'manual',
-      time_out_source: record.time_out ? 'manual' : null,
-      source: 'manual',
-      ...(record.cost_center_id != null && { cost_center: record.cost_center_id }),
-    })
-
-    if (activeAssignmentId != null) {
-      consumedAssignments.value = {
-        ...consumedAssignments.value,
-        [scheduleKey]: [...consumed, activeAssignmentId],
-      }
+    if (!createdBy) {
+      showErrorNotification('User not authenticated. Please log in again.')
+      return
     }
+
+    const payload = {
+      employee_id: employeeUUID,
+      time_in: timeIn.toISOString(),
+      source: 'manual',
+      connectivity: 'online',
+      created_by: createdBy,
+      ...(record.selected_assignment_id != null && {
+        assignment_id: Number(record.selected_assignment_id),
+      }),
+      ...(timeOut && { time_out: timeOut.toISOString() }),
+    }
+
+    const result = await logAttendance(payload)
+    recordId = result?.id ?? result?.data?.id
 
     showSuccessNotification('Attendance recorded successfully!')
     closeAddDialog()
     await fetchAttendanceData()
   } catch (error) {
-    if (timeInRecordId != null) {
+    if (recordId != null) {
       try {
-        await api.delete(`${BASE}/attendance/log/${companyId.value}/${timeInRecordId}/`)
+        await api.delete(`${BASE}/attendance/log/${companyId.value}/${recordId}/`)
       } catch { /* rollback failure is non-critical */ }
     }
     const data = error.response?.data
@@ -715,7 +697,17 @@ async function submitAttendance(record) {
 }
 
 // ─── Inline time edit ─────────────────────────────────────────────────────────
-function openInlineEdit(row, field) {
+async function openInlineEdit(row, field) {
+  const employeeId = getEmployeeId(row.employee)
+  if (!(await hasScheduleForEmployeeDate(employeeId, row.date))) {
+    await $q.dialog({
+      title: 'Not Allowed',
+      message: 'Not allowed to edit attendance, add a schedule first',
+      persistent: true,
+      ok: { label: 'OK', color: 'primary' },
+    })
+    return
+  }
   const currentValue = field === 'time_in' ? row.time_in : row.time_out
   inlineEdit.value = {
     record: row,
@@ -780,69 +772,6 @@ async function saveInlineEdit() {
     showErrorNotification(msg)
   } finally {
     inlineEdit.value.saving = false
-  }
-}
-
-// ─── Inline cost center edit ──────────────────────────────────────────────────
-function openCostCenterInlineEdit(row) {
-  const rawCc = row.cost_center
-  let resolvedId = null
-  if (rawCc) {
-    if (typeof rawCc === 'object') {
-      resolvedId = rawCc.id ?? null
-    } else {
-      const match = costCenterOptions.value.find((cc) => cc.label === rawCc || cc.value === rawCc)
-      resolvedId = match ? match.value : null
-    }
-  }
-  costCenterInlineEdit.value = {
-    record: row,
-    value: resolvedId,
-    date: row.date,
-    employeeName: getEmployeeName(row.employee),
-    saving: false,
-  }
-  showCostCenterInlineDialog.value = true
-}
-
-function closeCostCenterInlineEdit() {
-  showCostCenterInlineDialog.value = false
-  costCenterInlineEdit.value = {
-    record: null,
-    value: null,
-    date: '',
-    employeeName: '',
-    saving: false,
-  }
-}
-
-async function saveCostCenterInlineEdit() {
-  if (!costCenterInlineEdit.value.record) return
-
-  costCenterInlineEdit.value.saving = true
-  try {
-    const record = costCenterInlineEdit.value.record
-    await updateAttendanceApi(record.id, {
-      time_in: record.time_in || null,
-      time_out: record.time_out || null,
-      time_in_source: record.time_in_source || record.source || 'admin',
-      time_out_source: record.time_out_source || record.source || 'admin',
-      source: record.source || 'admin',
-      cost_center: costCenterInlineEdit.value.value ?? null,
-    })
-
-    showSuccessNotification('Cost center updated successfully')
-    closeCostCenterInlineEdit()
-    await fetchAttendanceData()
-  } catch (error) {
-    const data = error.response?.data
-    const msg =
-      typeof data === 'string'
-        ? data
-        : (data?.detail ?? data?.message ?? 'Failed to update cost center')
-    showErrorNotification(msg)
-  } finally {
-    costCenterInlineEdit.value.saving = false
   }
 }
 
@@ -918,6 +847,7 @@ function openAddDialog() {
     time_in: '',
     time_out: '',
     source: 'admin',
+    selected_assignment_id: null,
   }
   employeeSchedule.value = null
   scheduleError.value = null
@@ -934,6 +864,7 @@ function closeAddDialog() {
     time_in: '',
     time_out: '',
     source: 'admin',
+    selected_assignment_id: null,
   }
   employeeSchedule.value = null
   scheduleError.value = null
@@ -1117,7 +1048,17 @@ watch(
     employeeSchedule.value = null
     scheduleError.value = null
     if (newRecord.value.employee && newDate) {
+      newRecord.value.selected_assignment_id = null
       fetchEmployeeSchedule(newRecord.value.employee, newDate)
+    }
+  },
+)
+
+watch(
+  () => newRecord.value.employee,
+  (newEmp) => {
+    if (newEmp && newRecord.value.date) {
+      newRecord.value.selected_assignment_id = null
     }
   },
 )
@@ -1141,7 +1082,7 @@ onMounted(async () => {
   background: #ffffff;
   border-radius: 16px;
   border: 1px solid #e8ecf0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* ==============================
