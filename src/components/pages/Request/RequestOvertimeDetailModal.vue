@@ -53,6 +53,18 @@
                 <span class="detail-label">Approved By:</span>
                 <span class="detail-value">{{ request?.approvedByName || 'N/A' }}</span>
               </div>
+              <div v-if="request?.attendances?.length" class="detail-row">
+                <span class="detail-label">Attendance:</span>
+                <span class="detail-value">
+                  {{ request.attendances[0]?.time_in }} - {{ request.attendances[0]?.time_out }}
+                </span>
+              </div>
+              <div v-if="request?.schedules?.length" class="detail-row">
+                <span class="detail-label">Schedule:</span>
+                <span class="detail-value">
+                  {{ request.schedules[0]?.actual_start }} - {{ request.schedules[0]?.actual_end }}
+                </span>
+              </div>
             </div>
             <div v-if="request?.reason" class="info-content">
               <div class="info-label">Reason:</div>
@@ -91,6 +103,7 @@ const getStatusClass = (status) => {
   if (status === 'pending') return 'status-pending'
   if (status === 'approved') return 'status-approved'
   if (status === 'rejected') return 'status-rejected'
+  if (status === 'qualified') return 'status-qualified'
   return 'status-default'
 }
 </script>
@@ -187,6 +200,7 @@ const getStatusClass = (status) => {
 .status-pending { background: #fffbeb; color: #92400e; }
 .status-approved { background: #f0fdf4; color: #16a34a; }
 .status-rejected { background: #fef2f2; color: #dc2626; }
+.status-qualified { background: #eff6ff; color: #1d4ed8; }
 .status-default { background: #f3f4f6; color: #6b7280; }
 @media (max-width: 1024px) {
   .modal-card { min-width: unset; max-width: 680px; }

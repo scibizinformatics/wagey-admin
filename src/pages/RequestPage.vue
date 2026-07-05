@@ -130,7 +130,7 @@
                 </div>
 
                 <!-- Expanded Panel with Overtime Requests Table -->
-                <div v-if="selectedDisbursementLog === log.id" class="overtime-panel-wrapper">
+                <div v-if="selectedDisbursementLog === log.id" class="overtime-panel-wrapper" @click.stop>
                   <div class="overtime-panel">
                     <div class="overtime-panel-header">
                       <div class="panel-title">
@@ -150,22 +150,6 @@
                             <q-icon name="search" size="16px" />
                           </template>
                         </q-input>
-                        <q-select
-                          v-model="overtimeStatusFilter"
-                          :options="[{ label: 'All Status', value: 'all' }, { label: 'Pending', value: 'pending' }, { label: 'Approved', value: 'approved' }, { label: 'Rejected', value: 'rejected' }]"
-                          option-label="label"
-                          option-value="value"
-                          emit-value
-                          map-options
-                          label="Filter by Status"
-                          class="overtime-status-filter"
-                          dense outlined
-                          clearable
-                        >
-                          <template v-slot:prepend>
-                            <q-icon name="filter_list" />
-                          </template>
-                        </q-select>
                       </div>
                     </div>
 
@@ -214,6 +198,8 @@
                               />
                             </q-th>
                             <q-th key="employeeName" :props="props" class="table-header-cell">Employee</q-th>
+                            <q-th key="schedule" :props="props" class="table-header-cell">Schedule</q-th>
+                            <q-th key="attendance" :props="props" class="table-header-cell">Attendance</q-th>
                             <q-th key="dates" :props="props" class="table-header-cell">Date</q-th>
                             <q-th key="hours" :props="props" class="table-header-cell">Hours</q-th>
                             <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
@@ -224,7 +210,7 @@
                           <q-tr class="table-body-row" :props="props">
                             <q-td key="select" :props="props" class="table-body-cell" style="width: 48px; text-align: center;">
                               <q-checkbox
-                                v-if="props.row.status === 'pending'"
+                                v-if="['pending', 'qualified'].includes(props.row.status)"
                                 :model-value="selectedOvertimeIds.has(props.row.id)"
                                 @update:model-value="toggleOvertimeSelection(props.row.id)"
                                 dense
@@ -238,13 +224,29 @@
                                 <span class="employee-name">{{ props.row.employeeName }}</span>
                               </div>
                             </q-td>
+                            <q-td key="schedule" :props="props" class="table-body-cell">
+                              <div class="time-cell">
+                                <template v-if="props.row.schedules?.[0]">
+                                  <span class="time-range">{{ props.row.schedules[0].actual_start }} - {{ props.row.schedules[0].actual_end }}</span>
+                                </template>
+                                <span v-else class="shimmer-empty">-</span>
+                              </div>
+                            </q-td>
+                            <q-td key="attendance" :props="props" class="table-body-cell">
+                              <div class="time-cell">
+                                <template v-if="props.row.attendances?.[0]">
+                                  <span class="time-range">{{ props.row.attendances[0].time_in }} - {{ props.row.attendances[0].time_out }}</span>
+                                </template>
+                                <span v-else class="shimmer-empty">-</span>
+                              </div>
+                            </q-td>
                             <q-td key="dates" :props="props" class="table-body-cell">
                               <div class="date-text">{{ props.row.date ? new Date(props.row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A' }}</div>
                             </q-td>
                             <q-td key="hours" :props="props" class="table-body-cell">
                               <div class="hours-cell-content">
                                 <q-input
-                                  v-if="props.row.status === 'pending'"
+                                  v-if="['pending', 'qualified'].includes(props.row.status)"
                                   :model-value="overtimeEditableHours[props.row.id] ?? props.row.hours"
                                   @update:model-value="overtimeEditableHours[props.row.id] = $event"
                                   @click.stop
@@ -264,11 +266,11 @@
                             </q-td>
                             <q-td key="actions" :props="props" class="table-body-cell">
                               <div class="action-buttons">
-                                <q-btn flat round icon="visibility" size="sm" class="action-btn view-btn" @click="openOvertimeDetail(props.row)">
+                                <q-btn flat round icon="visibility" size="sm" class="action-btn view-btn" @click.stop="openOvertimeDetail(props.row)">
                                   <q-tooltip>View Details</q-tooltip>
                                 </q-btn>
                                 <q-btn
-                                  v-if="props.row.status === 'pending'"
+                                  v-if="['pending', 'qualified'].includes(props.row.status)"
                                   flat round icon="check" size="sm"
                                   class="action-btn approve-btn"
                                   @click.stop="approveOvertimeSingle(props.row)"
@@ -385,7 +387,6 @@ const selectedDisbursementLog = ref(null)
 const overtimeRequests = ref([])
 const overtimeLoading = ref(false)
 const overtimeSearch = ref('')
-const overtimeStatusFilter = ref('all')
 const overtimeSubmitting = ref(new Set())
 const overtimeEditableHours = ref({})
 const selectedOvertimeIds = ref(new Set())
@@ -454,7 +455,7 @@ const filteredCaRequests = computed(() => {
 
 const actionableOvertimeIds = computed(() => {
   return filteredOvertimeRequests.value
-    .filter(r => r.status === 'pending')
+    .filter(r => ['pending', 'qualified'].includes(r.status))
     .map(r => r.id)
 })
 
@@ -486,6 +487,8 @@ const getBaseName = (name) => {
 const otColumns = [
   { name: 'select', label: '', field: '', align: 'center' },
   { name: 'employeeName', label: 'Employee', field: 'employeeName', align: 'left' },
+  { name: 'schedule', label: 'Schedule', field: 'schedule', align: 'left' },
+  { name: 'attendance', label: 'Attendance', field: 'attendance', align: 'left' },
   { name: 'dates', label: 'Date', field: 'date', align: 'left' },
   { name: 'hours', label: 'Hours', field: 'hours', align: 'left' },
   { name: 'status', label: 'Status', field: 'status', align: 'center' },
@@ -610,8 +613,11 @@ const fetchOvertimeRequests = async (logId) => {
       category: item.category,
       categoryName: item.category_name || 'Uncategorized',
       date: item.date,
-      hours: item.hours,
+      hours: item.hours ?? item.qualified_hours ?? '-',
+      qualifiedHours: item.qualified_hours,
       approvedHours: item.approved_hours,
+      attendances: item.attendances || [],
+      schedules: item.schedules || [],
       status: item.status?.toLowerCase(),
       approvedByName: item.approved_by_name || 'Pending',
       convertedToCto: item.converted_to_cto || false,
@@ -722,10 +728,7 @@ const bulkApproveOvertime = async () => {
 
 const filteredOvertimeRequests = computed(() => {
   let filtered = [...overtimeRequests.value]
-  if (overtimeStatusFilter.value && overtimeStatusFilter.value !== 'all') {
-    filtered = filtered.filter((r) => r.status === overtimeStatusFilter.value)
-  }
-  if (overtimeSearch.value.trim()) {
+  if ((overtimeSearch.value || '').trim()) {
     const search = overtimeSearch.value.toLowerCase()
     filtered = filtered.filter(
       (r) =>
@@ -1296,10 +1299,6 @@ onUnmounted(() => {
   min-width: 180px;
   max-width: 220px;
 }
-.overtime-status-filter {
-  min-width: 160px;
-  max-width: 200px;
-}
 .overtime-panel-loading {
   display: flex;
   align-items: center;
@@ -1386,6 +1385,19 @@ onUnmounted(() => {
   color: #374151;
   font-weight: 600;
 }
+.time-cell {
+  font-size: 12px;
+  color: #374151;
+}
+.time-range {
+  font-weight: 500;
+  color: #111827;
+  white-space: nowrap;
+}
+.shimmer-empty {
+  color: #9ca3af;
+  font-style: italic;
+}
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -1407,6 +1419,10 @@ onUnmounted(() => {
 .status-rejected {
   background: #fef2f2;
   color: #dc2626;
+}
+.status-qualified {
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 .cto-badge {
   display: inline-flex;
@@ -1480,7 +1496,6 @@ onUnmounted(() => {
   .overtime-panel-header { flex-direction: column; align-items: stretch; }
   .panel-actions { width: 100%; }
   .overtime-search-input { max-width: 100%; width: 100%; }
-  .overtime-status-filter { max-width: 100%; width: 100%; }
   .panel-actions .q-field { width: 100%; }
 }
 </style>
