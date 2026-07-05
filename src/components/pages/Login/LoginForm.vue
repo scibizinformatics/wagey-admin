@@ -106,6 +106,7 @@ import { useQuasar } from 'quasar'
 import { useAuthStore } from 'boot/auth'
 import { useCompanyStore } from '@/stores/company'
 import { useAuth } from '@/composables/page/useAuth'
+import { api } from 'src/boot/axios'
 
 const router = useRouter()
 const route = useRoute()
@@ -177,6 +178,16 @@ const handleLogin = async () => {
     const accountUuid = firstCompany.id
     const userId = firstCompany.user?.id
 
+    let employeeUuid = null
+    try {
+      const profileResponse = await api.get('/user/check-type/', {
+        headers: { Authorization: `Bearer ${access}` },
+      })
+      employeeUuid = profileResponse.data?.profile?.id || null
+    } catch {
+      // non-critical — will be null if this endpoint fails
+    }
+
     if (!accountUuid) {
       showErrorNotification('Failed to get account UUID after login.')
       return
@@ -205,6 +216,7 @@ const handleLogin = async () => {
     localStorage.setItem('cached_username', displayName)
 
     authStore.setAuth(access, {
+      employee_uuid: employeeUuid,
       uuid: accountUuid,
       userId: userId,
       companyId: companyId,
