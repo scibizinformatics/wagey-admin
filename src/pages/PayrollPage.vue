@@ -69,11 +69,7 @@
                 <PayrollRunCard
                   :run="run"
                   :is-expanded="selectedRun?.id === run.id"
-                  :action-type="getRunActionType(run)"
-                  :action-loading="getRunActionLoading(run)"
                   @toggle-expand="toggleRunExpanded(run)"
-                  @disburse="selectAndDisburse(run)"
-                  @release="bulkReleaseAll(run)"
                 />
 
                 <div v-if="selectedRun?.id === run.id" class="employees-panel-wrapper">
@@ -539,26 +535,6 @@ const onCreateRun = async (form) => {
   }
 }
 
-// ─── Run Card Action Helpers ──────────────────────────────────────────────────
-function getRunActionType(run) {
-  if (!run) return null
-  const isExpanded = selectedRun.value?.id === run.id
-  const isDisbursed = ['disbursed', 'completed', 'closed'].includes(run.status)
-  if (isDisbursed) return 'completed'
-  if (run.status === 'pending_review') return 'awaiting'
-  if (isExpanded && workflowStage.value === 'draft' && hasReadyForPaymentSelected.value && !isRunFullyDisbursed(run)) return 'disburse'
-  if (isExpanded && allEmployeesReadyForPayment.value && !isRunFullyDisbursed(run)) return 'disburse'
-  if (run.status === 'ready_for_payment' && !isRunFullyDisbursed(run)) return 'disburse'
-  if (run.status === 'draft' || (isExpanded && workflowStage.value === 'draft')) return 'release'
-  return null
-}
-
-function getRunActionLoading(run) {
-  if (!run) return false
-  if (run.status === 'draft') return isSaving('bulkReleasing')
-  return isSaving('disbursing')
-}
-
 // ─── Run Selection & Employee Loading ─────────────────────────────────────────
 const selectedRun = ref(null)
 const selectedRunForData = ref(null)
@@ -587,23 +563,6 @@ const toggleRunExpanded = async (run) => {
       selectedRunForData.value = run.id
     } catch { /* non-fatal */ }
   }
-}
-
-const selectAndDisburse = async (run) => {
-  selectedRun.value = run
-  payrollRunId.value = run.id
-  await fetchPayrollRunEmployees(run.id)
-  const readyCount = payrollRunEmployees.value.filter(
-    (e) => e.status === 'ready_for_payment' && e.review_status !== 'pending',
-  ).length
-  if (!readyCount) {
-    $q.notify({ type: 'warning', message: 'No employees are ready for payment yet' })
-    return
-  }
-  await handleBulkDisburse()
-  await fetchPayrollRunsSummary()
-  const refreshedRun = payrollRunsSummary.value.find((r) => String(r.id) === String(run.id))
-  if (refreshedRun) selectedRun.value = refreshedRun
 }
 
 // ─── Employee Search & Display Rows ───────────────────────────────────────────
@@ -692,26 +651,6 @@ const selectedEmployeeIds = ref(new Set())
 const selectAll = ref(false)
 
 const selectedEmployees = computed(() => Array.from(selectedEmployeeIds.value))
-
-const hasReadyForPaymentSelected = computed(() => {
-  if (!selectedEmployees.value.length) return false
-  return payrollRunEmployees.value.some(
-    (e) => selectedEmployeeIds.value.has(e.employee_id) && e.status === 'ready_for_payment' && e.review_status !== 'pending',
-  )
-})
-
-const allEmployeesReadyForPayment = computed(() => {
-  const employees = payrollRunEmployees.value
-  if (!employees || employees.length === 0) return false
-  return employees.every((e) => e.status === 'ready_for_payment' && e.review_status !== 'pending')
-})
-
-const isRunFullyDisbursed = (run) => {
-  if (['disbursed', 'completed', 'closed'].includes(run.status)) return true
-  const employees = payrollRunEmployees.value
-  if (!employees || employees.length === 0) return false
-  return employees.every((e) => e.status === 'disbursed')
-}
 
 const isEmployeeSelected = (id) => selectedEmployeeIds.value.has(id)
 
@@ -1272,8 +1211,9 @@ const closeDetailModal = () => {
 }
 
 // ─── Selection helpers ────────────────────────────────────────────────────────
-const toggleSelectAll = () => {
-  if (selectAll.value) selectAllActionable()
+const toggleSelectAll = (val) => {
+  selectAll.value = val
+  if (val) selectAllActionable()
   else clearSelection()
 }
 
@@ -1304,37 +1244,6 @@ const onEmployeeMenuAction = (action, employee) => {
     case 'download': downloadPayslip(employee); break
     case 'retry': retryEmployeeAction(employee); break
   }
-}
-
-// ─── Bulk Release ─────────────────────────────────────────────────────────────
-const bulkReleaseAll = async (run) => {
-  selectedRun.value = run
-  payrollRunId.value = run.id
-  const draftIds = payrollRunEmployees.value.filter((e) => e.status === 'draft').map((e) => e.employee_id)
-  if (!draftIds.length) {
-    $q.notify({ type: 'info', message: 'No draft employees to release' })
-    return
-  }
-  $q.dialog({
-    title: 'Bulk Release for Review',
-    message: `Release ${draftIds.length} payslip(s) for employee review?`,
-    ok: { label: 'Release', color: 'orange', unelevated: true },
-    cancel: { label: 'Cancel', flat: true },
-  }).onOk(async () => {
-    try {
-      const result = await bulkReleasePayslips(run.id, draftIds)
-      $q.notify({
-        type: 'positive',
-        message: `Released ${result?.summary?.updated_to_pending_review ?? draftIds.length} payslip(s)!`,
-      })
-      await fetchPayrollRunEmployees(run.id)
-      await fetchPayrollRunsSummary()
-      clearSelection()
-      selectAll.value = false
-    } catch (err) {
-      $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Release failed' })
-    }
-  })
 }
 
 const handleBulkAction = async () => {

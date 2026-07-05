@@ -54,21 +54,11 @@
       </div>
 
       <div class="run-header-action" @click.stop>
-        <q-btn
-          v-if="actionType === 'disburse'"
-          unelevated no-caps size="sm" icon="payments" color="teal" label="Disburse"
-          class="run-action-btn" :loading="actionLoading" @click="$emit('disburse')"
-        />
-        <q-btn
-          v-else-if="actionType === 'release'"
-          unelevated no-caps size="sm" icon="send" color="orange" label="Release"
-          class="run-action-btn" :loading="actionLoading" @click="$emit('release')"
-        />
-        <div v-else-if="actionType === 'awaiting'" class="run-await-chip">
+        <div v-if="run.status === 'pending_review'" class="run-await-chip">
           <q-icon name="hourglass_top" size="13px" />
           <span>Awaiting Acknowledgement</span>
         </div>
-        <div v-else-if="actionType === 'completed'" class="run-done-chip">
+        <div v-else-if="['disbursed','completed','closed'].includes(run.status)" class="run-done-chip">
           <q-icon name="task_alt" size="18px" color="positive" />
         </div>
       </div>
@@ -80,11 +70,9 @@
 const props = defineProps({
   run: { type: Object, required: true },
   isExpanded: { type: Boolean, default: false },
-  actionType: { type: String, default: null },
-  actionLoading: { type: Boolean, default: false },
 })
 
-defineEmits(['toggle-expand', 'disburse', 'release'])
+defineEmits(['toggle-expand'])
 
 const baseName = (() => {
   if (!props.run?.name) return '\u2014'
