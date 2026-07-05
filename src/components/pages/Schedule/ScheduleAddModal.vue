@@ -472,6 +472,11 @@ function onSubmit() {
   padding: 20px;
   overflow-y: auto;
   max-height: 70vh;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.modal-body::-webkit-scrollbar {
+  display: none;
 }
 .schedule-form {
   display: flex;

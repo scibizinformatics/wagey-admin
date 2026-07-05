@@ -7,8 +7,8 @@
           v-model="activeTab"
           dense
           class="settings-tabs"
-          active-color="primary"
-          indicator-color="primary"
+          active-color="#102335"
+          indicator-color="#102335"
           align="left"
         >
           <q-tab name="sites" label="Sites" class="settings-tab" />

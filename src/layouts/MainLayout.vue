@@ -50,16 +50,6 @@
             <q-badge color="red" floating rounded :label="unreadCount" v-if="unreadCount > 0" />
             <q-tooltip>Notifications</q-tooltip>
 
-            <!-- WebSocket connection status dot -->
-            <span
-              class="ws-status-dot"
-              :class="{
-                'ws-dot-connected': isConnected,
-                'ws-dot-connecting': isConnecting,
-                'ws-dot-error': !isConnected && !isConnecting,
-              }"
-            />
-
             <q-menu
               v-model="notifModal"
               anchor="bottom right"
@@ -78,18 +68,6 @@
                     <q-badge color="red" rounded :label="unreadCount" v-if="unreadCount > 0" />
                   </div>
                   <div class="row items-center q-gutter-xs">
-                    <!-- WS connection indicator -->
-                    <q-chip
-                      dense
-                      :color="isConnected ? 'positive' : isConnecting ? 'warning' : 'negative'"
-                      text-color="white"
-                      :icon="isConnected ? 'wifi' : isConnecting ? 'sync' : 'wifi_off'"
-                      size="sm"
-                      class="q-px-sm"
-                    >
-                      {{ isConnected ? 'Live' : isConnecting ? 'Connecting…' : 'Offline' }}
-                    </q-chip>
-
                     <q-btn
                       flat
                       dense
@@ -126,16 +104,8 @@
 
                 <!-- Notification List -->
                 <q-scroll-area style="height: 380px; width: 380px; max-width: 95vw">
-                  <!-- Loading / initial state -->
-                  <div
-                    v-if="isInitialLoad"
-                    class="column items-center justify-center q-py-xl text-grey-5"
-                  >
-                    <q-spinner color="primary" size="32px" class="q-mb-sm" />
-                    <span class="text-body2">Loading notifications...</span>
-                  </div>
 
-                  <q-list separator v-else>
+                  <q-list separator>
                     <q-item
                       v-for="notif in sortedNotifications"
                       :key="notif.id"
@@ -205,7 +175,20 @@
             </q-menu>
           </q-btn>
 
-          <q-avatar size="36px" class="user-avatar" :style="{ background: avatarColor }">
+          <q-avatar
+            v-if="currentUserPicture"
+            size="36px"
+            class="user-avatar"
+          >
+            <img :src="currentUserPicture" alt="User Avatar" @error="handleImageError" />
+            <q-tooltip>{{ currentUsername }}</q-tooltip>
+          </q-avatar>
+          <q-avatar
+            v-else
+            size="36px"
+            class="user-avatar"
+            :style="{ background: avatarColor }"
+          >
             <span class="avatar-initials">{{ avatarInitials }}</span>
             <q-tooltip>{{ currentUsername }}</q-tooltip>
           </q-avatar>
@@ -331,6 +314,7 @@ import { useQuasar } from 'quasar'
 import { useOrganization } from '@/composables/page/useOrganization'
 import { useNotifications } from '@/composables/useNotifications'
 import { useCompanyStore } from '@/stores/company'
+import { api } from 'src/boot/axios'
 
 import wageyLogo from 'src/assets/wagey_icon(White).png'
 import terrainBg from 'src/assets/terrain.svg'
@@ -371,6 +355,7 @@ const loadingCompanies = ref(false)
 
 // ─── User state ───────────────────────────────────────────────────────────────
 const currentUsername = ref('')
+const currentUserPicture = ref('')
 
 // ─── Notifications (WebSocket-powered) ───────────────────────────────────────
 const {
@@ -548,6 +533,11 @@ function updateOverflowHint() {
   showOverflowHint.value = hasOverflow && !atEnd
 }
 
+function handleImageError() {
+  currentUserPicture.value = ''
+  // Keep localStorage cache intact so a page refresh may recover a temporary failure
+}
+
 // ─── Current user ─────────────────────────────────────────────────────────────
 async function loadCurrentUser() {
   const cached = localStorage.getItem('cached_username')
@@ -564,6 +554,30 @@ async function loadCurrentUser() {
   } catch {
     // keep cached value
   }
+
+  // Primary: fetch avatar from profile endpoint
+  try {
+    const response = await api.get('/user/check-type/')
+    const pictureUrl =
+      response.data?.picture_url ||
+      response.data?.profile?.picture_url ||
+      response.data?.profile?.profile_picture ||
+      response.data?.profile?.user?.picture_url ||
+      response.data?.user?.picture_url ||
+      response.data?.employee?.picture_url ||
+      ''
+    if (pictureUrl) {
+      currentUserPicture.value = pictureUrl
+      localStorage.setItem('cached_user_picture', pictureUrl)
+      return
+    }
+  } catch {
+    // silent — proceed to fallback
+  }
+
+  // Fallback: use cached picture if API fails or returns nothing
+  const cachedPicture = localStorage.getItem('cached_user_picture')
+  if (cachedPicture) currentUserPicture.value = cachedPicture
 }
 
 // ─── Logout ───────────────────────────────────────────────────────────────────
@@ -572,6 +586,7 @@ function logout() {
   companyStore.clear()
   localStorage.removeItem('access_token')
   localStorage.removeItem('username')
+  localStorage.removeItem('cached_user_picture')
   router.push({ name: 'login' }).then(() => window.location.reload())
 }
 
@@ -590,7 +605,7 @@ onMounted(async () => {
   await nextTick()
   scrollToActiveTab()
   reconnect() // Re-connect WS now that companyId is resolved
-  loadCurrentUser()
+  await loadCurrentUser()
 
   window.addEventListener('resize', updateOverflowHint)
   if (tabsWrapperRef.value) {
@@ -882,10 +897,10 @@ onUnmounted(() => {
   color: #334155;
 }
 .company-tab-active {
-  background: #2563eb;
+  background: #102335;
   color: #ffffff;
-  border-color: #2563eb;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  border-color: #102335;
+  box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3);
 }
 .tab-overflow-hint {
   position: absolute;
