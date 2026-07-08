@@ -334,6 +334,7 @@ const links = [
   { label: 'Attendance', icon: 'event_available', to: '/app/attendance' },
   { label: 'Schedule', icon: 'calendar_month', to: '/app/schedule' },
   { label: 'Disbursement', icon: 'paid', to: '/app/payroll' },
+  { label: 'Deductions', icon: 'money_off', to: '/app/deductions' },
   { label: 'Requests', icon: 'mark_email_unread', to: '/app/requests' },
   { label: 'Invite', icon: 'email', to: '/app/employees/invite' },
   { label: 'Announcement', icon: 'announcement', to: '/app/announcements' },
