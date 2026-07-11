@@ -689,6 +689,14 @@ const getActionableEmployees = (currentStage) => actionableEmployeesByStage.valu
 
 const releaseBtnLabel = computed(() => {
   if (selectedEmployeeIds.value.size === 0) return null
+  const selectedReadyCount = selectedEmployees.value.filter((id) => {
+    const emp = payrollRunEmployees.value.find((e) => e.employee_id === id)
+    return emp?.status === 'ready_for_payment' && emp?.review_status !== 'pending'
+  }).length
+  if (selectedReadyCount > 0) {
+    const readyActionable = getActionableEmployees('ready_for_payment').length
+    return selectedReadyCount === readyActionable ? 'Disburse All' : 'Disburse'
+  }
   const actionableCount = getActionableEmployees(workflowStage.value).length
   return selectedEmployeeIds.value.size === actionableCount ? 'Release All' : 'Release'
 })
@@ -1249,6 +1257,16 @@ const onEmployeeMenuAction = (action, employee) => {
 const handleBulkAction = async () => {
   const logId = payrollRunId.value
   if (!logId) { $q.notify({ type: 'warning', message: 'Please select a disbursement log first' }); return }
+
+  // If any selected employees are ready for payment, disburse those instead (ignore drafts)
+  const hasReadySelected = selectedEmployees.value.some((id) => {
+    const emp = payrollRunEmployees.value.find((e) => e.employee_id === id)
+    return emp?.status === 'ready_for_payment' && emp?.review_status !== 'pending'
+  })
+  if (hasReadySelected) {
+    return handleBulkDisburse()
+  }
+
   const employeeIds = selectedEmployeeIds.value.size > 0 ? selectedEmployees.value : getActionableEmployees('draft').map((e) => e.employee_id)
   if (!employeeIds.length) { $q.notify({ type: 'info', message: 'No draft employees to release' }); return }
   $q.dialog({
@@ -1371,6 +1389,13 @@ const handleBulkDisburse = async () => {
     ok: { label: 'Disburse', color: 'positive', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
+    // Optimistic UI: immediately show disbursed for selected employees
+    payrollRunEmployees.value = payrollRunEmployees.value.map((e) => {
+      if (readyIds.includes(e.employee_id)) {
+        return { ...e, status: 'disbursed' }
+      }
+      return e
+    })
     try {
       const result = await disbursePayslips(logId, readyIds)
       const summary = result?.summary ?? {}
@@ -1379,7 +1404,10 @@ const handleBulkDisburse = async () => {
       const refreshedRun = payrollRunsSummary.value.find((r) => String(r.id) === String(logId))
       if (refreshedRun) selectedRun.value = refreshedRun
       clearSelection(); selectAll.value = false
-    } catch (err) { $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Disbursement failed' }) }
+    } catch (err) {
+      await fetchPayrollRunEmployees(logId)
+      $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Disbursement failed' })
+    }
   })
 }
 

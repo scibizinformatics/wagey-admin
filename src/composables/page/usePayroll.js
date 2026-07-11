@@ -632,35 +632,55 @@ export function usePayroll() {
       const runRecord = payrollRunsSummary.value.find((r) => String(r.id) === String(logId))
       const runIsCompleted = ['completed', 'closed'].includes(runRecord?.status)
 
+      // Preserve statuses the API may omit (e.g. already-disbursed employees still
+      // come back as "Acknowledged" / ready_for_payment from the list endpoint).
+      const existingById = new Map(
+        (payrollRunEmployees.value || []).map((e) => [
+          String(e.employee_id ?? e.id),
+          e.status,
+        ]),
+      )
+
       payrollRunEmployees.value = Array.isArray(rawData)
-        ? rawData.map((emp) => ({
-            ...emp,
-            gross_pay: emp.gross_pay ?? emp.calculated ?? 0,
-            net_pay: emp.net_pay ?? emp.actual_net_pay ?? 0,
-            status: (() => {
-              const raw = emp.status ?? emp.review_status_display ?? 'draft'
-              const map = {
-                draft: 'draft',
-                pending: 'draft',
-                Pending: 'draft',
-                pending_review: 'pending_review',
-                'Pending Review': 'pending_review',
-                ready_for_payment: 'ready_for_payment',
-                Acknowledged: 'ready_for_payment',
-                disbursed: 'disbursed',
-                Disbursed: 'disbursed',
-                completed: 'completed',
-                Completed: 'completed',
-              }
-              const normalized = map[raw] ?? raw
-              // If the run is completed, promote any lingering "disbursed"
-              // employees to "completed" so the table reflects the true end state.
-              if (runIsCompleted && normalized === 'disbursed') {
-                return 'completed'
-              }
-              return normalized
-            })(),
-          }))
+        ? rawData.map((emp) => {
+            const id = String(emp.employee_id ?? emp.id)
+            const raw = emp.status ?? emp.review_status_display ?? 'draft'
+            const map = {
+              draft: 'draft',
+              pending: 'draft',
+              Pending: 'draft',
+              pending_review: 'pending_review',
+              'Pending Review': 'pending_review',
+              ready_for_payment: 'ready_for_payment',
+              Acknowledged: 'ready_for_payment',
+              disbursed: 'disbursed',
+              Disbursed: 'disbursed',
+              completed: 'disbursed',
+              Completed: 'disbursed',
+            }
+            let normalized = map[raw] ?? raw
+
+            // If the API didn't give us a real payment status and we already
+            // knew this employee was disbursed/completed, keep that status.
+            const existing = existingById.get(id)
+            if (
+              normalized === 'ready_for_payment' &&
+              (existing === 'disbursed' || existing === 'completed')
+            ) {
+              normalized = existing
+            }
+
+            if (runIsCompleted && normalized === 'disbursed') {
+              normalized = 'completed'
+            }
+
+            return {
+              ...emp,
+              gross_pay: emp.gross_pay ?? emp.calculated ?? 0,
+              net_pay: emp.net_pay ?? emp.actual_net_pay ?? 0,
+              status: normalized,
+            }
+          })
         : []
       payrollRunId.value = logId
       updateWorkflowStats()
