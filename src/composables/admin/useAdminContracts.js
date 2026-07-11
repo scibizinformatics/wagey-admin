@@ -52,17 +52,26 @@ export function useAdminContracts() {
       employee_id: employeeId,
       company_id: null,
       contract_type_id: null,
+      assignment_mode: 'custom',
       pay_type: null,
-      payment_method: 'bank_transfer',
       rate: '',
       work_hours_per_week: null,
       position: null,
       department: null,
+      payroll_group_id: null,
+      payroll_group: null,
       year: new Date().getFullYear(),
       month: new Date().getMonth() + 1,
       eligibilities: [],
       holiday_pay_types: [],
       contributions: [],
+      overtime_multiplier: null,
+      special_holiday_multiplier: null,
+      regular_holiday_multiplier: null,
+      night_diff_multiplier: null,
+      regular_holiday_ot_multiplier: null,
+      special_holiday_ot_multiplier: null,
+      undertime_multiplier: null,
     }
   }
 
@@ -326,11 +335,12 @@ export function useAdminContracts() {
     if (existing) {
       activeContract.value = existing
       assignForm.value.pay_type = existing.pay_type ?? null
-      assignForm.value.payment_method = existing.payment_method ?? 'bank_transfer'
       assignForm.value.rate = existing.rate ?? ''
       assignForm.value.work_hours_per_week = existing.work_hours_per_week ?? null
       assignForm.value.position = existing.position ?? null
       assignForm.value.department = existing.department ?? null
+      assignForm.value.payroll_group_id = existing.payroll_group_id ?? null
+      assignForm.value.payroll_group = existing.payroll_group ?? null
       assignForm.value.year = existing.year ?? new Date().getFullYear()
       assignForm.value.month = existing.month ?? new Date().getMonth() + 1
       assignForm.value.eligibilities = parseEligibilities(existing.eligibilities)
@@ -345,6 +355,7 @@ export function useAdminContracts() {
       if (matchedId) {
         assignForm.value.contract_type_id = matchedId
       }
+      assignForm.value.assignment_mode = 'custom'
     }
 
     assignDialog.value = true
@@ -364,7 +375,11 @@ export function useAdminContracts() {
       // ── Renew ── all fields optional, only validate if present
       if (assignForm.value.rate) {
         const rateNum = parseFloat(assignForm.value.rate)
-        if (isNaN(rateNum) || rateNum < 100) {
+        if (isNaN(rateNum) || rateNum < 0) {
+          $q.notify({ type: 'negative', message: 'Rate cannot be negative', position: 'top' })
+          return
+        }
+        if (rateNum < 100) {
           $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
           return
         }
@@ -379,7 +394,7 @@ export function useAdminContracts() {
     } else {
       // ── Create ── strict validation
       if (
-        !assignForm.value.contract_type_id ||
+        (assignForm.value.assignment_mode !== 'custom' && !assignForm.value.contract_type_id) ||
         !assignForm.value.pay_type ||
         !assignForm.value.rate
       ) {
@@ -391,7 +406,11 @@ export function useAdminContracts() {
         return
       }
       const rateNum = parseFloat(assignForm.value.rate)
-      if (isNaN(rateNum) || rateNum < 100) {
+      if (isNaN(rateNum) || rateNum < 0) {
+        $q.notify({ type: 'negative', message: 'Rate cannot be negative', position: 'top' })
+        return
+      }
+      if (rateNum < 100) {
         $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
         return
       }
@@ -404,6 +423,17 @@ export function useAdminContracts() {
       }
       if (!assignForm.value.department) {
         $q.notify({ type: 'negative', message: 'Department is required', position: 'top' })
+        return
+      }
+    }
+
+    // Validate multiplier values (reject negatives)
+    const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
+      'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+    for (const key of mKeys) {
+      const val = assignForm.value[key]
+      if (val !== null && val !== undefined && val !== '' && parseFloat(val) < 0) {
+        $q.notify({ type: 'negative', message: `${key.replace(/_/g, ' ')} cannot be negative`, position: 'top' })
         return
       }
     }
@@ -426,11 +456,13 @@ export function useAdminContracts() {
         // ── Renew payload ──
         if (assignForm.value.contract_type_id) payload.contract_type_id = assignForm.value.contract_type_id
         if (assignForm.value.pay_type) payload.pay_type = assignForm.value.pay_type
-        if (assignForm.value.payment_method) payload.payment_method = assignForm.value.payment_method
         if (rateNum) payload.rate = String(rateNum)
         if (hoursNum) payload.work_hours_per_week = hoursNum
         if (assignForm.value.position) payload.position = Number(assignForm.value.position)
         if (assignForm.value.department) payload.department = Number(assignForm.value.department)
+        payload.department_id = Number(assignForm.value.department || 0)
+        payload.payroll_group_id = assignForm.value.payroll_group_id || 0
+        payload.payroll_group = assignForm.value.payroll_group || 0
         payload.eligibilities = assignForm.value.eligibilities ?? []
         payload.holiday_pay_types = assignForm.value.holiday_pay_types ?? []
         if (assignForm.value.contributions?.length) payload.contributions = assignForm.value.contributions.map((c) => c.id ?? c)
@@ -438,22 +470,34 @@ export function useAdminContracts() {
         const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
           'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
         for (const key of mKeys) {
-          if (activeContract.value[key]) payload[key] = String(activeContract.value[key])
+          const val = assignForm.value[key]
+          if (val !== null && val !== undefined) payload[key] = String(val)
         }
       } else {
         // ── Create payload ──
-        payload.contract_type_id = assignForm.value.contract_type_id
+        if (assignForm.value.contract_type_id) payload.contract_type_id = assignForm.value.contract_type_id
         payload.pay_type = assignForm.value.pay_type
-        payload.payment_method = assignForm.value.payment_method || 'bank_transfer'
         payload.rate = String(rateNum)
         if (hoursNum) payload.work_hours_per_week = hoursNum
         if (assignForm.value.position) payload.position = Number(assignForm.value.position)
         payload.department = Number(assignForm.value.department)
+        payload.department_id = Number(assignForm.value.department || 0)
+        payload.payroll_group_id = assignForm.value.payroll_group_id || 0
+        payload.payroll_group = assignForm.value.payroll_group || 0
         payload.eligibilities = assignForm.value.eligibilities ?? []
         payload.holiday_pay_types = assignForm.value.holiday_pay_types ?? []
+        if (assignForm.value.contributions?.length) payload.contributions = assignForm.value.contributions.map((c) => c.id ?? c)
+
+        const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
+          'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+        for (const key of mKeys) {
+          const val = assignForm.value[key]
+          if (val !== null && val !== undefined) payload[key] = String(val)
+        }
 
         if (!payload.work_hours_per_week) delete payload.work_hours_per_week
         if (!payload.position) delete payload.position
+        if (!payload.contract_type_id) delete payload.contract_type_id
       }
 
       console.log('Payload to send:', payload)
@@ -498,7 +542,11 @@ export function useAdminContracts() {
 
   async function bulkAssignContract(employeeIds) {
     const rateNum = parseFloat(assignForm.value.rate)
-    if (isNaN(rateNum) || rateNum < 100) {
+    if (isNaN(rateNum) || rateNum < 0) {
+      $q.notify({ type: 'negative', message: 'Rate cannot be negative', position: 'top' })
+      return { successCount: 0, failCount: 0 }
+    }
+    if (rateNum < 100) {
       $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
       return { successCount: 0, failCount: 0 }
     }
@@ -527,18 +575,27 @@ export function useAdminContracts() {
           company_id: assignForm.value.company_id || companyId.value,
           contract_type_id: assignForm.value.contract_type_id,
           pay_type: assignForm.value.pay_type,
-          payment_method: assignForm.value.payment_method || 'bank_transfer',
           rate: String(rateNum),
         work_hours_per_week: hoursNum,
-        position: assignForm.value.position ? Number(assignForm.value.position) : null,
+          position: assignForm.value.position ? Number(assignForm.value.position) : null,
         department: Number(assignForm.value.department),
+        department_id: Number(assignForm.value.department || 0),
+        payroll_group_id: assignForm.value.payroll_group_id || 0,
+        payroll_group: assignForm.value.payroll_group || 0,
         year: assignForm.value.year ? Number(assignForm.value.year) : null,
         month: assignForm.value.month ? Number(assignForm.value.month) : null,
         eligibilities: assignForm.value.eligibilities ?? [],
         holiday_pay_types: assignForm.value.holiday_pay_types ?? [],
+        contributions: assignForm.value.contributions?.length ? assignForm.value.contributions.map((c) => c.id ?? c) : [],
       }
+        const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
+          'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+        for (const key of mKeys) {
+          if (assignForm.value[key]) payload[key] = String(assignForm.value[key])
+        }
         if (!payload.work_hours_per_week) delete payload.work_hours_per_week
         if (!payload.position) delete payload.position
+        if (!payload.contract_type_id) delete payload.contract_type_id
 
         await api.post(`${BASE}/user/employment-contracts/create/`, payload, {
           headers: authHeaders(),
