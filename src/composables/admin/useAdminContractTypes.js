@@ -373,6 +373,7 @@ export function useAdminContractTypes() {
     fetchContractTypes,
     fetchEligibilities,
     fetchContributions,
+    fetchCompanyMultipliersForForm,
     openDialog,
     editContractType,
     saveContractType,
