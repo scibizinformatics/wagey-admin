@@ -110,6 +110,8 @@ export default defineConfig((ctx) => {
             '/payroll/annual-contributions',
             '/payroll/employee-contributions',
             '/payroll/department-contributions',
+            '/payroll/payroll-groups',
+            '/payroll/payment-methods',
           ],
           target: apiBaseUrl,
           changeOrigin: true,

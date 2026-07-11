@@ -1,7 +1,6 @@
-<template>
+﻿<template>
   <PageShell>
     <div class="admin-card">
-      <!-- Tabs Navigation -->
       <div class="tabs-section">
         <q-tabs
           v-model="activeTab"
@@ -19,53 +18,40 @@
           <q-tab name="contract-types" label="Contract Types" class="settings-tab" />
           <q-tab name="cost-centers" label="Cost Centers" class="settings-tab" />
           <q-tab name="custom-multipliers" label="Custom Multipliers" class="settings-tab" />
+          <q-tab name="payroll-groups" label="Payroll Groups" class="settings-tab" />
         </q-tabs>
       </div>
 
-      <!-- Tab Panels -->
       <q-tab-panels v-model="activeTab" animated class="transparent-panels">
-        <!-- ===================== SITES ===================== -->
         <q-tab-panel name="sites" class="q-pa-none">
           <AdminSettingsPanelSites :search-query="searchQuery" />
         </q-tab-panel>
-
-        <!-- ===================== ROLES ===================== -->
         <q-tab-panel name="roles" class="q-pa-none">
           <AdminSettingsPanelRoles :search-query="searchQuery" />
         </q-tab-panel>
-
-        <!-- ===================== SHIFTS ===================== -->
         <q-tab-panel name="shifts" class="q-pa-none">
           <AdminSettingsPanelShifts :search-query="searchQuery" />
         </q-tab-panel>
-
-        <!-- ===================== DEPARTMENTS ===================== -->
         <q-tab-panel name="departments" class="q-pa-none">
           <AdminSettingsPanelDepartments :search-query="searchQuery" />
         </q-tab-panel>
-
-        <!-- ===================== POSITIONS ===================== -->
         <q-tab-panel name="positions" class="q-pa-none">
           <AdminSettingsPanelPositions :search-query="searchQuery" />
         </q-tab-panel>
-
-        <!-- ===================== CONTRACT TYPES ===================== -->
         <q-tab-panel name="contract-types" class="q-pa-none">
           <AdminSettingsPanelContractTypes :search-query="searchQuery" />
         </q-tab-panel>
-
-        <!-- ===================== CUSTOM MULTIPLIERS ===================== -->
         <q-tab-panel name="custom-multipliers" class="q-pa-none">
           <AdminSettingsPanelCustomMultipliers />
         </q-tab-panel>
-
-        <!-- ===================== COST CENTERS ===================== -->
         <q-tab-panel name="cost-centers" class="q-pa-none">
           <AdminSettingsPanelCostCenters :search-query="searchQuery" />
         </q-tab-panel>
+        <q-tab-panel name="payroll-groups" class="q-pa-none">
+          <AdminSettingsPanelPayrollGroups :search-query="searchQuery" />
+        </q-tab-panel>
       </q-tab-panels>
     </div>
-
   </PageShell>
 </template>
 
@@ -81,6 +67,7 @@ import AdminSettingsPanelPositions from '@/components/pages/AdminSettings/AdminS
 import AdminSettingsPanelContractTypes from '@/components/pages/AdminSettings/AdminSettingsPanelContractTypes.vue'
 import AdminSettingsPanelCustomMultipliers from '@/components/pages/AdminSettings/AdminSettingsPanelCustomMultipliers.vue'
 import AdminSettingsPanelCostCenters from '@/components/pages/AdminSettings/AdminSettingsPanelCostCenters.vue'
+import AdminSettingsPanelPayrollGroups from '@/components/pages/AdminSettings/AdminSettingsPanelPayrollGroups.vue'
 
 const activeTab = ref('sites')
 const searchQuery = ref('')
@@ -93,18 +80,15 @@ const searchQuery = ref('')
   border: 1px solid #e8ecf0;
   overflow: hidden;
 }
-
 .tabs-section {
   padding: 0 24px;
   border-bottom: 1px solid #f1f3f5;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-
 .settings-tabs {
   min-width: max-content;
 }
-
 .settings-tab {
   font-size: 13px;
   font-weight: 500;
@@ -113,26 +97,16 @@ const searchQuery = ref('')
   padding: 12px 16px;
   white-space: nowrap;
 }
-
 .transparent-panels {
   background: transparent;
 }
-
 @media (max-width: 1440px) {
-  .admin-card {
-    border-radius: 14px;
-  }
+  .admin-card { border-radius: 14px; }
 }
-
 @media (max-width: 1024px) {
-  .tabs-section {
-    padding: 0 16px;
-  }
+  .tabs-section { padding: 0 16px; }
 }
-
 @media (max-width: 768px) {
-  .tabs-section {
-    padding: 0 12px;
-  }
+  .tabs-section { padding: 0 12px; }
 }
 </style>
