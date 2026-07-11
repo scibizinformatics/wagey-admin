@@ -7,14 +7,14 @@
             <q-icon name="assignment" size="22px" />
           </q-avatar>
           <div>
-            <div class="modal-title">{{ isRenewing ? 'Renew Contract' : 'Assign Contract' }}</div>
+            <div class="modal-title">{{ isRenewing ? 'Renew Payroll Profile' : 'Assign Payroll Profile' }}</div>
             <div v-if="isRenewing && employeeName" class="modal-subtitle">
-              Renewing contract
+              Renewing payroll profile
               <q-chip dense outline size="12px" icon="person" class="employee-chip">
                 {{ employeeName }}
               </q-chip>
             </div>
-            <div v-else class="modal-subtitle">Fill in the employment contract details</div>
+            <div v-else class="modal-subtitle">Fill in the payroll profile details</div>
           </div>
         </div>
         <q-btn icon="close" flat round dense class="modal-close-btn" @click="$emit('update:modelValue', false)" />
@@ -24,8 +24,21 @@
         <div class="form-section">
           <div class="section-title">Contract Details</div>
           <div class="form-grid">
-            <!-- Contract Type -->
+            <!-- Assignment Mode -->
             <q-select v-if="!isRenewing"
+              :model-value="form.assignment_mode"
+              @update:model-value="$emit('update:field', { field: 'assignment_mode', value: $event })"
+              :options="assignmentModeOptions"
+              label="Assignment Mode"
+              outlined
+              dense
+              emit-value
+              map-options
+              class="col-span-2"
+            />
+
+            <!-- Contract Type -->
+            <q-select v-if="form.assignment_mode === 'contract_type' && !isRenewing"
               :model-value="form.contract_type_id"
               @update:model-value="$emit('contractTypeChange', $event)"
               :options="contractTypeOptions"
@@ -39,9 +52,22 @@
               class="col-span-2"
             />
 
-            <!-- Row 2: Pay Type -->
+            <!-- ── Job Structure ── -->
+            <div class="section-title col-span-2" style="margin-top: 8px;">Job Structure</div>
+
+            <!-- Pay Type -->
+            <q-select
+              v-if="form.assignment_mode === 'custom'"
+              :model-value="form.pay_type"
+              @update:model-value="$emit('update:field', { field: 'pay_type', value: $event })"
+              :options="payTypeSelectOptions"
+              label="Pay Type *"
+              outlined
+              dense
+              class="col-span-2"
+            />
             <q-input
-              v-if="selectedContractType?.pay_type"
+              v-else-if="selectedContractType?.pay_type"
               :model-value="payTypeLabel"
               label="Pay Type"
               outlined
@@ -50,21 +76,9 @@
               class="col-span-2"
             />
 
-            <!-- Row 3: Payment Method | Work Hours Per Week -->
-            <q-select
-              :model-value="form.payment_method"
-              @update:model-value="$emit('update:field', { field: 'payment_method', value: $event })"
-              :options="paymentMethodOptions"
-              label="Payment Method *"
-              outlined
-              dense
-              emit-value
-              map-options
-              :class="{ 'col-span-2': !selectedContractType?.pay_type }"
-            />
-
+            <!-- Work Hours Per Week -->
             <q-input
-              v-if="selectedContractType?.pay_type"
+              v-if="selectedContractType?.pay_type || form.assignment_mode === 'custom'"
               :model-value="form.work_hours_per_week"
               @update:model-value="$emit('update:field', { field: 'work_hours_per_week', value: $event })"
               label="Work Hours Per Week"
@@ -73,30 +87,10 @@
               dense
               :hint="'Min 8, max 48 hours per week'"
               :rules="[(val) => !val || (val >= 8 && val <= 48) || 'Must be between 8 and 48 hours']"
+              class="col-span-2"
             />
 
-            <!-- Row 3: Rate -->
-            <div class="col-span-2">
-              <q-input
-                :model-value="form.rate"
-                @update:model-value="$emit('update:field', { field: 'rate', value: $event })"
-                label="Rate *"
-                type="number"
-                outlined
-                dense
-                prefix="₱"
-                @wheel.prevent
-                :rules="[(val) => !val || val >= 100 || 'Minimum rate is ₱100']"
-                :hint="form.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate (min ₱100)'"
-              />
-              <div v-if="form.pay_type === 'monthly' && form.rate >= 100 && form.work_hours_per_week > 0" class="daily-rate-preview">
-                <span class="daily-rate-label">Equivalent Daily Rate</span>
-                <span class="daily-rate-value">₱{{ dailyRate }}</span>
-                <span class="daily-rate-formula">based on {{ form.work_hours_per_week }} hrs/week</span>
-              </div>
-            </div>
-
-            <!-- Row 4: Position | Department -->
+            <!-- Position | Department -->
             <q-select
               :model-value="form.position"
               @update:model-value="$emit('update:field', { field: 'position', value: $event })"
@@ -125,7 +119,26 @@
               clearable
             />
 
-            <!-- Row: Year | Month -->
+            <!-- Payroll Group -->
+            <q-select
+              :model-value="form.payroll_group_id"
+              @update:model-value="$emit('update:field', { field: 'payroll_group_id', value: $event })"
+              :options="payrollGroupOptions"
+              option-label="name"
+              option-value="id"
+              emit-value
+              map-options
+              label="Payroll Group"
+              outlined
+              dense
+              clearable
+              class="col-span-2"
+            />
+
+            <!-- ── Period & Compensation ── -->
+            <div class="section-title col-span-2" style="margin-top: 8px;">Period & Compensation</div>
+
+            <!-- Year | Month -->
             <q-select
               :model-value="form.year"
               @update:model-value="$emit('update:field', { field: 'year', value: $event })"
@@ -148,8 +161,29 @@
               map-options
             />
 
-            <!-- Eligibilities (renew: checkboxes, create: readonly list) -->
-            <div v-if="isRenewing" class="col-span-2">
+            <!-- Rate -->
+            <div class="col-span-2">
+              <q-input
+                :model-value="form.rate"
+                @update:model-value="$emit('update:field', { field: 'rate', value: $event })"
+                label="Rate *"
+                type="number"
+                outlined
+                dense
+                prefix="₱"
+                @wheel.prevent
+                :rules="[(val) => !val || val >= 100 || 'Minimum rate is ₱100']"
+                :hint="form.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate (min ₱100)'"
+              />
+              <div v-if="form.pay_type === 'monthly' && form.rate >= 100 && form.work_hours_per_week > 0" class="daily-rate-preview">
+                <span class="daily-rate-label">Equivalent Daily Rate</span>
+                <span class="daily-rate-value">₱{{ dailyRate }}</span>
+                <span class="daily-rate-formula">based on {{ form.work_hours_per_week }} hrs/week</span>
+              </div>
+            </div>
+
+            <!-- Eligibilities (checkboxes in both modes, editable) -->
+            <div v-if="isRenewing || form.assignment_mode === 'custom' || (form.assignment_mode === 'contract_type' && selectedContractType)" class="col-span-2">
               <div class="section-label">Eligibilities</div>
               <div class="checkbox-grid">
                 <q-checkbox
@@ -207,8 +241,8 @@
               </div>
             </div>
 
-            <!-- Contributions (renew only) -->
-            <div v-if="isRenewing && contributionOptions.length" class="col-span-2">
+            <!-- Contributions -->
+            <div v-if="(isRenewing || form.assignment_mode === 'custom' || (form.assignment_mode === 'contract_type' && selectedContractType)) && contributionOptions.length" class="col-span-2">
               <div class="section-label">Contributions</div>
               <div class="checkbox-grid">
                 <q-checkbox
@@ -221,8 +255,8 @@
               </div>
             </div>
 
-            <!-- Multipliers (renew only) -->
-            <div v-if="isRenewing && visibleMultiplierFields.length" class="col-span-2">
+            <!-- Multipliers -->
+            <div v-if="(isRenewing || form.assignment_mode === 'custom' || (form.assignment_mode === 'contract_type' && selectedContractType)) && visibleMultiplierFields.length" class="col-span-2">
               <div class="section-label">Payroll Multipliers</div>
               <div class="multipliers-section">
                 <div v-for="field in visibleMultiplierFields" :key="field.key" class="multiplier-row">
@@ -255,7 +289,7 @@
 
         <div class="form-actions">
           <q-btn flat label="Cancel" class="cancel-btn" @click="$emit('update:modelValue', false)" />
-          <q-btn unelevated :label="isRenewing ? 'Renew Contract' : 'Assign Contract'" class="submit-btn" :loading="assigning" @click="$emit('submit')" />
+          <q-btn unelevated :label="isRenewing ? 'Renew Payroll Profile' : 'Assign Payroll Profile'" class="submit-btn" :loading="assigning" @click="$emit('submit')" />
         </div>
       </q-card-section>
     </q-card>
@@ -279,6 +313,7 @@ const props = defineProps({
   isRenewing: { type: Boolean, default: false },
   allEligibilityOptions: { type: Array, default: () => [] },
   contributionOptions: { type: Array, default: () => [] },
+  payrollGroupOptions: { type: Array, default: () => [] },
 })
 
 const selectedContractType = computed(() =>
@@ -290,12 +325,17 @@ const payTypeLabel = computed(() => {
   return selectedContractType.value.pay_type === 'monthly' ? 'Monthly' : 'Daily'
 })
 
+const assignmentModeOptions = [
+  { label: 'Contract Type', value: 'contract_type' },
+  { label: 'Custom', value: 'custom' },
+]
 
-
-const paymentMethodOptions = [
-  { label: 'Bank Transfer', value: 'bank_transfer' },
-  { label: 'Cash', value: 'cash' },
-  { label: 'Paytaca', value: 'paytaca' },
+const payTypeSelectOptions = [
+  { label: 'Monthly', value: 'monthly' },
+  { label: 'Semi-Monthly', value: 'semi-monthly' },
+  { label: 'Weekly', value: 'weekly' },
+  { label: 'Daily', value: 'daily' },
+  { label: 'Hourly', value: 'hourly' },
 ]
 
 const currentYear = new Date().getFullYear()
@@ -392,9 +432,10 @@ function isMultiplierVisible(key) {
   }
 }
 
-const visibleMultiplierFields = computed(() =>
-  multiplierFields.filter((f) => isMultiplierVisible(f.key)),
-)
+const visibleMultiplierFields = computed(() => {
+  if (props.form.assignment_mode === 'custom') return multiplierFields
+  return multiplierFields.filter((f) => isMultiplierVisible(f.key))
+})
 
 </script>
 
