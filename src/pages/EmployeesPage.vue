@@ -47,7 +47,7 @@
                 unelevated
                 color="primary"
                 icon="assignment"
-                label="Assign Contract"
+                label="Assign Payroll Profile"
                 class="add-employee-btn"
                 @click="handleBulkAssignDialog"
               />
@@ -174,6 +174,7 @@
       :is-renewing="isRenewing"
       :all-eligibility-options="eligibilityOptions"
       :contribution-options="contributions"
+      :payroll-group-options="payrollGroups"
       @update:field="updateAssignField"
       @contract-type-change="onContractTypeChange"
       @submit="handleAssignSubmit"
@@ -193,6 +194,7 @@ import { useAdminContracts } from '@/composables/admin/useAdminContracts'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 import { useAdminPositions } from '@/composables/admin/useAdminPositions'
 import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
+import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 
 import EmployeeStatsCards from '@/components/pages/Employees/EmployeeStatsCards.vue'
 import EmployeeTable from '@/components/pages/Employees/EmployeeTable.vue'
@@ -247,10 +249,14 @@ const {
   fetchEligibilities: fetchEligibilityOptions,
   contributions,
   fetchContributions,
+  fetchCompanyMultipliersForForm,
+  companyMultipliers,
+  PHILIPPINES_DEFAULT_MULTIPLIERS: defaultMultipliers,
 } = useAdminContractTypes()
 
 const { positions, fetchPositions } = useAdminPositions()
 const { departments, fetchDepartments } = useAdminDepartments()
+const { payrollGroups, fetchPayrollGroups } = useAdminPayrollGroups()
 
 const selectedEligibilityObjectsData = ref([])
 
@@ -298,6 +304,20 @@ function onContractTypeChange(contractTypeId) {
     assignForm.value.rate = 100
   }
 
+  // Populate contributions from contract type
+  if (selectedType?.contributions?.length) {
+    assignForm.value.contributions = [...selectedType.contributions]
+  } else {
+    assignForm.value.contributions = []
+  }
+
+  // Populate multipliers from contract type
+  const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
+    'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+  for (const key of mKeys) {
+    assignForm.value[key] = selectedType?.[key] ?? null
+  }
+
   // Derive holiday_pay_types from contract type flags
   const codes = []
   if (selectedType) {
@@ -337,6 +357,28 @@ watch(
     }
   },
   { deep: true },
+)
+
+watch(
+  () => assignForm.value.assignment_mode,
+  (newMode) => {
+    if (newMode === 'contract_type' && assignForm.value.contract_type_id) {
+      onContractTypeChange(assignForm.value.contract_type_id)
+    } else if (newMode === 'custom') {
+      assignForm.value.contract_type_id = null
+      assignForm.value.pay_type = null
+      assignForm.value.eligibilities = eligibilityOptions.value.map((e) => e.id)
+      assignForm.value.contributions = []
+      assignForm.value.holiday_pay_types = []
+      assignForm.value.overtime_multiplier = companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null
+      assignForm.value.special_holiday_multiplier = companyMultipliers.value?.special_holiday_multiplier ?? defaultMultipliers.special_holiday ?? null
+      assignForm.value.regular_holiday_multiplier = companyMultipliers.value?.regular_holiday_multiplier ?? defaultMultipliers.regular_holiday ?? null
+      assignForm.value.night_diff_multiplier = companyMultipliers.value?.night_diff_multiplier ?? defaultMultipliers.night_diff ?? null
+      assignForm.value.regular_holiday_ot_multiplier = companyMultipliers.value?.regular_holiday_ot_multiplier ?? defaultMultipliers.regular_holiday_ot ?? null
+      assignForm.value.special_holiday_ot_multiplier = companyMultipliers.value?.special_holiday_ot_multiplier ?? defaultMultipliers.special_holiday_ot ?? null
+      assignForm.value.undertime_multiplier = companyMultipliers.value?.undertime_multiplier ?? defaultMultipliers.undertime ?? null
+    }
+  },
 )
 
 watch(contractAssigned, (newVal) => {
@@ -754,14 +796,33 @@ async function handleOpenAssignDialog(employee) {
   if (!positions.value.length) {
     await fetchPositions()
   }
+  if (!payrollGroups.value.length) {
+    await fetchPayrollGroups()
+  }
   if (!holidayTypes.value.length) {
     await fetchHolidayTypes()
   }
   if (!contributions.value.length) {
     await fetchContributions()
   }
+  if (!companyMultipliers.value) {
+    await fetchCompanyMultipliersForForm()
+  }
   selectedAssignEmployee.value = employee
   await openAssignDialog(employee)
+
+  // Populate defaults for new custom assignment
+  if (!activeContract.value && assignForm.value.assignment_mode === 'custom') {
+    assignForm.value.eligibilities = eligibilityOptions.value.map((e) => e.id)
+    assignForm.value.contributions = contributions.value.map((c) => c.id)
+    assignForm.value.overtime_multiplier = companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null
+    assignForm.value.special_holiday_multiplier = companyMultipliers.value?.special_holiday_multiplier ?? defaultMultipliers.special_holiday ?? null
+    assignForm.value.regular_holiday_multiplier = companyMultipliers.value?.regular_holiday_multiplier ?? defaultMultipliers.regular_holiday ?? null
+    assignForm.value.night_diff_multiplier = companyMultipliers.value?.night_diff_multiplier ?? defaultMultipliers.night_diff ?? null
+    assignForm.value.regular_holiday_ot_multiplier = companyMultipliers.value?.regular_holiday_ot_multiplier ?? defaultMultipliers.regular_holiday_ot ?? null
+    assignForm.value.special_holiday_ot_multiplier = companyMultipliers.value?.special_holiday_ot_multiplier ?? defaultMultipliers.special_holiday_ot ?? null
+    assignForm.value.undertime_multiplier = companyMultipliers.value?.undertime_multiplier ?? defaultMultipliers.undertime ?? null
+  }
 
   // Sync eligibility display when pre-filled from existing contract
   if (activeContract.value && assignForm.value.eligibilities.length) {
@@ -776,8 +837,10 @@ async function handleBulkAssignDialog() {
   if (!contractTypeOptions.value.length) await fetchContractTypes()
   if (!eligibilityOptions.value.length) await fetchEligibilityOptions()
   if (!positions.value.length) await fetchPositions()
+  if (!payrollGroups.value.length) await fetchPayrollGroups()
   if (!holidayTypes.value.length) await fetchHolidayTypes()
   if (!contributions.value.length) await fetchContributions()
+  if (!companyMultipliers.value) await fetchCompanyMultipliersForForm()
 
   bulkAssignEmployeeIds.value = selectedEmployees.value.map((e) => e.id)
   payTypeAutoFilled.value = false
@@ -786,16 +849,26 @@ async function handleBulkAssignDialog() {
     employee_id: null,
     company_id: companyId.value,
     contract_type_id: null,
+    assignment_mode: 'custom',
     pay_type: 'monthly',
-    payment_method: 'bank_transfer',
     rate: '',
     work_hours_per_week: 48,
     position: null,
     department: null,
-    eligibilities: [],
+    payroll_group_id: null,
+    payroll_group: null,
+    eligibilities: eligibilityOptions.value.map((e) => e.id),
+    contributions: contributions.value.map((c) => c.id),
     year: new Date().getFullYear(),
     month: new Date().getMonth() + 1,
     holiday_pay_types: [],
+    overtime_multiplier: companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null,
+    special_holiday_multiplier: companyMultipliers.value?.special_holiday_multiplier ?? defaultMultipliers.special_holiday ?? null,
+    regular_holiday_multiplier: companyMultipliers.value?.regular_holiday_multiplier ?? defaultMultipliers.regular_holiday ?? null,
+    night_diff_multiplier: companyMultipliers.value?.night_diff_multiplier ?? defaultMultipliers.night_diff ?? null,
+    regular_holiday_ot_multiplier: companyMultipliers.value?.regular_holiday_ot_multiplier ?? defaultMultipliers.regular_holiday_ot ?? null,
+    special_holiday_ot_multiplier: companyMultipliers.value?.special_holiday_ot_multiplier ?? defaultMultipliers.special_holiday_ot ?? null,
+    undertime_multiplier: companyMultipliers.value?.undertime_multiplier ?? defaultMultipliers.undertime ?? null,
     start_date: '',
     end_date: '',
   }
