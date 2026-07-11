@@ -145,8 +145,8 @@
                       /></q-item-section>
                       <q-item-section>{{
                         getContract(props.row) !== 'No Contract'
-                          ? 'Renew Contract'
-                          : 'Assign Contract'
+                          ? 'Renew Payroll Profile'
+                          : 'Assign Payroll Profile'
                       }}</q-item-section>
                     </q-item>
                     <q-separator v-if="getStatus(props.row) !== 'Terminated'" />
