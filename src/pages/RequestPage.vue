@@ -83,12 +83,23 @@
 
         <q-tab-panel name="overtime" class="tab-panel-content">
           <div class="payroll-card">
-            <div class="table-header">
-              <div class="table-title-section">
-                <h2 class="table-title">Payroll Run Overtime Summary</h2>
-                <div class="table-info">{{ overtimeSummary.length }} runs</div>
+<div class="table-header">
+                <div class="table-title-section">
+                  <h2 class="table-title">Payroll Run Overtime Summary</h2>
+                  <div class="table-info">{{ overtimeSummary.length }} runs</div>
+                </div>
+                <div class="table-header-actions">
+                  <q-btn
+                    unelevated
+                    dense
+                    no-caps
+                    icon="add"
+                    label="Overtime Advance"
+                    class="overtime-advance-btn"
+                    @click="openOvertimeAdvanceModal"
+                  />
+                </div>
               </div>
-            </div>
 
             <div v-if="overtimeSummary.length" class="overtime-summary-list">
               <div
@@ -337,6 +348,16 @@
       v-model="showOvertimeDetail"
       :request="selectedOvertimeRow"
     />
+
+    <OvertimeAdvanceModal
+      v-model="showOvertimeAdvanceModal"
+      :categories="overtimeCategories"
+      :employee-options="overtimeAdvanceEmployeeOptions"
+      :submitting="overtimeAdvanceSubmitting"
+      :company-id="selectedCompany"
+      @filter-employees="filterOvertimeAdvanceEmployees"
+      @submit="submitOvertimeAdvance"
+    />
     </div>
   </PageShell>
 </template>
@@ -346,6 +367,7 @@ import PageShell from '@/components/layout/PageShell.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
+import { useEmployees } from 'src/composables/page/useEmployees'
 import RequestStatsCards from 'src/components/pages/Request/RequestStatsCards.vue'
 import RequestLeaveTable from 'src/components/pages/Request/RequestLeaveTable.vue'
 import RequestCashAdvanceTable from 'src/components/pages/Request/RequestCashAdvanceTable.vue'
@@ -353,8 +375,16 @@ import RequestLeaveDetailModal from 'src/components/pages/Request/RequestLeaveDe
 import RequestCaApprovalModal from 'src/components/pages/Request/RequestCaApprovalModal.vue'
 import RequestCaViewModal from 'src/components/pages/Request/RequestCaViewModal.vue'
 import RequestOvertimeDetailModal from 'src/components/pages/Request/RequestOvertimeDetailModal.vue'
+import OvertimeAdvanceModal from 'src/components/pages/Request/OvertimeAdvanceModal.vue'
 
 const $q = useQuasar()
+
+const { employees, fetchEmployees } = useEmployees()
+
+// ===== OVERTIME ADVANCE STATE =====
+const showOvertimeAdvanceModal = ref(false)
+const overtimeAdvanceSubmitting = ref(false)
+const overtimeAdvanceEmployeeOptions = ref([])
 
 // ===== SHARED STATE =====
 const activeTab = ref('leave')
@@ -570,7 +600,7 @@ const fetchOvertimeCategories = async () => {
   try {
     const companyId = selectedCompany.value
     const res = await api.get('/payroll/overtime-categories/', {
-      params: companyId ? { company_id: companyId } : {},
+      params: companyId ? { company: companyId } : {},
     })
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
     overtimeCategories.value = data.filter((c) => c.is_active)
@@ -686,6 +716,78 @@ const toggleSelectAllOvertime = () => {
 
 const clearOvertimeSelection = () => {
   selectedOvertimeIds.value = new Set()
+}
+
+// ===== OVERTIME ADVANCE =====
+const openOvertimeAdvanceModal = async () => {
+  overtimeAdvanceEmployeeOptions.value = []
+  await fetchOvertimeAdvanceEmployees()
+  showOvertimeAdvanceModal.value = true
+}
+
+const fetchOvertimeAdvanceEmployees = async () => {
+  try {
+    await fetchEmployees({ force: true })
+    overtimeAdvanceEmployeeOptions.value = employees.value.map((e) => ({
+      id: e.id,
+      name: e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() || 'Unknown',
+    }))
+  } catch { /* silent */ }
+}
+
+const filterOvertimeAdvanceEmployees = (val) => {
+  if (!val || val.trim() === '') {
+    overtimeAdvanceEmployeeOptions.value = employees.value.map((e) => ({
+      id: e.id,
+      name: e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() || 'Unknown',
+    }))
+    return
+  }
+  const search = val.toLowerCase()
+  overtimeAdvanceEmployeeOptions.value = employees.value
+    .filter((e) => {
+      const name = e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim()
+      return name.toLowerCase().includes(search)
+    })
+    .map((e) => ({ id: e.id, name: e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() || 'Unknown' }))
+}
+
+const submitOvertimeAdvance = async (payload) => {
+  overtimeAdvanceSubmitting.value = true
+  const companyId = selectedCompany.value
+  if (!companyId) {
+    $q.notify({ type: 'negative', message: 'No company selected', icon: 'error', position: 'top' })
+    overtimeAdvanceSubmitting.value = false
+    return
+  }
+  try {
+    const body = {
+      employee_ids: payload.employee_ids,
+      category: payload.category,
+      date: payload.date,
+      reason: payload.reason,
+    }
+    if (payload.limit_hours) {
+      body.limit_hours = payload.limit_hours
+    }
+    await api.post(`/attendance/overtime/admin/${companyId}/`, body)
+    $q.notify({
+      type: 'positive',
+      message: 'Overtime advance created successfully',
+      icon: 'check_circle',
+      position: 'top',
+    })
+    showOvertimeAdvanceModal.value = false
+    if (selectedDisbursementLog.value) {
+      await fetchOvertimeRequests(selectedDisbursementLog.value)
+    }
+    await fetchOvertimeSummary()
+  } catch (e) {
+    const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.message || 'Failed to create overtime advance'
+    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+  } finally {
+    overtimeAdvanceSubmitting.value = false
+  }
 }
 
 const bulkApproveOvertime = async () => {
@@ -1100,6 +1202,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.overtime-advance-btn {
+  height: 32px;
+  font-size: 12px;
+  border-radius: 8px;
+  background: #102335 !important;
+  color: #ffffff !important;
 }
 .table-title {
   font-size: 15px;
