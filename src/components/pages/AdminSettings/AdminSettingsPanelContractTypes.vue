@@ -193,8 +193,7 @@
             :rules="[(val) => !val || val <= 48 || 'Maximum is 48 hours']"
             class="q-mb-md"
           />
-          <div class="text-subtitle2 q-mb-xs">Eligibilities</div>
-          <q-separator class="q-mb-md" />
+          <div class="section-label">Eligibilities</div>
           <q-select
             v-model="contractTypeForm.work_hours_type"
             :options="[
@@ -273,8 +272,7 @@
               !hasContributionsId || contractTypeForm.eligibilities.includes(hasContributionsId)
             "
           >
-            <div class="text-subtitle2 q-mb-xs q-mt-md">Contributions</div>
-            <q-separator class="q-mb-md" />
+            <div class="section-label">Contributions</div>
             <div class="row">
               <div v-for="item in contributions" :key="item.id" class="col-6 q-mb-sm">
                 <q-checkbox
@@ -288,8 +286,7 @@
           </template>
 
           <template v-if="holidayPayId && contractTypeForm.eligibilities.includes(holidayPayId)">
-            <div class="text-subtitle2 q-mb-xs q-mt-md">Holiday</div>
-            <q-separator class="q-mb-md" />
+            <div class="section-label">Holiday</div>
             <div class="row">
               <div class="col-6 q-mb-sm">
                 <q-checkbox
@@ -308,8 +305,7 @@
             </div>
           </template>
 
-          <div class="text-subtitle2 q-mb-xs q-mt-md">Payroll Multipliers</div>
-          <q-separator class="q-mb-md" />
+          <div class="section-label">Payroll Multipliers</div>
           <div class="multipliers-section">
             <div v-for="field in visibleMultiplierFields" :key="field.key" class="multiplier-row">
               <div class="multiplier-info">
@@ -322,19 +318,15 @@
               <div class="multiplier-controls">
                 <div class="multiplier-value-wrapper">
                   <q-input
-                    v-model="contractTypeForm[`${field.key}_multiplier`]"
+                    v-model="contractTypeForm[field.key + '_multiplier']"
                     type="number"
                     step="0.01"
                     min="0"
                     outlined
                     dense
-                    class="multiplier-input modern-input"
+                    class="multiplier-input"
                     placeholder="e.g. 1.50"
-                  >
-                    <template v-slot:prepend>
-                      <span class="multiplier-badge" @click="clearMultiplier(field.key)">×</span>
-                    </template>
-                  </q-input>
+                  />
                 </div>
               </div>
             </div>
@@ -833,10 +825,6 @@ watch(
   { immediate: true },
 )
 
-const clearMultiplier = (fieldKey) => {
-  contractTypeForm.value[`${fieldKey}_multiplier`] = null
-}
-
 onMounted(async () => {
   await fetchContractTypeDefs()
   await fetchEligibilities()
@@ -1141,9 +1129,16 @@ onMounted(async () => {
   flex-direction: column;
 }
 
+.section-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
 .multiplier-label {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   color: #1e293b;
 }
 
@@ -1176,62 +1171,11 @@ onMounted(async () => {
 }
 
 .multiplier-input {
-  width: 110px;
+  width: 90px;
 }
 
-.multiplier-input.modern-input :deep(.q-field__control) {
-  height: 38px;
-  border-radius: 8px;
-  background: #f8fafc;
-  border: 1px solid #d1d5db;
-  transition: all 0.2s ease;
-}
-
-.multiplier-input.modern-input :deep(.q-field__control:hover) {
-  border-color: #3b82f6;
-  background: #ffffff;
-}
-
-.multiplier-input.modern-input :deep(.q-field--focused .q-field__control) {
-  border-color: #3b82f6;
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.multiplier-input.modern-input :deep(.q-field__native) {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-  text-align: center;
-  padding-left: 0;
-}
-
-.multiplier-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: #102335;
-  color: white;
-  font-weight: 700;
-  font-size: 13px;
-  border-radius: 6px;
-  margin-right: 4px;
-  cursor: pointer;
-  user-select: none;
-}
-.multiplier-badge:hover {
-  background: #193d5c;
-}
-
-.multiplier-badge:hover {
-  background: #dc2626;
-}
-
-.multiplier-input.modern-input :deep(.q-field__prepend) {
-  padding-right: 0;
-  padding-left: 8px;
+.multiplier-input :deep(.q-field__control) {
+  height: 32px;
 }
 
 .gov-violations-list {
