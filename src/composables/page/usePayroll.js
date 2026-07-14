@@ -385,30 +385,30 @@ export function usePayroll() {
     }
   }
 
-  // ─── Step 4: Bulk Release Payslips for Review ─────────────────────────────
-  // PATCH /admin/payslips/bulk-release/
+  // ─── Step 4: Bulk Review Payslips ──────────────────────────────────────────
+  // PATCH /admin/payslips/bulk-review/
   // { disbursement_log_id, employee_ids }
-  // → Payslip status: pending_review
-  async function bulkReleasePayslips(disbursementLogId, employeeIds) {
+  // → Payslip status: reviewed
+  async function bulkReviewPayslips(disbursementLogId, employeeIds) {
     const ids = Array.isArray(employeeIds) ? employeeIds : [employeeIds]
-    setSaving('bulkReleasing', true)
+    setSaving('bulkReviewing', true)
     try {
       const response = await api.patch(
-        `${BASE}/payroll/admin/payslips/bulk-release/`,
+        `${BASE}/payroll/admin/payslips/bulk-review/`,
         { disbursement_log_id: disbursementLogId, employee_ids: ids },
         { headers: authHeaders() },
       )
 
       return response.data
     } catch (err) {
-      console.error('[usePayroll] Step 4 bulkReleasePayslips ✖ error', {
+      console.error('[usePayroll] Step 4 bulkReviewPayslips ✖ error', {
         status: err?.response?.status,
         data: err?.response?.data,
         message: err?.message,
       })
       throw err
     } finally {
-      setSaving('bulkReleasing', false)
+      setSaving('bulkReviewing', false)
     }
   }
 
@@ -594,6 +594,66 @@ export function usePayroll() {
     }
   }
 
+  // ─── Admin: Fetch Issues ────────────────────────────────────────────────────
+  // GET /payroll/admin/issues/all/?company=&status=&disbursement_log_id=
+  async function fetchIssues(params = {}) {
+    try {
+      const response = await api.get(`${BASE}/payroll/admin/issues/all/`, {
+        params,
+        headers: authHeaders(),
+      })
+      return response.data ?? []
+    } catch (err) {
+      console.error('[usePayroll] fetchIssues ✖ error', {
+        status: err?.response?.status,
+        message: err?.message,
+      })
+      return []
+    }
+  }
+
+  // ─── Admin: Resolve Issue ─────────────────────────────────────────────────
+  // PATCH /payroll/admin/payslips/{id}/resolve/
+  // { admin_notes }
+  async function resolveIssue(payslipId, adminNotes = '') {
+    try {
+      const response = await api.patch(
+        `${BASE}/payroll/admin/payslips/${payslipId}/resolve/`,
+        { admin_notes: adminNotes },
+        { headers: authHeaders() },
+      )
+      return response.data
+    } catch (err) {
+      console.error('[usePayroll] resolveIssue ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
+    }
+  }
+
+  // ─── Admin: Reject Issue ──────────────────────────────────────────────────
+  // PATCH /payroll/admin/payslips/{id}/reject/
+  // { admin_notes }
+  async function rejectIssue(payslipId, adminNotes = '') {
+    try {
+      const response = await api.patch(
+        `${BASE}/payroll/admin/payslips/${payslipId}/reject/`,
+        { admin_notes: adminNotes },
+        { headers: authHeaders() },
+      )
+      return response.data
+    } catch (err) {
+      console.error('[usePayroll] rejectIssue ✖ error', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      })
+      throw err
+    }
+  }
+
   // ─── Workflow: Fetch Disbursement Log Employees ───────────────────────────
   // Step 3: GET /payroll/admin/disbursement-logs/{id}/employees/
   async function fetchPayrollRunEmployees(logId, statusFilter = null) {
@@ -616,63 +676,52 @@ export function usePayroll() {
         },
       )
 
-      // FIX: API returns a bare array [...] — check for that first before trying object keys.
-      // Priority: root array → employees (custom key) → results (DRF pagination) → data (legacy wrapper)
-      const rawData = Array.isArray(response.data)
-        ? response.data
-        : (response.data.employees ?? response.data.results ?? response.data.data ?? [])
+      // FIX: API now returns an object wrapper: { disbursement_log_id, employees: [...], calculated_amount, total_net_pay, funded, ... }
+      // Also support legacy bare array for backward compatibility.
+      const responseData = Array.isArray(response.data) ? { employees: response.data } : (response.data ?? {})
+      const rawData = responseData.employees ?? responseData.results ?? responseData.data ?? []
+
+      // ─── Patch parent metadata into the matching run summary ───────────────────
+      // The employee endpoint carries the canonical run-level financials and counts.
+      const runIndex = payrollRunsSummary.value.findIndex((r) => String(r.id) === String(logId))
+      if (runIndex !== -1) {
+        const patched = { ...payrollRunsSummary.value[runIndex] }
+        if (responseData.calculated_amount !== undefined) patched.calculated_amount = responseData.calculated_amount
+        if (responseData.total_net_pay !== undefined) patched.total_net_pay = responseData.total_net_pay
+        if (responseData.funded !== undefined) patched.funded = responseData.funded
+        // New count fields from employee endpoint wrapper
+        if (responseData.total_employees !== undefined) patched.total_employees = responseData.total_employees
+        if (responseData.acknowledged_employees !== undefined) patched.acknowledged_employees = responseData.acknowledged_employees
+        if (responseData.pending_review_employees !== undefined) patched.pending_review_employees = responseData.pending_review_employees
+        if (responseData.reviewed_employees !== undefined) patched.reviewed_employees = responseData.reviewed_employees
+        if (responseData.disputed_employees !== undefined) patched.disputed_employees = responseData.disputed_employees
+        if (responseData.pending_issues_count !== undefined) patched.pending_issues_count = responseData.pending_issues_count
+        payrollRunsSummary.value[runIndex] = patched
+      }
 
       // FIX: Normalize API field names → shape the template expects.
-      // API returns:      calculated, actual_net_pay, review_status_display
-      // Template expects: gross_pay,  net_pay,         status
-      //
-      // Also: if the disbursement log itself is marked completed/closed,
-      // any employee still showing as "disbursed" is promoted to "completed"
-      // — the run is fully done, disbursement was successful.
-      const runRecord = payrollRunsSummary.value.find((r) => String(r.id) === String(logId))
-      const runIsCompleted = ['completed', 'closed'].includes(runRecord?.status)
-
-      // Preserve statuses the API may omit (e.g. already-disbursed employees still
-      // come back as "Acknowledged" / ready_for_payment from the list endpoint).
-      const existingById = new Map(
-        (payrollRunEmployees.value || []).map((e) => [
-          String(e.employee_id ?? e.id),
-          e.status,
-        ]),
-      )
-
+      // New payload: payslip_status, net_pay
+      // Supported statuses: Pending Review, Reviewed, Disputed, Acknowledged,
+      // Ready for Payment, Funded, Completed
       payrollRunEmployees.value = Array.isArray(rawData)
         ? rawData.map((emp) => {
-            const id = String(emp.employee_id ?? emp.id)
-            const raw = emp.status ?? emp.review_status_display ?? 'draft'
+            const raw = emp.payslip_status ?? emp.status ?? emp.review_status_display ?? 'pending_review'
             const map = {
-              draft: 'draft',
-              pending: 'draft',
-              Pending: 'draft',
-              pending_review: 'pending_review',
               'Pending Review': 'pending_review',
-              ready_for_payment: 'ready_for_payment',
+              pending_review: 'pending_review',
+              Reviewed: 'reviewed',
+              reviewed: 'reviewed',
+              Disputed: 'disputed',
+              disputed: 'disputed',
               Acknowledged: 'ready_for_payment',
-              disbursed: 'disbursed',
-              Disbursed: 'disbursed',
-              completed: 'disbursed',
-              Completed: 'disbursed',
+              ready_for_payment: 'ready_for_payment',
+              'Ready for Payment': 'ready_for_payment',
+              Funded: 'funded',
+              funded: 'funded',
+              Completed: 'completed',
+              completed: 'completed',
             }
-            let normalized = map[raw] ?? raw
-
-            // If the API didn't give us a real payment status and we already
-            // knew this employee was disbursed/completed, keep that status.
-            const existing = existingById.get(id)
-            if (
-              normalized === 'ready_for_payment' &&
-              (existing === 'disbursed' || existing === 'completed')
-            ) {
-              normalized = existing
-            }
-
-            if (runIsCompleted && normalized === 'disbursed') {
-              normalized = 'completed'
-            }
+            const normalized = map[raw] ?? raw
 
             return {
               ...emp,
@@ -706,29 +755,30 @@ export function usePayroll() {
   function updateWorkflowStats() {
     const employees = payrollRunEmployees.value
 
-    // Ensure employees is an array before processing
     if (!Array.isArray(employees)) {
       workflowStats.value = {
         total: 0,
-        draft: 0,
         pending_review: 0,
+        reviewed: 0,
+        disputed: 0,
         ready_for_payment: 0,
-        disbursed: 0,
+        funded: 0,
         completed: 0,
       }
       return
     }
 
     const statusCounts = {
-      draft: 0,
       pending_review: 0,
+      reviewed: 0,
+      disputed: 0,
       ready_for_payment: 0,
-      disbursed: 0,
+      funded: 0,
       completed: 0,
     }
 
     employees.forEach((emp) => {
-      const status = emp.status || 'draft'
+      const status = emp.status || 'pending_review'
       if (Object.prototype.hasOwnProperty.call(statusCounts, status)) {
         statusCounts[status]++
       }
@@ -744,67 +794,40 @@ export function usePayroll() {
   // Maps employee statuses → a single UI workflow stage for showing
   // the correct action buttons.
   //
-  //  draft             → admin can bulk-release
-  //  pending_review    → waiting for employees to acknowledge (read-only for admin)
-  //  ready_for_payment → admin can disburse (after funding)
-  //  disbursed         → cash employees waiting to confirm money received
+  //  pending_review    → admin can bulk-review
+  //  reviewed          → waiting for funding
+  //  ready_for_payment → waiting for funding (legacy/acknowledged)
+  //  funded            → admin can mark complete
   //  completed         → done
   function updateWorkflowStage() {
     const employees = payrollRunEmployees.value
 
-    // Ensure employees is an array
     if (!Array.isArray(employees) || employees.length === 0) {
-      workflowStage.value = 'draft'
+      workflowStage.value = 'pending_review'
       return
     }
 
-    const allHaveStatus = (statuses) => employees.every((e) => statuses.includes(e.status))
+    const anyHaveStatus = (statuses) => employees.some((e) => statuses.includes(e.status))
 
-    if (allHaveStatus(['completed'])) {
+    if (anyHaveStatus(['completed'])) {
       workflowStage.value = 'completed'
-    } else if (allHaveStatus(['disbursed', 'completed'])) {
-      workflowStage.value = 'disbursed'
-    } else if (allHaveStatus(['ready_for_payment', 'disbursed', 'completed'])) {
+    } else if (anyHaveStatus(['funded'])) {
+      workflowStage.value = 'funded'
+    } else if (anyHaveStatus(['ready_for_payment'])) {
       workflowStage.value = 'ready_for_payment'
-    } else if (allHaveStatus(['pending_review', 'ready_for_payment', 'disbursed', 'completed'])) {
-      workflowStage.value = 'pending_review'
+    } else if (anyHaveStatus(['reviewed'])) {
+      workflowStage.value = 'reviewed'
     } else {
-      workflowStage.value = 'draft'
+      workflowStage.value = 'pending_review'
     }
   }
 
   // ─── Workflow: Get Actionable Employees ────────────────────────
-  function getActionableEmployees(currentStage) {
+  // Backend handles all status validation; frontend returns all employees
+  // so the admin can select any and the backend will reject invalid ones.
+  function getActionableEmployees() {
     const employees = payrollRunEmployees.value
-
-    // Ensure employees is an array before filtering
-    if (!Array.isArray(employees)) {
-      return []
-    }
-
-    switch (currentStage) {
-      case 'draft':
-        // Admin can bulk-release draft payslips
-        return employees.filter((e) => e.status === 'draft')
-      case 'pending_review':
-        // Waiting for employee to acknowledge — but those who already acknowledged
-        // (ready_for_payment) can be selectively disbursed early by the admin
-        // Guard: review_status must not be pending
-        return employees.filter(
-          (e) => e.status === 'ready_for_payment' && e.review_status !== 'pending',
-        )
-      case 'ready_for_payment':
-        // Acknowledged by employee — admin can disburse
-        // Guard: review_status must not be pending
-        return employees.filter(
-          (e) => e.status === 'ready_for_payment' && e.review_status !== 'pending',
-        )
-      case 'disbursed':
-        // Cash disbursed — waiting for employee to confirm money received
-        return employees.filter((e) => e.status === 'disbursed')
-      default:
-        return []
-    }
+    return Array.isArray(employees) ? employees : []
   }
 
   // ─── Workflow: Check if stage has auto-selection behavior ──────
@@ -1071,8 +1094,8 @@ export function usePayroll() {
     updateCustomMultipliers,
     // Step 1: generate payslips + create disbursement log
     createPayrollRun,
-    // Step 4: bulk release for employee review
-    bulkReleasePayslips,
+    // Step 4: bulk review payslips
+    bulkReviewPayslips,
     // Step 5: employee view payslips
     employeePayslips,
     fetchEmployeePayslips,
@@ -1086,6 +1109,10 @@ export function usePayroll() {
     disbursePayslips,
     // Step 10: employee confirm money received (cash only)
     confirmMoneyReceived,
+    // Issue management
+    fetchIssues,
+    resolveIssue,
+    rejectIssue,
     // Workflow helpers
     fetchPayrollRunEmployees,
     updateWorkflowStats,
