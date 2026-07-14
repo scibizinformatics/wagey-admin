@@ -30,22 +30,16 @@
           class="select-all-checkbox"
         />
         <q-btn
-          v-if="showReleaseBtn"
+          v-if="showReviewBtn"
           unelevated dense no-caps size="sm" icon="send" color="orange"
-          :label="releaseBtnLabel" :loading="saving"
-          @click="$emit('bulk-release')"
+          :label="reviewBtnLabel" :loading="saving"
+          @click="$emit('bulk-review')"
         />
         <q-btn
-          v-if="showDisburseReadyBtn"
+          v-if="showMarkCompleteBtn"
           unelevated dense no-caps size="sm" icon="payments" color="teal"
-          label="Disburse Ready" :loading="saving"
-          @click="$emit('bulk-disburse')"
-        />
-        <q-btn
-          v-if="showDisburseSelectedBtn"
-          unelevated dense no-caps size="sm" icon="payments" color="teal"
-          :label="disburseBtnLabel" :loading="saving"
-          @click="$emit('bulk-disburse')"
+          :label="markCompleteBtnLabel" :loading="saving"
+          @click="$emit('bulk-mark-complete')"
         />
       </div>
     </div>
@@ -55,32 +49,19 @@
       <span style="font-size: 13px; color: #6b7280">Loading employees...</span>
     </div>
 
-    <div v-if="showEarlyDisbursalBannerFirst" class="early-disbursal-banner">
-      <q-icon name="payments" size="16px" color="teal" />
-      <span>
-        <strong>{{ earlyDisbursalCount }} employee(s)</strong>
-        have acknowledged their payslip and can be disbursed early. Select them
-        individually or use <strong>Select All</strong> to release their salary now.
-      </span>
-    </div>
-
-    <div v-if="showEarlyDisbursalBannerSecond" class="early-disbursal-banner">
-      <q-icon name="payments" size="16px" color="teal" />
-      <span>
-        <strong>{{ earlyDisbursalCount }} employee(s)</strong>
-        have acknowledged their payslip and can be disbursed early. Select them
-        individually to disburse their salary now.
-      </span>
-    </div>
-
     <div class="employees-table-container">
       <div class="employees-table-header">
         <div class="employees-th"></div>
         <div class="employees-th">Employee</div>
         <div class="employees-th">Status</div>
-        <div class="employees-th">Gross Pay</div>
         <div class="employees-th">Net Pay</div>
-        <div class="employees-th">Total Hours</div>
+        <div class="employees-th">Manual</div>
+        <div class="employees-th">Attendance</div>
+        <div class="employees-th">Pending OT</div>
+        <div class="employees-th">Allowance</div>
+        <div class="employees-th">Cash Adv</div>
+        <div class="employees-th">Tax</div>
+        <div class="employees-th">Contrib</div>
         <div class="employees-th">Actions</div>
       </div>
 
@@ -100,22 +81,11 @@
             >
               <div class="employees-td" @click.stop>
                 <q-checkbox
-                  v-if="emp._checkboxType === 'pending_review'"
-                  :model-value="false" disable dense
-                  checked-icon="hourglass_top" color="orange"
-                >
-                  <q-tooltip>Waiting for employee acknowledgement</q-tooltip>
-                </q-checkbox>
-                <q-checkbox
-                  v-else-if="emp._canCheck"
+                  v-if="!['completed', 'disputed'].includes(emp.status)"
                   :model-value="emp._selected"
                   @update:model-value="$emit('toggle-selection', emp.employee_id)"
                   dense
-                >
-                  <q-tooltip v-if="workflowStage === 'pending_review'">Acknowledged &mdash; select to disburse early</q-tooltip>
-                </q-checkbox>
-                <q-icon v-else-if="['disbursed', 'completed'].includes(emp.status)"
-                  name="task_alt" color="positive" size="20px" />
+                />
                 <span v-else class="text-grey-5">&mdash;</span>
               </div>
               <div class="employees-td employee-cell">
@@ -132,19 +102,20 @@
                 <q-tooltip v-if="emp._hasError" class="bg-negative">{{ emp.lastError }}</q-tooltip>
               </div>
               <div class="employees-td amount-cell">
-                <div class="amount-display">{{ emp._grossPayFormatted }}</div>
-                <div class="amount-progress">
-                  <div class="amount-bar gross-bar" :style="{ width: emp._grossBarWidth + '%' }"></div>
-                </div>
-              </div>
-              <div class="employees-td amount-cell">
                 <div class="amount-display">{{ emp._netPayFormatted }}</div>
-                <div class="amount-progress">
-                  <div class="amount-bar net-bar" :style="{ width: emp._netBarWidth + '%' }"></div>
-                </div>
               </div>
-              <div class="employees-td">
-                <div class="hours-badge">{{ emp._totalHours }}h</div>
+              <div class="employees-td numeric-cell">{{ emp._manualLogs }}</div>
+              <div class="employees-td numeric-cell">{{ emp._reviewAttendance }}</div>
+              <div class="employees-td numeric-cell">{{ emp._pendingOvertime }}</div>
+              <div class="employees-td numeric-cell">{{ emp._allowance }}</div>
+              <div class="employees-td numeric-cell">{{ emp._cashAdvance }}</div>
+              <div class="employees-td badge-cell">
+                <q-badge v-if="emp._taxDeducted" color="positive" label="Yes" dense />
+                <q-badge v-else color="grey-6" label="No" dense />
+              </div>
+              <div class="employees-td badge-cell">
+                <q-badge v-if="emp._contributionsDeducted" color="positive" label="Yes" dense />
+                <q-badge v-else color="grey-6" label="No" dense />
               </div>
               <div class="employees-td actions-cell">
                 <div class="workflow-actions-cell">
@@ -156,32 +127,23 @@
                     <q-menu anchor="bottom right" self="top right" class="action-dropdown"
                       @before-show="menuTarget = emp">
                       <q-list dense style="min-width: 180px">
-                        <q-item v-if="menuTarget?.status === 'draft'" clickable v-close-popup
-                          @click="$emit('menu-action', 'release', menuTarget)" class="dropdown-item">
+                        <q-item clickable v-close-popup @click="$emit('menu-action', 'review', menuTarget)" class="dropdown-item">
                           <q-item-section avatar><q-icon name="send" size="16px" color="orange" /></q-item-section>
-                          <q-item-section>Release for Review</q-item-section>
+                          <q-item-section>Review Payslip</q-item-section>
                         </q-item>
-                        <q-item v-if="menuTarget?.status === 'pending_review'" clickable v-close-popup
-                          @click="$emit('menu-action', 'acknowledge', menuTarget)" class="dropdown-item">
-                          <q-item-section avatar><q-icon name="fact_check" size="16px" color="blue" /></q-item-section>
-                          <q-item-section>View &amp; Acknowledge</q-item-section>
-                        </q-item>
-                        <q-item v-if="menuTarget?.status === 'ready_for_payment' && menuTarget?.review_status !== 'pending'"
-                          clickable v-close-popup @click="$emit('menu-action', 'disburse', menuTarget)" class="dropdown-item">
+                        <q-item clickable v-close-popup @click="$emit('menu-action', 'markComplete', menuTarget)" class="dropdown-item">
                           <q-item-section avatar><q-icon name="payments" size="16px" color="teal" /></q-item-section>
-                          <q-item-section>Disburse</q-item-section>
+                          <q-item-section>Mark Complete</q-item-section>
                         </q-item>
-                        <q-item v-if="menuTarget?.status === 'disbursed' && menuTarget?.payment_method === 'cash'"
-                          clickable v-close-popup @click="$emit('menu-action', 'markComplete', menuTarget)" class="dropdown-item">
-                          <q-item-section avatar><q-icon name="handshake" size="16px" color="positive" /></q-item-section>
-                          <q-item-section>Confirm Money Received</q-item-section>
+                        <q-item clickable v-close-popup @click="$emit('menu-action', 'resolve', menuTarget)" class="dropdown-item">
+                          <q-item-section avatar><q-icon name="check_circle" size="16px" color="positive" /></q-item-section>
+                          <q-item-section>Resolve Issue</q-item-section>
                         </q-item>
-                        <q-item v-if="menuTarget?.status === 'disbursed' && menuTarget?.payment_method !== 'cash'"
-                          disable class="dropdown-item">
-                          <q-item-section avatar><q-icon name="hourglass_top" size="16px" color="grey" /></q-item-section>
-                          <q-item-section class="text-grey-6">Processing bank transfer&hellip;</q-item-section>
+                        <q-item clickable v-close-popup @click="$emit('menu-action', 'reject', menuTarget)" class="dropdown-item">
+                          <q-item-section avatar><q-icon name="cancel" size="16px" color="negative" /></q-item-section>
+                          <q-item-section>Reject Issue</q-item-section>
                         </q-item>
-                        <q-separator v-if="!['completed'].includes(menuTarget?.status)" spaced />
+                        <q-separator spaced />
                         <q-item clickable v-close-popup @click="$emit('menu-action', 'view', menuTarget)" class="dropdown-item">
                           <q-item-section avatar><q-icon name="visibility" size="16px" /></q-item-section>
                           <q-item-section>View details</q-item-section>
@@ -220,18 +182,14 @@ defineProps({
   workflowStage: { type: String, default: '' },
   runId: { type: [Number, String], default: null },
   actionableCount: { type: Number, default: 0 },
-  showReleaseBtn: { type: Boolean, default: false },
-  showDisburseReadyBtn: { type: Boolean, default: false },
-  showDisburseSelectedBtn: { type: Boolean, default: false },
-  showEarlyDisbursalBannerFirst: { type: Boolean, default: false },
-  showEarlyDisbursalBannerSecond: { type: Boolean, default: false },
-  earlyDisbursalCount: { type: Number, default: 0 },
-  releaseBtnLabel: { type: String, default: 'Release' },
-  disburseBtnLabel: { type: String, default: 'Disburse Selected' },
+  showReviewBtn: { type: Boolean, default: false },
+  showMarkCompleteBtn: { type: Boolean, default: false },
+  reviewBtnLabel: { type: String, default: 'Review Selected' },
+  markCompleteBtnLabel: { type: String, default: 'Mark Complete' },
 })
 
 defineEmits([
-  'update:search-query', 'toggle-select-all', 'bulk-release', 'bulk-disburse',
+  'update:search-query', 'toggle-select-all', 'bulk-review', 'bulk-mark-complete',
   'toggle-selection', 'menu-action',
 ])
 
@@ -292,67 +250,62 @@ const menuTarget = ref(null)
 .employee-search-input { font-size: 13px; }
 .select-all-checkbox { font-size: 13px; color: #374151; }
 
-.early-disbursal-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: #f0fdf4;
-  border-left: 3px solid #14b8a6;
-  margin: 8px 14px 0;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #0f766e;
-}
-
 .employees-table-container {
   width: 100%;
-  overflow: hidden;
   overflow-x: auto;
 }
 
-.employees-table-header {
-  display: flex;
-  background: #f1f5f9;
-  border-bottom: 2px solid #e2e8f0;
-  padding: 14px 20px;
-  font-weight: 700;
-  font-size: 11px;
-  color: #475569;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  min-width: 700px;
+.employees-th,
+.employees-td {
+  box-sizing: border-box;
 }
 
 .employees-th {
-  padding: 0 12px;
+  padding: 0 8px;
   text-align: left;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
 }
 
-.employees-th:nth-child(1) { flex: 0 0 44px; padding: 0; text-align: center; }
-.employees-th:nth-child(2) { flex: 3 1 220px; }
-.employees-th:nth-child(3) { flex: 0 0 165px; }
-.employees-th:nth-child(4) { flex: 1.5 1 130px; }
-.employees-th:nth-child(5) { flex: 1.5 1 130px; }
-.employees-th:nth-child(6) { flex: 0 0 100px; text-align: center; }
-.employees-th:nth-child(7) { flex: 0 0 80px; text-align: center; }
+.employees-th:nth-child(1) { flex: 0 0 40px; padding: 0; text-align: center; }
+.employees-th:nth-child(2) { flex: 0 0 180px; }
+.employees-th:nth-child(3) { flex: 0 0 100px; }
+.employees-th:nth-child(4) { flex: 0 0 100px; }
+.employees-th:nth-child(5) { flex: 0 0 80px; text-align: center; }
+.employees-th:nth-child(6) { flex: 0 0 110px; text-align: center; }
+.employees-th:nth-child(7) { flex: 0 0 105px; text-align: center; }
+.employees-th:nth-child(8) { flex: 0 0 100px; text-align: center; }
+.employees-th:nth-child(9) { flex: 0 0 95px; text-align: center; }
+.employees-th:nth-child(10) { flex: 0 0 60px; text-align: center; }
+.employees-th:nth-child(11) { flex: 0 0 80px; text-align: center; }
+.employees-th:nth-child(12) { flex: 0 0 70px; text-align: center; }
 
 .virtual-scroll-container { width: 100%; }
 .employee-virtual-scroll { width: 100%; }
 
+.employees-table-header {
+  display: flex;
+  background: #f1f5f9;
+  border-bottom: 2px solid #e2e8f0;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 10px;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: 1120px;
+}
+
 .employees-table-row {
   display: flex;
-  padding: 16px 20px;
+  padding: 12px 16px;
   border-bottom: 1px solid #edf0f4;
   transition: background-color 0.15s ease;
-  min-height: 72px;
+  min-height: 60px;
   align-items: center;
-  min-width: 700px;
+  min-width: 1120px;
 }
 
 .employees-table-row:hover { background-color: #f8fafc; }
@@ -360,10 +313,9 @@ const menuTarget = ref(null)
 .employees-table-row.failed-row { background-color: #fef2f2; }
 
 .employees-td {
-  padding: 0 12px;
-  font-size: 13.5px;
+  padding: 0 8px;
+  font-size: 12px;
   color: #1e293b;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -372,13 +324,18 @@ const menuTarget = ref(null)
   flex: 1;
 }
 
-.employees-td:nth-child(1) { flex: 0 0 44px; justify-content: center; padding: 0; }
-.employees-td:nth-child(2) { flex: 3 1 220px; }
-.employees-td:nth-child(3) { flex: 0 0 165px; overflow: visible; }
-.employees-td:nth-child(4) { flex: 1.5 1 130px; }
-.employees-td:nth-child(5) { flex: 1.5 1 130px; }
-.employees-td:nth-child(6) { flex: 0 0 100px; justify-content: center; }
-.employees-td:nth-child(7) { flex: 0 0 72px; justify-content: center; }
+.employees-td:nth-child(1) { flex: 0 0 40px; justify-content: center; padding: 0; }
+.employees-td:nth-child(2) { flex: 0 0 180px; }
+.employees-td:nth-child(3) { flex: 0 0 100px; overflow: visible; }
+.employees-td:nth-child(4) { flex: 0 0 100px; }
+.employees-td:nth-child(5) { flex: 0 0 80px; justify-content: center; }
+.employees-td:nth-child(6) { flex: 0 0 110px; justify-content: center; }
+.employees-td:nth-child(7) { flex: 0 0 105px; justify-content: center; }
+.employees-td:nth-child(8) { flex: 0 0 100px; justify-content: center; }
+.employees-td:nth-child(9) { flex: 0 0 95px; justify-content: center; }
+.employees-td:nth-child(10) { flex: 0 0 60px; justify-content: center; }
+.employees-td:nth-child(11) { flex: 0 0 80px; justify-content: center; }
+.employees-td:nth-child(12) { flex: 0 0 70px; justify-content: center; }
 
 .employee-cell { min-width: 200px; }
 
@@ -397,7 +354,7 @@ const menuTarget = ref(null)
 .employee-name {
   font-weight: 600;
   color: #0f172a;
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -503,10 +460,21 @@ const menuTarget = ref(null)
 
 .text-grey-5 { color: #b0b8c1; font-size: 12px; }
 
+.numeric-cell {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  justify-content: center;
+}
+
+.badge-cell {
+  justify-content: center;
+}
+
 /* Virtual scroll & responsive */
 @media (max-width: 1024px) {
   .employees-table-header,
-  .employees-table-row { min-width: 720px; }
+  .employees-table-row { min-width: 1120px; }
 }
 
 @media (max-width: 768px) {
@@ -519,16 +487,12 @@ const menuTarget = ref(null)
   .employees-panel-actions { width: 100%; flex-wrap: wrap; gap: 6px; }
   .employee-search-input { flex: 1 1 100% !important; min-width: 0 !important; }
   .employees-table-header,
-  .employees-table-row { min-width: 600px; }
-  .employees-th:nth-child(2), .employees-td:nth-child(2) { flex: 2 1 140px; }
-  .employees-th:nth-child(4), .employees-td:nth-child(4) { flex: 1.2 1 100px; }
-  .employees-th:nth-child(5), .employees-td:nth-child(5) { flex: 1.2 1 100px; }
+  .employees-table-row { min-width: 1120px; }
 }
 
 @media (max-width: 480px) {
   .employees-panel-header { padding: 8px 10px; }
   .employees-table-header,
-  .employees-table-row { min-width: 580px; }
-  .employees-th:nth-child(6), .employees-td:nth-child(6) { flex: 0 0 70px; }
+  .employees-table-row { min-width: 1120px; }
 }
 </style>
