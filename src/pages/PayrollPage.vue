@@ -82,19 +82,15 @@
                     :selected-count="selectedEmployees.length"
                     :workflow-stage="workflowStage"
                     :run-id="run.id"
-                    :actionable-count="getActionableEmployees(workflowStage).length"
-                    :show-release-btn="run.id === selectedRun?.id && workflowStage === 'draft' && selectedEmployees.length > 0"
-                    :show-disburse-ready-btn="run.id === selectedRun?.id && workflowStage === 'draft' && getActionableEmployees('pending_review').length > 0 && selectedEmployees.length > 0"
-                    :show-disburse-selected-btn="showDisburseSelectedBtn(run)"
-                    :show-early-disbursal-banner-first="showEarlyDisbursalFirst(run)"
-                    :show-early-disbursal-banner-second="showEarlyDisbursalSecond(run)"
-                    :early-disbursal-count="getActionableEmployees('pending_review').length"
-                    :release-btn-label="releaseBtnLabel"
-                    :disburse-btn-label="disburseBtnLabel"
+                    :actionable-count="payrollRunEmployees.length"
+                    :show-review-btn="run.id === selectedRun?.id && workflowStage === 'pending_review' && selectedEmployees.length > 0"
+                    :show-mark-complete-btn="run.id === selectedRun?.id && workflowStage === 'funded' && selectedEmployees.length > 0"
+                    :review-btn-label="reviewBtnLabel"
+                    :mark-complete-btn-label="markCompleteBtnLabel"
                     @update:search-query="employeeSearchQuery = $event"
                     @toggle-select-all="toggleSelectAll"
-                    @bulk-release="handleBulkAction"
-                    @bulk-disburse="handleBulkDisburse"
+                    @bulk-review="handleBulkAction"
+                    @bulk-mark-complete="handleBulkDisburse"
                     @toggle-selection="toggleEmployeeSelection"
                     @menu-action="onEmployeeMenuAction"
                   />
@@ -151,15 +147,7 @@
       @download-daily-record="downloadDailyRecord"
     />
 
-    <PayrollAcknowledgeDialog
-      :show-acknowledge-dialog="showAcknowledgeDialog"
-      :target="acknowledgeTarget"
-      :acknowledge-loading="acknowledgeLoading"
-      :dialog-loading="acknowledgeDialogLoading"
-      @update:show-acknowledge-dialog="showAcknowledgeDialog = $event"
-      @close="showAcknowledgeDialog = false; acknowledgeTarget = null"
-      @acknowledge-payslip="submitAcknowledge"
-    />
+
   </PageShell>
 </template>
 
@@ -180,7 +168,7 @@ import PayrollFundingForm from 'src/components/pages/Payroll/PayrollFundingForm.
 import PayrollFundingHistory from 'src/components/pages/Payroll/PayrollFundingHistory.vue'
 import PayrollCreateRunDialog from 'src/components/pages/Payroll/PayrollCreateRunDialog.vue'
 import PayrollDetailModal from 'src/components/pages/Payroll/PayrollDetailModal.vue'
-import PayrollAcknowledgeDialog from 'src/components/pages/Payroll/PayrollAcknowledgeDialog.vue'
+
 
 const $q = useQuasar()
 const { companyId } = useCompany()
@@ -192,16 +180,16 @@ const {
   payrollRunEmployees,
   isLoading,
   isSaving,
-  bulkReleasePayslips,
+  bulkReviewPayslips,
   addDisbursementFunding,
   fetchDisbursementFundings,
   disbursePayslips,
   fetchPayrollRunEmployees,
   createPayrollRun,
-  fetchEmployeePayslips,
-  acknowledgePayslip,
-  confirmMoneyReceived,
+
   fetchDisbursementLogBankAccounts,
+  resolveIssue,
+  rejectIssue,
   retryWithBackoff,
   selectedBreakdown,
   breakdownLoading,
@@ -492,9 +480,11 @@ const onCreateRun = async (form) => {
     const optimisticId = result?.disbursement_log_id ?? Date.now()
     const optimisticRun = {
       id: optimisticId, name: result?.name ?? `Payroll Run | ${payload.type} | ${payload.start_date} - ${payload.end_date}`,
-      period: `${payload.start_date} - ${payload.end_date}`, status: 'draft', status_display: 'Draft',
+      period: `${payload.start_date} - ${payload.end_date}`, status: 'pending_review', status_display: 'Pending Review',
       calculated_amount: '0.00', total_net_pay: '0.00', funded: '0.00', released: '0.00',
-      number_of_employee: result?.generated_count ?? 0, completed_employees_count: 0,
+      total_employees: result?.generated_count ?? 0, completed_employees_count: 0,
+      acknowledged_employees: 0, pending_review_employees: 0, reviewed_employees: 0,
+      disputed_employees: 0, pending_issues_count: 0,
       department_id: payload.department_id ?? null, __optimistic: true, __optimisticAt: Date.now(),
     }
     payrollRunsSummary.value = [optimisticRun, ...payrollRunsSummary.value]
@@ -592,25 +582,8 @@ const filteredEmployees = computed(() => {
   })
 })
 
-const maxGrossPayComputed = computed(() => {
-  const employees = payrollRunEmployees.value
-  if (!Array.isArray(employees) || employees.length === 0) return 1
-  let max = 0
-  for (const emp of employees) { const val = Number(emp.gross_pay || 0); if (val > max) max = val }
-  return max > 0 ? max : 1
-})
-
-const maxNetPayComputed = computed(() => {
-  const employees = payrollRunEmployees.value
-  if (!Array.isArray(employees) || employees.length === 0) return 1
-  let max = 0
-  for (const emp of employees) { const val = Number(emp.net_pay || 0); if (val > max) max = val }
-  return max > 0 ? max : 1
-})
-
 const displayEmployees = computed(() => {
   return filteredEmployees.value.map((emp) => {
-    const grossPay = Number(emp.gross_pay || 0)
     const netPay = Number(emp.net_pay || 0)
     return {
       ...emp,
@@ -621,30 +594,17 @@ const displayEmployees = computed(() => {
       _statusLabel: getStatusLabel(emp.status),
       _hasError: !!emp.lastError,
       _initials: getInitials(emp.employee_name || emp.employee),
-      _grossPayFormatted: formatCurrency(grossPay),
       _netPayFormatted: formatCurrency(netPay),
-      _grossBarWidth: getPayPercentage(grossPay, maxGrossPayComputed.value),
-      _netBarWidth: getPayPercentage(netPay, maxNetPayComputed.value),
-      _totalHours: emp.total_hours ?? 0,
+      _manualLogs: emp.manual_logs ?? 0,
+      _reviewAttendance: emp.review_attendance ?? 0,
+      _pendingOvertime: emp.pending_overtime ?? 0,
+      _allowance: emp.allowance ?? 0,
+      _cashAdvance: emp.cash_advance ?? 0,
+      _taxDeducted: emp.tax?.is_deducted ?? false,
+      _contributionsDeducted: emp.contributions?.is_deducted ?? false,
     }
   })
 })
-
-// ─── Employee Panel Button Visibility ─────────────────────────────────────────
-function showDisburseSelectedBtn(run) {
-  if (run.id !== selectedRun.value?.id) return false
-  if (workflowStage.value === 'ready_for_payment' && selectedEmployees.value.length > 0) return true
-  if (workflowStage.value === 'pending_review' && selectedEmployees.value.length > 0) return true
-  return false
-}
-
-function showEarlyDisbursalFirst(run) {
-  return run.id === selectedRun.value?.id && workflowStage.value === 'pending_review' && getActionableEmployees('pending_review').length > 0
-}
-
-function showEarlyDisbursalSecond(run) {
-  return run.id === selectedRun.value?.id && workflowStage.value === 'draft' && getActionableEmployees('pending_review').length > 0
-}
 
 // ─── Selection State ──────────────────────────────────────────────────────────
 const selectedEmployeeIds = ref(new Set())
@@ -659,9 +619,8 @@ const toggleEmployeeSelection = (employeeId) => {
   if (newSet.has(employeeId)) newSet.delete(employeeId)
   else newSet.add(employeeId)
   selectedEmployeeIds.value = newSet
-  const actionable = getActionableEmployees(workflowStage.value)
-  const actionableIds = new Set(actionable.map((e) => e.employee_id))
-  selectAll.value = actionableIds.size > 0 && Array.from(actionableIds).every((id) => newSet.has(id))
+  const allIds = new Set(payrollRunEmployees.value.map((e) => e.employee_id))
+  selectAll.value = allIds.size > 0 && Array.from(allIds).every((id) => newSet.has(id))
 }
 
 const clearSelection = () => {
@@ -670,44 +629,21 @@ const clearSelection = () => {
 }
 
 const selectAllActionable = () => {
-  const actionable = getActionableEmployees(workflowStage.value)
-  selectedEmployeeIds.value = new Set(actionable.map((e) => e.employee_id))
+  selectedEmployeeIds.value = new Set(payrollRunEmployees.value.map((e) => e.employee_id))
 }
 
-const actionableEmployeesByStage = computed(() => {
-  const employees = payrollRunEmployees.value
-  if (!Array.isArray(employees)) return { draft: [], pending_review: [], ready_for_payment: [], disbursed: [] }
-  return {
-    draft: employees.filter((e) => e.status === 'draft'),
-    pending_review: employees.filter((e) => e.status === 'pending_review'),
-    ready_for_payment: employees.filter((e) => e.status === 'ready_for_payment'),
-    disbursed: employees.filter((e) => e.status === 'disbursed'),
-  }
-})
-
-const getActionableEmployees = (currentStage) => actionableEmployeesByStage.value[currentStage] || []
-
-const releaseBtnLabel = computed(() => {
-  if (selectedEmployeeIds.value.size === 0) return null
-  const selectedReadyCount = selectedEmployees.value.filter((id) => {
-    const emp = payrollRunEmployees.value.find((e) => e.employee_id === id)
-    return emp?.status === 'ready_for_payment' && emp?.review_status !== 'pending'
-  }).length
-  if (selectedReadyCount > 0) {
-    const readyActionable = getActionableEmployees('ready_for_payment').length
-    return selectedReadyCount === readyActionable ? 'Disburse All' : 'Disburse'
-  }
-  const actionableCount = getActionableEmployees(workflowStage.value).length
-  return selectedEmployeeIds.value.size === actionableCount ? 'Release All' : 'Release'
-})
-
-const disburseBtnLabel = computed(() => {
+const reviewBtnLabel = computed(() => {
   const selected = selectedEmployees.value.length
-  const actionable = getActionableEmployees('pending_review').length
-  if (workflowStage.value === 'pending_review') {
-    return `Disburse ${selected === actionable ? 'All Acknowledged' : 'Selected'} (${selected})`
-  }
-  return 'Disburse Selected'
+  const total = payrollRunEmployees.value.length
+  if (selected === 0) return null
+  return selected === total ? 'Review All' : 'Review Selected'
+})
+
+const markCompleteBtnLabel = computed(() => {
+  const selected = selectedEmployees.value.length
+  const total = payrollRunEmployees.value.length
+  if (selected === 0) return null
+  return selected === total ? 'Mark All Complete' : 'Mark Complete'
 })
 
 // ─── Payroll Data (for detail modal & PDF export) ────────────────────────────
@@ -734,7 +670,7 @@ const departmentOptions = computed(() =>
 )
 
 const totalEmployees = computed(() =>
-  safeArray(payrollRunsSummary.value).reduce((sum, r) => sum + Number(r.number_of_employee || 0), 0),
+  safeArray(payrollRunsSummary.value).reduce((sum, r) => sum + Number(r.total_employees || 0), 0),
 )
 const totalGrossPay = computed(() =>
   safeArray(payrollRunsSummary.value).reduce((sum, r) => sum + Number(r.calculated_amount || 0), 0),
@@ -748,17 +684,6 @@ const totalPayrollRuns = computed(() => safeArray(payrollRunsSummary.value).leng
 const getInitials = (name) => {
   if (!name) return '?'
   return name.toString().split(' ').map((n) => n.charAt(0)).join('').toUpperCase().slice(0, 2)
-}
-
-const payPercentageCache = new Map()
-const getPayPercentage = (value, max) => {
-  if (max <= 0) return 0
-  const cacheKey = `${value}-${max}`
-  if (payPercentageCache.has(cacheKey)) return payPercentageCache.get(cacheKey)
-  const result = Math.round(((value || 0) / max) * 100)
-  if (payPercentageCache.size > 1000) payPercentageCache.clear()
-  payPercentageCache.set(cacheKey, result)
-  return result
 }
 
 const exportToPDF = async () => {
@@ -1244,10 +1169,10 @@ const isEmployeeActionable = (emp) => {
 // ─── Employee Menu Actions (dispatched from PayrollEmployeePanel) ────────────
 const onEmployeeMenuAction = (action, employee) => {
   switch (action) {
-    case 'release': handleWorkflowAction(employee, 'release'); break
-    case 'acknowledge': openAcknowledgeDialog(employee); break
-    case 'disburse': handleWorkflowAction(employee, 'disburse'); break
-    case 'markComplete': handleMarkComplete(employee); break
+    case 'review': handleWorkflowAction(employee, 'review'); break
+    case 'markComplete': handleWorkflowAction(employee, 'markComplete'); break
+    case 'resolve': handleIssueAction(employee, 'resolve'); break
+    case 'reject': handleIssueAction(employee, 'reject'); break
     case 'view': viewDetails(employee); break
     case 'download': downloadPayslip(employee); break
     case 'retry': retryEmployeeAction(employee); break
@@ -1258,31 +1183,27 @@ const handleBulkAction = async () => {
   const logId = payrollRunId.value
   if (!logId) { $q.notify({ type: 'warning', message: 'Please select a disbursement log first' }); return }
 
-  // If any selected employees are ready for payment, disburse those instead (ignore drafts)
-  const hasReadySelected = selectedEmployees.value.some((id) => {
-    const emp = payrollRunEmployees.value.find((e) => e.employee_id === id)
-    return emp?.status === 'ready_for_payment' && emp?.review_status !== 'pending'
-  })
-  if (hasReadySelected) {
+  const employeeIds = selectedEmployeeIds.value.size > 0 ? selectedEmployees.value : payrollRunEmployees.value.map((e) => e.employee_id)
+  if (!employeeIds.length) { $q.notify({ type: 'info', message: 'No employees selected' }); return }
+
+  if (workflowStage.value === 'pending_review') {
+    $q.dialog({
+      title: 'Bulk Review Payslips',
+      message: `Review ${employeeIds.length} payslip(s)?`,
+      ok: { label: 'Review', color: 'orange', unelevated: true },
+      cancel: { label: 'Cancel', flat: true },
+    }).onOk(async () => {
+      try {
+        const result = await bulkReviewPayslips(logId, employeeIds)
+        $q.notify({ type: 'positive', message: result?.message || `Reviewed ${employeeIds.length} payslip(s)!` })
+        await fetchPayrollRunEmployees(logId)
+        await fetchPayrollRunsSummary()
+        clearSelection(); selectAll.value = false
+      } catch (err) { $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Bulk review failed' }) }
+    })
+  } else if (workflowStage.value === 'funded') {
     return handleBulkDisburse()
   }
-
-  const employeeIds = selectedEmployeeIds.value.size > 0 ? selectedEmployees.value : getActionableEmployees('draft').map((e) => e.employee_id)
-  if (!employeeIds.length) { $q.notify({ type: 'info', message: 'No draft employees to release' }); return }
-  $q.dialog({
-    title: 'Bulk Release for Review',
-    message: `Release ${employeeIds.length} payslip(s) for employee review?`,
-    ok: { label: 'Release', color: 'orange', unelevated: true },
-    cancel: { label: 'Cancel', flat: true },
-  }).onOk(async () => {
-    try {
-      const result = await bulkReleasePayslips(logId, employeeIds)
-      $q.notify({ type: 'positive', message: `Released ${result?.summary?.updated_to_pending_review ?? employeeIds.length} payslip(s)!` })
-      await fetchPayrollRunEmployees(logId)
-      await fetchPayrollRunsSummary()
-      clearSelection(); selectAll.value = false
-    } catch { $q.notify({ type: 'negative', message: 'Bulk release failed' }) }
-  })
 }
 
 // ─── Employee Action (single) ─────────────────────────────────────────────────
@@ -1290,135 +1211,111 @@ const handleWorkflowAction = async (employee, action) => {
   const logId = payrollRunId.value
   if (!logId) { $q.notify({ type: 'warning', message: 'Please select a disbursement log first' }); return }
   const employeeId = employee.employee_id || employee.id
-  if (action === 'release') {
+  if (action === 'review') {
     $q.dialog({
-      title: 'Release for Review', message: `Release payslip for ${employee.employee_name || employee.employee}?`,
-      ok: { label: 'Release', color: 'orange', unelevated: true }, cancel: { label: 'Cancel', flat: true },
+      title: 'Review Payslip', message: `Review payslip for ${employee.employee_name || employee.employee}?`,
+      ok: { label: 'Review', color: 'orange', unelevated: true }, cancel: { label: 'Cancel', flat: true },
     }).onOk(async () => {
       try {
-        await bulkReleasePayslips(logId, [employeeId])
-        $q.notify({ type: 'positive', message: `Released: ${employee.employee_name || employee.employee}` })
+        await bulkReviewPayslips(logId, [employeeId])
+        $q.notify({ type: 'positive', message: `Reviewed: ${employee.employee_name || employee.employee}` })
         await fetchPayrollRunEmployees(logId); await fetchPayrollRunsSummary(); clearSelection(); selectAll.value = false
-      } catch (err) { $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Release failed' }) }
+      } catch (err) { $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Review failed' }) }
     })
     return
   }
-  if (action === 'disburse') {
-    if (employee.review_status === 'pending') { $q.notify({ type: 'warning', message: 'This employee is still under review and cannot be disbursed yet.' }); return }
+  if (action === 'markComplete') {
     $q.dialog({
-      title: 'Disburse', message: `Disburse payment for ${employee.employee_name || employee.employee}?`,
-      ok: { label: 'Disburse', color: 'positive', unelevated: true }, cancel: { label: 'Cancel', flat: true },
+      title: 'Mark Complete', message: `Mark payment complete for ${employee.employee_name || employee.employee}?`,
+      ok: { label: 'Mark Complete', color: 'positive', unelevated: true }, cancel: { label: 'Cancel', flat: true },
     }).onOk(async () => {
       try {
         await disbursePayslips(logId, [employeeId])
-        $q.notify({ type: 'positive', message: `Disbursed: ${employee.employee_name || employee.employee}` })
+        $q.notify({ type: 'positive', message: `Completed: ${employee.employee_name || employee.employee}` })
         await fetchPayrollRunEmployees(logId); await fetchPayrollRunsSummary(); clearSelection(); selectAll.value = false
-      } catch (err) { $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Disbursement failed' }) }
+      } catch (err) { $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Action failed' }) }
     })
     return
   }
 }
 
-// ─── Confirm Money Received ───────────────────────────────────────────────────
-const handleMarkComplete = (employee) => {
+// ─── Issue Action (single) ──────────────────────────────────────────────────
+const handleIssueAction = async (employee, action) => {
   const payslipId = employee.payslip_id
-  if (!payslipId) { $q.notify({ type: 'warning', message: 'No payslip ID found for this employee' }); return }
+  if (!payslipId) { $q.notify({ type: 'warning', message: 'No payslip ID found' }); return }
   $q.dialog({
-    title: 'Confirm Money Received',
-    message: `Confirm that ${employee.employee_name || employee.employee} has physically received their cash payment?`,
-    ok: { label: 'Confirm Received', color: 'positive', unelevated: true },
+    title: action === 'resolve' ? 'Resolve Issue' : 'Reject Issue',
+    message: `${action === 'resolve' ? 'Resolve' : 'Reject'} issue for ${employee.employee_name || employee.employee}?`,
+    prompt: { model: '', type: 'textarea', label: 'Admin notes (optional)' },
+    ok: { label: action === 'resolve' ? 'Resolve' : 'Reject', color: action === 'resolve' ? 'positive' : 'negative', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
-  }).onOk(async () => {
+  }).onOk(async (adminNotes) => {
     try {
-      const result = await confirmMoneyReceived(payslipId)
-      $q.notify({ type: 'positive', message: `Marked as received for ${employee.employee_name || employee.employee}.${result?.disbursement_log_closed ? ' Disbursement log is now closed.' : ''}` })
+      if (action === 'resolve') {
+        await resolveIssue(payslipId, adminNotes)
+        $q.notify({ type: 'positive', message: `Issue resolved for ${employee.employee_name || employee.employee}` })
+      } else {
+        await rejectIssue(payslipId, adminNotes)
+        $q.notify({ type: 'positive', message: `Issue rejected for ${employee.employee_name || employee.employee}` })
+      }
       const logId = payrollRunId.value
       if (logId) { await fetchPayrollRunEmployees(logId); await fetchPayrollRunsSummary() }
     } catch (err) {
-      $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Failed to confirm receipt.' })
+      $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Issue action failed' })
     }
   })
 }
 
-// ─── Acknowledge Dialog ───────────────────────────────────────────────────────
-const showAcknowledgeDialog = ref(false)
-const acknowledgeTarget = ref(null)
-const acknowledgeLoading = ref(false)
-const acknowledgeDialogLoading = ref(false)
-
-const openAcknowledgeDialog = async (employee) => {
-  acknowledgeTarget.value = employee
-  showAcknowledgeDialog.value = true
-  acknowledgeDialogLoading.value = true
-  try {
-    const payslips = await fetchEmployeePayslips(getResolvedCompanyId())
-    const full = payslips.find((p) => p.id === employee.payslip_id)
-    if (full) acknowledgeTarget.value = { ...employee, ...full, payslip_id: full.id ?? employee.payslip_id }
-  } catch { /* non-fatal */ }
-  finally { acknowledgeDialogLoading.value = false }
-}
-
-const submitAcknowledge = async () => {
-  const emp = acknowledgeTarget.value
-  if (!emp?.payslip_id) return
-  acknowledgeLoading.value = true
-  try {
-    const result = await acknowledgePayslip(emp.payslip_id, 'web')
-    $q.notify({ type: 'positive', message: `Payslip acknowledged for ${emp.employee_name || emp.employee}. Status: ${result?.new_status ?? 'ready_for_payment'}.` })
-    showAcknowledgeDialog.value = false; acknowledgeTarget.value = null
-    const logId = payrollRunId.value
-    if (logId) { await fetchPayrollRunEmployees(logId); await fetchPayrollRunsSummary() }
-  } catch (err) {
-    const status = err?.response?.status
-    const msg = status === 403 ? 'Permission denied — this action must be completed by the employee in their own app.' : err?.response?.data?.message || 'Acknowledge failed'
-    $q.notify({ type: 'negative', message: msg })
-  } finally { acknowledgeLoading.value = false }
-}
-
-// ─── Bulk Disburse ────────────────────────────────────────────────────────────
+// ─── Bulk Mark Complete ───────────────────────────────────────────────────────
 const handleBulkDisburse = async () => {
   const logId = payrollRunId.value
   if (!logId) { $q.notify({ type: 'warning', message: 'Please select a disbursement log first' }); return }
-  const readyIds = selectedEmployeeIds.value.size > 0
-    ? payrollRunEmployees.value.filter((e) => selectedEmployeeIds.value.has(e.employee_id) && e.status === 'ready_for_payment' && e.review_status !== 'pending').map((e) => e.employee_id)
-    : payrollRunEmployees.value.filter((e) => e.status === 'ready_for_payment' && e.review_status !== 'pending').map((e) => e.employee_id)
-  if (!readyIds.length) { $q.notify({ type: 'warning', message: 'No employees are ready for payment' }); return }
+  const ids = selectedEmployeeIds.value.size > 0
+    ? selectedEmployees.value
+    : payrollRunEmployees.value.map((e) => e.employee_id)
+  if (!ids.length) { $q.notify({ type: 'warning', message: 'No employees selected' }); return }
   $q.dialog({
-    title: 'Disburse Payslips',
-    message: `Disburse payment for ${readyIds.length} employee(s)?`,
-    ok: { label: 'Disburse', color: 'positive', unelevated: true },
+    title: 'Mark Complete',
+    message: `Mark payment complete for ${ids.length} employee(s)?`,
+    ok: { label: 'Mark Complete', color: 'positive', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
-    // Optimistic UI: immediately show disbursed for selected employees
-    payrollRunEmployees.value = payrollRunEmployees.value.map((e) => {
-      if (readyIds.includes(e.employee_id)) {
-        return { ...e, status: 'disbursed' }
-      }
-      return e
-    })
     try {
-      const result = await disbursePayslips(logId, readyIds)
-      const summary = result?.summary ?? {}
-      $q.notify({ type: 'positive', message: `Done! Cash: ${summary.disbursed_cash ?? 0}, Bank: ${summary.completed_bank ?? 0}` })
+      const result = await disbursePayslips(logId, ids)
+      $q.notify({ type: 'positive', message: result?.message || `Marked ${ids.length} employee(s) complete` })
       await fetchPayrollRunEmployees(logId); await fetchPayrollRunsSummary()
       const refreshedRun = payrollRunsSummary.value.find((r) => String(r.id) === String(logId))
       if (refreshedRun) selectedRun.value = refreshedRun
       clearSelection(); selectAll.value = false
     } catch (err) {
       await fetchPayrollRunEmployees(logId)
-      $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Disbursement failed' })
+      $q.notify({ type: 'negative', message: err?.response?.data?.message || 'Action failed' })
     }
   })
 }
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
 const getStatusColor = (status) => {
-  const colors = { draft: 'grey', pending_review: 'orange', ready_for_payment: 'teal', disbursed: 'amber', completed: 'positive' }
+  const colors = {
+    pending_review: 'orange',
+    reviewed: 'blue',
+    disputed: 'red',
+    ready_for_payment: 'teal',
+    funded: 'purple',
+    completed: 'positive',
+  }
   return colors[status] || 'grey'
 }
 
 const getStatusLabel = (status) => {
-  const labels = { draft: 'Draft', pending_review: 'Pending Review', ready_for_payment: 'Ready for Payment', disbursed: 'Disbursed', completed: 'Completed' }
+  const labels = {
+    pending_review: 'Pending Review',
+    reviewed: 'Reviewed',
+    disputed: 'Disputed',
+    ready_for_payment: 'Ready for Payment',
+    funded: 'Funded',
+    completed: 'Completed',
+  }
   return labels[status] || status
 }
 
@@ -1427,9 +1324,8 @@ const retryEmployeeAction = async (emp) => {
   if (!logId) return
   try {
     emp.lastError = null
-    if (emp.status === 'draft') { await bulkReleasePayslips(logId, [emp.employee_id]) }
-    else if (emp.status === 'ready_for_payment') { await disbursePayslips(logId, [emp.employee_id]) }
-    else if (emp.status === 'disbursed' && emp.payment_method === 'cash' && emp.payslip_id) { await confirmMoneyReceived(emp.payslip_id) }
+    if (emp.status === 'pending_review') { await bulkReviewPayslips(logId, [emp.employee_id]) }
+    else if (emp.status === 'funded') { await disbursePayslips(logId, [emp.employee_id]) }
     $q.notify({ type: 'positive', message: `Retried: ${emp.employee_name || emp.employee}` })
     await fetchPayrollRunEmployees(logId)
   } catch (err) { emp.lastError = err.response?.data?.message || err.message; $q.notify({ type: 'negative', message: 'Retry failed' }) }
