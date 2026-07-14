@@ -21,13 +21,21 @@
             </q-badge>
           </div>
           <div class="run-period-tag" v-if="period">{{ period }}</div>
+          <div class="run-count-badges" v-if="run.total_employees != null">
+            <q-badge color="grey-7" :label="`Total: ${run.total_employees}`" class="count-badge" />
+            <q-badge v-if="run.acknowledged_employees > 0" color="blue" :label="`Acknowledged: ${run.acknowledged_employees}`" class="count-badge" />
+            <q-badge v-if="run.pending_review_employees > 0" color="orange" :label="`Pending Review: ${run.pending_review_employees}`" class="count-badge" />
+            <q-badge v-if="run.reviewed_employees > 0" color="teal" :label="`Reviewed: ${run.reviewed_employees}`" class="count-badge" />
+            <q-badge v-if="run.disputed_employees > 0" color="red" :label="`Disputed: ${run.disputed_employees}`" class="count-badge" />
+            <q-badge v-if="run.pending_issues_count > 0" color="red-8" :label="`Issues: ${run.pending_issues_count}`" class="count-badge" />
+          </div>
         </div>
       </div>
 
       <div class="run-header-stat-cols">
         <div class="run-header-stat-col">
           <span class="run-header-stat-label">Employees</span>
-          <span class="run-header-stat-val">{{ run.number_of_employee ?? '\u2014' }}</span>
+          <span class="run-header-stat-val">{{ run.total_employees ?? '\u2014' }}</span>
         </div>
         <div class="run-header-stat-col">
           <span class="run-header-stat-label">Calculated</span>
@@ -253,9 +261,24 @@ const formatCurrency = (val) => {
   color: #92400e;
 }
 
+.run-status-reviewed {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.run-status-disputed {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 .run-status-ready_for_payment {
   background: #ecfdf5;
   color: #065f46;
+}
+
+.run-status-funded {
+  background: #f3e8ff;
+  color: #6b21a8;
 }
 
 .run-status-disbursed,
@@ -279,6 +302,20 @@ const formatCurrency = (val) => {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+.run-count-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.count-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 /* Responsive overrides */
