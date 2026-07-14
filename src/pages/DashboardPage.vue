@@ -246,7 +246,7 @@ const payrollRows = computed(() => {
       type: p.type ? p.type.charAt(0).toUpperCase() + p.type.slice(1) : 'Payroll Run',
       start: startDate,
       end: endDate,
-      employees: p.number_of_employee ?? p.employee_count ?? p.employees ?? '-',
+      employees: p.total_employees ?? p.number_of_employee ?? p.employee_count ?? p.employees ?? '-',
       status: p.status ?? '-',
       date: releaseDate,
       amount: fmtCurrency(p.total_net_pay ?? p.calculated_amount),
