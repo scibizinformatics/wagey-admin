@@ -164,15 +164,30 @@
                       </div>
                     </div>
 
-                    <div v-if="overtimeLoading" class="overtime-panel-loading">
-                      <q-spinner color="primary" size="20px" />
-                      <span>Loading overtime requests...</span>
-                    </div>
-
-                    <div v-else-if="filteredOvertimeRequests.length === 0" class="overtime-panel-empty">
-                      <q-icon name="search_off" size="48px" color="grey-4" />
-                      <div class="empty-title">No overtime requests found</div>
-                      <div class="empty-subtitle">Try adjusting your search or filters</div>
+                    <!-- Skeleton: visible when loading OR no data (persists on 404) -->
+                    <div v-if="overtimeLoading || filteredOvertimeRequests.length === 0" class="overtime-panel-skeleton">
+                      <div class="table-skeleton">
+                        <div class="skeleton-header">
+                          <div class="skeleton-header-cell" style="flex: 0 0 48px"></div>
+                          <div class="skeleton-header-cell" style="flex: 1.5">Employee</div>
+                          <div class="skeleton-header-cell" style="flex: 1">Schedule</div>
+                          <div class="skeleton-header-cell" style="flex: 1">Attendance</div>
+                          <div class="skeleton-header-cell" style="flex: 1">Date</div>
+                          <div class="skeleton-header-cell" style="flex: 0.8">Hours</div>
+                          <div class="skeleton-header-cell" style="flex: 0.8">Status</div>
+                          <div class="skeleton-header-cell" style="flex: 0 0 80px">Actions</div>
+                        </div>
+                        <div class="skeleton-row" v-for="n in 4" :key="n">
+                          <div class="skeleton-cell" style="flex: 0 0 48px"><q-skeleton type="text" width="20px" /></div>
+                          <div class="skeleton-cell" style="flex: 1.5"><q-skeleton type="text" width="140px" /></div>
+                          <div class="skeleton-cell" style="flex: 1"><q-skeleton type="text" width="100px" /></div>
+                          <div class="skeleton-cell" style="flex: 1"><q-skeleton type="text" width="100px" /></div>
+                          <div class="skeleton-cell" style="flex: 1"><q-skeleton type="text" width="90px" /></div>
+                          <div class="skeleton-cell" style="flex: 0.8"><q-skeleton type="text" width="50px" /></div>
+                          <div class="skeleton-cell" style="flex: 0.8"><q-skeleton type="text" width="60px" /></div>
+                          <div class="skeleton-cell" style="flex: 0 0 80px"><q-skeleton type="text" width="40px" /></div>
+                        </div>
+                      </div>
                     </div>
 
                     <div v-else>
@@ -308,16 +323,54 @@
         </q-tab-panel>
 
         <q-tab-panel name="cash_advance" class="tab-panel-content">
-          <RequestCashAdvanceTable
-            :rows="filteredCaRequests"
-            :loading="loading"
-            :ca-filter-status="caFilterStatus"
-            :ca-status-options="caStatusOptions"
-            :ca-pagination="caPagination"
-            @update:ca-filter-status="caFilterStatus = $event"
-            @view="viewCaRequest"
-            @approve="openCaApprovalModal"
-          />
+          <div class="payroll-card">
+            <div class="table-header">
+              <div class="table-title-section">
+                <h2 class="table-title">Cash Advance Requests</h2>
+              </div>
+              <div class="table-header-actions">
+                <q-btn-toggle
+                  v-model="caViewMode"
+                  no-caps
+                  unelevated
+                  toggle-color="primary"
+                  color="grey-3"
+                  text-color="grey-8"
+                  :options="[
+                    { label: 'All Requests', value: 'all' },
+                    { label: 'By Cutoff', value: 'cutoff' },
+                  ]"
+                  class="view-toggle"
+                />
+              </div>
+            </div>
+
+            <RequestCashAdvanceTable
+              v-if="caViewMode === 'all'"
+              :rows="filteredCaRequests"
+              :loading="loading"
+              :ca-filter-status="caFilterStatus"
+              :ca-status-options="caStatusOptions"
+              :ca-pagination="caPagination"
+              @update:ca-filter-status="caFilterStatus = $event"
+              @view="viewCaRequest"
+              @approve="openCaApprovalModal"
+            />
+
+            <RequestCashAdvanceCutoff
+              v-else
+              :logs="caDisbursementLogs"
+              :loading="loading"
+              :expanded-log-id="selectedCaDisbursementLog"
+              :cutoff-requests="caCutoffRequests"
+              :cutoff-loading="caCutoffLoading"
+              :search="caCutoffSearch"
+              @expand="selectCaDisbursementLog"
+              @view="viewCaRequest"
+              @approve="openCaApprovalModal"
+              @update:search="caCutoffSearch = $event"
+            />
+          </div>
         </q-tab-panel>
       </q-tab-panels>
 
@@ -376,6 +429,7 @@ import RequestCaApprovalModal from 'src/components/pages/Request/RequestCaApprov
 import RequestCaViewModal from 'src/components/pages/Request/RequestCaViewModal.vue'
 import RequestOvertimeDetailModal from 'src/components/pages/Request/RequestOvertimeDetailModal.vue'
 import OvertimeAdvanceModal from 'src/components/pages/Request/OvertimeAdvanceModal.vue'
+import RequestCashAdvanceCutoff from 'src/components/pages/Request/RequestCashAdvanceCutoff.vue'
 
 const $q = useQuasar()
 
@@ -434,6 +488,12 @@ const caApprovalData = ref({ status: 'approved', remarks: '' })
 const caPagination = ref({ page: 1, rowsPerPage: 10 })
 const caStatistics = ref({ total: 0, pending: 0, approved: 0, rejected: 0 })
 const caStatusOptions = ['', 'pending', 'approved', 'rejected']
+const caViewMode = ref('all')
+const caDisbursementLogs = ref([])
+const selectedCaDisbursementLog = ref(null)
+const caCutoffRequests = ref([])
+const caCutoffLoading = ref(false)
+const caCutoffSearch = ref('')
 
 // ===== COMPUTED STATS =====
 const leaveStats = computed(() => ({
@@ -545,11 +605,11 @@ const extractEmployeeName = (request) => {
   return 'Unknown Employee'
 }
 
-const updateCaStats = () => {
-  caStatistics.value.total = caRequests.value.length
-  caStatistics.value.pending = caRequests.value.filter((r) => r.status === 'pending').length
-  caStatistics.value.approved = caRequests.value.filter((r) => r.status === 'approved').length
-  caStatistics.value.rejected = caRequests.value.filter((r) => r.status === 'rejected').length
+const updateCaStats = (sourceList = caRequests.value) => {
+  caStatistics.value.total = sourceList.length
+  caStatistics.value.pending = sourceList.filter((r) => r.status === 'pending').length
+  caStatistics.value.approved = sourceList.filter((r) => r.status === 'approved').length
+  caStatistics.value.rejected = sourceList.filter((r) => r.status === 'rejected').length
 }
 
 // ===== API: LEAVE =====
@@ -933,15 +993,15 @@ const openLeaveDetails = (request) => {
 const fetchCaRequests = async () => {
   loading.value = true
   try {
-    const res = await api.get('/cash_advance/admin/', {
-      params: { company_id: selectedCompany.value },
-    })
-    let data = Array.isArray(res.data) ? res.data : res.data.results || []
+    const companyId = selectedCompany.value
+    if (!companyId) throw new Error('No company selected')
+    const res = await api.get(`/cash_advance/admin/company/${companyId}/requests/`)
+    let data = Array.isArray(res.data) ? res.data : res.data?.data?.requests || res.data?.requests || res.data?.results || []
     caRequests.value = data.map((req) => ({
       ...req,
       employee_name: req.employee_name || extractEmployeeName(req),
     }))
-    updateCaStats()
+    updateCaStats(caRequests.value)
   } catch (err) {
     const errorMessages = {
       401: 'Unauthorized. Please log in again.',
@@ -959,6 +1019,48 @@ const fetchCaRequests = async () => {
   }
 }
 
+const fetchCaDisbursementLogs = async () => {
+  loading.value = true
+  try {
+    const res = await api.get('/cash_advance/admin/disbursement-logs/')
+    caDisbursementLogs.value = Array.isArray(res.data) ? res.data : res.data.results || []
+  } catch (err) {
+    console.error('Failed to fetch CA disbursement logs', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+const fetchCaCutoffRequests = async (logId) => {
+  caCutoffLoading.value = true
+  try {
+    const companyId = selectedCompany.value
+    if (!companyId) throw new Error('No company selected')
+    const params = { log_id: logId }
+    const res = await api.get(`/cash_advance/admin/company/${companyId}/requests/`, { params })
+    let data = Array.isArray(res.data) ? res.data : res.data?.data?.requests || res.data?.requests || res.data?.results || []
+    caCutoffRequests.value = data.map((req) => ({
+      ...req,
+      employee_name: req.employee_name || extractEmployeeName(req),
+    }))
+    updateCaStats(caCutoffRequests.value)
+  } catch (err) {
+    const errorMessages = {
+      401: 'Unauthorized. Please log in again.',
+      403: 'Access forbidden.',
+      404: 'Endpoint not found.',
+    }
+    const message =
+      errorMessages[err.response?.status] ||
+      err.response?.data?.detail ||
+      err.response?.data?.message ||
+      `Failed to fetch cutoff requests: ${err.message}`
+    $q.notify({ type: 'negative', message, position: 'top', timeout: 5000 })
+  } finally {
+    caCutoffLoading.value = false
+  }
+}
+
 const submitCaApproval = async () => {
   try {
     caSubmitting.value = true
@@ -969,19 +1071,27 @@ const submitCaApproval = async () => {
       remarks: caApprovalData.value.remarks || '',
     }
     await api.patch(
-      `/cash_advance/admin/${requestId}/approval/`,
+      `/cash_advance/admin/cash-advances/${requestId}/action/`,
       payload,
     )
     caApprovalModal.value = false
     selectedCaRequest.value = null
     $q.notify({ type: 'positive', message: 'Request updated successfully!', position: 'top' })
-    await fetchCaRequests()
+    if (caViewMode.value === 'cutoff' && selectedCaDisbursementLog.value) {
+      await fetchCaCutoffRequests(selectedCaDisbursementLog.value)
+    } else {
+      await fetchCaRequests()
+    }
   } catch (err) {
     if (err.response?.status === 500) {
       caApprovalModal.value = false
       selectedCaRequest.value = null
       $q.notify({ type: 'positive', message: 'Request updated successfully!', position: 'top' })
-      await fetchCaRequests()
+      if (caViewMode.value === 'cutoff' && selectedCaDisbursementLog.value) {
+        await fetchCaCutoffRequests(selectedCaDisbursementLog.value)
+      } else {
+        await fetchCaRequests()
+      }
       return
     }
     const message =
@@ -1006,10 +1116,29 @@ const viewCaRequest = (row) => {
   caViewDialog.value = true
 }
 
+const selectCaDisbursementLog = (id) => {
+  const isSame = selectedCaDisbursementLog.value === id
+  selectedCaDisbursementLog.value = isSame ? null : id
+  caCutoffSearch.value = ''
+  if (!isSame && id) {
+    fetchCaCutoffRequests(id)
+  } else {
+    caCutoffRequests.value = []
+    updateCaStats(caRequests.value)
+  }
+}
+
 // ===== REFRESH HANDLER =====
 const handleRefresh = () => {
   if (activeTab.value === 'cash_advance') {
-    fetchCaRequests()
+    if (caViewMode.value === 'cutoff') {
+      fetchCaDisbursementLogs()
+      if (selectedCaDisbursementLog.value) {
+        fetchCaCutoffRequests(selectedCaDisbursementLog.value)
+      }
+    } else {
+      fetchCaRequests()
+    }
   } else if (activeTab.value === 'overtime') {
     fetchOvertimeSummary()
     fetchOvertimeCategories()
@@ -1022,7 +1151,11 @@ const handleRefresh = () => {
 watch(activeTab, (newTab) => {
   statusFilter.value = 'all'
   if (newTab === 'cash_advance') {
-    fetchCaRequests()
+    if (caViewMode.value === 'cutoff') {
+      fetchCaDisbursementLogs()
+    } else {
+      fetchCaRequests()
+    }
   } else if (newTab === 'overtime') {
     fetchOvertimeSummary()
     fetchOvertimeCategories()
@@ -1031,13 +1164,26 @@ watch(activeTab, (newTab) => {
   }
 })
 
+watch(caViewMode, (mode) => {
+  if (activeTab.value === 'cash_advance') {
+    if (mode === 'cutoff') {
+      fetchCaDisbursementLogs()
+    } else {
+      fetchCaRequests()
+    }
+  }
+})
+
 // Re-fetch all data when selected company changes
 watch(selectedCompany, () => {
   selectedDisbursementLog.value = null
+  selectedCaDisbursementLog.value = null
+  caCutoffRequests.value = []
   fetchLeaveRequests()
   fetchOvertimeSummary()
   fetchOvertimeCategories()
   fetchCaRequests()
+  fetchCaDisbursementLogs()
 })
 
 // Sync selectedCompany with localStorage
@@ -1054,6 +1200,7 @@ onMounted(() => {
   fetchOvertimeSummary()
   fetchOvertimeCategories()
   fetchCaRequests()
+  fetchCaDisbursementLogs()
 })
 
 onUnmounted(() => {
@@ -1408,22 +1555,40 @@ onUnmounted(() => {
   min-width: 180px;
   max-width: 220px;
 }
-.overtime-panel-loading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 20px 24px;
-  font-size: 13px;
-  color: #6b7280;
+.overtime-panel-skeleton {
+  padding: 12px 16px;
 }
-.overtime-panel-empty {
+.table-skeleton {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
+  gap: 2px;
+}
+.skeleton-header {
+  display: flex;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 14px;
   gap: 8px;
-  text-align: center;
+}
+.skeleton-header-cell {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f3f5;
+  gap: 8px;
+}
+.skeleton-row:last-child {
+  border-bottom: none;
+}
+.skeleton-cell {
+  flex: 1;
 }
 .overtime-table-container {
   background: #ffffff;
@@ -1606,6 +1771,12 @@ onUnmounted(() => {
   .panel-actions { width: 100%; }
   .overtime-search-input { max-width: 100%; width: 100%; }
   .panel-actions .q-field { width: 100%; }
+}
+.view-toggle :deep(.q-btn) {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  min-height: 32px;
 }
 </style>
 

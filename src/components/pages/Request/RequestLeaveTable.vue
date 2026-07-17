@@ -25,11 +25,29 @@
           </q-select>
         </div>
       </div>
-      <div v-if="loading" class="loading-state">
-        <q-spinner size="48px" color="primary" :thickness="4" />
-        <div class="loading-text">Loading leave requests...</div>
+      <!-- Skeleton: visible when loading OR no data (persists on 404) -->
+      <div v-if="loading || rows.length === 0" class="modern-table-container">
+        <div class="table-skeleton">
+          <div class="skeleton-header">
+            <div class="skeleton-header-cell" style="flex: 2.2">Employee</div>
+            <div class="skeleton-header-cell" style="flex: 1.6">Type</div>
+            <div class="skeleton-header-cell" style="flex: 1.9">Period</div>
+            <div class="skeleton-header-cell" style="flex: 2">Reason</div>
+            <div class="skeleton-header-cell" style="flex: 1.2; text-align: center">Status</div>
+            <div class="skeleton-header-cell" style="flex: 0 0 72px">Actions</div>
+          </div>
+          <div class="skeleton-row" v-for="n in 4" :key="n">
+            <div class="skeleton-cell" style="flex: 2.2"><q-skeleton type="text" width="160px" /></div>
+            <div class="skeleton-cell" style="flex: 1.6"><q-skeleton type="text" width="100px" /></div>
+            <div class="skeleton-cell" style="flex: 1.9"><q-skeleton type="text" width="140px" /></div>
+            <div class="skeleton-cell" style="flex: 2"><q-skeleton type="text" width="180px" /></div>
+            <div class="skeleton-cell" style="flex: 1.2"><q-skeleton type="text" width="80px" /></div>
+            <div class="skeleton-cell" style="flex: 0 0 72px"><q-skeleton type="text" width="40px" /></div>
+          </div>
+        </div>
       </div>
-      <div v-else-if="rows.length > 0" class="modern-table-container">
+
+      <div v-else class="modern-table-container">
         <q-table
           :rows="rows"
           :columns="leaveColumns"
@@ -107,11 +125,6 @@
             </q-tr>
           </template>
         </q-table>
-      </div>
-      <div v-else class="empty-state">
-        <div class="empty-icon"><q-icon name="search_off" size="64px" color="grey-4" /></div>
-        <div class="empty-title">No leave requests found</div>
-        <div class="empty-subtitle">Try adjusting your search or filters</div>
       </div>
     </div>
 </template>
@@ -362,27 +375,40 @@ const getLeaveStatusClass = (request) => {
   border-radius: 6px !important;
 }
 
-.loading-state {
+.table-skeleton {
+  min-width: 700px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  gap: 16px;
+  gap: 2px;
+  padding: 0 14px 14px;
 }
-.loading-text { font-size: 14px; color: #94a3b8; }
-.empty-state {
+.skeleton-header {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 14px;
   gap: 8px;
-  text-align: center;
 }
-.empty-icon { color: #cbd5e1; margin-bottom: 6px; }
-.empty-title { font-size: 15px; font-weight: 500; color: #334155; }
-.empty-subtitle { font-size: 13px; color: #94a3b8; }
+.skeleton-header-cell {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f3f5;
+  gap: 8px;
+}
+.skeleton-row:last-child {
+  border-bottom: none;
+}
+.skeleton-cell {
+  flex: 1;
+}
 
 @media (max-width: 1440px) {
   .request-table { min-width: 680px; }

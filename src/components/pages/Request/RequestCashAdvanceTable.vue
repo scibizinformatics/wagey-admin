@@ -1,114 +1,129 @@
 <template>
   <div class="table-section">
-      <div class="table-header">
-        <div class="table-title-section">
-          <h2 class="table-title">Cash Advance Requests</h2>
-        </div>
-        <div class="table-actions">
-          <q-select
-            :model-value="caFilterStatus"
-            @update:model-value="$emit('update:caFilterStatus', $event)"
-            :options="caStatusOptions"
-            label="Filter by Status"
-            class="filter-select"
-            dense
-            outlined
-            clearable
-          >
-            <template v-slot:prepend>
-              <q-icon name="filter_list" />
-            </template>
-          </q-select>
-        </div>
+    <div class="table-header">
+      <div class="table-title-section">
+        <h2 class="table-title">Cash Advance Requests</h2>
       </div>
-      <div v-if="loading" class="loading-state">
-        <q-spinner size="48px" color="primary" :thickness="4" />
-        <div class="loading-text">Loading cash advance requests...</div>
-      </div>
-      <div v-else-if="rows.length > 0" class="modern-table-container">
-        <q-table
-          :rows="rows"
-          :columns="caColumns"
-          row-key="id"
-          flat
-          :loading="loading"
-          no-data-label="No cash advance requests found"
-          class="cash-advance-table"
-          :pagination="caPagination"
+      <div class="table-actions">
+        <q-select
+          :model-value="caFilterStatus"
+          @update:model-value="$emit('update:caFilterStatus', $event)"
+          :options="caStatusOptions"
+          label="Filter by Status"
+          class="filter-select"
+          dense
+          outlined
+          clearable
         >
-          <template v-slot:header>
-            <q-tr class="table-header-row">
-              <q-th class="table-header-cell">Employee</q-th>
-              <q-th class="table-header-cell">Requested Amount</q-th>
-              <q-th class="table-header-cell">Request Date</q-th>
-              <q-th class="table-header-cell">Status</q-th>
-              <q-th class="table-header-cell">Repayment</q-th>
-              <q-th class="table-header-cell">Repaid</q-th>
-              <q-th class="table-header-cell table-header-actions">Actions</q-th>
-            </q-tr>
+          <template v-slot:prepend>
+            <q-icon name="filter_list" />
           </template>
-          <template v-slot:body="props">
-            <q-tr class="table-body-row">
-              <q-td class="table-body-cell employee-name-cell">
-                <div class="employee-info">
-                  <q-avatar size="34px" class="avatar-fallback">
-                    {{ getInitials(props.row.employee_name) }}
-                  </q-avatar>
-                  <div class="employee-name-block">
-                    <span class="employee-name">{{ props.row.employee_name }}</span>
-                  </div>
-                </div>
-              </q-td>
-              <q-td class="table-body-cell amount-cell">
-                <div class="amount-info">
-                  <span class="amount-value">&#8369;{{ formatAmount(props.row.requested_amount) }}</span>
-                </div>
-              </q-td>
-              <q-td class="table-body-cell">{{ props.row.request_date }}</q-td>
-              <q-td class="table-body-cell">
-                <div :class="['status-badge', getCaStatusClass(props.row.status)]">
-                  <span class="status-dot"></span>
-                  {{ capitalizeStatus(props.row.status) }}
-                </div>
-              </q-td>
-              <q-td class="table-body-cell">
-                <div :class="['repayment-badge', getRepaymentClass(props.row.repayment_method)]">
-                  {{ capitalizeStatus(props.row.repayment_method) }}
-                </div>
-              </q-td>
-              <q-td class="table-body-cell repaid-cell">
-                <q-icon
-                  :name="props.row.is_repaid ? 'check_circle' : 'schedule'"
-                  :color="props.row.is_repaid ? 'positive' : 'warning'"
-                  size="20px"
-                />
-              </q-td>
-              <q-td class="table-body-cell actions-cell">
-                <q-btn flat round dense icon="more_horiz" class="action-menu-btn" @click.stop>
-                  <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                    <q-list dense style="min-width: 160px">
-                      <q-item clickable v-close-popup @click="$emit('view', props.row)" class="dropdown-item">
-                        <q-item-section avatar><q-icon name="visibility" size="16px" /></q-item-section>
-                        <q-item-section>View Details</q-item-section>
-                      </q-item>
-                      <q-item v-if="props.row.status === 'pending'" clickable v-close-popup @click="$emit('approve', props.row)" class="dropdown-item">
-                        <q-item-section avatar><q-icon name="check" size="16px" color="positive" /></q-item-section>
-                        <q-item-section>Approve/Reject</q-item-section>
-                      </q-item>
-                    </q-list>
-                  </q-menu>
-                </q-btn>
-              </q-td>
-            </q-tr>
-          </template>
-        </q-table>
-      </div>
-      <div v-else class="empty-state">
-        <div class="empty-icon"><q-icon name="search_off" size="64px" color="grey-4" /></div>
-        <div class="empty-title">No cash advance requests found</div>
-        <div class="empty-subtitle">Try adjusting your search or filters</div>
+        </q-select>
       </div>
     </div>
+    <!-- Skeleton: visible when loading OR no data (persists on 404) -->
+    <div v-if="loading || rows.length === 0" class="modern-table-container">
+      <div class="table-skeleton">
+        <div class="skeleton-header">
+          <div class="skeleton-header-cell">Employee</div>
+          <div class="skeleton-header-cell">Requested Amount</div>
+          <div class="skeleton-header-cell">Request Date</div>
+          <div class="skeleton-header-cell">Approval Date</div>
+          <div class="skeleton-header-cell">Payout Date</div>
+          <div class="skeleton-header-cell">Status</div>
+          <div class="skeleton-header-cell">Approved By</div>
+          <div class="skeleton-header-cell" style="flex: 0 0 72px">Actions</div>
+        </div>
+        <div class="skeleton-row" v-for="n in 4" :key="n">
+          <div class="skeleton-cell"><q-skeleton type="text" width="140px" /></div>
+          <div class="skeleton-cell"><q-skeleton type="text" width="100px" /></div>
+          <div class="skeleton-cell"><q-skeleton type="text" width="90px" /></div>
+          <div class="skeleton-cell"><q-skeleton type="text" width="90px" /></div>
+          <div class="skeleton-cell"><q-skeleton type="text" width="90px" /></div>
+          <div class="skeleton-cell"><q-skeleton type="text" width="80px" /></div>
+          <div class="skeleton-cell"><q-skeleton type="text" width="100px" /></div>
+          <div class="skeleton-cell" style="flex: 0 0 72px"><q-skeleton type="text" width="40px" /></div>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="modern-table-container">
+      <q-table
+        :rows="rows"
+        :columns="caColumns"
+        row-key="id"
+        flat
+        :loading="loading"
+        no-data-label="No cash advance requests found"
+        class="cash-advance-table"
+        :pagination="caPagination"
+      >
+        <template v-slot:header>
+          <q-tr class="table-header-row">
+            <q-th class="table-header-cell">Employee</q-th>
+            <q-th class="table-header-cell">Requested Amount</q-th>
+            <q-th class="table-header-cell">Request Date</q-th>
+            <q-th class="table-header-cell">Approval Date</q-th>
+            <q-th class="table-header-cell">Payout Date</q-th>
+            <q-th class="table-header-cell">Status</q-th>
+            <q-th class="table-header-cell">Approved By</q-th>
+            <q-th class="table-header-cell table-header-actions">Actions</q-th>
+          </q-tr>
+        </template>
+        <template v-slot:body="props">
+          <q-tr class="table-body-row">
+            <q-td class="table-body-cell employee-name-cell">
+              <div class="employee-info">
+                <q-avatar size="34px" class="avatar-fallback">
+                  {{ getInitials(props.row.employee_name) }}
+                </q-avatar>
+                <div class="employee-name-block">
+                  <span class="employee-name">{{ props.row.employee_name }}</span>
+                </div>
+              </div>
+            </q-td>
+            <q-td class="table-body-cell amount-cell">
+              <div class="amount-info">
+                <span class="amount-value">&#8369;{{ formatAmount(props.row.requested_amount) }}</span>
+              </div>
+            </q-td>
+            <q-td class="table-body-cell">{{ formatDate(props.row.request_date) }}</q-td>
+            <q-td class="table-body-cell">
+              {{ props.row.approval_date ? formatDate(props.row.approval_date) : '-' }}
+            </q-td>
+            <q-td class="table-body-cell">
+              {{ props.row.payout_date ? formatDate(props.row.payout_date) : '-' }}
+            </q-td>
+            <q-td class="table-body-cell">
+              <div :class="['status-badge', getCaStatusClass(props.row.status)]">
+                <span class="status-dot"></span>
+                {{ props.row.status_display || capitalizeStatus(props.row.status) }}
+              </div>
+            </q-td>
+            <q-td class="table-body-cell">
+              <span class="meta-text">{{ props.row.approved_by || '-' }}</span>
+            </q-td>
+            <q-td class="table-body-cell actions-cell">
+              <q-btn flat round dense icon="more_horiz" class="action-menu-btn" @click.stop>
+                <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                  <q-list dense style="min-width: 160px">
+                    <q-item clickable v-close-popup @click="$emit('view', props.row)" class="dropdown-item">
+                      <q-item-section avatar><q-icon name="visibility" size="16px" /></q-item-section>
+                      <q-item-section>View Details</q-item-section>
+                    </q-item>
+                    <q-item v-if="props.row.status === 'pending'" clickable v-close-popup @click="$emit('approve', props.row)" class="dropdown-item">
+                      <q-item-section avatar><q-icon name="check" size="16px" color="positive" /></q-item-section>
+                      <q-item-section>Approve/Reject</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </q-btn>
+            </q-td>
+          </q-tr>
+        </template>
+      </q-table>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -127,9 +142,10 @@ const caColumns = [
   { name: 'employee_name', label: 'Employee', field: 'employee_name', align: 'left', sortable: true },
   { name: 'requested_amount', label: 'Requested Amount', field: 'requested_amount', align: 'left', sortable: true },
   { name: 'request_date', label: 'Request Date', field: 'request_date', align: 'left', sortable: true },
+  { name: 'approval_date', label: 'Approval Date', field: 'approval_date', align: 'left', sortable: true },
+  { name: 'payout_date', label: 'Payout Date', field: 'payout_date', align: 'left', sortable: true },
   { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
-  { name: 'repayment_method', label: 'Repayment Method', field: 'repayment_method', align: 'center', sortable: true },
-  { name: 'is_repaid', label: 'Repaid?', field: 'is_repaid', align: 'center', sortable: true },
+  { name: 'approved_by', label: 'Approved By', field: 'approved_by', align: 'left', sortable: true },
   { name: 'actions', label: 'Actions', align: 'center' },
 ]
 
@@ -145,16 +161,17 @@ const formatAmount = (num) => {
   const n = Number(num || 0)
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  if (isNaN(d)) return dateStr
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 const getCaStatusClass = (status) => {
   if (status === 'pending') return 'status-pending'
   if (status === 'approved') return 'status-approved'
   if (status === 'rejected') return 'status-rejected'
   return 'status-default'
-}
-const getRepaymentClass = (method) => {
-  if (method === 'manual') return 'repayment-manual'
-  if (method === 'automatic') return 'repayment-automatic'
-  return 'repayment-default'
 }
 </script>
 
@@ -182,7 +199,7 @@ const getRepaymentClass = (method) => {
 .table-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .filter-select { min-width: 160px; }
 .modern-table-container { overflow-x: auto; position: relative; }
-.cash-advance-table { width: 100%; min-width: 700px; }
+.cash-advance-table { width: 100%; min-width: 900px; }
 
 .cash-advance-table,
 .cash-advance-table :deep(.q-table__container),
@@ -278,23 +295,9 @@ const getRepaymentClass = (method) => {
 .status-default { background: #f1f5f9; color: #64748b; }
 .status-default .status-dot { background: #94a3b8; }
 
-.repayment-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-  white-space: nowrap;
-}
-.repayment-manual { background: #fffbeb; color: #92400e; border-color: #fde68a; }
-.repayment-automatic { background: #f0fdf4; color: #065f46; border-color: #bbf7d0; }
-.repayment-default { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
-
 .amount-value { font-weight: 600; color: #0f172a; }
 .amount-cell { font-size: 13px; }
+.meta-text { font-size: 13px; color: #6b7280; }
 
 .actions-cell {
   text-align: center !important;
@@ -326,30 +329,44 @@ const getRepaymentClass = (method) => {
   border-radius: 6px !important;
 }
 
-.loading-state {
+.table-skeleton {
+  min-width: 900px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  gap: 16px;
+  gap: 2px;
+  padding: 0 14px 14px;
 }
-.loading-text { font-size: 14px; color: #94a3b8; }
-.empty-state {
+.skeleton-header {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 14px;
   gap: 8px;
-  text-align: center;
 }
-.empty-icon { color: #cbd5e1; margin-bottom: 6px; }
-.empty-title { font-size: 15px; font-weight: 500; color: #334155; }
-.empty-subtitle { font-size: 13px; color: #94a3b8; }
+.skeleton-header-cell {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f3f5;
+  gap: 8px;
+}
+.skeleton-row:last-child {
+  border-bottom: none;
+}
+.skeleton-cell {
+  flex: 1;
+}
 
 @media (max-width: 1440px) {
-  .cash-advance-table { min-width: 680px; }
+  .cash-advance-table { min-width: 880px; }
 }
 @media (max-width: 1024px) {
   .modern-table-container { overflow-x: auto; }
@@ -362,7 +379,7 @@ const getRepaymentClass = (method) => {
   .table-actions { width: 100%; }
   .filter-select { width: 100%; min-width: unset; }
   .modern-table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .cash-advance-table { min-width: 700px; }
+  .cash-advance-table { min-width: 900px; }
 }
 @media (max-width: 480px) {
   .table-header-cell, .table-body-cell { padding: 10px 12px !important; font-size: 12px; }
