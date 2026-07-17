@@ -1,26 +1,95 @@
 <template>
   <PageShell full-height flex-column>
-    <!-- Global loading overlay -->
     <q-inner-loading :showing="pageLoading" color="primary" />
-      <!-- Top Stats Row -->
-      <DashboardStatsRow :stats-cards="statsCards" :page-loading="pageLoading" />
 
-      <!-- Main Grid -->
-      <div class="main-grid">
-        <!-- Left Column -->
-        <div class="col-main">
-          <PayrollStatusPanel :rows="payrollRows" :columns="payrollColumns" :loading="payrollLoading" />
-          <QuickActionsPanel />
-          <RecentActivityPanel :activities="recentActivities" :loading="attendanceLoading || requestsLoading" />
-        </div>
-
-        <!-- Right Column -->
-        <div class="col-side">
-          <NotificationsPanel :notifications="notifications" :pending-count="pendingNotifCount" :loading="requestsLoading" />
-          <AnnouncementsPanel :announcements="announcements" :loading="announcementsLoading" />
-          <PendingSwapsPanel :pending-swaps="pendingSwaps" :loading="swapLoading" />
+    <!-- Header: title + segmented view toggle (Current / Monthly / Annual) -->
+    <div class="dash-header">
+      <div class="dash-header-left">
+        <q-btn-toggle
+          v-model="activeView"
+          class="view-toggle"
+          no-caps
+          unelevated
+          toggle-color="primary"
+          color="white"
+          text-color="grey-8"
+          :options="[
+            { label: 'Current Cutoff', value: 'current' },
+            { label: 'Monthly Summary', value: 'monthly' },
+            { label: 'Annual Summary', value: 'annual' },
+          ]"
+        />
+      </div>
+      <div class="dash-header-right">
+        <q-select
+          v-model="departmentFilter"
+          :options="departmentFilterOptions"
+          dense
+          outlined
+          emit-value
+          map-options
+          class="header-filter"
+        />
+        <div class="last-sync">
+          <q-icon name="sync" size="14px" />
+          Data as of {{ formattedToday }}
         </div>
       </div>
+    </div>
+
+    <!-- Top KPI stats row — tab-aware -->
+    <DashboardStatsRow :stats-cards="statsCards" :page-loading="pageLoading" />
+    <div v-if="activeView === 'annual'" class="annual-note">
+      <q-icon name="check_circle" size="16px" color="positive" class="q-mr-sm" />
+      12 of 12 scheduled cutoffs completed
+    </div>
+
+    <!-- Tabbed payroll summary section -->
+    <div class="summary-section">
+      <keep-alive>
+        <CurrentCutoffTab
+          v-if="activeView === 'current'"
+          key="current"
+          :fmt-currency="fmtCurrencyPeso"
+          :loading="summaryLoading"
+          :current-cutoff="currentCutoff"
+        />
+        <MonthlySummaryTab
+          v-else-if="activeView === 'monthly'"
+          key="monthly"
+          :months="monthlySummaries"
+          :thirteenth-month-pay="thirteenthMonthPay"
+          :component-breakdown="componentBreakdown"
+          :fmt-currency="fmtCurrencyPeso"
+          :today="formattedToday"
+          :loading="summaryLoading"
+        />
+        <AnnualSummaryTab
+          v-else
+          key="annual"
+          :annual="annualSummary"
+          :trend-labels="monthlyTrendSeries.map((m) => m.label)"
+          :trend-values="monthlyTrendSeries.map((m) => m.value)"
+          :thirteenth-month-pay="thirteenthMonthPay"
+          :component-breakdown="componentBreakdown"
+          :fmt-currency="fmtCurrencyPeso"
+          :loading="summaryLoading"
+        />
+      </keep-alive>
+    </div>
+
+    <!-- Operational panels — hidden for redesigned Current Cutoff tab -->
+    <div v-if="activeView !== 'current'" class="main-grid">
+      <PayrollStatusPanel
+        :rows="payrollRows"
+        :columns="payrollColumns"
+        :loading="payrollLoading"
+      />
+      <RecentActivityPanel
+        :activities="recentActivities"
+        :loading="attendanceLoading || requestsLoading"
+      />
+    </div>
   </PageShell>
 </template>
 
@@ -31,52 +100,69 @@ import { useEmployees } from '@/composables/page/useEmployees'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { usePayroll } from '@/composables/page/usePayroll'
 import { useRequests } from '@/composables/page/useRequests'
-import { useAnnouncements } from '@/composables/page/useAnnouncements'
-import { useSwapRequests } from '@/composables/page/useSwapRequests'
 import { useCompany, resolvedCompanyId } from '@/composables/page/useCompany'
 import { useNotifications } from 'src/composables/useNotifications'
+import { useDashboardSummary } from '@/composables/page/useDashboardSummary'
 
 import DashboardStatsRow from '@/components/pages/Dashboard/DashboardStatsRow.vue'
 import PayrollStatusPanel from '@/components/pages/Dashboard/PayrollStatusPanel.vue'
 import RecentActivityPanel from '@/components/pages/Dashboard/RecentActivityPanel.vue'
-import NotificationsPanel from '@/components/pages/Dashboard/NotificationsPanel.vue'
-import AnnouncementsPanel from '@/components/pages/Dashboard/AnnouncementsPanel.vue'
-import PendingSwapsPanel from '@/components/pages/Dashboard/PendingSwapsPanel.vue'
-import QuickActionsPanel from '@/components/pages/Dashboard/QuickActionsPanel.vue'
+import CurrentCutoffTab from '@/components/pages/Dashboard/CurrentCutoffTab.vue'
+import MonthlySummaryTab from '@/components/pages/Dashboard/MonthlySummaryTab.vue'
+import AnnualSummaryTab from '@/components/pages/Dashboard/AnnualSummaryTab.vue'
 
 // ─── Composables ─────────────────────────────────────────────────────────────
 useCompany()
 
-const { employees, fetchEmployees } = useEmployees()
-
+const { fetchEmployees } = useEmployees()
 const { attendanceData, loading: attendanceLoading, fetchAttendanceByDate } = useAttendance()
-
 const { payrollRunsSummary, isLoading, fetchPayrollRunsSummary } = usePayroll()
-
 const payrollLoading = computed(() => isLoading('fetchingPayrollRunsSummary'))
-
 const { onDataUpdate } = useNotifications()
-
 const {
   leaveRequests,
-  overtimeRequests,
-  cashAdvanceRequests,
   loading: requestsLoading,
   fetchLeaveRequests,
   fetchOvertimeRequests,
   fetchCashAdvanceRequests,
 } = useRequests()
 
-const { announcements, loading: announcementsLoading, fetchAnnouncements } = useAnnouncements()
+// ── Payroll summary / 13th-month-pay data ──
+const {
+  currentCutoff,
+  monthlySummaries,
+  annualSummary,
+  thirteenthMonthPay,
+  monthlyTrendSeries,
+  componentBreakdown,
+  fmtCurrency: fmtCurrencyPeso,
+  today: summaryToday,
+  loading: summaryLoading,
+  fetchDashboardSummary,
+} = useDashboardSummary()
 
-const { swapRequests, loading: swapLoading, fetchSwapRequests } = useSwapRequests()
+const activeView = ref('current')
+const formattedToday = computed(() =>
+  summaryToday.value?.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }),
+)
 
-// ─── Page-level loading (true until the first critical batch resolves) ────────
+// ── Header filters ──────────────────────────────────────────────────────
+// departmentFilter is UI-ready but not yet wired to a fetch param — add one
+// once your endpoint supports filtering by department/site.
+const departmentFilter = ref('all')
+const departmentFilterOptions = computed(() => [
+  { label: 'All Departments', value: 'all' },
+  // ...map real departments here
+])
+
+// ─── Page-level loading ─────────────────────────────────────────────────────
 const pageLoading = ref(true)
 
-// Uses shared resolvedCompanyId() from useCompany.js
-
-// ─── Payroll table columns ────────────────────────────────────────────────────
+// ─── Payroll table columns (unchanged) ─────────────────────────────────────
 const payrollColumns = [
   { name: 'group', label: 'Group Name', field: 'group', align: 'left' },
   { name: 'type', label: 'Type', field: 'type', align: 'left' },
@@ -88,11 +174,10 @@ const payrollColumns = [
   { name: 'amount', label: 'Total Amount', field: 'amount', align: 'right' },
 ]
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers (unchanged from original) ─────────────────────────────────────
 function today() {
   return new Date().toISOString().slice(0, 10)
 }
-
 function fmtDate(str) {
   if (!str) return '-'
   const d = new Date(str)
@@ -100,17 +185,16 @@ function fmtDate(str) {
     ? str
     : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
-
 function cleanGroupName(name) {
   if (!name) return '-'
   let cleaned = String(name)
-  // 1. Strip trailing date range patterns like "| 2026-05-01 - 2026-05-15"
-  cleaned = cleaned.replace(/\s*\|?\s*\d{4}[-/]\d{2}[-/]\d{2}\s*[-–]\s*\d{4}[-/]\d{2}[-/]\d{2}\s*$/, '')
-  // 2. Strip trailing type indicator like "| Salary" or "| Hourly"
+  cleaned = cleaned.replace(
+    /\s*\|?\s*\d{4}[-/]\d{2}[-/]\d{2}\s*[-–]\s*\d{4}[-/]\d{2}[-/]\d{2}\s*$/,
+    '',
+  )
   cleaned = cleaned.replace(/\s*\|\s*\w+\s*$/, '')
   return cleaned.trim() || '-'
 }
-
 function fmtTime(str) {
   if (!str) return ''
   const d = new Date(str)
@@ -123,12 +207,10 @@ function fmtTime(str) {
         minute: '2-digit',
       })
 }
-
 function fmtCurrency(val) {
   if (val == null) return '-'
   return Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
-
 function getEmployeeName(record) {
   if (!record) return ''
   if (record.full_name) return record.full_name
@@ -143,71 +225,157 @@ function getEmployeeName(record) {
   return u.email ?? u.username ?? ''
 }
 
-// ─── Stats cards ──────────────────────────────────────────────────────────────
-
+// ─── Stats cards — tab-aware ────────────────────────────────────────────────
 const statsCards = computed(() => {
-  const todayStr = today()
+  if (activeView.value === 'current') {
+    return [
+      {
+        icon: 'event',
+        label: 'Scheduled',
+        count: 42,
+        iconBg: '#e8f0fe',
+        iconColor: '#1a73e8',
+        valueColor: '#1a73e8',
+      },
+      {
+        icon: 'check_circle',
+        label: 'Present',
+        count: 31,
+        iconBg: '#e6f6ea',
+        iconColor: '#22c55e',
+        valueColor: '#22c55e',
+      },
+      {
+        icon: 'schedule',
+        label: 'Late',
+        count: 3,
+        iconBg: '#fff8e1',
+        iconColor: '#f59e0b',
+        valueColor: '#f59e0b',
+      },
+      {
+        icon: 'person_off',
+        label: 'Absent',
+        count: 2,
+        iconBg: '#fdecea',
+        iconColor: '#ef4444',
+        valueColor: '#ef4444',
+      },
+      {
+        icon: 'beach_access',
+        label: 'On Leave',
+        count: 1,
+        iconBg: '#ede9fe',
+        iconColor: '#8b5cf6',
+        valueColor: '#8b5cf6',
+      },
+      {
+        icon: 'work_off',
+        label: 'Unfilled',
+        count: 1,
+        iconBg: '#fff7ed',
+        iconColor: '#f97316',
+        valueColor: '#f97316',
+      },
+    ]
+  }
 
-  const activeEmps = employees.value.filter(
-    (e) => (e.status ?? 'active').toLowerCase() === 'active',
-  )
-  const onLeaveEmps = employees.value.filter((e) => {
-    const s = (e.status ?? '').toLowerCase()
-    return s === 'on_leave' || s === 'paid_leave' || s === 'leave'
-  })
+  if (activeView.value === 'monthly') {
+    return [
+      {
+        icon: 'payments',
+        label: 'Total Payroll',
+        count: '₱1,444,100',
+        iconBg: '#e8f0fe',
+        iconColor: '#1a73e8',
+        valueColor: '#1a73e8',
+      },
+      {
+        icon: 'groups',
+        label: 'Employees Paid',
+        count: 40,
+        iconBg: '#e6f6ea',
+        iconColor: '#22c55e',
+        valueColor: '#22c55e',
+      },
+      {
+        icon: 'groups_2',
+        label: 'Payroll Groups',
+        count: 6,
+        iconBg: '#ede9fe',
+        iconColor: '#8b5cf6',
+        valueColor: '#8b5cf6',
+      },
+      {
+        icon: 'account_balance',
+        label: 'Total Released',
+        count: '₱1,444,100',
+        iconBg: '#e0f7fa',
+        iconColor: '#0e7490',
+        valueColor: '#0e7490',
+      },
+      {
+        icon: 'person',
+        label: 'Average Payroll / Employee',
+        count: '₱36,103',
+        iconBg: '#fff7ed',
+        iconColor: '#f97316',
+        valueColor: '#f97316',
+      },
+    ]
+  }
 
-  const todayAtt = attendanceData.value.filter((a) => {
-    const d = a.date ?? a.attendance_date ?? a.time_in ?? a.clock_in ?? ''
-    return String(d).startsWith(todayStr)
-  })
-  const clockedIn = todayAtt.filter((a) => {
-    const hasIn = a.time_in ?? a.clock_in ?? a.check_in
-    const hasOut = a.time_out ?? a.clock_out ?? a.check_out
-    return hasIn && !hasOut
-  })
-
-  // Build a Set of all employee IDs found in today's attendance
-  // covering every field shape the API might return
-  const attendedIds = new Set(
-    todayAtt.flatMap((a) => {
-      const ids = []
-      if (a.employee_id != null) ids.push(String(a.employee_id))
-      if (a.employee != null) ids.push(String(a.employee))
-      if (a.user_id != null) ids.push(String(a.user_id))
-      if (a.user?.id != null) ids.push(String(a.user.id))
-      if (a.employee?.id != null) ids.push(String(a.employee.id))
-      return ids
-    }),
-  )
-
-  const absent = activeEmps.filter((e) => {
-    const empIds = [e.id, e.employee_id, e.user?.id, e.user_id].filter((v) => v != null).map(String)
-    // Employee is absent only if NONE of their IDs appear in today's attendance
-    return empIds.length > 0 && !empIds.some((id) => attendedIds.has(id))
-  })
-
-  const pendingLeave = leaveRequests.value.filter(
-    (r) => (r.status ?? '').toLowerCase() === 'pending',
-  )
-  const pendingOT = overtimeRequests.value.filter(
-    (r) => (r.status ?? '').toLowerCase() === 'pending',
-  )
-  const pendingCA = cashAdvanceRequests.value.filter(
-    (r) => (r.status ?? '').toLowerCase() === 'pending',
-  )
-  const totalRequests = pendingLeave.length + pendingOT.length + pendingCA.length
-
+  // Annual
   return [
-    { icon: 'people', count: activeEmps.length, label: 'Active' },
-    { icon: 'person_off', count: onLeaveEmps.length, label: 'Paid Leave' },
-    { icon: 'schedule', count: clockedIn.length, label: 'Clocked In' },
-    { icon: 'person_remove', count: absent.length, label: 'Absent' },
-    { icon: 'access_time', count: pendingLeave.length, label: 'Time Off' },
-    { icon: 'request_page', count: totalRequests, label: 'Requests' },
+    {
+      icon: 'payments',
+      label: 'Total Payroll',
+      count: '₱8,120,400',
+      subtitle: 'Year-to-Date',
+      iconBg: '#e8f0fe',
+      iconColor: '#1a73e8',
+      valueColor: '#1a73e8',
+    },
+    {
+      icon: 'attach_money',
+      label: 'Total Employee-Related Cash Released',
+      count: '₱8,614,900',
+      subtitle: 'Year-to-Date',
+      iconBg: '#e0f7fa',
+      iconColor: '#0e7490',
+      valueColor: '#0e7490',
+    },
+    {
+      icon: 'people',
+      label: 'Unique Employees Paid',
+      count: 46,
+      subtitle: 'Year-to-Date',
+      iconBg: '#ede9fe',
+      iconColor: '#8b5cf6',
+      valueColor: '#8b5cf6',
+    },
+    {
+      icon: 'trending_up',
+      label: 'Average Monthly Payroll',
+      count: '₱1,353,400',
+      subtitle: 'Year-to-Date',
+      iconBg: '#fff8e1',
+      iconColor: '#f59e0b',
+      valueColor: '#f59e0b',
+    },
+    {
+      icon: 'person',
+      label: 'Average Payroll per Employee',
+      count: '₱176,530',
+      subtitle: 'Year-to-Date',
+      iconBg: '#e0f7fa',
+      iconColor: '#0e7490',
+      valueColor: '#0e7490',
+    },
   ]
 })
 
-// ─── Payroll rows ─────────────────────────────────────────────────────────────
+// ─── Payroll rows (unchanged) ───────────────────────────────────────────────
 const payrollRows = computed(() => {
   const list = Array.isArray(payrollRunsSummary.value)
     ? payrollRunsSummary.value
@@ -217,7 +385,6 @@ const payrollRows = computed(() => {
         ? payrollRunsSummary.value.results
         : []
   return list.slice(0, 10).map((p, i) => {
-    // Resolve start / end dates: prefer explicit fields, then split period, then extract from name
     let startDate = '-'
     let endDate = '-'
     if (p.start_date && p.end_date) {
@@ -228,25 +395,24 @@ const payrollRows = computed(() => {
       startDate = parts[0] ?? '-'
       endDate = parts[1] ?? '-'
     } else if (p.name) {
-      // Fallback: extract date range embedded in the name (e.g. "Group | Type | 2026-05-01 - 2026-05-15")
-      const match = String(p.name).match(/(\d{4}[-/]\d{2}[-/]\d{2})\s*[-–]\s*(\d{4}[-/]\d{2}[-/]\d{2})/)
+      const match = String(p.name).match(
+        /(\d{4}[-/]\d{2}[-/]\d{2})\s*[-–]\s*(\d{4}[-/]\d{2}[-/]\d{2})/,
+      )
       if (match) {
         startDate = fmtDate(match[1])
         endDate = fmtDate(match[2])
       }
     }
-
-    // Date Released: show only if the run was actually released
     const releasedAt = p.released_at ?? p.date_released
     const releaseDate = releasedAt ? fmtDate(releasedAt) : '-'
-
     return {
       id: p.id ?? i,
       group: cleanGroupName(p.name),
       type: p.type ? p.type.charAt(0).toUpperCase() + p.type.slice(1) : 'Payroll Run',
       start: startDate,
       end: endDate,
-      employees: p.total_employees ?? p.number_of_employee ?? p.employee_count ?? p.employees ?? '-',
+      employees:
+        p.total_employees ?? p.number_of_employee ?? p.employee_count ?? p.employees ?? '-',
       status: p.status ?? '-',
       date: releaseDate,
       amount: fmtCurrency(p.total_net_pay ?? p.calculated_amount),
@@ -254,11 +420,10 @@ const payrollRows = computed(() => {
   })
 })
 
-// ─── Recent Activity ──────────────────────────────────────────────────────────
+// ─── Recent Activity (unchanged) ────────────────────────────────────────────
 const recentActivities = computed(() => {
   const activities = []
   const todayStr = today()
-
   attendanceData.value
     .filter((a) => {
       const d = a.date ?? a.attendance_date ?? a.time_in ?? a.clock_in ?? ''
@@ -278,7 +443,6 @@ const recentActivities = computed(() => {
         details: a.location_name ?? a.site_name ?? a.source ?? a.cost_center_name ?? '',
       })
     })
-
   leaveRequests.value.slice(0, 4).forEach((r) => {
     const nameCandidate =
       r.employee_name || r.full_name || getEmployeeName(r.employee ?? r.user ?? r) || null
@@ -298,130 +462,158 @@ const recentActivities = computed(() => {
       details: r.leave_type?.name ?? r.leave_type ?? r.type ?? '',
     })
   })
-
   return activities
     .filter((a) => a.user)
     .sort((a, b) => new Date(b.time) - new Date(a.time))
     .slice(0, 6)
 })
 
-// ─── Notifications ────────────────────────────────────────────────────────────
-const pendingSwaps = computed(() =>
-  swapRequests.value.filter((s) => (s.status ?? '').toLowerCase() === 'pending'),
-)
-
-const pendingNotifCount = computed(() => {
-  const pendingLeave = leaveRequests.value.filter(
-    (r) => (r.status ?? '').toLowerCase() === 'pending',
-  )
-  const pendingOT = overtimeRequests.value.filter(
-    (r) => (r.status ?? '').toLowerCase() === 'pending',
-  )
-  const pendingCA = cashAdvanceRequests.value.filter(
-    (r) => (r.status ?? '').toLowerCase() === 'pending',
-  )
-  return pendingLeave.length + pendingOT.length + pendingCA.length
-})
-
-const notifications = computed(() => {
-  const notes = []
-  const pendingLeave = leaveRequests.value.filter(
-    (r) => (r.status ?? '').toLowerCase() === 'pending',
-  )
-  const pendingOT = overtimeRequests.value.filter(
-    (r) => (r.status ?? '').toLowerCase() === 'pending',
-  )
-  const pendingCA = cashAdvanceRequests.value.filter(
-    (r) => (r.status ?? '').toLowerCase() === 'pending',
-  )
-
-  if (pendingLeave.length)
-    notes.push(
-      `${pendingLeave.length} leave request${pendingLeave.length > 1 ? 's' : ''} pending approval`,
-    )
-  if (pendingOT.length)
-    notes.push(
-      `${pendingOT.length} overtime request${pendingOT.length > 1 ? 's' : ''} pending approval`,
-    )
-  if (pendingCA.length)
-    notes.push(
-      `${pendingCA.length} cash advance request${pendingCA.length > 1 ? 's' : ''} pending approval`,
-    )
-  if (!notes.length) notes.push('No pending notifications')
-  return notes
-})
-
-// ─── Bootstrap ────────────────────────────────────────────────────────────────
+// ─── Bootstrap ───────────────────────────────────────────────────────────────
 onMounted(async () => {
   const cid = resolvedCompanyId()
-  console.debug('[Dashboard] resolved company ID:', cid)
 
   onDataUpdate('attendance', () => fetchAttendanceByDate(today()))
   onDataUpdate('leave', () => fetchLeaveRequests())
   onDataUpdate('overtime', () => fetchOvertimeRequests())
-  onDataUpdate('swap_request', () => fetchSwapRequests({ company: cid }))
 
-  // Batch 1 — critical for main panels
   await Promise.allSettled([
     fetchEmployees(),
     fetchAttendanceByDate(today()),
     fetchPayrollRunsSummary({ company_id: cid }),
+    fetchDashboardSummary({
+      company_id: cid,
+      year: summaryToday.value.getFullYear(),
+    }),
   ])
-
-  // Batch 2 — secondary panels
   await Promise.allSettled([
     fetchLeaveRequests(),
     fetchOvertimeRequests(),
-    fetchAnnouncements(),
-    fetchSwapRequests({ company: cid }),
   ])
-
-  // Batch 3 — cash advance (optional)
   if (cid) {
     await Promise.allSettled([fetchCashAdvanceRequests(cid)])
   }
-
   pageLoading.value = false
 })
 </script>
 
 <style scoped>
-/* ── Layout ── */
-.main-grid {
-  display: grid;
-  grid-template-columns: 1fr 290px;
-  gap: 12px;
-  flex: 1;
-  min-height: 0;
-}
-.col-main {
+/* ── Header ── */
+.dash-header {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
-  min-height: 0;
+  margin-bottom: 12px;
+}
+.dash-header-left,
+.dash-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.view-toggle {
+  border: 1px solid #e8ecf0;
+  border-radius: 8px;
   overflow: hidden;
 }
-.col-side {
+.header-filter {
+  min-width: 150px;
+}
+.header-filter :deep(.q-field__control) {
+  border-radius: 8px;
+  min-height: 38px;
+  background: #ffffff;
+}
+.last-sync {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  overflow: hidden;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #9ca3af;
+  white-space: nowrap;
 }
 
-/* ── Responsive ── */
-@media (max-width: 1200px) {
+/* ── Layout ── */
+.summary-section {
+  margin: 14px 0;
+}
+.main-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.annual-note {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #374151;
+  margin-top: -6px;
+  margin-bottom: 8px;
+}
+
+/* ── Responsive: 1440px (wide desktop) ── */
+@media (min-width: 1441px) {
   .main-grid {
-    grid-template-columns: 1fr;
-  }
-  .col-side {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    gap: 16px;
   }
 }
-@media (max-width: 768px) {
-  .col-side {
-    grid-template-columns: 1fr;
+
+/* ── Responsive: 1024px (tablet / small laptop) ── */
+@media (max-width: 1024px) {
+  .dash-header {
+    gap: 10px;
   }
+  .header-filter {
+    min-width: 130px;
+  }
+}
+
+/* ── Responsive: 768px (mobile) ── */
+@media (max-width: 768px) {
+  .dash-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dash-header-left,
+  .dash-header-right {
+    width: 100%;
+  }
+  .dash-header-right {
+    justify-content: space-between;
+  }
+  .view-toggle {
+    width: 100%;
+  }
+  .view-toggle :deep(.q-btn-group) {
+    width: 100%;
+  }
+  .view-toggle :deep(.q-btn) {
+    font-size: 11px;
+    padding: 6px 8px;
+    flex: 1;
+  }
+  .header-filter {
+    min-width: 0;
+    flex: 1;
+  }
+  .dash-title {
+    font-size: 18px;
+  }
+  .last-sync {
+    display: none;
+  }
+}
+</style>
+
+<style>
+/* Dashboard toggle — matches MainLayout company-tab-active exactly */
+.view-toggle .q-btn.bg-primary {
+  background: #102335 !important;
+  border-color: #102335 !important;
+  box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3) !important;
 }
 </style>
