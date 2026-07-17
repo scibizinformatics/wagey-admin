@@ -111,4 +111,16 @@ defineProps({
   animation: eps-pulse 1.6s ease-in-out infinite;
   transform-origin: left center;
 }
+
+@media (max-width: 768px) {
+  .panel-head {
+    padding: 12px 14px;
+  }
+  .panel-title {
+    font-size: 14px;
+  }
+  .notif-item {
+    padding: 10px 14px;
+  }
+}
 </style>

@@ -158,6 +158,16 @@ defineProps({
 }
 
 @media (max-width: 768px) {
+  .panel-head {
+    padding: 12px 14px;
+  }
+  .panel-title {
+    font-size: 14px;
+  }
+  .activity-row {
+    padding: 10px 14px;
+    gap: 10px;
+  }
   .activity-details {
     display: none;
   }

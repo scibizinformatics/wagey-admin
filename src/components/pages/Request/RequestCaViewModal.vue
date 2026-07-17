@@ -25,13 +25,25 @@
               </div>
               <div class="detail-row">
                 <span class="detail-label">Request Date:</span>
-                <span class="detail-value">{{ request.request_date }}</span>
+                <span class="detail-value">{{ formatDate(request.request_date) }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Approval Date:</span>
+                <span class="detail-value">{{ request.approval_date ? formatDate(request.approval_date) : '-' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Payout Date:</span>
+                <span class="detail-value">{{ request.payout_date ? formatDate(request.payout_date) : '-' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Approved By:</span>
+                <span class="detail-value">{{ request.approved_by || '-' }}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Status:</span>
                 <span class="detail-value">
                   <div :class="['status-badge', getCaStatusClass(request.status)]">
-                    {{ capitalizeStatus(request.status) }}
+                    {{ request.status_display || capitalizeStatus(request.status) }}
                   </div>
                 </span>
               </div>
@@ -43,32 +55,6 @@
               <div class="detail-row">
                 <span class="detail-label">Requested Amount:</span>
                 <span class="detail-value amount-highlight">&#8369;{{ formatAmount(request.requested_amount) }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="detail-section">
-            <div class="section-title">Repayment Information</div>
-            <div class="detail-grid">
-              <div class="detail-row">
-                <span class="detail-label">Repayment Method:</span>
-                <span class="detail-value">
-                  <div :class="['repayment-badge', getRepaymentClass(request.repayment_method)]">
-                    {{ capitalizeStatus(request.repayment_method) }}
-                  </div>
-                </span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Repaid Status:</span>
-                <span class="detail-value">
-                  <q-icon
-                    :name="request.is_repaid ? 'check_circle' : 'schedule'"
-                    :color="request.is_repaid ? 'positive' : 'warning'"
-                    size="20px"
-                  />
-                  <span :class="request.is_repaid ? 'text-positive' : 'text-warning'">
-                    {{ request.is_repaid ? 'Repaid' : 'Pending' }}
-                  </span>
-                </span>
               </div>
             </div>
           </div>
@@ -116,16 +102,17 @@ const formatAmount = (num) => {
   const n = Number(num || 0)
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  if (isNaN(d)) return dateStr
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 const getCaStatusClass = (status) => {
   if (status === 'pending') return 'status-pending'
   if (status === 'approved') return 'status-approved'
   if (status === 'rejected') return 'status-rejected'
   return 'status-default'
-}
-const getRepaymentClass = (method) => {
-  if (method === 'manual') return 'repayment-manual'
-  if (method === 'automatic') return 'repayment-automatic'
-  return 'repayment-default'
 }
 const getAvatarColor = (name) => {
   if (!name) return AVATAR_COLORS[0]
@@ -203,17 +190,6 @@ const getAvatarColor = (name) => {
   gap: 6px;
 }
 .amount-highlight { font-weight: 700; font-size: 15px; color: #111827; }
-.repayment-badge {
-  display: inline-block;
-  padding: 3px 9px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  border: 1px solid #e5e7eb;
-}
-.repayment-manual { background: #fffbeb; color: #92400e; border-color: #fde68a; }
-.repayment-automatic { background: #f0fdf4; color: #065f46; border-color: #bbf7d0; }
-.repayment-default { background: #f3f4f6; color: #6b7280; }
 .status-badge {
   display: inline-flex;
   align-items: center;

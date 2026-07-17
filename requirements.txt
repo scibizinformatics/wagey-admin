@@ -1,0 +1,5 @@
+# Python requirements for deployment scripts (fabfile.py)
+fabric>=2.0
+invoke>=1.0
+paramiko>=2.0
+patchwork>=1.0

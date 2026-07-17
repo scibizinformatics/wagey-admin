@@ -270,16 +270,16 @@ const menuTarget = ref(null)
 }
 
 .employees-th:nth-child(1) { flex: 0 0 40px; padding: 0; text-align: center; }
-.employees-th:nth-child(2) { flex: 0 0 180px; }
-.employees-th:nth-child(3) { flex: 0 0 100px; }
-.employees-th:nth-child(4) { flex: 0 0 100px; }
-.employees-th:nth-child(5) { flex: 0 0 80px; text-align: center; }
-.employees-th:nth-child(6) { flex: 0 0 110px; text-align: center; }
-.employees-th:nth-child(7) { flex: 0 0 105px; text-align: center; }
-.employees-th:nth-child(8) { flex: 0 0 100px; text-align: center; }
-.employees-th:nth-child(9) { flex: 0 0 95px; text-align: center; }
-.employees-th:nth-child(10) { flex: 0 0 60px; text-align: center; }
-.employees-th:nth-child(11) { flex: 0 0 80px; text-align: center; }
+.employees-th:nth-child(2) { flex: 1 1 180px; }
+.employees-th:nth-child(3) { flex: 0 1 100px; }
+.employees-th:nth-child(4) { flex: 0 1 100px; }
+.employees-th:nth-child(5) { flex: 0 1 80px; text-align: center; }
+.employees-th:nth-child(6) { flex: 0 1 110px; text-align: center; }
+.employees-th:nth-child(7) { flex: 0 1 105px; text-align: center; }
+.employees-th:nth-child(8) { flex: 0 1 100px; text-align: center; }
+.employees-th:nth-child(9) { flex: 0 1 95px; text-align: center; }
+.employees-th:nth-child(10) { flex: 0 1 60px; text-align: center; }
+.employees-th:nth-child(11) { flex: 0 1 80px; text-align: center; }
 .employees-th:nth-child(12) { flex: 0 0 70px; text-align: center; }
 
 .virtual-scroll-container { width: 100%; }
@@ -295,7 +295,6 @@ const menuTarget = ref(null)
   color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  min-width: 1120px;
 }
 
 .employees-table-row {
@@ -305,7 +304,6 @@ const menuTarget = ref(null)
   transition: background-color 0.15s ease;
   min-height: 60px;
   align-items: center;
-  min-width: 1120px;
 }
 
 .employees-table-row:hover { background-color: #f8fafc; }
@@ -325,19 +323,19 @@ const menuTarget = ref(null)
 }
 
 .employees-td:nth-child(1) { flex: 0 0 40px; justify-content: center; padding: 0; }
-.employees-td:nth-child(2) { flex: 0 0 180px; }
-.employees-td:nth-child(3) { flex: 0 0 100px; overflow: visible; }
-.employees-td:nth-child(4) { flex: 0 0 100px; }
-.employees-td:nth-child(5) { flex: 0 0 80px; justify-content: center; }
-.employees-td:nth-child(6) { flex: 0 0 110px; justify-content: center; }
-.employees-td:nth-child(7) { flex: 0 0 105px; justify-content: center; }
-.employees-td:nth-child(8) { flex: 0 0 100px; justify-content: center; }
-.employees-td:nth-child(9) { flex: 0 0 95px; justify-content: center; }
-.employees-td:nth-child(10) { flex: 0 0 60px; justify-content: center; }
-.employees-td:nth-child(11) { flex: 0 0 80px; justify-content: center; }
+.employees-td:nth-child(2) { flex: 1 1 180px; }
+.employees-td:nth-child(3) { flex: 0 1 100px; overflow: visible; }
+.employees-td:nth-child(4) { flex: 0 1 100px; }
+.employees-td:nth-child(5) { flex: 0 1 80px; justify-content: center; }
+.employees-td:nth-child(6) { flex: 0 1 110px; justify-content: center; }
+.employees-td:nth-child(7) { flex: 0 1 105px; justify-content: center; }
+.employees-td:nth-child(8) { flex: 0 1 100px; justify-content: center; }
+.employees-td:nth-child(9) { flex: 0 1 95px; justify-content: center; }
+.employees-td:nth-child(10) { flex: 0 1 60px; justify-content: center; }
+.employees-td:nth-child(11) { flex: 0 1 80px; justify-content: center; }
 .employees-td:nth-child(12) { flex: 0 0 70px; justify-content: center; }
 
-.employee-cell { min-width: 200px; }
+.employee-cell { min-width: 140px; }
 
 .employee-info {
   display: flex;
@@ -472,11 +470,6 @@ const menuTarget = ref(null)
 }
 
 /* Virtual scroll & responsive */
-@media (max-width: 1024px) {
-  .employees-table-header,
-  .employees-table-row { min-width: 1120px; }
-}
-
 @media (max-width: 768px) {
   .employees-panel-header {
     flex-direction: column;
@@ -486,13 +479,9 @@ const menuTarget = ref(null)
   }
   .employees-panel-actions { width: 100%; flex-wrap: wrap; gap: 6px; }
   .employee-search-input { flex: 1 1 100% !important; min-width: 0 !important; }
-  .employees-table-header,
-  .employees-table-row { min-width: 1120px; }
 }
 
 @media (max-width: 480px) {
   .employees-panel-header { padding: 8px 10px; }
-  .employees-table-header,
-  .employees-table-row { min-width: 1120px; }
 }
 </style>

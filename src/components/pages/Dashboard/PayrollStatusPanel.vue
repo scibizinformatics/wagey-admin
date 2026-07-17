@@ -14,37 +14,38 @@
         :style="{ width: n % 2 === 0 ? '60%' : '80%', animationDelay: `${n * 0.12}s` }"
       />
     </div>
-    <q-table
-      v-else
-      :rows="rows"
-      :columns="columns"
-      row-key="id"
-      flat
-      dense
-      hide-pagination
-      :rows-per-page-options="[0]"
-      :loading="loading"
-      no-data-label="No payroll data found"
-      class="ct-table"
-    >
-      <template v-slot:header="props">
-        <q-tr :props="props" class="ct-thead-row">
-          <q-th v-for="col in props.cols" :key="col.name" class="ct-th">{{ col.label }}</q-th>
-        </q-tr>
-      </template>
-      <template v-slot:body-cell-status="props">
-        <q-td :props="props">
-          <span
-            :class="[
-              'ct-status',
-              props.value?.toLowerCase() === 'released' ? 'ct-status--green' : 'ct-status--amber',
-            ]"
-          >
-            {{ props.value }}
-          </span>
-        </q-td>
-      </template>
-    </q-table>
+    <div v-else class="ct-table-wrap">
+      <q-table
+        :rows="rows"
+        :columns="columns"
+        row-key="id"
+        flat
+        dense
+        hide-pagination
+        :rows-per-page-options="[0]"
+        :loading="loading"
+        no-data-label="No payroll data found"
+        class="ct-table"
+      >
+        <template v-slot:header="props">
+          <q-tr :props="props" class="ct-thead-row">
+            <q-th v-for="col in props.cols" :key="col.name" class="ct-th">{{ col.label }}</q-th>
+          </q-tr>
+        </template>
+        <template v-slot:body-cell-status="props">
+          <q-td :props="props">
+            <span
+              :class="[
+                'ct-status',
+                props.value?.toLowerCase() === 'released' ? 'ct-status--green' : 'ct-status--amber',
+              ]"
+            >
+              {{ props.value }}
+            </span>
+          </q-td>
+        </template>
+      </q-table>
+    </div>
   </div>
 </template>
 
@@ -86,6 +87,9 @@ defineProps({
   color: #111827;
 }
 
+.ct-table-wrap {
+  overflow-x: auto;
+}
 .ct-table {
   background: transparent;
 }
@@ -153,5 +157,19 @@ defineProps({
   background-size: 200% 100%;
   animation: eps-pulse 1.6s ease-in-out infinite;
   transform-origin: left center;
+}
+
+@media (max-width: 768px) {
+  .panel-head {
+    padding: 12px 14px;
+  }
+  .panel-title {
+    font-size: 14px;
+  }
+  .ct-th,
+  .ct-table :deep(td) {
+    padding: 9px 12px;
+    white-space: nowrap;
+  }
 }
 </style>

@@ -104,7 +104,6 @@
 
                 <!-- Notification List -->
                 <q-scroll-area style="height: 380px; width: 380px; max-width: 95vw">
-
                   <q-list separator>
                     <q-item
                       v-for="notif in sortedNotifications"
@@ -175,20 +174,11 @@
             </q-menu>
           </q-btn>
 
-          <q-avatar
-            v-if="currentUserPicture"
-            size="36px"
-            class="user-avatar"
-          >
+          <q-avatar v-if="currentUserPicture" size="36px" class="user-avatar">
             <img :src="currentUserPicture" alt="User Avatar" @error="handleImageError" />
             <q-tooltip>{{ currentUsername }}</q-tooltip>
           </q-avatar>
-          <q-avatar
-            v-else
-            size="36px"
-            class="user-avatar"
-            :style="{ background: avatarColor }"
-          >
+          <q-avatar v-else size="36px" class="user-avatar" :style="{ background: avatarColor }">
             <span class="avatar-initials">{{ avatarInitials }}</span>
             <q-tooltip>{{ currentUsername }}</q-tooltip>
           </q-avatar>
@@ -225,33 +215,40 @@
 
       <!-- Navigation -->
       <div class="sidebar-nav q-px-md">
-        <q-list class="nav-list">
-          <q-item
-            v-for="link in links"
-            :key="link.label"
-            clickable
-            tag="router-link"
-            :to="link.to"
-            class="nav-item"
-            :class="{ 'nav-item-active': route.path === link.to, 'nav-item-mini': isMini }"
-          >
-            <q-item-section avatar class="nav-icon">
-              <q-icon :name="link.icon" size="20px" />
-            </q-item-section>
-            <q-item-section class="nav-label" v-if="!isMini">
-              {{ link.label }}
-            </q-item-section>
-            <q-tooltip
-              v-if="isMini"
-              anchor="center right"
-              self="center left"
-              :offset="[12, 0]"
-              class="nav-tooltip"
+        <div v-for="(group, gIndex) in navGroups" :key="group.label" class="nav-group">
+          <!-- Section label (expanded) -->
+          <div class="nav-group-label" v-if="!isMini">{{ group.label }}</div>
+          <!-- Thin divider between sections (mini mode) -->
+          <div class="nav-group-divider" v-else-if="gIndex > 0"></div>
+
+          <q-list class="nav-list">
+            <q-item
+              v-for="link in group.items"
+              :key="link.label"
+              clickable
+              tag="router-link"
+              :to="link.to"
+              class="nav-item"
+              :class="{ 'nav-item-active': route.path === link.to, 'nav-item-mini': isMini }"
             >
-              {{ link.label }}
-            </q-tooltip>
-          </q-item>
-        </q-list>
+              <q-item-section avatar class="nav-icon">
+                <q-icon :name="link.icon" size="20px" />
+              </q-item-section>
+              <q-item-section class="nav-label" v-if="!isMini">
+                {{ link.label }}
+              </q-item-section>
+              <q-tooltip
+                v-if="isMini"
+                anchor="center right"
+                self="center left"
+                :offset="[12, 0]"
+                class="nav-tooltip"
+              >
+                {{ link.label }}
+              </q-tooltip>
+            </q-item>
+          </q-list>
+        </div>
       </div>
 
       <!-- Sign Out -->
@@ -277,11 +274,7 @@
     </q-drawer>
 
     <!-- Half Circle Toggle Button -->
-    <div
-      class="sidebar-bookmark"
-      :class="{ 'sidebar-bookmark-mini': isMini }"
-      @click="isMini = !isMini"
-    >
+    <div class="sidebar-bookmark" :class="{ 'sidebar-bookmark-mini': isMini }" @click="toggleMini">
       <svg class="bookmark-svg" viewBox="0 0 28 56" xmlns="http://www.w3.org/2000/svg">
         <path d="M0 0 A28 28 0 0 1 0 56 Z" fill="#13283d" />
         <polyline
@@ -327,18 +320,39 @@ const route = useRoute()
 const logo = wageyLogo
 const terrainBgUrl = terrainBg
 
-// ─── Nav links ────────────────────────────────────────────────────────────────
-const links = [
-  { label: 'Dashboard', icon: 'dashboard', to: '/app' },
-  { label: 'Employees', icon: 'groups', to: '/app/employees' },
-  { label: 'Attendance', icon: 'event_available', to: '/app/attendance' },
-  { label: 'Schedule', icon: 'calendar_month', to: '/app/schedule' },
-  { label: 'Disbursement', icon: 'paid', to: '/app/payroll' },
-  { label: 'Deductions', icon: 'money_off', to: '/app/deductions' },
-  { label: 'Requests', icon: 'mark_email_unread', to: '/app/requests' },
-  { label: 'Invite', icon: 'email', to: '/app/employees/invite' },
-  { label: 'Announcement', icon: 'announcement', to: '/app/announcements' },
-  { label: 'Admin Settings', icon: 'settings', to: '/app/admin-settings' },
+// ─── Nav links (grouped) ───────────────────────────────────────────────────────
+const navGroups = [
+  {
+    label: 'Overview',
+    items: [{ label: 'Dashboard', icon: 'dashboard', to: '/app' }],
+  },
+  {
+    label: 'Workforce',
+    items: [
+      { label: 'Employees', icon: 'groups', to: '/app/employees' },
+      { label: 'Attendance', icon: 'event_available', to: '/app/attendance' },
+      { label: 'Schedule', icon: 'calendar_month', to: '/app/schedule' },
+    ],
+  },
+  {
+    label: 'Payroll',
+    items: [
+      { label: 'Disbursement', icon: 'paid', to: '/app/payroll' },
+      { label: 'Deductions', icon: 'money_off', to: '/app/deductions' },
+    ],
+  },
+  {
+    label: 'Communication',
+    items: [
+      { label: 'Requests', icon: 'mark_email_unread', to: '/app/requests' },
+      { label: 'Invite', icon: 'email', to: '/app/employees/invite' },
+      { label: 'Announcement', icon: 'announcement', to: '/app/announcements' },
+    ],
+  },
+  {
+    label: 'Administration',
+    items: [{ label: 'Admin Settings', icon: 'settings', to: '/app/admin-settings' }],
+  },
 ]
 
 // ─── UI state ─────────────────────────────────────────────────────────────────
@@ -405,15 +419,29 @@ const avatarColor = computed(() => {
   return colors[Math.abs(hash) % colors.length]
 })
 
+// Breakpoints: <768 mobile (overlay), 768-1023 tablet, 1024-1439 desktop, >=1440 large desktop
 const drawerWidth = computed(() => {
   const w = $q.screen.width
-  if (w < 640) return 260
-  if (w < 768) return 268
-  if (w < 1024) return 244
-  if (w < 1280) return 260
-  if (w < 1440) return 268
-  return 276
+  if (w < 768) return 272
+  if (w < 1024) return 240
+  if (w < 1440) return 264
+  return 284
 })
+
+// On tablet widths, default to mini mode since space is tight — but respect
+// the user's manual choice once they've toggled it themselves.
+const userToggledMini = ref(false)
+
+function applyResponsiveMiniDefault() {
+  if (userToggledMini.value) return
+  const w = $q.screen.width
+  isMini.value = w >= 768 && w < 1024
+}
+
+function toggleMini() {
+  userToggledMini.value = true
+  isMini.value = !isMini.value
+}
 
 // ─── Notification handlers ────────────────────────────────────────────────────
 async function handleMarkAsRead(notif) {
@@ -608,7 +636,9 @@ onMounted(async () => {
   reconnect() // Re-connect WS now that companyId is resolved
   await loadCurrentUser()
 
+  applyResponsiveMiniDefault()
   window.addEventListener('resize', updateOverflowHint)
+  window.addEventListener('resize', applyResponsiveMiniDefault)
   if (tabsWrapperRef.value) {
     tabsWrapperRef.value.addEventListener('scroll', updateOverflowHint)
   }
@@ -617,6 +647,7 @@ onMounted(async () => {
 onUnmounted(() => {
   cleanupNotifications()
   window.removeEventListener('resize', updateOverflowHint)
+  window.removeEventListener('resize', applyResponsiveMiniDefault)
   if (tabsWrapperRef.value) {
     tabsWrapperRef.value.removeEventListener('scroll', updateOverflowHint)
   }
@@ -701,24 +732,45 @@ onUnmounted(() => {
 
 /* ── Sidebar Header ── */
 .sidebar-header {
+  padding: 26px 14px 9px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar-header-mini {
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  margin: 18px 10px 10px 10px;
+  margin: 18px 6px 10px 6px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow:
     0 4px 16px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  padding: 12px 14px !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.sidebar-header-mini {
-  margin: 18px 6px 10px 6px;
   padding: 10px 6px !important;
   display: flex;
   justify-content: center;
+}
+
+/* Responsive gap under expanded sidebar header */
+@media (max-width: 767px) {
+  .sidebar-header {
+    padding-bottom: 16px !important;
+  }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .sidebar-header {
+    padding-bottom: 24px !important;
+  }
+}
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .sidebar-header {
+    padding-bottom: 32px !important;
+  }
+}
+@media (min-width: 1440px) {
+  .sidebar-header {
+    padding-bottom: 40px !important;
+  }
 }
 .sidebar-logo {
   width: 52px;
@@ -751,7 +803,7 @@ onUnmounted(() => {
   position: fixed;
   top: 50%;
   transform: translateY(-50%);
-  left: calc(276px - 28px);
+  left: calc(284px - 28px);
   width: 28px;
   height: 56px;
   cursor: pointer;
@@ -783,6 +835,30 @@ onUnmounted(() => {
 .sidebar-nav {
   flex: 1;
   padding: 6px 10px 16px 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* fade the bottom edge when content is scrollable */
+  mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent 100%);
+}
+.nav-group {
+  margin-bottom: 4px;
+}
+.nav-group-label {
+  padding: 14px 12px 6px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
+}
+.nav-group:first-child .nav-group-label {
+  padding-top: 4px;
+}
+.nav-group-divider {
+  height: 1px;
+  margin: 10px 6px 8px 6px;
+  background: rgba(255, 255, 255, 0.1);
 }
 .nav-list {
   padding: 0;
@@ -984,8 +1060,12 @@ onUnmounted(() => {
   background: #fafafa;
 }
 
-/* ── Responsive ── */
-@media (max-width: 639px) {
+/* ── Responsive ──────────────────────────────────────────────────────────────
+   Breakpoints match drawerWidth(): <768 mobile · 768-1023 tablet ·
+   1024-1439 desktop · >=1440 large desktop                                  */
+
+/* Mobile: <768px — drawer becomes an overlay, hamburger menu shown */
+@media (max-width: 767px) {
   .mobile-menu-btn {
     display: inline-flex;
   }
@@ -1002,6 +1082,10 @@ onUnmounted(() => {
   }
   .sidebar-nav {
     padding: 4px 8px 14px 8px;
+  }
+  .nav-group-label {
+    padding: 12px 10px 5px 10px;
+    font-size: 10px;
   }
   .nav-item {
     min-height: 40px;
@@ -1021,29 +1105,46 @@ onUnmounted(() => {
   .header-bar {
     padding: 8px 12px;
   }
+  /* Toggle bookmark is redundant with the hamburger + overlay backdrop */
   .sidebar-bookmark {
     display: none;
   }
 }
+
+/* Tablet: 768-1023px — starts mini by default (set in JS), compact spacing */
 @media (min-width: 768px) and (max-width: 1023px) {
+  .nav-group-label {
+    font-size: 10px;
+  }
   .sidebar-bookmark {
-    left: calc(244px - 28px);
+    left: calc(240px - 28px);
   }
   .sidebar-bookmark.sidebar-bookmark-mini {
     left: calc(68px - 1px);
   }
 }
-@media (min-width: 1024px) and (max-width: 1279px) {
+
+/* Desktop: 1024-1439px */
+@media (min-width: 1024px) and (max-width: 1439px) {
   .sidebar-bookmark {
-    left: calc(260px - 28px);
+    left: calc(264px - 28px);
   }
   .sidebar-bookmark.sidebar-bookmark-mini {
     left: calc(68px - 1px);
   }
 }
-@media (min-width: 1280px) and (max-width: 1439px) {
+
+/* Large desktop: >=1440px — most breathing room */
+@media (min-width: 1440px) {
+  .sidebar-header {
+    padding-bottom: 10px !important;
+  }
+  .nav-group-label {
+    font-size: 11px;
+    padding-top: 16px;
+  }
   .sidebar-bookmark {
-    left: calc(268px - 28px);
+    left: calc(284px - 28px);
   }
   .sidebar-bookmark.sidebar-bookmark-mini {
     left: calc(68px - 1px);

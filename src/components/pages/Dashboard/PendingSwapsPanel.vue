@@ -3,7 +3,12 @@
     <div class="panel-head">
       <q-icon name="swap_horiz" size="16px" class="panel-icon panel-icon--amber" />
       <span class="panel-title">Pending Swaps</span>
-      <q-badge v-if="pendingSwaps.length" color="warning" :label="pendingSwaps.length" class="q-ml-auto" />
+      <q-badge
+        v-if="pendingSwaps.length"
+        color="warning"
+        :label="pendingSwaps.length"
+        class="q-ml-auto"
+      />
     </div>
     <div class="notif-list">
       <template v-if="loading">
@@ -118,5 +123,17 @@ defineProps({
   background-size: 200% 100%;
   animation: eps-pulse 1.6s ease-in-out infinite;
   transform-origin: left center;
+}
+
+@media (max-width: 768px) {
+  .panel-head {
+    padding: 12px 14px;
+  }
+  .panel-title {
+    font-size: 14px;
+  }
+  .notif-item {
+    padding: 10px 14px;
+  }
 }
 </style>
