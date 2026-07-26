@@ -64,6 +64,8 @@
               label="Pay Type *"
               outlined
               dense
+              emit-value
+              map-options
               class="col-span-2"
             />
             <q-input

@@ -50,8 +50,39 @@ const routes = [
       },
       {
         path: 'payroll',
-        name: 'payroll',
-        component: () => import('pages/PayrollPage.vue'),
+        component: () => import('pages/Disbursement/DisbursementShell.vue'),
+        children: [
+          {
+            path: '',
+            name: 'disbursement-list',
+            component: () => import('pages/Disbursement/DisbursementListPage.vue'),
+          },
+          {
+            path: 'review/:id',
+            name: 'disbursement-review',
+            component: () => import('pages/Disbursement/ReviewPage.vue'),
+          },
+          {
+            path: 'payslips/:id',
+            name: 'disbursement-payslips',
+            component: () => import('pages/Disbursement/PayslipsPage.vue'),
+          },
+          {
+            path: 'funding/:id',
+            name: 'disbursement-funding',
+            component: () => import('pages/Disbursement/FundingPage.vue'),
+          },
+          {
+            path: 'disburse/:id',
+            name: 'disbursement-disburse',
+            component: () => import('pages/Disbursement/DisbursePage.vue'),
+          },
+          {
+            path: 'complete/:id',
+            name: 'disbursement-complete',
+            component: () => import('pages/Disbursement/CompletePage.vue'),
+          },
+        ],
       },
       {
         path: 'deductions',

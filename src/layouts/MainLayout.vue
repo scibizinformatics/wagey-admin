@@ -1,5 +1,5 @@
 <template>
-  <q-layout view="lHh Lpr lFf">
+  <q-layout view="LHh Lpr lFf">
     <!-- Header -->
     <q-header class="header-bar bg-white shadow-2 q-pa-md">
       <div class="row items-center justify-between no-wrap">
@@ -196,7 +196,7 @@
       :width="drawerWidth"
       :mini="isMini"
       :mini-width="68"
-      :breakpoint="768"
+      :breakpoint="0"
     >
       <!-- Background image layer -->
       <div class="drawer-bg" :style="{ backgroundImage: `url(${terrainBgUrl})` }"></div>
@@ -252,7 +252,7 @@
       </div>
 
       <!-- Sign Out -->
-      <div class="sidebar-nav q-px-md q-mt-md">
+      <div class="sidebar-nav signout-section q-px-md q-mt-md">
         <q-list class="nav-list">
           <q-item clickable class="nav-item" :class="{ 'nav-item-mini': isMini }" @click="logout">
             <q-item-section avatar class="nav-icon">
@@ -433,9 +433,8 @@ const drawerWidth = computed(() => {
 const userToggledMini = ref(false)
 
 function applyResponsiveMiniDefault() {
-  if (userToggledMini.value) return
-  const w = $q.screen.width
-  isMini.value = w >= 768 && w < 1024
+  // Never auto-enable mini mode — sidebar stays expanded by default
+  return
 }
 
 function toggleMini() {
@@ -638,7 +637,6 @@ onMounted(async () => {
 
   applyResponsiveMiniDefault()
   window.addEventListener('resize', updateOverflowHint)
-  window.addEventListener('resize', applyResponsiveMiniDefault)
   if (tabsWrapperRef.value) {
     tabsWrapperRef.value.addEventListener('scroll', updateOverflowHint)
   }
@@ -647,7 +645,6 @@ onMounted(async () => {
 onUnmounted(() => {
   cleanupNotifications()
   window.removeEventListener('resize', updateOverflowHint)
-  window.removeEventListener('resize', applyResponsiveMiniDefault)
   if (tabsWrapperRef.value) {
     tabsWrapperRef.value.removeEventListener('scroll', updateOverflowHint)
   }
@@ -708,7 +705,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  overflow-y: auto;
   overflow-x: hidden;
 }
 .modern-sidebar :deep(.q-drawer__content) {
@@ -732,7 +728,7 @@ onUnmounted(() => {
 
 /* ── Sidebar Header ── */
 .sidebar-header {
-  padding: 26px 14px 9px !important;
+  padding: 26px 14px 8px !important;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .sidebar-header-mini {
@@ -751,27 +747,7 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-/* Responsive gap under expanded sidebar header */
-@media (max-width: 767px) {
-  .sidebar-header {
-    padding-bottom: 16px !important;
-  }
-}
-@media (min-width: 768px) and (max-width: 1023px) {
-  .sidebar-header {
-    padding-bottom: 24px !important;
-  }
-}
-@media (min-width: 1024px) and (max-width: 1439px) {
-  .sidebar-header {
-    padding-bottom: 32px !important;
-  }
-}
-@media (min-width: 1440px) {
-  .sidebar-header {
-    padding-bottom: 40px !important;
-  }
-}
+
 .sidebar-logo {
   width: 52px;
   height: 52px;
@@ -835,22 +811,18 @@ onUnmounted(() => {
 .sidebar-nav {
   flex: 1;
   padding: 6px 10px 16px 10px;
-  overflow-y: auto;
   overflow-x: hidden;
-  /* fade the bottom edge when content is scrollable */
-  mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent 100%);
 }
 .nav-group {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .nav-group-label {
-  padding: 14px 12px 6px 12px;
-  font-size: 10.5px;
+  padding: 10px 12px 6px 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.32);
+  color: rgba(255, 255, 255, 0.40);
 }
 .nav-group:first-child .nav-group-label {
   padding-top: 4px;
@@ -864,17 +836,17 @@ onUnmounted(() => {
   padding: 0;
 }
 .nav-item {
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   border-radius: 9px;
-  min-height: 42px;
-  padding: 9px 12px;
+  min-height: 40px;
+  padding: 7px 12px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   color: rgba(255, 255, 255, 0.55);
 }
 .nav-item-mini {
   justify-content: center;
-  padding: 9px 0;
+  padding: 7px 0;
 }
 .nav-item:hover {
   background: rgba(99, 102, 241, 0.15);
@@ -915,6 +887,11 @@ onUnmounted(() => {
   border-radius: 6px;
   padding: 5px 10px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.signout-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 8px !important;
+  margin-top: 4px !important;
 }
 
 /* ── Header ── */
@@ -1064,58 +1041,10 @@ onUnmounted(() => {
    Breakpoints match drawerWidth(): <768 mobile · 768-1023 tablet ·
    1024-1439 desktop · >=1440 large desktop                                  */
 
-/* Mobile: <768px — drawer becomes an overlay, hamburger menu shown */
-@media (max-width: 767px) {
-  .mobile-menu-btn {
-    display: inline-flex;
-  }
-  .sidebar-header {
-    margin: 8px;
-    padding: 10px 12px !important;
-  }
-  .sidebar-logo {
-    width: 44px;
-    height: 44px;
-  }
-  .sidebar-title {
-    font-size: 16px;
-  }
-  .sidebar-nav {
-    padding: 4px 8px 14px 8px;
-  }
-  .nav-group-label {
-    padding: 12px 10px 5px 10px;
-    font-size: 10px;
-  }
-  .nav-item {
-    min-height: 40px;
-    padding: 8px 10px;
-    margin-bottom: 2px;
-    border-radius: 8px;
-  }
-  .nav-label {
-    font-size: 12.5px;
-  }
-  .nav-icon {
-    min-width: 32px;
-  }
-  .nav-icon :deep(.q-icon) {
-    font-size: 17px;
-  }
-  .header-bar {
-    padding: 8px 12px;
-  }
-  /* Toggle bookmark is redundant with the hamburger + overlay backdrop */
-  .sidebar-bookmark {
-    display: none;
-  }
-}
 
-/* Tablet: 768-1023px — starts mini by default (set in JS), compact spacing */
+
+/* Tablet: 768-1023px — bookmark follows 240px drawer */
 @media (min-width: 768px) and (max-width: 1023px) {
-  .nav-group-label {
-    font-size: 10px;
-  }
   .sidebar-bookmark {
     left: calc(240px - 28px);
   }
@@ -1134,20 +1063,54 @@ onUnmounted(() => {
   }
 }
 
-/* Large desktop: >=1440px — most breathing room */
-@media (min-width: 1440px) {
+/* Compact sidebar for 1024px and below */
+@media (max-width: 1024px) {
   .sidebar-header {
-    padding-bottom: 10px !important;
+    padding: 16px 14px 6px !important;
+  }
+  .sidebar-header-mini {
+    margin: 12px 6px 8px 6px;
+    padding: 8px 6px !important;
+  }
+  .sidebar-logo {
+    width: 46px;
+    height: 46px;
+  }
+  .sidebar-logo-mini {
+    width: 34px;
+    height: 34px;
+  }
+  .nav-group {
+    margin-bottom: 4px;
   }
   .nav-group-label {
-    font-size: 11px;
-    padding-top: 16px;
+    padding: 6px 12px 4px 12px;
+    font-size: 10px;
   }
-  .sidebar-bookmark {
-    left: calc(284px - 28px);
+  .nav-item {
+    min-height: 36px;
+    padding: 5px 12px;
+    border-radius: 8px;
   }
-  .sidebar-bookmark.sidebar-bookmark-mini {
-    left: calc(68px - 1px);
+  .nav-item-mini {
+    padding: 5px 0;
+  }
+  .nav-icon {
+    min-width: 30px;
+  }
+  .nav-icon :deep(.q-icon) {
+    font-size: 16px;
+  }
+  .nav-label {
+    font-size: 12px;
+  }
+  .sidebar-nav {
+    padding: 4px 10px 10px 10px;
+  }
+  .signout-section {
+    padding-top: 6px !important;
+    margin-top: 2px !important;
   }
 }
+
 </style>

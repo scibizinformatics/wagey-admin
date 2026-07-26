@@ -461,8 +461,8 @@ export function useAdminContracts() {
         if (assignForm.value.position) payload.position = Number(assignForm.value.position)
         if (assignForm.value.department) payload.department = Number(assignForm.value.department)
         payload.department_id = Number(assignForm.value.department || 0)
-        payload.payroll_group_id = assignForm.value.payroll_group_id || 0
-        payload.payroll_group = assignForm.value.payroll_group || 0
+        payload.payroll_group_id = assignForm.value.payroll_group_id || null
+        payload.payroll_group = assignForm.value.payroll_group || null
         payload.eligibilities = assignForm.value.eligibilities ?? []
         payload.holiday_pay_types = assignForm.value.holiday_pay_types ?? []
         if (assignForm.value.contributions?.length) payload.contributions = assignForm.value.contributions.map((c) => c.id ?? c)
@@ -482,8 +482,8 @@ export function useAdminContracts() {
         if (assignForm.value.position) payload.position = Number(assignForm.value.position)
         payload.department = Number(assignForm.value.department)
         payload.department_id = Number(assignForm.value.department || 0)
-        payload.payroll_group_id = assignForm.value.payroll_group_id || 0
-        payload.payroll_group = assignForm.value.payroll_group || 0
+        payload.payroll_group_id = assignForm.value.payroll_group_id || null
+        payload.payroll_group = assignForm.value.payroll_group || null
         payload.eligibilities = assignForm.value.eligibilities ?? []
         payload.holiday_pay_types = assignForm.value.holiday_pay_types ?? []
         if (assignForm.value.contributions?.length) payload.contributions = assignForm.value.contributions.map((c) => c.id ?? c)
@@ -580,8 +580,8 @@ export function useAdminContracts() {
           position: assignForm.value.position ? Number(assignForm.value.position) : null,
         department: Number(assignForm.value.department),
         department_id: Number(assignForm.value.department || 0),
-        payroll_group_id: assignForm.value.payroll_group_id || 0,
-        payroll_group: assignForm.value.payroll_group || 0,
+        payroll_group_id: assignForm.value.payroll_group_id || null,
+        payroll_group: assignForm.value.payroll_group || null,
         year: assignForm.value.year ? Number(assignForm.value.year) : null,
         month: assignForm.value.month ? Number(assignForm.value.month) : null,
         eligibilities: assignForm.value.eligibilities ?? [],
