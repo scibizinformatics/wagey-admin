@@ -96,10 +96,7 @@ export function useRequests() {
   async function fetchCashAdvanceRequests(selectedCompany) {
     loading.value = true
     try {
-      const response = await api.get(`${BASE}/cash_advance/admin/`, {
-        params: { company_id: selectedCompany },
-        headers: authHeaders(),
-      })
+      const response = await api.get(`/cash_advance/admin/company/${selectedCompany}/requests/`)
       cashAdvanceRequests.value = response.data.data ?? response.data ?? []
       return cashAdvanceRequests.value
     } finally {
@@ -115,10 +112,9 @@ export function useRequests() {
   async function updateCashAdvanceApproval(requestId, payload) {
     saving.value = true
     try {
-      const response = await api.patch(
-        `${BASE}/cash_advance/admin/${requestId}/approval/`,
+      const response = await api.post(
+        `/cash_advance/admin/cash-advances/${requestId}/action/`,
         payload,
-        { headers: authHeaders() },
       )
       return response.data
     } finally {

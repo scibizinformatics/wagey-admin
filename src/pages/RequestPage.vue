@@ -28,6 +28,14 @@
             <span>Cash Advance</span>
             <span v-if="caStatistics.pending > 0" class="tab-badge">{{ caStatistics.pending }}</span>
           </button>
+          <button
+            :class="['tab-pill', { active: activeTab === 'swap' }]"
+            @click="activeTab = 'swap'"
+          >
+            <q-icon name="swap_horiz" class="tab-pill-icon" />
+            <span>Swap</span>
+            <span v-if="swapStatistics.pending > 0" class="tab-badge">{{ swapStatistics.pending }}</span>
+          </button>
         </div>
       </div>
 
@@ -40,7 +48,7 @@
               round flat icon="refresh"
               class="refresh-btn"
               @click="handleRefresh"
-              :loading="loading"
+              :loading="refreshLoading"
             >
               <q-tooltip>Refresh</q-tooltip>
             </q-btn>
@@ -64,6 +72,7 @@
         :leave-stats="leaveStats"
         :overtime-stats="overtimeStats"
         :ca-statistics="caStatistics"
+        :swap-statistics="swapStatistics"
       />
 
       <!-- Tab Panels -->
@@ -134,7 +143,7 @@
                       <span class="summary-stat-val">{{ log.overtime_approved_count }}</span>
                     </div>
                     <div class="summary-stat-col">
-                      <span class="summary-stat-label">Pending</span>
+                      <span class="summary-stat-label">Requested</span>
                       <span class="summary-stat-val">{{ log.overtime_total_count - log.overtime_approved_count }}</span>
                     </div>
                   </div>
@@ -201,6 +210,13 @@
                           :loading="overtimeSubmitting.size > 0"
                           @click="bulkApproveOvertime"
                         />
+                        <q-btn
+                          unelevated dense no-caps
+                          icon="close" color="negative"
+                          label="Reject Selected"
+                          :loading="overtimeSubmitting.size > 0"
+                          @click="bulkRejectOvertime"
+                        />
                         <q-btn flat dense label="Clear" @click="clearOvertimeSelection" />
                       </div>
 
@@ -236,7 +252,7 @@
                           <q-tr class="table-body-row" :props="props">
                             <q-td key="select" :props="props" class="table-body-cell" style="width: 48px; text-align: center;">
                               <q-checkbox
-                                v-if="['pending', 'qualified'].includes(props.row.status)"
+                                v-if="['requested', 'qualified'].includes(props.row.status)"
                                 :model-value="selectedOvertimeIds.has(props.row.id)"
                                 @update:model-value="toggleOvertimeSelection(props.row.id)"
                                 dense
@@ -272,7 +288,7 @@
                             <q-td key="hours" :props="props" class="table-body-cell">
                               <div class="hours-cell-content">
                                 <q-input
-                                  v-if="['pending', 'qualified'].includes(props.row.status)"
+                                  v-if="['requested', 'qualified'].includes(props.row.status)"
                                   :model-value="overtimeEditableHours[props.row.id] ?? props.row.hours"
                                   @update:model-value="overtimeEditableHours[props.row.id] = $event"
                                   @click.stop
@@ -296,13 +312,22 @@
                                   <q-tooltip>View Details</q-tooltip>
                                 </q-btn>
                                 <q-btn
-                                  v-if="['pending', 'qualified'].includes(props.row.status)"
+                                  v-if="['requested', 'qualified'].includes(props.row.status)"
                                   flat round icon="check" size="sm"
                                   class="action-btn approve-btn"
                                   @click.stop="approveOvertimeSingle(props.row)"
                                   :loading="overtimeSubmitting.has(props.row.id)"
                                 >
                                   <q-tooltip>Approve</q-tooltip>
+                                </q-btn>
+                                <q-btn
+                                  v-if="['requested', 'qualified'].includes(props.row.status)"
+                                  flat round icon="close" size="sm"
+                                  class="action-btn reject-btn"
+                                  @click.stop="rejectOvertimeSingle(props.row)"
+                                  :loading="overtimeSubmitting.has(props.row.id)"
+                                >
+                                  <q-tooltip>Reject</q-tooltip>
                                 </q-btn>
                               </div>
                             </q-td>
@@ -333,12 +358,11 @@
                   v-model="caViewMode"
                   no-caps
                   unelevated
-                  toggle-color="primary"
-                  color="grey-3"
-                  text-color="grey-8"
+                  toggle-color="#102335"
+                  text-color="#475569"
                   :options="[
-                    { label: 'All Requests', value: 'all' },
-                    { label: 'By Cutoff', value: 'cutoff' },
+                    { label: 'All Requests', value: 'all', icon: 'list' },
+                    { label: 'By Cutoff', value: 'cutoff', icon: 'calendar_today' }
                   ]"
                   class="view-toggle"
                 />
@@ -372,6 +396,22 @@
             />
           </div>
         </q-tab-panel>
+
+        <q-tab-panel name="swap" class="tab-panel-content">
+          <RequestSwapTable
+            :rows="filteredSwapRequests"
+            :loading="swapLoading"
+            :sortBy="swapSortBy"
+            :processingId="swapActionLoading"
+            :pagination="swapPagination"
+            :totalRecords="swapRequests.length"
+            @update:sortBy="swapSortBy = $event"
+            @update:pagination="swapPagination = $event"
+            @view="viewSwapRequest"
+            @approve="approveSwapRequest"
+            @reject="rejectSwapRequest"
+          />
+        </q-tab-panel>
       </q-tab-panels>
 
     <!-- Modals -->
@@ -402,7 +442,7 @@
       :request="selectedOvertimeRow"
     />
 
-    <OvertimeAdvanceModal
+     <OvertimeAdvanceModal
       v-model="showOvertimeAdvanceModal"
       :categories="overtimeCategories"
       :employee-options="overtimeAdvanceEmployeeOptions"
@@ -410,6 +450,13 @@
       :company-id="selectedCompany"
       @filter-employees="filterOvertimeAdvanceEmployees"
       @submit="submitOvertimeAdvance"
+    />
+
+    <RequestSwapViewModal
+      v-model="showSwapViewDialog"
+      :request="selectedSwapRequest"
+      @approve="approveSwapRequest"
+      @reject="rejectSwapRequest"
     />
     </div>
   </PageShell>
@@ -430,6 +477,8 @@ import RequestCaViewModal from 'src/components/pages/Request/RequestCaViewModal.
 import RequestOvertimeDetailModal from 'src/components/pages/Request/RequestOvertimeDetailModal.vue'
 import OvertimeAdvanceModal from 'src/components/pages/Request/OvertimeAdvanceModal.vue'
 import RequestCashAdvanceCutoff from 'src/components/pages/Request/RequestCashAdvanceCutoff.vue'
+import RequestSwapTable from 'src/components/pages/Request/RequestSwapTable.vue'
+import RequestSwapViewModal from 'src/components/pages/Request/RequestSwapViewModal.vue'
 
 const $q = useQuasar()
 
@@ -495,6 +544,15 @@ const caCutoffRequests = ref([])
 const caCutoffLoading = ref(false)
 const caCutoffSearch = ref('')
 
+// ===== SWAP STATE =====
+const swapRequests = ref([])
+const swapSortBy = ref('Newest')
+const swapPagination = ref({ page: 1, rowsPerPage: 10 })
+const swapLoading = ref(false)
+const swapActionLoading = ref(null)
+const selectedSwapRequest = ref(null)
+const showSwapViewDialog = ref(false)
+
 // ===== COMPUTED STATS =====
 const leaveStats = computed(() => ({
   total: leaveList.value.length,
@@ -508,6 +566,13 @@ const overtimeStats = computed(() => ({
   pending: overtimeSummary.value.reduce((sum, log) => sum + ((log.overtime_total_count || 0) - (log.overtime_approved_count || 0)), 0),
   approved: overtimeSummary.value.reduce((sum, log) => sum + (log.overtime_approved_count || 0), 0),
   rejected: 0,
+}))
+
+const swapStatistics = computed(() => ({
+  total: swapRequests.value.length,
+  pending: swapRequests.value.filter((r) => r.status === 'pending' || r.status === 'to_employee_approved').length,
+  approved: swapRequests.value.filter((r) => r.status === 'approved').length,
+  rejected: swapRequests.value.filter((r) => r.status === 'rejected').length,
 }))
 
 // ===== FILTERED LISTS =====
@@ -543,9 +608,39 @@ const filteredCaRequests = computed(() => {
   return list
 })
 
+const filteredSwapRequests = computed(() => {
+  let filtered = [...swapRequests.value]
+  if (searchTerm.value.trim()) {
+    const search = searchTerm.value.toLowerCase()
+    filtered = filtered.filter(
+      (r) =>
+        (r.requested_by_name || '').toLowerCase().includes(search) ||
+        (r.from_employee_name || '').toLowerCase().includes(search) ||
+        (r.to_employee_name || '').toLowerCase().includes(search),
+    )
+  }
+  if (swapSortBy.value === 'Newest') {
+    filtered.sort((a, b) => new Date(b.requested_at || 0) - new Date(a.requested_at || 0))
+  } else if (swapSortBy.value === 'Oldest') {
+    filtered.sort((a, b) => new Date(a.requested_at || 0) - new Date(b.requested_at || 0))
+  } else if (swapSortBy.value === 'Status') {
+    filtered.sort((a, b) => (a.status || '').localeCompare(b.status || ''))
+  }
+  const page = swapPagination.value.page
+  const rowsPerPage = swapPagination.value.rowsPerPage
+  const start = (page - 1) * rowsPerPage
+  return filtered.slice(start, start + rowsPerPage)
+})
+
+const refreshLoading = computed(() => {
+  if (activeTab.value === 'swap') return swapLoading.value
+  if (activeTab.value === 'overtime') return overtimeLoading.value
+  return loading.value
+})
+
 const actionableOvertimeIds = computed(() => {
   return filteredOvertimeRequests.value
-    .filter(r => ['pending', 'qualified'].includes(r.status))
+    .filter(r => ['requested', 'qualified'].includes(r.status))
     .map(r => r.id)
 })
 
@@ -708,7 +803,7 @@ const fetchOvertimeRequests = async (logId) => {
       approvedHours: item.approved_hours,
       attendances: item.attendances || [],
       schedules: item.schedules || [],
-      status: item.status?.toLowerCase(),
+      status: item.status === 'REQUESTED' ? 'requested' : item.status?.toLowerCase(),
       approvedByName: item.approved_by_name || 'Pending',
       convertedToCto: item.converted_to_cto || false,
       reason: item.reason,
@@ -752,7 +847,36 @@ const approveOvertimeSingle = async (row) => {
     await fetchOvertimeRequests(selectedDisbursementLog.value)
     await fetchOvertimeSummary()
   } catch (e) {
-    const msg = e.response?.data?.message || e.response?.data?.detail || e.message || 'Failed to approve overtime'
+    console.log('Overtime approve error:', JSON.stringify(e.response?.data, null, 2))
+    const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.response?.data?.detail || e.message || 'Failed to approve overtime'
+    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+  } finally {
+    overtimeSubmitting.value.delete(row.id)
+  }
+}
+
+const rejectOvertimeSingle = async (row) => {
+  overtimeSubmitting.value.add(row.id)
+  try {
+    const hours = overtimeEditableHours.value[row.id] ?? row.hours
+    await api.patch(`/payroll/overtime-approve/${row.id}/`, {
+      approved_hours: String(hours),
+      category: row.category ?? 0,
+      reason: '',
+      status: 'rejected',
+    })
+    $q.notify({
+      type: 'positive',
+      message: 'Overtime rejected',
+      icon: 'cancel',
+      position: 'top',
+    })
+    clearOvertimeSelection()
+    await fetchOvertimeRequests(selectedDisbursementLog.value)
+    await fetchOvertimeSummary()
+  } catch (e) {
+    console.log('Overtime reject error:', JSON.stringify(e.response?.data, null, 2))
+    const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.response?.data?.detail || e.message || 'Failed to reject overtime'
     $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
   } finally {
     overtimeSubmitting.value.delete(row.id)
@@ -880,7 +1004,47 @@ const bulkApproveOvertime = async () => {
       await fetchOvertimeRequests(selectedDisbursementLog.value)
       await fetchOvertimeSummary()
     } catch (e) {
-      const msg = e.response?.data?.message || e.response?.data?.detail || e.message || 'Failed to bulk approve'
+      console.log('Overtime bulk approve error:', JSON.stringify(e.response?.data, null, 2))
+      const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.response?.data?.detail || e.message || 'Failed to bulk approve'
+      $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+    } finally {
+      overtimeSubmitting.value = new Set()
+    }
+  })
+}
+
+const bulkRejectOvertime = async () => {
+  const ids = Array.from(selectedOvertimeIds.value)
+  $q.dialog({
+    title: 'Bulk Reject',
+    message: `Reject ${ids.length} overtime request(s)?`,
+    ok: { label: 'Reject', color: 'negative', unelevated: true },
+    cancel: { label: 'Cancel', flat: true },
+    }).onOk(async () => {
+    overtimeSubmitting.value = new Set(ids)
+    try {
+      for (const id of ids) {
+        const row = overtimeRequests.value.find(r => r.id === id)
+        const hours = overtimeEditableHours.value[id] ?? row?.hours
+        await api.patch(`/payroll/overtime-approve/${id}/`, {
+          approved_hours: String(hours),
+          category: row?.category ?? 0,
+          reason: '',
+          status: 'rejected',
+        })
+      }
+      $q.notify({
+        type: 'positive',
+        message: `${ids.length} overtime request(s) rejected`,
+        icon: 'cancel',
+        position: 'top',
+      })
+      clearOvertimeSelection()
+      await fetchOvertimeRequests(selectedDisbursementLog.value)
+      await fetchOvertimeSummary()
+    } catch (e) {
+      console.log('Overtime bulk reject error:', JSON.stringify(e.response?.data, null, 2))
+      const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.response?.data?.detail || e.message || 'Failed to bulk reject'
       $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
     } finally {
       overtimeSubmitting.value = new Set()
@@ -1128,6 +1292,113 @@ const selectCaDisbursementLog = (id) => {
   }
 }
 
+// ===== API: SWAP REQUESTS =====
+const fetchSwapRequests = async () => {
+  swapLoading.value = true
+  try {
+    const companyId = selectedCompany.value
+    if (!companyId) throw new Error('No company selected')
+    const res = await api.get('/organization/swap-requests/', {
+      params: { company: companyId },
+    })
+    const data = Array.isArray(res.data) ? res.data : res.data?.data ?? res.data?.results ?? []
+    swapRequests.value = data
+  } catch (e) {
+    const errorMessage = Array.isArray(e.response?.data)
+      ? e.response.data[0]
+      : e.response?.data?.message ||
+        e.response?.data?.detail ||
+        e.message ||
+        'Failed to fetch swap requests.'
+    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+  } finally {
+    swapLoading.value = false
+  }
+}
+
+const approveSwapRequest = async (request) => {
+  if (!request.to_employee_approved) {
+    $q.notify({
+      type: 'warning',
+      message: 'Employee has not yet approved the swap',
+      icon: 'warning',
+      position: 'top',
+    })
+    return
+  }
+  swapActionLoading.value = `approve-${request.id}`
+  try {
+    await api.patch(`/organization/swap-requests/${request.id}/`, {
+      status: 'approved',
+      remarks: '',
+    })
+    const index = swapRequests.value.findIndex((r) => r.id === request.id)
+    if (index !== -1) swapRequests.value[index].status = 'approved'
+    $q.notify({
+      type: 'positive',
+      message: 'Swap request approved successfully',
+      icon: 'check_circle',
+      position: 'top',
+    })
+    if (showSwapViewDialog.value) showSwapViewDialog.value = false
+    await fetchSwapRequests()
+  } catch (e) {
+    const errorMessage = Array.isArray(e.response?.data)
+      ? e.response.data[0]
+      : e.response?.data?.message ||
+        e.response?.data?.detail ||
+        e.message ||
+        'Failed to approve swap request.'
+    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+  } finally {
+    swapActionLoading.value = null
+  }
+}
+
+const rejectSwapRequest = async (request) => {
+  if (!request.to_employee_approved) {
+    $q.notify({
+      type: 'warning',
+      message: 'Employee has not yet approved the swap',
+      icon: 'warning',
+      position: 'top',
+    })
+    return
+  }
+  swapActionLoading.value = `reject-${request.id}`
+  try {
+    await api.patch(`/organization/swap-requests/${request.id}/`, {
+      status: 'rejected',
+      remarks: '',
+    })
+    const index = swapRequests.value.findIndex((r) => r.id === request.id)
+    if (index !== -1) swapRequests.value[index].status = 'rejected'
+    $q.notify({
+      type: 'warning',
+      message: 'Swap request rejected',
+      icon: 'cancel',
+      position: 'top',
+    })
+    if (showSwapViewDialog.value) showSwapViewDialog.value = false
+    await fetchSwapRequests()
+  } catch (e) {
+    const errorMessage = Array.isArray(e.response?.data)
+      ? e.response.data[0]
+      : e.response?.data?.message ||
+        e.response?.data?.detail ||
+        e.message ||
+        'Failed to reject swap request.'
+    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+  } finally {
+    swapActionLoading.value = null
+  }
+}
+
+const viewSwapRequest = (request) => {
+  selectedSwapRequest.value = request
+  showSwapViewDialog.value = true
+}
+
 // ===== REFRESH HANDLER =====
 const handleRefresh = () => {
   if (activeTab.value === 'cash_advance') {
@@ -1142,6 +1413,11 @@ const handleRefresh = () => {
   } else if (activeTab.value === 'overtime') {
     fetchOvertimeSummary()
     fetchOvertimeCategories()
+    if (selectedDisbursementLog.value) {
+      fetchOvertimeRequests(selectedDisbursementLog.value)
+    }
+  } else if (activeTab.value === 'swap') {
+    fetchSwapRequests()
   } else {
     fetchLeaveRequests()
   }
@@ -1159,6 +1435,8 @@ watch(activeTab, (newTab) => {
   } else if (newTab === 'overtime') {
     fetchOvertimeSummary()
     fetchOvertimeCategories()
+  } else if (newTab === 'swap') {
+    fetchSwapRequests()
   } else {
     fetchLeaveRequests()
   }
@@ -1184,6 +1462,7 @@ watch(selectedCompany, () => {
   fetchOvertimeCategories()
   fetchCaRequests()
   fetchCaDisbursementLogs()
+  fetchSwapRequests()
 })
 
 // Sync selectedCompany with localStorage
@@ -1201,6 +1480,7 @@ onMounted(() => {
   fetchOvertimeCategories()
   fetchCaRequests()
   fetchCaDisbursementLogs()
+  fetchSwapRequests()
 })
 
 onUnmounted(() => {
@@ -1357,12 +1637,14 @@ onUnmounted(() => {
   background: #102335 !important;
   color: #ffffff !important;
 }
-.table-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
-}
+  .table-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
 .table-info {
   font-size: 12px;
   color: #9ca3af;
@@ -1686,6 +1968,10 @@ onUnmounted(() => {
   background: #fffbeb;
   color: #92400e;
 }
+.status-requested {
+  background: #fffbeb;
+  color: #92400e;
+}
 .status-approved {
   background: #f0fdf4;
   color: #16a34a;
@@ -1772,11 +2058,38 @@ onUnmounted(() => {
   .overtime-search-input { max-width: 100%; width: 100%; }
   .panel-actions .q-field { width: 100%; }
 }
-.view-toggle :deep(.q-btn) {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 12px;
-  min-height: 32px;
-}
+  .view-toggle {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #f8fafc;
+  }
+  .view-toggle :deep(.q-btn) {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    min-height: 32px;
+    border-radius: 0;
+    border: none;
+    background: transparent !important;
+    color: #475569 !important;
+    transition: all 0.2s ease;
+  }
+  .view-toggle :deep(.q-btn:hover:not(.q-btn--active)) {
+    background: #e2e8f0 !important;
+    color: #1e293b !important;
+  }
+  .view-toggle :deep(.q-btn--active) {
+    background: #102335 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3);
+  }
+  .view-toggle :deep(.q-btn + .q-btn) {
+    border-left: 1px solid #e2e8f0;
+  }
+  .view-toggle :deep(.q-btn--active + .q-btn),
+  .view-toggle :deep(.q-btn + .q-btn--active) {
+    border-left-color: transparent;
+  }
 </style>
 

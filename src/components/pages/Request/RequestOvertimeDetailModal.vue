@@ -100,7 +100,7 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 const getStatusClass = (status) => {
-  if (status === 'pending') return 'status-pending'
+  if (status === 'requested') return 'status-requested'
   if (status === 'approved') return 'status-approved'
   if (status === 'rejected') return 'status-rejected'
   if (status === 'qualified') return 'status-qualified'
@@ -198,6 +198,7 @@ const getStatusClass = (status) => {
   white-space: nowrap;
 }
 .status-pending { background: #fffbeb; color: #92400e; }
+.status-requested { background: #fffbeb; color: #92400e; }
 .status-approved { background: #f0fdf4; color: #16a34a; }
 .status-rejected { background: #fef2f2; color: #dc2626; }
 .status-qualified { background: #eff6ff; color: #1d4ed8; }
