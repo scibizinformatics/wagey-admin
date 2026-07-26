@@ -52,7 +52,7 @@ defineProps({
   color: #1a73e8;
 }
 .panel-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: #111827;
 }
@@ -81,6 +81,6 @@ defineProps({
 }
 @media (max-width: 768px) {
   .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 14px; }
+  .panel-title { font-size: 12px; }
 }
 </style>

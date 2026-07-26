@@ -8,32 +8,32 @@
       <div v-if="loading || !companies.length" class="skeleton-body">
         <div class="table-skeleton">
           <div class="skeleton-header">
-            <div class="skeleton-header-cell" style="flex: 1.5">Company</div>
-            <div class="skeleton-header-cell" style="flex: 0.8">Employees</div>
-            <div class="skeleton-header-cell" style="flex: 1">Final Payroll</div>
-            <div class="skeleton-header-cell" style="flex: 0.8">Share</div>
+            <div class="skeleton-header-cell">Company</div>
+            <div class="skeleton-header-cell">Employees</div>
+            <div class="skeleton-header-cell">Final Payroll</div>
+            <div class="skeleton-header-cell">Share</div>
           </div>
           <div class="skeleton-row" v-for="n in 5" :key="n">
-            <div class="skeleton-cell" style="flex: 1.5"><q-skeleton type="text" width="120px" /></div>
-            <div class="skeleton-cell" style="flex: 0.8"><q-skeleton type="text" width="50px" /></div>
-            <div class="skeleton-cell" style="flex: 1"><q-skeleton type="text" width="100px" /></div>
-            <div class="skeleton-cell" style="flex: 0.8"><q-skeleton type="text" width="60px" /></div>
+            <div class="skeleton-cell"><q-skeleton type="text" width="120px" /></div>
+            <div class="skeleton-cell"><q-skeleton type="text" width="50px" /></div>
+            <div class="skeleton-cell"><q-skeleton type="text" width="100px" /></div>
+            <div class="skeleton-cell"><q-skeleton type="text" width="60px" /></div>
           </div>
         </div>
       </div>
       <template v-else>
         <div class="company-table">
           <div class="company-header">
-            <div class="ch-cell" style="flex: 1.5">Company</div>
-            <div class="ch-cell" style="flex: 0.8">Employees</div>
-            <div class="ch-cell" style="flex: 1">Final Payroll</div>
-            <div class="ch-cell" style="flex: 0.8">Share</div>
+            <div class="ch-cell">Company</div>
+            <div class="ch-cell">Employees</div>
+            <div class="ch-cell">Final Payroll</div>
+            <div class="ch-cell">Share</div>
           </div>
           <div v-for="(c, i) in companies" :key="i" class="company-row">
-            <div class="cr-cell" style="flex: 1.5">{{ c.name }}</div>
-            <div class="cr-cell" style="flex: 0.8">{{ c.employees }}</div>
-            <div class="cr-cell" style="flex: 1">{{ fmtCurrency(c.amount) }}</div>
-            <div class="cr-cell" style="flex: 0.8">
+            <div class="cr-cell">{{ c.name }}</div>
+            <div class="cr-cell">{{ c.employees }}</div>
+            <div class="cr-cell">{{ fmtCurrency(c.amount) }}</div>
+            <div class="cr-cell">
               <div class="share-bar-wrap">
                 <div class="share-bar" :style="{ width: c.share + '%', background: shareColor(i) }" />
                 <span class="share-label">{{ c.share }}%</span>
@@ -53,8 +53,8 @@
 </template>
 
 <script setup>
-const props = defineProps({
-  companies: { type: Array, default: () => [] }, // [{ name, employees, amount, share }]
+defineProps({
+  companies: { type: Array, default: () => [] },
   totalRow: { type: Object, default: null },
   loading: { type: Boolean, default: false },
 })
@@ -86,32 +86,36 @@ function fmtCurrency(n) {
   flex-shrink: 0;
 }
 .panel-icon { color: #1a73e8; }
-.panel-title { font-size: 15px; font-weight: 600; color: #111827; }
+.panel-title { font-size: 13px; font-weight: 600; color: #111827; }
 .panel-body { padding: 12px 16px; flex: 1; min-height: 0; }
 
 .skeleton-body { min-height: 180px; }
 .table-skeleton { display: flex; flex-direction: column; gap: 2px; }
 .skeleton-header {
-  display: flex; background: #f8fafc; border-radius: 8px; padding: 8px 12px; gap: 8px;
+  display: grid; grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr; gap: 8px;
+  background: #f8fafc; border-radius: 8px; padding: 8px 12px;
 }
 .skeleton-header-cell {
   font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em;
 }
 .skeleton-row {
-  display: flex; align-items: center; padding: 10px 12px; border-bottom: 1px solid #f1f3f5; gap: 8px;
+  display: grid; grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr; gap: 8px;
+  align-items: center; padding: 10px 12px; border-bottom: 1px solid #f1f3f5;
 }
 .skeleton-row:last-child { border-bottom: none; }
 .skeleton-cell { flex: 1; }
 
 .company-table { display: flex; flex-direction: column; gap: 2px; }
 .company-header {
-  display: flex; background: #f8fafc; border-radius: 8px; padding: 8px 12px; gap: 8px;
+  display: grid; grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr; gap: 8px;
+  background: #f8fafc; border-radius: 8px; padding: 8px 12px;
 }
 .ch-cell {
   font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px;
 }
 .company-row {
-  display: flex; align-items: center; padding: 9px 12px; border-bottom: 1px solid #f1f3f5; gap: 8px;
+  display: grid; grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr; gap: 8px;
+  align-items: center; padding: 9px 12px; border-bottom: 1px solid #f1f3f5;
 }
 .company-row:last-child { border-bottom: none; }
 .cr-cell { font-size: 13px; color: #374151; }
@@ -123,12 +127,13 @@ function fmtCurrency(n) {
 }
 .share-label { font-size: 11px; color: #6b7280; font-weight: 500; }
 .company-total {
-  display: flex; align-items: center; padding: 10px 12px; margin-top: 4px;
-  background: #f8fafc; border-radius: 8px; gap: 8px;
+  display: grid; grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr; gap: 8px;
+  align-items: center; padding: 10px 12px; margin-top: 4px;
+  background: #f8fafc; border-radius: 8px;
   font-size: 13px; font-weight: 700; color: #111827;
 }
 @media (max-width: 768px) {
   .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 14px; }
+  .panel-title { font-size: 12px; }
 }
 </style>

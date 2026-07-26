@@ -23,13 +23,13 @@
           map-options
           class="mp-select"
         />
-        <span class="mp-closed">Closed</span>
       </div>
       <div class="month-picker-skeleton" v-else>
         <div class="eps-shimmer" style="width: 120px" />
       </div>
 
-      <div class="three-col">
+      <!-- Row 1: Cutoff Comparison | Monthly Payroll Breakdown | 6-Month Payroll Trend -->
+      <div class="row-three">
         <div class="panel">
           <div class="panel-head">
             <q-icon name="bar_chart" size="18px" class="panel-icon" />
@@ -76,17 +76,18 @@
 
         <MonthlyPayrollTrendPanel
           :title="'6-Month Payroll Trend'"
-          :labels="months.map((m) => m.label.split(' ')[0])"
-          :values="months.map((m) => m.total_payroll)"
+          :labels="monthlyTrendSeries.map((m) => m.label)"
+          :values="monthlyTrendSeries.map((m) => m.value)"
           chart-type="line"
           :loading="loading"
         />
       </div>
 
-      <div class="three-col">
-        <PayrollByCompanyPanel :companies="[]" :loading="loading" />
-        <PaymentChannelsPanel :channels="[]" :loading="loading" />
-        <OtherEmployeeReleasesPanel :releases="[]" :total="0" :loading="loading" />
+      <!-- Row 2: Payroll by Company | Payment Channels | Other Employee Releases -->
+      <div class="row-three">
+        <PayrollByCompanyPanel :companies="currentPayrollByCompany" :total-row="currentPayrollByCompanyTotal" :loading="loading" />
+        <PaymentChannelsPanel :channels="currentPaymentChannels" :total-row="currentPaymentChannelsTotal" :loading="loading" />
+        <OtherEmployeeReleasesPanel :releases="currentEmployeeReleases" :total="currentEmployeeReleasesTotal" :loading="loading" />
       </div>
 
       <ThirteenthMonthPayPanel :data="thirteenthMonthPay" mode="monthly" :loading="loading" />
@@ -98,12 +99,20 @@
 import { ref, computed, watch } from 'vue'
 import TrendChart from '@/components/pages/Dashboard/TrendChart.vue'
 import DonutChart from '@/components/pages/Dashboard/DonutChart.vue'
+import MonthlyPayrollTrendPanel from '@/components/pages/Dashboard/MonthlyPayrollTrendPanel.vue'
+import PayrollByCompanyPanel from '@/components/pages/Dashboard/PayrollByCompanyPanel.vue'
+import PaymentChannelsPanel from '@/components/pages/Dashboard/PaymentChannelsPanel.vue'
+import OtherEmployeeReleasesPanel from '@/components/pages/Dashboard/OtherEmployeeReleasesPanel.vue'
 import ThirteenthMonthPayPanel from '@/components/pages/Dashboard/ThirteenthMonthPayPanel.vue'
 
 const props = defineProps({
-  months: { type: Array, required: true }, // monthlySummaries
+  months: { type: Array, required: true },
+  monthlyTrendSeries: { type: Array, default: () => [] },
   thirteenthMonthPay: { type: Object, required: true },
   componentBreakdown: { type: Function, required: true },
+  payrollByCompany: { type: Array, default: () => [] },
+  paymentChannels: { type: Array, default: () => [] },
+  employeeReleases: { type: Array, default: () => [] },
   fmtCurrency: { type: Function, required: true },
   today: { type: String, required: true },
   loading: { type: Boolean, default: false },
@@ -124,6 +133,52 @@ const selected = computed(
     props.months.find((m) => m.month === selectedMonth.value) ??
     props.months[props.months.length - 1],
 )
+
+const currentPayrollByCompany = computed(() => {
+  const month = selected.value?.month
+  if (!month) return []
+  const entry = props.payrollByCompany.find((p) => p.month === month)
+  return entry?.companies ?? []
+})
+
+const currentPayrollByCompanyTotal = computed(() => {
+  const companies = currentPayrollByCompany.value
+  if (!companies.length) return null
+  return {
+    employees: companies.reduce((s, c) => s + (c.employees || 0), 0),
+    amount: companies.reduce((s, c) => s + (c.amount || 0), 0),
+  }
+})
+
+const currentPaymentChannels = computed(() => {
+  const month = selected.value?.month
+  if (!month) return []
+  const entry = props.paymentChannels.find((p) => p.month === month)
+  return entry?.channels ?? []
+})
+
+const currentPaymentChannelsTotal = computed(() => {
+  const channels = currentPaymentChannels.value
+  if (!channels.length) return null
+  return {
+    employees: channels.reduce((s, c) => s + (c.employees || 0), 0),
+    amount: channels.reduce((s, c) => s + (c.amount || 0), 0),
+  }
+})
+
+const currentEmployeeReleases = computed(() => {
+  const month = selected.value?.month
+  if (!month) return []
+  const entry = props.employeeReleases.find((p) => p.month === month)
+  return entry?.releases ?? []
+})
+
+const currentEmployeeReleasesTotal = computed(() => {
+  const month = selected.value?.month
+  if (!month) return 0
+  const entry = props.employeeReleases.find((p) => p.month === month)
+  return entry?.total ?? 0
+})
 </script>
 
 <style scoped>
@@ -156,6 +211,7 @@ const selected = computed(
   display: flex;
   align-items: center;
   gap: 10px;
+  justify-content: flex-end;
 }
 .month-picker-skeleton {
   display: flex;
@@ -171,31 +227,22 @@ const selected = computed(
 .mp-select {
   min-width: 200px;
 }
-.mp-closed {
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #2e7d32;
-  background: #e8f5e9;
-  padding: 3px 10px;
-  border-radius: 999px;
+
+/* ── Row 1 & 2: equal thirds, stretch ── */
+.row-three {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  align-items: stretch;
 }
 
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-.two-col {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 12px;
-  align-items: start;
-}
 .panel {
   background: #ffffff;
   border-radius: 12px;
   border: 1px solid #e8ecf0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .panel-head {
   display: flex;
@@ -203,17 +250,22 @@ const selected = computed(
   gap: 8px;
   padding: 14px 20px;
   border-bottom: 1px solid #f1f3f5;
+  flex-shrink: 0;
 }
 .panel-icon {
   color: #1a73e8;
 }
 .panel-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: #111827;
 }
 .panel-body {
   padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
 }
 .panel-body.split {
   padding: 12px 8px;
@@ -246,34 +298,33 @@ const selected = computed(
   transform-origin: left center;
 }
 
+/* ── Responsive ── */
 @media (min-width: 1441px) {
-  .stat-row,
-  .two-col {
-    gap: 16px;
+  .tab-grid { gap: 16px; }
+  .row-three { gap: 16px; }
+}
+
+@media (max-width: 1024px) {
+  .row-three {
+    grid-template-columns: 1fr 1fr;
+  }
+  .row-three > :nth-child(3) {
+    grid-column: 1 / -1;
   }
 }
-@media (max-width: 1024px) {
-  .stat-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .two-col {
+
+@media (max-width: 768px) {
+  .tab-grid { gap: 10px; }
+  .row-three {
     grid-template-columns: 1fr;
   }
-}
-@media (max-width: 768px) {
-  .stat-row {
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+  .row-three > :nth-child(3) {
+    grid-column: auto;
   }
-  .month-picker {
-    flex-wrap: wrap;
-  }
-  .mp-select {
-    min-width: 0;
-    flex: 1;
-  }
-  .panel-body {
-    padding: 10px 12px;
-  }
+  .month-picker { flex-wrap: wrap; }
+  .mp-select { min-width: 0; flex: 1; }
+  .panel-head { padding: 12px 14px; }
+  .panel-title { font-size: 12px; }
+  .panel-body { padding: 10px 12px; }
 }
 </style>

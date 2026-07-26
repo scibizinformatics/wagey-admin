@@ -92,7 +92,7 @@ function fmtCurrency(n) {
   color: #1a73e8;
 }
 .panel-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: #111827;
 }
@@ -203,7 +203,7 @@ function fmtCurrency(n) {
 
 @media (max-width: 768px) {
   .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 14px; }
+  .panel-title { font-size: 12px; }
   .panel-body { padding: 10px 12px; }
   .thirteenth-header,
   .thirteenth-row {

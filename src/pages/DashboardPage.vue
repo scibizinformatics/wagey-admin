@@ -14,6 +14,7 @@
           color="white"
           text-color="grey-8"
           :options="[
+            { label: 'Today', value: 'today' },
             { label: 'Current Cutoff', value: 'current' },
             { label: 'Monthly Summary', value: 'monthly' },
             { label: 'Annual Summary', value: 'annual' },
@@ -21,15 +22,43 @@
         />
       </div>
       <div class="dash-header-right">
-        <q-select
-          v-model="departmentFilter"
-          :options="departmentFilterOptions"
-          dense
-          outlined
-          emit-value
-          map-options
-          class="header-filter"
-        />
+        <q-input
+          v-if="activeView === 'today'"
+          v-model="todayDate"
+          dense outlined class="date-picker" readonly
+        >
+          <template v-slot:append>
+            <q-icon name="event" class="cursor-pointer">
+              <q-popup-proxy cover transition-show="scale" transition-hide="scale"
+                anchor="bottom left" self="top left">
+                <q-date v-model="todayDate" mask="YYYY-MM-DD" />
+              </q-popup-proxy>
+            </q-icon>
+          </template>
+        </q-input>
+
+        <template v-if="activeView === 'current'">
+          <q-toggle
+            v-model="hideCompleted"
+            dense label="Hide completed"
+            class="hide-completed-toggle" size="sm"
+          />
+          <span class="cutoff-label">Cutoff</span>
+          <q-select
+            v-if="cutoffOptions.length"
+            v-model="selectedCutoff" :options="cutoffOptions"
+            dense outlined class="cutoff-picker"
+            emit-value map-options placeholder="Select period"
+          >
+            <template v-slot:append>
+              <q-icon name="date_range" />
+            </template>
+          </q-select>
+          <span v-if="secondaryCutoffNotice" class="cutoff-notice">
+            {{ secondaryCutoffNotice }}
+          </span>
+        </template>
+
         <div class="last-sync">
           <q-icon name="sync" size="14px" />
           Data as of {{ formattedToday }}
@@ -37,65 +66,79 @@
       </div>
     </div>
 
-    <!-- Top KPI stats row — tab-aware -->
-    <DashboardStatsRow :stats-cards="statsCards" :page-loading="pageLoading" />
+    <!-- Top KPI stats row — hidden for current cutoff tab (has its own inside) -->
+    <DashboardStatsRow
+      v-if="activeView !== 'current'"
+      :stats-cards="activeView === 'today' ? currentStatsCards : statsCards"
+      :page-loading="activeView === 'today' ? currentCutoffLoading : pageLoading"
+    />
+
     <div v-if="activeView === 'annual'" class="annual-note">
       <q-icon name="check_circle" size="16px" color="positive" class="q-mr-sm" />
-      12 of 12 scheduled cutoffs completed
+      {{ annualSummary.closedMonthsCount ?? 0 }} of 12 scheduled cutoffs completed
     </div>
 
     <!-- Tabbed payroll summary section -->
-    <div class="summary-section">
+    <div class="summary-section" :class="{ 'summary-section--current': activeView === 'current' }">
       <keep-alive>
+        <TodayTab
+          v-if="activeView === 'today'"
+          :loading="currentCutoffLoading"
+          :priority-items="priorityItems"
+          :attention-summary="needsAttention"
+          :workforce-status="workforceStatus"
+          :pending-requests="pendingRequests"
+        />
         <CurrentCutoffTab
-          v-if="activeView === 'current'"
-          key="current"
+          v-else-if="activeView === 'current'"
           :fmt-currency="fmtCurrencyPeso"
-          :loading="summaryLoading"
-          :current-cutoff="currentCutoff"
+          :loading="summaryLoading || currentCutoffLoading"
+          :cutoff-stats="cutoffStats"
+          :payout-group-details="payoutGroupDetails"
+          :cutoff-summary-rollup="cutoffSummaryRollup"
+          :cutoff-status-summary="cutoffStatusSummary"
+          :previous-cutoff-incomplete="previousCutoffIncomplete"
+          :hide-completed="hideCompleted"
         />
         <MonthlySummaryTab
           v-else-if="activeView === 'monthly'"
-          key="monthly"
           :months="monthlySummaries"
+          :monthly-trend-series="monthlyTrendSeries"
           :thirteenth-month-pay="thirteenthMonthPay"
           :component-breakdown="componentBreakdown"
+          :payroll-by-company="payrollByCompany"
+          :payment-channels="paymentChannels"
+          :employee-releases="employeeReleases"
           :fmt-currency="fmtCurrencyPeso"
           :today="formattedToday"
           :loading="summaryLoading"
         />
         <AnnualSummaryTab
           v-else
-          key="annual"
           :annual="annualSummary"
           :trend-labels="monthlyTrendSeries.map((m) => m.label)"
           :trend-values="monthlyTrendSeries.map((m) => m.value)"
           :thirteenth-month-pay="thirteenthMonthPay"
           :component-breakdown="componentBreakdown"
+          :monthly-comparison="monthlyComparison"
+          :payroll-by-company="payrollByCompany"
+          :employee-releases="employeeReleases"
+          :payment-channels="paymentChannels"
+          :annual-indicators="annualIndicators"
+          :ytd-comparison="ytdComparison"
           :fmt-currency="fmtCurrencyPeso"
           :loading="summaryLoading"
         />
       </keep-alive>
     </div>
 
-    <!-- Operational panels — hidden for redesigned Current Cutoff tab -->
-    <div v-if="activeView !== 'current'" class="main-grid">
-      <PayrollStatusPanel
-        :rows="payrollRows"
-        :columns="payrollColumns"
-        :loading="payrollLoading"
-      />
-      <RecentActivityPanel
-        :activities="recentActivities"
-        :loading="attendanceLoading || requestsLoading"
-      />
-    </div>
+
   </PageShell>
 </template>
 
 <script setup>
 import PageShell from '@/components/layout/PageShell.vue'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { usePayroll } from '@/composables/page/usePayroll'
@@ -105,8 +148,7 @@ import { useNotifications } from 'src/composables/useNotifications'
 import { useDashboardSummary } from '@/composables/page/useDashboardSummary'
 
 import DashboardStatsRow from '@/components/pages/Dashboard/DashboardStatsRow.vue'
-import PayrollStatusPanel from '@/components/pages/Dashboard/PayrollStatusPanel.vue'
-import RecentActivityPanel from '@/components/pages/Dashboard/RecentActivityPanel.vue'
+import TodayTab from '@/components/pages/Dashboard/TodayTab.vue'
 import CurrentCutoffTab from '@/components/pages/Dashboard/CurrentCutoffTab.vue'
 import MonthlySummaryTab from '@/components/pages/Dashboard/MonthlySummaryTab.vue'
 import AnnualSummaryTab from '@/components/pages/Dashboard/AnnualSummaryTab.vue'
@@ -115,13 +157,10 @@ import AnnualSummaryTab from '@/components/pages/Dashboard/AnnualSummaryTab.vue'
 useCompany()
 
 const { fetchEmployees } = useEmployees()
-const { attendanceData, loading: attendanceLoading, fetchAttendanceByDate } = useAttendance()
-const { payrollRunsSummary, isLoading, fetchPayrollRunsSummary } = usePayroll()
-const payrollLoading = computed(() => isLoading('fetchingPayrollRunsSummary'))
+const { fetchAttendanceByDate } = useAttendance()
+const { fetchPayrollRunsSummary } = usePayroll()
 const { onDataUpdate } = useNotifications()
 const {
-  leaveRequests,
-  loading: requestsLoading,
   fetchLeaveRequests,
   fetchOvertimeRequests,
   fetchCashAdvanceRequests,
@@ -129,7 +168,6 @@ const {
 
 // ── Payroll summary / 13th-month-pay data ──
 const {
-  currentCutoff,
   monthlySummaries,
   annualSummary,
   thirteenthMonthPay,
@@ -138,10 +176,31 @@ const {
   fmtCurrency: fmtCurrencyPeso,
   today: summaryToday,
   loading: summaryLoading,
+  currentCutoffLoading,
   fetchDashboardSummary,
+  fetchCurrentCutoff,
+  // current-cutoff panels
+  needsAttention,
+  currentStatsCards,
+  // today tab data
+  priorityItems,
+  workforceStatus,
+  pendingRequests,
+  todayDate,
+  fetchTodayTabData,
+  // new cutoff dashboard data
+  cutoffStats,
+  payoutGroupDetails,
+  cutoffSummaryRollup,
+  cutoffStatusSummary,
+  previousCutoffIncomplete,
+  hideCompleted,
+  selectedCutoff,
+  cutoffOptions,
+  secondaryCutoffNotice,
 } = useDashboardSummary()
 
-const activeView = ref('current')
+const activeView = ref('today')
 const formattedToday = computed(() =>
   summaryToday.value?.toLocaleDateString('en-US', {
     month: 'short',
@@ -150,134 +209,26 @@ const formattedToday = computed(() =>
   }),
 )
 
-// ── Header filters ──────────────────────────────────────────────────────
-// departmentFilter is UI-ready but not yet wired to a fetch param — add one
-// once your endpoint supports filtering by department/site.
-const departmentFilter = ref('all')
-const departmentFilterOptions = computed(() => [
-  { label: 'All Departments', value: 'all' },
-  // ...map real departments here
-])
+watch(todayDate, (newDate) => {
+  console.log('[Dashboard] Date changed to', newDate)
+  const cid = resolvedCompanyId()
+  if (cid && activeView.value === 'today') {
+    fetchTodayTabData(cid, newDate)
+  }
+})
 
 // ─── Page-level loading ─────────────────────────────────────────────────────
 const pageLoading = ref(true)
 
-// ─── Payroll table columns (unchanged) ─────────────────────────────────────
-const payrollColumns = [
-  { name: 'group', label: 'Group Name', field: 'group', align: 'left' },
-  { name: 'type', label: 'Type', field: 'type', align: 'left' },
-  { name: 'start', label: 'Start', field: 'start', align: 'left' },
-  { name: 'end', label: 'End', field: 'end', align: 'left' },
-  { name: 'employees', label: 'No. of Employees', field: 'employees', align: 'center' },
-  { name: 'status', label: 'Status', field: 'status', align: 'center' },
-  { name: 'date', label: 'Date Released', field: 'date', align: 'left' },
-  { name: 'amount', label: 'Total Amount', field: 'amount', align: 'right' },
-]
-
-// ─── Helpers (unchanged from original) ─────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 function today() {
   return new Date().toISOString().slice(0, 10)
-}
-function fmtDate(str) {
-  if (!str) return '-'
-  const d = new Date(str)
-  return isNaN(d)
-    ? str
-    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-function cleanGroupName(name) {
-  if (!name) return '-'
-  let cleaned = String(name)
-  cleaned = cleaned.replace(
-    /\s*\|?\s*\d{4}[-/]\d{2}[-/]\d{2}\s*[-–]\s*\d{4}[-/]\d{2}[-/]\d{2}\s*$/,
-    '',
-  )
-  cleaned = cleaned.replace(/\s*\|\s*\w+\s*$/, '')
-  return cleaned.trim() || '-'
-}
-function fmtTime(str) {
-  if (!str) return ''
-  const d = new Date(str)
-  return isNaN(d)
-    ? str
-    : d.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-}
-function fmtCurrency(val) {
-  if (val == null) return '-'
-  return Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-function getEmployeeName(record) {
-  if (!record) return ''
-  if (record.full_name) return record.full_name
-  if (record.name) return record.name
-  const u = record.user ?? record.employee ?? record
-  if (u.full_name) return u.full_name
-  if (u.name) return u.name
-  const first = u.first_name ?? u.firstname ?? ''
-  const last = u.last_name ?? u.lastname ?? ''
-  const full = `${first} ${last}`.trim()
-  if (full) return full
-  return u.email ?? u.username ?? ''
 }
 
 // ─── Stats cards — tab-aware ────────────────────────────────────────────────
 const statsCards = computed(() => {
   if (activeView.value === 'current') {
-    return [
-      {
-        icon: 'event',
-        label: 'Scheduled',
-        count: 42,
-        iconBg: '#e8f0fe',
-        iconColor: '#1a73e8',
-        valueColor: '#1a73e8',
-      },
-      {
-        icon: 'check_circle',
-        label: 'Present',
-        count: 31,
-        iconBg: '#e6f6ea',
-        iconColor: '#22c55e',
-        valueColor: '#22c55e',
-      },
-      {
-        icon: 'schedule',
-        label: 'Late',
-        count: 3,
-        iconBg: '#fff8e1',
-        iconColor: '#f59e0b',
-        valueColor: '#f59e0b',
-      },
-      {
-        icon: 'person_off',
-        label: 'Absent',
-        count: 2,
-        iconBg: '#fdecea',
-        iconColor: '#ef4444',
-        valueColor: '#ef4444',
-      },
-      {
-        icon: 'beach_access',
-        label: 'On Leave',
-        count: 1,
-        iconBg: '#ede9fe',
-        iconColor: '#8b5cf6',
-        valueColor: '#8b5cf6',
-      },
-      {
-        icon: 'work_off',
-        label: 'Unfilled',
-        count: 1,
-        iconBg: '#fff7ed',
-        iconColor: '#f97316',
-        valueColor: '#f97316',
-      },
-    ]
+    return currentStatsCards.value
   }
 
   if (activeView.value === 'monthly') {
@@ -375,99 +326,6 @@ const statsCards = computed(() => {
   ]
 })
 
-// ─── Payroll rows (unchanged) ───────────────────────────────────────────────
-const payrollRows = computed(() => {
-  const list = Array.isArray(payrollRunsSummary.value)
-    ? payrollRunsSummary.value
-    : Array.isArray(payrollRunsSummary.value?.data)
-      ? payrollRunsSummary.value.data
-      : Array.isArray(payrollRunsSummary.value?.results)
-        ? payrollRunsSummary.value.results
-        : []
-  return list.slice(0, 10).map((p, i) => {
-    let startDate = '-'
-    let endDate = '-'
-    if (p.start_date && p.end_date) {
-      startDate = fmtDate(p.start_date)
-      endDate = fmtDate(p.end_date)
-    } else if (p.period) {
-      const parts = String(p.period).split(' - ')
-      startDate = parts[0] ?? '-'
-      endDate = parts[1] ?? '-'
-    } else if (p.name) {
-      const match = String(p.name).match(
-        /(\d{4}[-/]\d{2}[-/]\d{2})\s*[-–]\s*(\d{4}[-/]\d{2}[-/]\d{2})/,
-      )
-      if (match) {
-        startDate = fmtDate(match[1])
-        endDate = fmtDate(match[2])
-      }
-    }
-    const releasedAt = p.released_at ?? p.date_released
-    const releaseDate = releasedAt ? fmtDate(releasedAt) : '-'
-    return {
-      id: p.id ?? i,
-      group: cleanGroupName(p.name),
-      type: p.type ? p.type.charAt(0).toUpperCase() + p.type.slice(1) : 'Payroll Run',
-      start: startDate,
-      end: endDate,
-      employees:
-        p.total_employees ?? p.number_of_employee ?? p.employee_count ?? p.employees ?? '-',
-      status: p.status ?? '-',
-      date: releaseDate,
-      amount: fmtCurrency(p.total_net_pay ?? p.calculated_amount),
-    }
-  })
-})
-
-// ─── Recent Activity (unchanged) ────────────────────────────────────────────
-const recentActivities = computed(() => {
-  const activities = []
-  const todayStr = today()
-  attendanceData.value
-    .filter((a) => {
-      const d = a.date ?? a.attendance_date ?? a.time_in ?? a.clock_in ?? ''
-      return String(d).startsWith(todayStr) && (a.time_in ?? a.clock_in ?? a.check_in)
-    })
-    .slice(0, 6)
-    .forEach((a) => {
-      const name =
-        (getEmployeeName(a.employee ?? a.user ?? a) || a.employee_name || a.full_name) ?? null
-      if (!name) return
-      activities.push({
-        id: `att-${a.id}`,
-        user: name,
-        initial: name.charAt(0).toUpperCase(),
-        time: fmtTime(a.time_in ?? a.clock_in ?? a.check_in),
-        status: (a.time_out ?? a.clock_out ?? a.check_out) ? 'Clocked-Out' : 'Clocked-In',
-        details: a.location_name ?? a.site_name ?? a.source ?? a.cost_center_name ?? '',
-      })
-    })
-  leaveRequests.value.slice(0, 4).forEach((r) => {
-    const nameCandidate =
-      r.employee_name || r.full_name || getEmployeeName(r.employee ?? r.user ?? r) || null
-    const name = nameCandidate && nameCandidate !== 'Unknown' ? nameCandidate : null
-    if (!name) return
-    activities.push({
-      id: `leave-${r.id}`,
-      user: name,
-      initial: name.charAt(0).toUpperCase(),
-      time: fmtTime(r.created_at ?? r.applied_at ?? r.date_applied ?? r.start_date),
-      status:
-        r.status === 'approved'
-          ? 'Leave Approved'
-          : r.status === 'pending'
-            ? 'Leave Request'
-            : `Leave ${r.status ?? ''}`.trim(),
-      details: r.leave_type?.name ?? r.leave_type ?? r.type ?? '',
-    })
-  })
-  return activities
-    .filter((a) => a.user)
-    .sort((a, b) => new Date(b.time) - new Date(a.time))
-    .slice(0, 6)
-})
-
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 onMounted(async () => {
   const cid = resolvedCompanyId()
@@ -476,14 +334,15 @@ onMounted(async () => {
   onDataUpdate('leave', () => fetchLeaveRequests())
   onDataUpdate('overtime', () => fetchOvertimeRequests())
 
+  await fetchDashboardSummary({ company_id: cid })
+
+  await fetchCurrentCutoff(cid)
+
   await Promise.allSettled([
     fetchEmployees(),
     fetchAttendanceByDate(today()),
     fetchPayrollRunsSummary({ company_id: cid }),
-    fetchDashboardSummary({
-      company_id: cid,
-      year: summaryToday.value.getFullYear(),
-    }),
+    fetchTodayTabData(cid, todayDate.value),
   ])
   await Promise.allSettled([
     fetchLeaveRequests(),
@@ -518,13 +377,17 @@ onMounted(async () => {
   border-radius: 8px;
   overflow: hidden;
 }
-.header-filter {
-  min-width: 150px;
+.date-picker {
+  min-width: 180px;
 }
-.header-filter :deep(.q-field__control) {
+.date-picker :deep(.q-field__control) {
   border-radius: 8px;
   min-height: 38px;
   background: #ffffff;
+  cursor: pointer;
+}
+.date-picker :deep(.q-field__append) {
+  cursor: pointer;
 }
 .last-sync {
   display: flex;
@@ -539,13 +402,9 @@ onMounted(async () => {
 .summary-section {
   margin: 14px 0;
 }
-.main-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
+.summary-section--current {
+  margin: 0;
 }
-
 .annual-note {
   display: flex;
   align-items: center;
@@ -555,20 +414,40 @@ onMounted(async () => {
   margin-bottom: 8px;
 }
 
-/* ── Responsive: 1440px (wide desktop) ── */
-@media (min-width: 1441px) {
-  .main-grid {
-    gap: 16px;
-  }
+/* ── Cutoff dashboard header controls ── */
+.hide-completed-toggle {
+  margin-right: 8px;
+  font-size: 12px;
+}
+.cutoff-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.cutoff-picker {
+  min-width: 160px;
+  max-width: 220px;
+  margin-right: 8px;
+}
+.cutoff-picker :deep(.q-field__native) {
+  font-size: 12px;
+}
+.cutoff-notice {
+  font-size: 12px;
+  color: #b91c1c;
+  background: #fef2f2;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 /* ── Responsive: 1024px (tablet / small laptop) ── */
 @media (max-width: 1024px) {
   .dash-header {
     gap: 10px;
-  }
-  .header-filter {
-    min-width: 130px;
   }
 }
 
@@ -596,7 +475,7 @@ onMounted(async () => {
     padding: 6px 8px;
     flex: 1;
   }
-  .header-filter {
+  .date-picker {
     min-width: 0;
     flex: 1;
   }

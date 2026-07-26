@@ -53,7 +53,7 @@
 </template>
 
 <script setup>
-const props = defineProps({
+defineProps({
   channels: { type: Array, default: () => [] },
   totalRow: { type: Object, default: null },
   loading: { type: Boolean, default: false },
@@ -82,7 +82,7 @@ function fmtCurrency(n) {
   padding: 14px 20px; border-bottom: 1px solid #f1f3f5; flex-shrink: 0;
 }
 .panel-icon { color: #1a73e8; }
-.panel-title { font-size: 15px; font-weight: 600; color: #111827; }
+.panel-title { font-size: 13px; font-weight: 600; color: #111827; }
 .panel-body { padding: 12px 16px; flex: 1; min-height: 0; }
 
 .skeleton-body { min-height: 180px; }
@@ -123,6 +123,6 @@ function fmtCurrency(n) {
 }
 @media (max-width: 768px) {
   .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 14px; }
+  .panel-title { font-size: 12px; }
 }
 </style>
