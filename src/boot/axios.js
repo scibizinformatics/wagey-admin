@@ -54,9 +54,13 @@ api.interceptors.response.use(
     }
     console.error('[axios error] status:', res.status, '| url:', req.url, '| method:', req.method, '\ndata:', dataPreview)
     if (res.status === 401) {
-      const authStore = useAuthStore()
-      authStore.clearToken()
-      window.location.href = '/login'
+      const isLoginRequest = (req.url || '').includes('/api/employee/login/')
+      if (!isLoginRequest) {
+        console.warn('[axios 401] redirecting to login — triggered by:', req.url)
+        const authStore = useAuthStore()
+        authStore.clearToken()
+        window.location.href = '/#/login'
+      }
     }
     return Promise.reject(error)
   },
