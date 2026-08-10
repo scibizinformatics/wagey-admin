@@ -106,7 +106,6 @@ import { useQuasar } from 'quasar'
 import { useAuthStore } from 'boot/auth'
 import { useCompanyStore } from '@/stores/company'
 import { useAuth } from '@/composables/page/useAuth'
-import { api } from 'src/boot/axios'
 
 const router = useRouter()
 const route = useRoute()
@@ -114,7 +113,7 @@ const $q = useQuasar()
 const authStore = useAuthStore()
 const companyStore = useCompanyStore()
 
-const { loading, login, fetchCurrentUserCompanies } = useAuth()
+const { loading, login, fetchCurrentUserCompanies, fetchUserProfile } = useAuth()
 
 const showPassword = ref(false)
 
@@ -174,19 +173,22 @@ const handleLogin = async () => {
     }
 
     const firstCompany = companiesData[0]
-    const companyId = firstCompany.company?.id || firstCompany.id
-    const accountUuid = firstCompany.id
-    const userId = firstCompany.user?.id
+    const companyId = firstCompany.company?.id ?? firstCompany.company
 
+    let profileData = null
     let employeeUuid = null
     try {
-      const profileResponse = await api.get('/user/check-type/', {
-        headers: { Authorization: `Bearer ${access}` },
-      })
-      employeeUuid = profileResponse.data?.profile?.id || null
+      profileData = await fetchUserProfile(access)
+      employeeUuid = profileData?.profile?.id || null
+      if (profileData?.user_type === 'business_owner' && profileData?.profile?.id) {
+        localStorage.setItem('business_owner_uuid', profileData.profile.id)
+      }
     } catch {
       // non-critical — will be null if this endpoint fails
     }
+
+    const accountUuid = firstCompany.id || employeeUuid
+    const userId = firstCompany.user?.id ?? profileData?.user_id
 
     if (!accountUuid) {
       showErrorNotification('Failed to get account UUID after login.')
@@ -196,8 +198,8 @@ const handleLogin = async () => {
     // Store full company object with country context
     const companyPayload = {
       id: companyId,
-      name: firstCompany.company?.name || firstCompany.name || '',
-      logo: firstCompany.company?.logo || firstCompany.logo || null,
+      name: firstCompany.company?.name || firstCompany.company_name || '',
+      logo: firstCompany.company?.logo || firstCompany.company_logo || null,
       country: firstCompany.company?.country || firstCompany.country || '',
       country_name: firstCompany.company?.country_name || firstCompany.country_name || '',
     }
