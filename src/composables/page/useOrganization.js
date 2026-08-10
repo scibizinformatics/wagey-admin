@@ -212,6 +212,18 @@ export function useOrganization() {
     }
   }
 
+  async function fetchCurrentUserCompanies() {
+    try {
+      const response = await api.get(`${BASE}/user/current-user-companies/`, {
+        headers: authHeaders(),
+      })
+      return response.data.data ?? response.data ?? []
+    } catch (error) {
+      console.error('[fetchCurrentUserCompanies] failed:', error)
+      throw error
+    }
+  }
+
   async function createCompany(formData) {
     const response = await api.post(`${BASE}/organization/companies/create/`, formData, {
       headers: authHeaders(),
@@ -263,6 +275,7 @@ export function useOrganization() {
     fetchCostCenters,
     // companies
     fetchCompanies,
+    fetchCurrentUserCompanies,
     createCompany,
     updateCompany,
     deleteCompany,
