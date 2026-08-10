@@ -190,6 +190,39 @@ export function useSchedule() {
   }
 
   /**
+   * Fetch employees for a specific payroll group and site.
+   * @param {number|string} companyId
+   * @param {number|string} payrollGroupId
+   * @param {number|string} siteId
+   */
+  async function fetchEmployeesByPayrollSite(companyId, payrollGroupId, siteId) {
+    const response = await api.get(
+      `${BASE}/user/companies/${companyId}/employees/by-payroll-site/${payrollGroupId}/${siteId}/`,
+      { headers: authHeaders() },
+    )
+    return response.data ?? []
+  }
+
+  /**
+   * Auto-assign recurring (rotating) schedules.
+   * @param {object} payload
+   */
+  async function autoAssignRecurring(payload) {
+    saving.value = true
+    try {
+      const response = await api.post(`${BASE}/organization/auto-assign-recurring/`, payload, {
+        headers: authHeaders(),
+      })
+      return response.data
+    } catch (error) {
+      console.error('autoAssignRecurring error:', error.response?.data)
+      throw error
+    } finally {
+      saving.value = false
+    }
+  }
+
+  /**
    * Fetch schedules for a single employee in a date range.
    * @param {string} startDate - YYYY-MM-DD
    * @param {string} endDate   - YYYY-MM-DD
@@ -306,5 +339,7 @@ export function useSchedule() {
     fetchShiftTemplates,
     assignRecurringSchedule,
     fetchEmployeeSchedule,
+    fetchEmployeesByPayrollSite,
+    autoAssignRecurring,
   }
 }
