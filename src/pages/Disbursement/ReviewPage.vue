@@ -23,13 +23,12 @@
                 <q-icon name="search" class="search-icon" />
               </template>
             </q-input>
-
           </div>
         </div>
       </div>
 
       <!-- Stepper Header -->
-      <PayoutGroupStepperHeader :group-id="groupId" />
+      <PayoutGroupStepperHeader :group-id="groupId" :key="stepperKey" />
 
       <!-- Stats Bar -->
       <div class="stats-bar">
@@ -75,19 +74,30 @@
       </div>
 
       <!-- Main Table Section -->
+      <div class="section-header">
+        <h2 class="section-title">Attendance Review</h2>
+        <q-btn
+          label="Release Payslips"
+          icon="send"
+          class="header-action-btn"
+          unelevated
+          :loading="releasing"
+          @click="releaseAll"
+        />
+      </div>
       <div class="table-block">
-        <q-table
-          :rows="paginatedData"
-          :columns="columns"
-          :loading="loading"
-          row-key="id"
-          flat
-          dense
-          hide-no-data
-          hide-pagination
-          class="review-table"
-        >
-          <template #body-cell-status="props">
+          <q-table
+            :rows="paginatedData"
+            :columns="columns"
+            :loading="loading"
+            row-key="id"
+            flat
+            dense
+            hide-no-data
+            hide-pagination
+            class="review-table"
+          >
+            <template #body-cell-status="props">
             <q-td :props="props">
               <StatusPill :status="props.row.status" />
             </q-td>
@@ -102,7 +112,25 @@
           </template>
           <template #body-cell-action="props">
             <q-td :props="props">
-              <q-btn flat dense no-caps size="11px" color="primary" label="View" @click="viewEmployee(props.row)" />
+              <div class="action-cell">
+                <q-btn
+                  flat dense no-caps size="11px"
+                  color="positive"
+                  label="Review"
+                  :disable="reviewedIds.includes(props.row.id)"
+                  :loading="reviewingId === props.row.id"
+                  @click="reviewEmployee(props.row)"
+                />
+                <q-btn
+                  flat dense no-caps size="11px"
+                  color="info"
+                  label="Release"
+                  :disable="!reviewedIds.includes(props.row.id)"
+                  :loading="releasingId === props.row.id"
+                  @click="releaseEmployee(props.row)"
+                />
+                <q-btn flat dense no-caps size="11px" color="primary" label="View" @click="viewEmployee(props.row)" />
+              </div>
             </q-td>
           </template>
           <template #no-data>
@@ -161,6 +189,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import PayoutGroupStepperHeader from 'src/components/pages/Payroll/PayoutGroupStepperHeader.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
@@ -169,10 +198,16 @@ import { useDisbursementApi } from 'src/composables/disbursement/useDisbursement
 
 const route = useRoute()
 const router = useRouter()
+const $q = useQuasar()
 const groupId = route.params.id
-const { fetchReviewOverview, fetchAttendanceSummary } = useDisbursementApi()
+const stepperKey = ref(0)
+const { fetchReviewOverview, fetchAttendanceSummary, reviewToReady, releasePayslips } = useDisbursementApi()
 
 const loading = ref(true)
+const releasing = ref(false)
+const reviewingId = ref(null)
+const releasingId = ref(null)
+const reviewedIds = ref([])
 const overview = ref(null)
 const reviewData = ref([])
 const searchTerm = ref('')
@@ -226,6 +261,7 @@ onMounted(async () => {
     ])
     overview.value = ov
     reviewData.value = att?.employees || []
+    reviewedIds.value = (att?.employees || []).filter((e) => e.status === 'reviewed').map((e) => e.id)
   } catch (err) {
     console.error('[ReviewPage] fetch failed:', err)
   } finally {
@@ -254,9 +290,132 @@ function onPageSizeChange(newSize) {
   pageSize.value = newSize
   page.value = 1
 }
+
+async function reviewEmployee(row) {
+  reviewingId.value = row.id
+  try {
+    await reviewToReady(groupId, [row.id])
+    if (!reviewedIds.value.includes(row.id)) {
+      reviewedIds.value.push(row.id)
+    }
+  } catch (err) {
+    console.error('[ReviewPage] reviewEmployee ✖ error:', err)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to review employee.',
+      icon: 'error',
+      timeout: 3000,
+      position: 'top',
+    })
+  } finally {
+    reviewingId.value = null
+  }
+}
+
+async function releaseAll() {
+  releasing.value = true
+  try {
+    const epIds = reviewData.value
+      .filter((e) => reviewedIds.value.includes(e.id))
+      .map((e) => e.id)
+    if (!epIds.length) {
+      $q.notify({
+        type: 'warning',
+        message: 'No reviewed employees to release.',
+        icon: 'warning',
+        timeout: 2000,
+        position: 'top',
+      })
+      return
+    }
+    await releasePayslips(groupId, epIds)
+
+    stepperKey.value++
+    const [ov, att] = await Promise.all([
+      fetchReviewOverview(groupId),
+      fetchAttendanceSummary(groupId),
+    ])
+    overview.value = ov
+    reviewData.value = att?.employees || []
+    $q.notify({
+      type: 'positive',
+      message: `Payslips released for ${epIds.length} employee${epIds.length > 1 ? 's' : ''}.`,
+      icon: 'check_circle',
+      timeout: 3000,
+      position: 'top',
+    })
+  } catch (err) {
+    console.error('[ReviewPage] releaseAll ✖ error:', err)
+  } finally {
+    releasing.value = false
+  }
+}
+
+async function releaseEmployee(row) {
+  releasingId.value = row.id
+  try {
+    await releasePayslips(groupId, [row.id])
+
+    const [ov, att] = await Promise.all([
+      fetchReviewOverview(groupId),
+      fetchAttendanceSummary(groupId),
+    ])
+    overview.value = ov
+    reviewData.value = att?.employees || []
+    $q.notify({
+      type: 'positive',
+      message: `Payslip released for ${row.employee}.`,
+      icon: 'check_circle',
+      timeout: 2000,
+      position: 'top',
+    })
+  } catch (err) {
+    console.error('[ReviewPage] releaseEmployee ✖ error:', err)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to release payslip.',
+      icon: 'error',
+      timeout: 3000,
+      position: 'top',
+    })
+  } finally {
+    releasingId.value = null
+  }
+}
 </script>
 
 <style scoped>
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0px 14px 1px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.header-action-btn {
+  height: 36px;
+  border-radius: 10px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
+  background: #102335 !important;
+  color: #ffffff !important;
+}
+
+.header-action-btn:hover {
+  background: #193d5c !important;
+}
+
 /* ==============================
    WRAPPER
    ============================== */
@@ -436,7 +595,7 @@ function onPageSizeChange(newSize) {
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  padding: 8px 10px;
+  padding: 4px 10px;
   background: #f8f9fb;
   border-bottom: 1px solid #e8ecf0;
 }
@@ -488,6 +647,13 @@ function onPageSizeChange(newSize) {
 .no-issues {
   font-size: 11.5px;
   color: #9ca3af;
+}
+
+.action-cell {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
 }
 
 .done-text {
