@@ -91,6 +91,9 @@
       </div>
 
       <!-- Main Table Section -->
+      <div class="section-header">
+        <h2 class="section-title">Disbursement Runs</h2>
+      </div>
       <div class="table-block">
         <PayoutTable
           :rows="paginatedRuns"
@@ -255,7 +258,7 @@ onMounted(async () => {
 })
 
 function openRun(row) {
-  router.push(`/app/payroll/review/${row.id}`)
+  router.push({ path: `/app/payroll/review/${row.id}`, query: { pgi_status: row.status } })
 }
 
 function deleteRun(row) {
@@ -476,6 +479,21 @@ function filterRuns() {
    TABLE SECTION
    ============================== */
 .table-block {
+}
+
+/* ==============================
+   SECTION HEADER
+   ============================== */
+.section-header {
+  padding: 0px 14px 1px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  letter-spacing: -0.01em;
 }
 
 /* ==============================
