@@ -66,7 +66,7 @@
       </div>
 
       <!-- Stepper Header -->
-      <PayoutGroupStepperHeader :group-id="groupId" />
+      <PayoutGroupStepperHeader :group-id="groupId" :key="stepperKey" />
 
       <!-- Stats Bar -->
       <div class="stats-bar">
@@ -112,6 +112,9 @@
       </div>
 
       <!-- Main Table Section -->
+      <div class="section-header">
+        <h2 class="section-title">Employee Payslips</h2>
+      </div>
       <div class="table-block">
         <q-table
           :rows="paginatedData"
@@ -127,6 +130,15 @@
           <template #body-cell-payslip_status="props">
             <q-td :props="props">
               <StatusPill :status="props.row.payslip_status" />
+            </q-td>
+          </template>
+          <template #body-cell-actions="props">
+            <q-td :props="props">
+              <template v-if="props.row.payslip_status === 'Disputed'">
+                <q-btn flat dense no-caps size="11px" color="positive" label="Resolve" :disable="processing" @click="resolve(props.row)" />
+                <q-btn flat dense no-caps size="11px" color="negative" label="Reject" class="q-ml-xs" :disable="processing" @click="reject(props.row)" />
+              </template>
+              <span v-else class="no-action">&mdash;</span>
             </q-td>
           </template>
           <template #no-data>
@@ -183,6 +195,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import PayoutGroupStepperHeader from 'src/components/pages/Payroll/PayoutGroupStepperHeader.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
@@ -190,10 +203,13 @@ import { useDisbursementApi } from 'src/composables/disbursement/useDisbursement
 
 const route = useRoute()
 const router = useRouter()
+const $q = useQuasar()
 const groupId = route.params.id
-const { fetchPayslipOverview, fetchEmployeePayslips } = useDisbursementApi()
+const stepperKey = ref(0)
+const { fetchPayslipOverview, fetchEmployeePayslips, fetchPayslipIssues, resolveIssue, rejectIssue } = useDisbursementApi()
 
 const loading = ref(true)
+const processing = ref(false)
 const overview = ref(null)
 const payslips = ref([])
 const activeTab = ref('all')
@@ -209,6 +225,7 @@ const columns = [
   { name: 'payslip_status', label: 'Status', field: 'payslip_status', align: 'left', sortable: true },
   { name: 'acknowledged_on', label: 'Acknowledged On', field: 'acknowledged_on', align: 'center' },
   { name: 'dispute_status', label: 'Dispute Status', field: 'dispute_status', align: 'center' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
 
 const filteredData = computed(() => {
@@ -272,9 +289,57 @@ function onPageSizeChange(newSize) {
   pageSize.value = newSize
   page.value = 1
 }
+
+async function processIssue(row, action) {
+  processing.value = true
+  try {
+    const issues = await fetchPayslipIssues(row.epi_id)
+    const issueIds = Array.isArray(issues) ? issues.map((i) => i.id) : []
+    if (!issueIds.length) {
+      $q.notify({ type: 'warning', message: 'No issues found for this payslip.', position: 'top' })
+      processing.value = false
+      return
+    }
+    const fn = action === 'resolve' ? resolveIssue : rejectIssue
+    await Promise.all(issueIds.map((id) => fn(id, { admin_notes: '' })))
+    stepperKey.value++
+    const [ov, data] = await Promise.all([
+      fetchPayslipOverview(groupId),
+      fetchEmployeePayslips(groupId),
+    ])
+    overview.value = ov
+    payslips.value = data || []
+    $q.notify({ type: 'positive', message: `Issue${issueIds.length > 1 ? 's' : ''} ${action}d successfully.`, position: 'top' })
+  } catch (err) {
+    console.error(`[PayslipsPage] ${action} ✖ error:`, err)
+    $q.notify({ type: 'negative', message: `Failed to ${action} issue. Please try again.`, position: 'top' })
+  } finally {
+    processing.value = false
+  }
+}
+
+async function resolve(row) {
+  await processIssue(row, 'resolve')
+}
+
+async function reject(row) {
+  await processIssue(row, 'reject')
+}
 </script>
 
 <style scoped>
+.section-header {
+  padding: 0px 14px 1px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
 /* ==============================
    WRAPPER
    ============================== */
@@ -501,7 +566,7 @@ function onPageSizeChange(newSize) {
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  padding: 8px 10px;
+  padding: 4px 10px;
   background: #f8f9fb;
   border-bottom: 1px solid #e8ecf0;
 }
@@ -533,6 +598,11 @@ function onPageSizeChange(newSize) {
 .empty-text {
   font-size: 13px;
   color: #9ca3af;
+}
+
+.no-action {
+  font-size: 12px;
+  color: #d1d5db;
 }
 
 /* ==============================
