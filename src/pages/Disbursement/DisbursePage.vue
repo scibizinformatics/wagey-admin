@@ -28,7 +28,7 @@
       </div>
 
       <!-- Stepper Header -->
-      <PayoutGroupStepperHeader :group-id="groupId" />
+      <PayoutGroupStepperHeader :group-id="groupId" :key="stepperKey" />
 
       <!-- Stats Bar -->
       <div class="stats-bar">
@@ -74,39 +74,32 @@
       </div>
 
       <!-- Main Table Section -->
+      <div class="section-header">
+        <h2 class="section-title">Disbursement Details</h2>
+        <q-btn
+          label="Disburse All"
+          icon="send"
+          class="header-action-btn"
+          unelevated
+          :loading="disbursing"
+          @click="disburseAll"
+        />
+      </div>
       <div class="table-block">
-        <q-table
-          :rows="paginatedData"
-          :columns="columns"
-          :loading="loading"
-          row-key="id"
-          flat
-          dense
-          hide-no-data
-          hide-pagination
-          class="disburse-table"
-        >
-          <template #body-cell-claim_status="props">
+          <q-table
+            :rows="paginatedData"
+            :columns="columns"
+            :loading="loading"
+            row-key="id"
+            flat
+            dense
+            hide-no-data
+            hide-pagination
+            class="disburse-table"
+          >
+            <template #body-cell-claim_status="props">
             <q-td :props="props">
               <StatusPill :status="props.row.claim_status" />
-            </q-td>
-          </template>
-          <template #body-cell-actions="props">
-            <q-td :props="props">
-              <q-btn
-                v-if="props.row.claim_status === 'Pending' || props.row.claim_status === 'Failed'"
-                flat dense no-caps size="11px" color="primary"
-                label="Mark Disbursed"
-                @click="markDisbursed(props.row)"
-              />
-              <q-btn
-                v-if="props.row.claim_status === 'Failed'"
-                flat dense no-caps size="11px" color="warning"
-                label="Retry"
-                class="q-ml-xs"
-                @click="retryDisbursement(props.row)"
-              />
-              <span v-else-if="props.row.claim_status === 'Claimed'" class="done-text">Done</span>
             </q-td>
           </template>
           <template #no-data>
@@ -163,6 +156,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import PayoutGroupStepperHeader from 'src/components/pages/Payroll/PayoutGroupStepperHeader.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
@@ -170,10 +164,13 @@ import { useDisbursementApi } from 'src/composables/disbursement/useDisbursement
 
 const route = useRoute()
 const router = useRouter()
+const $q = useQuasar()
 const groupId = route.params.id
-const { fetchPayoutGroupInstanceSummary, fetchDisbursementEmployees } = useDisbursementApi()
+const stepperKey = ref(0)
+const { fetchPayoutGroupInstanceSummary, fetchDisbursementEmployees, disbursePgi } = useDisbursementApi()
 
 const loading = ref(true)
+const disbursing = ref(false)
 const summary = ref(null)
 const disbursements = ref([])
 const searchTerm = ref('')
@@ -190,7 +187,6 @@ const columns = [
   { name: 'claimed_on', label: 'Claimed On', field: 'claimed_on', align: 'center' },
   { name: 'proof_of_payment', label: 'Proof of Payment', field: 'proof_of_payment', align: 'center' },
   { name: 'reference_no', label: 'Reference No', field: 'reference_no', align: 'center' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
 
 const filteredData = computed(() => {
@@ -251,17 +247,59 @@ function onPageSizeChange(newSize) {
   page.value = 1
 }
 
-function markDisbursed(row) {
-  row.claim_status = 'Claimed'
-  row.claimed_on = new Date().toISOString().slice(0, 10)
-}
-
-function retryDisbursement(row) {
-  row.claim_status = 'Pending'
+async function disburseAll() {
+  disbursing.value = true
+  try {
+    const epiIds = disbursements.value.map((e) => e.epi_id)
+    await disbursePgi(groupId, epiIds)
+    stepperKey.value++
+    $q.notify({ type: 'positive', message: 'Disbursement successful!', position: 'top' })
+    const [summ, data] = await Promise.all([
+      fetchPayoutGroupInstanceSummary(groupId),
+      fetchDisbursementEmployees(groupId),
+    ])
+    summary.value = summ
+    disbursements.value = data || []
+  } catch (err) {
+    console.error('[DisbursePage] disburseAll ✖ error:', err)
+  } finally {
+    disbursing.value = false
+  }
 }
 </script>
 
 <style scoped>
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0px 14px 1px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.header-action-btn {
+  height: 36px;
+  border-radius: 10px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 13px;
+  background: #102335 !important;
+  color: #ffffff !important;
+}
+
+.header-action-btn:hover {
+  background: #193d5c !important;
+}
+
 /* ==============================
    WRAPPER
    ============================== */
@@ -429,7 +467,7 @@ function retryDisbursement(row) {
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  padding: 8px 10px;
+  padding: 4px 10px;
   background: #f8f9fb;
   border-bottom: 1px solid #e8ecf0;
 }
@@ -470,6 +508,12 @@ function retryDisbursement(row) {
 .done-text {
   font-size: 11.5px;
   color: #16a34a;
+  font-weight: 600;
+}
+
+.pending-text {
+  font-size: 11.5px;
+  color: #f59e0b;
   font-weight: 600;
 }
 
