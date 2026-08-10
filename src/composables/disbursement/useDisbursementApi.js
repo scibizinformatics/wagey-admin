@@ -86,6 +86,66 @@ export function useDisbursementApi() {
     return data
   }
 
+  // ── Phase 1: Admin Review & Release ──
+  async function reviewToReady(pgiId, epiIds = []) {
+    const { data } = await api.post(`${BASE}/payroll/admin/pgi/${pgiId}/review-to-ready/`, { epi_ids: epiIds })
+    return data
+  }
+
+  async function releasePayslips(pgiId, epiIds = []) {
+    const { data } = await api.post(`${BASE}/payroll/admin/pgi/${pgiId}/release-payslips/`, { epi_ids: epiIds })
+    return data
+  }
+
+  // ── Phase 2: Employee Payslip Operations ──
+  async function fetchEmployeePayslipDetail(epiId) {
+    const { data } = await api.get(`${BASE}/payroll/employee/payslips/${epiId}/`)
+    return data
+  }
+
+  async function acknowledgePayslip(epiId) {
+    const { data } = await api.post(`${BASE}/payroll/employee/payslips/${epiId}/acknowledge/`)
+    return data
+  }
+
+  async function reportIssue(epiId, payload) {
+    const { data } = await api.post(`${BASE}/payroll/employee/payslips/${epiId}/report-issue/`, payload)
+    return data
+  }
+
+  async function confirmMoneyReceived(epiId) {
+    const { data } = await api.post(`${BASE}/payroll/employee/payslips/${epiId}/money-received/`)
+    return data
+  }
+
+  // ── Phase 2: Admin Issue Resolution ──
+  async function fetchPayslipIssues(epiId) {
+    const { data } = await api.get(`${BASE}/payroll/admin/employee-payslips/${epiId}/issues/`)
+    return data
+  }
+
+  async function resolveIssue(issueId, payload) {
+    const { data } = await api.patch(`${BASE}/payroll/admin/issues/${issueId}/resolve/`, payload)
+    return data
+  }
+
+  async function rejectIssue(issueId, payload) {
+    const { data } = await api.patch(`${BASE}/payroll/admin/issues/${issueId}/reject/`, payload)
+    return data
+  }
+
+  // ── Phase 3: Funding ──
+  async function createPgiFunding(pgiId, payload) {
+    const { data } = await api.post(`${BASE}/payroll/admin/payout-group-fundings/salary/${pgiId}/`, payload)
+    return data
+  }
+
+  // ── Phase 4: Disbursement ──
+  async function disbursePgi(pgiId, epiIds = []) {
+    const { data } = await api.post(`${BASE}/payroll/admin/disburse/${pgiId}/`, { epi_ids: epiIds })
+    return data
+  }
+
   return {
     fetchCutoffInstances,
     fetchDashboardSummary,
@@ -102,5 +162,21 @@ export function useDisbursementApi() {
     fetchDisbursementEmployees,
     fetchPayoutGroupCompletion,
     fetchPayoutSummaryByEmployee,
+    // Phase 1
+    reviewToReady,
+    releasePayslips,
+    // Phase 2 - Employee
+    fetchEmployeePayslipDetail,
+    acknowledgePayslip,
+    reportIssue,
+    confirmMoneyReceived,
+    // Phase 2 - Admin
+    fetchPayslipIssues,
+    resolveIssue,
+    rejectIssue,
+    // Phase 3
+    createPgiFunding,
+    // Phase 4
+    disbursePgi,
   }
 }
