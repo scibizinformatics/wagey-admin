@@ -29,13 +29,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
+import { computeStepsFromPgiStatus } from 'src/constants/pgiStatus'
 
+const route = useRoute()
 const { fetchPayoutGroupProgress } = useDisbursementApi()
 
 const props = defineProps({
   groupId: { type: [String, Number], required: true },
+  pgiStatus: { type: String, default: null },
 })
 
 const BASE_PATH = '/app/payroll'
@@ -51,6 +55,17 @@ const stepDefs = [
 const progressData = ref(null)
 
 const steps = computed(() => {
+  const effectiveStatus = props.pgiStatus || route.query.pgi_status
+  if (effectiveStatus) {
+    const mapped = computeStepsFromPgiStatus(effectiveStatus, stepDefs.map((d) => ({ name: d.routeKey })))
+    if (mapped) {
+      return mapped.map((s, i) => ({
+        ...stepDefs[i],
+        route: `${BASE_PATH}/${stepDefs[i].routeKey}/${props.groupId}`,
+        state: s.state === 'completed' ? 'completed' : s.state === 'in_progress' ? 'current' : 'locked',
+      }))
+    }
+  }
   if (!progressData.value) return []
   return stepDefs.map((def, i) => {
     const prog = progressData.value.progress[i]
@@ -71,10 +86,15 @@ const steps = computed(() => {
 onMounted(async () => {
   try {
     progressData.value = await fetchPayoutGroupProgress(props.groupId)
+    console.log('[Stepper] progressData:', JSON.stringify(progressData.value))
   } catch (err) {
     console.error('[PayoutGroupStepperHeader] fetch failed:', err)
   }
 })
+
+watch(steps, (val) => {
+  console.log('[Stepper] computed steps:', JSON.stringify(val.map((s) => ({ label: s.label, state: s.state }))))
+}, { immediate: true })
 </script>
 
 <style scoped>
