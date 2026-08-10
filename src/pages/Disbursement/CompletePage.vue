@@ -82,6 +82,9 @@
       </div>
 
       <!-- Main Table Section -->
+      <div class="section-header">
+        <h2 class="section-title">Payment Summary</h2>
+      </div>
       <div class="table-block">
         <q-table
           :rows="paginatedData"
@@ -245,6 +248,18 @@ function onPageSizeChange(newSize) {
 </script>
 
 <style scoped>
+.section-header {
+  padding: 0px 14px 1px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
 /* ==============================
    WRAPPER
    ============================== */
@@ -412,7 +427,7 @@ function onPageSizeChange(newSize) {
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  padding: 8px 10px;
+  padding: 4px 10px;
   background: #f8f9fb;
   border-bottom: 1px solid #e8ecf0;
 }
