@@ -18,7 +18,7 @@
     </template>
     <template #body-cell-progress="props">
       <q-td :props="props">
-        <PayoutProgressStepper :group-id="props.row.id" />
+        <PayoutProgressStepper :group-id="props.row.id" :pgi-status="props.row.status" />
       </q-td>
     </template>
     <template #body-cell-actions="props">
@@ -88,7 +88,7 @@ const columns = computed(() => props.columns ?? defaultColumns)
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  padding: 8px 10px;
+  padding: 4px 10px;
   background: #f8f9fb;
   border-bottom: 1px solid #e8ecf0;
 }
