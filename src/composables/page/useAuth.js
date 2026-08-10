@@ -5,6 +5,15 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { BASE } from 'src/composables/utils/http'
 
+const ENDPOINTS = {
+  LOGIN:                `${BASE}/api/employee/login/`,
+  COMPANIES:            `${BASE}/organization/companies/`,
+  CURRENT_USER_COMPANIES: `${BASE}/user/current-user-companies/`,
+  USER_PROFILE:         `${BASE}/user/check-type/`,
+  POSITIONS:            `${BASE}/user/positions/`,
+  USER_ROLES:           `${BASE}/user/user-roles/`,
+}
+
 export function useAuth() {
   const loading = ref(false)
 
@@ -18,7 +27,7 @@ export function useAuth() {
   async function login(credentials) {
     loading.value = true
     try {
-      const response = await api.post(`${BASE}/api/employee/login/`, credentials)
+      const response = await api.post(ENDPOINTS.LOGIN, credentials)
       return response.data
     } finally {
       loading.value = false
@@ -33,7 +42,7 @@ export function useAuth() {
    * @returns {Promise<Array<{id:number|string,name:string,logo:string|null,country:string,country_name:string}>>}
    */
   async function fetchUserCompanies(token) {
-    const response = await api.get(`${BASE}/organization/companies/`, {
+    const response = await api.get(ENDPOINTS.COMPANIES, {
       headers: { Authorization: `Bearer ${token}` },
     })
     return response.data.data ?? response.data ?? []
@@ -46,10 +55,24 @@ export function useAuth() {
    * @returns {Promise<Array<{id:number|string,name:string,logo:string|null,country:string,country_name:string}>>}
    */
   async function fetchCurrentUserCompanies(token) {
-    const response = await api.get(`${BASE}/user/current-user-companies/`, {
+    const response = await api.get(ENDPOINTS.CURRENT_USER_COMPANIES, {
       headers: { Authorization: `Bearer ${token}` },
     })
     return response.data.data ?? response.data ?? []
+  }
+
+  // ─── Profile ──────────────────────────────────────────────────────────────
+
+  /**
+   * Fetch the current user's profile (used during login to resolve employee UUID).
+   * @param {string} token – JWT access token
+   * @returns {Promise<{profile:{id:string|null}}|null>}
+   */
+  async function fetchUserProfile(token) {
+    const response = await api.get(ENDPOINTS.USER_PROFILE, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return response.data
   }
 
   // ─── Positions & Roles ────────────────────────────────────────────────────
@@ -59,7 +82,7 @@ export function useAuth() {
    * @param {string} companyId
    */
   async function fetchPositions(companyId) {
-    const response = await api.get(`${BASE}/user/positions/`, {
+    const response = await api.get(ENDPOINTS.POSITIONS, {
       params: { company: companyId },
     })
     return response.data.data ?? response.data ?? []
@@ -70,7 +93,7 @@ export function useAuth() {
    * @param {string} companyId
    */
   async function fetchUserRoles(companyId) {
-    const response = await api.get(`${BASE}/user/user-roles/`, {
+    const response = await api.get(ENDPOINTS.USER_ROLES, {
       params: { company: companyId },
     })
     return response.data.data ?? response.data ?? []
@@ -83,6 +106,7 @@ export function useAuth() {
     login,
     fetchUserCompanies,
     fetchCurrentUserCompanies,
+    fetchUserProfile,
     fetchPositions,
     fetchUserRoles,
   }
