@@ -125,6 +125,8 @@
         :conflict-warning="addConflictWarning"
         :checking-conflict="isCheckingConflict"
         :loading-employees="loadingEmployees"
+        :site-options="siteOptionsForRotating"
+        :payroll-group-options="payrollGroupOptions"
         @submit="addSchedule"
         @filter-employees="filterEmployeeOptions"
         @template-change="onRecurringTemplateChange"
@@ -163,6 +165,7 @@ import { useCompany } from '@/composables/page/useCompany'
 import { useSchedule } from '@/composables/page/useSchedule'
 import { useOrganization } from '@/composables/page/useOrganization'
 import { useEmployees } from '@/composables/page/useEmployees'
+import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 import ScheduleStatsCards from '@/components/pages/Schedule/ScheduleStatsCards.vue'
 import ScheduleFilters from '@/components/pages/Schedule/ScheduleFilters.vue'
 import ScheduleTable from '@/components/pages/Schedule/ScheduleTable.vue'
@@ -183,6 +186,7 @@ const {
   fetchLeaveTypes: fetchLeaveTypesApi,
   fetchShiftTemplates: fetchShiftTemplatesApi,
   schedulePagination,
+  autoAssignRecurring,
 } = useSchedule()
 const {
   sites,
@@ -195,6 +199,7 @@ const {
   fetchRecurringSchedules,
 } = useOrganization()
 const { employees, loading: loadingEmployees, fetchEmployees } = useEmployees()
+const { payrollGroups, fetchPayrollGroups } = useAdminPayrollGroups()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -247,6 +252,10 @@ const _freshSchedule = () => ({
   repeatInterval: 1,
   recurringStartDate: null,
   recurringEndDate: null,
+  rotatingPayrollGroups: [],
+  rotatingSites: [],
+  rotatingShiftTemplate: null,
+  rotationMode: 'full_template',
 })
 
 const newSchedule = ref(_freshSchedule())
@@ -345,6 +354,10 @@ const siteFilterOptions = computed(() => [
   ...sites.value.map((site) => ({ label: site.name, value: site.id })),
 ])
 
+const siteOptionsForRotating = computed(() =>
+  sites.value.map((site) => ({ label: site.name, value: site.id })),
+)
+
 const userOptions = computed(() => users.value.map((u) => ({ label: u.name, value: u.id })))
 
 const employeeOptions = computed(() =>
@@ -355,6 +368,10 @@ const employeeOptions = computed(() =>
 
 const departmentOptions = computed(() =>
   departments.value.map((d) => ({ label: d.name, value: d.id })),
+)
+
+const payrollGroupOptions = computed(() =>
+  payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
 )
 
 const shiftTemplateOptions = computed(() => {
@@ -869,6 +886,7 @@ const openAddModal = () => {
   addConflictWarning.value = false
   fetchEmployees()
   fetchShiftTemplatesList()
+  fetchPayrollGroups()
   showAddModal.value = true
 }
 
@@ -994,11 +1012,36 @@ const addSchedule = async () => {
     if (!n.recurringSchedule)
       return $q.notify({ type: 'negative', message: 'Please select a recurring template.' })
   }
+  if (n.scheduleType === 'rotating') {
+    if (!n.recurringStartDate)
+      return $q.notify({ type: 'negative', message: 'Please select a start date.' })
+    if (!n.recurringEndDate)
+      return $q.notify({ type: 'negative', message: 'Please select an end date.' })
+    if (!n.rotatingShiftTemplate)
+      return $q.notify({ type: 'negative', message: 'Please select a shift template.' })
+    if (!n.weekdays?.length)
+      return $q.notify({ type: 'negative', message: 'Please select at least one weekday.' })
+  }
   isCheckingConflict.value = true
   addConflictWarning.value = false
   try {
     const cId = normalizeCompanyId()
-    if (n.scheduleType === 'recurring') {
+    if (n.scheduleType === 'rotating') {
+      const payload = {
+        recurring_items: [
+          {
+            employee_ids: n.userIds,
+            site_ids: n.rotatingSites.map((s) => resolveId(s)).filter(Boolean),
+            shift_template_24h_id: resolveId(n.rotatingShiftTemplate),
+            rotation_mode: n.rotationMode || 'full_template',
+            weekdays: n.weekdays || [],
+            start_date: n.recurringStartDate,
+            end_date: n.recurringEndDate,
+          },
+        ],
+      }
+      await autoAssignRecurring(payload)
+    } else if (n.scheduleType === 'recurring') {
       const template = recurringSchedules.value.find((r) => r.id === resolveId(n.recurringSchedule))
       const rules = Array.isArray(template?.rules) && template.rules.length ? template.rules : []
       const recurringEntries = rules.map((rule) => {
@@ -1052,7 +1095,12 @@ const addSchedule = async () => {
     scheduleCache.value = {}
     await fetchData()
     fetchLeaves()
-    const scheduleLabel = n.scheduleType === 'recurring' ? 'Recurring schedule' : 'Schedule'
+    const scheduleLabel =
+      n.scheduleType === 'recurring'
+        ? 'Recurring schedule'
+        : n.scheduleType === 'rotating'
+          ? 'Rotating schedule'
+          : 'Schedule'
     const startHint =
       n.scheduleType === 'recurring' && n.recurringStartDate
         ? ` Starting ${n.recurringStartDate}.`
