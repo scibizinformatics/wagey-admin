@@ -462,13 +462,13 @@ async function handleMarkAllRead() {
 }
 
 // ─── Companies ────────────────────────────────────────────────────────────────
-const { fetchCompanies: fetchCompaniesFromOrg } = useOrganization()
+const { fetchCurrentUserCompanies } = useOrganization()
 const companyStore = useCompanyStore()
 
 async function fetchCompanies() {
   loadingCompanies.value = true
   try {
-    const companiesData = await fetchCompaniesFromOrg()
+    const companiesData = await fetchCurrentUserCompanies()
     if (!Array.isArray(companiesData) || companiesData.length === 0) {
       $q.notify({
         type: 'warning',
@@ -478,11 +478,11 @@ async function fetchCompanies() {
       return
     }
     companyOptions.value = companiesData.map((company) => ({
-      siteId: String(company.id),
-      siteName: company.name || `Company ${company.id}`,
-      logo: company.logo || null,
-      country: company.country || '',
-      country_name: company.country_name || '',
+      siteId: String(company.company?.id ?? company.company ?? company.id),
+      siteName: company.company?.name || company.company_name || `Company ${company.id}`,
+      logo: company.company?.logo || company.company_logo || null,
+      country: company.company?.country || company.country || '',
+      country_name: company.company?.country_name || company.country_name || '',
     }))
     companyStore.setCompanies(companiesData)
   } catch (err) {
