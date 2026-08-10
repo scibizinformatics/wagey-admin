@@ -1,5 +1,5 @@
 <template>
-  <div class="payout-stepper">
+  <div class="payout-stepper" :class="`variant-${variant}`">
     <div
       v-for="(step, i) in steps"
       :key="step.name"
@@ -20,20 +20,32 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
+import { computeStepsFromPgiStatus } from 'src/constants/pgiStatus'
 
 const router = useRouter()
 const { fetchPayoutGroupProgress } = useDisbursementApi()
 
 const props = defineProps({
   groupId: { type: [Number, String], required: true },
+  pgiStatus: { type: String, default: null },
 })
 const stepIcons = ['check', 'description', 'account_balance', 'send', 'check_circle']
 const ROUTES = ['review', 'payslips', 'funding', 'disburse', 'complete']
+const stepDefs = ROUTES.map((r) => ({ name: r }))
 
 const progressData = ref(null)
 const loading = ref(true)
 
 const steps = computed(() => {
+  if (props.pgiStatus) {
+    const mapped = computeStepsFromPgiStatus(props.pgiStatus, stepDefs)
+    if (mapped) {
+      return mapped.map((s) => ({
+        ...s,
+        state: s.state === 'completed' ? 'done' : s.state === 'in_progress' ? 'active' : 'pending',
+      }))
+    }
+  }
   if (!progressData.value) return []
   return progressData.value.progress.map((p) => {
     let state = 'pending'
@@ -42,6 +54,14 @@ const steps = computed(() => {
     else if (p.status === 'locked') state = 'pending'
     return { ...p, state }
   })
+})
+
+const variant = computed(() => {
+  if (!steps.value?.length) return 'ongoing'
+  const firstStepDone = steps.value[0]?.state === 'done'
+  const allDone = steps.value.every((s) => s.state === 'done')
+  if (firstStepDone || allDone) return 'completed'
+  return 'ongoing'
 })
 
 onMounted(async () => {
@@ -123,6 +143,19 @@ function goToStep(index) {
 
 .line-done {
   border-color: #16a34a;
+}
+
+.variant-ongoing .step-circle.step-active {
+  background: #3b82f6;
+}
+.variant-ongoing .step-circle.step-done {
+  background: #3b82f6;
+}
+.variant-ongoing .line-active {
+  border-color: #3b82f6;
+}
+.variant-ongoing .line-done {
+  border-color: #3b82f6;
 }
 
 .clickable {
