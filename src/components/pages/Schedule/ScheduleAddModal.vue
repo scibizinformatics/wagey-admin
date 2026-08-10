@@ -14,6 +14,7 @@
             :options="[
               { label: 'One-Time Schedule', value: 'one-time' },
               { label: 'Recurring Schedule', value: 'recurring' },
+              { label: 'Rotating Schedule', value: 'rotating' },
             ]"
             option-value="value"
             option-label="label"
@@ -267,6 +268,142 @@
             />
           </template>
 
+          <!-- Rotating: Date Range + Details -->
+          <template v-if="newSchedule.scheduleType === 'rotating'">
+            <div class="form-row">
+              <q-input
+                :model-value="newSchedule.recurringStartDate"
+                @update:model-value="updateField('recurringStartDate', $event)"
+                label="Start Date" outlined class="form-field"
+                placeholder="YYYY-MM-DD"
+                :rules="[(val) => !!val || 'Start date is required']"
+                readonly
+              >
+                <template #append>
+                  <q-icon name="event" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-date
+                        :model-value="newSchedule.recurringStartDate"
+                        @update:model-value="updateField('recurringStartDate', $event)"
+                        mask="YYYY-MM-DD"
+                      >
+                        <div class="row items-center justify-end">
+                          <q-btn v-close-popup label="Close" color="primary" flat />
+                        </div>
+                      </q-date>
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
+              <q-input
+                :model-value="newSchedule.recurringEndDate"
+                @update:model-value="updateField('recurringEndDate', $event)"
+                label="End Date" outlined class="form-field"
+                placeholder="YYYY-MM-DD"
+                :rules="[(val) => !!val || 'End date is required']"
+                readonly
+              >
+                <template #append>
+                  <q-icon name="event" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-date
+                        :model-value="newSchedule.recurringEndDate"
+                        @update:model-value="updateField('recurringEndDate', $event)"
+                        mask="YYYY-MM-DD"
+                      >
+                        <div class="row items-center justify-end">
+                          <q-btn v-close-popup label="Close" color="primary" flat />
+                        </div>
+                      </q-date>
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
+            </div>
+
+            <div class="form-row">
+              <q-select
+                :model-value="newSchedule.rotatingPayrollGroups"
+                @update:model-value="updateField('rotatingPayrollGroups', $event)"
+                :options="payrollGroupOptions"
+                option-value="value"
+                option-label="label"
+                label="Payroll Groups"
+                outlined
+                emit-value
+                map-options
+                multiple
+                use-chips
+                class="form-field"
+                clearable
+              />
+              <q-select
+                :model-value="newSchedule.rotatingSites"
+                @update:model-value="updateField('rotatingSites', $event)"
+                :options="siteOptions"
+                option-value="value"
+                option-label="label"
+                label="Sites"
+                outlined
+                emit-value
+                map-options
+                multiple
+                use-chips
+                class="form-field"
+                clearable
+              />
+            </div>
+
+            <q-select
+              :model-value="newSchedule.rotatingShiftTemplate"
+              @update:model-value="updateField('rotatingShiftTemplate', $event)"
+              :options="shiftTemplateOptions"
+              option-value="value"
+              option-label="label"
+              label="Shift Template"
+              outlined emit-value map-options
+              class="form-field full-width"
+              :rules="[(val) => !!val || 'Shift template is required']"
+            />
+
+            <q-select
+              :model-value="newSchedule.rotationMode"
+              @update:model-value="updateField('rotationMode', $event)"
+              :options="[
+                { label: 'Full Template', value: 'full_template' },
+              ]"
+              option-value="value"
+              option-label="label"
+              label="Rotation Mode"
+              outlined emit-value map-options
+              class="form-field full-width"
+            />
+
+            <q-select
+              :model-value="newSchedule.weekdays"
+              @update:model-value="updateField('weekdays', $event)"
+              :options="[
+                { label: 'Monday', value: 'monday' },
+                { label: 'Tuesday', value: 'tuesday' },
+                { label: 'Wednesday', value: 'wednesday' },
+                { label: 'Thursday', value: 'thursday' },
+                { label: 'Friday', value: 'friday' },
+                { label: 'Saturday', value: 'saturday' },
+                { label: 'Sunday', value: 'sunday' },
+              ]"
+              option-value="value"
+              option-label="label"
+              label="Weekdays"
+              outlined
+              emit-value
+              map-options
+              multiple
+              use-chips
+              class="form-field full-width"
+              :rules="[(val) => (val && val.length > 0) || 'Select at least one weekday']"
+            />
+          </template>
+
           <!-- Conflict Warning -->
           <q-banner v-if="conflictWarning" class="warning-banner">
             <template #avatar>
@@ -282,7 +419,13 @@
             <q-btn
               type="submit"
               color="primary"
-              :label="newSchedule.scheduleType === 'recurring' ? 'Create Recurring Schedule' : 'Add Schedule'"
+              :label="
+                newSchedule.scheduleType === 'recurring'
+                  ? 'Create Recurring Schedule'
+                  : newSchedule.scheduleType === 'rotating'
+                    ? 'Create Rotating Schedule'
+                    : 'Add Schedule'
+              "
               unelevated
               class="submit-btn"
               :loading="checkingConflict"
@@ -295,7 +438,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -312,6 +455,10 @@ const props = defineProps({
       department: null,
       repeatInterval: 1,
       isRotating: false,
+      rotatingPayrollGroups: [],
+      rotatingSites: [],
+      rotatingShiftTemplate: null,
+      rotationMode: 'full_template',
     }),
   },
   filteredEmployeeOptions: { type: Array, default: () => [] },
@@ -321,9 +468,29 @@ const props = defineProps({
   conflictWarning: { type: Boolean, default: false },
   checkingConflict: { type: Boolean, default: false },
   loadingEmployees: { type: Boolean, default: false },
+  siteOptions: { type: Array, default: () => [] },
+  payrollGroupOptions: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(['update:modelValue', 'update:newSchedule', 'submit', 'filter-employees', 'template-change']);
+const emit = defineEmits([
+  'update:modelValue',
+  'update:newSchedule',
+  'submit',
+  'filter-employees',
+  'template-change',
+]);
+
+watch(
+  () => props.newSchedule.scheduleType,
+  (type) => {
+    if (type === 'rotating' && !(props.newSchedule.weekdays && props.newSchedule.weekdays.length)) {
+      emit('update:newSchedule', {
+        ...props.newSchedule,
+        weekdays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+      });
+    }
+  },
+);
 
 // ─── Calendar state ─────────────────────────────────────────────────────────
 const _today = new Date();
