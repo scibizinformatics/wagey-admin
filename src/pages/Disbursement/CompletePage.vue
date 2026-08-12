@@ -45,7 +45,7 @@
             <span class="stats-dot stats-dot-paid"></span>
             Total Employees Paid
           </div>
-          <div class="stats-segment-value">{{ completion?.total_employees_paid ?? 0 }}</div>
+          <div class="stats-segment-value">{{ employees.length ?? 0 }}</div>
         </div>
         <div class="stats-divider"></div>
         <div class="stats-segment">
@@ -90,6 +90,7 @@
           :rows="paginatedData"
           :columns="columns"
           :loading="loading"
+          :pagination="{ rowsPerPage: 0 }"
           row-key="id"
           flat
           dense
@@ -274,7 +275,7 @@ function onPageSizeChange(newSize) {
    HEADER
    ============================== */
 .back-row {
-  padding: 8px 24px 0;
+  padding: 8px 5px 0;
 }
 
 .back-btn {
