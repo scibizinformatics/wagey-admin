@@ -30,9 +30,16 @@
             </q-th>
             <q-th key="name" :props="props" class="table-header-cell">Employee</q-th>
             <q-th key="role" :props="props" class="table-header-cell">Role</q-th>
-            <q-th key="position" :props="props" class="table-header-cell">Position</q-th>
-            <q-th key="department" :props="props" class="table-header-cell">Department</q-th>
             <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
+            <q-th
+              v-for="(lt, idx) in visibleLeaveTypes"
+              :key="`leave_${idx}`"
+              :props="props"
+              class="table-header-cell leave-header-cell"
+            >
+              {{ lt.name || `Leave ${idx + 1}` }}
+            </q-th>
+            <q-th key="ctoBalance" :props="props" class="table-header-cell">CTO</q-th>
             <q-th key="contract" :props="props" class="table-header-cell">Contract</q-th>
             <q-th key="actions" :props="props" class="table-header-cell table-header-actions"
               >Actions</q-th
@@ -81,14 +88,6 @@
               <span class="role-chip">{{ getRole(props.row) }}</span>
             </q-td>
 
-            <q-td key="position" :props="props" class="table-body-cell">
-              <span class="position-text">{{ getPosition(props.row) }}</span>
-            </q-td>
-
-            <q-td key="department" :props="props" class="table-body-cell">
-              <span class="department-text">{{ getDepartment(props.row) }}</span>
-            </q-td>
-
             <q-td key="status" :props="props" class="table-body-cell">
               <div :class="['status-badge', getStatusClass(props.row)]">
                 <span class="status-dot"></span>
@@ -96,8 +95,40 @@
               </div>
             </q-td>
 
+            <q-td
+              v-for="(lt, idx) in visibleLeaveTypes"
+              :key="`leave_${idx}`"
+              :props="props"
+              class="table-body-cell leave-cell"
+            >
+              <q-skeleton
+                v-if="isLoadingBalance(props.row)"
+                type="text"
+                style="width: 40px; height: 16px"
+                class="skeleton-inline"
+              />
+              <span v-else class="balance-text">{{ getLeaveBalanceForType(props.row, lt.id) }}</span>
+            </q-td>
+
+            <q-td key="ctoBalance" :props="props" class="table-body-cell">
+              <q-skeleton
+                v-if="isLoadingBalance(props.row)"
+                type="text"
+                style="width: 40px; height: 16px"
+                class="skeleton-inline"
+              />
+              <span v-else class="balance-text">{{ getCtoBalance(props.row) }}</span>
+            </q-td>
+
             <q-td key="contract" :props="props" class="table-body-cell">
+              <q-skeleton
+                v-if="isLoadingContract(props.row)"
+                type="text"
+                style="width: 60px; height: 16px"
+                class="skeleton-inline"
+              />
               <span
+                v-else
                 :class="[
                   'contract-badge',
                   getContract(props.row) === 'No Contract' ? 'contract-none' : 'contract-active',
@@ -149,6 +180,30 @@
                           : 'Assign Payroll Profile'
                       }}</q-item-section>
                     </q-item>
+                    <q-item
+                      v-if="getStatus(props.row) !== 'Terminated'"
+                      clickable
+                      v-close-popup
+                      @click="$emit('add-leave-balance', props.row)"
+                      class="dropdown-item"
+                    >
+                      <q-item-section avatar
+                        ><q-icon name="event_note" size="16px" color="primary"
+                      /></q-item-section>
+                      <q-item-section>Add Leave Balance</q-item-section>
+                    </q-item>
+                    <q-item
+                      v-if="getStatus(props.row) !== 'Terminated'"
+                      clickable
+                      v-close-popup
+                      @click="$emit('add-cto-balance', props.row)"
+                      class="dropdown-item"
+                    >
+                      <q-item-section avatar
+                        ><q-icon name="more_time" size="16px" color="secondary"
+                      /></q-item-section>
+                      <q-item-section>Add CTO Balance</q-item-section>
+                    </q-item>
                     <q-separator v-if="getStatus(props.row) !== 'Terminated'" />
                     <q-item
                       v-if="getStatus(props.row) !== 'Terminated'"
@@ -181,15 +236,26 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 const props = defineProps({
   employees: { type: Array, required: true },
   loading: { type: Boolean, default: false },
   contracts: { type: Object, default: () => ({}) },
   companyId: { type: [Number, String], default: null },
   selected: { type: Array, default: () => [] },
-  positions: { type: Array, default: () => [] },
-  departments: { type: Array, default: () => [] },
+  leaveTypes: { type: Array, default: () => [] },
+  loadingContractIds: { type: Object, default: () => new Set() },
+  loadingBalanceIds: { type: Object, default: () => new Set() },
 })
+
+defineEmits(['update:selected', 'view', 'edit', 'assign', 'terminate', 'restore', 'view-photo', 'add-leave-balance', 'add-cto-balance'])
+
+const visibleLeaveTypes = computed(() =>
+  props.leaveTypes
+    .filter((lt) => !lt.name?.toLowerCase().includes('unpaid'))
+    .slice(0, 3),
+)
 
 /* ─── Helper Functions ─────────────────────────────────────────────────────── */
 
@@ -261,40 +327,6 @@ const getStatusClass = (employee) => {
   return 'status-default'
 }
 
-const getEmployeeContract = (employee) => {
-  if (!employee || !props.companyId) return null
-  const companyContracts = props.contracts[props.companyId]
-  if (!companyContracts) return null
-  const contract = companyContracts[employee.id]
-  if (!contract) return null
-  if (Array.isArray(contract) && contract.length > 0) return contract[0]
-  if (contract?.pay_type) return contract
-  if (contract?.contract) return contract.contract
-  return null
-}
-
-const getPosition = (employee) => {
-  const contract = getEmployeeContract(employee)
-  if (!contract) return 'N/A'
-  if (contract.position_name) return contract.position_name
-  if (contract.position) {
-    const pos = props.positions.find((p) => Number(p.id) === Number(contract.position))
-    if (pos) return pos.name
-  }
-  return 'N/A'
-}
-
-const getDepartment = (employee) => {
-  const contract = getEmployeeContract(employee)
-  if (!contract) return 'N/A'
-  if (contract.department_name) return contract.department_name
-  if (contract.department) {
-    const dept = props.departments.find((d) => Number(d.id) === Number(contract.department))
-    if (dept) return dept.name
-  }
-  return 'N/A'
-}
-
 const getInitials = (name) =>
   name && name !== 'N/A'
     ? name
@@ -310,15 +342,45 @@ const handleImageError = (event) => {
   event.target.style.display = 'none'
 }
 
-const columns = [
-  { name: 'name', label: 'Employee', field: (row) => getFullName(row), align: 'left' },
-  { name: 'role', label: 'Role', field: (row) => getRole(row), align: 'left' },
-  { name: 'position', label: 'Position', field: (row) => getPosition(row), align: 'left' },
-  { name: 'department', label: 'Department', field: (row) => getDepartment(row), align: 'left' },
-  { name: 'status', label: 'Status', field: (row) => getStatus(row), align: 'left' },
-  { name: 'contract', label: 'Contract', field: (row) => getContract(row), align: 'left' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-]
+const getLeaveBalanceForType = (employee, leaveTypeId) => {
+  const balances = employee?._balance?.leaveBalances || []
+  const match = balances.find(
+    (b) => b.leave_type_id === leaveTypeId || b.id === leaveTypeId,
+  )
+  if (!match) return '\u2014'
+  return match.balance ?? match.days ?? match.hours ?? 0
+}
+
+const getCtoBalance = (employee) => {
+  let cto = employee?._balance?.ctoBalance
+  if (cto === null || cto === undefined || cto === '') return '\u2014'
+
+  // Handle object response: { remaining: "7.00", ... }
+  if (typeof cto === 'object') {
+    cto = cto.remaining ?? cto.hours ?? null
+  }
+
+  return cto !== null && cto !== undefined ? `${cto}h` : '\u2014'
+}
+
+const isLoadingContract = (employee) => props.loadingContractIds.has(employee.id)
+const isLoadingBalance = (employee) => props.loadingBalanceIds.has(employee.id)
+
+const columns = computed(() => [
+  { name: 'name', label: 'Employee', field: (row) => getFullName(row), align: 'left', style: 'width: 200px; min-width: 200px' },
+  { name: 'role', label: 'Role', field: (row) => getRole(row), align: 'left', style: 'width: 120px; min-width: 120px' },
+  { name: 'status', label: 'Status', field: (row) => getStatus(row), align: 'left', style: 'width: 100px; min-width: 100px' },
+  ...visibleLeaveTypes.value.map((lt, idx) => ({
+    name: `leave_${idx}`,
+    label: lt.name || `Leave ${idx + 1}`,
+    field: (row) => getLeaveBalanceForType(row, lt.id),
+    align: 'left',
+    style: 'width: 110px; min-width: 110px',
+  })),
+  { name: 'ctoBalance', label: 'CTO', field: (row) => getCtoBalance(row), align: 'left', style: 'width: 70px; min-width: 70px' },
+  { name: 'contract', label: 'Contract', field: (row) => getContract(row), align: 'left', style: 'width: 100px; min-width: 100px' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center', style: 'width: 60px; min-width: 60px' },
+])
 </script>
 
 <style scoped>
@@ -550,6 +612,23 @@ const columns = [
   background: #94a3b8;
 }
 
+/* ── Balance text ── */
+.balance-text {
+  color: #64748b;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ── Leave columns ── */
+.leave-header-cell {
+  width: 110px;
+  min-width: 110px;
+}
+.leave-cell {
+  width: 110px;
+  min-width: 110px;
+}
+
 /* ── Contract badge ── */
 .contract-badge {
   display: inline-flex;
@@ -700,5 +779,10 @@ const columns = [
     padding: 10px 12px !important;
     font-size: 12px;
   }
+}
+
+.skeleton-inline {
+  display: inline-block;
+  border-radius: 4px;
 }
 </style>
