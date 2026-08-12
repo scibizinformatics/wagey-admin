@@ -38,7 +38,10 @@
             <span class="stats-dot stats-dot-total"></span>
             Open Groups
           </div>
-          <div class="stats-segment-value">{{ dashboard?.open_payout_groups ?? 0 }}</div>
+          <div class="stats-segment-value">
+            <q-skeleton v-if="loadingDashboards" type="text" style="width: 30px; height: 16px" />
+            <template v-else>{{ dashboard?.open_payout_groups ?? 0 }}</template>
+          </div>
         </div>
         <div class="stats-divider"></div>
         <div class="stats-segment">
@@ -46,7 +49,10 @@
             <span class="stats-dot stats-dot-review"></span>
             Review Required
           </div>
-          <div class="stats-segment-value">{{ dashboard?.review_required ?? 0 }}</div>
+          <div class="stats-segment-value">
+            <q-skeleton v-if="loadingDashboards" type="text" style="width: 30px; height: 16px" />
+            <template v-else>{{ dashboard?.review_required ?? 0 }}</template>
+          </div>
         </div>
         <div class="stats-divider"></div>
         <div class="stats-segment">
@@ -54,7 +60,10 @@
             <span class="stats-dot stats-dot-ack"></span>
             Awaiting Ack
           </div>
-          <div class="stats-segment-value">{{ dashboard?.awaiting_acknowledgement ?? 0 }}</div>
+          <div class="stats-segment-value">
+            <q-skeleton v-if="loadingDashboards" type="text" style="width: 30px; height: 16px" />
+            <template v-else>{{ dashboard?.awaiting_acknowledgement ?? 0 }}</template>
+          </div>
         </div>
         <div class="stats-divider"></div>
         <div class="stats-segment">
@@ -62,7 +71,10 @@
             <span class="stats-dot stats-dot-funding"></span>
             Ready for Funding
           </div>
-          <div class="stats-segment-value">₱{{ parseAmount(dashboard?.ready_for_funding_amount) }}</div>
+          <div class="stats-segment-value">
+            <q-skeleton v-if="loadingDashboards" type="text" style="width: 60px; height: 16px" />
+            <template v-else>₱{{ parseAmount(dashboard?.ready_for_funding_amount) }}</template>
+          </div>
         </div>
         <div class="stats-divider"></div>
         <div class="stats-segment">
@@ -70,7 +82,10 @@
             <span class="stats-dot stats-dot-funded"></span>
             Funded
           </div>
-          <div class="stats-segment-value">₱{{ parseAmount(dashboard?.funded_amount) }}</div>
+          <div class="stats-segment-value">
+            <q-skeleton v-if="loadingDashboards" type="text" style="width: 60px; height: 16px" />
+            <template v-else>₱{{ parseAmount(dashboard?.funded_amount) }}</template>
+          </div>
         </div>
         <div class="stats-divider"></div>
         <div class="stats-segment">
@@ -78,7 +93,10 @@
             <span class="stats-dot stats-dot-disbursing"></span>
             Disbursing
           </div>
-          <div class="stats-segment-value">₱{{ parseAmount(dashboard?.disbursing_amount) }}</div>
+          <div class="stats-segment-value">
+            <q-skeleton v-if="loadingDashboards" type="text" style="width: 60px; height: 16px" />
+            <template v-else>₱{{ parseAmount(dashboard?.disbursing_amount) }}</template>
+          </div>
         </div>
         <div class="stats-divider"></div>
         <div class="stats-segment">
@@ -86,7 +104,10 @@
             <span class="stats-dot stats-dot-completed"></span>
             Completed
           </div>
-          <div class="stats-segment-value">{{ dashboard?.completed_this_cutoff ?? 0 }}</div>
+          <div class="stats-segment-value">
+            <q-skeleton v-if="loadingDashboards" type="text" style="width: 30px; height: 16px" />
+            <template v-else>{{ dashboard?.completed_this_cutoff ?? 0 }}</template>
+          </div>
         </div>
       </div>
 
@@ -99,7 +120,6 @@
           :rows="paginatedRuns"
           :loading="loading"
           @view="openRun"
-          @delete="deleteRun"
         />
       </div>
 
@@ -161,6 +181,7 @@ const { companyId } = useCompany()
 const { fetchCutoffInstances, fetchDashboardSummary, fetchPayoutGroupInstances } = useDisbursementApi()
 
 const loading = ref(true)
+const loadingDashboards = ref(false)
 const rows = ref([])
 const dashboard = ref(null)
 const searchTerm = ref('')
@@ -201,46 +222,13 @@ onMounted(async () => {
       return
     }
 
-    const results = await Promise.all(
-      cutoffs.map((c) => {
-        const cid = c.id
-        return Promise.all([
-          fetchDashboardSummary(companyId.value, cid).catch(() => null),
-          fetchPayoutGroupInstances(companyId.value, cid).catch(() => null),
-        ])
-      }),
+    // PHASE 1: Fetch payout groups for all cutoffs (batched) and show table immediately
+    const allGroups = await fetchWithConcurrency(
+      cutoffs,
+      (c) => fetchPayoutGroupInstances(companyId.value, c.id).catch(() => null),
+      10,
     )
-
-    const allDashboards = results.map((r) => r[0]).filter(Boolean)
-
-    const agg = {
-      open_payout_groups: 0,
-      review_required: 0,
-      awaiting_acknowledgement: 0,
-      ready_for_funding: 0,
-      ready_for_funding_amount: 0,
-      funded: 0,
-      funded_amount: 0,
-      disbursing: 0,
-      disbursing_amount: 0,
-      completed_this_cutoff: 0,
-    }
-    for (const d of allDashboards) {
-      agg.open_payout_groups += d.open_payout_groups || 0
-      agg.review_required += d.review_required || 0
-      agg.awaiting_acknowledgement += d.awaiting_acknowledgement || 0
-      agg.ready_for_funding += d.ready_for_funding || 0
-      agg.ready_for_funding_amount += parseFloat(d.ready_for_funding_amount || 0)
-      agg.funded += d.funded || 0
-      agg.funded_amount += parseFloat(d.funded_amount || 0)
-      agg.disbursing += d.disbursing || 0
-      agg.disbursing_amount += parseFloat(d.disbursing_amount || 0)
-      agg.completed_this_cutoff += d.completed_this_cutoff || 0
-    }
-    dashboard.value = agg
-
-    const allGroups = results.flatMap((r) => r[1] || [])
-    rows.value = allGroups.map((item) => ({
+    rows.value = allGroups.flatMap((g) => g || []).map((item) => ({
       id: item.id,
       group: item.payout_group_name,
       cutoff: item.cutoff_instance_name,
@@ -250,19 +238,26 @@ onMounted(async () => {
       status: item.payout_status,
       statusDisplay: item.payout_status_display,
     }))
+    loading.value = false
+
+    // PHASE 2: Background-fetch dashboard summaries and aggregate stats
+    loadingDashboards.value = true
+    const dashboardResults = await fetchWithConcurrency(
+      cutoffs,
+      (c) => fetchDashboardSummary(companyId.value, c.id).catch(() => null),
+      10,
+    )
+    dashboard.value = aggregateDashboards(dashboardResults.filter(Boolean))
   } catch (err) {
-    console.error('[DisbursementListPage] aggregation failed:', err)
+    console.error('[DisbursementListPage] load failed:', err)
   } finally {
     loading.value = false
+    loadingDashboards.value = false
   }
 })
 
 function openRun(row) {
   router.push({ path: `/app/payroll/review/${row.id}`, query: { pgi_status: row.status } })
-}
-
-function deleteRun(row) {
-  console.log('[DisbursementListPage] delete run:', row.id)
 }
 
 function exportRuns() {
@@ -299,6 +294,44 @@ function exportRuns() {
     $q.notify({ type: 'negative', message: 'Failed to export PDF', position: 'top' })
     console.error('[DisbursementListPage] PDF export error:', err)
   }
+}
+
+async function fetchWithConcurrency(items, fn, concurrency = 10) {
+  const results = []
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency)
+    const batchResults = await Promise.all(batch.map(fn))
+    results.push(...batchResults)
+  }
+  return results
+}
+
+function aggregateDashboards(allDashboards) {
+  const agg = {
+    open_payout_groups: 0,
+    review_required: 0,
+    awaiting_acknowledgement: 0,
+    ready_for_funding: 0,
+    ready_for_funding_amount: 0,
+    funded: 0,
+    funded_amount: 0,
+    disbursing: 0,
+    disbursing_amount: 0,
+    completed_this_cutoff: 0,
+  }
+  for (const d of allDashboards) {
+    agg.open_payout_groups += d.open_payout_groups || 0
+    agg.review_required += d.review_required || 0
+    agg.awaiting_acknowledgement += d.awaiting_acknowledgement || 0
+    agg.ready_for_funding += d.ready_for_funding || 0
+    agg.ready_for_funding_amount += parseFloat(d.ready_for_funding_amount || 0)
+    agg.funded += d.funded || 0
+    agg.funded_amount += parseFloat(d.funded_amount || 0)
+    agg.disbursing += d.disbursing || 0
+    agg.disbursing_amount += parseFloat(d.disbursing_amount || 0)
+    agg.completed_this_cutoff += d.completed_this_cutoff || 0
+  }
+  return agg
 }
 
 function parseAmount(val) {
