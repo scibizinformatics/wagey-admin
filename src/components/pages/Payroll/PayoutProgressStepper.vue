@@ -20,7 +20,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
-import { computeStepsFromPgiStatus } from 'src/constants/pgiStatus'
+import { computeStepsFromPgiStatus, PGI_STATUS_MAP } from 'src/constants/pgiStatus'
 
 const router = useRouter()
 const { fetchPayoutGroupProgress } = useDisbursementApi()
@@ -34,18 +34,20 @@ const ROUTES = ['review', 'payslips', 'funding', 'disburse', 'complete']
 const stepDefs = ROUTES.map((r) => ({ name: r }))
 
 const progressData = ref(null)
-const loading = ref(true)
 
 const steps = computed(() => {
-  if (props.pgiStatus) {
-    const mapped = computeStepsFromPgiStatus(props.pgiStatus, stepDefs)
-    if (mapped) {
-      return mapped.map((s) => ({
-        ...s,
-        state: s.state === 'completed' ? 'done' : s.state === 'in_progress' ? 'active' : 'pending',
-      }))
-    }
+  if (!props.pgiStatus) return []
+
+  // Fast path: known status — derive steps locally
+  const mapped = computeStepsFromPgiStatus(props.pgiStatus, stepDefs)
+  if (mapped) {
+    return mapped.map((s) => ({
+      ...s,
+      state: s.state === 'completed' ? 'done' : s.state === 'in_progress' ? 'active' : 'pending',
+    }))
   }
+
+  // Fallback path: unknown status — use backend progress data
   if (!progressData.value) return []
   return progressData.value.progress.map((p) => {
     let state = 'pending'
@@ -65,12 +67,13 @@ const variant = computed(() => {
 })
 
 onMounted(async () => {
+  // Only fetch from backend for statuses not in the known map
+  if (!props.pgiStatus || PGI_STATUS_MAP[props.pgiStatus]) return
+
   try {
     progressData.value = await fetchPayoutGroupProgress(props.groupId)
   } catch (err) {
     console.error('[PayoutProgressStepper] fetch failed:', err)
-  } finally {
-    loading.value = false
   }
 })
 
