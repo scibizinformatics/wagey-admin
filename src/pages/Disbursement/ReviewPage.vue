@@ -37,7 +37,7 @@
             <span class="stats-dot stats-dot-total"></span>
             Total Employees
           </div>
-          <div class="stats-segment-value">{{ overview?.total_employee ?? 0 }}</div>
+          <div class="stats-segment-value">{{ reviewData.length ?? 0 }}</div>
         </div>
         <div class="stats-divider"></div>
         <div class="stats-segment">
@@ -87,15 +87,16 @@
       </div>
       <div class="table-block">
           <q-table
-            :rows="paginatedData"
-            :columns="columns"
-            :loading="loading"
-            row-key="id"
-            flat
-            dense
-            hide-no-data
-            hide-pagination
-            class="review-table"
+          :rows="paginatedData"
+          :columns="columns"
+          :loading="loading"
+          :pagination="{ rowsPerPage: 0 }"
+          row-key="id"
+          flat
+          dense
+          hide-no-data
+          hide-pagination
+          class="review-table"
           >
             <template #body-cell-status="props">
             <q-td :props="props">
@@ -111,26 +112,50 @@
             </q-td>
           </template>
           <template #body-cell-action="props">
-            <q-td :props="props">
-              <div class="action-cell">
-                <q-btn
-                  flat dense no-caps size="11px"
-                  color="positive"
-                  label="Review"
-                  :disable="reviewedIds.includes(props.row.id)"
-                  :loading="reviewingId === props.row.id"
-                  @click="reviewEmployee(props.row)"
-                />
-                <q-btn
-                  flat dense no-caps size="11px"
-                  color="info"
-                  label="Release"
-                  :disable="!reviewedIds.includes(props.row.id)"
-                  :loading="releasingId === props.row.id"
-                  @click="releaseEmployee(props.row)"
-                />
-                <q-btn flat dense no-caps size="11px" color="primary" label="View" @click="viewEmployee(props.row)" />
-              </div>
+            <q-td :props="props" class="actions-cell">
+              <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
+                <q-menu anchor="bottom right" self="top right" class="action-dropdown">
+                  <q-list dense style="min-width: 150px">
+                    <q-item
+                      clickable
+                      v-close-popup
+                      :disable="reviewedIds.includes(props.row.id) || reviewingId === props.row.id"
+                      @click="reviewEmployee(props.row)"
+                      class="dropdown-item"
+                    >
+                      <q-item-section avatar>
+                        <q-spinner v-if="reviewingId === props.row.id" size="16px" />
+                        <q-icon v-else name="check" size="16px" color="positive" />
+                      </q-item-section>
+                      <q-item-section>Review</q-item-section>
+                    </q-item>
+                    <q-item
+                      v-if="reviewedIds.includes(props.row.id)"
+                      clickable
+                      v-close-popup
+                      :disable="releasingId === props.row.id"
+                      @click="releaseEmployee(props.row)"
+                      class="dropdown-item"
+                    >
+                      <q-item-section avatar>
+                        <q-spinner v-if="releasingId === props.row.id" size="16px" />
+                        <q-icon v-else name="send" size="16px" color="info" />
+                      </q-item-section>
+                      <q-item-section>Release</q-item-section>
+                    </q-item>
+                    <q-separator />
+                    <q-item
+                      clickable
+                      v-close-popup
+                      @click="viewEmployee(props.row)"
+                      class="dropdown-item"
+                    >
+                      <q-item-section avatar><q-icon name="visibility" size="16px" /></q-item-section>
+                      <q-item-section>View</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </q-btn>
             </q-td>
           </template>
           <template #no-data>
@@ -430,7 +455,7 @@ async function releaseEmployee(row) {
    HEADER
    ============================== */
 .back-row {
-  padding: 8px 24px 0;
+  padding: 8px 5px 0;
 }
 
 .back-btn {
@@ -649,11 +674,37 @@ async function releaseEmployee(row) {
   color: #9ca3af;
 }
 
-.action-cell {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  justify-content: center;
+.actions-cell {
+  text-align: center !important;
+  width: 60px;
+}
+
+.action-menu-btn {
+  color: #94a3b8 !important;
+  border-radius: 8px !important;
+}
+
+.action-menu-btn:hover {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+}
+
+.action-dropdown {
+  border-radius: 10px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08) !important;
+}
+
+.dropdown-item {
+  font-size: 13px !important;
+  color: #334155 !important;
+  min-height: 36px !important;
+  padding: 0 12px !important;
+  border-radius: 6px !important;
+}
+
+.dropdown-item:hover {
+  background: #f8fafc !important;
 }
 
 .done-text {
