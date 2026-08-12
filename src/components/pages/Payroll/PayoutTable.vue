@@ -21,20 +21,6 @@
         <PayoutProgressStepper :group-id="props.row.id" :pgi-status="props.row.status" />
       </q-td>
     </template>
-    <template #body-cell-actions="props">
-      <q-td :props="props">
-        <q-btn-dropdown flat dense no-caps size="11px" label="Actions" class="action-btn">
-          <q-list dense>
-            <q-item v-ripple clickable @click="$emit('view', props.row)">
-              <q-item-section><q-item-label>View</q-item-label></q-item-section>
-            </q-item>
-            <q-item v-ripple clickable @click="$emit('delete', props.row)">
-              <q-item-section><q-item-label>Delete</q-item-label></q-item-section>
-            </q-item>
-          </q-list>
-        </q-btn-dropdown>
-      </q-td>
-    </template>
     <template #no-data>
       <div class="empty-state">
         <q-icon name="inbox" size="28px" color="grey-4" />
@@ -55,7 +41,7 @@ const props = defineProps({
   columns: { type: Array, default: null },
 })
 
-defineEmits(['view', 'delete'])
+defineEmits(['view'])
 
 const defaultColumns = [
   { name: 'group', label: 'Group', field: 'group', align: 'left', sortable: true },
@@ -72,7 +58,6 @@ const defaultColumns = [
   },
   { name: 'status', label: 'Status', field: 'status', align: 'left' },
   { name: 'progress', label: 'Progress', field: 'progress', align: 'left' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
 
 const columns = computed(() => props.columns ?? defaultColumns)
@@ -104,9 +89,6 @@ const columns = computed(() => props.columns ?? defaultColumns)
 }
 .payout-table :deep(.q-table tbody tr:hover td) {
   background: #f8fafc;
-}
-.action-btn :deep(.q-btn__content) {
-  font-size: 11px;
 }
 .empty-state {
   display: flex;
