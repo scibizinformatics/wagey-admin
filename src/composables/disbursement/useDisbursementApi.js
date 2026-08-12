@@ -1,22 +1,56 @@
 import { api } from 'boot/axios'
 import { BASE } from 'src/composables/utils/http'
 
+// ── Simple module-level cache for list-page data ──
+const cache = new Map()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+function cacheKey(fn, ...args) {
+  return `${fn}:${args.join(':')}`
+}
+
+function getCached(key) {
+  const entry = cache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    cache.delete(key)
+    return null
+  }
+  return entry.data
+}
+
+function setCached(key, data) {
+  cache.set(key, { data, timestamp: Date.now() })
+}
+
 export function useDisbursementApi() {
 
   // ── Cutoff Instances ──
   async function fetchCutoffInstances() {
+    const key = cacheKey('cutoffs')
+    const cached = getCached(key)
+    if (cached) return cached
     const { data } = await api.get(`${BASE}/payroll/admin/cutoff-instances/`)
+    setCached(key, data)
     return data
   }
 
   // ── List Page ──
   async function fetchDashboardSummary(companyId, cutoffInstanceId) {
+    const key = cacheKey('dashboard', companyId, cutoffInstanceId)
+    const cached = getCached(key)
+    if (cached) return cached
     const { data } = await api.get(`${BASE}/payroll/admin/payout-group-dashboard/${companyId}/${cutoffInstanceId}/`)
+    setCached(key, data)
     return data
   }
 
   async function fetchPayoutGroupInstances(companyId, cutoffInstanceId) {
+    const key = cacheKey('pgi', companyId, cutoffInstanceId)
+    const cached = getCached(key)
+    if (cached) return cached
     const { data } = await api.get(`${BASE}/payroll/admin/payout-group-instances/${companyId}/${cutoffInstanceId}/`)
+    setCached(key, data)
     return data
   }
 
