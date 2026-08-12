@@ -41,7 +41,7 @@
             <span class="stats-dot stats-dot-employees"></span>
             Employees
           </div>
-          <div class="stats-segment-value">{{ amounts?.employees ?? 0 }}</div>
+          <div class="stats-segment-value">{{ allEarners.length ?? 0 }}</div>
         </div>
         <div class="stats-divider"></div>
         <div class="stats-segment">
@@ -129,17 +129,18 @@
                 <q-icon name="leaderboard" size="18px" />
               </div>
               <div>
-                <h3 class="funding-top-earners-title">Top Earners</h3>
-                <p class="funding-form-subtitle">Highest net pay employees in this group</p>
+                <h3 class="funding-top-earners-title">All Earners</h3>
+                <p class="funding-form-subtitle">All employees in this group sorted by net pay</p>
               </div>
             </div>
 
             <div class="funding-divider" />
 
             <div class="table-block">
-              <q-table
-                :rows="topEarners"
-                :columns="topEarnerColumns"
+               <q-table
+                :rows="allEarners"
+                :columns="earnerColumns"
+                :pagination="{ rowsPerPage: 0 }"
                 flat
                 dense
                 hide-pagination
@@ -179,12 +180,12 @@ const $q = useQuasar()
 const authStore = useAuthStore()
 const groupId = route.params.id
 const stepperKey = ref(0)
-const { fetchPayoutGroupInstanceAmounts, fetchTopEarners, createPgiFunding } = useDisbursementApi()
+  const { fetchPayoutGroupInstanceAmounts, fetchEmployeePayslips, createPgiFunding } = useDisbursementApi()
 
-const loading = ref(true)
-const submitting = ref(false)
-const amounts = ref(null)
-const topEarners = ref([])
+  const loading = ref(true)
+  const submitting = ref(false)
+  const amounts = ref(null)
+  const allEarners = ref([])
 
 const form = ref({
   funding_source: null,
@@ -199,31 +200,31 @@ const sourceOptions = [
   { label: 'Paytaca', value: 'Paytaca' },
 ]
 
-const topEarnerColumns = [
-  { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
-  { name: 'position_name', label: 'Position', field: 'position_name', align: 'left' },
-  { name: 'net_pay', label: 'Net Pay', field: 'net_pay', align: 'right', sortable: true },
-  { name: 'payslip_status', label: 'Status', field: 'payslip_status', align: 'left', sortable: true },
-]
+  const earnerColumns = [
+    { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
+    { name: 'position_name', label: 'Position', field: 'position_name', align: 'left' },
+    { name: 'net_pay', label: 'Net Pay', field: 'net_pay', align: 'right', sortable: true },
+    { name: 'payslip_status', label: 'Status', field: 'payslip_status', align: 'left', sortable: true },
+  ]
 
 function parseAmount(val) {
   return parseFloat(val || 0).toLocaleString('en-PH')
 }
 
-onMounted(async () => {
-  try {
-    const [amt, earners] = await Promise.all([
-      fetchPayoutGroupInstanceAmounts(groupId),
-      fetchTopEarners(groupId),
-    ])
-    amounts.value = amt
-    topEarners.value = earners || []
-  } catch (err) {
-    console.error('[FundingPage] fetch failed:', err)
-  } finally {
-    loading.value = false
-  }
-})
+  onMounted(async () => {
+    try {
+      const [amt, earners] = await Promise.all([
+        fetchPayoutGroupInstanceAmounts(groupId),
+        fetchEmployeePayslips(groupId),
+      ])
+      amounts.value = amt
+      allEarners.value = (earners || []).sort((a, b) => parseFloat(b.net_pay || 0) - parseFloat(a.net_pay || 0))
+    } catch (err) {
+      console.error('[FundingPage] fetch failed:', err)
+    } finally {
+      loading.value = false
+    }
+  })
 
 async function submitFunding() {
   if (!form.value.amount) return
@@ -240,12 +241,12 @@ async function submitFunding() {
     })
     stepperKey.value++
     $q.notify({ type: 'positive', message: 'Funding added successfully!', position: 'top' })
-    const [amt, earners] = await Promise.all([
-      fetchPayoutGroupInstanceAmounts(groupId),
-      fetchTopEarners(groupId),
-    ])
-    amounts.value = amt
-    topEarners.value = earners || []
+      const [amt, earners] = await Promise.all([
+        fetchPayoutGroupInstanceAmounts(groupId),
+        fetchEmployeePayslips(groupId),
+      ])
+      amounts.value = amt
+      allEarners.value = (earners || []).sort((a, b) => parseFloat(b.net_pay || 0) - parseFloat(a.net_pay || 0))
     form.value = { funding_source: null, amount: '', reference_no: '', notes: '' }
   } catch (err) {
     console.error('[FundingPage] submitFunding error:', err)
