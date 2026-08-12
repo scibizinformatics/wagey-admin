@@ -71,6 +71,14 @@
           </div>
           <div class="stats-segment-value">₱{{ parseAmount(summary?.cash_on_hand_remaining) }}</div>
         </div>
+        <div class="stats-divider"></div>
+        <div class="stats-segment">
+          <div class="stats-segment-label">
+            <span class="stats-dot stats-dot-total"></span>
+            Total Employees
+          </div>
+          <div class="stats-segment-value">{{ disbursements.length ?? 0 }}</div>
+        </div>
       </div>
 
       <!-- Main Table Section -->
@@ -90,6 +98,7 @@
             :rows="paginatedData"
             :columns="columns"
             :loading="loading"
+            :pagination="{ rowsPerPage: 0 }"
             row-key="id"
             flat
             dense
@@ -314,7 +323,7 @@ async function disburseAll() {
    HEADER
    ============================== */
 .back-row {
-  padding: 8px 24px 0;
+  padding: 8px 5px 0;
 }
 
 .back-btn {
