@@ -11,10 +11,6 @@
       hide-pagination
       :rows-per-page-options="[0]"
     >
-      <template v-slot:loading>
-        <q-inner-loading showing color="primary" />
-      </template>
-
       <template v-slot:header>
         <q-tr class="table-header-row">
           <q-th class="table-header-cell th-sl">#</q-th>
