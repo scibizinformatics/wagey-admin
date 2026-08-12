@@ -69,14 +69,17 @@
           :loading="loading"
           :contracts="employeeContracts"
           :company-id="companyId"
-          :positions="positions"
-          :departments="departments"
+          :leave-types="leaveTypes"
+          :loading-contract-ids="loadingContractIds"
+          :loading-balance-ids="loadingBalanceIds"
           @view="viewEmployee"
           @edit="editEmployee"
           @assign="handleOpenAssignDialog"
           @terminate="confirmTerminate"
           @restore="confirmRestore"
           @view-photo="viewEmployeePhoto"
+          @add-leave-balance="openLeaveBalanceModal"
+          @add-cto-balance="openCtoBalanceModal"
         />
       </div>
 
@@ -179,6 +182,24 @@
       @contract-type-change="onContractTypeChange"
       @submit="handleAssignSubmit"
     />
+
+    <EmployeeLeaveBalanceModal
+      v-model="showLeaveBalanceModal"
+      :employee="selectedBalanceEmployee"
+      :leave-type-options="leaveTypes"
+      :loading-leave-types="loadingLeaveTypes"
+      :submitting="submittingLeave"
+      @submit="handleAddLeaveBalance"
+      @cancel="showLeaveBalanceModal = false"
+    />
+
+    <EmployeeCtoBalanceModal
+      v-model="showCtoBalanceModal"
+      :employee="selectedBalanceEmployee"
+      :submitting="submittingCto"
+      @submit="handleAddCtoBalance"
+      @cancel="showCtoBalanceModal = false"
+    />
   </PageShell>
 </template>
 
@@ -195,6 +216,7 @@ import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes
 import { useAdminPositions } from '@/composables/admin/useAdminPositions'
 import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
+import { useEmployeeBalances } from '@/composables/page/useEmployeeBalances'
 
 import EmployeeStatsCards from '@/components/pages/Employees/EmployeeStatsCards.vue'
 import EmployeeTable from '@/components/pages/Employees/EmployeeTable.vue'
@@ -205,6 +227,8 @@ import EmployeeTerminateDialog from '@/components/pages/Employees/EmployeeTermin
 import EmployeeRestoreDialog from '@/components/pages/Employees/EmployeeRestoreDialog.vue'
 import EmployeeAssignContractDialog from '@/components/pages/Employees/EmployeeAssignContractDialog.vue'
 import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/AttendanceEmployeePhotoViewer.vue'
+import EmployeeLeaveBalanceModal from '@/components/pages/Employees/EmployeeLeaveBalanceModal.vue'
+import EmployeeCtoBalanceModal from '@/components/pages/Employees/EmployeeCtoBalanceModal.vue'
 
 const $q = useQuasar()
 
@@ -258,6 +282,17 @@ const { positions, fetchPositions } = useAdminPositions()
 const { departments, fetchDepartments } = useAdminDepartments()
 const { payrollGroups, fetchPayrollGroups } = useAdminPayrollGroups()
 
+const {
+  leaveTypes,
+  loadingLeaveTypes,
+  fetchLeaveTypes,
+  fetchEmployeeBalances,
+  addLeaveBalance,
+  addCtoBalance,
+  submittingLeave,
+  submittingCto,
+} = useEmployeeBalances()
+
 const selectedEligibilityObjectsData = ref([])
 
 // ─── Local UI state ───────────────────────────────────────────────────────────
@@ -267,6 +302,8 @@ const sortBy = ref('A-Z')
 const sites = ref([])
 const selectedSite = ref(null)
 const employeeContracts = ref({})
+const loadingContractIds = ref(new Set())
+const loadingBalanceIds = ref(new Set())
 const payTypeAutoFilled = ref(false)
 const selectedEmployees = ref([])
 const bulkAssignEmployeeIds = ref([])
@@ -418,6 +455,11 @@ const restoring = ref(false)
 const showPhotoViewer = ref(false)
 const selectedPhotoUrl = ref('')
 
+// Balance modals
+const showLeaveBalanceModal = ref(false)
+const showCtoBalanceModal = ref(false)
+const selectedBalanceEmployee = ref(null)
+
 // Avatar
 const avatarFile = ref(null)
 const avatarPreview = ref(null)
@@ -529,41 +571,128 @@ const fetchEmployees = async () => {
     employees.value = list
     filteredEmployees.value = list
     sortEmployees()
-    fetchContracts(list)
+
+    // Clear stale contract / balance caches when the list refreshes
+    delete employeeContracts.value[companyId.value]
+    employees.value.forEach((emp) => {
+      emp._balance = undefined
+    })
+
+    // Show table immediately — do not block on heavy per-employee fetches
+    loading.value = false
+
+    // Fetch leave types and the first page of contract / balance data in background
+    await Promise.all([
+      fetchLeaveTypes(companyId.value).catch(() => {}),
+      fetchPageData(),
+    ])
   } catch (err) {
     $q.notify({
       type: 'negative',
       message: err.response?.data?.detail ?? 'Failed to fetch employees',
       position: 'top',
     })
+  } finally {
+    loading.value = false
   }
 }
 
-const fetchContracts = async (employeeList, batchSize = 15) => {
+const fetchBalances = async (employeeList, concurrency = 20) => {
   if (!employeeList?.length) return
   if (!companyId.value) return
 
-  delete employeeContracts.value[companyId.value]
-  employeeContracts.value[companyId.value] = {}
+  try {
+    for (let i = 0; i < employeeList.length; i += concurrency) {
+      const batch = employeeList.slice(i, i + concurrency)
+      const promises = batch.map((emp) =>
+        fetchEmployeeBalances(companyId.value, emp.id)
+          .then((data) => ({ status: 'fulfilled', emp, data }))
+          .catch(() => ({ status: 'rejected', emp, data: null })),
+      )
+      const results = await Promise.all(promises)
+      results.forEach((res) => {
+        if (res.status === 'fulfilled') {
+          res.emp._balance = res.data
+        } else {
+          res.emp._balance = null
+        }
+      })
+    }
+    filteredEmployees.value = [...filteredEmployees.value]
+  } catch {
+    // Silent - balances remain as null
+  }
+}
 
-  const fetchBatch = async (startIndex) => {
-    const batch = employeeList.slice(startIndex, startIndex + batchSize)
-    const results = await Promise.allSettled(batch.map((emp) => fetchEmployeeContract(emp.id)))
-    results.forEach((result, idx) => {
-      if (result.status === 'fulfilled' && result.value) {
-        const emp = batch[idx]
-        employeeContracts.value[companyId.value][emp.id] = result.value
-      }
-    })
+const fetchContracts = async (employeeList, concurrency = 20) => {
+  if (!employeeList?.length) return
+  if (!companyId.value) return
+
+  if (!employeeContracts.value[companyId.value]) {
+    employeeContracts.value[companyId.value] = {}
   }
 
   try {
-    for (let i = 0; i < employeeList.length; i += batchSize) {
-      await fetchBatch(i)
+    for (let i = 0; i < employeeList.length; i += concurrency) {
+      const batch = employeeList.slice(i, i + concurrency)
+      const promises = batch.map((emp) =>
+        fetchEmployeeContract(emp.id)
+          .then((data) => ({ status: 'fulfilled', empId: emp.id, data }))
+          .catch(() => ({ status: 'rejected', empId: emp.id, data: null })),
+      )
+      const results = await Promise.all(promises)
+      results.forEach((res) => {
+        if (res.status === 'fulfilled' && res.data) {
+          employeeContracts.value[companyId.value][res.empId] = res.data
+        }
+      })
     }
     filteredEmployees.value = [...filteredEmployees.value]
   } catch {
     // Silent - contracts remain as "No Contract"
+  }
+}
+
+let pageDataInFlight = null
+
+const fetchPageData = async () => {
+  if (pageDataInFlight) return pageDataInFlight
+
+  pageDataInFlight = (async () => {
+    const pageEmps = paginatedEmployees.value
+    if (!pageEmps.length) return
+
+    const uncachedContract = pageEmps.filter((emp) => {
+      const companyContracts = employeeContracts.value[companyId.value]
+      return !companyContracts?.[emp.id]
+    })
+
+    const uncachedBalance = pageEmps.filter((emp) => emp._balance === undefined)
+
+    if (!uncachedContract.length && !uncachedBalance.length) return
+
+    // Mark IDs as loading
+    uncachedContract.forEach((e) => loadingContractIds.value.add(e.id))
+    uncachedBalance.forEach((e) => loadingBalanceIds.value.add(e.id))
+
+    try {
+      await Promise.all([
+        uncachedContract.length ? fetchContracts(uncachedContract) : Promise.resolve(),
+        uncachedBalance.length ? fetchBalances(uncachedBalance) : Promise.resolve(),
+      ])
+    } catch {
+      // Silent
+    } finally {
+      // Clear loading state
+      uncachedContract.forEach((e) => loadingContractIds.value.delete(e.id))
+      uncachedBalance.forEach((e) => loadingBalanceIds.value.delete(e.id))
+    }
+  })()
+
+  try {
+    return await pageDataInFlight
+  } finally {
+    pageDataInFlight = null
   }
 }
 
@@ -1272,6 +1401,77 @@ const cancelAdd = () => {
   resetAddForm()
 }
 
+// ─── Balance Modal Actions ──────────────────────────────────────────────────
+
+const openLeaveBalanceModal = async (emp) => {
+  selectedBalanceEmployee.value = emp
+  if (!leaveTypes.value.length) {
+    await fetchLeaveTypes(companyId.value)
+  }
+  showLeaveBalanceModal.value = true
+}
+
+const openCtoBalanceModal = (emp) => {
+  selectedBalanceEmployee.value = emp
+  showCtoBalanceModal.value = true
+}
+
+const handleAddLeaveBalance = async (payload) => {
+  try {
+    await addLeaveBalance(payload)
+    $q.notify({
+      type: 'positive',
+      message: 'Leave balance added successfully',
+      icon: 'check_circle',
+      position: 'top',
+    })
+    showLeaveBalanceModal.value = false
+    // Refresh balance for this employee
+    const empId = selectedBalanceEmployee.value?.id
+    if (empId) {
+      const updated = await fetchEmployeeBalances(companyId.value, empId)
+      if (updated) {
+        const empIndex = employees.value.findIndex((e) => e.id === selectedBalanceEmployee.value.id)
+        if (empIndex !== -1) {
+          employees.value[empIndex] = { ...employees.value[empIndex], _balance: updated }
+          filteredEmployees.value = [...filteredEmployees.value]
+        }
+      }
+    }
+  } catch (e) {
+    const msg = e.response?.data?.message || e.response?.data?.detail || e.message || 'Failed to add leave balance'
+    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+  }
+}
+
+const handleAddCtoBalance = async (payload) => {
+  try {
+    await addCtoBalance(payload)
+    $q.notify({
+      type: 'positive',
+      message: 'CTO balance added successfully',
+      icon: 'check_circle',
+      position: 'top',
+    })
+    showCtoBalanceModal.value = false
+    // Refresh balance for this employee
+    const empId = selectedBalanceEmployee.value?.id
+    if (empId) {
+      const updated = await fetchEmployeeBalances(companyId.value, empId)
+      if (updated) {
+        const empIndex = employees.value.findIndex((e) => e.id === selectedBalanceEmployee.value.id)
+        if (empIndex !== -1) {
+          employees.value[empIndex] = { ...employees.value[empIndex], _balance: updated }
+          filteredEmployees.value = [...filteredEmployees.value]
+        }
+      }
+    }
+  } catch (e) {
+    const msg = e.response?.data?.message || e.response?.data?.detail || e.message || 'Failed to add CTO balance'
+    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+  }
+}
+
 const updateAssignField = ({ field, value }) => {
   assignForm.value[field] = value
 }
@@ -1279,6 +1479,17 @@ const updateAssignField = ({ field, value }) => {
 watch(sortBy, () => {
   sortEmployees()
 })
+
+// Lazy-load contract / balance data whenever the visible page changes
+watch(
+  [employeePage, employeePageSize],
+  () => {
+    if (filteredEmployees.value.length > 0) {
+      fetchPageData()
+    }
+  },
+  { immediate: false },
+)
 
 let initialised = false
 watch(
