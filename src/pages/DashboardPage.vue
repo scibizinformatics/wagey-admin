@@ -1,7 +1,5 @@
 <template>
   <PageShell full-height flex-column>
-    <q-inner-loading :showing="pageLoading" color="primary" />
-
     <!-- Header: title + segmented view toggle (Current / Monthly / Annual) -->
     <div class="dash-header">
       <div class="dash-header-left">
@@ -70,7 +68,7 @@
     <DashboardStatsRow
       v-if="activeView !== 'current'"
       :stats-cards="activeView === 'today' ? currentStatsCards : statsCards"
-      :page-loading="activeView === 'today' ? currentCutoffLoading : pageLoading"
+      :page-loading="activeView === 'today' ? currentCutoffLoading : false"
     />
 
     <div v-if="activeView === 'annual'" class="annual-note">
@@ -217,9 +215,6 @@ watch(todayDate, (newDate) => {
   }
 })
 
-// ─── Page-level loading ─────────────────────────────────────────────────────
-const pageLoading = ref(true)
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -351,7 +346,6 @@ onMounted(async () => {
   if (cid) {
     await Promise.allSettled([fetchCashAdvanceRequests(cid)])
   }
-  pageLoading.value = false
 })
 </script>
 
