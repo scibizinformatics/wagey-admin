@@ -1,746 +1,341 @@
 <template>
-  <div class="table-section">
-    <div class="modern-table-container">
-      <div class="table-wrapper">
-        <q-table
-          :rows="rows"
-          :columns="columns"
-          row-key="id"
-          flat
-          :loading="loading"
-          class="attendance-table"
-          hide-pagination
-          :rows-per-page-options="[0]"
-          :grid="$q.screen.xs"
-          table-header-class="table-header-custom"
-          separator="none"
-        >
-          <template v-slot:item="props" v-if="$q.screen.xs">
-            <div class="q-pa-xs col-xs-12 col-sm-6 col-md-4">
-              <q-card class="mobile-card">
-                <q-card-section>
-                  <div class="mobile-employee">{{ getEmployeeName(props.row.employee) }}</div>
-                  <div class="mobile-date">{{ props.row.date }}</div>
-                </q-card-section>
-                <q-card-section class="q-pt-none">
-                  <div class="mobile-details">
-                    Time In: {{ formatTime(props.row.time_in, props.row._timezone) }}<br />
-                    Time Out: {{ formatTime(props.row.time_out, props.row._timezone) }}<br />
-                    Source: {{ formatSource(props.row.source) }}
-                  </div>
-                  <div class="mobile-selfies q-mt-md">
-                    <div v-if="props.row.time_in_selfie" class="mobile-selfie-item">
-                      <span class="mobile-selfie-label">Time In Photo:</span>
-                      <img
-                        :src="props.row.time_in_selfie"
-                        alt="Time In"
-                        class="mobile-selfie-img"
-                        loading="lazy"
-                        @click="$emit('view-selfie', props.row.time_in_selfie, 'Time In')"
-                      />
-                    </div>
-                    <div v-if="props.row.time_out_selfie" class="mobile-selfie-item">
-                      <span class="mobile-selfie-label">Time Out Photo:</span>
-                      <img
-                        :src="props.row.time_out_selfie"
-                        alt="Time Out"
-                        class="mobile-selfie-img"
-                        loading="lazy"
-                        @click="$emit('view-selfie', props.row.time_out_selfie, 'Time Out')"
-                      />
-                    </div>
-                  </div>
-                </q-card-section>
-              </q-card>
+  <div class="att-table-wrap">
+    <q-table
+      :rows="rows"
+      :columns="columns"
+      row-key="id"
+      flat
+      :loading="loading"
+      class="att-table"
+      hide-pagination
+      :rows-per-page-options="[0]"
+      separator="none"
+    >
+      <template v-slot:header="props">
+        <q-tr class="att-table__head-row">
+          <q-th
+            v-for="col in columns"
+            :key="col.name"
+            :props="props"
+            class="att-table__th"
+            :class="col.headerClasses"
+          >
+            {{ col.label }}
+          </q-th>
+        </q-tr>
+      </template>
+
+      <template v-slot:body="props">
+        <q-tr class="att-table__row">
+          <q-td key="employee" :props="props" class="att-table__td">
+            <div class="who">
+              <q-avatar
+                v-if="photoOf(props.row)"
+                size="32px"
+                class="who__avatar"
+                @click="$emit('view-photo', props.row.employee)"
+              >
+                <img :src="photoOf(props.row)" alt="" loading="lazy" />
+              </q-avatar>
+              <q-avatar
+                v-else
+                size="32px"
+                class="who__avatar"
+                :style="{ background: getAvatarColor(nameOf(props.row)) }"
+                @click="$emit('view-photo', props.row.employee)"
+              >
+                <span class="who__initials">{{ getInitials(nameOf(props.row)) }}</span>
+              </q-avatar>
+              <span class="who__name">{{ nameOf(props.row) }}</span>
             </div>
-          </template>
+          </q-td>
 
-          <template v-slot:header="props">
-            <q-tr :props="props" class="table-header-row">
-              <q-th key="employee" :props="props" class="table-header-cell employee-col"
-                >Employee</q-th
-              >
-              <q-th key="work_type" :props="props" class="table-header-cell employment-status-col"
-                >Work Type</q-th
-              >
-              <q-th key="shift_name" :props="props" class="table-header-cell shift-name-col"
-                >Shift Name</q-th
-              >
-              <q-th key="time_in" :props="props" class="table-header-cell time-col">Time In</q-th>
-              <q-th key="time_in_photo" :props="props" class="table-header-cell photo-col"
-                >Photo</q-th
-              >
-              <q-th key="time_in_source" :props="props" class="table-header-cell source-mini-col"
-                >In Source</q-th
-              >
-              <q-th key="time_out" :props="props" class="table-header-cell time-col">Time Out</q-th>
-              <q-th key="time_out_photo" :props="props" class="table-header-cell photo-col"
-                >Photo</q-th
-              >
-              <q-th key="time_out_source" :props="props" class="table-header-cell source-mini-col"
-                >Out Source</q-th
-              >
-            </q-tr>
-          </template>
+          <q-td v-if="showWorkType" key="work_type" :props="props" class="att-table__td">
+            <span
+              v-if="props.row.work_type"
+              class="dash-chip work-type"
+              :class="workTypeToneClass(props.row.work_type)"
+            >
+              {{ props.row.work_type }}
+            </span>
+            <span v-else class="muted">—</span>
+          </q-td>
 
-          <template v-slot:body="props">
-            <q-tr :props="props" class="table-body-row">
-              <q-td key="employee" :props="props" class="table-body-cell employee-col">
-                <div class="employee-info">
-                  <q-avatar
-                    v-if="getEmployeePhoto(props.row.employee)"
-                    size="34px"
-                    class="clickable-avatar"
-                    @click="$emit('view-photo', props.row.employee)"
-                  >
-                    <img
-                      :src="getEmployeePhoto(props.row.employee)"
-                      alt="Employee Photo"
-                      class="avatar-image"
-                      loading="lazy"
-                      @error="handleImageError"
-                    />
-                  </q-avatar>
-                  <q-avatar
-                    v-else
-                    size="34px"
-                    class="avatar-fallback clickable-avatar"
-                    @click="$emit('view-photo', props.row.employee)"
-                  >
-                    {{ getInitials(getEmployeeName(props.row.employee)) }}
-                  </q-avatar>
-                  <span class="employee-name">{{ getEmployeeName(props.row.employee) }}</span>
-                </div>
-              </q-td>
-              <q-td key="work_type" :props="props" class="table-body-cell employment-status-col">
-                <div
-                  v-if="props.row.work_type"
-                  class="employment-status-badge"
-                  :class="getEmploymentStatusClass(props.row.work_type)"
-                >
-                  {{ props.row.work_type }}
-                </div>
-                <span v-else class="no-photo">-</span>
-              </q-td>
-              <q-td key="shift_name" :props="props" class="table-body-cell shift-name-col">
-                <span class="shift-name-badge">
-                  {{ props.row.employee_assignment?.schedule?.shift_type?.name || '-' }}
-                </span>
-              </q-td>
-              <q-td key="time_in" :props="props" class="table-body-cell time-col">
-                <div
-                  class="time-badge time-in"
-                  :class="{ 'has-time': props.row.time_in, 'time-editable': true }"
-                  @click="$emit('edit-time', props.row, 'time_in')"
-                  title="Click to edit"
-                >
-                  {{
-                    props.row.time_in ? formatTime(props.row.time_in, props.row._timezone) : '--:--'
-                  }}
-                  <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
-                </div>
-              </q-td>
-              <q-td key="time_in_photo" :props="props" class="table-body-cell photo-col">
-                <div class="selfie-container">
-                  <img
-                    v-if="props.row.time_in_selfie"
-                    :src="props.row.time_in_selfie"
-                    alt="Time In Selfie"
-                    class="selfie-thumbnail"
-                    loading="lazy"
-                    @click="$emit('view-selfie', props.row.time_in_selfie, 'Time In')"
-                  />
-                  <span v-else class="no-photo">-</span>
-                </div>
-              </q-td>
-              <q-td key="time_in_source" :props="props" class="table-body-cell source-mini-col">
-                <div
-                  class="source-mini-badge"
-                  :class="getSourceClass(props.row.time_in_source || props.row.source)"
-                >
-                  {{ formatSource(props.row.time_in_source || props.row.source) }}
-                </div>
-              </q-td>
-              <q-td key="time_out" :props="props" class="table-body-cell time-col">
-                <div
-                  class="time-badge time-out"
-                  :class="{ 'has-time': props.row.time_out, 'time-editable': true }"
-                  @click="$emit('edit-time', props.row, 'time_out')"
-                  title="Click to edit"
-                >
-                  {{
-                    props.row.time_out
-                      ? formatTime(props.row.time_out, props.row._timezone)
-                      : '--:--'
-                  }}
-                  <q-icon name="edit" size="10px" class="edit-icon q-ml-xs" />
-                </div>
-              </q-td>
-              <q-td key="time_out_photo" :props="props" class="table-body-cell photo-col">
-                <div class="selfie-container">
-                  <img
-                    v-if="props.row.time_out_selfie"
-                    :src="props.row.time_out_selfie"
-                    alt="Time Out Selfie"
-                    class="selfie-thumbnail"
-                    loading="lazy"
-                    @click="$emit('view-selfie', props.row.time_out_selfie, 'Time Out')"
-                  />
-                  <span v-else class="no-photo">-</span>
-                </div>
-              </q-td>
-              <q-td key="time_out_source" :props="props" class="table-body-cell source-mini-col">
-                <div
-                  v-if="props.row.time_out"
-                  class="source-mini-badge"
-                  :class="getSourceClass(props.row.time_out_source || props.row.source)"
-                >
-                  {{ formatSource(props.row.time_out_source || props.row.source) }}
-                </div>
-                <span v-else class="no-photo">-</span>
-              </q-td>
-            </q-tr>
-          </template>
-        </q-table>
-      </div>
-    </div>
+          <q-td v-if="showShift" key="shift_name" :props="props" class="att-table__td">
+            <span class="shift">{{ getShiftName(props.row) }}</span>
+          </q-td>
+
+          <q-td key="time_in" :props="props" class="att-table__td">
+            <AttendancePunchCell
+              kind="in"
+              :time="props.row.time_in"
+              :timezone="props.row._timezone"
+              :selfie="props.row.time_in_selfie"
+              :source="props.row.time_in_source || props.row.source"
+              @edit="$emit('edit-time', props.row, 'time_in')"
+              @view-selfie="(url, title) => $emit('view-selfie', url, title)"
+            />
+          </q-td>
+
+          <q-td key="time_out" :props="props" class="att-table__td">
+            <AttendancePunchCell
+              kind="out"
+              :time="props.row.time_out"
+              :timezone="props.row._timezone"
+              :selfie="props.row.time_out_selfie"
+              :source="props.row.time_out_source || props.row.source"
+              @edit="$emit('edit-time', props.row, 'time_out')"
+              @view-selfie="(url, title) => $emit('view-selfie', url, title)"
+            />
+          </q-td>
+        </q-tr>
+      </template>
+
+      <template v-slot:no-data>
+        <div v-if="!loading" class="dash-empty">
+          <span class="dash-featured-icon">
+            <q-icon :name="isFiltered ? 'filter_alt_off' : 'o_schedule'" size="20px" />
+          </span>
+          <p class="dash-empty__title">
+            {{ isFiltered ? 'No records match these filters' : 'No attendance for this date' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              isFiltered
+                ? 'Nothing here fits the current search and filters.'
+                : 'Nobody has clocked in on this date yet. Pick another day, or add a record.'
+            }}
+          </p>
+          <q-btn
+            v-if="isFiltered"
+            outline
+            no-caps
+            dense
+            size="12px"
+            icon="filter_alt_off"
+            label="Clear filters"
+            class="empty-btn"
+            @click="$emit('clear-filters')"
+          />
+        </div>
+      </template>
+    </q-table>
   </div>
 </template>
 
 <script setup>
+/**
+ * Attendance records as a table, for laptop and desktop. AttendanceCardList
+ * takes over below 1024px.
+ *
+ * Nine columns became five. Each punch's time, selfie and source are now one
+ * cell (AttendancePunchCell) instead of three columns repeated twice, and the
+ * two least load-bearing columns drop out as the viewport narrows. The previous
+ * table was a fixed 700px minimum that shrank its own type to 10px on tablet —
+ * both of which this replaces.
+ */
+import { computed } from 'vue'
 import { useQuasar } from 'quasar'
-import { formatInTimezone } from '@/composables/utils/timezone'
+import AttendancePunchCell from '@/components/pages/Attendance/AttendancePunchCell.vue'
+import {
+  getEmployeeName,
+  getEmployeePhoto,
+  getInitials,
+  getAvatarColor,
+  getShiftName,
+  workTypeToneClass,
+} from '@/composables/utils/attendance'
 
 const $q = useQuasar()
 
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
-  costCenterFilter: { type: [String, Number], default: '' },
-  costCenterOptions: { type: Array, default: () => [] },
-  optionsLoading: { type: Boolean, default: false },
   employees: { type: Array, default: () => [] },
+  isFiltered: { type: Boolean, default: false },
 })
 
-defineEmits([
-  'refresh',
-  'update:costCenterFilter',
-  'view-selfie',
-  'view-photo',
-  'edit-time',
-])
+defineEmits(['view-selfie', 'view-photo', 'edit-time', 'clear-filters'])
 
-const columns = [
-  { name: 'employee', label: 'Employee', align: 'left', field: 'employee', sortable: true },
-  { name: 'work_type', label: 'Work Type', align: 'left', field: 'work_type', sortable: true },
-  { name: 'shift_name', label: 'Shift Name', align: 'left', field: row => row.employee_assignment?.schedule?.shift_type?.name || '-', sortable: false },
-  { name: 'time_in', label: 'Time In', align: 'center', field: 'time_in', sortable: true },
-  {
-    name: 'time_in_photo',
-    label: 'Photo',
-    align: 'center',
-    field: 'time_in_selfie',
-    sortable: false,
-  },
-  { name: 'time_in_source', label: 'In Source', align: 'center', field: 'source', sortable: false },
-  { name: 'time_out', label: 'Time Out', align: 'center', field: 'time_out', sortable: true },
-  {
-    name: 'time_out_photo',
-    label: 'Photo',
-    align: 'center',
-    field: 'time_out_selfie',
-    sortable: false,
-  },
-  {
-    name: 'time_out_source',
-    label: 'Out Source',
-    align: 'center',
-    field: 'source',
-    sortable: false,
-  },
-]
+// Employee, time in and time out are the point of the page and always show.
+// Work type and shift are context, and give way in that order.
+const showWorkType = computed(() => $q.screen.width >= 1280)
+const showShift = computed(() => $q.screen.width >= 1440)
 
-function getEmployeeName(employee) {
-  if (!employee) return 'Unknown Employee'
-  if (typeof employee === 'number' || typeof employee === 'string') {
-    const found = props.employees.find(
-      (emp) => emp.id === employee || emp.id === parseInt(employee),
-    )
-    if (found) {
-      const fullName =
-        `${found.first_name || found.firstName || ''} ${found.last_name || found.lastName || ''}`.trim()
-      return fullName || found.name || found.username || found.email || 'Unknown Employee'
-    }
-    return `Employee #${employee}`
+const nameOf = (row) => getEmployeeName(row.employee, props.employees)
+const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
+
+const columns = computed(() => {
+  const cols = [
+    {
+      name: 'employee',
+      label: 'Employee',
+      field: (row) => nameOf(row),
+      align: 'left',
+      style: 'min-width: 190px',
+      sortable: true,
+    },
+  ]
+
+  if (showWorkType.value) {
+    cols.push({
+      name: 'work_type',
+      label: 'Work type',
+      field: 'work_type',
+      align: 'left',
+      style: 'width: 118px',
+      sortable: true,
+    })
   }
-  if (typeof employee === 'object') {
-    const fullName =
-      `${employee.first_name || employee.firstName || employee.firstname || ''} ${employee.last_name || employee.lastName || employee.lastname || ''}`.trim()
-    return (
-      fullName ||
-      employee.name ||
-      employee.fullName ||
-      employee.full_name ||
-      employee.username ||
-      employee.email ||
-      'Unknown Employee'
-    )
+
+  if (showShift.value) {
+    cols.push({
+      name: 'shift_name',
+      label: 'Shift',
+      field: (row) => getShiftName(row),
+      align: 'left',
+      style: 'width: 124px',
+    })
   }
-  return 'Unknown Employee'
-}
 
-function getEmployeePhoto(employee) {
-  if (!employee) return null
-  if (typeof employee === 'object') {
-    return (
-      employee.photo ||
-      employee.image ||
-      employee.profile_picture ||
-      employee.profile_photo ||
-      employee.avatar ||
-      employee.picture ||
-      null
-    )
-  }
-  const found = props.employees.find((emp) => emp.id === employee || emp.uuid === employee)
-  return found
-    ? found.photo ||
-        found.image ||
-        found.profile_picture ||
-        found.profile_photo ||
-        found.avatar ||
-        found.picture ||
-        null
-    : null
-}
+  cols.push(
+    {
+      name: 'time_in',
+      label: 'Time in',
+      field: 'time_in',
+      align: 'left',
+      style: 'width: 164px',
+      sortable: true,
+    },
+    {
+      name: 'time_out',
+      label: 'Time out',
+      field: 'time_out',
+      align: 'left',
+      style: 'width: 164px',
+      sortable: true,
+    },
+  )
 
-const getInitials = (name) =>
-  name && name !== 'Unknown Employee'
-    ? name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    : '?'
-
-const handleImageError = (event) => {
-  event.target.src = ''
-  event.target.style.display = 'none'
-}
-
-function getSourceClass(source) {
-  switch (source) {
-    case 'qr_scan':
-      return 'source-qr'
-    case 'manual':
-      return 'source-manual'
-    case 'auto_login':
-      return 'source-auto'
-    default:
-      return 'source-default'
-  }
-}
-
-function getEmploymentStatusClass(status) {
-  if (!status) return ''
-  switch (status.toLowerCase()) {
-    case 'regular':
-      return 'employment-status-regular'
-    case 'probationary':
-      return 'employment-status-probationary'
-    case 'contractual':
-      return 'employment-status-contractual'
-    case 'part-time':
-      return 'employment-status-parttime'
-    default:
-      return 'employment-status-default'
-  }
-}
-
-function formatSource(source) {
-  if (!source) return '-'
-  return source.replace('_', ' ').toUpperCase()
-}
-
-function formatTime(dateTimeString, timezone) {
-  if (!dateTimeString) return '-'
-  const formatted = formatInTimezone(dateTimeString, timezone || undefined)
-  return formatted || '-'
-}
+  return cols
+})
 </script>
 
 <style scoped>
-.table-section {
-  background: #ffffff;
+.att-table-wrap {
+  overflow-x: auto;
+  padding: 0 6px;
 }
-.table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 24px;
-  flex-wrap: wrap;
-  gap: 10px;
-  border-bottom: 1px solid #f1f3f5;
-}
-.table-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.table-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.header-btn {
-  color: #6b7280 !important;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px !important;
-}
-.header-btn:hover {
-  background: #f3f4f6 !important;
-}
-.modern-table-container {
-  border-radius: 0;
-}
-.table-wrapper {
-  overflow-x: visible;
-  overflow-y: visible;
-}
-.attendance-table {
-  background: white;
-  width: 100%;
-  min-width: 700px;
-}
-.attendance-table,
-.attendance-table :deep(.q-table__container),
-.attendance-table :deep(.q-table__card),
-.attendance-table.q-table__container,
-.attendance-table :deep(.q-table__bottom-border),
-.attendance-table :deep(.q-table__top),
-.attendance-table :deep(.q-table__bottom),
-.attendance-table :deep(.q-table) {
+
+.att-table,
+.att-table :deep(.q-table__container),
+.att-table :deep(.q-table__card),
+.att-table :deep(.q-table__top),
+.att-table :deep(.q-table__bottom),
+.att-table :deep(.q-table) {
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-}
-.attendance-table :deep(thead) {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #f8fafc;
+  background: transparent;
 }
 
-.table-header-row {
-  background: #f8fafc;
+/* ── Header: sentence case over a hairline, no filled band ── */
+.att-table :deep(.att-table__head-row) {
+  background: transparent;
 }
-.table-header-cell {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  color: #94a3b8 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 8px 14px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
+
+.att-table :deep(.att-table__th) {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--dash-ink-3) !important;
+  padding: 0 12px 11px !important;
+  border-bottom: 1px solid var(--dash-line) !important;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.table-body-row {
-  transition: background 0.15s ease;
+
+/* ── Body ── */
+.att-table :deep(.att-table__row) {
+  transition: background var(--dash-fast) var(--dash-ease);
 }
-.table-body-row:hover .table-body-cell {
-  background: #f8fafc;
+.att-table :deep(.att-table__row:hover) > td {
+  background: var(--dash-n-50);
 }
-.table-body-cell {
+
+.att-table :deep(.att-table__td) {
   font-size: 13px;
-  color: #334155;
-  padding: 9px 14px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
+  color: var(--dash-ink-2);
+  padding: 10px 12px !important;
+  border-bottom: 1px solid var(--dash-line-soft) !important;
   vertical-align: middle;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-
-.table-body-row:last-child .table-body-cell {
+.att-table :deep(.att-table__row:last-child) > td {
   border-bottom: none !important;
 }
-.employee-info {
+
+/* ── Employee ── */
+.who {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
-.employee-name {
-  font-size: 13px;
+
+.who__avatar {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.who__initials {
+  font-size: 11.5px;
   font-weight: 600;
+  color: #fff;
+}
+
+.who__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 140px;
-  display: block;
-}
-.avatar-fallback {
-  background: #eef2ff !important;
-  color: #4338ca !important;
-  font-weight: 600 !important;
-  min-width: 28px !important;
-  width: 28px !important;
-  height: 28px !important;
-  border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex-shrink: 0 !important;
 }
 
-.avatar-fallback :deep(.q-avatar__content) {
-  font-size: 11px !important;
-  line-height: 1 !important;
-  font-weight: 600 !important;
-}
-
-.clickable-avatar {
-  cursor: pointer;
-  transition: transform 0.15s ease;
-}
-.clickable-avatar:hover {
-  transform: scale(1.08);
-}
-
-.avatar-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-.time-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 8px;
-  border-radius: 16px;
-  font-size: 11px;
-  font-weight: 500;
-  background: #f1f5f9;
-  color: #64748b;
-  white-space: nowrap;
-  min-width: 80px;
-}
-.time-badge.has-time.time-in {
-  background: #dcfce7;
-  color: #166534;
-}
-.time-badge.has-time.time-out {
-  background: #fef2f2;
-  color: #991b1b;
-}
-.time-editable {
-  cursor: pointer;
-  transition: all 0.15s ease;
-  user-select: none;
-}
-.time-editable:hover {
-  filter: brightness(0.93);
-  transform: scale(1.04);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-.edit-icon {
-  opacity: 1;
-  transition: opacity 0.15s ease;
-  color: inherit;
-}
-.selfie-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.selfie-thumbnail {
-  width: 34px;
-  height: 34px;
-  border-radius: 6px;
-  object-fit: cover;
-  cursor: pointer;
-  border: 2px solid #e2e8f0;
-  transition: all 0.2s ease;
-}
-.selfie-thumbnail:hover {
-  transform: scale(1.1);
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-.no-photo {
-  font-size: 13px;
-  color: #94a3b8;
-  font-weight: 500;
-}
-.source-mini-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-.source-qr {
-  background: #f3e8ff;
-  color: #7c3aed;
-}
-.source-manual {
-  background: #dbeafe;
-  color: #2563eb;
-}
-.source-auto {
-  background: #dcfce7;
-  color: #16a34a;
-}
-.source-default {
-  background: #f1f5f9;
-  color: #64748b;
-}
-.employment-status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 500;
+.work-type {
   text-transform: capitalize;
 }
-.employment-status-regular {
-  background: #d1fae5;
-  color: #065f46;
-}
-.employment-status-probationary {
-  background: #fef3c7;
-  color: #92400e;
-}
-.employment-status-contractual {
-  background: #dbeafe;
-  color: #1e40af;
-}
-.employment-status-parttime {
-  background: #ede9fe;
-  color: #5b21b6;
-}
-.employment-status-default {
-  background: #f1f5f9;
-  color: #475569;
-}
-.mobile-card {
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  transition: all 0.2s ease;
-}
-.mobile-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-.mobile-employee {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a202c;
-}
-.mobile-date {
-  font-size: 14px;
-  color: #64748b;
-  margin-top: 4px;
-}
-.mobile-details {
-  font-size: 13px;
-  color: #4b5563;
-  line-height: 1.4;
-}
-.mobile-selfies {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.mobile-selfie-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.mobile-selfie-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
-}
-.mobile-selfie-img {
-  width: 50px;
-  height: 50px;
-  border-radius: 8px;
-  object-fit: cover;
-  cursor: pointer;
-  border: 2px solid #e2e8f0;
-}
-.mobile-selfie-img:hover {
-  border-color: #3b82f6;
+
+.shift {
+  color: var(--dash-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
-@media (max-width: 1024px) {
-  .table-header-cell {
-    font-size: 11px;
-    padding: 10px 4px;
-  }
-  .table-body-cell {
-    font-size: 11px;
-    padding: 8px 4px;
-  }
-  .modern-table-container {
-    overflow-x: auto;
-  }
+.muted {
+  color: var(--dash-ink-4);
 }
-@media (max-width: 768px) {
-  .table-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+
+.empty-btn {
+  margin-top: 6px;
+  padding: 0 12px;
+  height: 32px;
+  border-radius: var(--dash-r-md);
+  font-weight: 500;
+  color: var(--dash-ink-2);
+}
+
+/* Laptop runs the table at its tightest — three columns and less cell padding.
+   Below 1024 the card list takes over, so nothing here has to go narrower. */
+@media (max-width: 1279px) {
+  .att-table-wrap {
+    padding: 0 2px;
   }
-  .table-actions {
-    width: 100%;
-    flex-direction: row;
-    justify-content: space-between;
+  .att-table :deep(.att-table__th) {
+    padding: 0 9px 10px !important;
   }
-  .modern-table-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .table-wrapper {
-    overflow-x: visible;
-  }
-  .attendance-table {
-    width: 100%;
-  }
-  .table-header-cell {
-    font-size: 10px;
-    padding: 8px 3px;
-    white-space: normal;
-    word-break: break-word;
-  }
-  .table-body-cell {
-    font-size: 10px;
-    padding: 7px 3px;
-  }
-  .selfie-thumbnail {
-    width: 28px;
-    height: 28px;
-  }
-  .avatar-fallback {
-    width: 26px !important;
-    height: 26px !important;
-  }
-  .source-mini-badge {
-    font-size: 9px;
-    padding: 2px 4px;
+  .att-table :deep(.att-table__td) {
+    padding: 10px 9px !important;
   }
 }
 </style>

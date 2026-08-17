@@ -1,144 +1,199 @@
 <template>
   <PageShell>
-    <div class="attendance-card">
-      <!-- Header Section -->
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-titles">
-            <h1 class="page-title">Attendance</h1>
-          </div>
-          <div class="header-actions">
-            <q-input
-              v-model="employeeSearch"
-              placeholder="Search by employee name..."
-              class="header-search"
-              dense
-              outlined
-              clearable
-            >
-              <template v-slot:prepend>
-                <q-icon name="search" class="search-icon" />
-              </template>
-            </q-input>
-            <q-btn
-              unelevated
-              icon="add"
-              label="Add Attendance"
-              class="add-employee-btn header-add-btn"
-              no-caps
-              @click="openAddDialog"
-            />
-          </div>
+    <div class="att-page">
+      <!-- ── Page header ─────────────────────────────────────────────────── -->
+      <header class="att-head">
+        <div class="att-head__titles">
+          <h1 class="att-head__title">Attendance</h1>
+          <p class="att-head__sub">{{ dateSummary }}</p>
         </div>
-      </div>
+        <q-btn
+          unelevated
+          no-caps
+          icon="add"
+          label="Add attendance"
+          class="btn-primary"
+          @click="openAddDialog"
+        />
+      </header>
 
-      <!-- Stats Cards -->
-      <AttendanceStatsCards :loading="loading" :stats="statsObj" />
-
-      <!-- Filters Section -->
-      <div class="filters-section">
-        <div class="filters-header">
-          <h3 class="filters-title">Filter Records</h3>
-          <div class="filters-header-actions">
-            <div class="date-nav-wrapper">
-              <q-btn
-                flat
-                round
-                dense
-                icon="chevron_left"
-                class="date-nav-btn"
-                @click="goToPreviousDay"
-              />
-              <q-input
-                dense
-                outlined
-                v-model="currentDate"
-                type="date"
-                class="filter-input date-nav-input"
-                @update:model-value="onDateNavChange"
-              >
-                <template v-slot:prepend>
-                  <q-icon name="event" />
-                </template>
-              </q-input>
-              <q-btn
-                flat
-                round
-                dense
-                icon="chevron_right"
-                class="date-nav-btn"
-                @click="goToNextDay"
-                :disable="currentDate >= today"
-              />
-            </div>
+      <!-- ── List card ──────────────────────────────────────────────────── -->
+      <section class="dash-panel att-list">
+        <div class="att-toolbar">
+          <!-- The day being viewed is the page's primary control, so it leads
+               the toolbar rather than sitting in a separate "Filter Records"
+               strip below the stats. -->
+          <div class="daynav">
             <q-btn
               flat
               dense
-              icon="clear_all"
-              label="Clear All"
-              @click="clearAllFilters"
-              class="clear-btn"
-              size="sm"
+              round
+              size="11px"
+              icon="chevron_left"
+              class="daynav__btn"
+              aria-label="Previous day"
+              @click="goToPreviousDay"
+            />
+            <q-input
+              v-model="currentDate"
+              type="date"
+              dense
+              outlined
+              hide-bottom-space
+              class="daynav__field dash-field"
+              aria-label="Date"
+              @update:model-value="onDateNavChange"
+            />
+            <q-btn
+              flat
+              dense
+              round
+              size="11px"
+              icon="chevron_right"
+              class="daynav__btn"
+              aria-label="Next day"
+              :disable="currentDate >= today"
+              @click="goToNextDay"
+            />
+            <q-btn
+              v-if="currentDate !== today"
+              flat
+              dense
+              no-caps
+              size="11px"
+              label="Today"
+              class="daynav__today"
+              @click="goToToday"
             />
           </div>
-        </div>
-      </div>
 
-      <!-- Main Table Section -->
-      <div class="table-block">
-        <AttendanceTable
-          :rows="filteredAttendanceRows"
-          :loading="loading"
-          :cost-center-filter="filters.cost_center"
-          @update:cost-center-filter="(val) => (filters.cost_center = val)"
-          :cost-center-options="costCenterOptions"
-          :options-loading="filtersLoading"
-          :employees="employees"
-          @refresh="fetchAttendanceData()"
-          @view-selfie="viewSelfie"
-          @view-photo="viewEmployeePhoto"
-          @edit-time="openInlineEdit"
-        />
-      </div>
+          <q-input
+            ref="searchRef"
+            v-model="employeeSearch"
+            placeholder="Search employee"
+            dense
+            outlined
+            clearable
+            hide-bottom-space
+            class="att-search dash-field"
+          >
+            <template v-slot:prepend>
+              <q-icon name="search" size="18px" />
+            </template>
+          </q-input>
 
-      <!-- Pagination Controls -->
-      <div class="pagination-bar" v-if="filteredTotal > 0 || pagination.rowsNumber > 0">
-        <div class="pagination-info">
-          <span class="pagination-text">
-            Showing {{ (pagination.page - 1) * pagination.rowsPerPage + 1 }} –
-            {{ Math.min(pagination.page * pagination.rowsPerPage, filteredTotal) }}
-            of {{ filteredTotal }} records
-          </span>
+          <!-- Payout group, resolved from each employee's active contract. This
+               replaced a cost-centre select; cost centre is still used by the
+               add and edit dialogs, it just no longer filters the list. -->
           <q-select
-            :model-value="pagination.rowsPerPage"
-            :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
-            option-label="label"
-            option-value="value"
+            v-if="payrollGroupOptions.length"
+            v-model="payrollGroupFilter"
+            :options="payrollGroupSelectOptions"
             emit-value
             map-options
             dense
             outlined
-            class="page-size-select"
-            @update:model-value="onRowsPerPageChange"
+            hide-bottom-space
+            :popup-content-class="'att-popup'"
+            class="att-filter dash-field"
+            aria-label="Filter by payout group"
+          >
+            <template v-slot:prepend>
+              <q-icon name="o_groups" size="16px" />
+            </template>
+          </q-select>
+
+          <span class="att-toolbar__count">
+            {{ filteredTotal }} {{ filteredTotal === 1 ? 'record' : 'records' }}
+          </span>
+        </div>
+
+        <div v-if="activeFilters.length" class="att-applied">
+          <span class="att-applied__label">Filtered by</span>
+          <button
+            v-for="f in activeFilters"
+            :key="f.key"
+            type="button"
+            class="att-applied__chip"
+            @click="clearFilter(f.key)"
+          >
+            <span class="att-applied__chip-text">{{ f.label }}</span>
+            <q-icon name="close" size="13px" />
+          </button>
+          <q-btn
+            flat
+            dense
+            no-caps
+            size="11px"
+            label="Clear all"
+            class="btn-quiet"
+            @click="clearAllFilters"
           />
         </div>
-        <q-pagination
-          :model-value="pagination.page"
-          :max="totalPages"
-          :max-pages="6"
-          boundary-numbers
-          direction-links
-          color="primary"
-          active-color="primary"
-          active-text-color="white"
-          icon-first="first_page"
-          icon-prev="chevron_left"
-          icon-next="chevron_right"
-          icon-last="last_page"
-          class="schedule-pagination"
-          @update:model-value="onPageChange"
+
+        <!-- Cards below 1024px, table above. -->
+        <AttendanceCardList
+          v-if="$q.screen.lt.md"
+          :rows="filteredAttendanceRows"
+          :loading="loading || resolvingGroups"
+          :employees="employees"
+          :is-filtered="activeFilters.length > 0"
+          @view-selfie="viewSelfie"
+          @view-photo="viewEmployeePhoto"
+          @edit-time="openInlineEdit"
+          @clear-filters="clearAllFilters"
         />
-      </div>
+        <AttendanceTable
+          v-else
+          :rows="filteredAttendanceRows"
+          :loading="loading || resolvingGroups"
+          :employees="employees"
+          :is-filtered="activeFilters.length > 0"
+          @view-selfie="viewSelfie"
+          @view-photo="viewEmployeePhoto"
+          @edit-time="openInlineEdit"
+          @clear-filters="clearAllFilters"
+        />
+
+        <footer v-if="filteredTotal > 0" class="att-foot">
+          <div class="att-foot__left">
+            <span class="att-foot__range dash-num">
+              {{ (pagination.page - 1) * pagination.rowsPerPage + 1 }}–{{
+                Math.min(pagination.page * pagination.rowsPerPage, filteredTotal)
+              }}
+              of {{ filteredTotal }}
+            </span>
+            <q-select
+              :model-value="pagination.rowsPerPage"
+              :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              dense
+              outlined
+              hide-bottom-space
+              :popup-content-class="'att-popup'"
+              class="att-foot__size dash-field"
+              @update:model-value="onRowsPerPageChange"
+            />
+          </div>
+          <q-pagination
+            :model-value="pagination.page"
+            :max="totalPages"
+            :max-pages="$q.screen.lt.md ? 3 : 6"
+            boundary-numbers
+            direction-links
+            :ripple="false"
+            icon-first="first_page"
+            icon-prev="chevron_left"
+            icon-next="chevron_right"
+            icon-last="last_page"
+            class="att-pager"
+            @update:model-value="onPageChange"
+          />
+        </footer>
+      </section>
     </div>
     <!-- Date Range Picker Dialog -->
     <AttendanceDateRangePicker
@@ -204,20 +259,30 @@ import { api } from 'src/boot/axios'
 import { BASE } from 'src/composables/utils/http'
 import { useCompany } from '@/composables/page/useCompany'
 import PageShell from '@/components/layout/PageShell.vue'
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { toUTC, formatInTimezone } from '@/composables/utils/timezone'
 import { useOrganization } from '@/composables/page/useOrganization'
-import AttendanceStatsCards from '@/components/pages/Attendance/AttendanceStatsCards.vue'
 import AttendanceTable from '@/components/pages/Attendance/AttendanceTable.vue'
+import AttendanceCardList from '@/components/pages/Attendance/AttendanceCardList.vue'
 import AttendanceDateRangePicker from '@/components/pages/Attendance/AttendanceDateRangePicker.vue'
 import AttendanceSelfieViewer from '@/components/pages/Attendance/AttendanceSelfieViewer.vue'
 import AttendanceAddDialog from '@/components/pages/Attendance/AttendanceAddDialog.vue'
 import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/AttendanceEmployeePhotoViewer.vue'
 import AttendanceInlineEditDialog from '@/components/pages/Attendance/AttendanceInlineEditDialog.vue'
 import AttendanceEditDialog from '@/components/pages/Attendance/AttendanceEditDialog.vue'
+
+// Shared accessors — these were duplicated verbatim between this page and
+// AttendanceTable, so the two could disagree about the same record.
+import {
+  getEmployeeId,
+  getEmployeeName as getEmployeeNameFor,
+  getEmployeePhoto as getEmployeePhotoFor,
+} from '@/composables/utils/attendance'
+import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
+import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
 
 const $q = useQuasar()
 
@@ -287,11 +352,57 @@ const pageSizeOptions = [10, 25, 50]
 const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
+// cost_center stays in `filters` because fetchAttendanceData still forwards it
+// as a query param when set — it is simply no longer driven by a filter control.
 const filters = ref({
   date_from: today,
   date_to: today,
   cost_center: '',
 })
+
+// ─── Payout group filter ──────────────────────────────────────────────────────
+// Client-side, unlike the cost-centre filter it replaced: cost_center is a
+// supported query param on the attendance endpoint, payout group is not. The
+// group comes from each employee's active contract instead.
+const { payrollGroups, fetchPayrollGroups } = useAdminPayrollGroups()
+const {
+  resolving: resolvingGroups,
+  groupIdFor,
+  inlineGroupId,
+  ensure: ensurePayoutGroups,
+} = useEmployeePayoutGroup()
+
+const payrollGroupFilter = ref(null)
+
+const payrollGroupOptions = computed(() =>
+  payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
+)
+
+const payrollGroupSelectOptions = computed(() => [
+  { label: 'All payout groups', value: null },
+  ...payrollGroupOptions.value,
+])
+
+/**
+ * Roster primary key for an attendance row's employee.
+ *
+ * Rows carry either a uuid or a numeric id, but the contract endpoint wants the
+ * numeric pk — so resolve through the roster rather than passing whatever the
+ * row happened to hold.
+ */
+function rosterIdFor(rowEmployee) {
+  if (rowEmployee && typeof rowEmployee === 'object' && rowEmployee.id) return rowEmployee.id
+  const key = getEmployeeId(rowEmployee)
+  if (!key) return null
+  const found = employees.value.find((e) => e.uuid === key || e.id === key)
+  return found?.id ?? (typeof key === 'number' ? key : null)
+}
+
+function rowPayoutGroupId(row) {
+  const inline = inlineGroupId(row.employee)
+  if (inline !== null) return inline
+  return groupIdFor(rosterIdFor(row.employee))
+}
 
 const currentDate = ref(today)
 const tempDateRange = ref({ from: '', to: '' })
@@ -301,6 +412,7 @@ const siteOptions = ref([])
 const costCenterOptions = ref([])
 const employeeOptions = ref([])
 const employeeSearch = ref('')
+const searchRef = ref(null)
 
 // Edit form
 const editingRecord = ref(null)
@@ -337,12 +449,6 @@ const createdBy = userData.employee_uuid || null
 // ─── Timezone cache ──────────────────────────────────────────────────────────────
 const employeeTimezoneCache = reactive({})
 const fetchedEmployees = ref({})
-
-function getEmployeeId(employee) {
-  if (!employee) return null
-  if (typeof employee === 'object') return employee.uuid || employee.id || employee.employee_id
-  return employee
-}
 
 function getTimezoneForEmployee(employee) {
   const empId = getEmployeeId(employee)
@@ -396,19 +502,6 @@ async function lazyFetchTimezone(empId) {
 }
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
-const statsObj = computed(() => {
-  const data = attendanceData.value.filter((row) => {
-    if (!currentDate.value) return true
-    const recordDate = row.date || row.attendance_date || row.log_date
-    return recordDate === currentDate.value
-  })
-  const total = data.length
-  const app = data.filter((item) => item.source === 'app').length
-  const terminal = data.filter((item) => item.source === 'terminal').length
-  const system = data.filter((item) => item.source === 'system').length
-  return { total, app, terminal, system }
-})
-
 const filteredAttendanceRows = computed(() => {
   let data = attendanceData.value
   if (currentDate.value) {
@@ -421,6 +514,14 @@ const filteredAttendanceRows = computed(() => {
     const term = employeeSearch.value.trim().toLowerCase()
     data = data.filter((row) => getEmployeeName(row.employee).toLowerCase().includes(term))
   }
+
+  // A row whose group cannot be resolved is excluded while a group is selected —
+  // "show me group A" should not fall back to including unknowns.
+  if (payrollGroupFilter.value) {
+    data = data.filter(
+      (row) => String(rowPayoutGroupId(row) ?? '') === String(payrollGroupFilter.value),
+    )
+  }
   return data.map((row) => ({
     ...row,
     _timezone: getTimezoneForEmployee(row.employee) || '',
@@ -432,6 +533,52 @@ const filteredTotal = computed(() => filteredAttendanceRows.value.length)
 const totalPages = computed(() => {
   return Math.ceil(filteredTotal.value / pagination.value.rowsPerPage) || 1
 })
+
+// ─── Header + filters ─────────────────────────────────────────────────────────
+const dateSummary = computed(() => {
+  if (!currentDate.value) return ''
+  // Parsed as parts rather than `new Date(string)` so the label is not shifted a
+  // day by the browser treating a bare date as UTC midnight.
+  const [y, m, d] = currentDate.value.split('-').map(Number)
+  const label = new Date(y, m - 1, d).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+  return currentDate.value === today ? `Today · ${label}` : label
+})
+
+/** Everything narrowing the list beyond the chosen day, each removable. */
+const activeFilters = computed(() => {
+  const out = []
+  if (employeeSearch.value?.trim()) {
+    out.push({ key: 'search', label: `“${employeeSearch.value.trim()}”` })
+  }
+  if (payrollGroupFilter.value) {
+    const group = payrollGroupOptions.value.find((g) => g.value === payrollGroupFilter.value)
+    out.push({ key: 'payrollGroup', label: group?.label ?? 'Payout group' })
+  }
+  return out
+})
+
+function clearFilter(key) {
+  if (key === 'search') employeeSearch.value = ''
+  if (key === 'payrollGroup') payrollGroupFilter.value = null
+}
+
+// "/" focuses search, matching the Employees page. Ignored while the user is
+// already typing somewhere, so it never swallows a literal slash.
+function onGlobalKey(e) {
+  if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+  const tag = e.target?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
+  e.preventDefault()
+  searchRef.value?.focus()
+}
+
+onMounted(() => window.addEventListener('keydown', onGlobalKey))
+onUnmounted(() => window.removeEventListener('keydown', onGlobalKey))
 
 // ─── Date navigation ──────────────────────────────────────────────────────────
 function goToPreviousDay() {
@@ -463,6 +610,12 @@ function onDateNavChange(val) {
   filters.value.date_to = val
   pagination.value.page = 1
   fetchAttendanceData()
+}
+
+// Jumping back to today was previously only reachable through "Clear All",
+// which also dropped the cost-centre filter as a side effect.
+function goToToday() {
+  onDateNavChange(today)
 }
 
 // ─── Selfie viewer ────────────────────────────────────────────────────────────
@@ -872,8 +1025,13 @@ function closeAddDialog() {
 }
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
+// Clears the search and payout-group filters too, not just the date — this backs
+// both the toolbar's "Clear all" and the empty state's "Clear filters", and
+// leaving either one set would make those actions look broken.
 function clearAllFilters() {
   filters.value = { date_from: today, date_to: today, cost_center: '' }
+  employeeSearch.value = ''
+  payrollGroupFilter.value = null
   currentDate.value = today
   pagination.value.page = 1
   fetchAttendanceData()
@@ -939,65 +1097,15 @@ function onRowsPerPageChange(newSize) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function getEmployeeName(employee) {
-  if (!employee) return 'Unknown Employee'
-  if (typeof employee === 'number' || typeof employee === 'string') {
-    const found = employees.value.find(
-      (emp) => emp.id === employee || emp.id === parseInt(employee),
-    )
-    if (found) {
-      const fullName =
-        `${found.first_name || found.firstName || ''} ${found.last_name || found.lastName || ''}`.trim()
-      return fullName || found.name || found.username || found.email || 'Unknown Employee'
-    }
-    return `Employee #${employee}`
-  }
-  if (typeof employee === 'object') {
-    const fullName =
-      `${employee.first_name || employee.firstName || employee.firstname || ''} ${employee.last_name || employee.lastName || employee.lastname || ''}`.trim()
-    return (
-      fullName ||
-      employee.name ||
-      employee.fullName ||
-      employee.full_name ||
-      employee.username ||
-      employee.email ||
-      'Unknown Employee'
-    )
-  }
-  return 'Unknown Employee'
-}
+// Thin wrappers that bind the shared accessors to this page's employee roster.
+const getEmployeeName = (employee) => getEmployeeNameFor(employee, employees.value)
+const getEmployeePhoto = (employee) => getEmployeePhotoFor(employee, employees.value)
 
 function viewEmployeePhoto(employee) {
   if (!employee) return
   selectedEmployeeName.value = getEmployeeName(employee)
   selectedEmployeePhoto.value = getEmployeePhoto(employee)
   showEmployeePhotoDialog.value = true
-}
-
-function getEmployeePhoto(employee) {
-  if (!employee) return null
-  if (typeof employee === 'object') {
-    return (
-      employee.photo ||
-      employee.image ||
-      employee.profile_picture ||
-      employee.profile_photo ||
-      employee.avatar ||
-      employee.picture ||
-      null
-    )
-  }
-  const found = employees.value.find((emp) => emp.id === employee || emp.uuid === employee)
-  return found
-    ? found.photo ||
-        found.image ||
-        found.profile_picture ||
-        found.profile_photo ||
-        found.avatar ||
-        found.picture ||
-        null
-    : null
 }
 
 function formatTimeForInput(dateTimeString, timezone) {
@@ -1034,13 +1142,33 @@ function showErrorNotification(message) {
 }
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────
+// Payout groups feed the toolbar select, so the list loads with the page. Gated
+// on companyId because fetchPayrollGroups returns an empty list without one, and
+// does so silently.
 watch(
-  () => filters.value.cost_center,
-  () => {
-    pagination.value.page = 1
-    fetchAttendanceData()
+  companyId,
+  (id) => {
+    if (id) fetchPayrollGroups()
   },
+  { immediate: true },
 )
+
+// Contracts are only fetched once a group is actually selected, then cached
+// (module-level, shared with the Schedule page). Filtering is client-side, so
+// no refetch of attendance is needed — just resolve, then re-evaluate.
+watch(payrollGroupFilter, async (groupId) => {
+  pagination.value.page = 1
+  if (!groupId) return
+  const ids = attendanceData.value.map((row) => rosterIdFor(row.employee)).filter(Boolean)
+  await ensurePayoutGroups(ids)
+})
+
+// Rows arriving for a new date still need resolving while a group filter is on.
+watch(attendanceData, async () => {
+  if (!payrollGroupFilter.value) return
+  const ids = attendanceData.value.map((row) => rosterIdFor(row.employee)).filter(Boolean)
+  await ensurePayoutGroups(ids)
+})
 
 watch(
   () => newRecord.value.date,
@@ -1075,261 +1203,404 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* ==============================
-   WRAPPER
-   ============================== */
-.attendance-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e8ecf0;
-  overflow: visible;
+/* ============================================================================
+   ATTENDANCE PAGE
+   ----------------------------------------------------------------------------
+   Built on the app design system in src/css/dashboard.scss, matching the
+   Employees page. Was one card stacking header / stats / a "Filter Records"
+   strip / table / pagination; it is now a page header plus a single list card
+   whose toolbar carries the day being viewed and the filters.
+   ========================================================================== */
+.att-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-gap);
 }
 
-/* ==============================
-   HEADER
-   ============================== */
-.page-header {
-  padding: 8px 24px;
-  border-bottom: 1px solid #f1f3f5;
-}
-.header-content {
+/* ── Page header ── */
+.att-head {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  gap: 14px;
+  flex-wrap: wrap;
 }
-.page-title {
-  font-size: 20px;
+
+.att-head__titles {
+  min-width: 0;
+}
+
+.att-head__title {
+  margin: 0;
+  font-size: 22px;
   font-weight: 600;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-.header-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.header-search {
-  min-width: 220px;
-  max-width: 280px;
-}
-.header-search :deep(.q-field__control) {
-  border-radius: 10px;
-  height: 36px;
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-.header-search :deep(.q-field__control:hover) {
-  border-color: #cbd5e1;
-}
-.search-icon {
-  color: #94a3b8;
-}
-.add-employee-btn {
-  height: 36px;
-  border-radius: 10px;
-  font-weight: 500;
-  text-transform: none;
-  white-space: nowrap;
-  padding: 0 16px;
-  font-size: 13px;
-}
-.header-add-btn {
-  background: #102335 !important;
-  color: #ffffff !important;
-}
-.header-add-btn:hover {
-  background: #193d5c !important;
+  letter-spacing: -0.025em;
+  color: var(--dash-ink);
+  line-height: 1.2;
 }
 
-/* ==============================
-   FILTERS SECTION
-   ============================== */
-.filters-section {
-  border-bottom: 1px solid #f1f3f5;
+.att-head__sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--dash-ink-3);
 }
-.filters-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 24px;
-  flex-wrap: wrap;
-  gap: 10px;
+
+/* ── Buttons ── */
+.btn-primary {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-brand);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
 }
-.filters-title {
-  font-size: 11px;
+.btn-primary:hover {
+  background: #193d5c;
+}
+
+.btn-quiet {
+  font-size: 12.5px;
   font-weight: 500;
-  color: #94a3b8;
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--dash-ink-3);
+  padding: 0 8px;
 }
-.filters-header-actions {
+
+/* ── List card ── */
+.att-list {
+  /* Corners are clipped on all four sides. The old wrapper set
+     `overflow: visible`, which let the footer paint square over the bottom
+     radius while the top stayed round. */
+  overflow: hidden;
+}
+
+/* ── Toolbar ── */
+.att-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dash-line);
+  flex-wrap: wrap;
 }
-.clear-btn {
-  color: #94a3b8 !important;
-  font-size: 12px;
-}
-.date-nav-wrapper {
+
+/* ── Day navigator ── */
+.daynav {
   display: flex;
   align-items: center;
-  gap: 4px;
-}
-.date-nav-btn {
-  color: #64748b;
+  gap: 2px;
   flex-shrink: 0;
 }
-.date-nav-input {
-  width: 175px;
+
+.daynav__btn {
+  color: var(--dash-ink-3);
 }
-.filter-input :deep(.q-field__control) {
-  border-radius: 10px;
-  height: 34px;
-  background: #ffffff;
-  border-color: #e2e8f0;
+.daynav__btn:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-100);
 }
 
-/* ==============================
-   PAGINATION BAR
-   ============================== */
-.pagination-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 16px;
-  flex-wrap: wrap;
+.daynav__field {
+  width: 152px;
 }
-.pagination-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+.daynav__field :deep(.q-field__control) {
+  height: 34px;
+  min-height: 34px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
 }
-.pagination-text {
-  font-size: 12px;
-  color: #94a3b8;
-  font-weight: 400;
-}
-.page-size-select {
-  min-width: 120px;
-}
-.page-size-select :deep(.q-field__control) {
-  border-radius: 8px;
-  border-color: #e2e8f0;
-}
-.schedule-pagination :deep(.q-btn) {
+.daynav__field :deep(.q-field__native) {
+  font-size: 12.5px;
   font-weight: 500;
-  border-radius: 8px;
-  min-width: 32px;
-  min-height: 32px;
-  font-size: 13px;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+  min-height: 34px;
+  padding: 0;
 }
-.schedule-pagination :deep(.q-btn--active) {
+.daynav__field :deep(.q-field__marginal) {
+  height: 34px;
+  color: var(--dash-ink-4);
+}
+
+.daynav__today {
+  margin-left: 4px;
+  color: var(--dash-accent);
   font-weight: 600;
 }
 
-/* ==============================
+/* ── Search + filter ── */
+.att-search {
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 280px;
+}
+.att-search :deep(.q-field__control) {
+  height: 34px;
+  min-height: 34px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
+}
+.att-search :deep(.q-field__native) {
+  font-size: 13px;
+  color: var(--dash-ink);
+}
+.att-search :deep(.q-field__marginal) {
+  height: 34px;
+  color: var(--dash-ink-4);
+}
+
+.att-filter {
+  width: 172px;
+  flex-shrink: 0;
+}
+.att-filter :deep(.q-field__control) {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
+}
+.att-filter :deep(.q-field__native) {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  padding: 0;
+  min-height: 34px;
+}
+.att-filter :deep(.q-field__marginal) {
+  height: 34px;
+  min-width: 0;
+  padding: 0;
+  color: var(--dash-ink-4);
+}
+.att-filter :deep(.q-field__prepend) {
+  padding-right: 7px;
+}
+
+.att-toolbar__count {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Applied filters ── */
+.att-applied {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
+}
+
+.att-applied__label {
+  font-size: 12px;
+  color: var(--dash-ink-4);
+  white-space: nowrap;
+}
+
+.att-applied__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 3px 7px 3px 9px;
+  border-radius: var(--dash-r-sm);
+  border: 1px solid var(--dash-line-strong);
+  background: var(--dash-surface);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dash-ink-2);
+  cursor: pointer;
+  transition: border-color var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
+}
+.att-applied__chip:hover {
+  border-color: var(--dash-critical-line);
+  color: var(--dash-critical);
+}
+.att-applied__chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+}
+
+.att-applied__chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Footer ── */
+.att-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
+  flex-wrap: wrap;
+}
+
+.att-foot__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.att-foot__range {
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
+  white-space: nowrap;
+}
+
+.att-foot__size {
+  width: 132px;
+}
+.att-foot__size :deep(.q-field__control) {
+  height: 32px;
+  min-height: 32px;
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-surface);
+}
+.att-foot__size :deep(.q-field__native) {
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+  min-height: 32px;
+  padding: 0;
+}
+.att-foot__size :deep(.q-field__marginal) {
+  height: 32px;
+  color: var(--dash-ink-4);
+}
+
+.att-pager :deep(.q-btn) {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-3);
+}
+.att-pager :deep(.q-btn:hover) {
+  background: var(--dash-n-100);
+  color: var(--dash-ink);
+}
+.att-pager :deep(.q-btn--active) {
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line-strong);
+  color: var(--dash-ink);
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
+}
+
+/* ============================================================================
    RESPONSIVE
-   ============================== */
-@media (max-width: 1440px) {
-  .attendance-card {
-    border-radius: 14px;
-  }
-  .page-header {
-    padding: 8px 20px;
-  }
-  .filters-header,
-  .pagination-bar {
-    padding: 10px 20px;
+   ----------------------------------------------------------------------------
+     >= 1440   table with employee / work type / shift / time in / time out
+     1280-1439 shift drops
+     1024-1279 work type drops too, leaving three columns
+     < 1024    AttendanceCardList replaces the table; no sideways scroll
+     < 640     day navigator and filters go full width, footer stacks
+
+   The old page had no such staging: it kept nine columns at every width and
+   shrank its own type to 10px to cope, which is not a readable table.
+   ========================================================================== */
+@media (max-width: 1279px) {
+  .att-toolbar__count {
+    display: none;
   }
 }
 
-@media (max-width: 1024px) {
-  .page-header {
-    padding: 8px 16px;
+@media (max-width: 1023px) {
+  .att-head__title {
+    font-size: 20px;
   }
-  .page-title {
-    font-size: 19px;
+  .att-toolbar {
+    padding: 10px 14px;
   }
-  .header-search {
-    min-width: 180px;
+  /* The day navigator keeps its own line; search and the cost-centre filter
+     share the next one. */
+  .daynav {
+    width: 100%;
   }
-  .filters-header,
-  .pagination-bar {
-    padding: 10px 16px;
+  .daynav__field {
+    flex: 1;
+    width: auto;
   }
-  .pagination-info {
-    gap: 10px;
+  .att-search {
+    flex: 1 1 160px;
+    max-width: none;
   }
-  .date-nav-input {
-    width: 150px;
+  .att-filter {
+    flex: 1 1 150px;
+    width: auto;
+  }
+  .att-applied,
+  .att-foot {
+    padding: 9px 14px;
   }
 }
 
 @media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
+  .att-head {
     align-items: stretch;
-    gap: 8px;
   }
-  .header-actions {
-    flex-direction: column;
-    gap: 8px;
-  }
-  .header-search,
-  .add-employee-btn {
+  .att-head .btn-primary {
     width: 100%;
-    max-width: 100%;
-  }
-  .filters-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-  .filters-header-actions {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .date-nav-wrapper {
-    width: 100%;
-  }
-  .date-nav-input {
-    width: 100%;
-  }
-  .pagination-bar {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 10px;
-  }
-  .pagination-info {
-    justify-content: center;
   }
 }
 
-@media (max-width: 480px) {
-  .page-title {
-    font-size: 18px;
+@media (max-width: 640px) {
+  .att-search,
+  .att-filter {
+    flex: 1 1 100%;
+    max-width: none;
   }
-  .filters-header-actions {
+  .att-foot {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 10px;
   }
-  .date-nav-wrapper {
-    justify-content: stretch;
-    width: 100%;
+  .att-foot__left {
+    justify-content: space-between;
   }
-  .date-nav-input {
-    width: 100%;
+  .att-pager {
+    align-self: center;
   }
+}
+</style>
+
+<style>
+/* Select popups teleport to the body, so they sit outside this component's
+   style scope. */
+.att-popup {
+  border-radius: var(--dash-r-md) !important;
+  border: 1px solid var(--dash-line);
+  box-shadow: var(--dash-shadow-lg) !important;
+  padding: 4px;
+}
+.att-popup .q-item {
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+}
+.att-popup .q-item:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+.att-popup .q-item--active {
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
+  font-weight: 600;
 }
 </style>
