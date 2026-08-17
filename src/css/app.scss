@@ -439,9 +439,12 @@ $separator-size: 1px;
 
 // ============================================================================
 // DRAWER OVERRIDE
+// Quasar paints the drawer content area itself, so the navigation rail's colour
+// has to be forced from here. The value comes from the design system's
+// --nav-bg token (see dashboard.scss) — change it there, not here.
 // ============================================================================
 .q-drawer__content {
-  background-color: #13283d !important;
+  background-color: var(--nav-bg, #101f2d) !important;
 }
 
 // ========================================================================
@@ -542,5 +545,13 @@ $separator-size: 1px;
     background: rgba($brand-dark, 0.08) !important;
   }
 }
+
+// ============================================================================
+// DASHBOARD DESIGN SYSTEM
+// Tokens + shared primitives for DashboardPage and components/pages/Dashboard/*.
+// Kept in its own file because it is a self-contained system built on CSS custom
+// properties (readable from Vue scoped styles) rather than the Sass variables above.
+// ============================================================================
+@import './dashboard';
 
 

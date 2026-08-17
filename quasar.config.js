@@ -20,7 +20,11 @@ export default defineConfig((ctx) => {
 
     boot: ['pinia', 'auth', 'axios', 'suppressExtensionErrors'],
     css: ['app.scss'],
-    extras: ['roboto-font', 'material-icons'],
+    // `material-icons-outlined` backs the `o_` icon prefix. The navigation rail
+    // uses it for inactive items and swaps to the filled variant for the active
+    // one, so selection is carried by the glyph's weight rather than by a
+    // highlight behind it. Without this extra, every `o_*` icon renders blank.
+    extras: ['roboto-font', 'material-icons', 'material-icons-outlined'],
 
     babel: {
       presets: [['@quasar/babel-preset-app', {}]],

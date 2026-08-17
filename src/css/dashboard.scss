@@ -1,0 +1,667 @@
+// ============================================================================
+// WAGEY — DESIGN SYSTEM
+// ----------------------------------------------------------------------------
+// Tokens and shared primitives for src/layouts/MainLayout.vue (the app shell),
+// src/pages/DashboardPage.vue, and everything under components/pages/Dashboard/.
+//
+// The file is still named `dashboard` because that is where the system started;
+// the `--dash-*` prefix is now the app-wide namespace, and the app shell reads
+// from the same ramps so the chrome and the content agree.
+//
+// Why this file exists: every dashboard panel used to hand-roll the same panel
+// chrome, table, skeleton and empty state with literal hex values (#e8ecf0,
+// #f1f3f5, #1a73e8, #111827...). Changing the look meant editing ~25 files.
+// The tokens below are plain CSS custom properties on :root, so Vue *scoped*
+// component styles can read them without any import.
+//
+// ── Visual direction ────────────────────────────────────────────────────────
+// Contemporary B2B SaaS: flat surfaces, hairline borders, near-invisible
+// shadows, a muted neutral ramp, and dense but airy type. Depth comes from
+// borders and tone, not from elevation — a dashboard is a working surface, not
+// a stack of floating cards. Corner radii stay moderate (12px on containers,
+// 6–8px on controls); oversized radii and heavy drop shadows read as consumer
+// software rather than as a professional tool.
+//
+// ── Rules of the system ─────────────────────────────────────────────────────
+//   - Colour is assigned by the job it does: ink / surface / status / series.
+//   - The categorical series ramp is a FIXED order. Never cycle past --dash-cat-6;
+//     fold the rest into "Other". It is validated for colour-vision deficiency
+//     separation, so re-ordering or substituting a hue invalidates it.
+//   - Status colours (good / warn / critical) are reserved. They never stand in
+//     for "series 4", and they always ship with a label or icon, never colour alone.
+// ============================================================================
+
+:root {
+  // ── Neutral ramp ──────────────────────────────────────────────────────────
+  // A cool grey with a slight blue cast. Every surface, border and text colour
+  // below is drawn from these eleven steps, so the whole dashboard shares one
+  // temperature instead of mixing warm and cool greys panel by panel.
+  --dash-n-25: #fcfcfd;
+  --dash-n-50: #f9fafb;
+  --dash-n-100: #f2f4f7;
+  --dash-n-200: #eaecf0;
+  --dash-n-300: #d0d5dd;
+  --dash-n-400: #98a2b3;
+  --dash-n-500: #667085;
+  --dash-n-600: #475467;
+  --dash-n-700: #344054;
+  --dash-n-800: #182230;
+  --dash-n-900: #101828;
+
+  // ── Surfaces ──────────────────────────────────────────────────────────────
+  --dash-canvas: #f4f6f9;
+  --dash-surface: #ffffff;
+  --dash-sunken: var(--dash-n-50); // inset tiles, totals, summary blocks
+  --dash-hover: var(--dash-n-50); // row and control hover plate
+
+  // ── Borders ───────────────────────────────────────────────────────────────
+  // Opaque, not alpha: a hairline over a tinted panel header has to stay the
+  // same weight as one over white.
+  --dash-line: var(--dash-n-200); // card edges, structural rules
+  --dash-line-soft: var(--dash-n-100); // row dividers
+  --dash-line-strong: var(--dash-n-300); // input edges, emphasis
+
+  // ── Ink ───────────────────────────────────────────────────────────────────
+  --dash-ink: var(--dash-n-900);
+  --dash-ink-2: var(--dash-n-600);
+  --dash-ink-3: var(--dash-n-500);
+  --dash-ink-4: var(--dash-n-400); // placeholder / disabled only
+
+  // ── Brand + interactive ───────────────────────────────────────────────────
+  --dash-brand: #102335;
+  --dash-accent: #2e4fd4;
+  --dash-accent-hover: #2743b4;
+  --dash-accent-bg: #eef2ff;
+  --dash-accent-ring: rgba(46, 79, 212, 0.14);
+
+  // ── Status (reserved — never used as series colours) ──────────────────────
+  --dash-good: #067647;
+  --dash-good-bg: #ecfdf3;
+  --dash-good-line: #abefc6;
+  --dash-good-mark: #17b26a;
+
+  --dash-warn: #b54708;
+  --dash-warn-bg: #fffaeb;
+  --dash-warn-line: #fedf89;
+  --dash-warn-mark: #f79009;
+
+  --dash-critical: #b42318;
+  --dash-critical-bg: #fef3f2;
+  --dash-critical-line: #fecdca;
+  --dash-critical-mark: #f04438;
+
+  --dash-info: #2e4fd4;
+  --dash-info-bg: #eef2ff;
+  --dash-info-line: #c7d2fe;
+  --dash-info-mark: #6172f3;
+
+  --dash-neutral: var(--dash-n-600);
+  --dash-neutral-bg: var(--dash-n-100);
+  --dash-neutral-line: var(--dash-n-200);
+  --dash-neutral-mark: var(--dash-n-400);
+
+  // ── App shell — dark navigation rail ──────────────────────────────────────
+  // The sidebar keeps its dark navy: a dark rail against a light working
+  // surface is still the dominant B2B SaaS shell, and it is where this product's
+  // brand colour lives. What changes is how state is expressed — depth comes
+  // from translucent white overlays on the navy, so hover and active read as
+  // the same surface at different weights rather than as pasted-on colour.
+  --nav-bg: #101f2d;
+  --nav-hover: rgba(255, 255, 255, 0.05);
+  --nav-active: rgba(255, 255, 255, 0.09);
+  --nav-line: rgba(255, 255, 255, 0.08);
+  --nav-ink: #ffffff;
+  --nav-ink-2: rgba(255, 255, 255, 0.66);
+  --nav-ink-3: rgba(255, 255, 255, 0.40);
+  --nav-ring: rgba(255, 255, 255, 0.22);
+
+  // App header
+  --header-h: 60px;
+
+  // ── Categorical series — FIXED ORDER, validated for CVD separation ────────
+  // node scripts/validate_palette.js "#2e4fd4,#0e9384,#c4320a,#8b5cf6,#b58b00,#be185d"
+  //   lightness band PASS · chroma floor PASS · CVD separation PASS (worst ΔE 13.2)
+  //   normal-vision floor PASS (worst ΔE 24.7) · contrast vs surface PASS
+  --dash-cat-1: #2e4fd4;
+  --dash-cat-2: #0e9384;
+  --dash-cat-3: #c4320a;
+  --dash-cat-4: #8b5cf6;
+  --dash-cat-5: #b58b00;
+  --dash-cat-6: #be185d;
+
+  // ── Radius ────────────────────────────────────────────────────────────────
+  --dash-r-xs: 4px;
+  --dash-r-sm: 6px;
+  --dash-r-md: 8px;
+  --dash-r-lg: 12px; // panels, cards
+  --dash-r-pill: 999px;
+
+  // ── Elevation ─────────────────────────────────────────────────────────────
+  // Barely there by design. A card is defined by its border; the shadow only
+  // stops it looking pasted onto the canvas. Nothing on this dashboard floats.
+  --dash-shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --dash-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
+  --dash-shadow-md: 0 2px 4px -2px rgba(16, 24, 40, 0.06), 0 4px 8px -2px rgba(16, 24, 40, 0.1);
+  --dash-shadow-lg: 0 4px 6px -2px rgba(16, 24, 40, 0.03), 0 12px 16px -4px rgba(16, 24, 40, 0.08);
+
+  // ── Rhythm — the single knob that retunes density per breakpoint ──────────
+  --dash-gap: 16px;
+  --dash-pad-x: 20px;
+  --dash-pad-y: 16px;
+  --dash-row-y: 11px; // table row vertical padding
+
+  // ── Motion ────────────────────────────────────────────────────────────────
+  --dash-ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --dash-fast: 0.12s;
+  --dash-slow: 0.24s;
+}
+
+@media (min-width: 1441px) {
+  :root {
+    --dash-gap: 20px;
+    --dash-pad-x: 22px;
+    --dash-pad-y: 18px;
+  }
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --dash-gap: 12px;
+    --dash-pad-x: 16px;
+    --dash-pad-y: 14px;
+    --dash-row-y: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dash-fast: 0.01ms;
+    --dash-slow: 0.01ms;
+  }
+}
+
+// ============================================================================
+// TYPOGRAPHY
+// ----------------------------------------------------------------------------
+// One family (Roboto, already shipped via Quasar `extras`), differentiated by
+// role through size / weight / tracking rather than by loading a second face.
+//
+// Deliberately NOT using uppercase letter-spaced micro-labels: they were the
+// house style of an earlier generation of dashboards and now read as dated.
+// Labels are sentence case, one step down in size and two steps down in ink.
+//
+// Every numeric role is tabular — this is a payroll product, so columns of
+// pesos have to align down the page. That is a functional choice, not a
+// stylistic one.
+// ============================================================================
+
+.dash-eyebrow {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--dash-ink-3);
+  line-height: 1.4;
+}
+
+.dash-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.006em;
+  color: var(--dash-ink);
+  line-height: 1.35;
+}
+
+.dash-body {
+  font-size: 13px;
+  color: var(--dash-ink-2);
+  line-height: 1.5;
+}
+
+.dash-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.dash-metric {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-metric--lg {
+  font-size: 30px;
+  letter-spacing: -0.03em;
+}
+
+.dash-metric--sm {
+  font-size: 17px;
+  letter-spacing: -0.018em;
+}
+
+// ============================================================================
+// PANEL — the single card chrome every dashboard surface is built from.
+// Rendered by DashPanel.vue; the classes are global so scoped child styles can
+// reach into the body without :deep() gymnastics.
+// ============================================================================
+
+.dash-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-lg);
+  box-shadow: var(--dash-shadow-xs);
+  overflow: hidden;
+}
+
+// No hover elevation: a panel is a readout, not a control, and lifting it on
+// hover promises a click that does not exist. Table rows keep a hover plate
+// because there it aids tracking across a wide row.
+
+// Wraps rather than crushes: a panel in a one-third column may carry both a
+// title and a control cluster, and squeezing them onto one line truncates the
+// title. The action group drops to its own line instead.
+.dash-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: var(--dash-pad-y) var(--dash-pad-x);
+  border-bottom: 1px solid var(--dash-line);
+  flex-shrink: 0;
+  min-height: 48px;
+  flex-wrap: wrap;
+}
+
+// Tone lives in the icon alone. Tinting whole headers was louder than the
+// content underneath it — on a page of nine panels the tint became the thing
+// you saw first, regardless of what it meant.
+.dash-panel__icon {
+  color: var(--dash-ink-4);
+  flex-shrink: 0;
+}
+.dash-panel--accent .dash-panel__icon { color: var(--dash-accent); }
+.dash-panel--good .dash-panel__icon { color: var(--dash-good-mark); }
+.dash-panel--warn .dash-panel__icon { color: var(--dash-warn-mark); }
+.dash-panel--critical .dash-panel__icon { color: var(--dash-critical-mark); }
+
+.dash-panel__titles {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.dash-panel__subtitle {
+  font-size: 12px;
+  color: var(--dash-ink-3);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.dash-panel__body {
+  padding: var(--dash-pad-y) var(--dash-pad-x);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dash-panel__body--flush { padding: 0; }
+.dash-panel__body--scroll { overflow: auto; }
+
+.dash-panel__footer {
+  padding: 12px var(--dash-pad-x);
+  border-top: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
+  flex-shrink: 0;
+}
+
+// ============================================================================
+// TABLE
+// ----------------------------------------------------------------------------
+// Built from flex rows rather than <table> so panels can set column weights
+// inline and still collapse cleanly on narrow viewports. ARIA roles restore the
+// semantics a real <table> would have given for free.
+// ============================================================================
+
+.dash-table {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-x: auto;
+  flex: 1;
+}
+
+// A label strip, not a filled band. Dropping the grey header block is most of
+// what separates a current data table from a spreadsheet pastiche.
+.dash-table__head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 0 10px 9px;
+  border-bottom: 1px solid var(--dash-line);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--dash-surface);
+}
+
+.dash-table__th {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dash-ink-3);
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.dash-table__row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: var(--dash-row-y) 10px;
+  border-bottom: 1px solid var(--dash-line-soft);
+  transition: background var(--dash-fast) var(--dash-ease);
+}
+.dash-table__row:last-child { border-bottom: none; }
+.dash-table__row:hover { background: var(--dash-hover); }
+
+.dash-table__td {
+  font-size: 13px;
+  color: var(--dash-ink-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-table__td--strong {
+  color: var(--dash-ink);
+  font-weight: 500;
+}
+.dash-table__td--num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--dash-ink);
+}
+
+.dash-table__total {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 10px;
+  margin-top: 4px;
+  border-top: 1px solid var(--dash-line);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+// ── Share bar — inline proportion inside a table cell ──────────────────────
+.dash-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.dash-bar__track {
+  flex: 1;
+  min-width: 24px;
+  height: 6px;
+  border-radius: var(--dash-r-pill);
+  background: var(--dash-n-100);
+  overflow: hidden;
+}
+.dash-bar__fill {
+  height: 100%;
+  border-radius: var(--dash-r-pill);
+  transition: width var(--dash-slow) var(--dash-ease);
+}
+.dash-bar__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dash-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 32px;
+  text-align: right;
+}
+
+// ── Series swatch — the dot that carries identity next to a label ──────────
+.dash-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--dash-r-xs);
+  flex-shrink: 0;
+}
+
+// ============================================================================
+// BADGES + DELTAS
+// ----------------------------------------------------------------------------
+// Bordered rather than flat-filled. A 1px ring in the status hue holds its edge
+// against both white and tinted surfaces, where a pastel fill alone goes muddy.
+// ============================================================================
+
+.dash-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 3px 9px 3px 7px;
+  border-radius: var(--dash-r-sm);
+  white-space: nowrap;
+  background: var(--dash-neutral-bg);
+  border: 1px solid var(--dash-neutral-line);
+  color: var(--dash-neutral);
+}
+.dash-chip--good {
+  background: var(--dash-good-bg);
+  border-color: var(--dash-good-line);
+  color: var(--dash-good);
+}
+.dash-chip--warn {
+  background: var(--dash-warn-bg);
+  border-color: var(--dash-warn-line);
+  color: var(--dash-warn);
+}
+.dash-chip--critical {
+  background: var(--dash-critical-bg);
+  border-color: var(--dash-critical-line);
+  color: var(--dash-critical);
+}
+.dash-chip--info {
+  background: var(--dash-info-bg);
+  border-color: var(--dash-info-line);
+  color: var(--dash-info);
+}
+
+.dash-chip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+// Delta — signed change. Always carries its own +/− glyph so the sign is not
+// communicated by colour alone.
+.dash-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dash-delta--up { color: var(--dash-good); }
+.dash-delta--down { color: var(--dash-critical); }
+.dash-delta--flat { color: var(--dash-ink-3); }
+
+// ============================================================================
+// FEATURED ICON — the tinted, ringed square that heads an empty state.
+// A plain grey glyph on white reads as a rendering failure; the ring makes the
+// empty state look designed rather than broken.
+// ============================================================================
+
+.dash-featured-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--dash-r-lg);
+  background: var(--dash-n-50);
+  color: var(--dash-ink-3);
+  border: 1px solid var(--dash-line);
+  box-shadow: 0 0 0 4px var(--dash-n-25);
+  flex-shrink: 0;
+}
+.dash-featured-icon--good {
+  background: var(--dash-good-bg);
+  border-color: var(--dash-good-line);
+  color: var(--dash-good);
+  box-shadow: 0 0 0 4px rgba(6, 118, 71, 0.05);
+}
+
+// ============================================================================
+// EMPTY STATE
+// An empty screen is an invitation to act, so the copy names the state and,
+// where there is one, the next move — it is never just a shrug.
+// ============================================================================
+
+.dash-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px 20px;
+  text-align: center;
+  min-height: 140px;
+}
+.dash-empty__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  margin: 2px 0 0;
+}
+.dash-empty__sub {
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
+  line-height: 1.5;
+  max-width: 38ch;
+  margin: 0;
+}
+
+// ============================================================================
+// SKELETON
+// One shimmer definition for the whole dashboard, replacing the ~12 copies of
+// an `eps-pulse` keyframe that were pasted across the panel files.
+// ============================================================================
+
+@keyframes dash-shimmer-sweep {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+.dash-shimmer {
+  height: 10px;
+  border-radius: var(--dash-r-sm);
+  background: linear-gradient(
+    90deg,
+    var(--dash-n-100) 0%,
+    var(--dash-n-200) 45%,
+    var(--dash-n-100) 90%
+  );
+  background-size: 220% 100%;
+  animation: dash-shimmer-sweep 1.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-shimmer {
+    animation: none;
+    background: var(--dash-n-100);
+  }
+}
+
+// ============================================================================
+// OUTLINED FIELD — add `dash-field` to any outlined QInput / QSelect.
+// ----------------------------------------------------------------------------
+// Quasar's outlined QField paints TWO borders on the same box: `:before` is the
+// resting outline, and `:after` is the focus outline, drawn at 2px in the theme's
+// primary colour. Restyling only `:before` leaves `:after` in place, so a focused
+// field shows the resting border AND a thicker blue one on top of it — plus a
+// third ring if a focus halo is added. That stack is the doubled-border artefact.
+//
+// The fix is to have exactly one border at all times: `:after` is removed, and
+// `:before` is recoloured per state, with the halo carrying the emphasis. Kept
+// here rather than in each page so the four places that use these fields cannot
+// drift.
+//
+// Selectors are prefixed `.dash-field.q-field` (specificity 0,3,x) so they win
+// against Quasar's own `.q-field--outlined .q-field__control:after` without
+// resorting to !important.
+// ============================================================================
+
+.dash-field.q-field .q-field__control:after {
+  display: none;
+}
+
+.dash-field.q-field .q-field__control:before {
+  border-color: var(--dash-line-strong);
+  transition: border-color var(--dash-fast) var(--dash-ease);
+}
+
+.dash-field.q-field .q-field__control:hover:before {
+  border-color: var(--dash-n-400);
+}
+
+.dash-field.q-field--focused .q-field__control:before {
+  border-color: var(--dash-accent);
+  border-width: 1px;
+}
+
+.dash-field.q-field--focused .q-field__control {
+  box-shadow: 0 0 0 4px var(--dash-accent-ring);
+}
+
+// Error state still needs to read as an error: `:after` normally carries it, so
+// the colour moves to `:before` along with everything else.
+.dash-field.q-field--error .q-field__control:before {
+  border-color: var(--dash-critical-mark);
+}
+.dash-field.q-field--error.q-field--focused .q-field__control {
+  box-shadow: 0 0 0 4px rgba(240, 68, 56, 0.16);
+}
+
+// ============================================================================
+// FOCUS
+// Quality floor: keyboard focus is visible everywhere on the dashboard, and it
+// is the same ring in every panel — a 1px edge plus a soft halo, rather than a
+// hard outline that fights the hairline borders around it.
+// ============================================================================
+
+.dash-panel :focus-visible,
+.dash-focusable:focus-visible {
+  outline: none;
+  border-radius: var(--dash-r-sm);
+  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+}
