@@ -1,117 +1,101 @@
 <template>
   <PageShell>
-    <div class="schedule-card">
-      <!-- Header Section -->
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-titles">
-            <h1 class="page-title">Schedule</h1>
-            <div class="timezone-badge">
-              <q-icon name="schedule" size="14px" />
-              <span>{{ userTimezone }}</span>
-            </div>
-          </div>
-          <div class="header-actions">
-            <q-btn
-              icon="add"
-              label="Add Schedule"
-              @click="openAddModal"
-              class="add-btn header-add-btn"
-              unelevated
-              no-caps
-            />
-            <q-input
-              v-model="searchTerm"
-              placeholder="Search employees..."
-              outlined
-              dense
-              class="header-search"
-              debounce="300"
-              @update:model-value="filterEmployees"
-            >
-              <template #prepend>
-                <q-icon name="search" class="search-icon" />
-              </template>
-            </q-input>
-          </div>
+    <div class="sched-page">
+      <!-- ── Page header ─────────────────────────────────────────────────── -->
+      <header class="sched-head">
+        <div class="sched-head__titles">
+          <h1 class="sched-head__title">Schedule</h1>
+          <p class="sched-head__sub">{{ weekSummary }}</p>
         </div>
-      </div>
-
-      <!-- Stats Cards -->
-      <ScheduleStatsCards
-        :active-employees="activeEmployees"
-        :total-shifts="totalShifts"
-        :positions-count="positionsCount"
-      />
-
-      <!-- Filters / Controls -->
-      <ScheduleFilters
-        v-model:filters="filters"
-        :site-filter-options="siteFilterOptions"
-        :user-options="userOptions"
-        :selected-week="selectedWeek"
-        @prev-week="prevWeek"
-        @next-week="nextWeek"
-      />
-
-      <!-- Schedule Table -->
-      <ScheduleTable
-        :users="users"
-        :shifts="shifts"
-        :days="days"
-        :leave-types="leaveTypes"
-        :loading="isLoadingSchedule"
-
-        :quick-action-loading="quickActionLoading"
-        :assigning-day-off-id="assigningDayOffId"
-        :refreshing-row-user-id="refreshingRowUserId"
-        :sites="sites"
-        :shift-types="shiftTypes"
-        @open-quick-add="openQuickAddModal"
-        @open-reassign="openReassignModal"
-        @assign-dayoff="assignDayOff"
-        @assign-dual-dayoff="assignDualDayOff"
-        @quick-direct-assign="quickDirectAssign"
-      />
-
-      <!-- Pagination Controls -->
-      <div class="pagination-bar">
-        <div class="pagination-info">
-          <span class="pagination-text">
-            Showing {{ ((schedulePage - 1) * schedulePageSize) + 1 }} –
-            {{ Math.min(schedulePage * schedulePageSize, schedulePagination.count) }}
-            of {{ schedulePagination.count }} employees
-          </span>
-          <q-select
-            v-model="schedulePageSize"
-            :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
-            dense
-            outlined
-            class="page-size-select"
-            @update:model-value="onPageSizeChange"
-          />
-        </div>
-        <q-pagination
-          v-model="schedulePage"
-          :max="Math.ceil(schedulePagination.count / schedulePageSize)"
-          :max-pages="6"
-          boundary-numbers
-          direction-links
-          color="primary"
-          active-color="primary"
-          active-text-color="white"
-          icon-first="first_page"
-          icon-prev="chevron_left"
-          icon-next="chevron_right"
-          icon-last="last_page"
-          class="schedule-pagination"
-          @update:model-value="onPageChange"
+        <q-btn
+          unelevated
+          no-caps
+          icon="add"
+          label="Add schedule"
+          class="btn-primary"
+          @click="openAddModal"
         />
-      </div>
+      </header>
+
+      <!-- ── Scheduler card ─────────────────────────────────────────────── -->
+      <section class="dash-panel sched-board">
+        <ScheduleFilters
+          v-model:filters="filters"
+          v-model:search="searchTerm"
+          :payroll-group-options="payrollGroupOptions"
+          :selected-week="selectedWeek"
+          :timezone="userTimezone"
+          @prev-week="prevWeek"
+          @next-week="nextWeek"
+          @this-week="goToThisWeek"
+        />
+
+        <ScheduleTable
+          :users="users"
+          :shifts="shifts"
+          :days="days"
+          :week-dates="weekDates"
+          :leave-types="leaveTypes"
+          :loading="isLoadingSchedule || resolvingGroups"
+          :quick-action-loading="quickActionLoading"
+          :assigning-day-off-id="assigningDayOffId"
+          :refreshing-row-user-id="refreshingRowUserId"
+          :sites="sites"
+          :shift-types="shiftTypes"
+          :is-filtered="isFiltered"
+          @clear-filters="clearScheduleFilters"
+          @open-quick-add="openQuickAddModal"
+          @open-reassign="openReassignModal"
+          @assign-dayoff="assignDayOff"
+          @assign-dual-dayoff="assignDualDayOff"
+          @quick-direct-assign="quickDirectAssign"
+        />
+
+        <footer v-if="schedulePagination.count > 0" class="sched-foot">
+          <div class="sched-foot__left">
+            <!-- Week coverage, folded in from the stats row that used to sit
+                 above the grid. -->
+            <span class="sched-foot__stat dash-num">
+              {{ totalShifts }} {{ totalShifts === 1 ? 'shift' : 'shifts' }}
+            </span>
+            <span class="sched-foot__sep" />
+            <span class="sched-foot__range dash-num">
+              {{ (schedulePage - 1) * schedulePageSize + 1 }}–{{
+                Math.min(schedulePage * schedulePageSize, schedulePagination.count)
+              }}
+              of {{ schedulePagination.count }} employees
+            </span>
+            <q-select
+              v-model="schedulePageSize"
+              :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              dense
+              outlined
+              hide-bottom-space
+              :popup-content-class="'sched-popup'"
+              class="sched-foot__size dash-field"
+              @update:model-value="onPageSizeChange"
+            />
+          </div>
+          <q-pagination
+            v-model="schedulePage"
+            :max="Math.ceil(schedulePagination.count / schedulePageSize) || 1"
+            :max-pages="$q.screen.lt.md ? 3 : 6"
+            boundary-numbers
+            direction-links
+            :ripple="false"
+            icon-first="first_page"
+            icon-prev="chevron_left"
+            icon-next="chevron_right"
+            icon-last="last_page"
+            class="sched-pager"
+            @update:model-value="onPageChange"
+          />
+        </footer>
+      </section>
     </div>
 
       <!-- Add Schedule Modal -->
@@ -154,6 +138,7 @@
         @submit="handleReassignShift"
         @back-to-original="reassignData.shiftTemplateId = reassignData.originalTemplateId"
       />
+
   </PageShell>
 </template>
 
@@ -166,7 +151,7 @@ import { useSchedule } from '@/composables/page/useSchedule'
 import { useOrganization } from '@/composables/page/useOrganization'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
-import ScheduleStatsCards from '@/components/pages/Schedule/ScheduleStatsCards.vue'
+import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
 import ScheduleFilters from '@/components/pages/Schedule/ScheduleFilters.vue'
 import ScheduleTable from '@/components/pages/Schedule/ScheduleTable.vue'
 import ScheduleAddModal from '@/components/pages/Schedule/ScheduleAddModal.vue'
@@ -200,6 +185,14 @@ const {
 } = useOrganization()
 const { employees, loading: loadingEmployees, fetchEmployees } = useEmployees()
 const { payrollGroups, fetchPayrollGroups } = useAdminPayrollGroups()
+// Payout group comes from each employee's active contract; the cache is shared
+// with the Attendance page.
+const {
+  resolving: resolvingGroups,
+  groupIdFor,
+  inlineGroupId,
+  ensure: ensurePayoutGroups,
+} = useEmployeePayoutGroup()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -208,7 +201,9 @@ const shifts = ref([])
 const isReassigning = ref(false)
 const isLoadingSchedule = ref(false)
 const userTimezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
-const filters = ref({ site: null, employee: null })
+// Payout group is the only dropdown filter now — employee filtering is the
+// search box's job, and a select listing every employee duplicated it.
+const filters = ref({ payrollGroup: null })
 const searchTerm = ref('')
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -314,6 +309,30 @@ const prevWeek = async () => {
   fetchLeaves()
 }
 
+const goToThisWeek = async () => {
+  selectedWeek.value = getWeekRange()
+  schedulePage.value = 1
+  await fetchData()
+  fetchLeaves()
+}
+
+// The seven dates of the week on screen, Monday first — the grid needs the real
+// dates to print date numbers and mark today, not just weekday names.
+const weekDates = computed(() =>
+  Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(selectedWeek.value.start)
+    d.setDate(d.getDate() + i)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }),
+)
+
+const weekSummary = computed(() => {
+  const { start, end } = selectedWeek.value
+  const fmt = (d) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+  return `Week of ${fmt(start)} – ${fmt(end)}, ${end.getFullYear()}`
+})
+
 const onPageChange = (newPage) => {
   schedulePage.value = newPage
   renderPage()
@@ -345,20 +364,18 @@ const isEmployeeTerminated = (emp) => {
 }
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
+// Shown in the board footer. `activeEmployees` and `positionsCount` went with
+// the stats row: the employee count is already in the footer's pagination range,
+// and the grid now reports coverage per day and per person instead.
 const totalShifts = computed(() => shifts.value.length)
-const activeEmployees = computed(() => schedulePagination.value.count)
-const positionsCount = computed(() => new Set(shifts.value.map((s) => s.position)).size)
 
-const siteFilterOptions = computed(() => [
-  { label: 'All Sites', value: null },
-  ...sites.value.map((site) => ({ label: site.name, value: site.id })),
-])
-
+// `siteFilterOptions` and `userOptions` went with the two dropdowns they fed —
+// the toolbar filters by payout group now, and employee lookup is the search
+// box. `siteOptionsForRotating` stays: the Add Schedule modal still picks sites
+// for rotating schedules.
 const siteOptionsForRotating = computed(() =>
   sites.value.map((site) => ({ label: site.name, value: site.id })),
 )
-
-const userOptions = computed(() => users.value.map((u) => ({ label: u.name, value: u.id })))
 
 const employeeOptions = computed(() =>
   employees.value
@@ -403,25 +420,36 @@ const recurringScheduleOptions = computed(() =>
   recurringSchedules.value.map((r) => ({ label: r.name, value: r.id })),
 )
 
+// ─── Payout group resolution ──────────────────────────────────────────────────
+// Shared with the Attendance page through useEmployeePayoutGroup, which caches
+// by company at module level — so filtering by group on one page leaves the
+// other warm. That file documents why the group comes from the employee's active
+// contract rather than from the disbursement API.
+const resolvePayrollGroupId = (empData) => {
+  const inline = inlineGroupId(empData)
+  if (inline !== null) return inline
+  const empId = (empData.employee || empData)?.id
+  return empId ? groupIdFor(empId) : null
+}
+
+/** Resolve every employee on screen who has no group cached yet. */
+const ensurePayrollGroups = () =>
+  ensurePayoutGroups(allSchedules.value.map((empData) => (empData.employee || empData)?.id))
+
 const filteredAllSchedules = computed(() => {
   return allSchedules.value.filter((empData) => {
     const employee = empData.employee || empData
     const fullName = employee.full_name || employee.name || ''
-    const empId = employee.id || empData.id
 
-    const matchEmployee = !filters.value.employee || empId == filters.value.employee
     const matchSearch = fullName.toLowerCase().includes((searchTerm.value || '').toLowerCase())
-    const matchSite = !filters.value.site || (() => {
-      const schedules = empData.schedules || empData.schedule || empData.schedule_list || []
-      if (!Array.isArray(schedules) || schedules.length === 0) return true
-      return schedules.some((s) => {
-        const sSite = typeof s.site === 'number' ? s.site : parseInt(s.site)
-        const fSite = typeof filters.value.site === 'number' ? filters.value.site : parseInt(filters.value.site)
-        return sSite === fSite
-      })
-    })()
 
-    return matchEmployee && matchSearch && matchSite
+    // A record whose group cannot be resolved is excluded while a specific group
+    // is selected — "show me group A" should not fall back to showing unknowns.
+    const matchGroup =
+      !filters.value.payrollGroup ||
+      String(resolvePayrollGroupId(empData) ?? '') === String(filters.value.payrollGroup)
+
+    return matchSearch && matchGroup
   })
 })
 
@@ -435,12 +463,38 @@ watch(
 )
 
 watch(
-  () => ({ search: searchTerm.value, employee: filters.value.employee, site: filters.value.site }),
+  () => ({ search: searchTerm.value, payrollGroup: filters.value.payrollGroup }),
   () => {
     schedulePage.value = 1
     renderPage()
     fetchLeaves()
   },
+)
+
+// Contracts are only fetched once a payout group is actually selected, then
+// cached — so someone who never touches the filter never pays for it.
+watch(
+  () => filters.value.payrollGroup,
+  async (groupId) => {
+    if (!groupId) return
+    await ensurePayrollGroups()
+    renderPage()
+  },
+)
+
+// Payout groups feed the toolbar filter, so the list has to load with the page.
+// The only call used to be inside openAddModal(), because the options previously
+// fed nothing but the Add Schedule modal — which left the filter dropdown empty
+// until you happened to open that modal.
+//
+// Waiting on companyId rather than firing once in onMounted: fetchPayrollGroups()
+// returns an empty list without a company resolved, and would do so silently.
+watch(
+  companyId,
+  (id) => {
+    if (id) fetchPayrollGroups()
+  },
+  { immediate: true },
 )
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -470,7 +524,10 @@ const removeShiftRow = (index) => {
   quickAdd.value.shifts.splice(index, 1)
 }
 
-const filterEmployees = () => {}
+// Note: an empty `filterEmployees` no-op used to be wired to the search input's
+// @update:model-value. Search has always worked through `filteredAllSchedules`
+// reacting to `searchTerm` plus the refetch watcher below, so removing the
+// no-op changes nothing.
 
 // ─── localStorage leave helpers ───────────────────────────────────────────────
 const LEAVE_STORAGE_KEY = 'wagey_leaves'
@@ -886,7 +943,8 @@ const openAddModal = () => {
   addConflictWarning.value = false
   fetchEmployees()
   fetchShiftTemplatesList()
-  fetchPayrollGroups()
+  // Payout groups are loaded by the companyId watcher when the page mounts, so
+  // the modal no longer needs to fetch them itself.
   showAddModal.value = true
 }
 
@@ -1394,228 +1452,235 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* ==============================
-   WRAPPER
-   ============================== */
-.schedule-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e8ecf0;
+/* ============================================================================
+   SCHEDULE PAGE
+   ----------------------------------------------------------------------------
+   A scheduling board rather than a page of stacked sections. Was: page header,
+   three KPI cards, a "Schedule Overview" filter strip, a plain table, a
+   pagination bar — five bands before you reached a shift. Now: page header, then
+   one board card whose toolbar carries the week and whose footer carries
+   coverage and paging.
+   ========================================================================== */
+.sched-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-gap);
+}
+
+/* ── Page header ── */
+.sched-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.sched-head__titles {
+  min-width: 0;
+}
+
+.sched-head__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--dash-ink);
+  line-height: 1.2;
+}
+
+.sched-head__sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--dash-ink-3);
+}
+
+/* ── Buttons ── */
+.btn-primary {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-brand);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
+}
+.btn-primary:hover {
+  background: #193d5c;
+}
+
+/* ── Board ── */
+.sched-board {
+  /* Clips the four corners so rows and the footer cannot paint over the radius.
+     It does not constrain height — the card grows with the grid, which now
+     renders every row on the page rather than scrolling inside a fixed frame. */
   overflow: hidden;
 }
 
-/* ==============================
-   HEADER
-   ============================== */
-.page-header {
-  padding: 8px 24px;
-  border-bottom: 1px solid #f1f3f5;
+/* ── Footer ── */
+.sched-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
+  flex-wrap: wrap;
 }
 
-.header-content {
+.sched-foot__left {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
-.header-titles {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.page-title {
-  font-size: 20px;
+.sched-foot__stat {
+  font-size: 12.5px;
   font-weight: 600;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-
-.timezone-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #1d4ed8;
+  color: var(--dash-ink);
   white-space: nowrap;
 }
 
-.timezone-badge .q-icon {
-  font-size: 13px;
-  color: #3b82f6;
+.sched-foot__sep {
+  width: 1px;
+  height: 14px;
+  background: var(--dash-line-strong);
 }
 
-.header-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.header-search {
-  min-width: 220px;
-  max-width: 280px;
-}
-
-.header-search :deep(.q-field__control) {
-  border-radius: 10px;
-  height: 36px;
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-.header-search :deep(.q-field__control:hover) {
-  border-color: #cbd5e1;
-}
-
-.search-icon {
-  color: #94a3b8;
-}
-
-.add-btn {
-  height: 36px;
-  border-radius: 10px;
-  font-weight: 500;
-  text-transform: none;
+.sched-foot__range {
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
   white-space: nowrap;
-  padding: 0 16px;
-  font-size: 13px;
 }
 
-.header-add-btn {
-  background: #102335 !important;
-  color: #ffffff !important;
+.sched-foot__size {
+  width: 132px;
 }
-
-.header-add-btn:hover {
-  background: #193d5c !important;
-}
-
-/* ==============================
-   PAGINATION BAR
-   ============================== */
-.pagination-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.pagination-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.pagination-text {
-  font-size: 12px;
-  color: #94a3b8;
-  font-weight: 400;
-}
-
-.page-size-select {
-  min-width: 120px;
-}
-
-.page-size-select :deep(.q-field__control) {
-  border-radius: 8px;
-  border-color: #e2e8f0;
-}
-
-.schedule-pagination :deep(.q-btn) {
-  font-weight: 500;
-  border-radius: 8px;
-  min-width: 32px;
+.sched-foot__size :deep(.q-field__control) {
+  height: 32px;
   min-height: 32px;
-  font-size: 13px;
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-surface);
+}
+.sched-foot__size :deep(.q-field__native) {
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+  min-height: 32px;
+  padding: 0;
+}
+.sched-foot__size :deep(.q-field__marginal) {
+  height: 32px;
+  color: var(--dash-ink-4);
 }
 
-.schedule-pagination :deep(.q-btn--active) {
+.sched-pager :deep(.q-btn) {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-3);
+}
+.sched-pager :deep(.q-btn:hover) {
+  background: var(--dash-n-100);
+  color: var(--dash-ink);
+}
+.sched-pager :deep(.q-btn--active) {
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line-strong);
+  color: var(--dash-ink);
   font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
 }
 
-/* ==============================
+/* ============================================================================
    RESPONSIVE
-   ============================== */
-@media (max-width: 1440px) {
-  .schedule-card {
-    border-radius: 14px;
+   ----------------------------------------------------------------------------
+   A seven-day grid has a floor: seven columns plus the employee column cannot
+   usefully compress below about 950px. Rather than shrink the type until it is
+   unreadable — which the old table did, down to 10px — the grid keeps its cell
+   size and scrolls horizontally, with the employee column pinned so the row you
+   are reading stays identified.
+   ========================================================================== */
+@media (max-width: 1023px) {
+  .sched-head__title {
+    font-size: 20px;
   }
-
-  .page-header {
-    padding: 8px 20px;
+  .sched-foot {
+    padding: 10px 14px;
   }
-
-  .pagination-bar {
-    padding: 10px 20px;
-  }
-}
-
-@media (max-width: 1024px) {
-  .page-header {
-    padding: 8px 16px;
-  }
-
-  .page-title {
-    font-size: 19px;
-  }
-
-  .header-search {
-    min-width: 180px;
-  }
-
-  .pagination-bar {
-    padding: 10px 16px;
-  }
-
-  .pagination-info {
-    gap: 10px;
+  .sched-foot__stat,
+  .sched-foot__sep {
+    display: none;
   }
 }
 
-@media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
+@media (max-width: 640px) {
+  .sched-head {
     align-items: stretch;
   }
-
-  .header-actions {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .header-search,
-  .add-btn {
+  .sched-head .btn-primary {
     width: 100%;
-    max-width: 100%;
   }
-
-  .pagination-bar {
+  .sched-foot {
     flex-direction: column;
-    align-items: center;
-    text-align: center;
+    align-items: stretch;
     gap: 10px;
   }
-
-  .pagination-info {
-    justify-content: center;
+  .sched-foot__left {
+    justify-content: space-between;
+  }
+  .sched-pager {
+    align-self: center;
   }
 }
+</style>
 
-@media (max-width: 480px) {
-  .page-title {
-    font-size: 18px;
-  }
+<style>
+/* The empty-cell add menu teleports to the body. */
+.add-menu {
+  border-radius: var(--dash-r-md) !important;
+  border: 1px solid var(--dash-line);
+  box-shadow: var(--dash-shadow-lg) !important;
+}
+.add-menu__list {
+  min-width: 196px;
+  padding: 5px;
+}
+.add-menu__item {
+  min-height: 33px;
+  padding: 0 9px;
+  border-radius: var(--dash-r-sm);
+  font-size: 13px;
+  color: var(--dash-ink-2);
+}
+.add-menu__item:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+.add-menu__item .q-item__section--avatar {
+  min-width: 26px;
+  padding-right: 10px;
+  color: var(--dash-ink-4);
+}
+.add-menu__item--muted {
+  color: var(--dash-ink-4);
+  font-size: 12.5px;
+  pointer-events: none;
+}
+.add-menu__header {
+  padding: 6px 9px 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dash-ink-4);
+  min-height: 0;
+  line-height: 1.3;
+}
+.add-menu__sep {
+  margin: 4px 0;
+  background: var(--dash-line-soft);
 }
 </style>
