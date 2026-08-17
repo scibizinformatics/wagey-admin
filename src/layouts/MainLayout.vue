@@ -1,91 +1,99 @@
 <template>
   <q-layout view="LHh Lpr lFf">
-    <!-- Header -->
-    <q-header class="header-bar bg-white shadow-2 q-pa-md">
-      <div class="row items-center justify-between no-wrap">
-        <!-- Mobile menu toggle -->
+    <!-- ═══ Header ═══════════════════════════════════════════════════════════ -->
+    <q-header class="app-header">
+      <div class="app-header__inner">
         <q-btn
           flat
           dense
           round
           icon="menu"
-          class="mobile-menu-btn lt-md q-mr-sm"
+          class="app-header__menu lt-md"
+          aria-label="Open navigation"
           @click="leftDrawerOpen = !leftDrawerOpen"
         />
 
-        <!-- Company Tabs -->
-        <div ref="tabsWrapperRef" class="company-tabs-wrapper row no-wrap">
-          <div
+        <!-- Workspace switcher. Each company the user belongs to is a tab; the
+             active one is the scope every API call on the page is made against. -->
+        <div ref="tabsWrapperRef" class="workspaces" role="tablist" aria-label="Companies">
+          <button
             v-for="company in companyOptions"
             :key="company.siteId"
-            class="company-tab"
-            :class="{ 'company-tab-active': selectedCompany === company.siteId }"
+            type="button"
+            role="tab"
+            class="workspace"
+            :class="{ 'workspace--active': selectedCompany === company.siteId }"
+            :aria-selected="selectedCompany === company.siteId"
             @click="onCompanyChange(company.siteId)"
           >
             <img
               v-if="company.logo"
               :src="company.logo"
-              class="tab-logo"
+              class="workspace__logo"
+              alt=""
               @error="company.logo = null"
             />
-            <q-icon v-else name="business" size="14px" class="q-mr-xs" />
-            <span class="tab-label">{{ company.siteName }}</span>
+            <span v-else class="workspace__logo workspace__logo--fallback">
+              <q-icon name="business" size="13px" />
+            </span>
+            <span class="workspace__name">{{ company.siteName }}</span>
+          </button>
+
+          <div v-if="loadingCompanies" class="workspace workspace--loading">
+            <q-spinner size="14px" />
+            <span class="workspace__name">Loading…</span>
           </div>
-          <div v-if="loadingCompanies" class="company-tab">
-            <q-spinner size="14px" class="q-mr-xs" />
-            <span>Loading...</span>
-          </div>
-          <div v-if="showOverflowHint" class="tab-overflow-hint" />
+
+          <div v-if="showOverflowHint" class="workspaces__fade" />
         </div>
 
-        <!-- Right side -->
-        <div class="row items-center q-gutter-sm q-ml-md">
-          <span class="text-body2 email-text" style="color: #000000">
-            {{ currentUsername }}
-          </span>
-
-          <!-- ── Notifications Button ── -->
-          <q-btn flat round dense color="grey-7" class="notification-btn" ref="notifBtn">
-            <q-icon name="notifications" size="22px" />
-            <q-badge color="red" floating rounded :label="unreadCount" v-if="unreadCount > 0" />
+        <!-- ── Right cluster ── -->
+        <div class="app-header__right">
+          <q-btn flat round dense class="icon-btn" aria-label="Notifications">
+            <q-icon name="notifications" size="20px" />
+            <span v-if="unreadCount > 0" class="icon-btn__badge">
+              {{ unreadCount > 9 ? '9+' : unreadCount }}
+            </span>
             <q-tooltip>Notifications</q-tooltip>
 
             <q-menu
               v-model="notifModal"
               anchor="bottom right"
               self="top right"
-              :offset="[0, 8]"
+              :offset="[0, 10]"
               class="notif-menu"
               transition-show="jump-down"
               transition-hide="jump-up"
             >
-              <q-card class="notif-card">
-                <!-- Header -->
-                <q-card-section class="notif-header row items-center justify-between q-pb-sm">
-                  <div class="row items-center q-gutter-sm">
-                    <q-icon name="notifications" size="20px" color="primary" />
-                    <span class="notif-title">Notifications</span>
-                    <q-badge color="red" rounded :label="unreadCount" v-if="unreadCount > 0" />
+              <div class="notif">
+                <header class="notif__head">
+                  <div class="notif__head-left">
+                    <h2 class="notif__title">Notifications</h2>
+                    <span v-if="unreadCount > 0" class="dash-chip dash-chip--info">
+                      {{ unreadCount }} unread
+                    </span>
                   </div>
-                  <div class="row items-center q-gutter-xs">
+                  <div class="notif__head-actions">
                     <q-btn
+                      v-if="unreadCount > 0"
                       flat
                       dense
-                      size="sm"
+                      no-caps
+                      size="12px"
                       label="Mark all read"
-                      color="primary"
-                      @click="handleMarkAllRead"
+                      class="notif__link"
                       :loading="isMarkingAsRead"
-                      v-if="unreadCount > 0"
+                      @click="handleMarkAllRead"
                     />
                     <q-btn
                       flat
                       round
                       dense
                       icon="refresh"
-                      color="grey-6"
-                      @click="requestRefresh"
+                      size="11px"
+                      class="notif__icon-btn"
                       :loading="isInitialLoad"
+                      @click="requestRefresh"
                     >
                       <q-tooltip>Refresh</q-tooltip>
                     </q-btn>
@@ -94,204 +102,191 @@
                       round
                       dense
                       icon="close"
-                      color="grey-6"
+                      size="11px"
+                      class="notif__icon-btn"
+                      aria-label="Close"
                       @click="notifModal = false"
                     />
                   </div>
-                </q-card-section>
+                </header>
 
-                <q-separator />
-
-                <!-- Notification List -->
-                <q-scroll-area style="height: 380px; width: 380px; max-width: 95vw">
-                  <q-list separator>
-                    <q-item
+                <q-scroll-area class="notif__scroll">
+                  <ul v-if="sortedNotifications.length" class="notif__list">
+                    <li
                       v-for="notif in sortedNotifications"
                       :key="notif.id"
-                      clickable
-                      class="notif-item"
-                      :class="{ 'notif-unread': !notif.read }"
+                      class="notif__item"
+                      :class="{ 'notif__item--unread': !notif.read }"
                       @click="handleMarkAsRead(notif)"
                     >
-                      <q-item-section avatar>
-                        <q-avatar :color="notif.iconColor" text-color="white" size="38px">
-                          <q-icon :name="notif.icon" size="18px" />
-                        </q-avatar>
-                      </q-item-section>
-
-                      <q-item-section>
-                        <q-item-label class="notif-item-title">{{ notif.title }}</q-item-label>
-                        <q-item-label caption class="notif-item-body">{{
-                          notif.message
-                        }}</q-item-label>
-                        <q-item-label caption class="notif-item-time">
-                          <q-icon name="schedule" size="11px" class="q-mr-xs" />
-                          {{ formatTimeAgo(notif.timestamp) }}
-                        </q-item-label>
-                      </q-item-section>
-
-                      <q-item-section side top v-if="!notif.read">
-                        <q-badge
-                          color="blue-5"
-                          rounded
-                          style="width: 8px; height: 8px; min-width: unset; padding: 0"
-                        />
-                      </q-item-section>
-
-                      <!-- Priority badge -->
-                      <q-item-section side v-if="notif.priority === 'high'">
-                        <q-chip dense color="red-1" text-color="red-8" size="xs">Urgent</q-chip>
-                      </q-item-section>
-                    </q-item>
-
-                    <!-- Empty state -->
-                    <div
-                      v-if="sortedNotifications.length === 0"
-                      class="column items-center justify-center q-py-xl text-grey-5"
-                    >
-                      <q-icon name="notifications_none" size="48px" class="q-mb-sm" />
-                      <span class="text-body2">No notifications yet</span>
-                      <span class="text-caption q-mt-xs">
-                        {{ isConnected ? "You're all caught up!" : 'Reconnecting…' }}
+                      <span class="notif__avatar" :style="{ background: notifTint(notif) }">
+                        <q-icon :name="notif.icon" size="17px" />
                       </span>
-                    </div>
-                  </q-list>
+
+                      <div class="notif__body">
+                        <p class="notif__item-title">{{ notif.title }}</p>
+                        <p class="notif__item-text">{{ notif.message }}</p>
+                        <p class="notif__item-time">
+                          <q-icon name="schedule" size="12px" />
+                          {{ formatTimeAgo(notif.timestamp) }}
+                        </p>
+                      </div>
+
+                      <div class="notif__aside">
+                        <span
+                          v-if="notif.priority === 'high'"
+                          class="dash-chip dash-chip--critical notif__urgent"
+                        >
+                          Urgent
+                        </span>
+                        <span v-if="!notif.read" class="notif__dot" aria-label="Unread" />
+                      </div>
+                    </li>
+                  </ul>
+
+                  <div v-else class="dash-empty notif__empty">
+                    <span class="dash-featured-icon">
+                      <q-icon name="notifications_none" size="20px" />
+                    </span>
+                    <p class="dash-empty__title">
+                      {{ isConnected ? "You're all caught up" : 'Reconnecting…' }}
+                    </p>
+                    <p class="dash-empty__sub">
+                      {{
+                        isConnected
+                          ? 'New notifications will appear here as they arrive.'
+                          : 'Waiting for the connection to come back.'
+                      }}
+                    </p>
+                  </div>
                 </q-scroll-area>
 
-                <!-- Footer: reconnect button when offline -->
-                <div v-if="!isConnected && !isConnecting" class="notif-footer">
+                <footer v-if="!isConnected && !isConnecting" class="notif__foot">
                   <q-btn
                     flat
                     dense
-                    color="primary"
+                    no-caps
+                    size="12px"
                     icon="wifi"
                     label="Reconnect"
-                    size="sm"
+                    class="notif__link"
                     @click="reconnect"
                   />
-                </div>
-              </q-card>
+                </footer>
+              </div>
             </q-menu>
           </q-btn>
 
-          <q-avatar v-if="currentUserPicture" size="36px" class="user-avatar">
-            <img :src="currentUserPicture" alt="User Avatar" @error="handleImageError" />
+          <span class="app-header__rule" />
+
+          <div class="user">
+            <q-avatar v-if="currentUserPicture" size="30px" class="user__avatar">
+              <img :src="currentUserPicture" alt="" @error="handleImageError" />
+            </q-avatar>
+            <q-avatar v-else size="30px" class="user__avatar" :style="{ background: avatarColor }">
+              <span class="user__initials">{{ avatarInitials }}</span>
+            </q-avatar>
+            <span class="user__name">{{ currentUsername }}</span>
             <q-tooltip>{{ currentUsername }}</q-tooltip>
-          </q-avatar>
-          <q-avatar v-else size="36px" class="user-avatar" :style="{ background: avatarColor }">
-            <span class="avatar-initials">{{ avatarInitials }}</span>
-            <q-tooltip>{{ currentUsername }}</q-tooltip>
-          </q-avatar>
+          </div>
         </div>
       </div>
     </q-header>
 
-    <!-- Sidebar Drawer -->
+    <!-- ═══ Navigation rail ══════════════════════════════════════════════════ -->
     <q-drawer
-      show-if-above
       v-model="leftDrawerOpen"
+      show-if-above
       side="left"
-      bordered
-      class="modern-sidebar"
+      class="app-nav"
       :width="drawerWidth"
-      :mini="isMini"
-      :mini-width="68"
+      :mini="isCollapsed"
+      :mini-width="72"
       :breakpoint="0"
     >
-      <!-- Background image layer -->
-      <div class="drawer-bg" :style="{ backgroundImage: `url(${terrainBgUrl})` }"></div>
-
-      <!-- Sidebar Header -->
-      <div class="sidebar-header q-pa-lg" :class="{ 'sidebar-header-mini': isMini }">
-        <div class="row items-center no-wrap" :class="isMini ? 'justify-center' : ''">
-          <div class="sidebar-logo" :class="{ 'sidebar-logo-mini': isMini }">
-            <img :src="logo" alt="Wagey Logo" />
-          </div>
-          <div class="q-ml-md" v-if="!isMini">
-            <div class="sidebar-title">Wagey</div>
-          </div>
+      <div class="app-nav__brand" :class="{ 'app-nav__brand--mini': isCollapsed }">
+        <div class="app-nav__logo">
+          <img :src="logo" alt="Wagey" />
         </div>
+        <span v-if="!isCollapsed" class="app-nav__wordmark">Wagey</span>
+
+        <!-- Tablet and below only: on desktop the rail is always full width, so
+             the control is absent rather than present-but-disabled — a disabled
+             affordance still asks to be understood.
+
+             It lives in the rail's own header. It used to be a floating
+             half-circle SVG pinned to the drawer's outer edge, whose position
+             had to be re-derived in CSS at every breakpoint. -->
+        <q-btn
+          v-if="canCollapse"
+          flat
+          dense
+          round
+          size="11px"
+          class="app-nav__collapse"
+          :icon="isCollapsed ? 'chevron_right' : 'chevron_left'"
+          :aria-label="isCollapsed ? 'Expand navigation' : 'Collapse navigation'"
+          @click="toggleMini"
+        >
+          <q-tooltip anchor="center right" self="center left" :offset="[10, 0]" class="nav-tooltip">
+            {{ isCollapsed ? 'Expand' : 'Collapse' }}
+          </q-tooltip>
+        </q-btn>
       </div>
 
-      <!-- Navigation -->
-      <div class="sidebar-nav q-px-md">
-        <div v-for="(group, gIndex) in navGroups" :key="group.label" class="nav-group">
-          <!-- Section label (expanded) -->
-          <div class="nav-group-label" v-if="!isMini">{{ group.label }}</div>
-          <!-- Thin divider between sections (mini mode) -->
-          <div class="nav-group-divider" v-else-if="gIndex > 0"></div>
+      <nav class="app-nav__body" :class="{ 'app-nav__body--mini': isCollapsed }" aria-label="Main">
+        <div v-for="group in navGroups" :key="group.label" class="nav-group">
+          <!-- Collapsed, the group labels go and the groups are separated by
+               space alone — dividers would cut the rail into boxes. -->
+          <p v-if="!isCollapsed" class="nav-group__label">{{ group.label }}</p>
 
-          <q-list class="nav-list">
-            <q-item
-              v-for="link in group.items"
-              :key="link.label"
-              clickable
-              tag="router-link"
-              :to="link.to"
-              class="nav-item"
-              :class="{ 'nav-item-active': route.path === link.to, 'nav-item-mini': isMini }"
-            >
-              <q-item-section avatar class="nav-icon">
-                <q-icon :name="link.icon" size="20px" />
-              </q-item-section>
-              <q-item-section class="nav-label" v-if="!isMini">
-                {{ link.label }}
-              </q-item-section>
-              <q-tooltip
-                v-if="isMini"
-                anchor="center right"
-                self="center left"
-                :offset="[12, 0]"
-                class="nav-tooltip"
+          <ul class="nav-list">
+            <li v-for="link in group.items" :key="link.label">
+              <router-link
+                :to="link.to"
+                class="nav-item"
+                :class="{ 'nav-item--active': isActive(link), 'nav-item--mini': isCollapsed }"
+                :aria-current="isActive(link) ? 'page' : undefined"
               >
-                {{ link.label }}
-              </q-tooltip>
-            </q-item>
-          </q-list>
+                <q-icon :name="navIcon(link)" size="19px" class="nav-item__icon" />
+                <span v-if="!isCollapsed" class="nav-item__label">{{ link.label }}</span>
+                <q-tooltip
+                  v-if="isCollapsed"
+                  anchor="center right"
+                  self="center left"
+                  :offset="[12, 0]"
+                  class="nav-tooltip"
+                >
+                  {{ link.label }}
+                </q-tooltip>
+              </router-link>
+            </li>
+          </ul>
         </div>
-      </div>
+      </nav>
 
-      <!-- Sign Out -->
-      <div class="sidebar-nav signout-section q-px-md q-mt-md">
-        <q-list class="nav-list">
-          <q-item clickable class="nav-item" :class="{ 'nav-item-mini': isMini }" @click="logout">
-            <q-item-section avatar class="nav-icon">
-              <q-icon name="logout" size="20px" />
-            </q-item-section>
-            <q-item-section class="nav-label" v-if="!isMini"> Sign Out </q-item-section>
-            <q-tooltip
-              v-if="isMini"
-              anchor="center right"
-              self="center left"
-              :offset="[12, 0]"
-              class="nav-tooltip"
-            >
-              Sign Out
-            </q-tooltip>
-          </q-item>
-        </q-list>
+      <div class="app-nav__foot" :class="{ 'app-nav__foot--mini': isCollapsed }">
+        <button
+          type="button"
+          class="nav-item nav-item--button"
+          :class="{ 'nav-item--mini': isCollapsed }"
+          @click="logout"
+        >
+          <q-icon name="o_logout" size="19px" class="nav-item__icon" />
+          <span v-if="!isCollapsed" class="nav-item__label">Sign out</span>
+          <q-tooltip
+            v-if="isCollapsed"
+            anchor="center right"
+            self="center left"
+            :offset="[12, 0]"
+            class="nav-tooltip"
+          >
+            Sign out
+          </q-tooltip>
+        </button>
       </div>
     </q-drawer>
 
-    <!-- Half Circle Toggle Button -->
-    <div class="sidebar-bookmark" :class="{ 'sidebar-bookmark-mini': isMini }" @click="toggleMini">
-      <svg class="bookmark-svg" viewBox="0 0 28 56" xmlns="http://www.w3.org/2000/svg">
-        <path d="M0 0 A28 28 0 0 1 0 56 Z" fill="#13283d" />
-        <polyline
-          points="11,23 17,28 11,33"
-          fill="none"
-          stroke="white"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-      <q-tooltip anchor="center right" self="center left" :offset="[10, 0]">
-        {{ isMini ? 'Expand sidebar' : 'Collapse sidebar' }}
-      </q-tooltip>
-    </div>
-
-    <!-- Page Container -->
     <q-page-container>
       <router-view />
     </q-page-container>
@@ -310,7 +305,6 @@ import { useCompanyStore } from '@/stores/company'
 import { api } from 'src/boot/axios'
 
 import wageyLogo from 'src/assets/wagey_icon(White).png'
-import terrainBg from 'src/assets/terrain.svg'
 
 const $q = useQuasar()
 const router = useRouter()
@@ -318,7 +312,6 @@ const route = useRoute()
 
 // ─── Static assets ────────────────────────────────────────────────────────────
 const logo = wageyLogo
-const terrainBgUrl = terrainBg
 
 // ─── Nav links (grouped) ───────────────────────────────────────────────────────
 const navGroups = [
@@ -355,9 +348,26 @@ const navGroups = [
   },
 ]
 
+// ─── Nav item state ───────────────────────────────────────────────────────────
+function isActive(link) {
+  return route.path === link.to
+}
+
+/**
+ * Outlined glyph for an inactive item, filled for the active one.
+ *
+ * The `o_` prefix resolves to the material-icons-outlined webfont, registered in
+ * quasar.config.js `extras`. This is what lets the rail mark selection by the
+ * weight of the icon itself instead of by a highlight block behind it — which
+ * matters most when the rail is collapsed and the glyph is all there is.
+ */
+function navIcon(link) {
+  return isActive(link) ? link.icon : `o_${link.icon}`
+}
+
 // ─── UI state ─────────────────────────────────────────────────────────────────
 const leftDrawerOpen = ref(true)
-const isMini = ref(false)
+const miniPref = ref(false)
 const notifModal = ref(false)
 
 const tabsWrapperRef = ref(null)
@@ -398,26 +408,45 @@ const avatarInitials = computed(() => {
   return name.slice(0, 2).toUpperCase()
 })
 
+// Avatars draw from the design system's categorical ramp rather than a private
+// list of pastels, so identity colour is consistent with the rest of the app.
+const AVATAR_COLORS = [
+  'var(--dash-cat-1)',
+  'var(--dash-cat-2)',
+  'var(--dash-cat-3)',
+  'var(--dash-cat-4)',
+  'var(--dash-cat-5)',
+  'var(--dash-cat-6)',
+]
+
 const avatarColor = computed(() => {
   const name = currentUsername.value || '?'
-  const colors = [
-    '#667eea',
-    '#764ba2',
-    '#f093fb',
-    '#4facfe',
-    '#43e97b',
-    '#fa709a',
-    '#fee140',
-    '#30cfd0',
-    '#a18cd1',
-    '#fda085',
-    '#84fab0',
-    '#f6d365',
-  ]
   let hash = 0
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  return colors[Math.abs(hash) % colors.length]
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 })
+
+// Notification avatars: the composable supplies a Quasar colour name, which is
+// no longer part of this design system. Map the few it emits onto status tints
+// and fall back to neutral for anything unrecognised.
+const NOTIF_TINTS = {
+  red: 'var(--dash-critical-mark)',
+  negative: 'var(--dash-critical-mark)',
+  orange: 'var(--dash-warn-mark)',
+  amber: 'var(--dash-warn-mark)',
+  warning: 'var(--dash-warn-mark)',
+  green: 'var(--dash-good-mark)',
+  positive: 'var(--dash-good-mark)',
+  blue: 'var(--dash-info-mark)',
+  primary: 'var(--dash-info-mark)',
+  info: 'var(--dash-info-mark)',
+  purple: 'var(--dash-cat-4)',
+}
+
+function notifTint(notif) {
+  const key = String(notif.iconColor || '').split('-')[0]
+  return NOTIF_TINTS[key] ?? 'var(--dash-neutral-mark)'
+}
 
 // Breakpoints: <768 mobile (overlay), 768-1023 tablet, 1024-1439 desktop, >=1440 large desktop
 const drawerWidth = computed(() => {
@@ -428,18 +457,23 @@ const drawerWidth = computed(() => {
   return 284
 })
 
-// On tablet widths, default to mini mode since space is tight — but respect
-// the user's manual choice once they've toggled it themselves.
-const userToggledMini = ref(false)
+// ─── Collapsing the rail ──────────────────────────────────────────────────────
+// Offered on tablet and below only (Quasar's `lt.md` is < 1024px, matching the
+// breakpoints above). On desktop there is room for the full rail, so trading
+// legible labels for horizontal space nobody needs back is a bad deal — and the
+// collapse control is hidden there rather than merely disabled.
+const canCollapse = computed(() => $q.screen.lt.md)
 
-function applyResponsiveMiniDefault() {
-  // Never auto-enable mini mode — sidebar stays expanded by default
-  return
-}
+// `miniPref` is what the user asked for; `isCollapsed` is whether it currently
+// applies. Keeping the two separate means a tablet user who collapses the rail
+// and then rotates to a wider viewport gets the full rail back automatically —
+// and still finds it collapsed when they rotate back, rather than having the
+// preference silently reset under them.
+const isCollapsed = computed(() => miniPref.value && canCollapse.value)
 
 function toggleMini() {
-  userToggledMini.value = true
-  isMini.value = !isMini.value
+  if (!canCollapse.value) return
+  miniPref.value = !miniPref.value
 }
 
 // ─── Notification handlers ────────────────────────────────────────────────────
@@ -547,7 +581,7 @@ function onCompanyChange(siteId) {
 
 function scrollToActiveTab() {
   if (!tabsWrapperRef.value) return
-  const activeEl = tabsWrapperRef.value.querySelector('.company-tab-active')
+  const activeEl = tabsWrapperRef.value.querySelector('.workspace--active')
   if (activeEl) {
     activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
   }
@@ -635,7 +669,6 @@ onMounted(async () => {
   reconnect() // Re-connect WS now that companyId is resolved
   await loadCurrentUser()
 
-  applyResponsiveMiniDefault()
   window.addEventListener('resize', updateOverflowHint)
   if (tabsWrapperRef.value) {
     tabsWrapperRef.value.addEventListener('scroll', updateOverflowHint)
@@ -651,14 +684,9 @@ onUnmounted(() => {
 })
 </script>
 
-<style>
-.modern-sidebar .q-drawer__content {
-  background-color: #13283d !important;
-}
-</style>
-
 <style scoped>
-/* Hide Scrollbar */
+/* Hide scrollbars throughout the shell — the drawer and the workspace strip
+   both scroll, and visible bars break the flush edges. */
 :deep(*) {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -667,450 +695,639 @@ onUnmounted(() => {
   display: none;
 }
 
-/* ── WebSocket status dot ── */
-.ws-status-dot {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  border: 1px solid white;
-}
-.ws-dot-connected {
-  background: #22c55e;
-}
-.ws-dot-connecting {
-  background: #f59e0b;
-  animation: pulse-dot 1.2s infinite;
-}
-.ws-dot-error {
-  background: #ef4444;
-}
-
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
-
-/* Modern Sidebar Styling */
-.modern-sidebar {
-  border: none;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow-x: hidden;
-}
-.modern-sidebar :deep(.q-drawer__content) {
-  background-color: #13283d !important;
-  position: relative;
-}
-.drawer-bg {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  opacity: 0.15;
-  z-index: 0;
-  pointer-events: none;
-}
-.modern-sidebar :deep(.q-drawer__content) > *:not(.drawer-bg) {
-  position: relative;
-  z-index: 1;
-}
-
-/* ── Sidebar Header ── */
-.sidebar-header {
-  padding: 26px 14px 8px !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.sidebar-header-mini {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  margin: 18px 6px 10px 6px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  padding: 10px 6px !important;
-  display: flex;
-  justify-content: center;
-}
-
-
-.sidebar-logo {
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.sidebar-logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.sidebar-logo-mini {
-  width: 36px;
-  height: 36px;
-}
-.sidebar-title {
-  font-size: 21px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: -0.025em;
-  white-space: nowrap;
-}
-
-/* ── Half Circle Toggle ── */
-.sidebar-bookmark {
-  position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
-  left: calc(284px - 28px);
-  width: 28px;
-  height: 56px;
-  cursor: pointer;
-  z-index: 1100;
-  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  filter: drop-shadow(-3px 0px 5px rgba(0, 0, 0, 0.4));
-}
-.sidebar-bookmark:not(.sidebar-bookmark-mini) .bookmark-svg {
-  transform: scaleX(-1);
-}
-.sidebar-bookmark-mini {
-  left: calc(68px - 1px);
-}
-.sidebar-bookmark-mini .bookmark-svg {
-  transform: scaleX(1);
-}
-.bookmark-svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.sidebar-bookmark:hover path {
-  fill: #1e3f61;
-  transition: fill 0.2s ease;
-}
-
-/* ── Navigation ── */
-.sidebar-nav {
-  flex: 1;
-  padding: 6px 10px 16px 10px;
-  overflow-x: hidden;
-}
-.nav-group {
-  margin-bottom: 6px;
-}
-.nav-group-label {
-  padding: 10px 12px 6px 12px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.40);
-}
-.nav-group:first-child .nav-group-label {
-  padding-top: 4px;
-}
-.nav-group-divider {
-  height: 1px;
-  margin: 10px 6px 8px 6px;
-  background: rgba(255, 255, 255, 0.1);
-}
-.nav-list {
-  padding: 0;
-}
-.nav-item {
-  margin-bottom: 2px;
-  border-radius: 9px;
-  min-height: 40px;
-  padding: 7px 12px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  color: rgba(255, 255, 255, 0.55);
-}
-.nav-item-mini {
-  justify-content: center;
-  padding: 7px 0;
-}
-.nav-item:hover {
-  background: rgba(99, 102, 241, 0.15);
-  color: #ffffff;
-  transform: translateX(2px);
-}
-.nav-item-mini:hover {
-  transform: translateX(0);
-}
-.nav-item-active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.35);
-}
-.nav-item-active:hover {
-  transform: translateX(0);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-.nav-icon {
-  min-width: 34px;
-}
-.nav-icon :deep(.q-icon) {
-  font-size: 18px;
-}
-.nav-label {
-  font-weight: 500;
-  font-size: 13px;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  color: inherit;
-}
-.nav-tooltip {
-  background: #1e3a55;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 6px;
-  padding: 5px 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-.signout-section {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 8px !important;
-  margin-top: 4px !important;
-}
-
-/* ── Header ── */
-.header-bar {
+/* ═══ Header ═══════════════════════════════════════════════════════════════
+   A hairline bottom border instead of a Material drop shadow. The shadow made
+   the bar look like it hovered over the page; the rule just separates them. */
+.app-header {
+  background: var(--dash-surface);
+  border-bottom: 1px solid var(--dash-line);
+  box-shadow: none;
+  color: var(--dash-ink);
   z-index: 1001;
 }
-.company-tabs-wrapper {
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  width: 470px;
+
+.app-header__inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--header-h);
+  padding: 0 18px;
+}
+
+.app-header__menu {
+  color: var(--dash-ink-2);
   flex-shrink: 0;
+}
+
+/* ── Workspace switcher ── */
+.workspaces {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
-  gap: 8px;
 }
-.company-tabs-wrapper::-webkit-scrollbar {
-  display: none;
-}
-.company-tab {
+
+.workspace {
   display: inline-flex;
   align-items: center;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #64748b;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-  user-select: none;
-  width: 150px;
+  gap: 8px;
   flex-shrink: 0;
   scroll-snap-align: start;
+  max-width: 190px;
+  padding: 6px 12px;
+  border-radius: var(--dash-r-md);
+  border: 1px solid var(--dash-line);
+  background: var(--dash-surface);
+  color: var(--dash-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: background var(--dash-fast) var(--dash-ease),
+    border-color var(--dash-fast) var(--dash-ease), color var(--dash-fast) var(--dash-ease);
 }
-.company-tab .tab-label {
+.workspace:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+.workspace:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+}
+
+/* Selection is a tinted, ringed chip rather than a filled navy pill with a
+   glow. It still reads unmistakably as "you are here" without turning the
+   busiest strip in the app into the highest-contrast thing on screen. */
+.workspace--active {
+  background: var(--dash-accent-bg);
+  border-color: var(--dash-info-line);
+  color: var(--dash-accent);
+  font-weight: 600;
+}
+.workspace--active:hover {
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
+}
+
+.workspace--loading {
+  cursor: default;
+  color: var(--dash-ink-3);
+}
+
+.workspace__logo {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--dash-r-xs);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.workspace__logo--fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dash-n-100);
+  color: var(--dash-ink-3);
+}
+
+.workspace__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaces__fade {
+  position: sticky;
+  right: 0;
+  align-self: stretch;
+  width: 36px;
+  margin-left: -36px;
+  flex-shrink: 0;
+  pointer-events: none;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0), var(--dash-surface));
+}
+
+/* ── Right cluster ── */
+.app-header__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.app-header__rule {
+  width: 1px;
+  height: 22px;
+  background: var(--dash-line);
+}
+
+.icon-btn {
+  position: relative;
+  color: var(--dash-ink-3);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--dash-r-md);
+  transition: color var(--dash-fast) var(--dash-ease),
+    background var(--dash-fast) var(--dash-ease);
+}
+.icon-btn:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-50);
+}
+
+/* Count badge with a surface-coloured ring, so it stays legible where it
+   overlaps the bell glyph. */
+.icon-btn__badge {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--dash-r-pill);
+  background: var(--dash-critical-mark);
+  border: 2px solid var(--dash-surface);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 3px 4px;
+  border-radius: var(--dash-r-md);
+}
+
+.user__avatar {
+  flex-shrink: 0;
+}
+
+.user__initials {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.user__name {
+  font-size: 13px;
+  color: var(--dash-ink-2);
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ═══ Navigation rail ══════════════════════════════════════════════════════ */
+.app-nav {
+  overflow-x: hidden;
+}
+.app-nav :deep(.q-drawer__content) {
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* ── Brand ──────────────────────────────────────────────────────────────────
+   The rail's masthead, and deliberately the largest type in the drawer: a 34px
+   mark beside a 19px wordmark against 13px nav labels. Padding is horizontal
+   only so `min-height` can hold the block to exactly the header's height and
+   the two line up across the seam. */
+.app-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--nav-line);
+  flex-shrink: 0;
+  min-height: var(--header-h);
+}
+/* Collapsed: logo over the collapse control, both centred, and no rule beneath
+   — the rail reads as one continuous dark surface with a column of glyphs. */
+.app-nav__brand--mini {
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0 14px;
+  border-bottom: none;
+}
+
+.app-nav__logo {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.app-nav__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.app-nav__wordmark {
+  flex: 1;
+  min-width: 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--nav-ink);
+  white-space: nowrap;
+}
+
+.app-nav__collapse {
+  color: var(--nav-ink-3);
+  flex-shrink: 0;
+  transition: color var(--dash-fast) var(--dash-ease),
+    background var(--dash-fast) var(--dash-ease);
+}
+.app-nav__collapse:hover {
+  color: var(--nav-ink);
+  background: var(--nav-hover);
+}
+
+/* ── Groups ── */
+.app-nav__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 12px 8px;
+}
+/* Collapsed, the rail is a single centred column of glyphs. */
+.app-nav__body--mini {
+  padding: 10px 0 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nav-group {
+  margin-bottom: 14px;
+  width: 100%;
+}
+.nav-group:last-child {
+  margin-bottom: 0;
+}
+
+/* Sentence case, matching the rest of the system. Uppercase letter-spaced
+   section headers are the clearest single tell of an older dashboard. */
+.nav-group__label {
+  margin: 0 0 4px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--nav-ink-3);
+  white-space: nowrap;
+}
+
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.app-nav__body--mini .nav-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Items ──────────────────────────────────────────────────────────────────
+   Selection is carried by the icon: outlined when inactive, filled when active
+   (see navIcon()), with the label going white and semibold alongside it. There
+   is deliberately NO highlight block behind the active item — a filled glyph is
+   already much heavier than an outlined one, so the row reads as selected
+   without painting a shape around it, and the rail stays quiet. Hover is the
+   only thing that draws a surface. */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 11px;
+  margin-bottom: 2px;
+  border: none;
+  background: transparent;
+  border-radius: var(--dash-r-lg);
+  color: var(--nav-ink-2);
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
+}
+.nav-item--button {
+  text-align: left;
+}
+
+/* Collapsed: a circular hit area, so the hover surface is a disc centred on the
+   glyph rather than a wide rounded rectangle in a 72px rail.
+
+   Held at 44px even though the glyph inside is only 19px. Collapsing is offered
+   below 1024px only, which is exactly where the rail is being touched rather
+   than clicked, so this is the one place in the shell where the target should
+   not shrink with its icon. */
+.nav-item--mini {
+  width: 44px;
+  height: 44px;
+  min-height: 0;
+  padding: 0;
+  margin-bottom: 4px;
+  gap: 0;
+  justify-content: center;
+  border-radius: var(--dash-r-pill);
+}
+
+.nav-item:hover {
+  background: var(--nav-hover);
+  color: var(--nav-ink);
+}
+
+.nav-item--active {
+  background: transparent;
+  color: var(--nav-ink);
+}
+.nav-item--active:hover {
+  background: var(--nav-hover);
+}
+
+.nav-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--nav-bg), 0 0 0 4px var(--nav-ring);
+}
+
+.nav-item__icon {
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.nav-item__label {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.006em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  color: inherit;
 }
-.tab-logo {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  object-fit: cover;
-  margin-right: 6px;
-  flex-shrink: 0;
-}
-.company-tab:hover {
-  background: #e2e8f0;
-  color: #334155;
-}
-.company-tab-active {
-  background: #102335;
-  color: #ffffff;
-  border-color: #102335;
-  box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3);
-}
-.tab-overflow-hint {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 40px;
-  pointer-events: none;
-  background: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1));
-  z-index: 2;
-}
-.mobile-menu-btn {
-  display: none;
-}
-.q-item {
-  text-decoration: none !important;
-}
-.q-item__section--avatar {
-  padding-right: 10px;
+.nav-item--active .nav-item__label {
+  font-weight: 600;
 }
 
-/* ── Notification Menu ── */
-.notif-menu {
-  border-radius: 14px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14) !important;
-  overflow: hidden;
+/* ── Foot ── */
+.app-nav__foot {
+  flex-shrink: 0;
+  padding: 8px 12px 14px;
+  border-top: 1px solid var(--nav-line);
 }
-.notif-card {
-  width: 380px;
-  max-width: 95vw;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: none;
-}
-.notif-header {
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-}
-.notif-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1e293b;
-}
-.notif-item {
-  padding: 12px 16px;
-  transition: background 0.15s ease;
-}
-.notif-item:hover {
-  background: #f1f5f9;
-}
-.notif-unread {
-  background: #eff6ff;
-}
-.notif-unread:hover {
-  background: #dbeafe;
-}
-.notif-item-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 2px;
-}
-.notif-item-body {
-  font-size: 12px;
-  color: #475569;
-  line-height: 1.4;
-}
-.notif-item-time {
-  font-size: 11px;
-  color: #94a3b8;
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-}
-.notif-footer {
-  padding: 8px 16px;
-  border-top: 1px solid #e2e8f0;
+.app-nav__foot--mini {
   display: flex;
   justify-content: center;
-  background: #fafafa;
+  padding: 8px 0 14px;
 }
 
-/* ── Responsive ──────────────────────────────────────────────────────────────
-   Breakpoints match drawerWidth(): <768 mobile · 768-1023 tablet ·
-   1024-1439 desktop · >=1440 large desktop                                  */
-
-
-
-/* Tablet: 768-1023px — bookmark follows 240px drawer */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .sidebar-bookmark {
-    left: calc(240px - 28px);
-  }
-  .sidebar-bookmark.sidebar-bookmark-mini {
-    left: calc(68px - 1px);
-  }
+/* ═══ Notifications ════════════════════════════════════════════════════════ */
+.notif {
+  width: 384px;
+  max-width: 94vw;
+  display: flex;
+  flex-direction: column;
+  background: var(--dash-surface);
 }
 
-/* Desktop: 1024-1439px */
-@media (min-width: 1024px) and (max-width: 1439px) {
-  .sidebar-bookmark {
-    left: calc(264px - 28px);
-  }
-  .sidebar-bookmark.sidebar-bookmark-mini {
-    left: calc(68px - 1px);
-  }
+.notif__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--dash-line);
 }
 
-/* Compact sidebar for 1024px and below */
+.notif__head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.notif__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--dash-ink);
+}
+
+.notif__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.notif__link {
+  color: var(--dash-accent);
+  font-weight: 500;
+}
+
+.notif__icon-btn {
+  color: var(--dash-ink-4);
+}
+.notif__icon-btn:hover {
+  color: var(--dash-ink-2);
+}
+
+.notif__scroll {
+  height: 384px;
+  width: 100%;
+}
+
+.notif__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notif__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--dash-line-soft);
+  cursor: pointer;
+  transition: background var(--dash-fast) var(--dash-ease);
+}
+.notif__item:last-child {
+  border-bottom: none;
+}
+.notif__item:hover {
+  background: var(--dash-n-50);
+}
+
+/* Unread is marked by a dot and a faint tint, never by tint alone. */
+.notif__item--unread {
+  background: var(--dash-accent-bg);
+}
+.notif__item--unread:hover {
+  background: #e3eaff;
+}
+
+.notif__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--dash-r-md);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.notif__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif__item-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  letter-spacing: -0.006em;
+}
+
+.notif__item-text {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+  line-height: 1.45;
+}
+
+.notif__item-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--dash-ink-4);
+}
+
+.notif__aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.notif__urgent {
+  font-size: 11px;
+  padding: 1px 7px;
+}
+
+.notif__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dash-accent);
+}
+
+.notif__empty {
+  min-height: 300px;
+}
+
+.notif__foot {
+  display: flex;
+  justify-content: center;
+  padding: 9px 14px;
+  border-top: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
+}
+
+/* ═══ Responsive ═══════════════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
-  .sidebar-header {
-    padding: 16px 14px 6px !important;
+  .app-header__inner {
+    gap: 10px;
+    padding: 0 12px;
   }
-  .sidebar-header-mini {
-    margin: 12px 6px 8px 6px;
-    padding: 8px 6px !important;
+  .workspace {
+    max-width: 150px;
+    font-size: 12.5px;
+    padding: 5px 10px;
   }
-  .sidebar-logo {
-    width: 46px;
-    height: 46px;
-  }
-  .sidebar-logo-mini {
-    width: 34px;
-    height: 34px;
+  .app-nav__body {
+    padding: 10px 10px 6px;
   }
   .nav-group {
-    margin-bottom: 4px;
+    margin-bottom: 10px;
   }
-  .nav-group-label {
-    padding: 6px 12px 4px 12px;
-    font-size: 10px;
+  /* One step tighter again on tablet, with the masthead scaled to match so the
+     size relationship between the two holds at every width. */
+  .app-nav__logo {
+    width: 32px;
+    height: 32px;
+  }
+  .app-nav__wordmark {
+    font-size: 18px;
   }
   .nav-item {
     min-height: 36px;
-    padding: 5px 12px;
-    border-radius: 8px;
+    padding: 6px 10px;
+    gap: 11px;
   }
-  .nav-item-mini {
-    padding: 5px 0;
-  }
-  .nav-icon {
-    min-width: 30px;
-  }
-  .nav-icon :deep(.q-icon) {
-    font-size: 16px;
-  }
-  .nav-label {
-    font-size: 12px;
-  }
-  .sidebar-nav {
-    padding: 4px 10px 10px 10px;
-  }
-  .signout-section {
-    padding-top: 6px !important;
-    margin-top: 2px !important;
+  .nav-item__label {
+    font-size: 12.5px;
   }
 }
 
+/* The user's email is the first thing to go when the bar gets tight — the
+   avatar still identifies the account, and the tooltip still names it. */
+@media (max-width: 900px) {
+  .user__name,
+  .app-header__rule {
+    display: none;
+  }
+}
+</style>
+
+<style>
+/* Tooltips inside the dark rail. Unscoped because Quasar teleports QTooltip to
+   the body, out of this component's scope. */
+.nav-tooltip {
+  background: #1c3346;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--dash-r-sm);
+  padding: 5px 10px;
+  box-shadow: var(--dash-shadow-lg);
+}
+
+/* Same for the notification menu's popup surface. */
+.notif-menu {
+  border-radius: var(--dash-r-lg) !important;
+  border: 1px solid var(--dash-line);
+  box-shadow: var(--dash-shadow-lg) !important;
+  overflow: hidden;
+}
 </style>
