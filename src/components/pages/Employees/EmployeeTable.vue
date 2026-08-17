@@ -1,242 +1,241 @@
 <template>
-  <div class="table-section">
-    <!-- Employee Table -->
-    <div class="modern-table-container">
-      <q-table
-        :rows="employees"
-        :columns="columns"
-        row-key="id"
-        flat
-        :loading="loading"
-        no-data-label="No employees found"
-        class="loan-table"
-        hide-pagination
-        :rows-per-page-options="[0]"
-        selection="multiple"
-        :selected="selected"
-        @update:selected="(val) => $emit('update:selected', val)"
-      >
-        <template v-slot:header="props">
-          <q-tr class="table-header-row">
-            <q-th auto-width>
-              <q-checkbox
-                :model-value="props.selected"
-                :indeterminate="props.selected === 'some'"
-                @update:model-value="
-                  () => $emit('update:selected', selected.length > 0 ? [] : [...employees])
-                "
-                size="sm"
-              />
-            </q-th>
-            <q-th key="name" :props="props" class="table-header-cell">Employee</q-th>
-            <q-th key="role" :props="props" class="table-header-cell">Role</q-th>
-            <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
-            <q-th
-              v-for="(lt, idx) in visibleLeaveTypes"
-              :key="`leave_${idx}`"
-              :props="props"
-              class="table-header-cell leave-header-cell"
-            >
-              {{ lt.name || `Leave ${idx + 1}` }}
-            </q-th>
-            <q-th key="ctoBalance" :props="props" class="table-header-cell">CTO</q-th>
-            <q-th key="contract" :props="props" class="table-header-cell">Contract</q-th>
-            <q-th key="actions" :props="props" class="table-header-cell table-header-actions"
-              >Actions</q-th
-            >
-          </q-tr>
-        </template>
+  <div class="emp-table-wrap">
+    <q-table
+      :rows="employees"
+      :columns="columns"
+      row-key="id"
+      flat
+      :loading="loading"
+      class="emp-table"
+      hide-pagination
+      :rows-per-page-options="[0]"
+      selection="multiple"
+      :selected="selected"
+      @update:selected="(val) => $emit('update:selected', val)"
+    >
+      <template v-slot:header="props">
+        <q-tr class="emp-table__head-row">
+          <q-th auto-width class="emp-table__th">
+            <q-checkbox
+              :model-value="props.selected"
+              :indeterminate="props.selected === 'some'"
+              size="sm"
+              aria-label="Select all on this page"
+              @update:model-value="
+                () => $emit('update:selected', selected.length > 0 ? [] : [...employees])
+              "
+            />
+          </q-th>
+          <q-th
+            v-for="col in columns"
+            :key="col.name"
+            :props="props"
+            class="emp-table__th"
+            :class="col.headerClasses"
+          >
+            {{ col.label }}
+          </q-th>
+        </q-tr>
+      </template>
 
-        <template v-slot:body="props">
-          <q-tr class="table-body-row">
-            <q-td auto-width>
-              <q-checkbox v-model="props.selected" :val="props.row" size="sm" />
-            </q-td>
-            <!-- Employee name + avatar + email merged cell -->
-            <q-td key="name" :props="props" class="table-body-cell employee-name-cell">
-              <div class="employee-info">
-                <q-avatar
-                  size="34px"
-                  v-if="props.row.user?.picture_url"
-                  class="clickable-avatar"
-                  @click="$emit('view-photo', props.row)"
-                >
-                  <img
-                    :src="props.row.user.picture_url"
-                    :alt="getFullName(props.row)"
-                    @error="handleImageError"
-                  />
-                </q-avatar>
-                <q-avatar
-                  v-else
-                  size="34px"
-                  class="avatar-fallback clickable-avatar"
-                  @click="$emit('view-photo', props.row)"
-                >
-                  {{ getInitials(getFullName(props.row)) }}
-                </q-avatar>
-                <div class="employee-name-block">
-                  <span class="employee-name">{{ getFullName(props.row) }}</span>
-                  <a :href="`mailto:${getEmail(props.row)}`" class="email-link">
-                    {{ getEmail(props.row) }}
-                  </a>
-                </div>
-              </div>
-            </q-td>
+      <template v-slot:body="props">
+        <q-tr
+          class="emp-table__row"
+          :class="{ 'emp-table__row--inactive': isTerminated(props.row) }"
+        >
+          <q-td auto-width class="emp-table__td">
+            <q-checkbox
+              v-model="props.selected"
+              :val="props.row"
+              size="sm"
+              :aria-label="`Select ${getFullName(props.row)}`"
+            />
+          </q-td>
 
-            <q-td key="role" :props="props" class="table-body-cell">
-              <span class="role-chip">{{ getRole(props.row) }}</span>
-            </q-td>
-
-            <q-td key="status" :props="props" class="table-body-cell">
-              <div :class="['status-badge', getStatusClass(props.row)]">
-                <span class="status-dot"></span>
-                {{ getStatus(props.row) }}
-              </div>
-            </q-td>
-
-            <q-td
-              v-for="(lt, idx) in visibleLeaveTypes"
-              :key="`leave_${idx}`"
-              :props="props"
-              class="table-body-cell leave-cell"
-            >
-              <q-skeleton
-                v-if="isLoadingBalance(props.row)"
-                type="text"
-                style="width: 40px; height: 16px"
-                class="skeleton-inline"
-              />
-              <span v-else class="balance-text">{{ getLeaveBalanceForType(props.row, lt.id) }}</span>
-            </q-td>
-
-            <q-td key="ctoBalance" :props="props" class="table-body-cell">
-              <q-skeleton
-                v-if="isLoadingBalance(props.row)"
-                type="text"
-                style="width: 40px; height: 16px"
-                class="skeleton-inline"
-              />
-              <span v-else class="balance-text">{{ getCtoBalance(props.row) }}</span>
-            </q-td>
-
-            <q-td key="contract" :props="props" class="table-body-cell">
-              <q-skeleton
-                v-if="isLoadingContract(props.row)"
-                type="text"
-                style="width: 60px; height: 16px"
-                class="skeleton-inline"
-              />
-              <span
-                v-else
-                :class="[
-                  'contract-badge',
-                  getContract(props.row) === 'No Contract' ? 'contract-none' : 'contract-active',
-                ]"
+          <!-- Identity: name with its role beside it, email beneath. Role used to
+               own a whole column; folding it in here is what freed the width the
+               table needed to stop scrolling on a 1024px laptop. -->
+          <q-td key="name" :props="props" class="emp-table__td">
+            <div class="who">
+              <q-avatar
+                v-if="props.row.user?.picture_url"
+                size="34px"
+                class="who__avatar"
+                @click="$emit('view-photo', props.row)"
               >
-                {{ getContract(props.row) }}
-              </span>
-            </q-td>
+                <img :src="props.row.user.picture_url" :alt="getFullName(props.row)" />
+              </q-avatar>
+              <q-avatar
+                v-else
+                size="34px"
+                class="who__avatar"
+                :style="{ background: getAvatarColor(getFullName(props.row)) }"
+                @click="$emit('view-photo', props.row)"
+              >
+                <span class="who__initials">{{ getInitials(getFullName(props.row)) }}</span>
+              </q-avatar>
 
-            <!-- Actions: ⋯ dropdown -->
-            <q-td key="actions" :props="props" class="table-body-cell actions-cell">
-              <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
-                <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                  <q-list dense style="min-width: 150px">
-                    <q-item
-                      clickable
-                      v-close-popup
-                      @click="$emit('view', props.row)"
-                      class="dropdown-item"
-                    >
-                      <q-item-section avatar
-                        ><q-icon name="visibility" size="16px"
-                      /></q-item-section>
-                      <q-item-section>View details</q-item-section>
-                    </q-item>
-                    <q-item
-                      clickable
-                      v-close-popup
-                      @click="$emit('edit', props.row)"
-                      :disable="getStatus(props.row) === 'Terminated'"
-                      class="dropdown-item"
-                    >
-                      <q-item-section avatar><q-icon name="edit" size="16px" /></q-item-section>
-                      <q-item-section>Edit</q-item-section>
-                    </q-item>
-                    <q-item
-                      clickable
-                      v-close-popup
-                      @click="$emit('assign', props.row)"
-                      :disable="getStatus(props.row) === 'Terminated'"
-                      class="dropdown-item"
-                    >
-                      <q-item-section avatar
-                        ><q-icon name="assignment" size="16px"
-                      /></q-item-section>
-                      <q-item-section>{{
-                        getContract(props.row) !== 'No Contract'
-                          ? 'Renew Payroll Profile'
-                          : 'Assign Payroll Profile'
-                      }}</q-item-section>
-                    </q-item>
-                    <q-item
-                      v-if="getStatus(props.row) !== 'Terminated'"
-                      clickable
-                      v-close-popup
-                      @click="$emit('add-leave-balance', props.row)"
-                      class="dropdown-item"
-                    >
-                      <q-item-section avatar
-                        ><q-icon name="event_note" size="16px" color="primary"
-                      /></q-item-section>
-                      <q-item-section>Add Leave Balance</q-item-section>
-                    </q-item>
-                    <q-item
-                      v-if="getStatus(props.row) !== 'Terminated'"
-                      clickable
-                      v-close-popup
-                      @click="$emit('add-cto-balance', props.row)"
-                      class="dropdown-item"
-                    >
-                      <q-item-section avatar
-                        ><q-icon name="more_time" size="16px" color="secondary"
-                      /></q-item-section>
-                      <q-item-section>Add CTO Balance</q-item-section>
-                    </q-item>
-                    <q-separator v-if="getStatus(props.row) !== 'Terminated'" />
-                    <q-item
-                      v-if="getStatus(props.row) !== 'Terminated'"
-                      clickable
-                      v-close-popup
-                      @click="$emit('terminate', props.row)"
-                      class="dropdown-item dropdown-item-danger"
-                    >
-                      <q-item-section avatar><q-icon name="block" size="16px" /></q-item-section>
-                      <q-item-section>Terminate</q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-menu>
-              </q-btn>
-            </q-td>
-          </q-tr>
-        </template>
+              <div class="who__block">
+                <div class="who__line">
+                  <!-- The name is the row's primary action. Reaching details via
+                       the ⋯ menu only was two clicks for the most common intent. -->
+                  <button
+                    type="button"
+                    class="who__name"
+                    @click="$emit('view', props.row)"
+                  >
+                    {{ getFullName(props.row) }}
+                  </button>
+                  <span class="who__role">{{ getRole(props.row) }}</span>
+                </div>
+                <a :href="`mailto:${getEmail(props.row)}`" class="who__email">
+                  {{ getEmail(props.row) }}
+                </a>
+              </div>
+            </div>
+          </q-td>
 
-        <!-- Empty state (only shown when not loading) -->
-        <template v-slot:no-data>
-          <div v-if="!loading" class="empty-state">
-            <q-icon name="group_off" size="48px" class="empty-state-icon" />
-            <div class="empty-state-title">No employees found</div>
-            <div class="empty-state-sub">Try adjusting your search or filters.</div>
-          </div>
-        </template>
-      </q-table>
-    </div>
+          <q-td key="status" :props="props" class="emp-table__td">
+            <span class="dash-chip" :class="isTerminated(props.row) ? '' : 'dash-chip--good'">
+              <span class="dash-chip__dot" />
+              {{ getStatus(props.row) }}
+            </span>
+          </q-td>
+
+          <q-td
+            v-for="lt in visibleLeaveTypes"
+            :key="`leave_${lt.id}`"
+            :props="props"
+            class="emp-table__td emp-table__td--num"
+          >
+            <q-skeleton
+              v-if="isLoadingBalance(props.row)"
+              type="text"
+              width="30px"
+              height="14px"
+            />
+            <span v-else class="dash-num">{{ getLeaveBalanceForType(props.row, lt.id) }}</span>
+          </q-td>
+
+          <q-td key="ctoBalance" :props="props" class="emp-table__td emp-table__td--num">
+            <q-skeleton
+              v-if="isLoadingBalance(props.row)"
+              type="text"
+              width="30px"
+              height="14px"
+            />
+            <span v-else class="dash-num">{{ getCtoBalance(props.row) }}</span>
+          </q-td>
+
+          <q-td key="contract" :props="props" class="emp-table__td">
+            <q-skeleton
+              v-if="isLoadingContract(props.row)"
+              type="text"
+              width="54px"
+              height="14px"
+            />
+            <span
+              v-else
+              class="dash-chip contract"
+              :class="hasContract(props.row, contracts, companyId) ? 'dash-chip--info' : ''"
+            >
+              {{ getContract(props.row, contracts, companyId) }}
+            </span>
+          </q-td>
+
+          <q-td key="actions" :props="props" class="emp-table__td emp-table__td--actions">
+            <q-btn flat round dense icon="more_horiz" size="12px" class="row-btn">
+              <EmployeeRowMenu
+                :employee="props.row"
+                :has-contract="hasContract(props.row, contracts, companyId)"
+                @view="$emit('view', props.row)"
+                @edit="$emit('edit', props.row)"
+                @assign="$emit('assign', props.row)"
+                @terminate="$emit('terminate', props.row)"
+                @restore="$emit('restore', props.row)"
+                @add-leave-balance="$emit('add-leave-balance', props.row)"
+                @add-cto-balance="$emit('add-cto-balance', props.row)"
+              />
+            </q-btn>
+          </q-td>
+        </q-tr>
+      </template>
+
+      <!-- Two different empty states, because they need two different actions:
+           a filtered-to-nothing list wants the filters cleared, an genuinely
+           empty company wants its first employee added. -->
+      <template v-slot:no-data>
+        <div v-if="!loading" class="dash-empty">
+          <span class="dash-featured-icon">
+            <q-icon :name="isFiltered ? 'filter_alt_off' : 'group_add'" size="20px" />
+          </span>
+          <p class="dash-empty__title">
+            {{ isFiltered ? 'No employees match these filters' : 'No employees yet' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              isFiltered
+                ? 'Nothing here fits the current search and filters.'
+                : 'Add your first employee to start tracking attendance and payroll.'
+            }}
+          </p>
+          <q-btn
+            v-if="isFiltered"
+            outline
+            no-caps
+            dense
+            size="12px"
+            icon="filter_alt_off"
+            label="Clear filters"
+            class="empty-btn"
+            @click="$emit('clear-filters')"
+          />
+          <q-btn
+            v-else
+            unelevated
+            no-caps
+            dense
+            size="12px"
+            icon="add"
+            label="Add employee"
+            class="empty-btn empty-btn--primary"
+            @click="$emit('add')"
+          />
+        </div>
+      </template>
+    </q-table>
   </div>
 </template>
 
 <script setup>
+/**
+ * The employee list as a table, used on laptop and desktop.
+ * EmployeeCardList takes over below 1024px.
+ *
+ * The visible leave-balance columns scale with viewport width. With three leave
+ * types configured the full table needs roughly 1000px, which does not exist on
+ * a 1024px laptop once the navigation rail is subtracted — so the table showed a
+ * horizontal scrollbar and hid columns behind a gesture. Dropping to one leave
+ * column at that width, plus folding Role into the identity cell, makes it fit.
+ */
 import { computed } from 'vue'
+import { useQuasar } from 'quasar'
+import EmployeeRowMenu from '@/components/pages/Employees/EmployeeRowMenu.vue'
+import {
+  getFullName,
+  getEmail,
+  getRole,
+  getStatus,
+  getInitials,
+  getContract,
+  hasContract,
+  getLeaveBalanceForType,
+  getCtoBalance,
+  getAvatarColor,
+  isTerminated,
+} from '@/composables/utils/employee'
+
+const $q = useQuasar()
 
 const props = defineProps({
   employees: { type: Array, required: true },
@@ -247,542 +246,298 @@ const props = defineProps({
   leaveTypes: { type: Array, default: () => [] },
   loadingContractIds: { type: Object, default: () => new Set() },
   loadingBalanceIds: { type: Object, default: () => new Set() },
+  /** Drives which empty state to show when there are no rows. */
+  isFiltered: { type: Boolean, default: false },
 })
 
-defineEmits(['update:selected', 'view', 'edit', 'assign', 'terminate', 'restore', 'view-photo', 'add-leave-balance', 'add-cto-balance'])
+defineEmits([
+  'update:selected',
+  'view',
+  'edit',
+  'assign',
+  'terminate',
+  'restore',
+  'view-photo',
+  'add-leave-balance',
+  'add-cto-balance',
+  'clear-filters',
+  'add',
+])
+
+// How many leave columns the viewport can carry without forcing a sideways
+// scroll. Anything hidden here is still shown in full on the card view and in
+// the employee's detail modal.
+const leaveColumnBudget = computed(() => {
+  const w = $q.screen.width
+  if (w >= 1600) return 3
+  if (w >= 1280) return 2
+  return 1
+})
 
 const visibleLeaveTypes = computed(() =>
   props.leaveTypes
     .filter((lt) => !lt.name?.toLowerCase().includes('unpaid'))
-    .slice(0, 3),
+    .slice(0, leaveColumnBudget.value),
 )
-
-/* ─── Helper Functions ─────────────────────────────────────────────────────── */
-
-const getFullName = (employee) => {
-  if (!employee) return 'N/A'
-  return (
-    `${employee.user?.first_name || ''} ${employee.user?.last_name || ''}`.trim() ||
-    employee.user?.username ||
-    'N/A'
-  )
-}
-
-const getEmail = (employee) => employee?.user?.email || 'N/A'
-
-const getRole = (employee) => {
-  if (!employee) return 'N/A'
-  if (employee.user_role_name) return String(employee.user_role_name)
-  if (employee.user_role?.name) return String(employee.user_role.name)
-  if (employee.companies?.length > 0) {
-    const role = employee.companies[0].user_role
-    return role?.name ? String(role.name) : 'N/A'
-  }
-  return 'N/A'
-}
-
-const getStatus = (employee) => {
-  if (!employee) return 'N/A'
-  if (employee.status?.toLowerCase() === 'terminated') return 'Terminated'
-  if (employee.is_active === false) return 'Terminated'
-  const empStatus = employee.companies?.[0]?.employment_status
-  if (empStatus?.toLowerCase() === 'terminated') return 'Terminated'
-  return 'Active'
-}
-
-const getContract = (employee) => {
-  if (!employee) return 'N/A'
-  if (!props.companyId) return 'N/A'
-
-  // Get contract for current company
-  const companyContracts = props.contracts[props.companyId]
-  if (!companyContracts) return 'No Contract'
-
-  const contract = companyContracts[employee.id]
-  if (!contract) return 'No Contract'
-
-  // Handle array response (API returns array of contracts)
-  if (Array.isArray(contract) && contract.length > 0) {
-    return contract[0].pay_type
-  }
-  // Handle single contract object (direct contract object with pay_type)
-  if (contract?.pay_type) {
-    return contract.pay_type
-  }
-  // Handle nested format (contract inside companies)
-  if (contract?.contract?.name) {
-    return contract.contract.name
-  }
-  // Handle empty response (contract was deleted/unassigned)
-  if (contract === null || (contract && Object.keys(contract).length === 0)) {
-    return 'No Contract'
-  }
-  return 'No Contract'
-}
-
-const getStatusClass = (employee) => {
-  const status = getStatus(employee)
-  if (status === 'Active') return 'status-active'
-  if (status === 'Terminated') return 'status-terminated'
-  return 'status-default'
-}
-
-const getInitials = (name) =>
-  name && name !== 'N/A'
-    ? name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    : '?'
-
-const handleImageError = (event) => {
-  event.target.src = ''
-  event.target.style.display = 'none'
-}
-
-const getLeaveBalanceForType = (employee, leaveTypeId) => {
-  const balances = employee?._balance?.leaveBalances || []
-  const match = balances.find(
-    (b) => b.leave_type_id === leaveTypeId || b.id === leaveTypeId,
-  )
-  if (!match) return '\u2014'
-  return match.balance ?? match.days ?? match.hours ?? 0
-}
-
-const getCtoBalance = (employee) => {
-  let cto = employee?._balance?.ctoBalance
-  if (cto === null || cto === undefined || cto === '') return '\u2014'
-
-  // Handle object response: { remaining: "7.00", ... }
-  if (typeof cto === 'object') {
-    cto = cto.remaining ?? cto.hours ?? null
-  }
-
-  return cto !== null && cto !== undefined ? `${cto}h` : '\u2014'
-}
 
 const isLoadingContract = (employee) => props.loadingContractIds.has(employee.id)
 const isLoadingBalance = (employee) => props.loadingBalanceIds.has(employee.id)
 
+// Column widths, tightened so the table genuinely fits its narrowest supported
+// viewport. At 1024px the content box is about 728px after the navigation rail
+// and page padding; with one leave column these sum to roughly 664px, which
+// leaves headroom instead of overflowing by a few pixels and re-introducing the
+// horizontal scrollbar this redesign set out to remove.
 const columns = computed(() => [
-  { name: 'name', label: 'Employee', field: (row) => getFullName(row), align: 'left', style: 'width: 200px; min-width: 200px' },
-  { name: 'role', label: 'Role', field: (row) => getRole(row), align: 'left', style: 'width: 120px; min-width: 120px' },
-  { name: 'status', label: 'Status', field: (row) => getStatus(row), align: 'left', style: 'width: 100px; min-width: 100px' },
-  ...visibleLeaveTypes.value.map((lt, idx) => ({
-    name: `leave_${idx}`,
-    label: lt.name || `Leave ${idx + 1}`,
-    field: (row) => getLeaveBalanceForType(row, lt.id),
+  {
+    name: 'name',
+    label: 'Employee',
+    field: (row) => getFullName(row),
     align: 'left',
-    style: 'width: 110px; min-width: 110px',
+    style: 'min-width: 200px',
+  },
+  {
+    name: 'status',
+    label: 'Status',
+    field: (row) => getStatus(row),
+    align: 'left',
+    style: 'width: 104px',
+  },
+  ...visibleLeaveTypes.value.map((lt) => ({
+    name: `leave_${lt.id}`,
+    label: lt.name || 'Leave',
+    field: (row) => getLeaveBalanceForType(row, lt.id),
+    align: 'right',
+    style: 'width: 88px',
+    headerClasses: 'emp-table__th--num',
   })),
-  { name: 'ctoBalance', label: 'CTO', field: (row) => getCtoBalance(row), align: 'left', style: 'width: 70px; min-width: 70px' },
-  { name: 'contract', label: 'Contract', field: (row) => getContract(row), align: 'left', style: 'width: 100px; min-width: 100px' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center', style: 'width: 60px; min-width: 60px' },
+  {
+    name: 'ctoBalance',
+    label: 'CTO',
+    field: (row) => getCtoBalance(row),
+    align: 'right',
+    style: 'width: 72px',
+    headerClasses: 'emp-table__th--num',
+  },
+  {
+    name: 'contract',
+    label: 'Contract',
+    field: (row) => getContract(row, props.contracts, props.companyId),
+    align: 'left',
+    style: 'width: 108px',
+  },
+  {
+    name: 'actions',
+    label: '',
+    field: 'actions',
+    align: 'center',
+    style: 'width: 52px',
+    headerClasses: 'emp-table__th--actions',
+  },
 ])
 </script>
 
 <style scoped>
-.table-section {
-  background: #ffffff;
-}
-
-.table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 24px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.table-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.table-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.modern-table-container {
+.emp-table-wrap {
   overflow-x: auto;
-  position: relative;
+  padding: 0 6px;
 }
 
-.loan-table {
-  width: 100%;
-  min-width: 700px;
-}
-
-.loan-table,
-.loan-table :deep(.q-table__container),
-.loan-table :deep(.q-table__card),
-.loan-table.q-table__container,
-.loan-table :deep(.q-table__bottom-border),
-.loan-table :deep(.q-table__top),
-.loan-table :deep(.q-table__bottom),
-.loan-table :deep(.q-table) {
+.emp-table,
+.emp-table :deep(.q-table__container),
+.emp-table :deep(.q-table__card),
+.emp-table :deep(.q-table__top),
+.emp-table :deep(.q-table__bottom),
+.emp-table :deep(.q-table) {
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+  background: transparent;
 }
 
-/* ── Table header ── */
-.table-header-row {
-  background: #f8fafc;
+/* ── Header: sentence case over a hairline, no filled band ── */
+.emp-table :deep(.emp-table__head-row) {
+  background: transparent;
 }
 
-.table-header-cell {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  color: #94a3b8 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 8px 14px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
+.emp-table :deep(.emp-table__th) {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--dash-ink-3) !important;
+  padding: 0 12px 11px !important;
+  border-bottom: 1px solid var(--dash-line) !important;
+  white-space: nowrap;
+}
+.emp-table :deep(.emp-table__th--num) {
+  text-align: right !important;
+}
+.emp-table :deep(.emp-table__th--actions) {
+  width: 56px;
 }
 
-.table-header-actions {
-  text-align: center !important;
+/* ── Body ── */
+.emp-table :deep(.emp-table__row) {
+  transition: background var(--dash-fast) var(--dash-ease);
+}
+.emp-table :deep(.emp-table__row:hover) > td {
+  background: var(--dash-n-50);
+}
+.emp-table :deep(.emp-table__row--inactive) > td {
+  background: var(--dash-n-25);
+}
+.emp-table :deep(.emp-table__row--inactive:hover) > td {
+  background: var(--dash-n-50);
 }
 
-/* ── Table body ── */
-.table-body-row {
-  transition: background 0.12s ease;
-}
-
-.table-body-row:hover .table-body-cell {
-  background: #f8fafc;
-}
-
-.table-body-row:last-child .table-body-cell {
-  border-bottom: none !important;
-}
-
-.table-body-cell {
+.emp-table :deep(.emp-table__td) {
   font-size: 13px;
-  color: #334155;
-  padding: 9px 14px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
+  color: var(--dash-ink-2);
+  padding: 11px 12px !important;
+  border-bottom: 1px solid var(--dash-line-soft) !important;
   vertical-align: middle;
 }
-
-/* ── Employee cell ── */
-.employee-name-cell {
-  min-width: 200px;
+.emp-table :deep(.emp-table__row:last-child) > td {
+  border-bottom: none !important;
+}
+.emp-table :deep(.emp-table__td--num) {
+  text-align: right;
+  color: var(--dash-ink);
+}
+.emp-table :deep(.emp-table__td--actions) {
+  text-align: center;
 }
 
-.employee-info {
+/* ── Identity cell ── */
+.who {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.employee-name-block {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  gap: 11px;
   min-width: 0;
 }
 
-.employee-name {
-  font-weight: 500;
-  color: #0f172a;
+.who__avatar {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.who__initials {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.who__block {
+  min-width: 0;
+}
+
+.who__line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.who__name {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
   font-size: 13px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  text-align: left;
+  cursor: pointer;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--dash-fast) var(--dash-ease);
+}
+.who__name:hover {
+  color: var(--dash-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.who__name:focus-visible {
+  outline: none;
+  border-radius: var(--dash-r-xs);
+  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+}
+
+/* Role reads as metadata on the name, not as a second value competing with it. */
+.who__role {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--dash-ink-3);
+  padding-left: 8px;
+  border-left: 1px solid var(--dash-line);
+  white-space: nowrap;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.email-link {
-  font-size: 11px;
-  color: #94a3b8;
+.who__email {
+  display: block;
+  font-size: 12px;
+  color: var(--dash-ink-4);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.email-link:hover {
-  color: #6366f1;
+.who__email:hover {
+  color: var(--dash-accent);
   text-decoration: underline;
 }
 
-/* ── Avatar ── */
-.avatar-fallback {
-  background: #eef2ff !important;
-  color: #4338ca !important;
-  font-weight: 600 !important;
-  min-width: 28px !important;
-  width: 28px !important;
-  height: 28px !important;
-  border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex-shrink: 0 !important;
-}
-
-.avatar-fallback :deep(.q-avatar__content) {
-  font-size: 11px !important;
-  line-height: 1 !important;
-  font-weight: 600 !important;
-}
-
-.clickable-avatar {
-  cursor: pointer;
-  transition: transform 0.15s ease;
-}
-
-.clickable-avatar:hover {
-  transform: scale(1.08);
-}
-
-/* ── Role chip ── */
-.role-chip {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-  white-space: nowrap;
-}
-
-/* ── Position / department text ── */
-.position-text,
-.department-text {
-  color: #64748b;
-  font-size: 13px;
-}
-
-/* ── Status badge ── */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.status-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.status-active {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.status-active .status-dot {
-  background: #10b981;
-}
-
-.status-terminated {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.status-terminated .status-dot {
-  background: #f87171;
-}
-
-.status-default {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.status-default .status-dot {
-  background: #94a3b8;
-}
-
-/* ── Balance text ── */
-.balance-text {
-  color: #64748b;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-/* ── Leave columns ── */
-.leave-header-cell {
-  width: 110px;
-  min-width: 110px;
-}
-.leave-cell {
-  width: 110px;
-  min-width: 110px;
-}
-
-/* ── Contract badge ── */
-.contract-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
+.contract {
   text-transform: capitalize;
 }
 
-.contract-active {
-  background: #eef2ff;
-  color: #3730a3;
+.row-btn {
+  color: var(--dash-ink-4);
+}
+.row-btn:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-100);
 }
 
-.contract-none {
-  background: #f8fafc;
-  color: #94a3b8;
-  border: 1px solid #e2e8f0;
+/* Laptop (1024–1279) runs the table at its tightest: one leave column, less cell
+   padding, and a shorter role clamp. Below 1024 the card list takes over, so
+   nothing here has to survive narrower than this. */
+@media (max-width: 1279px) {
+  .emp-table-wrap {
+    padding: 0 2px;
+  }
+  .emp-table :deep(.emp-table__th) {
+    padding: 0 9px 10px !important;
+  }
+  .emp-table :deep(.emp-table__td) {
+    padding: 10px 9px !important;
+  }
+  .who {
+    gap: 9px;
+  }
+  .who__role {
+    max-width: 84px;
+    padding-left: 7px;
+  }
+}
+
+/* ── Empty state action ── */
+.empty-btn {
+  margin-top: 6px;
+  padding: 0 12px;
+  height: 32px;
+  border-radius: var(--dash-r-md);
   font-weight: 500;
+  color: var(--dash-ink-2);
 }
-
-/* ── Actions ── */
-.actions-cell {
-  text-align: center !important;
-  width: 60px;
+.empty-btn--primary {
+  background: var(--dash-brand);
+  color: #fff;
 }
-
-.action-menu-btn {
-  color: #94a3b8 !important;
-  border-radius: 8px !important;
-}
-
-.action-menu-btn:hover {
-  background: #f1f5f9 !important;
-  color: #334155 !important;
-}
-
-.action-dropdown {
-  border-radius: 10px !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08) !important;
-}
-
-.dropdown-item {
-  font-size: 13px !important;
-  color: #334155 !important;
-  min-height: 36px !important;
-  padding: 0 12px !important;
-  border-radius: 6px !important;
-}
-
-.dropdown-item:hover {
-  background: #f8fafc !important;
-}
-
-.dropdown-item-danger {
-  color: #dc2626 !important;
-}
-
-.dropdown-item-danger:hover {
-  background: #fef2f2 !important;
-}
-
-.dropdown-item-restore {
-  color: #16a34a !important;
-}
-
-.dropdown-item-restore:hover {
-  background: #f0fdf4 !important;
-}
-
-/* ── Empty state ── */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.empty-state-icon {
-  color: #cbd5e1;
-  margin-bottom: 14px;
-}
-
-.empty-state-title {
-  font-size: 15px;
-  font-weight: 500;
-  color: #334155;
-  margin-bottom: 6px;
-}
-
-.empty-state-sub {
-  font-size: 13px;
-  color: #94a3b8;
-  margin-bottom: 16px;
-}
-
-@media (max-width: 1440px) {
-  .loan-table {
-    min-width: 680px;
-  }
-}
-
-@media (max-width: 1024px) {
-  .modern-table-container {
-    overflow-x: auto;
-  }
-
-  .loan-table {
-    min-width: 640px;
-  }
-
-  .table-header-cell,
-  .table-body-cell {
-    padding: 8px 12px !important;
-  }
-
-  .employee-name-cell {
-    min-width: 170px;
-  }
-}
-
-@media (max-width: 768px) {
-  .table-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .modern-table-container {
-    overflow-x: auto;
-  }
-
-  .loan-table {
-    min-width: 600px;
-  }
-}
-
-@media (max-width: 480px) {
-  .table-header-cell,
-  .table-body-cell {
-    padding: 10px 12px !important;
-    font-size: 12px;
-  }
-}
-
-.skeleton-inline {
-  display: inline-block;
-  border-radius: 4px;
+.empty-btn--primary:hover {
+  background: #193d5c;
 }
 </style>

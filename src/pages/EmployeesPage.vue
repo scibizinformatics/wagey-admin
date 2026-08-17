@@ -1,77 +1,189 @@
 ﻿<template>
   <PageShell>
-    <div class="employees-card">
-      <!-- Header Section -->
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-titles">
-            <h1 class="page-title">Employees</h1>
-          </div>
-          <div class="header-actions">
+    <div class="emp-page">
+      <!-- ── Page header: identity and the one primary action ────────────── -->
+      <header class="emp-head">
+        <div class="emp-head__titles">
+          <h1 class="emp-head__title">Employees</h1>
+          <p class="emp-head__sub">
+            {{ headcountSummary }}
+          </p>
+        </div>
+        <q-btn
+          unelevated
+          no-caps
+          icon="add"
+          label="Add employee"
+          class="btn-primary"
+          @click="openAddModal"
+        />
+      </header>
+
+      <!-- ── List card ──────────────────────────────────────────────────── -->
+      <section class="dash-panel emp-list">
+        <!-- The toolbar becomes the selection bar when rows are picked, rather
+             than a second bar pushing the list down. One row, two states. -->
+        <div class="emp-toolbar" :class="{ 'emp-toolbar--selecting': hasSelection }">
+          <template v-if="!hasSelection">
             <q-input
+              ref="searchRef"
               v-model="searchTerm"
-              placeholder="Search employees..."
-              class="header-search"
+              placeholder="Search name, email, role or status"
               dense
               outlined
-              @update:model-value="filterEmployees"
+              clearable
+              class="emp-search dash-field"
+              @update:model-value="onSearchInput"
+              @focus="searchFocused = true"
+              @blur="searchFocused = false"
             >
               <template v-slot:prepend>
-                <q-icon name="search" class="search-icon" />
+                <q-icon name="search" size="18px" />
+              </template>
+              <!-- Press / to jump here. Hidden once the field has focus or text,
+                   so the hint never sits on top of what you are typing. -->
+              <template v-slot:append>
+                <kbd v-if="showSearchHint" class="emp-kbd">/</kbd>
               </template>
             </q-input>
-            <q-btn
-              label="Add employee"
-              icon="add"
-              class="add-employee-btn header-add-btn"
-              unelevated
-              @click="openAddModal"
-            />
-          </div>
-        </div>
-      </div>
 
-      <!-- Stats Cards -->
-      <EmployeeStatsCards :stats="employeeStats" />
+            <!-- No floating labels: a Quasar stacked label needs ~44px of
+                 height and these fields are 34px, so the label and the value
+                 were overlapping. Each option label is self-describing instead
+                 ("All statuses", "All Sites", "Name A–Z") and a leading icon
+                 says which dimension it controls. -->
+            <div class="emp-filters">
+              <q-select
+                v-model="statusFilter"
+                :options="statusOptions"
+                emit-value
+                map-options
+                dense
+                outlined
+                hide-bottom-space
+                :popup-content-class="'emp-popup'"
+                class="emp-filter dash-field"
+                aria-label="Filter by status"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="o_filter_alt" size="16px" />
+                </template>
+              </q-select>
 
-      <!-- Main Table Section -->
-      <div class="table-block">
-        <div v-if="selectedEmployees.length > 0" class="selection-bar">
-          <div class="selection-bar-content">
-            <div class="selection-info">
-              <q-icon name="check_circle" size="20px" color="primary" />
-              <span class="selection-text">{{ selectedEmployees.length }} selected</span>
+              <!-- Payout group, resolved from each employee's active contract —
+                   the same source the Schedule and Attendance filters use. -->
+              <q-select
+                v-if="payrollGroupOptions.length"
+                v-model="payrollGroupFilter"
+                :options="payrollGroupSelectOptions"
+                emit-value
+                map-options
+                dense
+                outlined
+                hide-bottom-space
+                :popup-content-class="'emp-popup'"
+                class="emp-filter emp-filter--wide dash-field"
+                aria-label="Filter by payout group"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="o_groups" size="16px" />
+                </template>
+              </q-select>
+
+              <q-select
+                v-model="sortBy"
+                :options="sortOptions"
+                emit-value
+                map-options
+                dense
+                outlined
+                hide-bottom-space
+                :popup-content-class="'emp-popup'"
+                class="emp-filter emp-filter--wide dash-field"
+                aria-label="Sort order"
+              >
+                <template v-slot:prepend>
+                  <q-icon name="o_swap_vert" size="16px" />
+                </template>
+              </q-select>
             </div>
-            <div class="selection-actions">
+
+            <span class="emp-toolbar__count">
+              {{ filteredEmployees.length }}
+              {{ filteredEmployees.length === 1 ? 'result' : 'results' }}
+            </span>
+          </template>
+
+          <template v-else>
+            <span class="emp-toolbar__selected">
+              <q-icon name="check_circle" size="17px" />
+              {{ selectedEmployees.length }} selected
+            </span>
+            <div class="emp-toolbar__actions">
               <q-btn
-                unelevated
-                color="primary"
-                icon="assignment"
-                label="Assign Payroll Profile"
-                class="add-employee-btn"
+                outline
+                no-caps
+                dense
+                icon="o_assignment"
+                label="Assign payroll profile"
+                class="btn-outline"
                 @click="handleBulkAssignDialog"
               />
               <q-btn
-                unelevated
-                color="negative"
-                icon="block"
+                outline
+                no-caps
+                dense
+                icon="o_block"
                 label="Terminate"
-                class="add-employee-btn"
+                class="btn-outline btn-outline--danger"
                 @click="handleBulkTerminateDialog"
               />
-              <q-btn flat dense label="Clear" @click="selectedEmployees = []" />
+              <q-btn
+                flat
+                dense
+                no-caps
+                label="Clear"
+                class="btn-quiet"
+                @click="selectedEmployees = []"
+              />
             </div>
-          </div>
+          </template>
         </div>
-        <EmployeeTable
+
+        <!-- What is currently narrowing the list, and how to undo it. Without
+             this, a filter left set three visits ago reads as "we have no
+             employees". -->
+        <div v-if="!hasSelection && activeFilters.length" class="emp-applied">
+          <span class="emp-applied__label">Filtered by</span>
+          <button
+            v-for="f in activeFilters"
+            :key="f.key"
+            type="button"
+            class="emp-applied__chip"
+            @click="clearFilter(f.key)"
+          >
+            <span class="emp-applied__chip-text">{{ f.label }}</span>
+            <q-icon name="close" size="13px" />
+          </button>
+          <q-btn flat dense no-caps size="11px" label="Clear all" class="btn-quiet" @click="clearFilters" />
+        </div>
+
+        <!-- Cards below 1024px, table above. The table needs ~1000px with three
+             leave types configured; below that width it would scroll sideways and
+             hide columns behind a gesture. -->
+        <EmployeeCardList
+          v-if="$q.screen.lt.md"
           v-model:selected="selectedEmployees"
           :employees="paginatedEmployees"
-          :loading="loading"
+          :loading="loading || resolvingGroups"
           :contracts="employeeContracts"
           :company-id="companyId"
-          :leave-types="leaveTypes"
+          :leave-types="cardLeaveTypes"
           :loading-contract-ids="loadingContractIds"
           :loading-balance-ids="loadingBalanceIds"
+          :is-filtered="activeFilters.length > 0"
+          @clear-filters="clearFilters"
+          @add="openAddModal"
           @view="viewEmployee"
           @edit="editEmployee"
           @assign="handleOpenAssignDialog"
@@ -81,46 +193,66 @@
           @add-leave-balance="openLeaveBalanceModal"
           @add-cto-balance="openCtoBalanceModal"
         />
-      </div>
-
-      <!-- Pagination Controls -->
-      <div class="pagination-bar" v-if="filteredEmployees.length > 0">
-        <div class="pagination-info">
-          <span class="pagination-text">
-            Showing {{ (employeePage - 1) * employeePageSize + 1 }} –
-            {{ Math.min(employeePage * employeePageSize, filteredEmployees.length) }}
-            of {{ filteredEmployees.length }} employees
-          </span>
-          <q-select
-            v-model="employeePageSize"
-            :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
-            dense
-            outlined
-            class="page-size-select"
-            @update:model-value="onPageSizeChange"
-          />
-        </div>
-        <q-pagination
-          v-model="employeePage"
-          :max="totalPages"
-          :max-pages="6"
-          boundary-numbers
-          direction-links
-          color="primary"
-          active-color="primary"
-          active-text-color="white"
-          icon-first="first_page"
-          icon-prev="chevron_left"
-          icon-next="chevron_right"
-          icon-last="last_page"
-          class="schedule-pagination"
-          @update:model-value="onPageChange"
+        <EmployeeTable
+          v-else
+          v-model:selected="selectedEmployees"
+          :employees="paginatedEmployees"
+          :loading="loading || resolvingGroups"
+          :contracts="employeeContracts"
+          :company-id="companyId"
+          :leave-types="leaveTypes"
+          :loading-contract-ids="loadingContractIds"
+          :loading-balance-ids="loadingBalanceIds"
+          :is-filtered="activeFilters.length > 0"
+          @clear-filters="clearFilters"
+          @add="openAddModal"
+          @view="viewEmployee"
+          @edit="editEmployee"
+          @assign="handleOpenAssignDialog"
+          @terminate="confirmTerminate"
+          @restore="confirmRestore"
+          @view-photo="viewEmployeePhoto"
+          @add-leave-balance="openLeaveBalanceModal"
+          @add-cto-balance="openCtoBalanceModal"
         />
-      </div>
+
+        <footer v-if="filteredEmployees.length > 0" class="emp-foot">
+          <div class="emp-foot__left">
+            <span class="emp-foot__range dash-num">
+              {{ (employeePage - 1) * employeePageSize + 1 }}–{{
+                Math.min(employeePage * employeePageSize, filteredEmployees.length)
+              }}
+              of {{ filteredEmployees.length }}
+            </span>
+            <q-select
+              v-model="employeePageSize"
+              :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              dense
+              outlined
+              class="emp-foot__size dash-field"
+              @update:model-value="onPageSizeChange"
+            />
+          </div>
+          <q-pagination
+            v-model="employeePage"
+            :max="totalPages"
+            :max-pages="$q.screen.lt.md ? 3 : 6"
+            boundary-numbers
+            direction-links
+            :ripple="false"
+            icon-prev="chevron_left"
+            icon-next="chevron_right"
+            icon-first="first_page"
+            icon-last="last_page"
+            class="emp-pager"
+            @update:model-value="onPageChange"
+          />
+        </footer>
+      </section>
     </div>
 
     <!-- Modals -->
@@ -205,11 +337,11 @@
 
 <script setup>
 import PageShell from '@/components/layout/PageShell.vue'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
-import { useOrganization } from '@/composables/page/useOrganization'
+import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
 import { useCompany } from '@/composables/page/useCompany'
 import { useAdminContracts } from '@/composables/admin/useAdminContracts'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
@@ -218,8 +350,8 @@ import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 import { useEmployeeBalances } from '@/composables/page/useEmployeeBalances'
 
-import EmployeeStatsCards from '@/components/pages/Employees/EmployeeStatsCards.vue'
 import EmployeeTable from '@/components/pages/Employees/EmployeeTable.vue'
+import EmployeeCardList from '@/components/pages/Employees/EmployeeCardList.vue'
 import EmployeeAddModal from '@/components/pages/Employees/EmployeeAddModal.vue'
 import EmployeeEditModal from '@/components/pages/Employees/EmployeeEditModal.vue'
 import EmployeeViewModal from '@/components/pages/Employees/EmployeeViewModal.vue'
@@ -229,6 +361,17 @@ import EmployeeAssignContractDialog from '@/components/pages/Employees/EmployeeA
 import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/AttendanceEmployeePhotoViewer.vue'
 import EmployeeLeaveBalanceModal from '@/components/pages/Employees/EmployeeLeaveBalanceModal.vue'
 import EmployeeCtoBalanceModal from '@/components/pages/Employees/EmployeeCtoBalanceModal.vue'
+
+// Shared accessors — these were duplicated verbatim between this page and
+// EmployeeTable, which meant the two could disagree about the same record.
+import {
+  getFullName,
+  getEmail,
+  getRole,
+  getStatus,
+  getPhoneNumber,
+  isTerminated,
+} from '@/composables/utils/employee'
 
 const $q = useQuasar()
 
@@ -248,7 +391,14 @@ const {
 } = useEmployees()
 
 const { userRoles, fetchUserRoles } = useRolesAndPositions()
-const { sites: rawSites, fetchSites: fetchSitesApi } = useOrganization()
+// Payout group comes from each employee's active contract. The cache is shared
+// with the Schedule and Attendance pages.
+const {
+  resolving: resolvingGroups,
+  groupIdFor,
+  inlineGroupId,
+  ensure: ensurePayoutGroups,
+} = useEmployeePayoutGroup()
 const { companyId } = useCompany()
 
 const {
@@ -299,8 +449,10 @@ const selectedEligibilityObjectsData = ref([])
 const filteredEmployees = ref([])
 const searchTerm = ref('')
 const sortBy = ref('A-Z')
-const sites = ref([])
-const selectedSite = ref(null)
+const payrollGroupFilter = ref(null)
+const statusFilter = ref('all')
+const searchRef = ref(null)
+const searchFocused = ref(false)
 const employeeContracts = ref({})
 const loadingContractIds = ref(new Set())
 const loadingBalanceIds = ref(new Set())
@@ -496,11 +648,13 @@ const editForm = ref({
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const roleOptions = computed(() => userRoles.value)
+// Feeds the header's "N on record · N active" line. The terminated count went
+// with the stats cards — nothing reads it now, and it cost a second pass over
+// the whole list on every recompute.
 const employeeStats = computed(() => {
   const total = employees.value.length
   const active = employees.value.filter((emp) => getStatus(emp) === 'Active').length
-  const terminated = employees.value.filter((emp) => getStatus(emp) === 'Terminated').length
-  return { total, active, terminated }
+  return { total, active }
 })
 
 const totalPages = computed(
@@ -517,40 +671,92 @@ const selectedActiveEmployees = computed(() =>
   selectedEmployees.value.filter((emp) => getStatus(emp) === 'Active'),
 )
 
-// ─── Helper Functions ─────────────────────────────────────────────────────────
+const hasSelection = computed(() => selectedEmployees.value.length > 0)
 
-const getFullName = (employee) => {
-  if (!employee) return 'N/A'
-  return (
-    `${employee.user?.first_name || ''} ${employee.user?.last_name || ''}`.trim() ||
-    employee.user?.username ||
-    'N/A'
-  )
+// ─── Filters ──────────────────────────────────────────────────────────────────
+// `sortBy` already had complete sort logic but was never bound to anything, so
+// it was unreachable until these options exposed it. The site filter it sat
+// beside has since been replaced by payout group, which is the grouping this
+// page is actually asked about.
+const statusOptions = [
+  { label: 'All statuses', value: 'all' },
+  { label: 'Active', value: 'Active' },
+  { label: 'Terminated', value: 'Terminated' },
+]
+
+const sortOptions = [
+  { label: 'Name A–Z', value: 'A-Z' },
+  { label: 'Name Z–A', value: 'Z-A' },
+  { label: 'Recently updated', value: 'Newest' },
+  { label: 'Oldest updated', value: 'Oldest' },
+]
+
+const DEFAULT_SORT = 'A-Z'
+
+const payrollGroupOptions = computed(() =>
+  payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
+)
+
+const payrollGroupSelectOptions = computed(() => [
+  { label: 'All payout groups', value: null },
+  ...payrollGroupOptions.value,
+])
+
+/** Payout group for an employee row: inline if present, else from the cache. */
+const employeePayoutGroupId = (emp) => {
+  const inline = inlineGroupId(emp)
+  return inline !== null ? inline : groupIdFor(emp?.id)
 }
 
-const getEmail = (employee) => employee?.user?.email || 'N/A'
-
-const getRole = (employee) => {
-  if (!employee) return 'N/A'
-  if (employee.user_role_name) return String(employee.user_role_name)
-  if (employee.user_role?.name) return String(employee.user_role.name)
-  if (employee.companies?.length > 0) {
-    const role = employee.companies[0].user_role
-    return role?.name ? String(role.name) : 'N/A'
+/** Everything currently narrowing the list, each individually removable. */
+const activeFilters = computed(() => {
+  const out = []
+  if (searchTerm.value?.trim()) {
+    out.push({ key: 'search', label: `“${searchTerm.value.trim()}”` })
   }
-  return 'N/A'
+  if (statusFilter.value !== 'all') {
+    out.push({ key: 'status', label: statusFilter.value })
+  }
+  if (payrollGroupFilter.value !== null) {
+    const group = payrollGroupOptions.value.find((g) => g.value === payrollGroupFilter.value)
+    out.push({ key: 'payrollGroup', label: group?.label ?? 'Payout group' })
+  }
+  if (sortBy.value !== DEFAULT_SORT) {
+    const sort = sortOptions.find((s) => s.value === sortBy.value)
+    out.push({ key: 'sort', label: sort?.label ?? 'Sorted' })
+  }
+  return out
+})
+
+function clearFilter(key) {
+  if (key === 'search') searchTerm.value = ''
+  if (key === 'status') statusFilter.value = 'all'
+  if (key === 'payrollGroup') payrollGroupFilter.value = null
+  if (key === 'sort') sortBy.value = DEFAULT_SORT
+  filterEmployees()
 }
 
-const getPhoneNumber = (employee) => employee?.phone_number || 'N/A'
-
-const getStatus = (employee) => {
-  if (!employee) return 'N/A'
-  if (employee.status?.toLowerCase() === 'terminated') return 'Terminated'
-  if (employee.is_active === false) return 'Terminated'
-  const empStatus = employee.companies?.[0]?.employment_status
-  if (empStatus?.toLowerCase() === 'terminated') return 'Terminated'
-  return 'Active'
+function clearFilters() {
+  searchTerm.value = ''
+  statusFilter.value = 'all'
+  payrollGroupFilter.value = null
+  sortBy.value = DEFAULT_SORT
+  filterEmployees()
 }
+
+// The card view has room for every configured leave type, so it is not subject
+// to the table's column budget.
+const cardLeaveTypes = computed(() =>
+  leaveTypes.value.filter((lt) => !lt.name?.toLowerCase().includes('unpaid')),
+)
+
+const headcountSummary = computed(() => {
+  const { total, active } = employeeStats.value
+  if (!total) return 'No employees on record yet'
+  return `${total} on record · ${active} active`
+})
+
+// ─── Helper Functions ─────────────────────────────────────────────────────────
 
 function formatPhilippinePhone(number) {
   if (!number) return ''
@@ -704,25 +910,8 @@ const fetchRoles = async () => {
   }
 }
 
-const fetchSites = async () => {
-  try {
-    await fetchSitesApi()
-    sites.value = [
-      { label: 'All Sites', value: null },
-      ...rawSites.value.map((site) => ({
-        label: site.name || site.site_name || `Site ${site.id}`,
-        value: site.id,
-      })),
-    ]
-  } catch (err) {
-    sites.value = [{ label: 'All Sites', value: null }]
-    $q.notify({
-      type: 'warning',
-      message: err.response?.data?.detail ?? 'Could not load sites. Showing all employees.',
-      position: 'top',
-    })
-  }
-}
+// `fetchSites` is gone with the site filter it populated — sites were fetched on
+// every page load purely to fill that dropdown, and nothing else here used them.
 
 const fetchEmployeeDetails = async (employeeId) => {
   try {
@@ -1226,6 +1415,40 @@ const removeEditAvatar = () => {
   editAvatarPreview.value = null
 }
 
+// Search runs over the whole in-memory list on every keystroke, which is wasted
+// work on a few thousand employees. A short debounce keeps typing responsive
+// without making the result feel laggy.
+let searchTimer = null
+
+function onSearchInput() {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => filterEmployees(), 180)
+}
+
+const showSearchHint = computed(
+  () => !searchFocused.value && !searchTerm.value && !$q.screen.lt.md,
+)
+
+// "/" focuses search, the convention in most tools with a list this long.
+// Ignored while the user is already typing somewhere, so it never swallows a
+// literal slash.
+function onGlobalKey(e) {
+  if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+  const tag = e.target?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
+  e.preventDefault()
+  searchRef.value?.focus()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onGlobalKey)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onGlobalKey)
+  clearTimeout(searchTimer)
+})
+
 const onPageChange = (newPage) => {
   employeePage.value = newPage
 }
@@ -1238,7 +1461,9 @@ const onPageSizeChange = (newSize) => {
 const filterEmployees = () => {
   let filtered = employees.value
 
-  if (searchTerm.value.trim()) {
+  // Optional-chained because the search field is `clearable`: Quasar sets the
+  // model to null rather than '' when the clear button is used.
+  if (searchTerm.value?.trim()) {
     const term = searchTerm.value.toLowerCase()
     filtered = filtered.filter((emp) => {
       return (
@@ -1251,26 +1476,21 @@ const filterEmployees = () => {
     })
   }
 
-  if (selectedSite.value !== null) {
-    filtered = filtered.filter((emp) => {
-      const empSiteId =
-        emp.site_id ||
-        emp.site?.id ||
-        emp.companies?.[0]?.site_id ||
-        emp.companies?.[0]?.site?.id ||
-        emp.user_site?.id
-      const employeeSite = typeof empSiteId === 'number' ? empSiteId : parseInt(empSiteId)
-      const filterSite =
-        typeof selectedSite.value === 'number' ? selectedSite.value : parseInt(selectedSite.value)
-      return employeeSite === filterSite
-    })
+  if (statusFilter.value !== 'all') {
+    filtered = filtered.filter((emp) => getStatus(emp) === statusFilter.value)
+  }
+
+  // An employee whose group cannot be resolved is excluded while a group is
+  // selected — "show me group A" should not fall back to including unknowns.
+  if (payrollGroupFilter.value !== null) {
+    filtered = filtered.filter(
+      (emp) => String(employeePayoutGroupId(emp) ?? '') === String(payrollGroupFilter.value),
+    )
   }
 
   filteredEmployees.value = filtered
   sortEmployees()
 }
-
-const isTerminated = (emp) => getStatus(emp) === 'Terminated'
 
 const sortEmployees = () => {
   const sorted = [...filteredEmployees.value]
@@ -1480,6 +1700,20 @@ watch(sortBy, () => {
   sortEmployees()
 })
 
+// The status and site selects re-run the whole filter chain. Sort has its own
+// watcher above because it only needs to reorder, not re-filter.
+watch([statusFilter, payrollGroupFilter], () => {
+  filterEmployees()
+})
+
+// Contracts are only fetched once a payout group is actually selected, then
+// cached (module-level, shared with the Schedule and Attendance pages).
+watch(payrollGroupFilter, async (groupId) => {
+  if (!groupId) return
+  await ensurePayoutGroups(employees.value.map((emp) => emp.id))
+  filterEmployees()
+})
+
 // Lazy-load contract / balance data whenever the visible page changes
 watch(
   [employeePage, employeePageSize],
@@ -1499,7 +1733,8 @@ watch(
       initialised = true
       await Promise.all([
         fetchRoles(),
-        fetchSites(),
+        // Feeds the payout-group filter; replaced fetchSites() here.
+        fetchPayrollGroups(),
         fetchContractTypes(),
         fetchDepartments(),
         fetchEligibilityOptions(),
@@ -1523,253 +1758,444 @@ watch(companyId, (newId, oldId) => {
 </script>
 
 <style scoped>
-/* ==============================
-   WRAPPER
-   ============================== */
-.employees-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e8ecf0;
+/* ============================================================================
+   EMPLOYEES PAGE
+   ----------------------------------------------------------------------------
+   Built on the app design system in src/css/dashboard.scss. Was one monolithic
+   white card holding header, stats, table and pagination; it is now three
+   stacked regions — page header, KPI tiles, list card — so the page has an
+   entry point instead of opening straight into chrome.
+   ========================================================================== */
+.emp-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-gap);
+}
+
+/* ── Page header ── */
+.emp-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.emp-head__titles {
+  min-width: 0;
+}
+
+.emp-head__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--dash-ink);
+  line-height: 1.2;
+}
+
+.emp-head__sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--dash-ink-3);
+}
+
+/* ── Buttons ── */
+.btn-primary {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-brand);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
+}
+.btn-primary:hover {
+  background: #193d5c;
+}
+
+.btn-outline {
+  height: 32px;
+  padding: 0 11px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-2);
+}
+.btn-outline--danger {
+  color: var(--dash-critical);
+}
+
+.btn-quiet {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-3);
+  padding: 0 8px;
+}
+
+/* ── List card ──
+   No `overflow: visible` here. It was defeating the `overflow: hidden` that
+   clips .dash-panel's rounded corners, so the footer's fill painted square over
+   the bottom two while the top two stayed round. Quasar teleports select and
+   menu popups to the body, so nothing inside needs to escape the card anyway. */
+.emp-list {
+  /* Rows and the footer are clipped to the card's radius on all four corners. */
   overflow: hidden;
 }
 
-/* ==============================
-   HEADER
-   ============================== */
-.page-header {
-  padding: 8px 24px;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.header-content {
+/* ── Toolbar ── */
+.emp-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 12px;
-}
-
-.header-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-
-.page-subtitle {
-  font-size: 13px;
-  color: #94a3b8;
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+  min-height: 56px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dash-line);
   flex-wrap: wrap;
+  transition: background var(--dash-fast) var(--dash-ease);
+}
+/* Selection is a state of the toolbar, marked by a tint, not a second bar. */
+.emp-toolbar--selecting {
+  background: var(--dash-accent-bg);
+  border-bottom-color: var(--dash-info-line);
 }
 
-.header-search {
-  min-width: 220px;
-  max-width: 280px;
+/* Search takes the slack rather than a fixed 320px. At 1024–1280 a fixed search
+   plus three fixed filters overflowed the row and wrapped the count onto its
+   own line; now search absorbs the difference and the filters keep their size. */
+.emp-search {
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 340px;
+}
+.emp-search :deep(.q-field__control) {
+  height: 34px;
+  min-height: 34px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
+}
+/* Border and focus ring come from `.dash-field` in the design system. */
+.emp-search :deep(.q-field__native) {
+  font-size: 13px;
+  color: var(--dash-ink);
+}
+.emp-search :deep(.q-field__marginal) {
+  height: 34px;
+  color: var(--dash-ink-4);
 }
 
-.header-search :deep(.q-field__control) {
-  border-radius: 10px;
-  height: 36px;
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-.header-search :deep(.q-field__control:hover) {
-  border-color: #cbd5e1;
-}
-
-.search-icon {
-  color: #94a3b8;
-}
-
-.add-employee-btn {
-  height: 36px;
-  border-radius: 10px;
+/* ── Keyboard hint ── */
+.emp-kbd {
+  font-family: inherit;
+  font-size: 11px;
   font-weight: 500;
-  text-transform: none;
+  line-height: 1;
+  color: var(--dash-ink-4);
+  background: var(--dash-n-100);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-xs);
+  padding: 3px 6px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ── Filter selects ──
+   Compact, label-above-value fields so three of them fit on one line without
+   reading as a form. */
+.emp-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.emp-filter {
+  width: 148px;
+  flex-shrink: 0;
+}
+.emp-filter--wide {
+  width: 166px;
+}
+.emp-filter :deep(.q-field__control) {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
+}
+/* No vertical padding games: with the label gone the value is simply centred. */
+.emp-filter :deep(.q-field__native) {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  padding: 0;
+  min-height: 34px;
+}
+.emp-filter :deep(.q-field__marginal) {
+  height: 34px;
+  min-width: 0;
+  padding: 0;
+  color: var(--dash-ink-4);
+}
+.emp-filter :deep(.q-field__prepend) {
+  padding-right: 7px;
+}
+.emp-filter :deep(.q-field__append) {
+  padding-left: 2px;
+}
+
+.emp-toolbar__count {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  padding: 0 16px;
-  font-size: 13px;
 }
 
-.header-add-btn {
-  background: #102335 !important;
-  color: #ffffff !important;
-}
-
-.header-add-btn:hover {
-  background: #193d5c !important;
-}
-
-/* ==============================
-   TABLE SECTION
-============================== */
-.table-block {
-}
-
-/* ==============================
-   SELECTION BAR
-============================== */
-.selection-bar {
-  padding: 10px 24px;
-  background: #f0f4ff;
-  border-bottom: 1px solid #c7d2fe;
-}
-.selection-bar-content {
+/* ── Applied filters ── */
+.emp-applied {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 7px;
   flex-wrap: wrap;
-}
-.selection-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.selection-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: #3730a3;
-}
-.selection-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
 }
 
-/* ==============================
-   PAGINATION BAR
-============================== */
-.pagination-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.pagination-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.pagination-text {
+.emp-applied__label {
   font-size: 12px;
-  color: #94a3b8;
-  font-weight: 400;
+  color: var(--dash-ink-4);
+  white-space: nowrap;
 }
-.page-size-select {
-  min-width: 120px;
-}
-.page-size-select :deep(.q-field__control) {
-  border-radius: 8px;
-  border-color: #e2e8f0;
-}
-.schedule-pagination :deep(.q-btn) {
+
+.emp-applied__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 3px 7px 3px 9px;
+  border-radius: var(--dash-r-sm);
+  border: 1px solid var(--dash-line-strong);
+  background: var(--dash-surface);
+  font-family: inherit;
+  font-size: 12px;
   font-weight: 500;
-  border-radius: 8px;
-  min-width: 32px;
-  min-height: 32px;
+  color: var(--dash-ink-2);
+  cursor: pointer;
+  transition: border-color var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
+}
+.emp-applied__chip:hover {
+  border-color: var(--dash-critical-line);
+  color: var(--dash-critical);
+}
+.emp-applied__chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+}
+
+.emp-applied__chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emp-toolbar__selected {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
   font-size: 13px;
-}
-.schedule-pagination :deep(.q-btn--active) {
   font-weight: 600;
+  color: var(--dash-accent);
+  white-space: nowrap;
 }
 
-/* ==============================
+.emp-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+/* ── Footer ── */
+.emp-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
+  flex-wrap: wrap;
+}
+
+.emp-foot__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.emp-foot__range {
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
+  white-space: nowrap;
+}
+
+.emp-foot__size {
+  width: 132px;
+}
+.emp-foot__size :deep(.q-field__control) {
+  height: 32px;
+  min-height: 32px;
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-surface);
+}
+.emp-foot__size :deep(.q-field__native) {
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+}
+.emp-foot__size :deep(.q-field__marginal) {
+  height: 32px;
+  color: var(--dash-ink-4);
+}
+
+.emp-pager :deep(.q-btn) {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-3);
+}
+.emp-pager :deep(.q-btn:hover) {
+  background: var(--dash-n-100);
+  color: var(--dash-ink);
+}
+.emp-pager :deep(.q-btn--active) {
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line-strong);
+  color: var(--dash-ink);
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
+}
+
+/* ============================================================================
    RESPONSIVE
-============================== */
-@media (max-width: 1440px) {
-  .employees-card {
-    border-radius: 14px;
-  }
+   ----------------------------------------------------------------------------
+   Four stages rather than one breakpoint, because three different things need
+   to give way at three different widths:
 
-  .page-header {
-    padding: 8px 20px;
-  }
+     >= 1280   full table, up to 2-3 leave columns, filters and count inline
+     1024-1279 table on a reduced column budget; result count drops
+     < 1024    EmployeeCardList replaces the table entirely — no sideways scroll
+     < 640     single-column cards, filters two-up, footer stacks
+   ========================================================================== */
 
-  .pagination-bar {
-    padding: 10px 20px;
+/* Laptop: the count is the first thing to go — it is a nicety, and the filters
+   are not. */
+@media (max-width: 1279px) {
+  .emp-toolbar__count {
+    display: none;
   }
 }
 
-@media (max-width: 1024px) {
-  .page-header {
-    padding: 8px 16px;
+@media (max-width: 1023px) {
+  .emp-head__title {
+    font-size: 20px;
   }
-
-  .page-title {
-    font-size: 19px;
+  .emp-toolbar {
+    padding: 10px 14px;
   }
-
-  .header-search {
-    min-width: 180px;
+  /* Search claims its own line so the three filters can share the next one at
+     full width instead of one of them being orphaned. */
+  .emp-search {
+    flex: 1 1 100%;
+    max-width: none;
   }
-
-  .selection-bar,
-  .pagination-bar {
-    padding: 10px 16px;
+  .emp-filters {
+    width: 100%;
   }
-
-  .pagination-info {
-    gap: 10px;
+  .emp-filter,
+  .emp-filter--wide {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+  .emp-applied {
+    padding: 9px 14px;
+  }
+  .emp-foot {
+    padding: 10px 14px;
   }
 }
 
 @media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
+  .emp-head {
     align-items: stretch;
   }
-
-  .header-actions {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .header-search,
-  .add-employee-btn {
+  .emp-head .btn-primary {
     width: 100%;
-    max-width: 100%;
   }
-
-  .selection-bar-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+  /* Bulk actions get their own line and split it evenly, so neither is the
+     awkward one that wraps alone. */
+  .emp-toolbar__actions {
+    width: 100%;
   }
-
-  .pagination-bar {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 10px;
-  }
-  .pagination-info {
-    justify-content: center;
+  .emp-toolbar__actions .btn-outline {
+    flex: 1;
   }
 }
 
-@media (max-width: 480px) {
-  .page-title {
-    font-size: 18px;
+@media (max-width: 640px) {
+  /* Three selects side by side stop being tappable at phone width. */
+  .emp-filter,
+  .emp-filter--wide {
+    flex: 1 1 calc(50% - 4px);
   }
+  .emp-foot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .emp-foot__left {
+    justify-content: space-between;
+  }
+  .emp-foot__size {
+    width: 124px;
+  }
+  .emp-pager {
+    align-self: center;
+  }
+}
+
+/* Filter dropdown panels. Unscoped because QSelect teleports its popup to the
+   body, out of this component's style scope. */
+.emp-popup {
+  border-radius: var(--dash-r-md) !important;
+  border: 1px solid var(--dash-line);
+  box-shadow: var(--dash-shadow-lg) !important;
+  padding: 4px;
+}
+.emp-popup .q-item {
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+}
+.emp-popup .q-item:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+.emp-popup .q-item--active {
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
+  font-weight: 600;
 }
 
 /* Custom Multiplier Warning Dialog Styles */
