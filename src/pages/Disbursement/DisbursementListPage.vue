@@ -1,171 +1,107 @@
 <template>
   <PageShell>
-    <div class="disbursement-card">
-      <!-- Header Section -->
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-titles">
-            <h1 class="page-title">Disbursement</h1>
-          </div>
-          <div class="header-actions">
-            <q-input
-              v-model="searchTerm"
-              placeholder="Search runs..."
-              class="header-search"
-              dense
-              outlined
-              @update:model-value="filterRuns"
-            >
-              <template v-slot:prepend>
-                <q-icon name="search" class="search-icon" />
-              </template>
-            </q-input>
-            <q-btn
-              label="Export"
-              icon="file_download"
-              class="header-add-btn"
-              unelevated
-              @click="exportRuns"
-            />
-          </div>
+    <div class="disb-page">
+      <!-- ── Page header ─────────────────────────────────────────────────── -->
+      <header class="disb-head">
+        <div class="disb-head__titles">
+          <h1 class="disb-head__title">Disbursement</h1>
+          <p class="disb-head__sub">{{ headSummary }}</p>
         </div>
-      </div>
-
-      <!-- Stats Bar -->
-      <div class="stats-bar">
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-total"></span>
-            Open Groups
-          </div>
-          <div class="stats-segment-value">
-            <q-skeleton v-if="loadingDashboards" type="text" style="width: 30px; height: 16px" />
-            <template v-else>{{ dashboard?.open_payout_groups ?? 0 }}</template>
-          </div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-review"></span>
-            Review Required
-          </div>
-          <div class="stats-segment-value">
-            <q-skeleton v-if="loadingDashboards" type="text" style="width: 30px; height: 16px" />
-            <template v-else>{{ dashboard?.review_required ?? 0 }}</template>
-          </div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-ack"></span>
-            Awaiting Ack
-          </div>
-          <div class="stats-segment-value">
-            <q-skeleton v-if="loadingDashboards" type="text" style="width: 30px; height: 16px" />
-            <template v-else>{{ dashboard?.awaiting_acknowledgement ?? 0 }}</template>
-          </div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-funding"></span>
-            Ready for Funding
-          </div>
-          <div class="stats-segment-value">
-            <q-skeleton v-if="loadingDashboards" type="text" style="width: 60px; height: 16px" />
-            <template v-else>₱{{ parseAmount(dashboard?.ready_for_funding_amount) }}</template>
-          </div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-funded"></span>
-            Funded
-          </div>
-          <div class="stats-segment-value">
-            <q-skeleton v-if="loadingDashboards" type="text" style="width: 60px; height: 16px" />
-            <template v-else>₱{{ parseAmount(dashboard?.funded_amount) }}</template>
-          </div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-disbursing"></span>
-            Disbursing
-          </div>
-          <div class="stats-segment-value">
-            <q-skeleton v-if="loadingDashboards" type="text" style="width: 60px; height: 16px" />
-            <template v-else>₱{{ parseAmount(dashboard?.disbursing_amount) }}</template>
-          </div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-completed"></span>
-            Completed
-          </div>
-          <div class="stats-segment-value">
-            <q-skeleton v-if="loadingDashboards" type="text" style="width: 30px; height: 16px" />
-            <template v-else>{{ dashboard?.completed_this_cutoff ?? 0 }}</template>
-          </div>
-        </div>
-      </div>
-
-      <!-- Main Table Section -->
-      <div class="section-header">
-        <h2 class="section-title">Disbursement Runs</h2>
-      </div>
-      <div class="table-block">
-        <PayoutTable
-          :rows="paginatedRuns"
-          :loading="loading"
-          @view="openRun"
+        <q-btn
+          outline
+          no-caps
+          icon="o_file_download"
+          label="Export PDF"
+          class="btn-outline"
+          :disable="!filteredRuns.length"
+          @click="exportRuns"
         />
+      </header>
+
+      <!-- ── Pipeline summary ────────────────────────────────────────────────
+           The cutoff read as a pipeline rather than seven equal readings: what
+           still needs work, then what money is where. The old strip gave counts
+           and pesos the same weight in one grey band, so nothing led. -->
+      <div class="disb-stats">
+        <div v-for="tile in statTiles" :key="tile.key" class="disb-stat">
+          <div class="disb-stat__head">
+            <span class="disb-stat__mark" :style="{ background: tile.mark }" />
+            <span class="disb-stat__label">{{ tile.label }}</span>
+          </div>
+          <span v-if="loadingDashboards" class="dash-shimmer disb-stat__skeleton" />
+          <span v-else class="disb-stat__value dash-num">{{ tile.value }}</span>
+        </div>
       </div>
 
-      <!-- Pagination Controls -->
-      <div class="pagination-bar" v-if="filteredRuns.length > 0">
-        <div class="pagination-info">
-          <span class="pagination-text">
-            Showing {{ (page - 1) * pageSize + 1 }} –
-            {{ Math.min(page * pageSize, filteredRuns.length) }}
-            of {{ filteredRuns.length }} runs
-          </span>
-          <q-select
-            v-model="pageSize"
-            :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
+      <!-- ── Runs ────────────────────────────────────────────────────────── -->
+      <section class="dash-panel disb-list">
+        <div class="disb-toolbar">
+          <q-input
+            ref="searchRef"
+            v-model="searchTerm"
+            placeholder="Search group, cutoff, method or status"
             dense
             outlined
-            class="page-size-select"
-          />
-        </div>
-        <q-pagination
-          v-model="page"
-          :max="totalPages"
-          :max-pages="6"
-          boundary-numbers
-          direction-links
-          color="primary"
-          active-color="primary"
-          active-text-color="white"
-          icon-first="first_page"
-          icon-prev="chevron_left"
-          icon-next="chevron_right"
-          icon-last="last_page"
-          class="schedule-pagination"
-        />
-      </div>
-    </div>
+            clearable
+            hide-bottom-space
+            debounce="250"
+            class="disb-search dash-field"
+          >
+            <template #prepend>
+              <q-icon name="search" size="18px" />
+            </template>
+          </q-input>
 
+          <span class="disb-toolbar__count">
+            {{ filteredRuns.length }} {{ filteredRuns.length === 1 ? 'run' : 'runs' }}
+          </span>
+        </div>
+
+        <div class="disb-table-wrap">
+          <PayoutTable :rows="paginatedRuns" :loading="loading" @view="openRun" />
+        </div>
+
+        <footer v-if="filteredRuns.length > 0" class="disb-foot">
+          <div class="disb-foot__left">
+            <span class="disb-foot__range dash-num">
+              {{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, filteredRuns.length) }}
+              of {{ filteredRuns.length }}
+            </span>
+            <q-select
+              v-model="pageSize"
+              :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              dense
+              outlined
+              hide-bottom-space
+              :popup-content-class="'disb-popup'"
+              class="disb-foot__size dash-field"
+            />
+          </div>
+          <q-pagination
+            v-model="page"
+            :max="totalPages"
+            :max-pages="$q.screen.lt.md ? 3 : 6"
+            boundary-numbers
+            direction-links
+            :ripple="false"
+            icon-first="first_page"
+            icon-prev="chevron_left"
+            icon-next="chevron_right"
+            icon-last="last_page"
+            class="disb-pager"
+          />
+        </footer>
+      </section>
+    </div>
   </PageShell>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import jsPDF from 'jspdf'
@@ -205,6 +141,83 @@ const filteredRuns = computed(() => {
 const totalPages = computed(
   () => Math.ceil((filteredRuns.value?.length ?? 0) / pageSize.value) || 1,
 )
+
+const searchRef = ref(null)
+
+const headSummary = computed(() => {
+  if (loading.value) return 'Loading payout groups…'
+  const n = rows.value.length
+  if (!n) return 'No payout groups in the open cutoffs'
+  return `${n} payout ${n === 1 ? 'group' : 'groups'} across open cutoffs`
+})
+
+/**
+ * The cutoff read as a pipeline: what still needs a person, then where the money
+ * has got to. Ordered left to right in the direction work actually moves, so the
+ * leftmost non-zero tile is what to pick up next.
+ *
+ * Marks come from the design system's status and categorical ramps rather than
+ * the seven ad-hoc dot colours the old strip used.
+ */
+const statTiles = computed(() => {
+  const d = dashboard.value
+  return [
+    {
+      key: 'open',
+      label: 'Open groups',
+      value: d?.open_payout_groups ?? 0,
+      mark: 'var(--dash-cat-1)',
+    },
+    {
+      key: 'review',
+      label: 'Review required',
+      value: d?.review_required ?? 0,
+      mark: 'var(--dash-critical-mark)',
+    },
+    {
+      key: 'ack',
+      label: 'Awaiting ack',
+      value: d?.awaiting_acknowledgement ?? 0,
+      mark: 'var(--dash-warn-mark)',
+    },
+    {
+      key: 'ready',
+      label: 'Ready to fund',
+      value: `₱${parseAmount(d?.ready_for_funding_amount)}`,
+      mark: 'var(--dash-good-mark)',
+    },
+    {
+      key: 'funded',
+      label: 'Funded',
+      value: `₱${parseAmount(d?.funded_amount)}`,
+      mark: 'var(--dash-cat-2)',
+    },
+    {
+      key: 'disbursing',
+      label: 'Disbursing',
+      value: `₱${parseAmount(d?.disbursing_amount)}`,
+      mark: 'var(--dash-info-mark)',
+    },
+    {
+      key: 'completed',
+      label: 'Completed',
+      value: d?.completed_this_cutoff ?? 0,
+      mark: 'var(--dash-neutral-mark)',
+    },
+  ]
+})
+
+// "/" focuses search, matching the other list pages.
+function onGlobalKey(e) {
+  if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+  const tag = e.target?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
+  e.preventDefault()
+  searchRef.value?.focus()
+}
+
+onMounted(() => window.addEventListener('keydown', onGlobalKey))
+onUnmounted(() => window.removeEventListener('keydown', onGlobalKey))
 
 const paginatedRuns = computed(() => {
   if (!filteredRuns.value) return []
@@ -338,347 +351,303 @@ function parseAmount(val) {
   return parseFloat(val || 0).toLocaleString('en-PH')
 }
 
-watch(pageSize, () => {
+// Both reset to page 1: narrowing the list while on page 3 would otherwise land
+// on a page that no longer exists. Search was previously reset by a `filterRuns`
+// handler on the input; a watcher covers it without the template wiring.
+watch([pageSize, searchTerm], () => {
   page.value = 1
 })
-
-function filterRuns() {
-  page.value = 1
-}
 </script>
 
 <style scoped>
-/* ==============================
-   WRAPPER
-   ============================== */
-.disbursement-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e8ecf0;
+/* ============================================================================
+   DISBURSEMENT LIST
+   ----------------------------------------------------------------------------
+   Entry point to the five-step flow. Was one card stacking header / a seven-cell
+   grey stats strip / a section heading / table / pagination. Now: page header,
+   a pipeline summary, and one list card — the same shape as Employees,
+   Attendance and Schedule.
+   ========================================================================== */
+.disb-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-gap);
+}
+
+/* ── Page header ── */
+.disb-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.disb-head__titles {
+  min-width: 0;
+}
+
+.disb-head__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--dash-ink);
+  line-height: 1.2;
+}
+
+.disb-head__sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--dash-ink-3);
+}
+
+.btn-outline {
+  height: 38px;
+  padding: 0 14px;
+  border-radius: var(--dash-r-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink-2);
+}
+
+/* ── Pipeline summary ──
+   Seven tiles that wrap, rather than seven segments divided by vertical rules in
+   a fixed row — the old strip could not fit its own content once the drawer took
+   its share, so labels truncated before the numbers did. */
+.disb-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+}
+
+.disb-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px 13px 12px;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  box-shadow: var(--dash-shadow-xs);
+}
+
+.disb-stat__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.disb-stat__mark {
+  width: 3px;
+  height: 10px;
+  border-radius: var(--dash-r-pill);
+  flex-shrink: 0;
+}
+
+.disb-stat__label {
+  font-size: 12px;
+  color: var(--dash-ink-3);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disb-stat__value {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--dash-ink);
+}
+
+.disb-stat__skeleton {
+  width: 62px;
+  height: 16px;
+}
+
+/* ── List card ── */
+.disb-list {
   overflow: hidden;
 }
 
-/* ==============================
-   HEADER
-   ============================== */
-.page-header {
-  padding: 8px 24px;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.header-content {
+.disb-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 12px;
-}
-
-.header-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+  min-height: 56px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dash-line);
   flex-wrap: wrap;
 }
 
-.header-search {
-  min-width: 220px;
-  max-width: 280px;
+.disb-search {
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 360px;
 }
-
-.header-search :deep(.q-field__control) {
-  border-radius: 10px;
-  height: 36px;
-  background: #f8fafc;
-  border-color: #e2e8f0;
+.disb-search :deep(.q-field__control) {
+  height: 34px;
+  min-height: 34px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
 }
-
-.header-search :deep(.q-field__control:hover) {
-  border-color: #cbd5e1;
-}
-
-.search-icon {
-  color: #94a3b8;
-}
-
-.header-add-btn {
-  height: 36px;
-  border-radius: 10px;
-  font-weight: 500;
-  text-transform: none;
-  white-space: nowrap;
-  padding: 0 16px;
+.disb-search :deep(.q-field__native) {
   font-size: 13px;
-  background: #102335 !important;
-  color: #ffffff !important;
+  color: var(--dash-ink);
+}
+.disb-search :deep(.q-field__marginal) {
+  height: 34px;
+  color: var(--dash-ink-4);
 }
 
-.header-add-btn:hover {
-  background: #193d5c !important;
-}
-
-/* ==============================
-   STATS BAR
-   ============================== */
-.stats-bar {
-  display: flex;
-  align-items: center;
-  background: #f8fafc;
-  border-bottom: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 0;
-}
-
-.stats-segment {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.stats-divider {
-  width: 1px;
-  height: 20px;
-  background: #e2e8f0;
-  margin: 0 20px;
-  flex-shrink: 0;
-}
-
-.stats-segment-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #94a3b8;
+.disb-toolbar__count {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.stats-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
+/* The progress column carries five step nodes, so the table needs room to
+   scroll sideways on a laptop rather than crushing them. */
+.disb-table-wrap {
+  overflow-x: auto;
+  padding: 0 6px;
 }
 
-.stats-dot-total {
-  background: #6366f1;
-}
-
-.stats-dot-review {
-  background: #f59e0b;
-}
-
-.stats-dot-ack {
-  background: #3b82f6;
-}
-
-.stats-dot-funding {
-  background: #06b6d4;
-}
-
-.stats-dot-funded {
-  background: #10b981;
-}
-
-.stats-dot-disbursing {
-  background: #f97316;
-}
-
-.stats-dot-completed {
-  background: #22c55e;
-}
-
-.stats-segment-value {
-  font-size: 15px;
-  font-weight: 600;
-  color: #0f172a;
-  letter-spacing: -0.01em;
-}
-
-/* ==============================
-   TABLE SECTION
-   ============================== */
-.table-block {
-}
-
-/* ==============================
-   SECTION HEADER
-   ============================== */
-.section-header {
-  padding: 0px 14px 1px;
-}
-
-.section-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-  letter-spacing: -0.01em;
-}
-
-/* ==============================
-   PAGINATION BAR
-   ============================== */
-.pagination-bar {
+/* ── Footer ── */
+.disb-foot {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 16px;
+  gap: 14px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
   flex-wrap: wrap;
 }
 
-.pagination-info {
+.disb-foot__left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
-.pagination-text {
-  font-size: 12px;
-  color: #94a3b8;
-  font-weight: 400;
+.disb-foot__range {
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
+  white-space: nowrap;
 }
 
-.page-size-select {
-  min-width: 120px;
+.disb-foot__size {
+  width: 132px;
 }
-
-.page-size-select :deep(.q-field__control) {
-  border-radius: 8px;
-  border-color: #e2e8f0;
-}
-
-.schedule-pagination :deep(.q-btn) {
-  font-weight: 500;
-  border-radius: 8px;
-  min-width: 32px;
+.disb-foot__size :deep(.q-field__control) {
+  height: 32px;
   min-height: 32px;
-  font-size: 13px;
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-surface);
+}
+.disb-foot__size :deep(.q-field__native) {
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+  min-height: 32px;
+  padding: 0;
+}
+.disb-foot__size :deep(.q-field__marginal) {
+  height: 32px;
+  color: var(--dash-ink-4);
 }
 
-.schedule-pagination :deep(.q-btn--active) {
+.disb-pager :deep(.q-btn) {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-3);
+}
+.disb-pager :deep(.q-btn:hover) {
+  background: var(--dash-n-100);
+  color: var(--dash-ink);
+}
+.disb-pager :deep(.q-btn--active) {
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line-strong);
+  color: var(--dash-ink);
   font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
 }
 
-/* ==============================
-   RESPONSIVE
-   ============================== */
-@media (max-width: 1440px) {
-  .disbursement-card {
-    border-radius: 14px;
+/* ── Responsive ── */
+@media (max-width: 1023px) {
+  .disb-head__title {
+    font-size: 20px;
   }
-
-  .page-header {
-    padding: 8px 20px;
+  .disb-toolbar,
+  .disb-foot {
+    padding: 10px 14px;
   }
-
-  .stats-bar {
-    padding: 10px 20px;
+  .disb-search {
+    flex: 1 1 100%;
+    max-width: none;
   }
-
-  .stats-divider {
-    margin: 0 16px;
-  }
-
-  .pagination-bar {
-    padding: 10px 20px;
-  }
-}
-
-@media (max-width: 1024px) {
-  .page-header {
-    padding: 8px 16px;
-  }
-
-  .page-title {
-    font-size: 19px;
-  }
-
-  .header-search {
-    min-width: 180px;
-  }
-
-  .stats-bar {
-    padding: 10px 16px;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .stats-divider {
-    margin: 0 12px;
-  }
-
-  .stats-segment-value {
-    font-size: 14px;
-  }
-
-  .pagination-bar {
-    padding: 10px 16px;
-  }
-
-  .pagination-info {
-    gap: 10px;
-  }
-}
-
-@media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header-actions {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .header-search,
-  .header-add-btn {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .stats-bar {
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 16px;
-  }
-
-  .stats-divider {
+  .disb-toolbar__count {
     display: none;
   }
-
-  .pagination-bar {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 10px;
-  }
-
-  .pagination-info {
-    justify-content: center;
-  }
 }
 
-@media (max-width: 480px) {
-  .page-title {
-    font-size: 18px;
+@media (max-width: 640px) {
+  .disb-head {
+    align-items: stretch;
   }
+  .disb-head .btn-outline {
+    width: 100%;
+  }
+  .disb-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .disb-foot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .disb-foot__left {
+    justify-content: space-between;
+  }
+  .disb-pager {
+    align-self: center;
+  }
+}
+</style>
+
+<style>
+/* QSelect popups teleport to the body. */
+.disb-popup {
+  border-radius: var(--dash-r-md) !important;
+  border: 1px solid var(--dash-line);
+  box-shadow: var(--dash-shadow-lg) !important;
+  padding: 4px;
+}
+.disb-popup .q-item {
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+}
+.disb-popup .q-item:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+.disb-popup .q-item--active {
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
+  font-weight: 600;
 }
 </style>

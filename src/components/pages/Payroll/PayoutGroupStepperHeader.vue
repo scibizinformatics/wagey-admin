@@ -1,35 +1,68 @@
 <template>
-  <div class="stepper-header">
-    <div
-      v-for="(step, i) in steps"
-      :key="i"
-      class="step-node"
-      :class="[step.state, { clickable: step.state !== 'locked' }]"
-    >
-      <router-link
-        v-if="step.state !== 'locked'"
-        :to="step.route"
-        class="step-link"
+  <nav class="steps" aria-label="Disbursement progress">
+    <!-- Skeleton keeps the header's height while progress loads, so the page
+         below does not jump once the steps resolve. -->
+    <ol v-if="!steps.length" class="steps__list steps__list--loading" aria-hidden="true">
+      <li v-for="n in stepDefs.length" :key="n" class="step">
+        <span class="dash-shimmer step__skeleton-node" />
+        <span class="dash-shimmer step__skeleton-label" />
+      </li>
+    </ol>
+
+    <ol v-else class="steps__list">
+      <li
+        v-for="(step, i) in steps"
+        :key="step.routeKey"
+        class="step"
+        :class="`step--${step.state}`"
+        :aria-current="step.state === 'current' ? 'step' : undefined"
       >
-        <div class="step-circle">
-          <q-icon v-if="step.state === 'completed'" name="check" size="14px" />
-          <span v-else>{{ i + 1 }}</span>
-        </div>
-        <div class="step-label">{{ step.label }}</div>
-      </router-link>
-      <div v-else class="step-link">
-        <div class="step-circle">
-          <span>{{ i + 1 }}</span>
-        </div>
-        <div class="step-label">{{ step.label }}</div>
-      </div>
-      <div v-if="i < steps.length - 1" class="step-line" :class="{ 'line-done': step.state === 'completed' }" />
-    </div>
-  </div>
+        <!-- The rail belongs to the step it leads *into*, so it fills only once
+             the step before it is done. -->
+        <span v-if="i > 0" class="step__rail" :class="{ 'step__rail--done': steps[i - 1].state === 'completed' }" />
+
+        <component
+          :is="step.state === 'locked' ? 'div' : 'router-link'"
+          :to="step.state === 'locked' ? undefined : step.route"
+          class="step__body"
+          :class="{ 'step__body--locked': step.state === 'locked' }"
+        >
+          <span class="step__node">
+            <q-icon v-if="step.state === 'completed'" name="check" size="15px" />
+            <q-icon v-else-if="step.state === 'locked'" name="lock" size="12px" />
+            <span v-else class="step__num dash-num">{{ i + 1 }}</span>
+          </span>
+
+          <span class="step__text">
+            <span class="step__label">{{ step.label }}</span>
+            <span class="step__state">{{ stateLabel(step.state) }}</span>
+          </span>
+        </component>
+      </li>
+    </ol>
+  </nav>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+/**
+ * The five-step disbursement progress header.
+ *
+ * Redesigned from a row of coloured circles with a caption underneath. Changes
+ * that matter beyond looks:
+ *
+ *  - Each step now states its own condition ("Done", "In progress", "Locked")
+ *    rather than encoding it in the circle's colour alone.
+ *  - Locked steps show a padlock, so it is clear they are not merely upcoming —
+ *    previously locked and upcoming differed only by grey tone.
+ *  - Marked up as an <ol> of steps with aria-current, so the sequence and the
+ *    reader's position in it survive without sight of the colours.
+ *  - The connecting rail belongs to the step it leads into and fills from the
+ *    step before, which is what makes the run of completed work legible.
+ *
+ * Progress still comes from either the `pgiStatus` prop / query param (mapped by
+ * computeStepsFromPgiStatus) or the progress endpoint, unchanged.
+ */
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { computeStepsFromPgiStatus } from 'src/constants/pgiStatus'
@@ -45,7 +78,7 @@ const props = defineProps({
 const BASE_PATH = '/app/payroll'
 
 const stepDefs = [
-  { label: 'Review Employees', routeKey: 'review' },
+  { label: 'Review', routeKey: 'review' },
   { label: 'Payslips', routeKey: 'payslips' },
   { label: 'Funding', routeKey: 'funding' },
   { label: 'Disbursement', routeKey: 'disburse' },
@@ -54,10 +87,23 @@ const stepDefs = [
 
 const progressData = ref(null)
 
+const STATE_LABELS = {
+  completed: 'Done',
+  current: 'In progress',
+  locked: 'Locked',
+  upcoming: 'Not started',
+}
+
+const stateLabel = (state) => STATE_LABELS[state] ?? ''
+
 const steps = computed(() => {
   const effectiveStatus = props.pgiStatus || route.query.pgi_status
+
   if (effectiveStatus) {
-    const mapped = computeStepsFromPgiStatus(effectiveStatus, stepDefs.map((d) => ({ name: d.routeKey })))
+    const mapped = computeStepsFromPgiStatus(
+      effectiveStatus,
+      stepDefs.map((d) => ({ name: d.routeKey })),
+    )
     if (mapped) {
       return mapped.map((s, i) => ({
         ...stepDefs[i],
@@ -66,128 +112,201 @@ const steps = computed(() => {
       }))
     }
   }
+
   if (!progressData.value) return []
+
   return stepDefs.map((def, i) => {
-    const prog = progressData.value.progress[i]
+    const prog = progressData.value.progress?.[i]
     let state = 'upcoming'
-    if (prog) {
-      if (prog.status === 'completed') state = 'completed'
-      else if (prog.status === 'in_progress') state = 'current'
-      else if (prog.status === 'locked') state = 'locked'
-    }
-    return {
-      ...def,
-      route: `${BASE_PATH}/${def.routeKey}/${props.groupId}`,
-      state,
-    }
+    if (prog?.status === 'completed') state = 'completed'
+    else if (prog?.status === 'in_progress') state = 'current'
+    else if (prog?.status === 'locked') state = 'locked'
+    return { ...def, route: `${BASE_PATH}/${def.routeKey}/${props.groupId}`, state }
   })
 })
 
 onMounted(async () => {
   try {
     progressData.value = await fetchPayoutGroupProgress(props.groupId)
-    console.log('[Stepper] progressData:', JSON.stringify(progressData.value))
   } catch (err) {
     console.error('[PayoutGroupStepperHeader] fetch failed:', err)
   }
 })
-
-watch(steps, (val) => {
-  console.log('[Stepper] computed steps:', JSON.stringify(val.map((s) => ({ label: s.label, state: s.state }))))
-}, { immediate: true })
 </script>
 
 <style scoped>
-.stepper-header {
+.steps {
+  padding: 14px var(--dash-pad-x);
+  border-bottom: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
+  overflow-x: auto;
+}
+
+.steps__list {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: min-content;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Rail ── */
+.step__rail {
+  flex: 1;
+  min-width: 18px;
+  height: 2px;
+  margin: 0 8px;
+  border-radius: var(--dash-r-pill);
+  background: var(--dash-line);
+  transition: background var(--dash-slow) var(--dash-ease);
+}
+.step__rail--done {
+  background: var(--dash-good-mark);
+}
+
+/* ── Body ── */
+.step__body {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 5px 9px 5px 5px;
+  border-radius: var(--dash-r-pill);
+  text-decoration: none;
+  transition: background var(--dash-fast) var(--dash-ease);
+}
+.step__body:not(.step__body--locked):hover {
+  background: var(--dash-surface);
+}
+.step__body:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dash-n-25), 0 0 0 4px var(--dash-accent-ring);
+}
+.step__body--locked {
+  cursor: default;
+}
+
+/* ── Node ── */
+.step__node {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px 0;
-  gap: 0;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease), box-shadow var(--dash-fast) var(--dash-ease);
 }
-.step-node {
-  display: flex;
-  align-items: center;
-  gap: 0;
-}
-.step-link {
+
+.step__text {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-decoration: none;
+  min-width: 0;
+  line-height: 1.25;
 }
-.step-circle {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  transition: all 0.2s;
-}
-.step-label {
-  font-size: 10.5px;
-  font-weight: 600;
+
+.step__label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-2);
   white-space: nowrap;
-  color: #6b7280;
-  transition: color 0.2s;
-}
-.step-line {
-  width: 48px;
-  height: 2px;
-  background: #e8ecf0;
-  margin: 0 4px;
-  margin-bottom: 22px;
-  transition: background 0.2s;
 }
 
-.locked .step-circle {
-  background: #f3f4f6;
-  color: #d1d5db;
-  border: 2px solid #e5e7eb;
-}
-.locked .step-label {
-  color: #d1d5db;
-}
-.locked .step-line {
-  background: #e8ecf0;
+/* The step's condition in words, so state is never carried by colour alone. */
+.step__state {
+  font-size: 11px;
+  color: var(--dash-ink-4);
+  white-space: nowrap;
 }
 
-.current .step-circle {
-  background: #1a73e8;
-  color: #ffffff;
+/* ── States ── */
+.step--completed .step__node {
+  background: var(--dash-good-bg);
+  color: var(--dash-good);
+  box-shadow: inset 0 0 0 1px var(--dash-good-line);
 }
-.current .step-label {
-  color: #1a73e8;
+.step--completed .step__label {
+  color: var(--dash-ink);
 }
-
-.completed .step-circle {
-  background: #16a34a;
-  color: #ffffff;
-}
-.completed .step-label {
-  color: #16a34a;
-}
-.line-done {
-  background: #16a34a !important;
+.step--completed .step__state {
+  color: var(--dash-good);
 }
 
-.upcoming .step-circle {
-  background: #ffffff;
-  color: #9ca3af;
-  border: 2px solid #d1d5db;
+.step--current .step__node {
+  background: var(--dash-accent);
+  color: #fff;
+  box-shadow: 0 0 0 3px var(--dash-accent-ring);
 }
-.upcoming .step-label {
-  color: #9ca3af;
+.step--current .step__label {
+  color: var(--dash-ink);
+  font-weight: 600;
+}
+.step--current .step__state {
+  color: var(--dash-accent);
+  font-weight: 500;
 }
 
-.clickable .step-link {
-  cursor: pointer;
+.step--upcoming .step__node {
+  background: var(--dash-surface);
+  color: var(--dash-ink-4);
+  box-shadow: inset 0 0 0 1px var(--dash-line-strong);
 }
-.clickable:hover .step-circle {
-  transform: scale(1.08);
+
+.step--locked .step__node {
+  background: var(--dash-n-100);
+  color: var(--dash-n-400);
+}
+.step--locked .step__label,
+.step--locked .step__state {
+  color: var(--dash-ink-4);
+}
+
+/* ── Skeleton ── */
+.steps__list--loading .step {
+  gap: 9px;
+  padding: 5px 9px 5px 5px;
+}
+.step__skeleton-node {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.step__skeleton-label {
+  width: 74px;
+  height: 10px;
+}
+
+/* Below 1024 the five steps cannot all carry a label, so they compress to nodes
+   and rails — the current step keeps its label, since that is the one the reader
+   needs. */
+@media (max-width: 1023px) {
+  .steps {
+    padding: 12px 14px;
+  }
+  .step__body {
+    padding: 4px;
+  }
+  .step__text {
+    display: none;
+  }
+  .step--current .step__text {
+    display: flex;
+  }
+  .step__rail {
+    margin: 0 6px;
+  }
 }
 </style>
