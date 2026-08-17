@@ -1,9 +1,9 @@
 <template>
-  <div class="tab-grid">
-    <!-- Row 1: Monthly Payroll Trend (2026) | YTD Payroll Breakdown -->
-    <div class="row-weighted row-1">
+  <div class="annual">
+    <!-- Lead: the year's shape, and what it is made of. -->
+    <div class="annual__row annual__row--lead">
       <MonthlyPayrollTrendPanel
-        :title="`Monthly Payroll Trend (${annual.year})`"
+        :title="`Monthly payroll (${annual.year})`"
         :labels="trendLabels"
         :values="trendValues"
         chart-type="bar"
@@ -12,18 +12,26 @@
       <YtdPayrollBreakdownPanel :breakdown="componentBreakdown(annual)" :loading="loading" />
     </div>
 
-    <!-- Row 2: Monthly Comparison Table | Payroll by Company (donut) | Other Employee Releases YTD -->
-    <div class="row-weighted row-2">
+    <!-- The year read three ways: over time, by org unit, by channel. -->
+    <div class="annual__row annual__row--three">
       <MonthlyComparisonTablePanel :months="monthlyComparison" :loading="loading" />
       <PayrollByCompanyDonutPanel :companies="ytdPayrollByCompany" :loading="loading" />
-      <OtherEmployeeReleasesPanel :releases="ytdEmployeeReleases" :total="ytdEmployeeReleasesTotal" :loading="loading" />
+      <PaymentChannelsPanel
+        :channels="ytdPaymentChannels"
+        :total-row="ytdPaymentChannelsTotal"
+        :loading="loading"
+      />
     </div>
 
-    <!-- Row 3: Payment Channel Summary | Key Annual Indicators | YTD Comparison -->
-    <div class="row-three">
-      <PaymentChannelsPanel :channels="ytdPaymentChannels" :total-row="ytdPaymentChannelsTotal" :loading="loading" />
+    <!-- Derived figures and the year-on-year headline. -->
+    <div class="annual__row annual__row--three">
       <KeyAnnualIndicatorsPanel :indicators="computedIndicators" :loading="loading" />
       <YtdComparisonPanel :data="ytdComparison" :loading="loading" />
+      <OtherEmployeeReleasesPanel
+        :releases="ytdEmployeeReleases"
+        :total="ytdEmployeeReleasesTotal"
+        :loading="loading"
+      />
     </div>
 
     <ThirteenthMonthPayPanel :data="thirteenthMonthPay" mode="annual" :loading="loading" />
@@ -31,6 +39,14 @@
 </template>
 
 <script setup>
+/**
+ * Annual Summary tab layout.
+ *
+ * Three rows of equal-weight panels became a lead row plus two supporting rows,
+ * so the year's trend and composition are read first and the derived figures
+ * sit beneath them. The 13th month accrual closes the tab on its own, since it
+ * is a statutory ledger rather than another slice of the same total.
+ */
 import { computed } from 'vue'
 import MonthlyPayrollTrendPanel from '@/components/pages/Dashboard/MonthlyPayrollTrendPanel.vue'
 import YtdPayrollBreakdownPanel from '@/components/pages/Dashboard/YtdPayrollBreakdownPanel.vue'
@@ -58,174 +74,78 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 
-const ytdPayrollByCompany = computed(() => {
-  if (!props.payrollByCompany.length) return []
-  return props.payrollByCompany[props.payrollByCompany.length - 1]?.companies ?? []
-})
+// These arrays are ordered oldest to newest, so the last entry is the running
+// year-to-date total.
+function latest(list) {
+  return list.length ? list[list.length - 1] : null
+}
 
-const ytdEmployeeReleases = computed(() => {
-  if (!props.employeeReleases.length) return []
-  return props.employeeReleases[props.employeeReleases.length - 1]?.releases ?? []
-})
-
-const ytdEmployeeReleasesTotal = computed(() => {
-  if (!props.employeeReleases.length) return 0
-  return props.employeeReleases[props.employeeReleases.length - 1]?.total ?? 0
-})
-
-const ytdPaymentChannels = computed(() => {
-  if (!props.paymentChannels.length) return []
-  return props.paymentChannels[props.paymentChannels.length - 1]?.channels ?? []
-})
+const ytdPayrollByCompany = computed(() => latest(props.payrollByCompany)?.companies ?? [])
+const ytdEmployeeReleases = computed(() => latest(props.employeeReleases)?.releases ?? [])
+const ytdEmployeeReleasesTotal = computed(() => latest(props.employeeReleases)?.total ?? 0)
+const ytdPaymentChannels = computed(() => latest(props.paymentChannels)?.channels ?? [])
 
 const ytdPaymentChannelsTotal = computed(() => {
   const channels = ytdPaymentChannels.value
   if (!channels.length) return null
   return {
-    employees: channels.reduce((s, c) => s + (c.employees || 0), 0),
-    amount: channels.reduce((s, c) => s + (c.amount || 0), 0),
+    employees: channels.reduce((acc, c) => acc + (Number(c.employees) || 0), 0),
+    amount: channels.reduce((acc, c) => acc + (Number(c.amount) || 0), 0),
   }
 })
 
-const computedIndicators = computed(() => {
-  const ind = props.annualIndicators
-  const list = []
-  if (ind.highestPayrollMonth) {
-    list.push({ icon: 'trending_up', label: 'Highest Payroll Month', value: ind.highestPayrollMonth, color: '#22c55e' })
-  }
-  if (ind.lowestPayrollMonth) {
-    list.push({ icon: 'trending_down', label: 'Lowest Payroll Month', value: ind.lowestPayrollMonth, color: '#ef4444' })
-  }
-  if (ind.largestComponent) {
-    list.push({ icon: 'pie_chart', label: 'Largest Component', value: ind.largestComponent, color: '#8b5cf6' })
-  }
-  if (ind.avgOvertimePercent) {
-    list.push({ icon: 'schedule', label: 'OT % of Payroll', value: `${ind.avgOvertimePercent}%`, color: '#f97316' })
-  }
-  if (ind.avgMonthlyEmployeeCount) {
-    list.push({ icon: 'people', label: 'Avg Monthly Employees', value: ind.avgMonthlyEmployeeCount, color: '#06b6d4' })
-  }
-  if (ind.avgMonthlyPayrollGrowth) {
-    list.push({ icon: 'trending_up', label: 'Avg Monthly Growth', value: `${ind.avgMonthlyPayrollGrowth}%`, color: '#8b5cf6' })
-  }
-  return list
-})
+// Declared once so the indicator list keeps a stable order and colour per
+// metric no matter which of them the backend actually returns.
+const INDICATORS = [
+  { key: 'highestPayrollMonth', icon: 'trending_up', label: 'Highest payroll month', color: 'var(--dash-good)' },
+  { key: 'lowestPayrollMonth', icon: 'trending_down', label: 'Lowest payroll month', color: 'var(--dash-critical)' },
+  { key: 'largestComponent', icon: 'pie_chart', label: 'Largest component', color: 'var(--dash-cat-4)' },
+  { key: 'avgOvertimePercent', icon: 'schedule', label: 'Overtime share of payroll', color: 'var(--dash-cat-3)', suffix: '%' },
+  { key: 'avgMonthlyEmployeeCount', icon: 'people', label: 'Avg monthly employees', color: 'var(--dash-cat-2)' },
+  { key: 'avgMonthlyPayrollGrowth', icon: 'show_chart', label: 'Avg monthly growth', color: 'var(--dash-cat-1)', suffix: '%' },
+]
 
+const computedIndicators = computed(() =>
+  INDICATORS.filter((i) => props.annualIndicators?.[i.key]).map((i) => ({
+    icon: i.icon,
+    label: i.label,
+    color: i.color,
+    value: `${props.annualIndicators[i.key]}${i.suffix ?? ''}`,
+  })),
+)
 </script>
 
 <style scoped>
-.tab-grid {
+.annual {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--dash-gap);
 }
 
-/* ── Row 1: weighted 2.6fr 1.6fr ── */
-.row-1 {
+.annual__row {
   display: grid;
-  grid-template-columns: 2.6fr 1.6fr;
-  gap: 12px;
+  gap: var(--dash-gap);
   align-items: stretch;
 }
 
-/* ── Row 2: weighted 1.1fr 1.5fr 1.0fr ── */
-.row-2 {
-  display: grid;
-  grid-template-columns: 1.1fr 1.5fr 1.0fr;
-  gap: 12px;
-  align-items: stretch;
+.annual__row--lead {
+  grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
 }
 
-/* ── Row 3: equal thirds ── */
-.row-three {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
-  align-items: stretch;
+.annual__row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.panel {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.panel-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 20px;
-  border-bottom: 1px solid #f1f3f5;
-  flex-shrink: 0;
-}
-.panel-icon { color: #1a73e8; }
-.panel-title { font-size: 13px; font-weight: 600; color: #111827; }
-.panel-body {
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  flex: 1;
-}
-.panel-body.split { padding: 12px 8px; }
-
-.skeleton-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 100px;
-}
-
-@keyframes eps-pulse {
-  0%, 100% { opacity: 0.45; transform: scaleX(1); }
-  50% { opacity: 0.85; transform: scaleX(1.015); }
-}
-.eps-shimmer {
-  height: 10px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #e8ecf0 0%, #d1d9e0 50%, #e8ecf0 100%);
-  background-size: 200% 100%;
-  animation: eps-pulse 1.6s ease-in-out infinite;
-  transform-origin: left center;
-}
-
-/* ── Responsive ── */
-@media (min-width: 1441px) {
-  .tab-grid { gap: 16px; }
-  .row-1, .row-2, .row-three { gap: 16px; }
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .annual__row--three {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
 }
 
 @media (max-width: 1024px) {
-  .row-1 {
-    grid-template-columns: 1fr 1fr;
-  }
-  .row-2 {
-    grid-template-columns: 1fr 1fr;
-  }
-  .row-2 > :nth-child(3) {
-    grid-column: 1 / -1;
-  }
-  .row-three {
-    grid-template-columns: 1fr 1fr;
-  }
-  .row-three > :nth-child(3) {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 768px) {
-  .tab-grid { gap: 10px; }
-  .row-1, .row-2, .row-three {
+  .annual__row--lead,
+  .annual__row--three {
     grid-template-columns: 1fr;
   }
-  .row-2 > :nth-child(3),
-  .row-three > :nth-child(3) {
-    grid-column: auto;
-  }
-  .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 12px; }
-  .panel-body { padding: 10px 12px; }
 }
 </style>

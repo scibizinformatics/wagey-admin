@@ -1,87 +1,82 @@
 <template>
-  <div class="payout-table-wrap">
-    <div v-if="loading" class="skeleton-body">
-      <div class="eps-shimmer" v-for="n in 6" :key="n" :style="{ width: n % 2 === 0 ? '70%' : '85%', animationDelay: `${n * 0.12}s` }" />
-    </div>
-    <template v-else>
-      <q-table
-        :rows="rows"
-        :columns="columns"
-        row-key="id"
-        flat
-        dense
-        :pagination="pagination"
-        :rows-per-page-options="[5, 10, 15]"
-        class="payout-table"
-        hide-no-data
-        @request="onRequest"
-      >
-        <template v-slot:body-cell-payout_group="props">
-          <q-td class="cell-group">
-            <div class="group-name-row">
-              <q-icon :name="groupIcon(props.row)" size="16px" class="group-icon" />
-              <div class="group-info">
-                <div class="group-name">{{ props.row.payout_group }}</div>
-                <div class="group-range">{{ props.row.date_range }}</div>
-              </div>
+  <div class="payout">
+    <DashSkeleton v-if="loading" variant="table" :rows="6" :columns="6" />
+
+    <q-table
+      v-else
+      :rows="rows"
+      :columns="columns"
+      row-key="id"
+      flat
+      dense
+      :pagination="pagination"
+      :rows-per-page-options="[5, 10, 15]"
+      class="payout__table"
+      hide-no-data
+      @request="onRequest"
+    >
+      <template v-slot:body-cell-payout_group="props">
+        <q-td>
+          <div class="group">
+            <q-icon :name="channelIcon(props.row.disbursement_type)" size="15px" class="group__icon" />
+            <div class="group__info">
+              <span class="group__name">{{ props.row.payout_group }}</span>
+              <span class="group__range dash-num">{{ props.row.date_range }}</span>
             </div>
-            <div v-if="props.row.notes?.length" class="group-notes">
-              <span v-for="(note, ni) in props.row.notes" :key="ni" class="note-chip">
-                {{ note }}
-              </span>
-            </div>
-          </q-td>
-        </template>
-
-        <template v-slot:body-cell-disbursement_type="props">
-          <q-td>
-            <div class="disburse-type">
-              <q-icon :name="channelIcon(props.row.disbursement_type)" size="14px" class="channel-icon" />
-              <span>{{ props.row.disbursement_type }}</span>
-            </div>
-          </q-td>
-        </template>
-
-        <template v-slot:body-cell-reviewed="props">
-          <q-td style="white-space: nowrap">
-            <span :class="['frac', props.row.reviewed >= props.row.employees ? 'frac-done' : 'frac-pending']">
-              {{ props.row.reviewed }}/{{ props.row.employees }}
-            </span>
-          </q-td>
-        </template>
-
-        <template v-slot:body-cell-acknowledged="props">
-          <q-td style="white-space: nowrap">
-            <span :class="['frac', props.row.acknowledged >= props.row.employees ? 'frac-done' : 'frac-pending']">
-              {{ props.row.acknowledged }}/{{ props.row.employees }}
-            </span>
-          </q-td>
-        </template>
-
-        <template v-slot:body-cell-payroll_amount="props">
-          <q-td style="white-space: nowrap">{{ fmtAmount(props.row.payroll_amount) }}</q-td>
-        </template>
-
-        <template v-slot:body-cell-status="props">
-          <q-td>
-            <CutoffStatusBadge :status="props.row.status" />
-          </q-td>
-        </template>
-
-        <template v-slot:no-data>
-          <div class="empty-state">
-            <q-icon name="inbox" size="32px" color="grey-4" />
-            <div class="empty-text">No payout groups found</div>
           </div>
-        </template>
-      </q-table>
-    </template>
+          <div v-if="props.row.notes?.length" class="group__notes">
+            <span v-for="(note, ni) in props.row.notes" :key="ni" class="group__note">{{ note }}</span>
+          </div>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-disbursement_type="props">
+        <q-td>
+          <span class="channel">
+            <q-icon :name="channelIcon(props.row.disbursement_type)" size="14px" />
+            {{ props.row.disbursement_type }}
+          </span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-reviewed="props">
+        <q-td>
+          <ProgressFraction :done="props.row.reviewed" :total="props.row.employees" />
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-acknowledged="props">
+        <q-td>
+          <ProgressFraction :done="props.row.acknowledged" :total="props.row.employees" />
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-payroll_amount="props">
+        <q-td class="amount dash-num">{{ fmtAmount(props.row.payroll_amount) }}</q-td>
+      </template>
+
+      <template v-slot:body-cell-status="props">
+        <q-td>
+          <CutoffStatusBadge :status="props.row.status" />
+        </q-td>
+      </template>
+
+      <template v-slot:no-data>
+        <div class="dash-empty">
+          <q-icon name="filter_alt_off" size="26px" :style="{ color: 'var(--dash-ink-3)' }" />
+          <p class="dash-empty__title">No payout groups match this view</p>
+          <p class="dash-empty__sub">Clear the stage filter or the "hide completed" toggle to see them all.</p>
+        </div>
+      </template>
+    </q-table>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import CutoffStatusBadge from '@/components/pages/Dashboard/CutoffStatusBadge.vue'
+import DashSkeleton from '@/components/pages/Dashboard/DashSkeleton.vue'
+import ProgressFraction from '@/components/pages/Dashboard/ProgressFraction.vue'
 
 defineEmits(['action', 'update:pagination'])
 
@@ -90,15 +85,12 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   fmtCurrency: { type: Function, default: (v) => `₱${Number(v || 0).toLocaleString('en-PH')}` },
   hideCompleted: { type: Boolean, default: false },
+  /** Status selected on the stage rail above, or null for all. */
+  statusFilter: { type: String, default: null },
 })
 
 function fmtAmount(v) {
   return props.fmtCurrency(Number(v))
-}
-
-function groupIcon(row) {
-  const map = { Cash: 'payments', Bank: 'account_balance', GCash: 'smartphone' }
-  return map[row.disbursement_type] ?? 'payments'
 }
 
 function channelIcon(ch) {
@@ -107,18 +99,20 @@ function channelIcon(ch) {
 }
 
 const columns = [
-  { name: 'payout_group', label: 'Payout Group', field: 'payout_group', align: 'center', sortable: true, classes: 'col-payout-group' },
-  { name: 'disbursement_type', label: 'Disbursement Type', field: 'disbursement_type', align: 'center', sortable: true, classes: 'col-disbursement' },
-  { name: 'employees', label: 'Employees', field: 'employees', align: 'center', sortable: true, classes: 'col-employees' },
-  { name: 'reviewed', label: 'Reviewed', field: 'reviewed', align: 'center', sortable: true, classes: 'col-reviewed' },
-  { name: 'acknowledged', label: 'Acknowledged', field: 'acknowledged', align: 'center', sortable: true, classes: 'col-acknowledged' },
-  { name: 'payroll_amount', label: 'Payroll Amount', field: 'payroll_amount', align: 'center', sortable: true, classes: 'col-payroll-amount' },
-  { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true, classes: 'col-status' },
+  { name: 'payout_group', label: 'Payout group', field: 'payout_group', align: 'left', sortable: true, classes: 'col-group', headerClasses: 'col-group' },
+  { name: 'disbursement_type', label: 'Channel', field: 'disbursement_type', align: 'left', sortable: true, classes: 'col-channel', headerClasses: 'col-channel' },
+  { name: 'employees', label: 'Employees', field: 'employees', align: 'right', sortable: true, classes: 'col-num', headerClasses: 'col-num' },
+  { name: 'reviewed', label: 'Reviewed', field: 'reviewed', align: 'left', sortable: true, classes: 'col-progress', headerClasses: 'col-progress' },
+  { name: 'acknowledged', label: 'Acknowledged', field: 'acknowledged', align: 'left', sortable: true, classes: 'col-progress', headerClasses: 'col-progress' },
+  { name: 'payroll_amount', label: 'Payroll amount', field: 'payroll_amount', align: 'right', sortable: true, classes: 'col-amount', headerClasses: 'col-amount' },
+  { name: 'status', label: 'Status', field: 'status', align: 'left', sortable: true, classes: 'col-status', headerClasses: 'col-status' },
 ]
 
 const filteredRows = computed(() => {
-  if (!props.hideCompleted) return props.groups
-  return props.groups.filter((g) => g.status !== 'complete')
+  let list = props.groups
+  if (props.hideCompleted) list = list.filter((g) => g.status !== 'complete')
+  if (props.statusFilter) list = list.filter((g) => g.status === props.statusFilter)
+  return list
 })
 
 const filteredCount = computed(() => filteredRows.value.length)
@@ -131,19 +125,26 @@ const pagination = ref({
   rowsNumber: 0,
 })
 
-watch(() => props.groups, () => {
-  pagination.value.page = 1
-  pagination.value.rowsNumber = filteredCount.value
-}, { immediate: true })
+watch(
+  () => props.groups,
+  () => {
+    pagination.value.page = 1
+    pagination.value.rowsNumber = filteredCount.value
+  },
+  { immediate: true },
+)
 
+// Narrowing the list can strand the reader on a page that no longer exists, so
+// snap back to the first page whenever a filter changes the row count.
 watch(filteredCount, (val) => {
   pagination.value.rowsNumber = val
+  const lastPage = Math.max(1, Math.ceil(val / pagination.value.rowsPerPage))
+  if (pagination.value.page > lastPage) pagination.value.page = lastPage
 })
 
 const rows = computed(() => {
   const start = (pagination.value.page - 1) * pagination.value.rowsPerPage
-  const end = start + pagination.value.rowsPerPage
-  return filteredRows.value.slice(start, end)
+  return filteredRows.value.slice(start, start + pagination.value.rowsPerPage)
 })
 
 function onRequest(pp) {
@@ -152,160 +153,120 @@ function onRequest(pp) {
 </script>
 
 <style scoped>
-.payout-table-wrap {
+.payout {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--dash-pad-x) 4px;
 }
 
-.skeleton-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 200px;
-  padding: 16px;
-}
-
-@keyframes eps-pulse {
-  0%, 100% { opacity: 0.45; transform: scaleX(1); }
-  50% { opacity: 0.85; transform: scaleX(1.015); }
-}
-
-.eps-shimmer {
-  height: 10px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #e8ecf0 0%, #d1d9e0 50%, #e8ecf0 100%);
-  background-size: 200% 100%;
-  animation: eps-pulse 1.6s ease-in-out infinite;
-  transform-origin: left center;
-}
-
-.payout-table :deep(.q-table) {
+/* ── Table chrome ── */
+.payout__table :deep(.q-table) {
   border-collapse: separate;
   border-spacing: 0;
 }
 
-.payout-table :deep(.q-table thead th) {
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  padding: 8px 8px;
-  background: #f8f9fb;
-  border-bottom: 1px solid #e8ecf0;
-}
-
-.payout-table :deep(.q-table tbody td) {
-  padding: 8px 8px;
-  font-size: 12.5px;
-  color: #374151;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.payout-table :deep(.q-table tbody tr:last-child td) {
-  border-bottom: none;
-}
-
-.payout-table :deep(.q-table tbody tr:hover td) {
-  background: #f8fafc;
-}
-
-.payout-table :deep(.col-payout-group) {
-  min-width: 180px;
-}
-.payout-table :deep(.col-disbursement) {
-  min-width: 100px;
-}
-.payout-table :deep(.col-payroll-amount) {
-  min-width: 120px;
-}
-.payout-table :deep(.col-employees) {
-  min-width: 80px;
-}
-.payout-table :deep(.col-reviewed) {
-  min-width: 80px;
-}
-.payout-table :deep(.col-acknowledged) {
-  min-width: 80px;
-}
-.payout-table :deep(.col-status) {
-  min-width: 100px;
-}
-
-.group-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.group-icon {
-  color: #6b7280;
-  flex-shrink: 0;
-}
-
-.group-info {
-  min-width: 0;
-}
-
-.group-name {
-  font-weight: 600;
-  color: #111827;
-  font-size: 12.5px;
-}
-
-.group-range {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-.group-notes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  margin-top: 5px;
-}
-
-.note-chip {
-  font-size: 10px;
-  color: #b45309;
-  background: #fffbeb;
-  padding: 1px 7px;
-  border-radius: 4px;
+/* Sentence-case label strip, not an uppercase grey band — matches DashTable. */
+.payout__table :deep(.q-table thead th) {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dash-ink-3);
+  padding: 0 10px 10px;
+  background: transparent;
+  border-bottom: 1px solid var(--dash-line);
   white-space: nowrap;
 }
 
-.disburse-type {
+.payout__table :deep(.q-table tbody td) {
+  padding: 12px 10px;
+  font-size: 13px;
+  color: var(--dash-ink-2);
+  border-bottom: 1px solid var(--dash-line-soft);
+}
+.payout__table :deep(.q-table tbody tr:last-child td) {
+  border-bottom: none;
+}
+.payout__table :deep(.q-table tbody tr:hover td) {
+  background: var(--dash-hover);
+}
+
+.payout__table :deep(.q-table__bottom) {
+  border-top: 1px solid var(--dash-line);
+  font-size: 12px;
+  color: var(--dash-ink-3);
+  min-height: 44px;
+  padding: 0 4px;
+}
+
+.payout__table :deep(.col-group) { min-width: 190px; }
+.payout__table :deep(.col-channel) { min-width: 104px; }
+.payout__table :deep(.col-num) { min-width: 84px; }
+.payout__table :deep(.col-progress) { min-width: 96px; }
+.payout__table :deep(.col-amount) { min-width: 122px; }
+.payout__table :deep(.col-status) { min-width: 132px; }
+
+/* ── Group cell ── */
+.group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 9px;
 }
-
-.channel-icon {
-  color: #6b7280;
+.group__icon {
+  color: var(--dash-ink-3);
+  flex-shrink: 0;
 }
-
-.font-mono {
-  font-variant-numeric: tabular-nums;
-}
-
-.frac {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.frac-done { color: #16a34a; }
-.frac-pending { color: #d97706; }
-
-.empty-state {
+.group__info {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 40px 0;
+  min-width: 0;
+}
+.group__name {
+  font-weight: 500;
+  color: var(--dash-ink);
+  font-size: 13px;
+}
+.group__range {
+  font-size: 12px;
+  color: var(--dash-ink-3);
+}
+.group__notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0 0 24px;
+}
+.group__note {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--dash-warn);
+  background: var(--dash-warn-bg);
+  border: 1px solid var(--dash-warn-line);
+  padding: 1px 7px;
+  border-radius: var(--dash-r-xs);
+  white-space: nowrap;
 }
 
-.empty-text {
-  font-size: 13px;
-  color: #9ca3af;
+/* ── Channel cell ── */
+.channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.channel .q-icon {
+  color: var(--dash-ink-3);
+}
+
+.amount {
+  font-weight: 500;
+  color: var(--dash-ink);
+}
+
+@media (max-width: 1024px) {
+  .payout {
+    padding: 0 var(--dash-pad-x) 4px;
+    overflow-x: auto;
+  }
 }
 </style>

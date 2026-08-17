@@ -1,8 +1,8 @@
 <template>
   <PageShell full-height flex-column>
-    <!-- Header: title + segmented view toggle (Current / Monthly / Annual) -->
-    <div class="dash-header">
-      <div class="dash-header-left">
+    <!-- ── Header: tab rail + the controls that belong to the active tab ──── -->
+    <header class="dash-header">
+      <div class="dash-header__lead">
         <q-btn-toggle
           v-model="activeView"
           class="view-toggle"
@@ -19,65 +19,101 @@
           ]"
         />
       </div>
-      <div class="dash-header-right">
-        <q-input
-          v-if="activeView === 'today'"
-          v-model="todayDate"
-          dense outlined class="date-picker" readonly
-        >
-          <template v-slot:append>
-            <q-icon name="event" class="cursor-pointer">
-              <q-popup-proxy cover transition-show="scale" transition-hide="scale"
-                anchor="bottom left" self="top left">
-                <q-date v-model="todayDate" mask="YYYY-MM-DD" />
-              </q-popup-proxy>
-            </q-icon>
-          </template>
-        </q-input>
+
+      <div class="dash-header__controls">
+        <template v-if="activeView === 'today'">
+          <label class="control">
+            <span class="dash-eyebrow control__label">Date</span>
+            <q-input
+              v-model="todayDate"
+              dense
+              outlined
+              readonly
+              class="control__field control__field--date dash-field"
+            >
+              <template v-slot:append>
+                <q-icon name="event" class="cursor-pointer">
+                  <q-popup-proxy
+                    cover
+                    transition-show="scale"
+                    transition-hide="scale"
+                    anchor="bottom left"
+                    self="top left"
+                  >
+                    <q-date v-model="todayDate" mask="YYYY-MM-DD" />
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
+          </label>
+        </template>
 
         <template v-if="activeView === 'current'">
-          <q-toggle
-            v-model="hideCompleted"
-            dense label="Hide completed"
-            class="hide-completed-toggle" size="sm"
-          />
-          <span class="cutoff-label">Cutoff</span>
-          <q-select
-            v-if="cutoffOptions.length"
-            v-model="selectedCutoff" :options="cutoffOptions"
-            dense outlined class="cutoff-picker"
-            emit-value map-options placeholder="Select period"
-          >
-            <template v-slot:append>
-              <q-icon name="date_range" />
-            </template>
-          </q-select>
-          <span v-if="secondaryCutoffNotice" class="cutoff-notice">
+          <label v-if="cutoffOptions.length" class="control">
+            <span class="dash-eyebrow control__label">Cutoff</span>
+            <q-select
+              v-model="selectedCutoff"
+              :options="cutoffOptions"
+              dense
+              outlined
+              emit-value
+              map-options
+              class="control__field control__field--select dash-field"
+              placeholder="Select period"
+            >
+              <template v-slot:append>
+                <q-icon name="date_range" />
+              </template>
+            </q-select>
+          </label>
+          <q-toggle v-model="hideCompleted" dense size="sm" label="Hide completed" class="control__toggle" />
+          <span v-if="secondaryCutoffNotice" class="dash-chip dash-chip--critical">
+            <span class="dash-chip__dot" />
             {{ secondaryCutoffNotice }}
           </span>
         </template>
 
-        <div class="last-sync">
-          <q-icon name="sync" size="14px" />
-          Data as of {{ formattedToday }}
-        </div>
-      </div>
-    </div>
+        <template v-if="activeView === 'monthly'">
+          <label v-if="monthOptions.length" class="control">
+            <span class="dash-eyebrow control__label">Month</span>
+            <q-select
+              v-model="selectedMonth"
+              :options="monthOptions"
+              dense
+              outlined
+              emit-value
+              map-options
+              class="control__field control__field--select dash-field"
+            />
+          </label>
+        </template>
 
-    <!-- Top KPI stats row — hidden for current cutoff tab (has its own inside) -->
+        <template v-if="activeView === 'annual'">
+          <span class="dash-chip dash-chip--good">
+            <q-icon name="event_available" size="12px" />
+            {{ annualSummary.closedMonthsCount ?? 0 }} of 12 cutoffs closed
+          </span>
+        </template>
+
+        <p class="last-sync">
+          <q-icon name="sync" size="13px" />
+          <span>Data as of {{ formattedToday }}</span>
+        </p>
+      </div>
+    </header>
+
+    <!-- ── Top KPI row. The Current Cutoff tab carries its own, tuned to that
+         cutoff, so it is suppressed here rather than shown twice. ────────── -->
     <DashboardStatsRow
       v-if="activeView !== 'current'"
       :stats-cards="activeView === 'today' ? currentStatsCards : statsCards"
       :page-loading="activeView === 'today' ? currentCutoffLoading : false"
     />
 
-    <div v-if="activeView === 'annual'" class="annual-note">
-      <q-icon name="check_circle" size="16px" color="positive" class="q-mr-sm" />
-      {{ annualSummary.closedMonthsCount ?? 0 }} of 12 scheduled cutoffs completed
-    </div>
-
-    <!-- Tabbed payroll summary section -->
-    <div class="summary-section" :class="{ 'summary-section--current': activeView === 'current' }">
+    <!-- ── Active tab. Scrolls in its own right so the header and KPI row stay
+         put — PageShell clips at 100vh, which previously cut the taller
+         Monthly and Annual tabs off at the bottom of the viewport. ───────── -->
+    <div class="summary-section">
       <keep-alive>
         <TodayTab
           v-if="activeView === 'today'"
@@ -101,6 +137,7 @@
         <MonthlySummaryTab
           v-else-if="activeView === 'monthly'"
           :months="monthlySummaries"
+          :selected-month="selectedMonth"
           :monthly-trend-series="monthlyTrendSeries"
           :thirteenth-month-pay="thirteenthMonthPay"
           :component-breakdown="componentBreakdown"
@@ -129,8 +166,6 @@
         />
       </keep-alive>
     </div>
-
-
   </PageShell>
 </template>
 
@@ -158,11 +193,7 @@ const { fetchEmployees } = useEmployees()
 const { fetchAttendanceByDate } = useAttendance()
 const { fetchPayrollRunsSummary } = usePayroll()
 const { onDataUpdate } = useNotifications()
-const {
-  fetchLeaveRequests,
-  fetchOvertimeRequests,
-  fetchCashAdvanceRequests,
-} = useRequests()
+const { fetchLeaveRequests, fetchOvertimeRequests, fetchCashAdvanceRequests } = useRequests()
 
 // ── Payroll summary / 13th-month-pay data ──
 const {
@@ -171,6 +202,12 @@ const {
   thirteenthMonthPay,
   monthlyTrendSeries,
   componentBreakdown,
+  payrollByCompany,
+  paymentChannels,
+  employeeReleases,
+  monthlyComparison,
+  annualIndicators,
+  ytdComparison,
   fmtCurrency: fmtCurrencyPeso,
   today: summaryToday,
   loading: summaryLoading,
@@ -208,12 +245,26 @@ const formattedToday = computed(() =>
 )
 
 watch(todayDate, (newDate) => {
-  console.log('[Dashboard] Date changed to', newDate)
   const cid = resolvedCompanyId()
   if (cid && activeView.value === 'today') {
     fetchTodayTabData(cid, newDate)
   }
 })
+
+// ─── Monthly Summary — month picker (lives in the header) ────────────────────
+const selectedMonth = ref(null)
+const monthOptions = computed(() =>
+  monthlySummaries.value.map((m) => ({ label: m.label, value: m.month })),
+)
+watch(
+  monthlySummaries,
+  (list) => {
+    if (list.length && !list.find((m) => m.month === selectedMonth.value)) {
+      selectedMonth.value = list[list.length - 1].month
+    }
+  },
+  { immediate: true },
+)
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function today() {
@@ -221,6 +272,8 @@ function today() {
 }
 
 // ─── Stats cards — tab-aware ────────────────────────────────────────────────
+// Colours reference the validated categorical ramp in src/css/dashboard.scss and
+// are assigned in fixed order, so a card keeps its hue regardless of the tab.
 const statsCards = computed(() => {
   if (activeView.value === 'current') {
     return currentStatsCards.value
@@ -232,41 +285,31 @@ const statsCards = computed(() => {
         icon: 'payments',
         label: 'Total Payroll',
         count: '₱1,444,100',
-        iconBg: '#e8f0fe',
-        iconColor: '#1a73e8',
-        valueColor: '#1a73e8',
+        iconColor: 'var(--dash-cat-1)',
       },
       {
         icon: 'groups',
         label: 'Employees Paid',
         count: 40,
-        iconBg: '#e6f6ea',
-        iconColor: '#22c55e',
-        valueColor: '#22c55e',
+        iconColor: 'var(--dash-cat-2)',
       },
       {
         icon: 'groups_2',
         label: 'Payroll Groups',
         count: 6,
-        iconBg: '#ede9fe',
-        iconColor: '#8b5cf6',
-        valueColor: '#8b5cf6',
+        iconColor: 'var(--dash-cat-4)',
       },
       {
         icon: 'account_balance',
         label: 'Total Released',
         count: '₱1,444,100',
-        iconBg: '#e0f7fa',
-        iconColor: '#0e7490',
-        valueColor: '#0e7490',
+        iconColor: 'var(--dash-cat-3)',
       },
       {
         icon: 'person',
         label: 'Average Payroll / Employee',
         count: '₱36,103',
-        iconBg: '#fff7ed',
-        iconColor: '#f97316',
-        valueColor: '#f97316',
+        iconColor: 'var(--dash-cat-5)',
       },
     ]
   }
@@ -277,46 +320,36 @@ const statsCards = computed(() => {
       icon: 'payments',
       label: 'Total Payroll',
       count: '₱8,120,400',
-      subtitle: 'Year-to-Date',
-      iconBg: '#e8f0fe',
-      iconColor: '#1a73e8',
-      valueColor: '#1a73e8',
+      subtitle: 'Year to date',
+      iconColor: 'var(--dash-cat-1)',
     },
     {
       icon: 'attach_money',
-      label: 'Total Employee-Related Cash Released',
+      label: 'Employee-Related Cash Released',
       count: '₱8,614,900',
-      subtitle: 'Year-to-Date',
-      iconBg: '#e0f7fa',
-      iconColor: '#0e7490',
-      valueColor: '#0e7490',
+      subtitle: 'Year to date',
+      iconColor: 'var(--dash-cat-2)',
     },
     {
       icon: 'people',
       label: 'Unique Employees Paid',
       count: 46,
-      subtitle: 'Year-to-Date',
-      iconBg: '#ede9fe',
-      iconColor: '#8b5cf6',
-      valueColor: '#8b5cf6',
+      subtitle: 'Year to date',
+      iconColor: 'var(--dash-cat-4)',
     },
     {
       icon: 'trending_up',
       label: 'Average Monthly Payroll',
       count: '₱1,353,400',
-      subtitle: 'Year-to-Date',
-      iconBg: '#fff8e1',
-      iconColor: '#f59e0b',
-      valueColor: '#f59e0b',
+      subtitle: 'Year to date',
+      iconColor: 'var(--dash-cat-5)',
     },
     {
       icon: 'person',
       label: 'Average Payroll per Employee',
       count: '₱176,530',
-      subtitle: 'Year-to-Date',
-      iconBg: '#e0f7fa',
-      iconColor: '#0e7490',
-      valueColor: '#0e7490',
+      subtitle: 'Year to date',
+      iconColor: 'var(--dash-cat-3)',
     },
   ]
 })
@@ -339,10 +372,7 @@ onMounted(async () => {
     fetchPayrollRunsSummary({ company_id: cid }),
     fetchTodayTabData(cid, todayDate.value),
   ])
-  await Promise.allSettled([
-    fetchLeaveRequests(),
-    fetchOvertimeRequests(),
-  ])
+  await Promise.allSettled([fetchLeaveRequests(), fetchOvertimeRequests()])
   if (cid) {
     await Promise.allSettled([fetchCashAdvanceRequests(cid)])
   }
@@ -350,131 +380,122 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* ── Header ── */
+/* ── Header ────────────────────────────────────────────────────────────────
+   The tab rail owns the left edge; everything that scopes the active tab
+   (date, cutoff, month) sits together on the right, so the controls read as
+   belonging to the tab rather than to the page. */
 .dash-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 12px;
+  flex-shrink: 0;
 }
-.dash-header-left,
-.dash-header-right {
+
+.dash-header__lead {
+  min-width: 0;
+}
+
+.dash-header__controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 14px;
   flex-wrap: wrap;
 }
-.view-toggle {
-  border: 1px solid #e8ecf0;
-  border-radius: 8px;
-  overflow: hidden;
+
+/* ── Contextual controls ── */
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
-.date-picker {
-  min-width: 180px;
+
+.control__label {
+  padding-left: 1px;
 }
-.date-picker :deep(.q-field__control) {
-  border-radius: 8px;
-  min-height: 38px;
-  background: #ffffff;
+
+.control__field :deep(.q-field__control) {
+  min-height: 36px;
+  height: 36px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
+  box-shadow: var(--dash-shadow-xs);
+}
+/* Border, hover and focus ring all come from `.dash-field` in the design system,
+   which also removes Quasar's second `:after` outline so focus is a single
+   1px border plus a halo rather than two stacked borders. */
+.control__field :deep(.q-field__native),
+.control__field :deep(.q-field__input) {
+  font-size: 13px;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+}
+.control__field :deep(.q-field__marginal) {
+  height: 36px;
+  color: var(--dash-ink-4);
+}
+.control__field--date {
+  width: 158px;
+}
+.control__field--date :deep(.q-field__control),
+.control__field--date :deep(.q-field__append) {
   cursor: pointer;
 }
-.date-picker :deep(.q-field__append) {
-  cursor: pointer;
+.control__field--select {
+  width: 190px;
 }
+
+.control__toggle {
+  font-size: 13px;
+  color: var(--dash-ink-2);
+  padding-bottom: 7px;
+}
+
 .last-sync {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
-  color: #9ca3af;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--dash-ink-4);
   white-space: nowrap;
 }
 
-/* ── Layout ── */
+/* ── Active tab region ──
+   PageShell pins the page to 100vh with overflow hidden, so the tab has to own
+   its own scroll or the taller tabs get clipped at the fold. */
 .summary-section {
-  margin: 14px 0;
-}
-.summary-section--current {
-  margin: 0;
-}
-.annual-note {
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-  color: #374151;
-  margin-top: -6px;
-  margin-bottom: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin-top: 2px;
+  padding-bottom: 4px;
+  scrollbar-gutter: stable;
 }
 
-/* ── Cutoff dashboard header controls ── */
-.hide-completed-toggle {
-  margin-right: 8px;
-  font-size: 12px;
-}
-.cutoff-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-  margin-right: 4px;
-  white-space: nowrap;
-}
-.cutoff-picker {
-  min-width: 160px;
-  max-width: 220px;
-  margin-right: 8px;
-}
-.cutoff-picker :deep(.q-field__native) {
-  font-size: 12px;
-}
-.cutoff-notice {
-  font-size: 12px;
-  color: #b91c1c;
-  background: #fef2f2;
-  padding: 4px 10px;
-  border-radius: 6px;
-  white-space: nowrap;
-  font-weight: 500;
-}
-
-/* ── Responsive: 1024px (tablet / small laptop) ── */
+/* ── Responsive ── */
 @media (max-width: 1024px) {
-  .dash-header {
-    gap: 10px;
-  }
-}
-
-/* ── Responsive: 768px (mobile) ── */
-@media (max-width: 768px) {
   .dash-header {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
-  .dash-header-left,
-  .dash-header-right {
+  .dash-header__lead,
+  .dash-header__controls {
     width: 100%;
   }
-  .dash-header-right {
+  .dash-header__controls {
     justify-content: space-between;
   }
-  .view-toggle {
+  .control__field--date,
+  .control__field--select {
     width: 100%;
   }
-  .view-toggle :deep(.q-btn-group) {
-    width: 100%;
-  }
-  .view-toggle :deep(.q-btn) {
-    font-size: 11px;
-    padding: 6px 8px;
+  .control {
     flex: 1;
-  }
-  .date-picker {
-    min-width: 0;
-    flex: 1;
-  }
-  .dash-title {
-    font-size: 18px;
   }
   .last-sync {
     display: none;
@@ -483,10 +504,79 @@ onMounted(async () => {
 </style>
 
 <style>
-/* Dashboard toggle — matches MainLayout company-tab-active exactly */
+/* Dashboard tab rail. Intentionally unscoped: QBtnToggle renders its
+   <button class="q-btn"> children outside this component's template, so scoped
+   CSS cannot reach them without :deep() on every rule.
+
+   A recessed grey track with a raised white pill for the active tab — the
+   segmented control every current SaaS product uses, and a straight swap for
+   the solid navy pill this replaced. Navy-on-grey read as a filled button
+   sitting in a bar; white-on-grey reads as one surface lifted out of another,
+   which is what a tab actually is. */
+.view-toggle {
+  background: var(--dash-n-100);
+  border: 1px solid var(--dash-line);
+  padding: 3px;
+  border-radius: var(--dash-r-md);
+  display: inline-flex;
+  gap: 2px;
+  flex-wrap: nowrap;
+}
+
+.view-toggle .q-btn {
+  border-radius: var(--dash-r-sm) !important;
+  padding: 7px 16px;
+  min-height: unset;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: -0.006em;
+  transition: background-color var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease), box-shadow var(--dash-fast) var(--dash-ease);
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+/* Quasar draws a focus/ripple helper via ::before; neutralise its shadow so the
+   pills stay flat against the track. */
+.view-toggle .q-btn::before {
+  box-shadow: none;
+}
+
 .view-toggle .q-btn.bg-primary {
-  background: #102335 !important;
-  border-color: #102335 !important;
-  box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3) !important;
+  background: var(--dash-surface) !important;
+  color: var(--dash-ink) !important;
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs) !important;
+}
+
+.view-toggle .q-btn.bg-white {
+  background: transparent !important;
+  color: var(--dash-ink-3) !important;
+}
+
+.view-toggle .q-btn.bg-white:hover {
+  color: var(--dash-ink-2) !important;
+}
+
+.view-toggle .q-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dash-canvas), 0 0 0 4px var(--dash-accent-ring) !important;
+}
+
+.view-toggle .q-btn__content,
+.view-toggle .q-btn .block {
+  white-space: nowrap;
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 1024px) {
+  .view-toggle {
+    width: 100%;
+  }
+  .view-toggle .q-btn {
+    font-size: 11px;
+    padding: 6px 10px;
+    flex: 1;
+  }
 }
 </style>

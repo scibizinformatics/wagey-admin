@@ -1,69 +1,67 @@
 <template>
-  <div class="panel">
-    <div class="panel-head">
-      <q-icon name="donut_large" size="18px" class="panel-icon" />
-      <span class="panel-title">Payroll by Company</span>
-    </div>
-    <div class="panel-body">
-      <div v-if="loading" class="skeleton-body">
-        <div class="eps-shimmer" v-for="n in 6" :key="n" :style="{ width: n % 2 === 0 ? '55%' : '75%', animationDelay: `${n * 0.12}s` }" />
-      </div>
-      <template v-else>
-        <div class="toggle-row">
-          <q-btn-toggle
-            v-model="viewMode"
-            class="view-toggle"
-            no-caps
-            unelevated
-            toggle-color="primary"
-            color="white"
-            text-color="grey-8"
-            size="11px"
-            :options="[
-              { label: 'By Company', value: 'company' },
-              { label: 'By Department', value: 'department' },
-              { label: 'By Payroll Group', value: 'payroll_group' },
-            ]"
-          />
-        </div>
+  <DashPanel
+    icon="donut_large"
+    title="Payroll by company"
+    subtitle="Year to date"
+    :loading="loading"
+    :empty="!items.length"
+    empty-icon="business"
+    empty-title="No company data for this view"
+    empty-sub="Switch the grouping, or check that payroll has closed for the year so far."
+    skeleton="chart"
+  >
+    <template #actions>
+      <q-btn-toggle
+        v-model="viewMode"
+        class="group-toggle"
+        no-caps
+        unelevated
+        toggle-color="primary"
+        color="white"
+        text-color="grey-8"
+        size="10px"
+        :options="[
+          { label: 'Company', value: 'company' },
+          { label: 'Department', value: 'department' },
+          { label: 'Payroll group', value: 'payroll_group' },
+        ]"
+      />
+    </template>
 
-        <div v-if="!items.length" class="empty-state">
-          <q-icon name="info" size="16px" color="grey-4" />
-          <span class="empty-text">No data available for this view</span>
-        </div>
-
-        <div v-else class="chart-section">
-          <DonutChart :data="donutData" show-legend />
-          <div class="legend-table">
-            <div class="legend-header">
-              <div class="lh-cell" style="flex: 1.5">Name</div>
-              <div class="lh-cell" style="flex: 0.8">Employees</div>
-              <div class="lh-cell" style="flex: 1">Amount</div>
-              <div class="lh-cell" style="flex: 0.8">Share</div>
-            </div>
-            <div v-for="(item, i) in items" :key="i" class="legend-row">
-              <div class="lr-cell" style="flex: 1.5">
-                <span class="lr-dot" :style="{ background: shareColor(i) }" />
-                {{ item.name }}
-              </div>
-              <div class="lr-cell" style="flex: 0.8">{{ item.employees }}</div>
-              <div class="lr-cell" style="flex: 1">{{ fmtCurrency(item.amount) }}</div>
-              <div class="lr-cell" style="flex: 0.8">
-                <div class="share-bar-wrap">
-                  <div class="share-bar" :style="{ width: item.share + '%', background: shareColor(i) }" />
-                  <span class="share-label">{{ item.share }}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </template>
+    <div class="split">
+      <DonutChart class="split__chart" :data="donutData" />
+      <DashTable class="split__table" :columns="columns" :rows="items" row-key="name" :min-width="300">
+        <template #cell-name="{ row, index }">
+          <span class="name">
+            <span class="dash-swatch" :style="{ background: seriesColor(index) }" />
+            <span class="name__text">{{ row.name }}</span>
+          </span>
+        </template>
+        <template #cell-amount="{ row }">{{ fmtCurrency(row.amount) }}</template>
+        <template #cell-share="{ row }">
+          <span class="dash-num">{{ row.share }}%</span>
+        </template>
+      </DashTable>
     </div>
-  </div>
+  </DashPanel>
 </template>
 
 <script setup>
+/**
+ * YTD payroll split by company, department or payroll group.
+ *
+ * The grouping toggle moved from the middle of the panel body into the header,
+ * where the panel's other controls live — it scopes the whole panel, so it
+ * should not sit inside the thing it scopes. The donut drops its own legend
+ * because the table beside it already names every slice with its figures.
+ *
+ * Note: the toggle currently re-renders the same `companies` prop for all three
+ * modes. Wiring department and payroll-group data is a backend change and is
+ * out of scope for this redesign.
+ */
 import { ref, computed } from 'vue'
+import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
+import DashTable from '@/components/pages/Dashboard/DashTable.vue'
 import DonutChart from '@/components/pages/Dashboard/DonutChart.vue'
 
 const props = defineProps({
@@ -73,141 +71,114 @@ const props = defineProps({
 
 const viewMode = ref('company')
 
-const shareColors = ['#1a73e8', '#22c55e', '#8b5cf6', '#f97316', '#06b6d4', '#ef4444']
-function shareColor(i) {
-  return shareColors[i % shareColors.length]
+const SERIES = [
+  'var(--dash-cat-1)',
+  'var(--dash-cat-2)',
+  'var(--dash-cat-3)',
+  'var(--dash-cat-4)',
+  'var(--dash-cat-5)',
+  'var(--dash-cat-6)',
+]
+
+const columns = [
+  { key: 'name', label: 'Name', flex: 1.5, strong: true },
+  { key: 'employees', label: 'Employees', flex: 0.8, num: true },
+  { key: 'amount', label: 'Amount', flex: 1.1, num: true },
+  { key: 'share', label: 'Share', flex: 0.6, align: 'right' },
+]
+
+const items = computed(() => props.companies ?? [])
+
+const donutData = computed(() => items.value.map((c) => ({ name: c.name, value: c.amount })))
+
+function seriesColor(i) {
+  return SERIES[i] ?? 'var(--dash-neutral-mark)'
 }
 
-const items = computed(() => {
-  if (!props.companies.length) return []
-  return props.companies
-})
-
-const donutData = computed(() =>
-  items.value.map((c) => ({ name: c.name, value: c.amount })),
-)
-
 function fmtCurrency(n) {
-  return `\u20b1${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  return `₱${Number(n || 0).toLocaleString('en-PH', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`
 }
 </script>
 
 <style scoped>
-.panel {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+.split {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.4fr);
+  gap: var(--dash-gap);
+  align-items: center;
+  flex: 1;
 }
-.panel-head {
+
+.split__chart,
+.split__table {
+  min-width: 0;
+}
+
+.name {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 20px;
-  border-bottom: 1px solid #f1f3f5;
-  flex-shrink: 0;
+  min-width: 0;
 }
-.panel-icon { color: #1a73e8; }
-.panel-title { font-size: 13px; font-weight: 600; color: #111827; }
-.panel-body { padding: 12px 16px; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 
-.toggle-row {
-  display: flex;
-  justify-content: center;
-}
-.view-toggle {
-  border: 1px solid #e8ecf0;
-  border-radius: 8px;
+.name__text {
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 24px 0;
-  color: #9ca3af;
-  font-size: 13px;
+@media (max-width: 1024px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
 }
+</style>
 
-.legend-table {
-  display: flex;
-  flex-direction: column;
+<style>
+/* QBtnToggle renders its buttons outside this component's template, so the rail
+   styling has to be unscoped. Scoped to .group-toggle so it cannot leak. */
+/* Same recessed-track / raised-pill segmented control as the page tab rail,
+   one size down. Consistency here matters more than variety: two segmented
+   controls on one screen that behave alike should look alike. */
+.group-toggle {
+  background: var(--dash-n-100);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  padding: 2px;
+  display: inline-flex;
   gap: 2px;
 }
-.legend-header {
-  display: flex;
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 8px 12px;
-  gap: 8px;
-}
-.lh-cell {
-  font-size: 11px;
-  font-weight: 700;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-.legend-row {
-  display: flex;
-  align-items: center;
-  padding: 9px 12px;
-  border-bottom: 1px solid #f1f3f5;
-  gap: 8px;
-}
-.legend-row:last-child { border-bottom: none; }
-.lr-cell {
-  font-size: 13px;
-  color: #374151;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.lr-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.share-bar-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-}
-.share-bar {
-  height: 6px;
-  border-radius: 3px;
-  flex: 1;
-  min-width: 20px;
-}
-.share-label { font-size: 11px; color: #6b7280; font-weight: 500; }
 
-.skeleton-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 180px;
-}
-@keyframes eps-pulse {
-  0%, 100% { opacity: 0.45; transform: scaleX(1); }
-  50% { opacity: 0.85; transform: scaleX(1.015); }
-}
-.eps-shimmer {
-  height: 10px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #e8ecf0 0%, #d1d9e0 50%, #e8ecf0 100%);
-  background-size: 200% 100%;
-  animation: eps-pulse 1.6s ease-in-out infinite;
-  transform-origin: left center;
+.group-toggle .q-btn {
+  border-radius: var(--dash-r-xs) !important;
+  padding: 4px 10px;
+  min-height: unset;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: none;
+  white-space: nowrap;
 }
 
-@media (max-width: 768px) {
-  .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 12px; }
+.group-toggle .q-btn::before {
+  box-shadow: none;
+}
+
+.group-toggle .q-btn.bg-primary {
+  background: var(--dash-surface) !important;
+  color: var(--dash-ink) !important;
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs) !important;
+}
+
+.group-toggle .q-btn.bg-white {
+  background: transparent !important;
+  color: var(--dash-ink-3) !important;
+}
+
+.group-toggle .q-btn.bg-white:hover {
+  color: var(--dash-ink-2) !important;
 }
 </style>

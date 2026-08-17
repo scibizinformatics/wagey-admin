@@ -1,31 +1,34 @@
 <template>
-  <div class="today-tab">
-    <!-- Top section: Priority Items (tall) + Today's Guide + Attention Summary -->
-    <div class="top-grid">
-      <div class="top-priority">
-        <PriorityItemsPanel :items="priorityItems" :loading="loading" />
-      </div>
-      <div class="top-guide">
-        <TodayGuidePanel />
-      </div>
-      <div class="top-attention">
-        <AttentionSummaryPanel :attention-summary="attentionSummary" :loading="loading" />
-      </div>
+  <div class="today">
+    <!-- Lead row: the queue you act on, with the open-item counters beside it. -->
+    <div class="today__row today__row--lead">
+      <PriorityItemsPanel class="today__primary" :items="priorityItems" :loading="loading" />
+      <AttentionSummaryPanel
+        class="today__secondary"
+        :attention-summary="attentionSummary"
+        :loading="loading"
+      />
     </div>
 
-    <!-- Bottom section: Workforce Status + Requests -->
-    <div class="bottom-grid">
-      <div class="bottom-workforce">
-        <WorkforceStatusPanel :sites="workforceStatus" :loading="loading" />
-      </div>
-      <div class="bottom-requests">
-        <RequestsPanel :requests="pendingRequests" :loading="loading" />
-      </div>
+    <!-- Supporting row: where the day stands, once the queue is handled. -->
+    <div class="today__row">
+      <WorkforceStatusPanel class="today__primary" :sites="workforceStatus" :loading="loading" />
+      <RequestsPanel class="today__secondary" :requests="pendingRequests" :loading="loading" />
     </div>
+
+    <TodayGuidePanel />
   </div>
 </template>
 
 <script setup>
+/**
+ * Today tab layout.
+ *
+ * Two rows, each a wide primary panel with a narrow companion, rather than the
+ * previous four-slot grid where a static glossary card held the same visual
+ * weight as the live action queue. Reading order now matches priority: what
+ * needs doing, how much is open, whether sites are covered, what is queued.
+ */
 import PriorityItemsPanel from '@/components/pages/Dashboard/PriorityItemsPanel.vue'
 import AttentionSummaryPanel from '@/components/pages/Dashboard/AttentionSummaryPanel.vue'
 import WorkforceStatusPanel from '@/components/pages/Dashboard/WorkforceStatusPanel.vue'
@@ -42,79 +45,35 @@ defineProps({
 </script>
 
 <style scoped>
-.today-tab {
+.today {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--dash-gap);
 }
 
-/* ── Top section grid: Priority (tall) + Guide + Attention ── */
-.top-grid {
+.today__row {
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  grid-auto-rows: 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr);
+  gap: var(--dash-gap);
   align-items: stretch;
 }
 
-.top-priority {
-  grid-column: span 8;
-  grid-row: 1 / 3;
-  min-height: 0;
+/* The lead row gets a floor so the action queue has room to show several rows
+   without the companion panel collapsing to a sliver. */
+.today__row--lead {
+  min-height: 268px;
 }
 
-.top-guide {
-  grid-column: span 4;
-  grid-row: 1;
-  min-height: 160px;
+.today__primary,
+.today__secondary {
+  min-width: 0;
 }
 
-.top-attention {
-  grid-column: span 4;
-  grid-row: 2;
-  min-height: 160px;
-}
-
-/* ── Bottom section grid: Workforce + Requests ── */
-.bottom-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 12px;
-  align-items: stretch;
-}
-
-.bottom-workforce {
-  grid-column: span 8;
-}
-
-.bottom-requests {
-  grid-column: span 4;
-}
-
-/* ── Responsive: collapse to single column at ≤1024px ── */
 @media (max-width: 1024px) {
-  .top-grid, .bottom-grid {
+  .today__row,
+  .today__row--lead {
     grid-template-columns: 1fr;
+    min-height: 0;
   }
-  .top-priority,
-  .top-guide,
-  .top-attention,
-  .bottom-workforce,
-  .bottom-requests {
-    grid-column: 1 / -1;
-    grid-row: auto;
-  }
-}
-
-@media (min-width: 1441px) {
-  .today-tab { gap: 20px; }
-  .top-grid { gap: 20px; }
-  .bottom-grid { gap: 20px; }
-}
-
-@media (max-width: 768px) {
-  .today-tab { gap: 12px; }
-  .top-grid { gap: 12px; }
-  .bottom-grid { gap: 12px; }
 }
 </style>

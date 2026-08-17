@@ -1,68 +1,83 @@
 <template>
-  <span class="cs-badge" :class="`cs--${statusClass}`">
-    <span class="cs-dot" />
-    {{ label }}
+  <span class="dash-chip" :class="`cs--${entry.cls}`">
+    <span class="dash-chip__dot" :style="{ background: entry.mark }" />
+    {{ entry.label }}
   </span>
 </template>
 
 <script setup>
+/**
+ * The status pill for a payout group.
+ *
+ * Colours are shared with CutoffStageRail so a group's badge in the table and
+ * its segment in the rail read as the same thing. Every badge carries its label,
+ * so status is never communicated by colour alone.
+ */
 import { computed } from 'vue'
 
 const STATUS_MAP = {
-  needs_attention: { label: 'Needs Attention', cls: 'needs-attention' },
-  under_review: { label: 'Under Review', cls: 'under-review' },
-  awaiting_acknowledgment: { label: 'Awaiting Acknowledgment', cls: 'awaiting-ack' },
-  ready_for_funding: { label: 'Ready for Funding', cls: 'ready-funding' },
-  funded: { label: 'Funded', cls: 'funded' },
-  disbursing: { label: 'Disbursing', cls: 'disbursing' },
-  complete: { label: 'Complete', cls: 'complete' },
+  needs_attention: {
+    label: 'Needs attention',
+    cls: 'critical',
+    mark: 'var(--dash-critical-mark)',
+  },
+  under_review: { label: 'Under review', cls: 'warn', mark: 'var(--dash-warn-mark)' },
+  awaiting_acknowledgment: {
+    label: 'Awaiting ack',
+    cls: 'violet',
+    mark: 'var(--dash-cat-4)',
+  },
+  ready_for_funding: { label: 'Ready to fund', cls: 'info', mark: 'var(--dash-cat-1)' },
+  funded: { label: 'Funded', cls: 'teal', mark: 'var(--dash-cat-2)' },
+  disbursing: { label: 'Disbursing', cls: 'info', mark: 'var(--dash-info-mark)' },
+  complete: { label: 'Complete', cls: 'neutral', mark: 'var(--dash-neutral-mark)' },
 }
 
 const props = defineProps({
   status: { type: String, required: true },
 })
 
-const entry = computed(() => STATUS_MAP[props.status] ?? { label: props.status, cls: 'needs-attention' })
-const statusClass = computed(() => entry.value.cls)
-const label = computed(() => entry.value.label)
+const entry = computed(
+  () =>
+    STATUS_MAP[props.status] ?? {
+      label: props.status,
+      cls: 'neutral',
+      mark: 'var(--dash-neutral-mark)',
+    },
+)
 </script>
 
 <style scoped>
-.cs-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 999px;
-  white-space: nowrap;
+/* Each badge is a tint plus a 1px ring in its own hue. The ring is what keeps
+   the pill legible against both white rows and the tinted hover plate. */
+.cs--critical {
+  background: var(--dash-critical-bg);
+  border-color: var(--dash-critical-line);
+  color: var(--dash-critical);
 }
-.cs-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.cs--warn {
+  background: var(--dash-warn-bg);
+  border-color: var(--dash-warn-line);
+  color: var(--dash-warn);
 }
-
-.cs--needs-attention { background: #fff7ed; color: #c2410c; }
-.cs--needs-attention .cs-dot { background: #f97316; }
-
-.cs--under-review { background: #eff6ff; color: #1d4ed8; }
-.cs--under-review .cs-dot { background: #3b82f6; }
-
-.cs--awaiting-ack { background: #f5f3ff; color: #6d28d9; }
-.cs--awaiting-ack .cs-dot { background: #8b5cf6; }
-
-.cs--ready-funding { background: #f0fdf4; color: #15803d; }
-.cs--ready-funding .cs-dot { background: #22c55e; }
-
-.cs--funded { background: #f0fdfa; color: #0f766e; }
-.cs--funded .cs-dot { background: #14b8a6; }
-
-.cs--disbursing { background: #ecfeff; color: #0e7490; }
-.cs--disbursing .cs-dot { background: #06b6d4; }
-
-.cs--complete { background: #f9fafb; color: #6b7280; }
-.cs--complete .cs-dot { background: #9ca3af; }
+.cs--info {
+  background: var(--dash-info-bg);
+  border-color: var(--dash-info-line);
+  color: var(--dash-info);
+}
+.cs--violet {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+  color: #6941c6;
+}
+.cs--teal {
+  background: #f0fdf9;
+  border-color: #a7f3d0;
+  color: #0e9384;
+}
+.cs--neutral {
+  background: var(--dash-neutral-bg);
+  border-color: var(--dash-neutral-line);
+  color: var(--dash-neutral);
+}
 </style>

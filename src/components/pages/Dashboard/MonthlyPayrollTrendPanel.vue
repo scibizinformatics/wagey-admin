@@ -1,86 +1,48 @@
 <template>
-  <div class="panel">
-    <div class="panel-head">
-      <q-icon name="show_chart" size="18px" class="panel-icon" />
-      <span class="panel-title">{{ title }}</span>
-    </div>
-    <div class="panel-body">
-      <div v-if="loading || !values.length" class="skeleton-body">
-        <div
-          class="eps-shimmer"
-          v-for="n in 6"
-          :key="n"
-          :style="{ width: n % 2 === 0 ? '55%' : '75%', animationDelay: `${n * 0.12}s` }"
-        />
-      </div>
-      <TrendChart v-else :labels="labels" :values="values" :type="chartType" :color="color" />
-    </div>
-  </div>
+  <DashPanel
+    :icon="chartType === 'bar' ? 'bar_chart' : 'show_chart'"
+    :title="title"
+    :subtitle="subtitle"
+    :loading="loading"
+    :empty="!values.length"
+    empty-icon="show_chart"
+    empty-title="No trend data yet"
+    empty-sub="A point appears here for each month once its payroll is closed."
+    skeleton="chart"
+  >
+    <TrendChart :labels="labels" :values="values" :type="chartType" :color="color" />
+  </DashPanel>
 </template>
 
 <script setup>
+/**
+ * Payroll over time. Used on both summary tabs — as a line for the rolling
+ * six-month view, as bars for the twelve-month annual view.
+ *
+ * The subtitle carries the period-over-period change, so the panel answers
+ * "is payroll going up?" without the reader having to compare two bars by eye.
+ */
+import { computed } from 'vue'
+import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
 import TrendChart from '@/components/pages/Dashboard/TrendChart.vue'
 
-defineProps({
-  title: { type: String, default: 'Payroll Trend' },
+const props = defineProps({
+  title: { type: String, default: 'Payroll trend' },
   labels: { type: Array, default: () => [] },
   values: { type: Array, default: () => [] },
   chartType: { type: String, default: 'line' }, // 'line' | 'bar'
-  color: { type: String, default: '#1a73e8' },
+  color: { type: String, default: '#2e4fd4' },
   loading: { type: Boolean, default: false },
 })
-</script>
 
-<style scoped>
-.panel {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.panel-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 20px;
-  border-bottom: 1px solid #f1f3f5;
-  flex-shrink: 0;
-}
-.panel-icon {
-  color: #1a73e8;
-}
-.panel-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #111827;
-}
-.panel-body {
-  padding: 12px 16px;
-  flex: 1;
-  min-height: 0;
-}
-.skeleton-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 180px;
-}
-@keyframes eps-pulse {
-  0%, 100% { opacity: 0.45; transform: scaleX(1); }
-  50% { opacity: 0.85; transform: scaleX(1.015); }
-}
-.eps-shimmer {
-  height: 10px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #e8ecf0 0%, #d1d9e0 50%, #e8ecf0 100%);
-  background-size: 200% 100%;
-  animation: eps-pulse 1.6s ease-in-out infinite;
-  transform-origin: left center;
-}
-@media (max-width: 768px) {
-  .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 12px; }
-}
-</style>
+const subtitle = computed(() => {
+  if (props.loading || props.values.length < 2) return ''
+  const vals = props.values.map(Number)
+  const latest = vals[vals.length - 1]
+  const prior = vals[vals.length - 2]
+  if (!prior) return ''
+  const pct = ((latest - prior) / prior) * 100
+  const dir = pct >= 0 ? 'up' : 'down'
+  return `${dir} ${Math.abs(pct).toFixed(1)}% on ${props.labels[props.labels.length - 2] ?? 'the prior period'}`
+})
+</script>

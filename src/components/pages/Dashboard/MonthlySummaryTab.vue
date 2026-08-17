@@ -1,102 +1,90 @@
 <template>
-  <div class="tab-grid">
-    <div v-if="!loading && !months.length" class="no-month-banner">
-      <q-icon name="info" size="18px" />
+  <div class="monthly">
+    <div v-if="!loading && !months.length" class="notice" role="status">
+      <q-icon name="hourglass_empty" size="18px" class="notice__icon" />
       <div>
-        <div class="banner-title">No closed month yet</div>
-        <div class="banner-sub">
-          A month appears here only once every cutoff inside it is completed and every payout group
-          is fully funded. As of {{ today }}, no month qualifies yet.
-        </div>
+        <p class="notice__title">No closed month yet</p>
+        <p class="notice__body">
+          A month appears here once every cutoff inside it is complete and every payout group is
+          fully funded. As of {{ today }}, none qualifies.
+        </p>
       </div>
     </div>
 
     <template v-if="loading || months.length">
-      <div class="month-picker" v-if="!loading">
-        <span class="mp-label">Month</span>
-        <q-select
-          v-model="selectedMonth"
-          :options="monthOptions"
-          dense
-          outlined
-          emit-value
-          map-options
-          class="mp-select"
-        />
-      </div>
-      <div class="month-picker-skeleton" v-else>
-        <div class="eps-shimmer" style="width: 120px" />
-      </div>
-
-      <!-- Row 1: Cutoff Comparison | Monthly Payroll Breakdown | 6-Month Payroll Trend -->
-      <div class="row-three">
-        <div class="panel">
-          <div class="panel-head">
-            <q-icon name="bar_chart" size="18px" class="panel-icon" />
-            <span class="panel-title">
-              {{ loading ? 'Cutoff Comparison' : `Cutoff Comparison — ${selected.label}` }}
-            </span>
-          </div>
-          <div class="panel-body">
-            <div v-if="loading" class="skeleton-body">
-              <div
-                class="eps-shimmer"
-                v-for="n in 6"
-                :key="n"
-                :style="{ width: n % 2 === 0 ? '55%' : '75%', animationDelay: `${n * 0.12}s` }"
-              />
-            </div>
-            <TrendChart
-              v-else
-              :labels="selected.cutoffs.map((c) => c.period_label.split(',')[0])"
-              :values="selected.cutoffs.map((c) => c.total_payroll)"
-              type="bar"
-              color="#1a73e8"
-            />
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <q-icon name="pie_chart" size="18px" class="panel-icon" />
-            <span class="panel-title">Monthly Payroll Breakdown</span>
-          </div>
-          <div class="panel-body split">
-            <div v-if="loading" class="skeleton-body">
-              <div
-                class="eps-shimmer"
-                v-for="n in 5"
-                :key="n"
-                :style="{ width: n % 2 === 0 ? '60%' : '80%', animationDelay: `${n * 0.12}s` }"
-              />
-            </div>
-            <DonutChart v-else :data="componentBreakdown(selected)" show-legend />
-          </div>
-        </div>
-
+      <!-- Lead: where this month sits in the run of months, and what it is made of. -->
+      <div class="monthly__row monthly__row--lead">
         <MonthlyPayrollTrendPanel
-          :title="'6-Month Payroll Trend'"
+          title="Six-month payroll trend"
           :labels="monthlyTrendSeries.map((m) => m.label)"
           :values="monthlyTrendSeries.map((m) => m.value)"
           chart-type="line"
           :loading="loading"
         />
+        <DashPanel
+          icon="pie_chart"
+          title="Payroll breakdown"
+          :subtitle="selected?.label ?? ''"
+          :loading="loading"
+          :empty="!breakdown.length"
+          empty-icon="pie_chart"
+          empty-title="No breakdown for this month"
+          skeleton="chart"
+        >
+          <DonutChart :data="breakdown" show-legend />
+        </DashPanel>
       </div>
 
-      <!-- Row 2: Payroll by Company | Payment Channels | Other Employee Releases -->
-      <div class="row-three">
-        <PayrollByCompanyPanel :companies="currentPayrollByCompany" :total-row="currentPayrollByCompanyTotal" :loading="loading" />
-        <PaymentChannelsPanel :channels="currentPaymentChannels" :total-row="currentPaymentChannelsTotal" :loading="loading" />
-        <OtherEmployeeReleasesPanel :releases="currentEmployeeReleases" :total="currentEmployeeReleasesTotal" :loading="loading" />
+      <!-- Detail: how the month divides across cutoffs, companies and channels. -->
+      <div class="monthly__row monthly__row--three">
+        <DashPanel
+          icon="bar_chart"
+          title="Cutoff comparison"
+          :subtitle="selected?.label ?? ''"
+          :loading="loading"
+          :empty="!cutoffLabels.length"
+          empty-icon="bar_chart"
+          empty-title="No cutoffs closed this month"
+          skeleton="chart"
+        >
+          <TrendChart :labels="cutoffLabels" :values="cutoffValues" type="bar" />
+        </DashPanel>
+
+        <PayrollByCompanyPanel
+          :companies="currentPayrollByCompany"
+          :total-row="currentPayrollByCompanyTotal"
+          :loading="loading"
+        />
+        <PaymentChannelsPanel
+          :channels="currentPaymentChannels"
+          :total-row="currentPaymentChannelsTotal"
+          :loading="loading"
+        />
       </div>
 
-      <ThirteenthMonthPayPanel :data="thirteenthMonthPay" mode="monthly" :loading="loading" />
+      <div class="monthly__row monthly__row--split">
+        <OtherEmployeeReleasesPanel
+          :releases="currentEmployeeReleases"
+          :total="currentEmployeeReleasesTotal"
+          :loading="loading"
+        />
+        <ThirteenthMonthPayPanel :data="thirteenthMonthPay" mode="monthly" :loading="loading" />
+      </div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+/**
+ * Monthly Summary tab layout.
+ *
+ * Ordered so the month is understood before it is dissected: the trend places
+ * the month in context and the donut says what it is made of, then the three
+ * splits (by cutoff, by company, by channel) explain it, then the two
+ * supporting ledgers close the tab.
+ */
+import { computed } from 'vue'
+import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
 import TrendChart from '@/components/pages/Dashboard/TrendChart.vue'
 import DonutChart from '@/components/pages/Dashboard/DonutChart.vue'
 import MonthlyPayrollTrendPanel from '@/components/pages/Dashboard/MonthlyPayrollTrendPanel.vue'
@@ -116,215 +104,127 @@ const props = defineProps({
   fmtCurrency: { type: Function, required: true },
   today: { type: String, required: true },
   loading: { type: Boolean, default: false },
+  selectedMonth: { type: String, default: null },
 })
 
-const monthOptions = computed(() => props.months.map((m) => ({ label: m.label, value: m.month })))
-const selectedMonth = ref(props.months.length ? props.months[props.months.length - 1].month : null)
-watch(
-  () => props.months,
-  (list) => {
-    if (list.length && !list.find((m) => m.month === selectedMonth.value)) {
-      selectedMonth.value = list[list.length - 1].month
-    }
-  },
-)
 const selected = computed(
   () =>
-    props.months.find((m) => m.month === selectedMonth.value) ??
+    props.months.find((m) => m.month === props.selectedMonth) ??
     props.months[props.months.length - 1],
 )
 
-const currentPayrollByCompany = computed(() => {
+const breakdown = computed(() => (selected.value ? props.componentBreakdown(selected.value) : []))
+
+const cutoffs = computed(() => selected.value?.cutoffs ?? [])
+const cutoffLabels = computed(() => cutoffs.value.map((c) => c.period_label.split(',')[0]))
+const cutoffValues = computed(() => cutoffs.value.map((c) => c.total_payroll))
+
+// Each of the three splits below is stored as a list of per-month entries, so
+// they all resolve the same way: find this month's entry, or fall back to empty.
+function entryForSelectedMonth(list) {
   const month = selected.value?.month
-  if (!month) return []
-  const entry = props.payrollByCompany.find((p) => p.month === month)
-  return entry?.companies ?? []
-})
+  if (!month) return null
+  return list.find((p) => p.month === month) ?? null
+}
 
-const currentPayrollByCompanyTotal = computed(() => {
-  const companies = currentPayrollByCompany.value
-  if (!companies.length) return null
-  return {
-    employees: companies.reduce((s, c) => s + (c.employees || 0), 0),
-    amount: companies.reduce((s, c) => s + (c.amount || 0), 0),
-  }
-})
+function sumBy(rows, key) {
+  return rows.reduce((acc, r) => acc + (Number(r[key]) || 0), 0)
+}
 
-const currentPaymentChannels = computed(() => {
-  const month = selected.value?.month
-  if (!month) return []
-  const entry = props.paymentChannels.find((p) => p.month === month)
-  return entry?.channels ?? []
-})
+function totalsFor(rows) {
+  if (!rows.length) return null
+  return { employees: sumBy(rows, 'employees'), amount: sumBy(rows, 'amount') }
+}
 
-const currentPaymentChannelsTotal = computed(() => {
-  const channels = currentPaymentChannels.value
-  if (!channels.length) return null
-  return {
-    employees: channels.reduce((s, c) => s + (c.employees || 0), 0),
-    amount: channels.reduce((s, c) => s + (c.amount || 0), 0),
-  }
-})
+const currentPayrollByCompany = computed(
+  () => entryForSelectedMonth(props.payrollByCompany)?.companies ?? [],
+)
+const currentPayrollByCompanyTotal = computed(() => totalsFor(currentPayrollByCompany.value))
 
-const currentEmployeeReleases = computed(() => {
-  const month = selected.value?.month
-  if (!month) return []
-  const entry = props.employeeReleases.find((p) => p.month === month)
-  return entry?.releases ?? []
-})
+const currentPaymentChannels = computed(
+  () => entryForSelectedMonth(props.paymentChannels)?.channels ?? [],
+)
+const currentPaymentChannelsTotal = computed(() => totalsFor(currentPaymentChannels.value))
 
-const currentEmployeeReleasesTotal = computed(() => {
-  const month = selected.value?.month
-  if (!month) return 0
-  const entry = props.employeeReleases.find((p) => p.month === month)
-  return entry?.total ?? 0
-})
+const currentEmployeeReleases = computed(
+  () => entryForSelectedMonth(props.employeeReleases)?.releases ?? [],
+)
+const currentEmployeeReleasesTotal = computed(
+  () => entryForSelectedMonth(props.employeeReleases)?.total ?? 0,
+)
 </script>
 
 <style scoped>
-.tab-grid {
+.monthly {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-.no-month-banner {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  background: #fff8e1;
-  border: 1px solid #ffe4a3;
-  color: #92610a;
-  border-radius: 12px;
-  padding: 14px 16px;
-}
-.banner-title {
-  font-weight: 600;
-  font-size: 13px;
-}
-.banner-sub {
-  font-size: 12px;
-  margin-top: 2px;
-  line-height: 1.5;
+  gap: var(--dash-gap);
 }
 
-.month-picker {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: flex-end;
-}
-.month-picker-skeleton {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-}
-.mp-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
-}
-.mp-select {
-  min-width: 200px;
-}
-
-/* ── Row 1 & 2: equal thirds, stretch ── */
-.row-three {
+.monthly__row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
+  gap: var(--dash-gap);
   align-items: stretch;
 }
 
-.panel {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+/* The trend is the context; the donut only has to hold a ring and a legend. */
+.monthly__row--lead {
+  grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
 }
-.panel-head {
+
+.monthly__row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.monthly__row--split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+
+/* ── Notice ── */
+.notice {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 20px;
-  border-bottom: 1px solid #f1f3f5;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--dash-warn-bg);
+  border: 1px solid var(--dash-warn-line);
+  border-radius: var(--dash-r-lg);
+  padding: 14px 16px;
+}
+
+.notice__icon {
+  color: var(--dash-warn-mark);
   flex-shrink: 0;
+  margin-top: 1px;
 }
-.panel-icon {
-  color: #1a73e8;
-}
-.panel-title {
-  font-size: 13px;
+
+.notice__title {
+  margin: 0;
+  font-size: 13.5px;
   font-weight: 600;
-  color: #111827;
-}
-.panel-body {
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  flex: 1;
-}
-.panel-body.split {
-  padding: 12px 8px;
+  color: #93370d;
+  letter-spacing: -0.006em;
 }
 
-/* Skeleton */
-.skeleton-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 100px;
-}
-
-@keyframes eps-pulse {
-  0%, 100% {
-    opacity: 0.45;
-    transform: scaleX(1);
-  }
-  50% {
-    opacity: 0.85;
-    transform: scaleX(1.015);
-  }
-}
-.eps-shimmer {
-  height: 10px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #e8ecf0 0%, #d1d9e0 50%, #e8ecf0 100%);
-  background-size: 200% 100%;
-  animation: eps-pulse 1.6s ease-in-out infinite;
-  transform-origin: left center;
+.notice__body {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dash-warn);
+  max-width: 78ch;
 }
 
 /* ── Responsive ── */
-@media (min-width: 1441px) {
-  .tab-grid { gap: 16px; }
-  .row-three { gap: 16px; }
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .monthly__row--three {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
 }
 
 @media (max-width: 1024px) {
-  .row-three {
-    grid-template-columns: 1fr 1fr;
-  }
-  .row-three > :nth-child(3) {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 768px) {
-  .tab-grid { gap: 10px; }
-  .row-three {
+  .monthly__row--lead,
+  .monthly__row--three,
+  .monthly__row--split {
     grid-template-columns: 1fr;
   }
-  .row-three > :nth-child(3) {
-    grid-column: auto;
-  }
-  .month-picker { flex-wrap: wrap; }
-  .mp-select { min-width: 0; flex: 1; }
-  .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 12px; }
-  .panel-body { padding: 10px 12px; }
 }
 </style>

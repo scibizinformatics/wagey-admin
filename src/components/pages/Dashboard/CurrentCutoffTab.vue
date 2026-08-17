@@ -1,55 +1,74 @@
 <template>
-  <div class="cutoff-dashboard">
-    <CutoffStatCardsRow
-      :stats="cutoffStats"
-      :loading="loading"
-      :fmt-currency="fmtCurrency"
-    />
+  <div class="cutoff">
+    <!-- Overdue money first. This sat at the foot of the tab before, below the
+         table, which put the single most urgent thing on the page furthest from
+         where the reader starts. -->
+    <CutoffOverdueBanner :overdue="previousCutoffIncomplete" @open-cutoff="onOpenPreviousCutoff" />
 
-    <div class="cutoff-main">
-      <div class="cutoff-table-col">
-        <div class="panel-head">
-          <q-icon name="groups" size="16px" class="panel-icon" />
-          <span class="panel-title">Payout Groups</span>
-        </div>
-        <CutoffPayoutGroupTable
-          :groups="payoutGroupDetails"
-          :loading="loading"
-          :fmt-currency="fmtCurrency"
-          :hide-completed="hideCompleted"
-          @action="onGroupAction"
-          @update:pagination="onPaginationUpdate"
-        />
-      </div>
-      <div class="cutoff-sidebar-col">
-        <CutoffStatusSummaryPanel
-          class="stretch-panel"
-          :data="cutoffStatusSummary"
-          :loading="loading"
-        />
-        <CutoffSummaryPanel
-          :data="cutoffSummaryRollup"
-          :loading="loading"
-          @view-issues="onViewIssues"
-        />
-      </div>
+    <CutoffStatCardsRow :stats="cutoffStats" :loading="loading" :fmt-currency="fmtCurrency" />
+
+    <!-- Lead: the pipeline, and the roll-up that explains it. -->
+    <div class="cutoff__lead">
+      <CutoffStatusSummaryPanel
+        class="cutoff__rail"
+        :data="cutoffStatusSummary"
+        :loading="loading"
+        @filter="onStageFilter"
+      />
+      <CutoffSummaryPanel
+        class="cutoff__rollup"
+        :data="cutoffSummaryRollup"
+        :loading="loading"
+        @view-issues="onViewIssues"
+      />
     </div>
 
-    <CutoffOverdueBanner
-      :overdue="previousCutoffIncomplete"
-      @open-cutoff="onOpenPreviousCutoff"
-    />
+    <!-- Detail: the groups themselves, narrowed by whatever the rail selected. -->
+    <DashPanel
+      icon="groups"
+      title="Payout groups"
+      :subtitle="tableSubtitle"
+      flush
+      class="cutoff__table"
+    >
+      <template v-if="stageFilter" #actions>
+        <span class="dash-chip dash-chip--info">
+          <span class="dash-chip__dot" />
+          Filtered by stage
+        </span>
+      </template>
+
+      <CutoffPayoutGroupTable
+        :groups="payoutGroupDetails"
+        :loading="loading"
+        :fmt-currency="fmtCurrency"
+        :hide-completed="hideCompleted"
+        :status-filter="stageFilter"
+        @action="onGroupAction"
+        @update:pagination="onPaginationUpdate"
+      />
+    </DashPanel>
   </div>
 </template>
 
 <script setup>
+/**
+ * Current Cutoff tab layout.
+ *
+ * Reading order now follows urgency: anything overdue, then the headline
+ * figures, then the pipeline showing where the cutoff is stuck, then the groups
+ * themselves. Selecting a stage on the rail narrows the table below it, so the
+ * lead element does real work rather than only reporting.
+ */
+import { computed, ref } from 'vue'
+import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
 import CutoffStatCardsRow from '@/components/pages/Dashboard/CutoffStatCardsRow.vue'
 import CutoffPayoutGroupTable from '@/components/pages/Dashboard/CutoffPayoutGroupTable.vue'
 import CutoffStatusSummaryPanel from '@/components/pages/Dashboard/CutoffStatusSummaryPanel.vue'
 import CutoffSummaryPanel from '@/components/pages/Dashboard/CutoffSummaryPanel.vue'
 import CutoffOverdueBanner from '@/components/pages/Dashboard/CutoffOverdueBanner.vue'
 
-defineProps({
+const props = defineProps({
   fmtCurrency: { type: Function, required: true },
   loading: { type: Boolean, default: false },
   cutoffStats: { type: Object, default: () => ({}) },
@@ -59,6 +78,19 @@ defineProps({
   previousCutoffIncomplete: { type: Object, default: null },
   hideCompleted: { type: Boolean, default: false },
 })
+
+const stageFilter = ref(null)
+
+const tableSubtitle = computed(() => {
+  if (props.loading) return ''
+  const n = props.payoutGroupDetails.length
+  if (!n) return ''
+  return `${n} ${n === 1 ? 'group' : 'groups'} in this cutoff`
+})
+
+function onStageFilter(status) {
+  stageFilter.value = status
+}
 
 function onGroupAction(row) {
   console.log('[CurrentCutoffTab] group action:', row)
@@ -78,63 +110,30 @@ function onOpenPreviousCutoff(data) {
 </script>
 
 <style scoped>
-.cutoff-dashboard {
+.cutoff {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--dash-gap);
 }
 
-.cutoff-main {
+/* The rail needs width to be readable as a proportion; the roll-up is a column
+   of four figures and does not. */
+.cutoff__lead {
   display: grid;
-  grid-template-columns: 1fr 260px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
+  gap: var(--dash-gap);
   align-items: stretch;
 }
 
-.cutoff-table-col {
-  background: #ffffff;
-  border: 1px solid #e8ecf0;
-  border-radius: 12px;
-  overflow: hidden;
+.cutoff__rail,
+.cutoff__rollup,
+.cutoff__table {
+  min-width: 0;
 }
 
-.cutoff-table-col .panel-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 18px;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.cutoff-table-col .panel-icon {
-  color: #1a73e8;
-}
-
-.cutoff-table-col .panel-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.cutoff-sidebar-col {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.stretch-panel {
-  flex: 1;
-}
-
-@media (max-width: 1200px) {
-  .cutoff-main {
+@media (max-width: 1024px) {
+  .cutoff__lead {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .cutoff-dashboard {
-    gap: 12px;
   }
 }
 </style>

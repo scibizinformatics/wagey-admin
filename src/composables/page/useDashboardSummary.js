@@ -599,46 +599,39 @@ export function useDashboardSummary() {
     // employeeReleases.value = ...
   }
 
+  // Colours reference the dashboard's categorical ramp (src/css/dashboard.scss)
+  // and must stay in step with TodayGuidePanel, which is the legend for these
+  // same five figures.
   const currentStatsCards = computed(() => [
     {
       icon: 'event',
       label: 'Scheduled',
       count: todaySummary.value.scheduled,
-      iconBg: '#e8f0fe',
-      iconColor: '#1a73e8',
-      valueColor: '#1a73e8',
+      iconColor: 'var(--dash-cat-1)',
     },
     {
       icon: 'check_circle',
-      label: 'Clocked In',
+      label: 'Clocked in',
       count: todaySummary.value.present,
-      iconBg: '#e6f6ea',
-      iconColor: '#22c55e',
-      valueColor: '#22c55e',
+      iconColor: 'var(--dash-cat-2)',
     },
     {
       icon: 'warning',
-      label: 'Needs Attention',
+      label: 'Needs attention',
       count: todaySummary.value.needs_attention,
-      iconBg: '#fff8e1',
-      iconColor: '#f59e0b',
-      valueColor: '#f59e0b',
+      iconColor: 'var(--dash-warn-mark)',
     },
     {
       icon: 'pending_actions',
-      label: 'Pending Requests',
+      label: 'Pending requests',
       count: todaySummary.value.pending_requests,
-      iconBg: '#ede9fe',
-      iconColor: '#8b5cf6',
-      valueColor: '#8b5cf6',
+      iconColor: 'var(--dash-cat-4)',
     },
     {
       icon: 'payments',
-      label: 'Est. Payroll',
+      label: 'Est. payroll',
       count: todaySummary.value.estimated_payroll ? `₱${Number(todaySummary.value.estimated_payroll).toLocaleString('en-PH')}` : '₱0',
-      iconBg: '#e0f7fa',
-      iconColor: '#0e7490',
-      valueColor: '#0e7490',
+      iconColor: 'var(--dash-cat-3)',
     },
   ])
 

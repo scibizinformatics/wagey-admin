@@ -1,113 +1,137 @@
 <template>
-  <div class="panel">
-    <div class="panel-head">
-      <q-icon name="compare_arrows" size="18px" class="panel-icon" />
-      <span class="panel-title">YTD Comparison: {{ data.currentYearLabel }} vs {{ data.previousYearLabel }}</span>
+  <DashPanel
+    icon="compare_arrows"
+    title="Year on year"
+    :subtitle="`${data.currentYearLabel} vs ${data.previousYearLabel}`"
+    :loading="loading"
+    :empty="!data.currentAmount"
+    empty-icon="compare_arrows"
+    empty-title="Nothing to compare yet"
+    empty-sub="A comparison needs closed payroll in both years."
+    skeleton="lines"
+    :skeleton-rows="4"
+  >
+    <!-- The headline is the change, not the two amounts it is derived from —
+         those move to the supporting rows beneath it. -->
+    <div class="lead">
+      <p class="dash-eyebrow">Change year on year</p>
+      <p class="dash-metric dash-metric--lg lead__value" :class="deltaClass">
+        {{ signed(data.changePercent) }}%
+      </p>
+      <p class="lead__amount" :class="deltaClass">
+        {{ data.difference >= 0 ? '+' : '−' }}{{ fmtCurrency(Math.abs(data.difference)) }}
+      </p>
     </div>
-    <div class="panel-body">
-      <div v-if="loading || !data.currentAmount" class="skeleton-body">
-        <div class="table-skeleton">
-          <div class="skeleton-header">
-            <div class="skeleton-header-cell" style="flex: 1.5">Period</div>
-            <div class="skeleton-header-cell" style="flex: 1">Amount</div>
-          </div>
-          <div class="skeleton-row" v-for="n in 4" :key="n">
-            <div class="skeleton-cell" style="flex: 1.5"><q-skeleton type="text" width="140px" /></div>
-            <div class="skeleton-cell" style="flex: 1"><q-skeleton type="text" width="100px" /></div>
-          </div>
-        </div>
+
+    <dl class="rows">
+      <div class="row">
+        <dt class="row__label">January – June {{ data.currentYearLabel }}</dt>
+        <dd class="row__value dash-num">{{ fmtCurrency(data.currentAmount) }}</dd>
       </div>
-      <template v-else>
-        <div class="comparison-table">
-          <div class="comparison-header">
-            <div class="ch-cell" style="flex: 1.5">Period</div>
-            <div class="ch-cell" style="flex: 1">Amount</div>
-          </div>
-          <div class="comparison-row">
-            <div class="cr-cell" style="flex: 1.5">January – June {{ data.currentYearLabel }}</div>
-            <div class="cr-cell" style="flex: 1">{{ fmtCurrency(data.currentAmount) }}</div>
-          </div>
-          <div class="comparison-row">
-            <div class="cr-cell" style="flex: 1.5">January – June {{ data.previousYearLabel }}</div>
-            <div class="cr-cell" style="flex: 1">{{ fmtCurrency(data.previousAmount) }}</div>
-          </div>
-          <div class="comparison-row highlight">
-            <div class="cr-cell" style="flex: 1.5">Difference</div>
-            <div class="cr-cell" style="flex: 1" :class="data.difference >= 0 ? 'positive' : 'negative'">
-              {{ data.difference >= 0 ? '+' : '' }}{{ fmtCurrency(data.difference) }}
-            </div>
-          </div>
-          <div class="comparison-row highlight">
-            <div class="cr-cell" style="flex: 1.5">Change</div>
-            <div class="cr-cell" style="flex: 1" :class="data.changePercent >= 0 ? 'positive' : 'negative'">
-              {{ data.changePercent >= 0 ? '+' : '' }}{{ data.changePercent }}%
-            </div>
-          </div>
-        </div>
-      </template>
-    </div>
-  </div>
+      <div class="row">
+        <dt class="row__label">January – June {{ data.previousYearLabel }}</dt>
+        <dd class="row__value dash-num">{{ fmtCurrency(data.previousAmount) }}</dd>
+      </div>
+    </dl>
+  </DashPanel>
 </template>
 
 <script setup>
-defineProps({
+/**
+ * This year's payroll against last year's, over the same window.
+ *
+ * The panel was a four-row table in which the two raw amounts, the difference
+ * and the percentage all carried equal weight. The percentage is the answer
+ * people come here for, so it now leads and the rest supports it.
+ */
+import { computed } from 'vue'
+import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
+
+const props = defineProps({
   data: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
 })
 
+const deltaClass = computed(() => {
+  const pct = Number(props.data?.changePercent ?? 0)
+  if (pct > 0) return 'is-up'
+  if (pct < 0) return 'is-down'
+  return 'is-flat'
+})
+
+// The glyph is always printed, so direction never depends on colour alone.
+function signed(pct) {
+  const n = Number(pct ?? 0)
+  return `${n >= 0 ? '+' : '−'}${Math.abs(n)}`
+}
+
 function fmtCurrency(n) {
-  return `\u20b1${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  return `₱${Number(n || 0).toLocaleString('en-PH', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`
 }
 </script>
 
 <style scoped>
-.panel {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
+.lead {
+  padding: 4px 0 14px;
+  border-bottom: 1px solid var(--dash-line-soft);
+}
+
+.lead__value {
+  margin: 3px 0 0;
+}
+
+.lead__amount {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.is-up {
+  color: var(--dash-good);
+}
+.is-down {
+  color: var(--dash-critical);
+}
+.is-flat {
+  color: var(--dash-ink-2);
+}
+
+.rows {
+  margin: 0;
+  padding-top: 4px;
   display: flex;
   flex-direction: column;
+  flex: 1;
 }
-.panel-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 14px 20px; border-bottom: 1px solid #f1f3f5; flex-shrink: 0;
-}
-.panel-icon { color: #1a73e8; }
-.panel-title { font-size: 13px; font-weight: 600; color: #111827; }
-.panel-body { padding: 12px 16px; flex: 1; min-height: 0; }
 
-.skeleton-body { min-height: 160px; }
-.table-skeleton { display: flex; flex-direction: column; gap: 2px; }
-.skeleton-header {
-  display: flex; background: #f8fafc; border-radius: 8px; padding: 8px 12px; gap: 8px;
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--dash-line-soft);
 }
-.skeleton-header-cell {
-  font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em;
+.row:last-child {
+  border-bottom: none;
 }
-.skeleton-row {
-  display: flex; align-items: center; padding: 10px 12px; border-bottom: 1px solid #f1f3f5; gap: 8px;
-}
-.skeleton-row:last-child { border-bottom: none; }
-.skeleton-cell { flex: 1; }
 
-.comparison-table { display: flex; flex-direction: column; gap: 2px; }
-.comparison-header {
-  display: flex; background: #f8fafc; border-radius: 8px; padding: 8px 12px; gap: 8px;
+.row__label {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
+  min-width: 0;
 }
-.ch-cell {
-  font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px;
-}
-.comparison-row {
-  display: flex; align-items: center; padding: 9px 12px; border-bottom: 1px solid #f1f3f5; gap: 8px;
-}
-.comparison-row:last-child { border-bottom: none; }
-.comparison-row.highlight { background: #f8fafc; border-radius: 6px; margin-top: 2px; }
-.cr-cell { font-size: 13px; color: #374151; font-weight: 500; }
-.cr-cell.positive { color: #16a34a; font-weight: 700; }
-.cr-cell.negative { color: #dc2626; font-weight: 700; }
-@media (max-width: 768px) {
-  .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 12px; }
+
+.row__value {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  flex-shrink: 0;
 }
 </style>

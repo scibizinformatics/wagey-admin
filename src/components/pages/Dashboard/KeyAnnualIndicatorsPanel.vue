@@ -1,39 +1,38 @@
 <template>
-  <div class="panel">
-    <div class="panel-head">
-      <q-icon name="insights" size="18px" class="panel-icon" />
-      <span class="panel-title">Key Annual Indicators</span>
-    </div>
-    <div class="panel-body">
-      <div v-if="loading || !indicators.length" class="skeleton-body">
-        <div class="indicators-grid">
-          <div
-            class="indicator-skeleton"
-            v-for="n in 6"
-            :key="n"
-          >
-            <q-skeleton type="circle" size="32px" />
-            <div class="indicator-skeleton-text">
-              <q-skeleton type="text" width="100px" />
-              <q-skeleton type="text" width="80px" />
-            </div>
-          </div>
+  <DashPanel
+    icon="insights"
+    title="Key indicators"
+    subtitle="Year to date"
+    :loading="loading"
+    :empty="!indicators.length"
+    empty-icon="insights"
+    empty-title="Not enough closed months"
+    empty-sub="Indicators need at least two closed months to compare."
+    skeleton="tiles"
+    :skeleton-rows="6"
+  >
+    <dl class="indicators">
+      <div v-for="item in indicators" :key="item.label" class="indicator">
+        <q-icon :name="item.icon" size="17px" class="indicator__icon" :style="{ color: item.color }" />
+        <div class="indicator__text">
+          <dt class="indicator__label" :title="item.label">{{ item.label }}</dt>
+          <dd class="indicator__value dash-num">{{ item.value }}</dd>
         </div>
       </div>
-      <div v-else class="indicators-grid">
-        <div v-for="(item, i) in indicators" :key="i" class="indicator-card">
-          <q-icon :name="item.icon" size="24px" :style="{ color: item.color || '#1a73e8' }" />
-          <div class="indicator-info">
-            <div class="indicator-label">{{ item.label }}</div>
-            <div class="indicator-value">{{ item.value }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+    </dl>
+  </DashPanel>
 </template>
 
 <script setup>
+/**
+ * The handful of derived figures worth calling out for the year — highest and
+ * lowest payroll month, largest component, overtime share, and so on.
+ *
+ * A definition list rather than a set of divs: each row genuinely is a term and
+ * its value, and screen readers get that structure for free.
+ */
+import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
+
 defineProps({
   indicators: { type: Array, default: () => [] }, // [{ icon, label, value, color? }]
   loading: { type: Boolean, default: false },
@@ -41,54 +40,57 @@ defineProps({
 </script>
 
 <style scoped>
-.panel {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.panel-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 14px 20px; border-bottom: 1px solid #f1f3f5; flex-shrink: 0;
-}
-.panel-icon { color: #1a73e8; }
-.panel-title { font-size: 13px; font-weight: 600; color: #111827; }
-.panel-body { padding: 12px 16px; flex: 1; min-height: 0; }
-
-.skeleton-body { min-height: 160px; }
-.indicators-grid {
+.indicators {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  flex: 1;
+  align-content: start;
+}
+
+.indicator {
+  display: flex;
+  align-items: center;
   gap: 10px;
+  padding: 11px 12px;
+  background: var(--dash-n-25);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  min-width: 0;
 }
-.indicator-skeleton {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px;
-  border-radius: 8px;
-  background: #f8fafc;
+
+.indicator__icon {
+  flex-shrink: 0;
 }
-.indicator-skeleton-text {
-  display: flex; flex-direction: column; gap: 4px; flex: 1;
+
+.indicator__text {
+  min-width: 0;
 }
-.indicator-card {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px;
-  border-radius: 8px;
-  background: #f8fafc;
+
+.indicator__label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dash-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.indicator-info { min-width: 0; }
-.indicator-label {
-  font-size: 11px; color: #6b7280; font-weight: 500;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+
+.indicator__value {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.indicator-value {
-  font-size: 13px; font-weight: 600; color: #111827;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-@media (max-width: 768px) {
-  .panel-head { padding: 12px 14px; }
-  .panel-title { font-size: 12px; }
+
+@media (max-width: 480px) {
+  .indicators {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
