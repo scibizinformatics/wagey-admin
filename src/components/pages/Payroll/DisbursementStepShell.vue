@@ -38,15 +38,16 @@
 
     <!-- ── Progress + content ──────────────────────────────────────────────── -->
     <section class="dash-panel step-board">
-      <PayoutGroupStepperHeader :group-id="groupId" :pgi-status="status" />
+      <!-- `stepperKey` lets a step force the progress header to refetch after an
+           action that advances the flow — incrementing it remounts the header. -->
+      <PayoutGroupStepperHeader :key="stepperKey" :group-id="groupId" :pgi-status="status" />
 
+      <!-- No footer slot by design. A step's primary action belongs in its list
+           toolbar, beside search, where it is visible without scrolling past the
+           table to find it. -->
       <div :class="['step-board__body', { 'step-board__body--flush': flush }]">
         <slot />
       </div>
-
-      <footer v-if="$slots.footer" class="step-board__foot">
-        <slot name="footer" />
-      </footer>
     </section>
   </div>
 </template>
@@ -80,6 +81,8 @@ const props = defineProps({
   status: { type: String, default: '' },
   /** Drop body padding, for a step whose content owns its own edges. */
   flush: { type: Boolean, default: false },
+  /** Bump to remount the progress header, e.g. after releasing payslips. */
+  stepperKey: { type: [Number, String], default: 0 },
 })
 
 const STEP_NAMES = ['Review employees', 'Payslips', 'Funding', 'Disbursement', 'Complete']
@@ -183,32 +186,15 @@ function goBack() {
   padding: 0;
 }
 
-.step-board__foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 12px var(--dash-pad-x);
-  border-top: 1px solid var(--dash-line);
-  background: var(--dash-n-25);
-  flex-wrap: wrap;
-}
-
 @media (max-width: 1023px) {
   .step-head__title {
     font-size: 20px;
-  }
-  .step-board__foot {
-    padding: 12px 14px;
   }
 }
 
 @media (max-width: 640px) {
   .step-head {
     align-items: stretch;
-  }
-  .step-board__foot > * {
-    flex: 1;
   }
 }
 </style>

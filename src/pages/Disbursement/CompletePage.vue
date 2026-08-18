@@ -1,91 +1,72 @@
 <template>
   <PageShell>
-    <div class="complete-card">
-      <!-- Header Section -->
-      <div class="page-header">
-        <div class="back-row">
-          <q-btn flat dense no-caps icon="arrow_back" label="Back to Disbursement" class="back-btn" @click="goBack" />
+    <DisbursementStepShell
+      :group-id="groupId"
+      :step="5"
+      :group-name="groupName"
+      subtitle="The finished record of this payout group."
+      :status="pgiStatus"
+    >
+      <!-- The terminal step is a result, not a worklist, so it opens by saying
+           the run is done and what it came to. Previously it looked identical to
+           the four working steps, giving no sense of arrival. -->
+      <div class="done">
+        <span class="dash-featured-icon dash-featured-icon--good done__icon">
+          <q-icon name="check" size="20px" />
+        </span>
+        <div class="done__text">
+          <h2 class="done__title">Disbursement complete</h2>
+          <p class="done__sub">
+            <template v-if="completion?.completion_date">
+              Closed {{ completion.completion_date }} ·
+            </template>
+            {{ completion?.employees_paid ?? 0 }} of {{ employees.length }} employees paid
+          </p>
         </div>
-        <div class="header-content">
-          <div class="header-titles">
-            <h1 class="page-title">Complete</h1>
-          </div>
-          <div class="header-actions">
-            <q-input
-              v-model="searchTerm"
-              placeholder="Search employees..."
-              class="header-search"
-              dense
-              outlined
-              @update:model-value="filterEmployees"
-            >
-              <template v-slot:prepend>
-                <q-icon name="search" class="search-icon" />
-              </template>
-            </q-input>
-          </div>
-        </div>
-      </div>
-
-      <!-- Stepper Header -->
-      <PayoutGroupStepperHeader :group-id="groupId" />
-
-      <!-- Stats Bar -->
-      <div class="stats-bar">
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-total"></span>
-            Net Payroll Amount
-          </div>
-          <div class="stats-segment-value">₱{{ parseAmount(completion?.net_payroll_amount) }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-paid"></span>
-            Total Employees Paid
-          </div>
-          <div class="stats-segment-value">{{ employees.length ?? 0 }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-success"></span>
-            Employees Paid
-          </div>
-          <div class="stats-segment-value">{{ completion?.employees_paid ?? 0 }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-payouts"></span>
-            Total Payouts
-          </div>
-          <div class="stats-segment-value">{{ completion?.total_payouts ?? 0 }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-fees"></span>
-            Total Fees
-          </div>
-          <div class="stats-segment-value">₱{{ parseAmount(completion?.total_fees) }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-date"></span>
-            Completion Date
-          </div>
-          <div class="stats-segment-value">{{ completion?.completion_date || '—' }}</div>
+        <div class="done__total">
+          <span class="done__total-label">Net payroll</span>
+          <span class="done__total-value dash-num">₱{{ parseAmount(completion?.net_payroll_amount) }}</span>
         </div>
       </div>
 
-      <!-- Main Table Section -->
-      <div class="section-header">
-        <h2 class="section-title">Payment Summary</h2>
-      </div>
-      <div class="table-block">
+      <DisbursementStatRow :tiles="statTiles" :loading="loading" />
+
+      <DisbursementTableCard
+        v-model:search="searchTerm"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        title="Payment summary"
+        :total="filteredData.length"
+        :page-size-options="pageSizeOptions"
+        :loading="loading"
+        searchable
+        search-placeholder="Search employee, method or status"
+        unit-label="employee"
+        unit-label-plural="employees"
+      >
+        <!-- Both actions beside search rather than below the table. -->
+        <template #actions>
+          <q-btn
+            outline
+            no-caps
+            dense
+            icon="o_file_download"
+            label="Export PDF"
+            class="btn-outline"
+            :disable="!filteredData.length"
+            @click="exportSummary"
+          />
+          <q-btn
+            unelevated
+            no-caps
+            dense
+            icon="o_list"
+            label="All runs"
+            class="btn-primary"
+            @click="goToList"
+          />
+        </template>
+
         <q-table
           :rows="paginatedData"
           :columns="columns"
@@ -93,76 +74,71 @@
           :pagination="{ rowsPerPage: 0 }"
           row-key="id"
           flat
-          dense
           hide-no-data
           hide-pagination
-          class="complete-table"
         >
+          <template #body-cell-payment_method="props">
+            <q-td :props="props">
+              <span class="method">
+                <q-icon :name="methodIcon(props.row.payment_method)" size="15px" />
+                {{ props.row.payment_method || '—' }}
+              </span>
+            </q-td>
+          </template>
+
+          <template #body-cell-reference_no="props">
+            <q-td :props="props">
+              <span v-if="props.row.reference_no" class="dash-num">{{ props.row.reference_no }}</span>
+              <span v-else class="muted">—</span>
+            </q-td>
+          </template>
+
           <template #body-cell-status="props">
             <q-td :props="props">
               <StatusPill :status="props.row.status" />
             </q-td>
           </template>
-          <template #body-cell-net_pay="props">
-            <q-td :props="props" class="text-right">₱{{ parseFloat(props.row.net_pay || 0).toLocaleString('en-PH') }}</q-td>
+
+          <template #body-cell-received_by="props">
+            <q-td :props="props">
+              <span v-if="props.row.received_by">{{ props.row.received_by }}</span>
+              <span v-else class="muted">—</span>
+            </q-td>
           </template>
+
           <template #no-data>
-            <div class="empty-state">
-              <q-icon name="inbox" size="28px" color="grey-4" />
-              <div class="empty-text">No data found</div>
+            <div v-if="!loading" class="dash-empty">
+              <span class="dash-featured-icon">
+                <q-icon :name="searchTerm ? 'filter_alt_off' : 'o_receipt_long'" size="20px" />
+              </span>
+              <p class="dash-empty__title">
+                {{ searchTerm ? 'No employees match this search' : 'No payment records' }}
+              </p>
+              <p class="dash-empty__sub">
+                {{
+                  searchTerm
+                    ? 'Try a different name, method or status.'
+                    : 'This group has no completed payments to show.'
+                }}
+              </p>
             </div>
           </template>
         </q-table>
-      </div>
-
-      <!-- Pagination Controls -->
-      <div class="pagination-bar" v-if="filteredData.length > 0">
-        <div class="pagination-info">
-          <span class="pagination-text">
-            Showing {{ (page - 1) * pageSize + 1 }} –
-            {{ Math.min(page * pageSize, filteredData.length) }}
-            of {{ filteredData.length }} employees
-          </span>
-          <q-select
-            v-model="pageSize"
-            :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
-            dense
-            outlined
-            class="page-size-select"
-            @update:model-value="onPageSizeChange"
-          />
-        </div>
-        <q-pagination
-          v-model="page"
-          :max="totalPages"
-          :max-pages="6"
-          boundary-numbers
-          direction-links
-          color="primary"
-          active-color="primary"
-          active-text-color="white"
-          icon-first="first_page"
-          icon-prev="chevron_left"
-          icon-next="chevron_right"
-          icon-last="last_page"
-          class="schedule-pagination"
-          @update:model-value="onPageChange"
-        />
-      </div>
-    </div>
+      </DisbursementTableCard>
+    </DisbursementStepShell>
   </PageShell>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
 import StatusPill from 'src/components/common/StatusPill.vue'
-import PayoutGroupStepperHeader from 'src/components/pages/Payroll/PayoutGroupStepperHeader.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
+import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
+import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
+import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 
 const route = useRoute()
@@ -181,13 +157,128 @@ const pageSizeOptions = [10, 20, 50]
 const columns = [
   { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
   { name: 'position', label: 'Position', field: 'position', align: 'left', sortable: true },
-  { name: 'payment_method', label: 'Payment Method', field: 'payment_method', align: 'center' },
-  { name: 'reference_no', label: 'Reference No', field: 'reference_no', align: 'center' },
-  { name: 'net_pay', label: 'Net Pay', field: 'net_pay', align: 'right', sortable: true, format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}` },
+  { name: 'payment_method', label: 'Method', field: 'payment_method', align: 'left' },
+  { name: 'reference_no', label: 'Reference', field: 'reference_no', align: 'left' },
+  { name: 'net_pay', label: 'Net pay', field: 'net_pay', align: 'right', sortable: true, format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}` },
   { name: 'status', label: 'Status', field: 'status', align: 'left', sortable: true },
-  { name: 'released_on', label: 'Released On', field: 'released_on', align: 'center' },
-  { name: 'received_by', label: 'Received By', field: 'received_by', align: 'center' },
+  { name: 'released_on', label: 'Released', field: 'released_on', align: 'left' },
+  { name: 'received_by', label: 'Received by', field: 'received_by', align: 'left' },
 ]
+
+const pgiStatus = computed(() => route.query.pgi_status || '')
+
+const groupName = computed(
+  () =>
+    completion.value?.payout_group_name ||
+    completion.value?.group_name ||
+    route.query.group ||
+    '',
+)
+
+const statTiles = computed(() => [
+  {
+    key: 'paid',
+    label: 'Employees paid',
+    value: completion.value?.employees_paid ?? 0,
+    mark: 'var(--dash-good-mark)',
+  },
+  {
+    key: 'payouts',
+    label: 'Total payouts',
+    value: completion.value?.total_payouts ?? 0,
+    mark: 'var(--dash-cat-1)',
+  },
+  {
+    key: 'fees',
+    label: 'Total fees',
+    value: `₱${parseAmount(completion.value?.total_fees)}`,
+    mark: 'var(--dash-cat-3)',
+  },
+  {
+    key: 'date',
+    label: 'Completed',
+    value: completion.value?.completion_date || '—',
+    mark: 'var(--dash-neutral-mark)',
+    numeric: false,
+  },
+])
+
+const METHOD_ICONS = {
+  cash: 'o_payments',
+  bank: 'o_account_balance',
+  gcash: 'o_smartphone',
+  check: 'o_receipt_long',
+  cheque: 'o_receipt_long',
+  paytaca: 'o_qr_code',
+}
+
+function methodIcon(method) {
+  const key = String(method || '').toLowerCase()
+  const hit = Object.keys(METHOD_ICONS).find((k) => key.includes(k))
+  return hit ? METHOD_ICONS[hit] : 'o_account_balance_wallet'
+}
+
+// Narrowing the list while on a later page would strand the reader.
+watch([searchTerm, pageSize], () => {
+  page.value = 1
+})
+
+function goToList() {
+  router.push('/app/payroll')
+}
+
+/**
+ * A completed run is the record people are asked for later, so it exports.
+ * Uses the same jsPDF + autotable pair as the disbursement list page.
+ */
+function exportSummary() {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+
+  doc.setFontSize(15)
+  doc.text(`Payment summary - ${groupName.value || 'Payout group'}`, 14, 18)
+  doc.setFontSize(9)
+  doc.text(
+    [
+      completion.value?.completion_date ? `Completed ${completion.value.completion_date}` : '',
+      `Employees paid: ${completion.value?.employees_paid ?? 0}`,
+      `Net payroll: PHP ${parseAmount(completion.value?.net_payroll_amount)}`,
+    ]
+      .filter(Boolean)
+      .join('   |   '),
+    14,
+    25,
+  )
+
+  doc.autoTable({
+    startY: 31,
+    head: [
+      [
+        'Employee',
+        'Position',
+        'Method',
+        'Reference',
+        'Net pay',
+        'Status',
+        'Released',
+        'Received by',
+      ],
+    ],
+    body: filteredData.value.map((e) => [
+      e.employee || '',
+      e.position || '',
+      e.payment_method || '',
+      e.reference_no || '',
+      `PHP ${parseAmount(e.net_pay)}`,
+      e.status || '',
+      e.released_on || '',
+      e.received_by || '',
+    ]),
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [16, 35, 53] },
+  })
+
+  doc.save(`payment-summary-${groupId}.pdf`)
+}
 
 const filteredData = computed(() => {
   if (!searchTerm.value.trim()) return employees.value
@@ -201,9 +292,6 @@ const filteredData = computed(() => {
   })
 })
 
-const totalPages = computed(
-  () => Math.ceil((filteredData.value?.length ?? 0) / pageSize.value) || 1,
-)
 
 const paginatedData = computed(() => {
   if (!filteredData.value) return []
@@ -230,387 +318,143 @@ onMounted(async () => {
   }
 })
 
-function goBack() {
-  router.push('/app/payroll')
-}
 
-function filterEmployees() {
-  page.value = 1
-}
 
-function onPageChange(newPage) {
-  page.value = newPage
-}
 
-function onPageSizeChange(newSize) {
-  pageSize.value = newSize
-  page.value = 1
-}
 </script>
 
 <style scoped>
-.section-header {
-  padding: 0px 14px 1px;
-}
-
-.section-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-  letter-spacing: -0.01em;
-}
-
-/* ==============================
-   WRAPPER
-   ============================== */
-.complete-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
-}
-
-/* ==============================
-   HEADER
-   ============================== */
-.back-row {
-  padding: 8px 5px 0;
-}
-
-.back-btn {
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
-  text-transform: none;
-}
-
-.back-btn:hover {
-  color: #102335;
-}
-
-.page-header {
-  padding: 8px 24px;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.page-title {
-  font-size: 20px;
+/* ============================================================================
+   Complete step — local styles only. Frame, figures strip and table chrome are
+   shared (DisbursementStepShell / DisbursementStatRow / DisbursementTableCard).
+   ========================================================================== */
+.btn-primary {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-brand);
+  color: #fff;
+  font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: -0.02em;
+  box-shadow: var(--dash-shadow-xs);
+}
+.btn-primary:hover {
+  background: #193d5c;
 }
 
-.header-actions {
+.btn-outline {
+  height: 34px;
+  padding: 0 11px;
+  border-radius: var(--dash-r-md);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-2);
+}
+
+/* ── Completion banner ──
+   States the outcome and its headline figure. A completed run should read as
+   finished on arrival, not as another step waiting for input. */
+.done {
   display: flex;
-  gap: 10px;
   align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--dash-good-bg);
+  border: 1px solid var(--dash-good-line);
+  border-radius: var(--dash-r-lg);
   flex-wrap: wrap;
 }
 
-.header-search {
-  min-width: 220px;
-  max-width: 280px;
-}
-
-.header-search :deep(.q-field__control) {
-  border-radius: 10px;
-  height: 36px;
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-.header-search :deep(.q-field__control:hover) {
-  border-color: #cbd5e1;
-}
-
-.search-icon {
-  color: #94a3b8;
-}
-
-/* ==============================
-   STATS BAR
-   ============================== */
-.stats-bar {
-  display: flex;
-  align-items: center;
-  background: #f8fafc;
-  border-bottom: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 0;
-}
-
-.stats-segment {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.stats-divider {
-  width: 1px;
-  height: 20px;
-  background: #e2e8f0;
-  margin: 0 20px;
+.done__icon {
+  background: var(--dash-surface);
   flex-shrink: 0;
 }
 
-.stats-segment-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #94a3b8;
-  white-space: nowrap;
+.done__text {
+  flex: 1;
+  min-width: 180px;
 }
 
-.stats-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.stats-dot-total {
-  background: #6366f1;
-}
-
-.stats-dot-paid {
-  background: #10b981;
-}
-
-.stats-dot-success {
-  background: #f59e0b;
-}
-
-.stats-dot-payouts {
-  background: #8b5cf6;
-}
-
-.stats-dot-fees {
-  background: #f59e0b;
-}
-
-.stats-dot-date {
-  background: #3b82f6;
-}
-
-.stats-segment-value {
+.done__title {
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.012em;
+  color: #05603a;
 }
 
-/* ==============================
-   TABLE SECTION
-   ============================== */
-.table-block {
-}
-
-.complete-table :deep(.q-table thead th) {
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  padding: 4px 10px;
-  background: #f8f9fb;
-  border-bottom: 1px solid #e8ecf0;
-}
-
-.complete-table :deep(.q-table tbody td) {
-  padding: 8px 10px;
+.done__sub {
+  margin: 2px 0 0;
   font-size: 12.5px;
-  color: #374151;
-  border-bottom: 1px solid #f1f3f5;
-  vertical-align: middle;
+  color: var(--dash-good);
 }
 
-.complete-table :deep(.q-table tbody tr:last-child td) {
-  border-bottom: none;
-}
-
-.complete-table :deep(.q-table tbody tr:hover td) {
-  background: #f8fafc;
-}
-
-.empty-state {
+.done__total {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 32px 0;
+  align-items: flex-end;
+  flex-shrink: 0;
 }
 
-.empty-text {
-  font-size: 13px;
-  color: #9ca3af;
+.done__total-label {
+  font-size: 11.5px;
+  color: var(--dash-good);
 }
 
-/* ==============================
-   PAGINATION BAR
-   ============================== */
-.pagination-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.pagination-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.pagination-text {
-  font-size: 12px;
-  color: #94a3b8;
-  font-weight: 400;
-}
-
-.page-size-select {
-  min-width: 120px;
-}
-
-.page-size-select :deep(.q-field__control) {
-  border-radius: 8px;
-  border-color: #e2e8f0;
-}
-
-.schedule-pagination :deep(.q-btn) {
-  font-weight: 500;
-  border-radius: 8px;
-  min-width: 32px;
-  min-height: 32px;
-  font-size: 13px;
-}
-
-.schedule-pagination :deep(.q-btn--active) {
+.done__total-value {
+  font-size: 22px;
   font-weight: 600;
+  letter-spacing: -0.025em;
+  color: #05603a;
 }
 
-/* ==============================
-   RESPONSIVE
-   ============================== */
-@media (max-width: 1440px) {
-  .complete-card {
-    border-radius: 14px;
-  }
-
-  .page-header {
-    padding: 8px 20px;
-  }
-
-  .stats-bar {
-    padding: 10px 20px;
-  }
-
-  .stats-divider {
-    margin: 0 16px;
-  }
-
-  .pagination-bar {
-    padding: 10px 20px;
-  }
+/* ── Cells ── */
+.method {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.method .q-icon {
+  color: var(--dash-ink-4);
+  flex-shrink: 0;
 }
 
-@media (max-width: 1024px) {
-  .page-header {
-    padding: 8px 16px;
-  }
-
-  .page-title {
-    font-size: 19px;
-  }
-
-  .header-search {
-    min-width: 180px;
-  }
-
-  .stats-bar {
-    padding: 10px 16px;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .stats-divider {
-    margin: 0 12px;
-  }
-
-  .stats-segment-value {
-    font-size: 14px;
-  }
-
-  .pagination-bar {
-    padding: 10px 16px;
-  }
-
-  .pagination-info {
-    gap: 10px;
-  }
+.muted {
+  color: var(--dash-ink-4);
 }
 
-@media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header-actions {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .header-search {
+@media (max-width: 640px) {
+  .done__total {
+    align-items: flex-start;
     width: 100%;
-    max-width: 100%;
-  }
-
-  .stats-bar {
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 16px;
-  }
-
-  .stats-divider {
-    display: none;
-  }
-
-  .pagination-bar {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 10px;
-  }
-
-  .pagination-info {
-    justify-content: center;
+    padding-top: 4px;
+    border-top: 1px solid var(--dash-good-line);
   }
 }
+</style>
 
-@media (max-width: 480px) {
-  .page-title {
-    font-size: 18px;
-  }
+<style>
+.disb-popup {
+  border-radius: var(--dash-r-md) !important;
+  border: 1px solid var(--dash-line);
+  box-shadow: var(--dash-shadow-lg) !important;
+  padding: 4px;
+}
+.disb-popup .q-item {
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+}
+.disb-popup .q-item:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+.disb-popup .q-item--active {
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
+  font-weight: 600;
 }
 </style>

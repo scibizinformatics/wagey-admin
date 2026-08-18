@@ -1,129 +1,65 @@
 <template>
   <PageShell>
-    <div class="payslip-card">
-      <!-- Header Section -->
-      <div class="page-header">
-        <div class="back-row">
-          <q-btn flat dense no-caps icon="arrow_back" label="Back to Disbursement" class="back-btn" @click="goBack" />
-        </div>
-        <div class="header-content">
-          <div class="header-titles">
-            <h1 class="page-title">Payslips</h1>
-          </div>
-          <div class="header-actions">
-            <q-input
-              v-model="searchTerm"
-              placeholder="Search payslips..."
-              class="header-search"
-              dense
-              outlined
-              @update:model-value="filterEmployees"
+    <DisbursementStepShell
+      :group-id="groupId"
+      :step="2"
+      :group-name="groupName"
+      subtitle="Track who has seen and acknowledged their payslip."
+      :status="pgiStatus"
+      :stepper-key="stepperKey"
+    >
+      <DisbursementStatRow :tiles="statTiles" :loading="loading" />
+
+      <DisbursementTableCard
+        v-model:search="searchTerm"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        title="Employee payslips"
+        :total="filteredData.length"
+        :page-size-options="pageSizeOptions"
+        :loading="loading"
+        searchable
+        search-placeholder="Search employee"
+        unit-label="payslip"
+        unit-label-plural="payslips"
+      >
+        <!-- Beside search, so it is reachable without scrolling past the table. -->
+        <template #actions>
+          <span class="action-note dash-num">
+            {{ overview?.acknowledged ?? 0 }}/{{ overview?.payslip_sent ?? 0 }} acknowledged
+          </span>
+          <q-btn
+            unelevated
+            no-caps
+            dense
+            icon-right="o_arrow_forward"
+            label="Continue to funding"
+            class="btn-primary"
+            @click="goToFunding"
+          />
+        </template>
+
+        <!-- Filter tabs live inside the list card, under its toolbar, because
+             they scope the list — they used to sit above the progress stepper,
+             which put a list control above the page's own navigation. -->
+        <template #tabs>
+          <div class="tabs">
+            <button
+              v-for="tab in tabs"
+              :key="tab.value"
+              type="button"
+              class="tab"
+              :class="{ 'tab--active': activeTab === tab.value }"
+              :aria-pressed="activeTab === tab.value"
+              @click="setTab(tab.value)"
             >
-              <template v-slot:prepend>
-                <q-icon name="search" class="search-icon" />
-              </template>
-            </q-input>
+              <q-icon :name="tab.icon" size="15px" />
+              <span class="tab__label">{{ tab.label }}</span>
+              <span v-if="tab.count" class="tab__count dash-num">{{ tab.count }}</span>
+            </button>
           </div>
-        </div>
-      </div>
+        </template>
 
-      <!-- Tab Pills -->
-      <div class="tabs-section">
-        <div class="tab-pills">
-          <button
-            :class="['tab-pill', { active: activeTab === 'all' }]"
-            @click="setTab('all')"
-          >
-            <q-icon name="view_list" class="tab-pill-icon" />
-            <span>All</span>
-            <span v-if="(overview?.payslip_sent ?? 0) > 0" class="tab-badge">{{ overview?.payslip_sent ?? 0 }}</span>
-          </button>
-          <button
-            :class="['tab-pill', { active: activeTab === 'acknowledged' }]"
-            @click="setTab('acknowledged')"
-          >
-            <q-icon name="check_circle" class="tab-pill-icon" />
-            <span>Acknowledged</span>
-            <span v-if="(overview?.acknowledged ?? 0) > 0" class="tab-badge">{{ overview?.acknowledged ?? 0 }}</span>
-          </button>
-          <button
-            :class="['tab-pill', { active: activeTab === 'pending' }]"
-            @click="setTab('pending')"
-          >
-            <q-icon name="schedule" class="tab-pill-icon" />
-            <span>Pending</span>
-            <span v-if="(overview?.pending ?? 0) > 0" class="tab-badge">{{ overview?.pending ?? 0 }}</span>
-          </button>
-          <button
-            :class="['tab-pill', { active: activeTab === 'disputed' }]"
-            @click="setTab('disputed')"
-          >
-            <q-icon name="report" class="tab-pill-icon" />
-            <span>Disputed</span>
-            <span v-if="(overview?.disputed ?? 0) > 0" class="tab-badge">{{ overview?.disputed ?? 0 }}</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Stepper Header -->
-      <PayoutGroupStepperHeader :group-id="groupId" :key="stepperKey" />
-
-      <!-- Stats Bar -->
-      <div class="stats-bar">
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-total"></span>
-            Payslip Sent
-          </div>
-          <div class="stats-segment-value">{{ overview?.payslip_sent ?? 0 }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-acknowledged"></span>
-            Acknowledged
-          </div>
-          <div class="stats-segment-value">{{ overview?.acknowledged ?? 0 }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-pending"></span>
-            Pending
-          </div>
-          <div class="stats-segment-value">{{ overview?.pending ?? 0 }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-disputed"></span>
-            Disputed
-          </div>
-          <div class="stats-segment-value">{{ overview?.disputed ?? 0 }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-failed"></span>
-            Failed Delivery
-          </div>
-          <div class="stats-segment-value">{{ overview?.failed_delivery ?? 0 }}</div>
-        </div>
-        <div class="stats-divider"></div>
-        <div class="stats-segment">
-          <div class="stats-segment-label">
-            <span class="stats-dot stats-dot-total"></span>
-            Total Employees
-          </div>
-          <div class="stats-segment-value">{{ payslips.length ?? 0 }}</div>
-        </div>
-      </div>
-
-      <!-- Main Table Section -->
-      <div class="section-header">
-        <h2 class="section-title">Employee Payslips</h2>
-      </div>
-      <div class="table-block">
         <q-table
           :rows="paginatedData"
           :columns="columns"
@@ -131,83 +67,90 @@
           :pagination="{ rowsPerPage: 0 }"
           row-key="id"
           flat
-          dense
           hide-no-data
           hide-pagination
-          class="payslip-table"
         >
           <template #body-cell-payslip_status="props">
             <q-td :props="props">
               <StatusPill :status="props.row.payslip_status" />
             </q-td>
           </template>
+
           <template #body-cell-actions="props">
-            <q-td :props="props">
-              <template v-if="props.row.payslip_status === 'Disputed'">
-                <q-btn flat dense no-caps size="11px" color="positive" label="Resolve" :disable="processing" @click="resolve(props.row)" />
-                <q-btn flat dense no-caps size="11px" color="negative" label="Reject" class="q-ml-xs" :disable="processing" @click="reject(props.row)" />
-              </template>
-              <span v-else class="no-action">&mdash;</span>
+            <q-td :props="props" class="text-right">
+              <!-- Only a disputed payslip can be acted on here. Other rows show
+                   nothing rather than a dash, so the column reads as "actions
+                   where there are any". -->
+              <span v-if="isDisputed(props.row)" class="row-actions">
+                <q-btn
+                  outline
+                  dense
+                  no-caps
+                  size="11px"
+                  icon="o_check"
+                  label="Resolve"
+                  class="btn-outline btn-outline--good"
+                  :disable="processing"
+                  @click="resolve(props.row)"
+                />
+                <q-btn
+                  outline
+                  dense
+                  no-caps
+                  size="11px"
+                  icon="o_close"
+                  label="Reject"
+                  class="btn-outline btn-outline--danger"
+                  :disable="processing"
+                  @click="reject(props.row)"
+                />
+              </span>
             </q-td>
           </template>
+
           <template #no-data>
-            <div class="empty-state">
-              <q-icon name="inbox" size="28px" color="grey-4" />
-              <div class="empty-text">No data found</div>
+            <div v-if="!loading" class="dash-empty">
+              <span class="dash-featured-icon">
+                <q-icon :name="isFiltered ? 'filter_alt_off' : 'o_receipt_long'" size="20px" />
+              </span>
+              <p class="dash-empty__title">
+                {{ isFiltered ? 'No payslips match this view' : 'No payslips yet' }}
+              </p>
+              <p class="dash-empty__sub">
+                {{
+                  isFiltered
+                    ? 'Try another tab, or clear the search.'
+                    : 'Payslips appear here once they are released in the review step.'
+                }}
+              </p>
+              <q-btn
+                v-if="isFiltered"
+                outline
+                no-caps
+                dense
+                size="12px"
+                icon="filter_alt_off"
+                label="Show all"
+                class="btn-outline"
+                @click="clearFilters"
+              />
             </div>
           </template>
         </q-table>
-      </div>
-
-      <!-- Pagination Controls -->
-      <div class="pagination-bar" v-if="filteredData.length > 0">
-        <div class="pagination-info">
-          <span class="pagination-text">
-            Showing {{ (page - 1) * pageSize + 1 }} –
-            {{ Math.min(page * pageSize, filteredData.length) }}
-            of {{ filteredData.length }} payslips
-          </span>
-          <q-select
-            v-model="pageSize"
-            :options="pageSizeOptions.map((n) => ({ label: `${n} per page`, value: n }))"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
-            dense
-            outlined
-            class="page-size-select"
-            @update:model-value="onPageSizeChange"
-          />
-        </div>
-        <q-pagination
-          v-model="page"
-          :max="totalPages"
-          :max-pages="6"
-          boundary-numbers
-          direction-links
-          color="primary"
-          active-color="primary"
-          active-text-color="white"
-          icon-first="first_page"
-          icon-prev="chevron_left"
-          icon-next="chevron_right"
-          icon-last="last_page"
-          class="schedule-pagination"
-          @update:model-value="onPageChange"
-        />
-      </div>
-    </div>
+      </DisbursementTableCard>
+    </DisbursementStepShell>
   </PageShell>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
-import PayoutGroupStepperHeader from 'src/components/pages/Payroll/PayoutGroupStepperHeader.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
+import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
+import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
+import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 
 const route = useRoute()
@@ -230,12 +173,82 @@ const pageSizeOptions = [10, 20, 50]
 const columns = [
   { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
   { name: 'position_name', label: 'Position', field: 'position_name', align: 'left', sortable: true },
-  { name: 'net_pay', label: 'Net Pay', field: 'net_pay', align: 'right', sortable: true, format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}` },
+  { name: 'net_pay', label: 'Net pay', field: 'net_pay', align: 'right', sortable: true, format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}` },
   { name: 'payslip_status', label: 'Status', field: 'payslip_status', align: 'left', sortable: true },
-  { name: 'acknowledged_on', label: 'Acknowledged On', field: 'acknowledged_on', align: 'center' },
-  { name: 'dispute_status', label: 'Dispute Status', field: 'dispute_status', align: 'center' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+  { name: 'acknowledged_on', label: 'Acknowledged', field: 'acknowledged_on', align: 'left' },
+  { name: 'dispute_status', label: 'Dispute', field: 'dispute_status', align: 'left' },
+  { name: 'actions', label: '', field: 'actions', align: 'right' },
 ]
+
+const pgiStatus = computed(() => route.query.pgi_status || '')
+
+const groupName = computed(
+  () => overview.value?.payout_group_name || overview.value?.group_name || route.query.group || '',
+)
+
+/**
+ * Tabs carry their own counts, which is what the figures strip was duplicating —
+ * it listed acknowledged / pending / disputed and so did the tabs. The strip
+ * keeps the totals that are not selectable as a view.
+ */
+const tabs = computed(() => [
+  { value: 'all', label: 'All', icon: 'o_list', count: payslips.value.length },
+  {
+    value: 'acknowledged',
+    label: 'Acknowledged',
+    icon: 'o_check_circle',
+    count: overview.value?.acknowledged ?? 0,
+  },
+  { value: 'pending', label: 'Pending', icon: 'o_schedule', count: overview.value?.pending ?? 0 },
+  { value: 'disputed', label: 'Disputed', icon: 'o_report', count: overview.value?.disputed ?? 0 },
+])
+
+const statTiles = computed(() => [
+  {
+    key: 'sent',
+    label: 'Payslips sent',
+    value: overview.value?.payslip_sent ?? 0,
+    mark: 'var(--dash-cat-1)',
+  },
+  {
+    key: 'ack',
+    label: 'Acknowledged',
+    value: overview.value?.acknowledged ?? 0,
+    mark: 'var(--dash-good-mark)',
+  },
+  {
+    key: 'pending',
+    label: 'Pending',
+    value: overview.value?.pending ?? 0,
+    mark: 'var(--dash-warn-mark)',
+  },
+  {
+    key: 'disputed',
+    label: 'Disputed',
+    value: overview.value?.disputed ?? 0,
+    mark: 'var(--dash-critical-mark)',
+  },
+  {
+    key: 'failed',
+    label: 'Failed delivery',
+    value: overview.value?.failed_delivery ?? 0,
+    mark: 'var(--dash-critical-mark)',
+  },
+])
+
+const isFiltered = computed(() => activeTab.value !== 'all' || !!searchTerm.value?.trim())
+
+const isDisputed = (row) => String(row.payslip_status || '').toLowerCase() === 'disputed'
+
+function clearFilters() {
+  activeTab.value = 'all'
+  searchTerm.value = ''
+}
+
+function goToFunding() {
+  router.push(`/app/payroll/funding/${groupId}`)
+}
+
 
 const filteredData = computed(() => {
   let result = payslips.value
@@ -251,10 +264,6 @@ const filteredData = computed(() => {
   }
   return result
 })
-
-const totalPages = computed(
-  () => Math.ceil((filteredData.value?.length ?? 0) / pageSize.value) || 1,
-)
 
 const paginatedData = computed(() => {
   if (!filteredData.value) return []
@@ -277,27 +286,15 @@ onMounted(async () => {
   }
 })
 
-function goBack() {
-  router.push('/app/payroll')
-}
-
 function setTab(tab) {
   activeTab.value = tab
-  page.value = 1
 }
 
-function filterEmployees() {
+// Narrowing the list while on a later page would strand the reader on a page that
+// no longer exists.
+watch([searchTerm, activeTab, pageSize], () => {
   page.value = 1
-}
-
-function onPageChange(newPage) {
-  page.value = newPage
-}
-
-function onPageSizeChange(newSize) {
-  pageSize.value = newSize
-  page.value = 1
-}
+})
 
 async function processIssue(row, action) {
   processing.value = true
@@ -337,468 +334,164 @@ async function reject(row) {
 </script>
 
 <style scoped>
-.section-header {
-  padding: 0px 14px 1px;
-}
+/* ============================================================================
+   Payslips step — local styles only. Frame, figures strip and table chrome are
+   shared (DisbursementStepShell / DisbursementStatRow / DisbursementTableCard).
+   ========================================================================== */
 
-.section-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-  letter-spacing: -0.01em;
-}
-
-/* ==============================
-   WRAPPER
-   ============================== */
-.payslip-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
-}
-
-/* ==============================
-   HEADER
-   ============================== */
-.back-row {
-  padding: 8px 5px 0;
-}
-
-.back-btn {
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
-  text-transform: none;
-}
-
-.back-btn:hover {
-  color: #102335;
-}
-
-.page-header {
-  padding: 8px 24px;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.header-search {
-  min-width: 220px;
-  max-width: 280px;
-}
-
-.header-search :deep(.q-field__control) {
-  border-radius: 10px;
-  height: 36px;
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-.header-search :deep(.q-field__control:hover) {
-  border-color: #cbd5e1;
-}
-
-.search-icon {
-  color: #94a3b8;
-}
-
-/* ==============================
-   TAB PILLS
-   ============================== */
-.tabs-section {
-  padding: 10px 24px;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.tab-pills {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.tab-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 20px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  color: #6b7280;
+/* Toolbar buttons match the 34px search field beside them, so the row shares one
+   baseline rather than stepping up and down. */
+.btn-primary {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-brand);
+  color: #fff;
   font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
+}
+.btn-primary:hover {
+  background: #193d5c;
+}
+
+.btn-outline {
+  height: 34px;
+  padding: 0 11px;
+  border-radius: var(--dash-r-md);
+  font-size: 12.5px;
   font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  outline: none;
+  color: var(--dash-ink-2);
 }
 
-.tab-pill:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
-  color: #374151;
+/* Row-level resolve / reject sit inside a cell, so they are smaller than the
+   toolbar's actions. */
+.row-actions {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: flex-end;
 }
-
-.tab-pill.active {
-  background: #102335;
-  border-color: #102335;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3);
-}
-
-.tab-pill-icon {
-  font-size: 15px;
-}
-
-.tab-badge {
-  background: #ef4444;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 700;
-  border-radius: 10px;
-  padding: 1px 5px;
-  min-width: 17px;
-  text-align: center;
-  line-height: 1.5;
-}
-
-.tab-pill.active .tab-badge {
-  background: rgba(255, 255, 255, 0.35);
-}
-
-/* ==============================
-   STATS BAR
-   ============================== */
-.stats-bar {
-  display: flex;
-  align-items: center;
-  background: #f8fafc;
-  border-bottom: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 0;
-}
-
-.stats-segment {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.stats-divider {
-  width: 1px;
-  height: 20px;
-  background: #e2e8f0;
-  margin: 0 20px;
-  flex-shrink: 0;
-}
-
-.stats-segment-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.row-actions .btn-outline {
+  height: 28px;
+  padding: 0 9px;
   font-size: 12px;
-  font-weight: 500;
-  color: #94a3b8;
+}
+.btn-outline--good {
+  color: var(--dash-good);
+}
+.btn-outline--danger {
+  color: var(--dash-critical);
+}
+
+.action-note {
+  font-size: 12.5px;
+  color: var(--dash-ink-3);
   white-space: nowrap;
 }
 
-.stats-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+/* ── Filter tabs ──
+   A recessed segmented control, the same language as the dashboard's view
+   toggle and the schedule's grouping switch. Was a row of custom pills with
+   their own palette. */
+.tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  background: var(--dash-n-100);
+  min-width: min-content;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: none;
+  border-radius: var(--dash-r-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease), box-shadow var(--dash-fast) var(--dash-ease);
+}
+.tab:hover {
+  color: var(--dash-ink-2);
+}
+.tab--active {
+  background: var(--dash-surface);
+  color: var(--dash-ink);
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
+}
+.tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dash-n-100), 0 0 0 4px var(--dash-accent-ring);
+}
+
+.tab .q-icon {
+  color: var(--dash-ink-4);
   flex-shrink: 0;
 }
-
-.stats-dot-total {
-  background: #6366f1;
+.tab--active .q-icon {
+  color: var(--dash-accent);
 }
 
-.stats-dot-acknowledged {
-  background: #10b981;
-}
-
-.stats-dot-pending {
-  background: #f59e0b;
-}
-
-.stats-dot-disputed {
-  background: #f87171;
-}
-
-.stats-dot-failed {
-  background: #ef4444;
-}
-
-.stats-segment-value {
-  font-size: 15px;
+/* The count is a figure on the tab, not a badge shouting for attention. */
+.tab__count {
+  padding: 1px 6px;
+  border-radius: var(--dash-r-pill);
+  background: var(--dash-n-200);
+  font-size: 11px;
   font-weight: 600;
-  color: #0f172a;
-  letter-spacing: -0.01em;
+  color: var(--dash-ink-2);
+}
+.tab--active .tab__count {
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
 }
 
-/* ==============================
-   TABLE SECTION
-   ============================== */
-.table-block {
+@media (max-width: 1023px) {
+  .action-note {
+    display: none;
+  }
+  .tab__label {
+    display: none;
+  }
+  /* Collapsed to icon plus count, the active tab keeps its label so the current
+     view is still named. */
+  .tab--active .tab__label {
+    display: inline;
+  }
 }
+</style>
 
-.payslip-table :deep(.q-table thead th) {
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  padding: 4px 10px;
-  background: #f8f9fb;
-  border-bottom: 1px solid #e8ecf0;
+<style>
+.disb-popup {
+  border-radius: var(--dash-r-md) !important;
+  border: 1px solid var(--dash-line);
+  box-shadow: var(--dash-shadow-lg) !important;
+  padding: 4px;
 }
-
-.payslip-table :deep(.q-table tbody td) {
-  padding: 8px 10px;
-  font-size: 12.5px;
-  color: #374151;
-  border-bottom: 1px solid #f1f3f5;
-  vertical-align: middle;
-}
-
-.payslip-table :deep(.q-table tbody tr:last-child td) {
-  border-bottom: none;
-}
-
-.payslip-table :deep(.q-table tbody tr:hover td) {
-  background: #f8fafc;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 32px 0;
-}
-
-.empty-text {
-  font-size: 13px;
-  color: #9ca3af;
-}
-
-.no-action {
-  font-size: 12px;
-  color: #d1d5db;
-}
-
-/* ==============================
-   PAGINATION BAR
-   ============================== */
-.pagination-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.pagination-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.pagination-text {
-  font-size: 12px;
-  color: #94a3b8;
-  font-weight: 400;
-}
-
-.page-size-select {
-  min-width: 120px;
-}
-
-.page-size-select :deep(.q-field__control) {
-  border-radius: 8px;
-  border-color: #e2e8f0;
-}
-
-.schedule-pagination :deep(.q-btn) {
-  font-weight: 500;
-  border-radius: 8px;
-  min-width: 32px;
+.disb-popup .q-item {
   min-height: 32px;
-  font-size: 13px;
+  padding: 0 9px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
 }
-
-.schedule-pagination :deep(.q-btn--active) {
+.disb-popup .q-item:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+.disb-popup .q-item--active {
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
   font-weight: 600;
-}
-
-/* ==============================
-   RESPONSIVE
-   ============================== */
-@media (max-width: 1440px) {
-  .payslip-card {
-    border-radius: 14px;
-  }
-
-  .page-header {
-    padding: 8px 20px;
-  }
-
-  .tabs-section {
-    padding: 10px 20px;
-  }
-
-  .stats-bar {
-    padding: 10px 20px;
-  }
-
-  .stats-divider {
-    margin: 0 16px;
-  }
-
-  .pagination-bar {
-    padding: 10px 20px;
-  }
-}
-
-@media (max-width: 1024px) {
-  .page-header {
-    padding: 8px 16px;
-  }
-
-  .page-title {
-    font-size: 19px;
-  }
-
-  .header-search {
-    min-width: 180px;
-  }
-
-  .tabs-section {
-    padding: 10px 16px;
-  }
-
-  .tab-pill {
-    padding: 7px 12px;
-    font-size: 12px;
-  }
-
-  .stats-bar {
-    padding: 10px 16px;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .stats-divider {
-    margin: 0 12px;
-  }
-
-  .stats-segment-value {
-    font-size: 14px;
-  }
-
-  .pagination-bar {
-    padding: 10px 16px;
-  }
-
-  .pagination-info {
-    gap: 10px;
-  }
-}
-
-@media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header-actions {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .header-search {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .tab-pills {
-    gap: 5px;
-  }
-
-  .tab-pill {
-    padding: 7px 12px;
-    font-size: 12px;
-    flex: 1;
-    justify-content: center;
-  }
-
-  .stats-bar {
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 16px;
-  }
-
-  .stats-divider {
-    display: none;
-  }
-
-  .pagination-bar {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 10px;
-  }
-
-  .pagination-info {
-    justify-content: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .page-title {
-    font-size: 18px;
-  }
-
-  .tab-pill span:not(.tab-badge) {
-    display: none;
-  }
-
-  .tab-pill {
-    padding: 8px 14px;
-  }
-
-  .tab-pill-icon {
-    font-size: 16px;
-  }
 }
 </style>
