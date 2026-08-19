@@ -104,7 +104,7 @@ function statusLabel(status) {
   color: #f57f17;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .site-name {
     font-size: 12.5px;
   }

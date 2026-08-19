@@ -79,19 +79,6 @@ defineProps({
 
 @media (max-width: 1024px) {
   .stat-card {
-    padding: 14px 16px;
-    gap: 12px;
-  }
-  .stat-icon {
-    width: 38px;
-    height: 38px;
-  }
-  .stat-value {
-    font-size: 18px;
-  }
-}
-@media (max-width: 768px) {
-  .stat-card {
     padding: 12px 14px;
     gap: 10px;
   }

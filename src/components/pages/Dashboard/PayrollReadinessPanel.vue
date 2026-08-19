@@ -187,7 +187,7 @@ function statusColor(status) {
   align-items: center;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .readiness-label {
     font-size: 12.5px;
   }

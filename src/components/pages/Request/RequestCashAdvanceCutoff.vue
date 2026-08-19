@@ -67,15 +67,32 @@
                 <q-input
                   :model-value="search"
                   @update:model-value="$emit('update:search', $event)"
-                  dense outlined
-                  placeholder="Search employees..."
-                  class="cutoff-search-input"
+                  placeholder="Search employee or ID"
+                  dense
+                  outlined
                   clearable
+                  class="grid-search dash-field"
                 >
                   <template v-slot:prepend>
-                    <q-icon name="search" size="16px" />
+                    <q-icon name="search" size="18px" />
                   </template>
                 </q-input>
+                <q-select
+                  v-model="statusFilter"
+                  :options="statusOptions"
+                  emit-value
+                  map-options
+                  dense
+                  outlined
+                  hide-bottom-space
+                  popup-content-class="dash-popup"
+                  class="grid-filter dash-field"
+                  aria-label="Filter by status"
+                >
+                  <template v-slot:prepend>
+                    <q-icon name="o_filter_alt" size="16px" />
+                  </template>
+                </q-select>
               </div>
             </div>
 
@@ -84,10 +101,18 @@
               <span>Loading cash advance requests...</span>
             </div>
 
-            <div v-else-if="filteredCutoffRequests.length === 0" class="cutoff-panel-empty">
-              <q-icon name="search_off" size="48px" color="grey-4" />
-              <div class="empty-title">No cash advance requests found</div>
-              <div class="empty-subtitle">Try adjusting your search</div>
+            <div v-else-if="filteredCutoffRequests.length === 0" class="grid-empty">
+              <div class="grid-empty-icon"><q-icon name="account_balance_wallet" size="26px" /></div>
+              <div class="grid-empty-title">
+                {{ isNarrowed ? 'No cash advances match your search' : 'No cash advances in this cutoff' }}
+              </div>
+              <div class="grid-empty-text">
+                {{
+                  isNarrowed
+                    ? 'Clear the search or switch back to All statuses to see every request in this cutoff.'
+                    : 'Cash advances drawn against this cutoff will appear here.'
+                }}
+              </div>
             </div>
 
             <div v-else class="cutoff-table-container">
@@ -98,62 +123,66 @@
                 flat
                 hide-pagination
                 :rows-per-page-options="[0]"
-                class="cutoff-table"
+                class="request-grid cutoff-grid"
               >
                 <template v-slot:header="props">
-                  <q-tr class="table-header-row" :props="props">
-                    <q-th key="employeeName" :props="props" class="table-header-cell">Employee</q-th>
-                    <q-th key="requestedAmount" :props="props" class="table-header-cell">Amount</q-th>
-                    <q-th key="requestDate" :props="props" class="table-header-cell">Request Date</q-th>
-                    <q-th key="approvalDate" :props="props" class="table-header-cell">Approval Date</q-th>
-                    <q-th key="payoutDate" :props="props" class="table-header-cell">Payout Date</q-th>
-                    <q-th key="status" :props="props" class="table-header-cell">Status</q-th>
-                    <q-th key="approvedBy" :props="props" class="table-header-cell">Approved By</q-th>
-                    <q-th key="actions" :props="props" class="table-header-cell">Actions</q-th>
+                  <q-tr class="grid-head-row" :props="props">
+                    <q-th key="employeeName" :props="props" class="grid-head-cell cut-cell-employee">Employee</q-th>
+                    <q-th key="requestedAmount" :props="props" class="grid-head-cell grid-head-cell--right cut-cell-amount">Amount</q-th>
+                    <q-th key="requestDate" :props="props" class="grid-head-cell cut-cell-date">Requested</q-th>
+                    <q-th key="payoutDate" :props="props" class="grid-head-cell cut-cell-date">Payout</q-th>
+                    <q-th key="status" :props="props" class="grid-head-cell cut-cell-status">Status</q-th>
+                    <q-th key="actions" :props="props" class="grid-head-cell grid-head-cell--right cut-cell-actions">Actions</q-th>
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
-                  <q-tr class="table-body-row" :props="props">
-                    <q-td key="employeeName" :props="props" class="table-body-cell">
-                      <div class="employee-info">
-                        <q-avatar size="28px" color="primary" text-color="white">
-                          {{ getInitials(props.row.employee_name) }}
-                        </q-avatar>
-                        <span class="employee-name">{{ props.row.employee_name }}</span>
+                  <q-tr
+                    class="grid-row"
+                    :class="{ 'grid-row--waiting': props.row.status === 'pending' }"
+                    :props="props"
+                  >
+                    <q-td key="employeeName" :props="props" class="grid-cell cut-cell-employee">
+                      <div class="identity">
+                        <span class="identity-avatar">{{ getInitials(props.row.employee_name) }}</span>
+                        <span class="identity-text">
+                          <span class="identity-name">{{ props.row.employee_name }}</span>
+                        </span>
                       </div>
                     </q-td>
-                    <q-td key="requestedAmount" :props="props" class="table-body-cell">
-                      <span class="amount-text">&#8369;{{ formatAmount(props.row.requested_amount) }}</span>
+                    <q-td key="requestedAmount" :props="props" class="grid-cell grid-cell--right cut-cell-amount">
+                      <span class="amount">&#8369;{{ formatAmount(props.row.requested_amount) }}</span>
                     </q-td>
-                    <q-td key="requestDate" :props="props" class="table-body-cell">
-                      <div class="date-text">{{ formatDate(props.row.request_date) }}</div>
+                    <q-td key="requestDate" :props="props" class="grid-cell cut-cell-date">
+                      <span class="stat-num">{{ formatDate(props.row.request_date) }}</span>
                     </q-td>
-                    <q-td key="approvalDate" :props="props" class="table-body-cell">
-                      <div class="date-text">{{ props.row.approval_date ? formatDate(props.row.approval_date) : '-' }}</div>
+                    <q-td key="payoutDate" :props="props" class="grid-cell cut-cell-date">
+                      <span :class="['stat-num', { muted: !props.row.payout_date }]">
+                        {{ props.row.payout_date ? formatDate(props.row.payout_date) : '—' }}
+                      </span>
+                      <div v-if="props.row.approval_date" class="range-meta">
+                        approved {{ formatDate(props.row.approval_date) }}
+                      </div>
                     </q-td>
-                    <q-td key="payoutDate" :props="props" class="table-body-cell">
-                      <div class="date-text">{{ props.row.payout_date ? formatDate(props.row.payout_date) : '-' }}</div>
-                    </q-td>
-                    <q-td key="status" :props="props" class="table-body-cell">
-                      <div :class="['status-badge', getStatusClass(props.row.status)]">
+                    <q-td key="status" :props="props" class="grid-cell cut-cell-status">
+                      <span :class="['status-pill', statusPillClass(props.row.status)]">
                         {{ props.row.status_display || capitalize(props.row.status) }}
+                      </span>
+                      <div v-if="props.row.approved_by" class="status-note">
+                        by {{ props.row.approved_by }}
                       </div>
                     </q-td>
-                    <q-td key="approvedBy" :props="props" class="table-body-cell">
-                      <span class="meta-text">{{ props.row.approved_by || '-' }}</span>
-                    </q-td>
-                    <q-td key="actions" :props="props" class="table-body-cell">
-                      <div class="action-buttons">
-                        <q-btn flat round icon="visibility" size="sm" class="action-btn view-btn" @click.stop="$emit('view', props.row)">
-                          <q-tooltip>View Details</q-tooltip>
+                    <q-td key="actions" :props="props" class="grid-cell cut-cell-actions">
+                      <div class="grid-actions">
+                        <q-btn flat dense round icon="visibility" size="sm" class="grid-action" @click.stop="$emit('view', props.row)">
+                          <q-tooltip>View details</q-tooltip>
                         </q-btn>
                         <q-btn
                           v-if="props.row.status === 'pending'"
-                          flat round icon="check" size="sm"
-                          class="action-btn approve-btn"
+                          flat dense round icon="rule" size="sm"
+                          class="grid-action grid-action--approve"
                           @click.stop="$emit('approve', props.row)"
                         >
-                          <q-tooltip>Approve / Reject</q-tooltip>
+                          <q-tooltip>Approve or reject</q-tooltip>
                         </q-btn>
                       </div>
                     </q-td>
@@ -169,7 +198,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   logs: { type: Array, default: () => [] },
@@ -184,17 +213,28 @@ defineEmits(['expand', 'view', 'approve', 'update:search'])
 
 const cutoffColumns = [
   { name: 'employeeName', label: 'Employee', field: 'employee_name', align: 'left' },
-  { name: 'requestedAmount', label: 'Amount', field: 'requested_amount', align: 'left' },
-  { name: 'requestDate', label: 'Request Date', field: 'request_date', align: 'left' },
-  { name: 'approvalDate', label: 'Approval Date', field: 'approval_date', align: 'left' },
-  { name: 'payoutDate', label: 'Payout Date', field: 'payout_date', align: 'left' },
-  { name: 'status', label: 'Status', field: 'status', align: 'center' },
-  { name: 'approvedBy', label: 'Approved By', field: 'approved_by', align: 'left' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+  { name: 'requestedAmount', label: 'Amount', field: 'requested_amount', align: 'right' },
+  { name: 'requestDate', label: 'Requested', field: 'request_date', align: 'left' },
+  { name: 'payoutDate', label: 'Payout', field: 'payout_date', align: 'left' },
+  { name: 'status', label: 'Status', field: 'status', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'right' },
+]
+
+// Status lives here rather than on RequestPage: this panel already filters its
+// own rows, and the parent has no other use for it.
+const statusFilter = ref('all')
+const statusOptions = [
+  { label: 'All statuses', value: 'all' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Rejected', value: 'rejected' },
 ]
 
 const filteredCutoffRequests = computed(() => {
   let filtered = [...props.cutoffRequests]
+  if (statusFilter.value !== 'all') {
+    filtered = filtered.filter((r) => r.status === statusFilter.value)
+  }
   if ((props.search || '').trim()) {
     const search = props.search.toLowerCase()
     filtered = filtered.filter(
@@ -205,6 +245,10 @@ const filteredCutoffRequests = computed(() => {
   }
   return filtered
 })
+
+const isNarrowed = computed(
+  () => statusFilter.value !== 'all' || !!(props.search || '').trim(),
+)
 
 const getInitials = (name) => {
   if (!name || name === 'N/A') return '?'
@@ -234,7 +278,16 @@ const getStatusClass = (status) => {
   if (status === 'rejected') return 'status-rejected'
   return 'status-default'
 }
+
+const statusPillClass = (status) => {
+  if (status === 'pending') return 'status-pill--pending'
+  if (status === 'approved') return 'status-pill--approved'
+  if (status === 'rejected') return 'status-pill--rejected'
+  return 'status-pill--default'
+}
 </script>
+
+<style scoped src="./requestGrid.css"></style>
 
 <style scoped>
 .cutoff-section { padding: 0; }
@@ -394,10 +447,6 @@ const getStatusClass = (status) => {
   align-items: center;
   flex-wrap: wrap;
 }
-.cutoff-search-input {
-  min-width: 180px;
-  max-width: 220px;
-}
 .cutoff-panel-loading {
   display: flex;
   align-items: center;
@@ -406,77 +455,30 @@ const getStatusClass = (status) => {
   font-size: 13px;
   color: #6b7280;
 }
-.cutoff-panel-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  gap: 8px;
-  text-align: center;
-}
 .cutoff-table-container {
   background: #ffffff;
-  border-radius: 0 0 8px 8px;
-  border: 1px solid #e8ecf0;
-  overflow: hidden;
+  border: 1px solid #e6ebf1;
+  border-radius: 12px;
+  overflow: auto;
 }
-.cutoff-table {
-  background: #ffffff;
-  width: 100%;
+.cutoff-grid {
+  min-width: 780px;
 }
-.table-header-row { background: #f8fafc; }
-.table-header-cell {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  color: #6b7280 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 11px 16px !important;
-  border-bottom: 1px solid #e8ecf0 !important;
-  vertical-align: middle !important;
+.cut-cell-employee {
+  width: 230px;
 }
-.table-body-row { transition: background 0.15s ease; }
-.table-body-row:hover { background: #f9fafb; }
-.table-body-cell {
-  font-size: 13px;
-  color: #374151;
-  padding: 12px 16px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
-  vertical-align: middle !important;
+.cut-cell-amount {
+  width: 130px;
 }
-.employee-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.employee-name {
-  font-weight: 600;
-  color: #111827;
-  font-size: 13px;
-}
-.amount-text {
-  font-weight: 600;
-  color: #0f172a;
-}
-.date-text {
-  font-size: 13px;
-  color: #374151;
-  font-weight: 500;
-}
-.meta-text {
-  font-size: 13px;
-  color: #6b7280;
-}
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+.cut-cell-date {
+  width: 140px;
   white-space: nowrap;
+}
+.cut-cell-status {
+  width: 160px;
+}
+.cut-cell-actions {
+  width: 100px;
 }
 .status-pending { background: #fffbeb; color: #92400e; }
 .status-approved { background: #f0fdf4; color: #16a34a; }
@@ -496,25 +498,6 @@ const getStatusClass = (status) => {
 .status-badge-mini.status-approved { background: #f0fdf4; color: #16a34a; }
 .status-badge-mini.status-rejected { background: #fef2f2; color: #dc2626; }
 .status-badge-mini.status-default { background: #f1f5f9; color: #64748b; }
-.action-buttons {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-  align-items: center;
-}
-.action-btn {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-  background: #102335;
-  color: #ffffff;
-}
-.action-btn:hover {
-  background: #193d5c;
-}
 .empty-title { font-size: 15px; font-weight: 500; color: #334155; }
 .empty-subtitle { font-size: 13px; color: #94a3b8; }
 
@@ -530,7 +513,8 @@ const getStatusClass = (status) => {
   .cutoff-stat-cols { flex: 1 1 auto; overflow-x: auto; padding-bottom: 2px; }
   .cutoff-stat-col { padding: 0 8px; }
   .cutoff-panel { padding: 12px 14px; }
-  .cutoff-search-input { width: 100%; max-width: 100%; }
+  .panel-actions .grid-search { flex: 1 1 100%; max-width: 100%; }
+  .panel-actions .grid-filter { width: 100%; }
 }
 @media (max-width: 480px) {
   .cutoff-card-header { flex-direction: column; align-items: flex-start; padding: 10px 12px; gap: 8px; }

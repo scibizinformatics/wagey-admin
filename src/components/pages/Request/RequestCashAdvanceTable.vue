@@ -1,123 +1,148 @@
 <template>
   <div class="table-section">
-    <div class="table-header">
-      <div class="table-title-section">
-        <h2 class="table-title">Cash Advance Requests</h2>
-      </div>
-      <div class="table-actions">
-        <q-select
-          :model-value="caFilterStatus"
-          @update:model-value="$emit('update:caFilterStatus', $event)"
-          :options="caStatusOptions"
-          label="Filter by Status"
-          class="filter-select"
-          dense
-          outlined
-          clearable
-        >
-          <template v-slot:prepend>
-            <q-icon name="filter_list" />
-          </template>
-        </q-select>
-      </div>
-    </div>
-    <!-- Skeleton: visible when loading OR no data (persists on 404) -->
-    <div v-if="loading || rows.length === 0" class="modern-table-container">
-      <div class="table-skeleton">
-        <div class="skeleton-header">
-          <div class="skeleton-header-cell">Employee</div>
-          <div class="skeleton-header-cell">Requested Amount</div>
-          <div class="skeleton-header-cell">Request Date</div>
-          <div class="skeleton-header-cell">Approval Date</div>
-          <div class="skeleton-header-cell">Payout Date</div>
-          <div class="skeleton-header-cell">Status</div>
-          <div class="skeleton-header-cell">Approved By</div>
-          <div class="skeleton-header-cell" style="flex: 0 0 72px">Actions</div>
-        </div>
-        <div class="skeleton-row" v-for="n in 4" :key="n">
-          <div class="skeleton-cell"><q-skeleton type="text" width="140px" /></div>
-          <div class="skeleton-cell"><q-skeleton type="text" width="100px" /></div>
-          <div class="skeleton-cell"><q-skeleton type="text" width="90px" /></div>
-          <div class="skeleton-cell"><q-skeleton type="text" width="90px" /></div>
-          <div class="skeleton-cell"><q-skeleton type="text" width="90px" /></div>
-          <div class="skeleton-cell"><q-skeleton type="text" width="80px" /></div>
-          <div class="skeleton-cell"><q-skeleton type="text" width="100px" /></div>
-          <div class="skeleton-cell" style="flex: 0 0 72px"><q-skeleton type="text" width="40px" /></div>
-        </div>
+    <div class="grid-toolbar grid-toolbar--sub">
+      <q-input
+        :model-value="search"
+        @update:model-value="$emit('update:search', $event)"
+        placeholder="Search employee or ID"
+        dense
+        outlined
+        clearable
+        class="grid-search dash-field"
+      >
+        <template v-slot:prepend>
+          <q-icon name="search" size="18px" />
+        </template>
+      </q-input>
+      <q-select
+        :model-value="caFilterStatus || ''"
+        @update:model-value="$emit('update:caFilterStatus', $event)"
+        :options="statusChips"
+        emit-value
+        map-options
+        dense
+        outlined
+        hide-bottom-space
+        popup-content-class="dash-popup"
+        class="grid-filter dash-field"
+        aria-label="Filter by status"
+      >
+        <template v-slot:prepend>
+          <q-icon name="o_filter_alt" size="16px" />
+        </template>
+      </q-select>
+      <div class="grid-footer-info">
+        <strong>{{ rows.length }}</strong> {{ rows.length === 1 ? 'request' : 'requests' }}
       </div>
     </div>
 
-    <div v-else class="modern-table-container">
+    <!-- Loading -->
+    <div v-if="loading" class="grid-scroll">
+      <div class="skel-head">
+        <div class="skel-head-cell" style="flex: 2">Employee</div>
+        <div class="skel-head-cell" style="flex: 1.2">Amount</div>
+        <div class="skel-head-cell" style="flex: 1.2">Requested</div>
+        <div class="skel-head-cell" style="flex: 1.2">Payout</div>
+        <div class="skel-head-cell" style="flex: 1.4">Status</div>
+        <div class="skel-head-cell" style="flex: 0 0 90px">Actions</div>
+      </div>
+      <div class="skel-row" v-for="n in 5" :key="n">
+        <div class="skel-cell" style="flex: 2"><q-skeleton type="text" width="150px" /></div>
+        <div class="skel-cell" style="flex: 1.2"><q-skeleton type="text" width="90px" /></div>
+        <div class="skel-cell" style="flex: 1.2"><q-skeleton type="text" width="90px" /></div>
+        <div class="skel-cell" style="flex: 1.2"><q-skeleton type="text" width="90px" /></div>
+        <div class="skel-cell" style="flex: 1.4"><q-skeleton type="text" width="80px" /></div>
+        <div class="skel-cell" style="flex: 0 0 90px"><q-skeleton type="text" width="50px" /></div>
+      </div>
+    </div>
+
+    <!-- Empty -->
+    <div v-else-if="rows.length === 0" class="grid-empty">
+      <div class="grid-empty-icon"><q-icon name="account_balance_wallet" size="26px" /></div>
+      <div class="grid-empty-title">{{ emptyTitle }}</div>
+      <div class="grid-empty-text">{{ emptyText }}</div>
+    </div>
+
+    <!-- Grid -->
+    <div v-else class="grid-scroll">
       <q-table
         :rows="rows"
         :columns="caColumns"
         row-key="id"
         flat
-        :loading="loading"
-        no-data-label="No cash advance requests found"
-        class="cash-advance-table"
+        class="request-grid ca-grid"
         :pagination="caPagination"
       >
         <template v-slot:header>
-          <q-tr class="table-header-row">
-            <q-th class="table-header-cell">Employee</q-th>
-            <q-th class="table-header-cell">Requested Amount</q-th>
-            <q-th class="table-header-cell">Request Date</q-th>
-            <q-th class="table-header-cell">Approval Date</q-th>
-            <q-th class="table-header-cell">Payout Date</q-th>
-            <q-th class="table-header-cell">Status</q-th>
-            <q-th class="table-header-cell">Approved By</q-th>
-            <q-th class="table-header-cell table-header-actions">Actions</q-th>
+          <q-tr class="grid-head-row">
+            <q-th class="grid-head-cell cell-employee">Employee</q-th>
+            <q-th class="grid-head-cell grid-head-cell--right cell-amount">Amount</q-th>
+            <q-th class="grid-head-cell cell-date">Requested</q-th>
+            <q-th class="grid-head-cell cell-date">Payout</q-th>
+            <q-th class="grid-head-cell cell-status">Status</q-th>
+            <q-th class="grid-head-cell grid-head-cell--right cell-actions">Actions</q-th>
           </q-tr>
         </template>
+
         <template v-slot:body="props">
-          <q-tr class="table-body-row">
-            <q-td class="table-body-cell employee-name-cell">
-              <div class="employee-info">
-                <q-avatar size="34px" class="avatar-fallback">
-                  {{ getInitials(props.row.employee_name) }}
-                </q-avatar>
-                <div class="employee-name-block">
-                  <span class="employee-name">{{ props.row.employee_name }}</span>
-                </div>
+          <q-tr class="grid-row" :class="{ 'grid-row--waiting': props.row.status === 'pending' }">
+            <q-td class="grid-cell cell-employee">
+              <div class="identity">
+                <span class="identity-avatar">{{ getInitials(props.row.employee_name) }}</span>
+                <span class="identity-text">
+                  <span class="identity-name">{{ props.row.employee_name }}</span>
+                </span>
               </div>
             </q-td>
-            <q-td class="table-body-cell amount-cell">
-              <div class="amount-info">
-                <span class="amount-value">&#8369;{{ formatAmount(props.row.requested_amount) }}</span>
+
+            <q-td class="grid-cell grid-cell--right cell-amount">
+              <span class="amount">&#8369;{{ formatAmount(props.row.requested_amount) }}</span>
+            </q-td>
+
+            <q-td class="grid-cell cell-date">
+              <span class="stat-num">{{ formatDate(props.row.request_date) }}</span>
+            </q-td>
+
+            <q-td class="grid-cell cell-date">
+              <span :class="['stat-num', { muted: !props.row.payout_date }]">
+                {{ props.row.payout_date ? formatDate(props.row.payout_date) : '—' }}
+              </span>
+              <div v-if="props.row.approval_date" class="range-meta">
+                approved {{ formatDate(props.row.approval_date) }}
               </div>
             </q-td>
-            <q-td class="table-body-cell">{{ formatDate(props.row.request_date) }}</q-td>
-            <q-td class="table-body-cell">
-              {{ props.row.approval_date ? formatDate(props.row.approval_date) : '-' }}
-            </q-td>
-            <q-td class="table-body-cell">
-              {{ props.row.payout_date ? formatDate(props.row.payout_date) : '-' }}
-            </q-td>
-            <q-td class="table-body-cell">
-              <div :class="['status-badge', getCaStatusClass(props.row.status)]">
-                <span class="status-dot"></span>
+
+            <q-td class="grid-cell cell-status">
+              <span :class="['status-pill', statusPillClass(props.row.status)]">
                 {{ props.row.status_display || capitalizeStatus(props.row.status) }}
+              </span>
+              <div v-if="props.row.approved_by" class="status-note">
+                by {{ props.row.approved_by }}
               </div>
             </q-td>
-            <q-td class="table-body-cell">
-              <span class="meta-text">{{ props.row.approved_by || '-' }}</span>
-            </q-td>
-            <q-td class="table-body-cell actions-cell">
-              <q-btn flat round dense icon="more_horiz" class="action-menu-btn" @click.stop>
-                <q-menu anchor="bottom right" self="top right" class="action-dropdown">
-                  <q-list dense style="min-width: 160px">
-                    <q-item clickable v-close-popup @click="$emit('view', props.row)" class="dropdown-item">
-                      <q-item-section avatar><q-icon name="visibility" size="16px" /></q-item-section>
-                      <q-item-section>View Details</q-item-section>
-                    </q-item>
-                    <q-item v-if="props.row.status === 'pending'" clickable v-close-popup @click="$emit('approve', props.row)" class="dropdown-item">
-                      <q-item-section avatar><q-icon name="check" size="16px" color="positive" /></q-item-section>
-                      <q-item-section>Approve/Reject</q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-menu>
-              </q-btn>
+
+            <q-td class="grid-cell cell-actions">
+              <div class="grid-actions">
+                <q-btn
+                  flat dense round
+                  icon="visibility"
+                  size="sm"
+                  class="grid-action"
+                  @click.stop="$emit('view', props.row)"
+                >
+                  <q-tooltip>View details</q-tooltip>
+                </q-btn>
+                <q-btn
+                  v-if="props.row.status === 'pending'"
+                  flat dense round
+                  icon="rule"
+                  size="sm"
+                  class="grid-action grid-action--approve"
+                  @click.stop="$emit('approve', props.row)"
+                >
+                  <q-tooltip>Approve or reject</q-tooltip>
+                </q-btn>
+              </div>
             </q-td>
           </q-tr>
         </template>
@@ -127,261 +152,120 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 
-defineProps({
+const props = defineProps({
   rows: Array,
   loading: Boolean,
   caFilterStatus: String,
   caStatusOptions: Array,
   caPagination: Object,
+  search: String,
 })
-defineEmits(['update:caFilterStatus', 'view', 'approve'])
+defineEmits(['update:caFilterStatus', 'update:search', 'view', 'approve'])
 
+// Self-describing labels: the field is 34px tall, too short for a Quasar
+// stacked label, so the option text has to say which dimension it controls.
+const STATUS_LABELS = {
+  '': 'All statuses',
+  pending: 'Pending',
+  approved: 'Approved',
+  rejected: 'Rejected',
+}
+
+const statusChips = computed(() =>
+  (props.caStatusOptions || []).map((value) => ({
+    value,
+    label: STATUS_LABELS[value] || capitalizeStatus(value),
+  })),
+)
+
+const isNarrowed = computed(() => !!props.caFilterStatus || !!(props.search || '').trim())
+
+const emptyTitle = computed(() =>
+  isNarrowed.value ? 'No requests match your search' : 'No cash advance requests',
+)
+const emptyText = computed(() =>
+  isNarrowed.value
+    ? 'Clear the search or switch back to All to see every request in this queue.'
+    : 'Cash advance requests from employees appear here for review.',
+)
+
+// The approval date rides under Payout and the approver under Status, so six
+// columns cover what eight did. RequestCaViewModal still lists every field.
 const caColumns = [
-  { name: 'id', label: 'ID', field: 'id', align: 'left', sortable: true },
-  { name: 'employee_name', label: 'Employee', field: 'employee_name', align: 'left', sortable: true },
-  { name: 'requested_amount', label: 'Requested Amount', field: 'requested_amount', align: 'left', sortable: true },
-  { name: 'request_date', label: 'Request Date', field: 'request_date', align: 'left', sortable: true },
-  { name: 'approval_date', label: 'Approval Date', field: 'approval_date', align: 'left', sortable: true },
-  { name: 'payout_date', label: 'Payout Date', field: 'payout_date', align: 'left', sortable: true },
-  { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
-  { name: 'approved_by', label: 'Approved By', field: 'approved_by', align: 'left', sortable: true },
-  { name: 'actions', label: 'Actions', align: 'center' },
+  { name: 'employee_name', label: 'Employee', field: 'employee_name', align: 'left' },
+  { name: 'requested_amount', label: 'Amount', field: 'requested_amount', align: 'right' },
+  { name: 'request_date', label: 'Requested', field: 'request_date', align: 'left' },
+  { name: 'payout_date', label: 'Payout', field: 'payout_date', align: 'left' },
+  { name: 'status', label: 'Status', field: 'status', align: 'left' },
+  { name: 'actions', label: 'Actions', align: 'right' },
 ]
 
 const getInitials = (name) => {
   if (!name || name === 'N/A') return '?'
-  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 }
-const capitalizeStatus = (status) => {
-  if (!status) return 'N/A'
+function capitalizeStatus(status) {
+  if (!status) return 'Unknown'
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
 const formatAmount = (num) => {
-  const n = Number(num || 0)
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const value = Number(num || 0)
+  return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 const formatDate = (dateStr) => {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  if (isNaN(d)) return dateStr
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  if (!dateStr) return '—'
+  const date = new Date(dateStr)
+  if (isNaN(date)) return dateStr
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
-const getCaStatusClass = (status) => {
-  if (status === 'pending') return 'status-pending'
-  if (status === 'approved') return 'status-approved'
-  if (status === 'rejected') return 'status-rejected'
-  return 'status-default'
+const statusPillClass = (status) => {
+  if (status === 'pending') return 'status-pill--pending'
+  if (status === 'approved') return 'status-pill--approved'
+  if (status === 'rejected') return 'status-pill--rejected'
+  return 'status-pill--default'
 }
 </script>
+
+<style scoped src="./requestGrid.css"></style>
 
 <style scoped>
 .table-section {
   background: #ffffff;
 }
-.table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 24px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.table-title-section { min-width: 0; }
-.table-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.table-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.filter-select { min-width: 160px; }
-.modern-table-container { overflow-x: auto; position: relative; }
-.cash-advance-table { width: 100%; min-width: 900px; }
-
-.cash-advance-table,
-.cash-advance-table :deep(.q-table__container),
-.cash-advance-table :deep(.q-table__card),
-.cash-advance-table.q-table__container,
-.cash-advance-table :deep(.q-table__bottom-border),
-.cash-advance-table :deep(.q-table__top),
-.cash-advance-table :deep(.q-table__bottom),
-.cash-advance-table :deep(.q-table) {
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+.ca-grid {
+  min-width: 800px;
 }
 
-.table-header-row { background: #f8fafc; }
-
-.table-header-cell {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  color: #94a3b8 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 8px 14px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
-  vertical-align: middle !important;
+.cell-employee {
+  width: 230px;
 }
-.table-header-actions { text-align: center !important; }
-
-.table-body-row { transition: background 0.12s ease; }
-.table-body-row:hover .table-body-cell { background: #f8fafc; }
-
-.table-body-row:last-child .table-body-cell {
-  border-bottom: none !important;
+.cell-amount {
+  width: 130px;
 }
-
-.table-body-cell {
-  font-size: 13px;
-  color: #334155;
-  padding: 9px 14px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
-  vertical-align: middle !important;
-}
-
-.employee-info { display: flex; align-items: center; gap: 10px; }
-.employee-name-cell { min-width: 200px; }
-.employee-name-block { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.employee-name {
-  font-weight: 500;
-  color: #0f172a;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.avatar-fallback {
-  background: #eef2ff !important;
-  color: #4338ca !important;
-  font-weight: 600 !important;
-  min-width: 28px !important;
-  width: 28px !important;
-  height: 28px !important;
-  border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex-shrink: 0 !important;
-  font-size: 11px !important;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
+.cell-date {
+  width: 140px;
   white-space: nowrap;
 }
-.status-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.cell-status {
+  width: 160px;
 }
-.status-pending { background: #fffbeb; color: #92400e; }
-.status-pending .status-dot { background: #f59e0b; }
-.status-approved { background: #d1fae5; color: #065f46; }
-.status-approved .status-dot { background: #10b981; }
-.status-rejected { background: #fee2e2; color: #991b1b; }
-.status-rejected .status-dot { background: #f87171; }
-.status-default { background: #f1f5f9; color: #64748b; }
-.status-default .status-dot { background: #94a3b8; }
-
-.amount-value { font-weight: 600; color: #0f172a; }
-.amount-cell { font-size: 13px; }
-.meta-text { font-size: 13px; color: #6b7280; }
-
-.actions-cell {
-  text-align: center !important;
-  width: 72px;
-  min-width: 72px;
-}
-.action-menu-btn {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  border-radius: 8px;
-  color: #94a3b8;
-  transition: all 0.15s ease;
-}
-.action-menu-btn:hover {
-  background: #f1f5f9;
-  color: #334155;
-}
-.action-dropdown {
-  border-radius: 10px !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 8px 24px rgba(15,23,42,0.08) !important;
-}
-.dropdown-item {
-  font-size: 13px !important;
-  color: #334155 !important;
-  min-height: 36px !important;
-  padding: 0 12px !important;
-  border-radius: 6px !important;
+.cell-actions {
+  width: 100px;
 }
 
-.table-skeleton {
-  min-width: 900px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0 14px 14px;
-}
-.skeleton-header {
-  display: flex;
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 8px 14px;
-  gap: 8px;
-}
-.skeleton-header-cell {
-  flex: 1;
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.skeleton-row {
-  display: flex;
-  align-items: center;
-  padding: 10px 14px;
-  border-bottom: 1px solid #f1f3f5;
-  gap: 8px;
-}
-.skeleton-row:last-child {
-  border-bottom: none;
-}
-.skeleton-cell {
-  flex: 1;
+.ca-grid :deep(.q-table__bottom) {
+  padding: 10px 20px;
+  border-top: 1px solid #eef1f5 !important;
+  font-size: 12.5px;
+  color: #64748b;
+  min-height: unset;
 }
 
-@media (max-width: 1440px) {
-  .cash-advance-table { min-width: 880px; }
-}
-@media (max-width: 1024px) {
-  .modern-table-container { overflow-x: auto; }
-  .table-header-cell, .table-body-cell { padding: 8px 12px !important; font-size: 12px; }
-  .employee-name-cell { min-width: 170px; }
-  .filter-select { min-width: 140px; }
-}
-@media (max-width: 768px) {
-  .table-header { flex-direction: column; align-items: stretch; gap: 10px; }
-  .table-actions { width: 100%; }
-  .filter-select { width: 100%; min-width: unset; }
-  .modern-table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .cash-advance-table { min-width: 900px; }
-}
-@media (max-width: 480px) {
-  .table-header-cell, .table-body-cell { padding: 10px 12px !important; font-size: 12px; }
-}
 </style>

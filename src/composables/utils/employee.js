@@ -70,6 +70,11 @@ export function getInitials(name) {
 /**
  * Resolve an employee's contract pay type from the page-level contract cache,
  * which is keyed by company and then by employee id.
+ *
+ * The cache holds each employee's *active* contract (from
+ * `/user/employee/{company}/{employee}/active-contract/`). A `null` entry means
+ * "resolved: this employee has no active contract"; a missing entry means it has
+ * not been fetched yet. Both render as "No Contract".
  */
 export function getContract(employee, contracts, companyId) {
   if (!employee || !companyId) return 'N/A'
@@ -80,13 +85,12 @@ export function getContract(employee, contracts, companyId) {
   const contract = companyContracts[employee.id]
   if (!contract) return 'No Contract'
 
-  // The endpoint returns an array of contracts for some employees and a bare
-  // contract object for others.
-  if (Array.isArray(contract) && contract.length > 0) return contract[0].pay_type
-  if (contract?.pay_type) return contract.pay_type
-  if (contract?.contract?.name) return contract.contract.name
+  // Tolerate a wrapped list, in case the endpoint ever returns one.
+  const record = Array.isArray(contract) ? contract[0] : contract
 
-  return 'No Contract'
+  // Never fall through to a bare `undefined` — that renders as an empty chip
+  // styled as though a contract existed.
+  return record?.pay_type || record?.contract?.name || record?.name || 'No Contract'
 }
 
 export function hasContract(employee, contracts, companyId) {

@@ -414,19 +414,83 @@
   min-width: 0;
   flex: 1;
 }
+// Both parts are explicitly `block`. They are written as spans in some callers
+// and divs in others, and an inline fill silently drops its `width` and `height`
+// — the bar then renders as nothing at all, with no error and no colour, which
+// is exactly what happened to the table's bars while the tile's identical markup
+// worked because it had a local `display: block`.
 .dash-bar__track {
+  display: block;
   flex: 1;
   min-width: 24px;
-  height: 6px;
+  height: 7px;
   border-radius: var(--dash-r-pill);
   background: var(--dash-n-100);
+  // A hairline inside the track reads as a channel the fill sits in, which is
+  // what makes the empty remainder legible as "not yet" rather than as padding.
+  box-shadow: inset 0 0 0 1px rgba(16, 24, 40, 0.04);
   overflow: hidden;
 }
+
+// ── Track tones ──
+// The channel takes the same status hue as its fill, at tint strength: the
+// remainder then belongs to the same reading as the filled part, instead of
+// sitting in neutral grey that says nothing. Tint and ring come from the status
+// ramp's own `-bg` and `-line` steps, so the pairing can never drift out of
+// agreement with the fill.
+.dash-bar__track--good {
+  background: var(--dash-good-bg);
+  box-shadow: inset 0 0 0 1px var(--dash-good-line);
+}
+.dash-bar__track--info {
+  background: var(--dash-info-bg);
+  box-shadow: inset 0 0 0 1px var(--dash-info-line);
+}
+.dash-bar__track--warn {
+  background: var(--dash-warn-bg);
+  box-shadow: inset 0 0 0 1px var(--dash-warn-line);
+}
+.dash-bar__track--critical {
+  background: var(--dash-critical-bg);
+  box-shadow: inset 0 0 0 1px var(--dash-critical-line);
+}
+.dash-bar__track--neutral {
+  background: var(--dash-n-100);
+  box-shadow: inset 0 0 0 1px var(--dash-neutral-line);
+}
 .dash-bar__fill {
+  display: block;
   height: 100%;
   border-radius: var(--dash-r-pill);
   transition: width var(--dash-slow) var(--dash-ease);
+  // Top-down highlight, applied to every tone so none of them needs a second
+  // hardcoded colour of its own.
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0));
 }
+
+// ── Fill tones ──
+// Named by status, drawn from the reserved status ramp. Defined here rather than
+// per component so a bar means the same thing wherever it appears.
+.dash-bar__fill--good {
+  background-color: var(--dash-good-mark);
+}
+.dash-bar__fill--info {
+  background-color: var(--dash-info-mark);
+}
+.dash-bar__fill--warn {
+  background-color: var(--dash-warn-mark);
+}
+.dash-bar__fill--critical {
+  background-color: var(--dash-critical-mark);
+}
+.dash-bar__fill--neutral {
+  background-color: var(--dash-neutral-mark);
+}
+
+// No perpetual motion on these bars by deliberate choice: a share bar is a
+// static reading, and animating it forever drew the eye away from the figures it
+// sits beside. The band's colour and the printed percentage carry the state.
+
 .dash-bar__label {
   font-size: 12px;
   font-weight: 500;
@@ -650,6 +714,132 @@
 }
 .dash-field.q-field--error.q-field--focused .q-field__control {
   box-shadow: 0 0 0 4px rgba(240, 68, 56, 0.16);
+}
+
+// ============================================================================
+// SELECT POPUP — pass `popup-content-class="dash-popup"` to any QSelect that
+// uses `dash-field`, so the open menu matches the closed control.
+// ----------------------------------------------------------------------------
+// This has to live here rather than in a page's `<style scoped>`: QSelect
+// teleports its menu to `<body>`, so the menu never carries the page's
+// `data-v-*` scope attribute and scoped rules silently never match.
+// ============================================================================
+
+.dash-popup {
+  border-radius: var(--dash-r-md) !important;
+  border: 1px solid var(--dash-line);
+  box-shadow: var(--dash-shadow-lg) !important;
+  padding: 4px;
+}
+.dash-popup .q-item {
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: var(--dash-r-sm);
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+}
+.dash-popup .q-item:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+.dash-popup .q-item--active {
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
+  font-weight: 600;
+}
+
+// ============================================================================
+// QTABLE — add `dash-qtable` to any flat QTable to give it the table styling
+// above without hand-rolling it per component.
+// ----------------------------------------------------------------------------
+// `.dash-table` (further up) is for tables built out of flex rows. Several pages
+// need a real QTable instead — for its header slots, sorting and expanders — and
+// each one was re-deriving the same chrome in scoped CSS: strip the card border,
+// unfill the header band, restate cell padding, all behind `:deep()` and a wall
+// of `!important` because Quasar's `.q-table th` ties on specificity. Three
+// copies of that had already drifted apart on font size and row padding.
+//
+// Global, not scoped, so scoped child styles can still colour their own cells.
+// Selectors read `.dash-qtable .q-table th` (0,2,1) to out-specify Quasar's
+// `.q-table th` without `!important`.
+//
+// Cell modifiers, set per column: `.num` right-aligns and tabulates figures
+// (pesos have to line up down a payroll column), `.strong` promotes the label
+// column to full ink.
+// ============================================================================
+
+.dash-qtable {
+  background: transparent;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+
+  .q-table__middle {
+    background: transparent;
+  }
+
+  // A label strip over a hairline, not a filled grey band — the same treatment
+  // `.dash-table__head` gets.
+  .q-table thead tr {
+    height: auto;
+    background: transparent;
+  }
+
+  // Top padding matters: the header strip usually sits directly under a panel
+  // head or toolbar, and with none the column labels crowd that border and read
+  // as part of it rather than as the top of the table.
+  .q-table th {
+    padding: 13px 12px 11px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--dash-ink-3);
+    border-bottom: 1px solid var(--dash-line);
+    white-space: nowrap;
+  }
+
+  // Quasar's loading bar rides in its own thead row; it must not inherit the
+  // header cell's padding or it pushes the whole header down 11px mid-fetch.
+  .q-table .q-table__progress th {
+    padding: 0;
+    border: none;
+  }
+
+  .q-table td {
+    padding: var(--dash-row-y) 12px;
+    font-size: 13px;
+    color: var(--dash-ink-2);
+    border-bottom: 1px solid var(--dash-line-soft);
+    vertical-align: middle;
+  }
+
+  .q-table tbody tr:last-child > td {
+    border-bottom: none;
+  }
+
+  // Hover is opt-in per row (`dash-qtable__row`) so that expanded detail rows,
+  // totals and spacers do not light up as if they were clickable records.
+  .q-table tbody tr.dash-qtable__row {
+    transition: background var(--dash-fast) var(--dash-ease);
+  }
+  .q-table tbody tr.dash-qtable__row:hover > td {
+    background: var(--dash-n-50);
+  }
+
+  .q-table th.num,
+  .q-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  .q-table td.strong {
+    color: var(--dash-ink);
+    font-weight: 500;
+  }
+
+  .q-table td.muted {
+    color: var(--dash-ink-4);
+  }
 }
 
 // ============================================================================

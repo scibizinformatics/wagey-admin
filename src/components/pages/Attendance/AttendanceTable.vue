@@ -27,7 +27,12 @@
 
       <template v-slot:body="props">
         <q-tr class="att-table__row">
-          <q-td key="employee" :props="props" class="att-table__td">
+          <!-- Every row is the same person while a single-employee range is
+               active, so the date earns the lead column instead. -->
+          <q-td v-if="singleEmployee" key="date" :props="props" class="att-table__td">
+            <span class="when">{{ rowDateLabel(props.row) }}</span>
+          </q-td>
+          <q-td v-else key="employee" :props="props" class="att-table__td">
             <div class="who">
               <q-avatar
                 v-if="photoOf(props.row)"
@@ -61,7 +66,7 @@
             <span v-else class="muted">—</span>
           </q-td>
 
-          <q-td v-if="showShift" key="shift_name" :props="props" class="att-table__td">
+          <q-td key="shift_name" :props="props" class="att-table__td">
             <span class="shift">{{ getShiftName(props.row) }}</span>
           </q-td>
 
@@ -87,6 +92,22 @@
               @edit="$emit('edit-time', props.row, 'time_out')"
               @view-selfie="(url, title) => $emit('view-selfie', url, title)"
             />
+          </q-td>
+
+          <q-td key="audit" :props="props" class="att-table__td att-table__td--audit">
+            <button
+              type="button"
+              class="audit-btn"
+              :class="auditToneClass(props.row)"
+              :aria-label="`View audit trail for ${nameOf(props.row)}`"
+              @click="$emit('view-audit', props.row)"
+            >
+              <q-icon name="o_visibility" size="16px" />
+              <!-- A dot rather than a count: the row only ever has flags set or
+                   not, and a number here would imply a tally that doesn't exist. -->
+              <span v-if="hasAuditFlags(props.row)" class="audit-btn__dot" />
+              <q-tooltip>{{ auditTooltip(props.row) }}</q-tooltip>
+            </button>
           </q-td>
         </q-tr>
       </template>
@@ -129,10 +150,10 @@
  * takes over below 1024px.
  *
  * Nine columns became five. Each punch's time, selfie and source are now one
- * cell (AttendancePunchCell) instead of three columns repeated twice, and the
- * two least load-bearing columns drop out as the viewport narrows. The previous
- * table was a fixed 700px minimum that shrank its own type to 10px on tablet —
- * both of which this replaces.
+ * cell (AttendancePunchCell) instead of three columns repeated twice, and work
+ * type — the least load-bearing column — drops out as the viewport narrows. The
+ * previous table was a fixed 700px minimum that shrank its own type to 10px on
+ * tablet — both of which this replaces.
  */
 import { computed } from 'vue'
 import { useQuasar } from 'quasar'
@@ -153,28 +174,57 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   employees: { type: Array, default: () => [] },
   isFiltered: { type: Boolean, default: false },
+  // Set while the list is narrowed to one employee over a date range: the
+  // Employee column carries no information then, so Date takes its place.
+  singleEmployee: { type: Boolean, default: false },
 })
 
-defineEmits(['view-selfie', 'view-photo', 'edit-time', 'clear-filters'])
+defineEmits(['view-selfie', 'view-photo', 'edit-time', 'clear-filters', 'view-audit'])
 
-// Employee, time in and time out are the point of the page and always show.
-// Work type and shift are context, and give way in that order.
+// Employee, shift, time in and time out are the point of the page and always
+// show — the table only renders at 1024px and up, where all four fit without
+// sideways scroll. Work type is the one piece of context that gives way.
 const showWorkType = computed(() => $q.screen.width >= 1280)
-const showShift = computed(() => $q.screen.width >= 1440)
 
 const nameOf = (row) => getEmployeeName(row.employee, props.employees)
 const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
 
+const rowDate = (row) => row.date || row.attendance_date || row.log_date || ''
+
+// A bare YYYY-MM-DD parses as UTC and can shift a day west of Greenwich, so pin
+// it to local midnight before formatting.
+function rowDateLabel(row) {
+  const iso = rowDate(row)
+  if (!iso) return '—'
+  const date = new Date(`${iso}T00:00:00`)
+  if (isNaN(date.getTime())) return iso
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 const columns = computed(() => {
   const cols = [
-    {
-      name: 'employee',
-      label: 'Employee',
-      field: (row) => nameOf(row),
-      align: 'left',
-      style: 'min-width: 190px',
-      sortable: true,
-    },
+    props.singleEmployee
+      ? {
+          name: 'date',
+          label: 'Date',
+          field: (row) => rowDate(row),
+          align: 'left',
+          style: 'min-width: 190px',
+          sortable: true,
+        }
+      : {
+          name: 'employee',
+          label: 'Employee',
+          field: (row) => nameOf(row),
+          align: 'left',
+          style: 'min-width: 190px',
+          sortable: true,
+        },
   ]
 
   if (showWorkType.value) {
@@ -188,15 +238,13 @@ const columns = computed(() => {
     })
   }
 
-  if (showShift.value) {
-    cols.push({
-      name: 'shift_name',
-      label: 'Shift',
-      field: (row) => getShiftName(row),
-      align: 'left',
-      style: 'width: 124px',
-    })
-  }
+  cols.push({
+    name: 'shift_name',
+    label: 'Shift',
+    field: (row) => getShiftName(row),
+    align: 'left',
+    style: 'width: 124px',
+  })
 
   cols.push(
     {
@@ -215,10 +263,40 @@ const columns = computed(() => {
       style: 'width: 164px',
       sortable: true,
     },
+    {
+      name: 'audit',
+      label: 'Audit',
+      field: 'id',
+      align: 'center',
+      style: 'width: 62px',
+      headerClasses: 'att-table__th--audit',
+    },
   )
 
   return cols
 })
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+function hasAuditFlags(row) {
+  return Boolean(row.flagged || row.is_suspicious || row.auto_closed)
+}
+
+// Worst state wins the colour, matching the chip order inside the dialog.
+function auditToneClass(row) {
+  if (row.is_suspicious) return 'audit-btn--critical'
+  if (row.flagged) return 'audit-btn--warn'
+  if (row.auto_closed) return 'audit-btn--info'
+  return null
+}
+
+function auditTooltip(row) {
+  const states = []
+  if (row.is_suspicious) states.push('Suspicious')
+  if (row.flagged) states.push('Flagged')
+  if (row.auto_closed) states.push('Auto-closed')
+  if (row.acknowledged) states.push('Acknowledged')
+  return states.length ? `${states.join(' · ')} — view audit trail` : 'View audit trail'
+}
 </script>
 
 <style scoped>
@@ -298,6 +376,75 @@ const columns = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Audit ── */
+.att-table__td--audit,
+.att-table :deep(.att-table__th--audit) {
+  text-align: center;
+}
+
+.audit-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--dash-line, #eaecf0);
+  border-radius: 7px;
+  background: var(--dash-surface, #fff);
+  color: var(--dash-ink-3, #667085);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.audit-btn:hover {
+  background: var(--dash-hover, #f9fafb);
+  border-color: var(--dash-line-strong, #d0d5dd);
+  color: var(--dash-ink, #101828);
+}
+
+/* Tinted only when the row actually carries a flag, so a clean table stays quiet
+   and the exceptions are what catch the eye. */
+.audit-btn--warn {
+  border-color: var(--dash-warn-line, #fedf89);
+  background: var(--dash-warn-bg, #fffaeb);
+  color: var(--dash-warn, #b54708);
+}
+
+.audit-btn--critical {
+  border-color: var(--dash-critical-line, #fecdca);
+  background: var(--dash-critical-bg, #fef3f2);
+  color: var(--dash-critical, #b42318);
+}
+
+.audit-btn--info {
+  border-color: var(--dash-info-line, #c7d2fe);
+  background: var(--dash-info-bg, #eef2ff);
+  color: var(--dash-info, #2e4fd4);
+}
+
+.audit-btn__dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--dash-surface, #fff);
+}
+
+/* Stands in for .who__name in the lead column during a single-employee range */
+.when {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  white-space: nowrap;
 }
 
 .work-type {

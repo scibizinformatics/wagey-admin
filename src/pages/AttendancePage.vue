@@ -23,7 +23,9 @@
           <!-- The day being viewed is the page's primary control, so it leads
                the toolbar rather than sitting in a separate "Filter Records"
                strip below the stats. -->
-          <div class="daynav">
+          <!-- Inert while a date range is active: stepping one day at a time has
+               no meaning when the list already spans a span of days. -->
+          <div class="daynav" :class="{ 'daynav--off': dateRangeActive }">
             <q-btn
               flat
               dense
@@ -32,6 +34,7 @@
               icon="chevron_left"
               class="daynav__btn"
               aria-label="Previous day"
+              :disable="dateRangeActive"
               @click="goToPreviousDay"
             />
             <q-input
@@ -42,6 +45,7 @@
               hide-bottom-space
               class="daynav__field dash-field"
               aria-label="Date"
+              :disable="dateRangeActive"
               @update:model-value="onDateNavChange"
             />
             <q-btn
@@ -52,11 +56,11 @@
               icon="chevron_right"
               class="daynav__btn"
               aria-label="Next day"
-              :disable="currentDate >= today"
+              :disable="dateRangeActive || currentDate >= today"
               @click="goToNextDay"
             />
             <q-btn
-              v-if="currentDate !== today"
+              v-if="currentDate !== today && !dateRangeActive"
               flat
               dense
               no-caps
@@ -85,6 +89,10 @@
           <!-- Payout group, resolved from each employee's active contract. This
                replaced a cost-centre select; cost centre is still used by the
                add and edit dialogs, it just no longer filters the list. -->
+          <!-- Disabled during a date range: payout group is resolved per employee
+               from their active contract, one request each, which would mean
+               resolving a whole span's worth of people to filter a view that is
+               usually already narrowed to one of them. -->
           <q-select
             v-if="payrollGroupOptions.length"
             v-model="payrollGroupFilter"
@@ -94,6 +102,7 @@
             dense
             outlined
             hide-bottom-space
+            :disable="dateRangeActive"
             :popup-content-class="'att-popup'"
             class="att-filter dash-field"
             aria-label="Filter by payout group"
@@ -101,7 +110,26 @@
             <template v-slot:prepend>
               <q-icon name="o_groups" size="16px" />
             </template>
+            <q-tooltip v-if="dateRangeActive">
+              Not available while a date range is active
+            </q-tooltip>
           </q-select>
+
+          <!-- Opens the range picker. Separate from the day navigator: that walks
+               one day at a time, this reviews a span for a single employee. -->
+          <q-btn
+            outline
+            no-caps
+            dense
+            size="12px"
+            icon="o_date_range"
+            :label="dateRangeLabel || 'Date range'"
+            class="att-range-btn"
+            :class="{ 'att-range-btn--on': dateRangeActive }"
+            @click="openDateRangePicker"
+          >
+            <q-tooltip>Review one employee between two dates</q-tooltip>
+          </q-btn>
 
           <span class="att-toolbar__count">
             {{ filteredTotal }} {{ filteredTotal === 1 ? 'record' : 'records' }}
@@ -134,24 +162,28 @@
         <!-- Cards below 1024px, table above. -->
         <AttendanceCardList
           v-if="$q.screen.lt.md"
-          :rows="filteredAttendanceRows"
+          :rows="pagedRows"
           :loading="loading || resolvingGroups"
           :employees="employees"
           :is-filtered="activeFilters.length > 0"
+          :single-employee="reviewingSingleEmployee"
           @view-selfie="viewSelfie"
           @view-photo="viewEmployeePhoto"
           @edit-time="openInlineEdit"
+          @view-audit="openAuditTrail"
           @clear-filters="clearAllFilters"
         />
         <AttendanceTable
           v-else
-          :rows="filteredAttendanceRows"
+          :rows="pagedRows"
           :loading="loading || resolvingGroups"
           :employees="employees"
           :is-filtered="activeFilters.length > 0"
+          :single-employee="reviewingSingleEmployee"
           @view-selfie="viewSelfie"
           @view-photo="viewEmployeePhoto"
           @edit-time="openInlineEdit"
+          @view-audit="openAuditTrail"
           @clear-filters="clearAllFilters"
         />
 
@@ -199,6 +231,9 @@
     <AttendanceDateRangePicker
       v-model="showDatePicker"
       :initial-range="tempDateRange"
+      :initial-employee="dateRangeEmployee"
+      :employee-options="employeeOptions"
+      :options-loading="filtersLoading"
       @apply="applyDateRange"
     />
 
@@ -223,6 +258,15 @@
       @submit="submitAttendance"
       @filter-employees="filterEmployees"
       @fetch-schedule="fetchEmployeeSchedule"
+    />
+
+    <!-- Audit Trail Dialog -->
+    <AttendanceAuditDialog
+      v-model="showAuditDialog"
+      :record="auditRecord"
+      :employee-name="auditEmployeeName"
+      :photo="auditPhoto"
+      :timezone="auditTimezone"
     />
 
     <!-- Employee Photo Viewer Dialog -->
@@ -273,6 +317,7 @@ import AttendanceAddDialog from '@/components/pages/Attendance/AttendanceAddDial
 import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/AttendanceEmployeePhotoViewer.vue'
 import AttendanceInlineEditDialog from '@/components/pages/Attendance/AttendanceInlineEditDialog.vue'
 import AttendanceEditDialog from '@/components/pages/Attendance/AttendanceEditDialog.vue'
+import AttendanceAuditDialog from '@/components/pages/Attendance/AttendanceAuditDialog.vue'
 
 // Shared accessors — these were duplicated verbatim between this page and
 // AttendanceTable, so the two could disagree about the same record.
@@ -292,6 +337,7 @@ const { companyId } = useCompany()
 const {
   attendanceData,
   loading,
+  fetchAttendance,
   fetchAttendanceByDate,
   fetchEmployeeSchedule: fetchScheduleFromComposable,
   logAttendance,
@@ -311,6 +357,7 @@ const filtersLoading = ref(false)
 
 // Dialog states
 const showDatePicker = ref(false)
+const showAuditDialog = ref(false)
 const showEditDialog = ref(false)
 const showAddDialog = ref(false)
 const showSelfieDialog = ref(false)
@@ -406,6 +453,88 @@ function rowPayoutGroupId(row) {
 
 const currentDate = ref(today)
 const tempDateRange = ref({ from: '', to: '' })
+
+// Audit trail dialog — snapshot of the row whose eye icon was clicked
+const auditRecord = ref({})
+const auditEmployeeName = ref('')
+const auditPhoto = ref('')
+const auditTimezone = ref('')
+
+// ─── Date-range review ────────────────────────────────────────────────────────
+// A span of days for (optionally) one employee, as an alternative to the
+// day-at-a-time navigator. Held apart from `currentDate` so that leaving range
+// mode drops the user back on the day they were looking at before.
+const dateRangeActive = ref(false)
+const dateRangeEmployee = ref(null)
+
+const reviewingSingleEmployee = computed(() =>
+  Boolean(dateRangeActive.value && dateRangeEmployee.value),
+)
+
+function isoDayLabel(iso) {
+  if (!iso) return ''
+  // Pin to local midnight — a bare YYYY-MM-DD parses as UTC and can shift a day
+  const date = new Date(`${iso}T00:00:00`)
+  if (isNaN(date.getTime())) return iso
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+const dateRangeSpanLabel = computed(() => {
+  if (!dateRangeActive.value) return ''
+  const { date_from: from, date_to: to } = filters.value
+  return from === to ? isoDayLabel(from) : `${isoDayLabel(from)} – ${isoDayLabel(to)}`
+})
+
+const dateRangeEmployeeName = computed(() => {
+  if (!dateRangeEmployee.value) return ''
+  const match = employeeOptions.value.find(
+    (o) => String(o.value) === String(dateRangeEmployee.value),
+  )
+  return match?.label ?? 'Selected employee'
+})
+
+// Doubles as the toolbar button's label, so an active review is legible without
+// opening the dialog.
+const dateRangeLabel = computed(() => {
+  if (!dateRangeActive.value) return ''
+  return dateRangeEmployeeName.value
+    ? `${dateRangeEmployeeName.value} · ${dateRangeSpanLabel.value}`
+    : dateRangeSpanLabel.value
+})
+
+// The option values come from `emp.id || emp.uuid` while getEmployeeId() on a
+// record prefers uuid, so a roster entry carrying both would compare unequal.
+// Match against every id the record exposes rather than picking one.
+function rowIsEmployee(row, wanted) {
+  const employee = row.employee
+  if (!employee) return false
+
+  const target = String(wanted)
+  if (typeof employee !== 'object') return String(employee) === target
+
+  return [employee.uuid, employee.id, employee.employee_id].some(
+    (candidate) => candidate != null && String(candidate) === target,
+  )
+}
+
+// Every calendar month the span touches, as ['2026-07', '2026-08', …]. The
+// attendance endpoint takes year and month in its path, so a span crossing a
+// month boundary needs one request per month.
+function monthsInRange(from, to) {
+  const out = []
+  let [year, month] = from.split('-').map(Number)
+  const [endYear, endMonth] = to.split('-').map(Number)
+
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    out.push({ year: String(year), month: String(month).padStart(2, '0') })
+    month += 1
+    if (month > 12) {
+      month = 1
+      year += 1
+    }
+  }
+  return out
+}
 
 // Filter options
 const siteOptions = ref([])
@@ -504,7 +633,20 @@ async function lazyFetchTimezone(empId) {
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const filteredAttendanceRows = computed(() => {
   let data = attendanceData.value
-  if (currentDate.value) {
+
+  if (dateRangeActive.value) {
+    // The endpoint returns whole months, so the span is trimmed here. Records
+    // carry a plain YYYY-MM-DD `date`, which compares correctly as a string.
+    const { date_from: from, date_to: to } = filters.value
+    data = data.filter((row) => {
+      const recordDate = row.date || row.attendance_date || row.log_date
+      return recordDate && recordDate >= from && recordDate <= to
+    })
+
+    if (dateRangeEmployee.value) {
+      data = data.filter((row) => rowIsEmployee(row, dateRangeEmployee.value))
+    }
+  } else if (currentDate.value) {
     data = data.filter((row) => {
       const recordDate = row.date || row.attendance_date || row.log_date
       return recordDate === currentDate.value
@@ -522,10 +664,7 @@ const filteredAttendanceRows = computed(() => {
       (row) => String(rowPayoutGroupId(row) ?? '') === String(payrollGroupFilter.value),
     )
   }
-  return data.map((row) => ({
-    ...row,
-    _timezone: getTimezoneForEmployee(row.employee) || '',
-  }))
+  return data
 })
 
 const filteredTotal = computed(() => filteredAttendanceRows.value.length)
@@ -534,8 +673,39 @@ const totalPages = computed(() => {
   return Math.ceil(filteredTotal.value / pagination.value.rowsPerPage) || 1
 })
 
+// The rows actually handed to the table.
+//
+// A range covers whole months, so the API returns everything at once and the
+// page has to cut it down itself — without this the table built a DOM row for
+// every record in the span, which is what made a range feel slower than a day.
+// Day mode is left alone: there the server already returns one page, so slicing
+// again would blank out every page after the first.
+//
+// The per-row timezone stamp happens here rather than in filteredAttendanceRows
+// so it only ever runs over one page of rows instead of the whole span.
+const pagedRows = computed(() => {
+  const rows = filteredAttendanceRows.value
+
+  const visible = dateRangeActive.value
+    ? rows.slice(
+        (pagination.value.page - 1) * pagination.value.rowsPerPage,
+        pagination.value.page * pagination.value.rowsPerPage,
+      )
+    : rows
+
+  return visible.map((row) => ({
+    ...row,
+    _timezone: getTimezoneForEmployee(row.employee) || '',
+  }))
+})
+
 // ─── Header + filters ─────────────────────────────────────────────────────────
 const dateSummary = computed(() => {
+  if (dateRangeActive.value) {
+    return dateRangeEmployeeName.value
+      ? `${dateRangeEmployeeName.value} · ${dateRangeSpanLabel.value}`
+      : dateRangeSpanLabel.value
+  }
   if (!currentDate.value) return ''
   // Parsed as parts rather than `new Date(string)` so the label is not shifted a
   // day by the browser treating a bare date as UTC midnight.
@@ -552,6 +722,12 @@ const dateSummary = computed(() => {
 /** Everything narrowing the list beyond the chosen day, each removable. */
 const activeFilters = computed(() => {
   const out = []
+  if (dateRangeActive.value) {
+    out.push({ key: 'dateRange', label: dateRangeSpanLabel.value })
+    if (dateRangeEmployee.value) {
+      out.push({ key: 'dateRangeEmployee', label: dateRangeEmployeeName.value })
+    }
+  }
   if (employeeSearch.value?.trim()) {
     out.push({ key: 'search', label: `“${employeeSearch.value.trim()}”` })
   }
@@ -565,6 +741,11 @@ const activeFilters = computed(() => {
 function clearFilter(key) {
   if (key === 'search') employeeSearch.value = ''
   if (key === 'payrollGroup') payrollGroupFilter.value = null
+  // Dropping the span leaves range mode entirely; dropping just the employee
+  // widens the same span to everyone, which needs no refetch — the months are
+  // already loaded and filteredAttendanceRows re-runs on its own.
+  if (key === 'dateRange') exitDateRange()
+  if (key === 'dateRangeEmployee') dateRangeEmployee.value = null
 }
 
 // "/" focuses search, matching the Employees page. Ignored while the user is
@@ -679,6 +860,52 @@ async function fetchAttendanceData(params = {}) {
       ...params,
     }
 
+    if (dateRangeActive.value) {
+      const { date_from: from, date_to: to } = filters.value
+      const months = monthsInRange(from, to)
+
+      // No page/limit here: the span is narrowed client-side, so a server-side
+      // page would silently clip days off the end of each month.
+      const rangeParams = {
+        ...(filters.value.cost_center ? { cost_center: filters.value.cost_center } : {}),
+        ...params,
+      }
+
+      // One request per calendar month the span touches — the endpoint keys off
+      // year/month in its path. Issued together rather than in sequence: a
+      // three-month span was costing three round trips end to end.
+      const perMonth = await Promise.all(
+        months.map(({ year, month }) => fetchAttendance(year, month, rangeParams)),
+      )
+      const collected = perMonth.flatMap((rows) => rows ?? [])
+
+      // Same record can't arrive twice, but months are fetched independently and
+      // a boundary record showing up in both would render as a duplicate row.
+      const seen = new Set()
+      const deduped = collected.filter((row) => {
+        const key = row.id ?? JSON.stringify(row)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+
+      attendanceData.value = deduped
+      // filteredAttendanceRows trims to the span and employee, so the API's own
+      // month totals would overstate the footer count.
+      const inRange = filteredAttendanceRows.value
+      pagination.value.rowsNumber = inRange.length
+
+      if (inRange.length === 0) {
+        showErrorNotification('No attendance records found for this range.')
+      }
+
+      // Only the rows that survived the span and employee filters — a whole
+      // month of everyone would otherwise queue a timezone lookup per person to
+      // stamp rows that are never rendered.
+      triggerTimezoneFetch(inRange)
+      return
+    }
+
     const { data, total } = await fetchAttendanceByDate(currentDate.value, extraParams)
     attendanceData.value = [...data]
     pagination.value.rowsNumber = total
@@ -782,7 +1009,11 @@ async function submitAttendance(record) {
     if (timeOut <= timeIn) timeOut.setDate(timeOut.getDate() + 1)
   }
 
-  if (record.date && (!employeeSchedule.value || employeeSchedule.value.length === 0) && !loadingSchedule.value) {
+  if (
+    record.date &&
+    (!employeeSchedule.value || employeeSchedule.value.length === 0) &&
+    !loadingSchedule.value
+  ) {
     await $q.dialog({
       title: 'Not Allowed',
       message: 'Not allowed to add an attendance, add a schedule first',
@@ -836,7 +1067,9 @@ async function submitAttendance(record) {
     if (recordId != null) {
       try {
         await api.delete(`${BASE}/attendance/log/${companyId.value}/${recordId}/`)
-      } catch { /* rollback failure is non-critical */ }
+      } catch {
+        /* rollback failure is non-critical */
+      }
     }
     const data = error.response?.data
     const msg =
@@ -1032,18 +1265,51 @@ function clearAllFilters() {
   filters.value = { date_from: today, date_to: today, cost_center: '' }
   employeeSearch.value = ''
   payrollGroupFilter.value = null
+  dateRangeActive.value = false
+  dateRangeEmployee.value = null
   currentDate.value = today
   pagination.value.page = 1
   fetchAttendanceData()
 }
 
+function openDateRangePicker() {
+  tempDateRange.value = dateRangeActive.value
+    ? { from: filters.value.date_from, to: filters.value.date_to }
+    : { from: '', to: '' }
+  showDatePicker.value = true
+}
+
 function applyDateRange(range) {
-  if (range && range.from && range.to) {
-    filters.value.date_from = range.from
-    filters.value.date_to = range.to
-    currentDate.value = range.from
+  if (!range || !range.from || !range.to) {
+    showDatePicker.value = false
+    return
   }
+
+  // Guard against a hand-entered inverted span; q-date's own range mode can't
+  // produce one, but the payload is a plain object either way.
+  const from = range.from <= range.to ? range.from : range.to
+  const to = range.from <= range.to ? range.to : range.from
+
+  filters.value.date_from = from
+  filters.value.date_to = to
+  dateRangeEmployee.value = range.employee ?? null
+  dateRangeActive.value = true
+
+  // Cleared rather than merely disabled — a filter that still narrows the table
+  // while its control is greyed out is the worst of both.
+  payrollGroupFilter.value = null
+
   showDatePicker.value = false
+  pagination.value.page = 1
+  fetchAttendanceData()
+}
+
+// Back to the single day the navigator was last on
+function exitDateRange() {
+  dateRangeActive.value = false
+  dateRangeEmployee.value = null
+  filters.value.date_from = currentDate.value
+  filters.value.date_to = currentDate.value
   pagination.value.page = 1
   fetchAttendanceData()
 }
@@ -1085,14 +1351,18 @@ function filterEmployees(val, update) {
   })
 }
 
+// In range mode the whole span is already in memory and pagedRows slices it, so
+// turning a page is instant — refetching would re-download every month.
 function onPageChange(newPage) {
   pagination.value.page = newPage
+  if (dateRangeActive.value) return
   fetchAttendanceData()
 }
 
 function onRowsPerPageChange(newSize) {
   pagination.value.rowsPerPage = newSize
   pagination.value.page = 1
+  if (dateRangeActive.value) return
   fetchAttendanceData()
 }
 
@@ -1106,6 +1376,18 @@ function viewEmployeePhoto(employee) {
   selectedEmployeeName.value = getEmployeeName(employee)
   selectedEmployeePhoto.value = getEmployeePhoto(employee)
   showEmployeePhotoDialog.value = true
+}
+
+// ─── Audit trail ──────────────────────────────────────────────────────────────
+// The row is snapshotted rather than referenced: a refetch while the dialog is
+// open would otherwise swap the record out from under it, or blank it entirely.
+function openAuditTrail(row) {
+  if (!row) return
+  auditRecord.value = { ...row }
+  auditEmployeeName.value = getEmployeeName(row.employee)
+  auditPhoto.value = getEmployeePhoto(row.employee) || ''
+  auditTimezone.value = row._timezone || getTimezoneForEmployee(row.employee) || ''
+  showAuditDialog.value = true
 }
 
 function formatTimeForInput(dateTimeString, timezone) {
@@ -1168,6 +1450,24 @@ watch(attendanceData, async () => {
   if (!payrollGroupFilter.value) return
   const ids = attendanceData.value.map((row) => rosterIdFor(row.employee)).filter(Boolean)
   await ensurePayoutGroups(ids)
+})
+
+// Range mode pages client-side, so the row count can shrink under the current
+// page — dropping the employee chip, for instance — and strand the user on an
+// empty one with no refetch to reset it.
+watch(totalPages, (max) => {
+  if (dateRangeActive.value && pagination.value.page > max) {
+    pagination.value.page = max
+  }
+})
+
+// Searching is a whole-roster action, so it takes precedence over a range that
+// has usually been narrowed to one person — typing into the box would otherwise
+// search within that one employee's span and look broken.
+watch(employeeSearch, (term) => {
+  if (term && term.trim() && dateRangeActive.value) {
+    exitDateRange()
+  }
 })
 
 watch(
@@ -1379,6 +1679,64 @@ onMounted(async () => {
   padding-right: 7px;
 }
 
+/* ── Date range ── */
+/* Sized and edged to sit level with the search and payout-group fields rather
+   than reading as a floating action. */
+.att-range-btn {
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
+  color: var(--dash-ink-2);
+  max-width: 290px;
+  font-weight: 500;
+  transition:
+    background var(--dash-fast, 0.15s) var(--dash-ease, ease),
+    border-color var(--dash-fast, 0.15s) var(--dash-ease, ease),
+    color var(--dash-fast, 0.15s) var(--dash-ease, ease);
+}
+
+.att-range-btn :deep(.q-btn__content) {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.att-range-btn :deep(.block) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Quasar paints `outline` as a pseudo-element border; recolour that rather than
+   adding a second border on top of it. */
+.att-range-btn :deep(.q-btn__content + span),
+.att-range-btn::before {
+  border-color: var(--dash-line-strong);
+}
+
+.att-range-btn:hover::before {
+  border-color: var(--dash-n-400);
+}
+
+/* An applied range puts the employee and span in the label, so mark the button
+   as carrying state rather than sitting idle. */
+.att-range-btn--on {
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
+  font-weight: 600;
+}
+
+.att-range-btn--on::before,
+.att-range-btn--on:hover::before {
+  border-color: var(--dash-accent);
+}
+
+/* The day navigator is disabled, not hidden, while a range is on — hiding it
+   would make the toolbar jump every time a range is applied or cleared. */
+.daynav--off {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .att-toolbar__count {
   margin-left: auto;
   font-size: 12.5px;
@@ -1418,7 +1776,8 @@ onMounted(async () => {
   font-weight: 500;
   color: var(--dash-ink-2);
   cursor: pointer;
-  transition: border-color var(--dash-fast) var(--dash-ease),
+  transition:
+    border-color var(--dash-fast) var(--dash-ease),
     color var(--dash-fast) var(--dash-ease);
 }
 .att-applied__chip:hover {
@@ -1427,7 +1786,9 @@ onMounted(async () => {
 }
 .att-applied__chip:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 .att-applied__chip-text {
@@ -1504,9 +1865,9 @@ onMounted(async () => {
 /* ============================================================================
    RESPONSIVE
    ----------------------------------------------------------------------------
-     >= 1440   table with employee / work type / shift / time in / time out
-     1280-1439 shift drops
-     1024-1279 work type drops too, leaving three columns
+     >= 1280   table with employee / work type / shift / time in / time out
+     1024-1279 work type drops; shift stays — it is load-bearing, and the
+               remaining columns still fit the content width without scrolling
      < 1024    AttendanceCardList replaces the table; no sideways scroll
      < 640     day navigator and filters go full width, footer stacks
 

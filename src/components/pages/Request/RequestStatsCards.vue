@@ -1,246 +1,150 @@
 <template>
-  <div class="stats-bar">
-    <template v-if="activeTab === 'leave'">
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-total"></span>
-          Total Leave
-        </div>
-        <div class="stats-segment-value">{{ leaveStats.total }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-pending"></span>
-          Pending
-        </div>
-        <div class="stats-segment-value">{{ leaveStats.pending }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-approved"></span>
-          Approved
-        </div>
-        <div class="stats-segment-value">{{ leaveStats.approved }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-rejected"></span>
-          Rejected
-        </div>
-        <div class="stats-segment-value">{{ leaveStats.rejected }}</div>
-      </div>
-    </template>
-
-    <template v-else-if="activeTab === 'swap'">
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-total"></span>
-          Total Requests
-        </div>
-        <div class="stats-segment-value">{{ swapStatistics.total }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-pending"></span>
-          Pending
-        </div>
-        <div class="stats-segment-value">{{ swapStatistics.pending }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-approved"></span>
-          Approved
-        </div>
-        <div class="stats-segment-value">{{ swapStatistics.approved }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-rejected"></span>
-          Rejected
-        </div>
-        <div class="stats-segment-value">{{ swapStatistics.rejected }}</div>
-      </div>
-    </template>
-
-    <template v-else-if="activeTab === 'overtime'">
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-overtime"></span>
-          Total Overtime
-        </div>
-        <div class="stats-segment-value">{{ overtimeStats.total }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-pending"></span>
-          Pending
-        </div>
-        <div class="stats-segment-value">{{ overtimeStats.pending }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-approved"></span>
-          Approved
-        </div>
-        <div class="stats-segment-value">{{ overtimeStats.approved }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-rejected"></span>
-          Rejected
-        </div>
-        <div class="stats-segment-value">{{ overtimeStats.rejected }}</div>
-      </div>
-    </template>
-
-    <template v-else>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-total"></span>
-          Total Requests
-        </div>
-        <div class="stats-segment-value">{{ caStatistics.total }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-pending"></span>
-          Pending
-        </div>
-        <div class="stats-segment-value">{{ caStatistics.pending }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-approved"></span>
-          Approved
-        </div>
-        <div class="stats-segment-value">{{ caStatistics.approved }}</div>
-      </div>
-      <div class="stats-divider"></div>
-      <div class="stats-segment">
-        <div class="stats-segment-label">
-          <span class="stats-dot stats-dot-rejected"></span>
-          Rejected
-        </div>
-        <div class="stats-segment-value">{{ caStatistics.rejected }}</div>
-      </div>
-    </template>
+  <div class="stat-chips">
+    <span class="stat-total">
+      <strong>{{ stats.total }}</strong>
+      <span class="stat-chip-label">total</span>
+    </span>
+    <span
+      v-for="seg in segments"
+      :key="seg.key"
+      :class="['stat-chip', `stat-chip--${seg.key}`]"
+    >
+      <span class="stat-chip-dot" aria-hidden="true"></span>
+      <strong>{{ seg.value }}</strong>
+      <span class="stat-chip-label">{{ seg.label }}</span>
+    </span>
   </div>
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   activeTab: String,
   leaveStats: Object,
   overtimeStats: Object,
   caStatistics: Object,
   swapStatistics: Object,
 })
+
+const EMPTY = { total: 0, pending: 0, approved: 0, rejected: 0 }
+
+const stats = computed(() => {
+  const source =
+    {
+      leave: props.leaveStats,
+      overtime: props.overtimeStats,
+      swap: props.swapStatistics,
+    }[props.activeTab] || props.caStatistics
+  return { ...EMPTY, ...(source || {}) }
+})
+
+// Every bucket stays visible so the row does not reflow as counts change. The
+// overtime endpoint reports no rejected count at all, so that chip is dropped
+// there rather than always showing a hard-coded zero.
+const segments = computed(() => {
+  const s = stats.value
+  const list = [
+    { key: 'pending', label: 'pending', value: s.pending },
+    { key: 'approved', label: 'approved', value: s.approved },
+  ]
+  if (props.activeTab !== 'overtime') {
+    list.push({ key: 'rejected', label: 'rejected', value: s.rejected })
+  }
+  return list
+})
 </script>
 
 <style scoped>
-.stats-bar {
+.stat-chips {
   display: flex;
   align-items: center;
-  background: #f8fafc;
-  border-bottom: 1px solid #f1f3f5;
-  padding: 10px 24px;
-  gap: 0;
-}
-
-.stats-segment {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.stats-divider {
-  width: 1px;
-  height: 20px;
-  background: #e2e8f0;
-  margin: 0 20px;
-  flex-shrink: 0;
-}
-
-.stats-segment-label {
-  display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
-  font-size: 12px;
+}
+/* The total reads as plain text so the three tinted chips carry the colour on
+   their own — four bordered pills in a row was busier than it was informative. */
+.stat-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding-right: 4px;
+  font-size: 11.5px;
   font-weight: 500;
   color: #94a3b8;
   white-space: nowrap;
 }
-
-.stats-dot {
+.stat-total strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+.stat-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.stat-chip strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stat-chip-dot {
+  align-self: center;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.stats-dot-total {
-  background: #3b82f6;
+.stat-chip--pending {
+  background: #fef6e4;
+  color: #b45309;
 }
-
-.stats-dot-overtime {
-  background: #8b5cf6;
+.stat-chip--pending strong {
+  color: #92400e;
 }
-
-.stats-dot-pending {
+.stat-chip--pending .stat-chip-dot {
   background: #f59e0b;
 }
 
-.stats-dot-approved {
+.stat-chip--approved {
+  background: #eefbf2;
+  color: #15803d;
+}
+.stat-chip--approved strong {
+  color: #14532d;
+}
+.stat-chip--approved .stat-chip-dot {
   background: #22c55e;
 }
 
-.stats-dot-rejected {
+.stat-chip--rejected {
+  background: #fdf1f1;
+  color: #b91c1c;
+}
+.stat-chip--rejected strong {
+  color: #7f1d1d;
+}
+.stat-chip--rejected .stat-chip-dot {
   background: #ef4444;
 }
 
-.stats-segment-value {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #0f172a;
-  letter-spacing: -0.01em;
-}
-
-@media (max-width: 1024px) {
-  .stats-bar {
-    padding: 10px 16px;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .stats-divider {
-    margin: 0 12px;
-  }
-  .stats-segment-value {
-    font-size: 14px;
-  }
-}
-
-@media (max-width: 768px) {
-  .stats-bar {
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 16px;
-  }
-  .stats-divider {
+@media (max-width: 1279px) {
+  .stat-chip-label {
     display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .stat-chip-label {
+    display: inline;
   }
 }
 </style>

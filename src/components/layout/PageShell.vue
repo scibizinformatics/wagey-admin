@@ -1,6 +1,11 @@
 <template>
   <q-page :class="['page-shell', { 'full-height': fullHeight }]">
-    <div :class="['page-shell-container', { 'full-height': fullHeight, 'flex-column': flexColumn }]">
+    <div
+      :class="[
+        'page-shell-container',
+        { 'full-height': fullHeight, 'flex-column': flexColumn, fluid },
+      ]"
+    >
       <slot />
     </div>
   </q-page>
@@ -10,6 +15,9 @@
 defineProps({
   fullHeight: { type: Boolean, default: false },
   flexColumn: { type: Boolean, default: false },
+  // Drops the centred max-width cap. For data-dense pages whose wide tables
+  // would otherwise be cut off inside the 1400/1600px column.
+  fluid: { type: Boolean, default: false },
 })
 </script>
 
@@ -44,13 +52,18 @@ defineProps({
   }
 }
 
-@media (max-width: 1024px) {
+/* Declared last so it beats the width-capped rules above at every breakpoint. */
+.page-shell-container.fluid {
+  max-width: none;
+}
+
+@media (min-width: 1024px) and (max-width: 1439px) {
   .page-shell-container {
-    padding: 14px;
+    padding: 16px;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .page-shell-container {
     padding: 14px;
   }

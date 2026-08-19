@@ -157,7 +157,7 @@ defineProps({
   transform-origin: left center;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .panel-head {
     padding: 12px 14px;
   }

@@ -116,7 +116,7 @@ defineEmits(['action'])
   flex-shrink: 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .attention-item {
     align-items: flex-start;
     flex-wrap: wrap;

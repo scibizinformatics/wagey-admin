@@ -63,8 +63,10 @@
           <span class="card__initials">{{ getInitials(nameOf(row)) }}</span>
         </q-avatar>
 
+        <!-- Every card is the same person during a single-employee range, so the
+             date leads instead of the name — mirrors AttendanceTable. -->
         <div class="card__identity">
-          <p class="card__name">{{ nameOf(row) }}</p>
+          <p class="card__name">{{ singleEmployee ? rowDateLabel(row) : nameOf(row) }}</p>
           <p class="card__meta">
             <span>{{ getShiftName(row) }}</span>
           </p>
@@ -77,6 +79,18 @@
         >
           {{ row.work_type }}
         </span>
+
+        <!-- Audit trail, mirroring the table's Audit column -->
+        <button
+          type="button"
+          class="card__audit"
+          :class="auditToneClass(row)"
+          :aria-label="`View audit trail for ${nameOf(row)}`"
+          @click="$emit('view-audit', row)"
+        >
+          <q-icon name="o_visibility" size="16px" />
+          <span v-if="hasAuditFlags(row)" class="card__audit-dot" />
+        </button>
       </div>
 
       <!-- The two punches side by side, each labelled. On a card there is room
@@ -136,9 +150,38 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   employees: { type: Array, default: () => [] },
   isFiltered: { type: Boolean, default: false },
+  // Set while the list is narrowed to one employee over a date range.
+  singleEmployee: { type: Boolean, default: false },
 })
 
-defineEmits(['view-selfie', 'view-photo', 'edit-time', 'clear-filters'])
+// Pinned to local midnight — a bare YYYY-MM-DD parses as UTC and can shift a day
+function rowDateLabel(row) {
+  const iso = row.date || row.attendance_date || row.log_date || ''
+  if (!iso) return '—'
+  const date = new Date(`${iso}T00:00:00`)
+  if (isNaN(date.getTime())) return iso
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+defineEmits(['view-selfie', 'view-photo', 'edit-time', 'clear-filters', 'view-audit'])
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+function hasAuditFlags(row) {
+  return Boolean(row.flagged || row.is_suspicious || row.auto_closed)
+}
+
+// Worst state wins the colour, matching the chip order inside the dialog.
+function auditToneClass(row) {
+  if (row.is_suspicious) return 'card__audit--critical'
+  if (row.flagged) return 'card__audit--warn'
+  if (row.auto_closed) return 'card__audit--info'
+  return null
+}
 
 const nameOf = (row) => getEmployeeName(row.employee, props.employees)
 const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
@@ -210,6 +253,60 @@ const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
 .card__work-type {
   flex-shrink: 0;
   text-transform: capitalize;
+}
+
+/* ── Audit ── */
+.card__audit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--dash-line);
+  border-radius: 8px;
+  background: var(--dash-surface);
+  color: var(--dash-ink-3);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.card__audit:active {
+  background: var(--dash-hover);
+}
+
+/* Tinted only when the row carries a flag, so clean cards stay quiet */
+.card__audit--warn {
+  border-color: var(--dash-warn-line);
+  background: var(--dash-warn-bg);
+  color: var(--dash-warn);
+}
+
+.card__audit--critical {
+  border-color: var(--dash-critical-line);
+  background: var(--dash-critical-bg);
+  color: var(--dash-critical);
+}
+
+.card__audit--info {
+  border-color: var(--dash-info-line);
+  background: var(--dash-info-bg);
+  color: var(--dash-info);
+}
+
+.card__audit-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--dash-surface);
 }
 
 /* ── Punches ── */

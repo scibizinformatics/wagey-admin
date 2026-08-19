@@ -24,6 +24,8 @@ export const STATUS_TONES = {
   pending_review: 'warn',
   missing_date: 'warn',
   disbursing: 'warn',
+  // Contributions: a department that has not finished collecting for the month.
+  incomplete: 'warn',
 
   // ── In flight ──
   under_review: 'info',

@@ -382,7 +382,6 @@ const {
   saving: savingEmployee,
   fetchEmployees: fetchEmployeesList,
   fetchEmployee,
-  fetchEmployeeContract,
   addEmployee: addEmployeeApi,
   updateEmployee,
   uploadEmployeeAvatar,
@@ -398,6 +397,7 @@ const {
   groupIdFor,
   inlineGroupId,
   ensure: ensurePayoutGroups,
+  invalidate: invalidatePayoutGroups,
 } = useEmployeePayoutGroup()
 const { companyId } = useCompany()
 
@@ -414,6 +414,7 @@ const {
   fetchHolidayTypes,
   activeContract,
   isRenewing,
+  fetchActiveContract,
 } = useAdminContracts()
 
 const {
@@ -778,8 +779,12 @@ const fetchEmployees = async () => {
     filteredEmployees.value = list
     sortEmployees()
 
-    // Clear stale contract / balance caches when the list refreshes
+    // Clear stale contract / balance caches when the list refreshes. The payout
+    // group is read off the same active contract, so it goes stale in lockstep —
+    // without this, an assignment that sets a payroll group left the Payout Group
+    // column showing the previous resolution.
     delete employeeContracts.value[companyId.value]
+    invalidatePayoutGroups(companyId.value)
     employees.value.forEach((emp) => {
       emp._balance = undefined
     })
@@ -790,8 +795,14 @@ const fetchEmployees = async () => {
     // Fetch leave types and the first page of contract / balance data in background
     await Promise.all([
       fetchLeaveTypes(companyId.value).catch(() => {}),
-      fetchPageData(),
+      fetchPageData({ force: true }),
     ])
+
+    // Re-resolve payout groups only if the filter that needs them is in use.
+    if (payrollGroupFilter.value) {
+      await ensurePayoutGroups(employees.value.map((emp) => emp.id))
+      filterEmployees()
+    }
   } catch (err) {
     $q.notify({
       type: 'negative',
@@ -830,6 +841,12 @@ const fetchBalances = async (employeeList, concurrency = 20) => {
   }
 }
 
+// Sourced from the *active-contract* endpoint, not the contracts list endpoint.
+// The list returns every contract an employee has ever held in no guaranteed
+// order, so reading it meant the column showed whichever contract happened to be
+// first — a freshly assigned or renewed contract never appeared. `active-contract`
+// answers "which one is current?" server-side. See useEmployeePayoutGroup.js,
+// which resolves payout groups from the same endpoint for the same reason.
 const fetchContracts = async (employeeList, concurrency = 20) => {
   if (!employeeList?.length) return
   if (!companyId.value) return
@@ -842,14 +859,17 @@ const fetchContracts = async (employeeList, concurrency = 20) => {
     for (let i = 0; i < employeeList.length; i += concurrency) {
       const batch = employeeList.slice(i, i + concurrency)
       const promises = batch.map((emp) =>
-        fetchEmployeeContract(emp.id)
+        // Resolves to null on 404 (no active contract) rather than throwing.
+        Promise.resolve(fetchActiveContract(emp.id))
           .then((data) => ({ status: 'fulfilled', empId: emp.id, data }))
           .catch(() => ({ status: 'rejected', empId: emp.id, data: null })),
       )
       const results = await Promise.all(promises)
       results.forEach((res) => {
-        if (res.status === 'fulfilled' && res.data) {
-          employeeContracts.value[companyId.value][res.empId] = res.data
+        // Cache the null too: "resolved, no contract" has to be distinguishable
+        // from "not fetched yet", or every page visit re-requests these.
+        if (res.status === 'fulfilled') {
+          employeeContracts.value[companyId.value][res.empId] = res.data ?? null
         }
       })
     }
@@ -861,8 +881,10 @@ const fetchContracts = async (employeeList, concurrency = 20) => {
 
 let pageDataInFlight = null
 
-const fetchPageData = async () => {
-  if (pageDataInFlight) return pageDataInFlight
+// `force` skips the in-flight dedup: a refresh that has just cleared the caches
+// must not be answered by a request that computed its work list before the clear.
+const fetchPageData = async ({ force = false } = {}) => {
+  if (pageDataInFlight && !force) return pageDataInFlight
 
   pageDataInFlight = (async () => {
     const pageEmps = paginatedEmployees.value
@@ -870,7 +892,8 @@ const fetchPageData = async () => {
 
     const uncachedContract = pageEmps.filter((emp) => {
       const companyContracts = employeeContracts.value[companyId.value]
-      return !companyContracts?.[emp.id]
+      // `null` means "resolved: no active contract" — only `undefined` is unfetched.
+      return companyContracts?.[emp.id] === undefined
     })
 
     const uncachedBalance = pageEmps.filter((emp) => emp._balance === undefined)

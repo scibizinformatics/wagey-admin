@@ -90,11 +90,6 @@ function handleAction(action) {
 }
 @media (max-width: 1024px) {
   .quick-actions {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-@media (max-width: 768px) {
-  .quick-actions {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
