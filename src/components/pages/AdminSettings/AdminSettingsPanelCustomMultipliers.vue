@@ -32,7 +32,16 @@
               <div class="multiplier-card-desc">Applied to hours beyond regular schedule</div>
             </div>
           </div>
-          <q-input v-model="multipliersForm.overtime_multiplier" outlined dense type="number" min="0" step="0.01" placeholder="e.g. 1.25" class="multiplier-input">
+          <q-input
+            v-model="multipliersForm.overtime_multiplier"
+            outlined
+            dense
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 1.25"
+            class="multiplier-input"
+          >
             <template v-slot:prepend><span class="multiplier-prefix">×</span></template>
           </q-input>
         </div>
@@ -47,7 +56,16 @@
               <div class="multiplier-card-desc">Applied to hours worked at night</div>
             </div>
           </div>
-          <q-input v-model="multipliersForm.night_diff_multiplier" outlined dense type="number" min="0" step="0.01" placeholder="e.g. 1.10" class="multiplier-input">
+          <q-input
+            v-model="multipliersForm.night_diff_multiplier"
+            outlined
+            dense
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 1.10"
+            class="multiplier-input"
+          >
             <template v-slot:prepend><span class="multiplier-prefix">×</span></template>
           </q-input>
         </div>
@@ -62,7 +80,16 @@
               <div class="multiplier-card-desc">Applied on declared regular holidays</div>
             </div>
           </div>
-          <q-input v-model="multipliersForm.regular_holiday_multiplier" outlined dense type="number" min="0" step="0.01" placeholder="e.g. 2.00" class="multiplier-input">
+          <q-input
+            v-model="multipliersForm.regular_holiday_multiplier"
+            outlined
+            dense
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 2.00"
+            class="multiplier-input"
+          >
             <template v-slot:prepend><span class="multiplier-prefix">×</span></template>
           </q-input>
         </div>
@@ -77,7 +104,16 @@
               <div class="multiplier-card-desc">Applied on special non-working days</div>
             </div>
           </div>
-          <q-input v-model="multipliersForm.special_holiday_multiplier" outlined dense type="number" min="0" step="0.01" placeholder="e.g. 1.30" class="multiplier-input">
+          <q-input
+            v-model="multipliersForm.special_holiday_multiplier"
+            outlined
+            dense
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 1.30"
+            class="multiplier-input"
+          >
             <template v-slot:prepend><span class="multiplier-prefix">×</span></template>
           </q-input>
         </div>
@@ -92,7 +128,16 @@
               <div class="multiplier-card-desc">Overtime on regular holidays</div>
             </div>
           </div>
-          <q-input v-model="multipliersForm.regular_holiday_ot_multiplier" outlined dense type="number" min="0" step="0.01" placeholder="e.g. 2.60" class="multiplier-input">
+          <q-input
+            v-model="multipliersForm.regular_holiday_ot_multiplier"
+            outlined
+            dense
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 2.60"
+            class="multiplier-input"
+          >
             <template v-slot:prepend><span class="multiplier-prefix">×</span></template>
           </q-input>
         </div>
@@ -107,7 +152,16 @@
               <div class="multiplier-card-desc">Overtime on special holidays</div>
             </div>
           </div>
-          <q-input v-model="multipliersForm.special_holiday_ot_multiplier" outlined dense type="number" min="0" step="0.01" placeholder="e.g. 1.95" class="multiplier-input">
+          <q-input
+            v-model="multipliersForm.special_holiday_ot_multiplier"
+            outlined
+            dense
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 1.95"
+            class="multiplier-input"
+          >
             <template v-slot:prepend><span class="multiplier-prefix">×</span></template>
           </q-input>
         </div>
@@ -122,7 +176,16 @@
               <div class="multiplier-card-desc">Applied to undertime hours</div>
             </div>
           </div>
-          <q-input v-model="multipliersForm.undertime_multiplier" outlined dense type="number" min="0" step="0.01" placeholder="e.g. 0.50" class="multiplier-input">
+          <q-input
+            v-model="multipliersForm.undertime_multiplier"
+            outlined
+            dense
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 0.50"
+            class="multiplier-input"
+          >
             <template v-slot:prepend><span class="multiplier-prefix">×</span></template>
           </q-input>
         </div>
@@ -158,12 +221,12 @@ const multipliersForm = ref({
 
 const PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN = {
   overtime: 1.25,
-  night_diff: 1.10,
-  regular_holiday: 2.00,
-  special_holiday: 1.30,
-  regular_holiday_ot: 2.60,
+  night_diff: 1.1,
+  regular_holiday: 2.0,
+  special_holiday: 1.3,
+  regular_holiday_ot: 2.6,
   special_holiday_ot: 1.95,
-  undertime: 0.50,
+  undertime: 0.5,
 }
 
 async function loadMultipliers(companyId) {
@@ -202,12 +265,36 @@ async function saveMultipliers() {
   const modifiedMultipliers = []
   const multiplierFields = [
     { key: 'overtime', label: 'Overtime', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.overtime },
-    { key: 'night_diff', label: 'Night Differential', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.night_diff },
-    { key: 'regular_holiday', label: 'Regular Holiday', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.regular_holiday },
-    { key: 'special_holiday', label: 'Special Holiday', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.special_holiday },
-    { key: 'regular_holiday_ot', label: 'Regular Holiday OT', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.regular_holiday_ot },
-    { key: 'special_holiday_ot', label: 'Special Holiday OT', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.special_holiday_ot },
-    { key: 'undertime', label: 'Undertime', default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.undertime },
+    {
+      key: 'night_diff',
+      label: 'Night Differential',
+      default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.night_diff,
+    },
+    {
+      key: 'regular_holiday',
+      label: 'Regular Holiday',
+      default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.regular_holiday,
+    },
+    {
+      key: 'special_holiday',
+      label: 'Special Holiday',
+      default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.special_holiday,
+    },
+    {
+      key: 'regular_holiday_ot',
+      label: 'Regular Holiday OT',
+      default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.regular_holiday_ot,
+    },
+    {
+      key: 'special_holiday_ot',
+      label: 'Special Holiday OT',
+      default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.special_holiday_ot,
+    },
+    {
+      key: 'undertime',
+      label: 'Undertime',
+      default: PHILIPPINES_DEFAULT_MULTIPLIERS_ADMIN.undertime,
+    },
   ]
 
   multiplierFields.forEach((field) => {
@@ -301,93 +388,9 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="scss">
+/* Card, icon tile, title, description, input and prefix are all defined in the
+   shared file now. This block used to restate every one of them after the
+   import — at 44px tiles with seven different background tints — so the shared
+   definitions never applied. */
 @import './AdminSettingsPanelShared.scss';
-.multipliers-body {
-  padding: 24px;
-}
-
-.multipliers-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-}
-
-@media (max-width: 700px) {
-  .multipliers-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.multiplier-card {
-  background: #ffffff;
-  border: 1px solid #e8ecf4;
-  border-radius: 14px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.05);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.multiplier-card:hover {
-  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.1);
-  border-color: #c7d7f8;
-}
-
-.multiplier-card-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.multiplier-icon-wrap {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.multiplier-icon--overtime { background: #eff6ff; color: #2563eb; }
-.multiplier-icon--night { background: #f5f3ff; color: #7c3aed; }
-.multiplier-icon--regular { background: #fff7ed; color: #ea580c; }
-.multiplier-icon--special { background: #f0fdf4; color: #16a34a; }
-.multiplier-icon--regular-ot { background: #fef3c7; color: #d97706; }
-.multiplier-icon--special-ot { background: #fce7f3; color: #db2777; }
-.multiplier-icon--undertime { background: #f3f4f6; color: #4b5563; }
-
-.multiplier-card-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1e293b;
-  line-height: 1.3;
-}
-
-.multiplier-card-desc {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-top: 2px;
-  line-height: 1.4;
-}
-
-.multiplier-input :deep(.q-field__control) {
-  background: #f8faff !important;
-  border-radius: 10px !important;
-}
-
-.multiplier-input :deep(.q-field__native) {
-  font-size: 18px !important;
-  font-weight: 700 !important;
-  color: #1e293b !important;
-}
-
-.multiplier-prefix {
-  font-size: 18px;
-  font-weight: 700;
-  color: #94a3b8;
-  margin-right: 4px;
-}
 </style>

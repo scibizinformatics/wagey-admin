@@ -3,20 +3,25 @@ import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
 import { BASE, authHeaders } from 'src/composables/utils/http'
+import { useToast } from 'src/composables/useToast'
 
 export function useAdminShifts() {
   const $q = useQuasar()
+  const toast = useToast()
   const { companyId } = useCompany()
 
   const shiftTypes = ref([])
   const shiftTemplates = ref([])
   const shiftTypeTemplates = ref([])
   const weeklyShiftTemplates = ref([])
+  const shiftTemplates24h = ref([])
 
   const loadingShiftTypeTemplates = ref(false)
   const savingShiftTypeTemplate = ref(false)
   const loadingWeeklyTemplates = ref(false)
   const savingWeeklyTemplate = ref(false)
+  const loadingShiftTemplates24h = ref(false)
+  const savingShiftTemplate24h = ref(false)
 
   // ─── Shift Type Template dialog state ─────────────────────────────────────
   const shiftTypeTemplateDialog = ref(false)
@@ -27,6 +32,11 @@ export function useAdminShifts() {
   const weeklyTemplateDialog = ref(false)
   const weeklyTemplateForm = ref(_emptyWeeklyTemplateForm())
   const editingWeeklyTemplate = ref(false)
+
+  // ─── 24-hour shift template dialog state ───────────────────────
+  const shiftTemplate24hDialog = ref(false)
+  const editingShiftTemplate24h = ref(false)
+  const shiftTemplate24hForm = ref({ id: null, name: '', is_active: true, shifts: [] })
 
   const weekdayOptions = [
     { label: 'Monday', value: 'Mon' },
@@ -490,12 +500,197 @@ export function useAdminShifts() {
     })
   }
 
+  // ─── 24-Hour shift templates ───────────────────────────────────────────────
+  // Same shift shape as the regular shift-type templates, but the segments are
+  // expected to chain around the clock (e.g. 06:00-14:00, 14:00-22:00,
+  // 22:00-06:00), so the modal reports live coverage instead of total/break.
+
+  function _emptyTemplate24hForm() {
+    return {
+      id: null,
+      name: '',
+      is_active: true,
+      shifts: [
+        { site_id: null, default_start_time: '', default_end_time: '' },
+        { site_id: null, default_start_time: '', default_end_time: '' },
+        { site_id: null, default_start_time: '', default_end_time: '' },
+      ],
+    }
+  }
+
+  /** `shifts`/`shifts_detail` come back either as arrays or JSON strings. */
+  function parseShiftList(value) {
+    if (!value) return []
+    if (Array.isArray(value)) return value
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value)
+        return Array.isArray(parsed) ? parsed : []
+      } catch {
+        return []
+      }
+    }
+    return []
+  }
+
+  async function fetchShiftTemplates24h() {
+    if (!companyId.value) {
+      shiftTemplates24h.value = []
+      return
+    }
+    loadingShiftTemplates24h.value = true
+    try {
+      const response = await api.get(`${BASE}/organization/shift-type-templates-24h-list/`, {
+        params: { company: companyId.value },
+        headers: authHeaders(),
+      })
+      shiftTemplates24h.value = response.data.data ?? response.data ?? []
+      return shiftTemplates24h.value
+    } catch (error) {
+      console.error('Error fetching 24-hour shift templates:', error)
+      toast.error(error.response?.data?.message || 'Failed to load 24-hour shift templates')
+    } finally {
+      loadingShiftTemplates24h.value = false
+    }
+  }
+
+  function openShiftTemplate24hDialog() {
+    if (!companyId.value) {
+      toast.warning('Please select a company first')
+      return
+    }
+    editingShiftTemplate24h.value = false
+    shiftTemplate24hForm.value = _emptyTemplate24hForm()
+    shiftTemplate24hDialog.value = true
+  }
+
+  function openEditShiftTemplate24hDialog(row) {
+    editingShiftTemplate24h.value = true
+    const shifts = parseShiftList(row.shifts_detail).length
+      ? parseShiftList(row.shifts_detail)
+      : parseShiftList(row.shifts)
+    shiftTemplate24hForm.value = {
+      id: row.id,
+      name: row.name || '',
+      is_active: row.is_active ?? true,
+      shifts: shifts.length
+        ? shifts.map((s) => ({
+            site_id: s.site?.id ?? s.site_id ?? null,
+            default_start_time: extractTime(s.start_time || s.default_start_time),
+            default_end_time: extractTime(s.end_time || s.default_end_time),
+          }))
+        : _emptyTemplate24hForm().shifts,
+    }
+    shiftTemplate24hDialog.value = true
+  }
+
+  async function saveShiftTemplate24h() {
+    const form = shiftTemplate24hForm.value
+
+    if (!form.name?.trim()) {
+      toast.warning('Template name is required')
+      return
+    }
+    if (!form.shifts?.length) {
+      toast.warning('Please add at least one shift')
+      return
+    }
+    const invalid = form.shifts.filter(
+      (s) => !s.site_id || !s.default_start_time || !s.default_end_time,
+    )
+    if (invalid.length) {
+      toast.warning('All shifts must have site, start time, and end time')
+      return
+    }
+
+    // Kept to exactly the fields the create endpoint documents (name /
+    // company_id / shifts) — it 500s rather than 400s on anything it does not
+    // recognise, so extra keys are not worth the risk. `is_active` is only sent
+    // on update, where the detail route does model the field.
+    const payload = {
+      name: form.name.trim(),
+      company_id: parseInt(companyId.value),
+      shifts: form.shifts.map((s) => ({
+        site_id: parseInt(s.site_id),
+        default_start_time: s.default_start_time,
+        default_end_time: s.default_end_time,
+      })),
+    }
+    if (editingShiftTemplate24h.value) payload.is_active = form.is_active ?? true
+
+    savingShiftTemplate24h.value = true
+    try {
+      if (editingShiftTemplate24h.value) {
+        // Mirrors the regular shift-type-template detail route; the 24h list and
+        // create endpoints are the only two the API documents explicitly.
+        await api.put(`${BASE}/organization/shift-type-templates-24h/${form.id}/`, payload, {
+          headers: authHeaders(),
+        })
+        toast.success('24-hour shift template updated successfully')
+      } else {
+        await api.post(`${BASE}/organization/shift-type-templates-24h/create/`, payload, {
+          headers: authHeaders(),
+        })
+        toast.success('24-hour shift template created successfully')
+      }
+      shiftTemplate24hDialog.value = false
+      await fetchShiftTemplates24h()
+    } catch (error) {
+      console.error('Error saving 24-hour shift template:', error)
+      // The payload is the first thing a backend dev needs when this endpoint
+      // throws, and a 500 comes back as an HTML page with nothing else in it.
+      console.error(
+        '[saveShiftTemplate24h] payload that failed:',
+        JSON.stringify(payload, null, 2),
+      )
+      let errorMessage = 'Failed to save 24-hour shift template'
+      if (error.response?.status >= 500) {
+        errorMessage = 'The server failed while saving this template (500)'
+      } else if (error.response?.data && typeof error.response.data === 'object') {
+        const errors = Object.entries(error.response.data).map(
+          ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`,
+        )
+        if (errors.length) errorMessage = errors.join(' | ')
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      }
+      toast.error(errorMessage, { timeout: 5000 })
+    } finally {
+      savingShiftTemplate24h.value = false
+    }
+  }
+
+  async function deleteShiftTemplate24h(template) {
+    $q.dialog({
+      title: 'Confirm Delete',
+      message: `Are you sure you want to delete "${template.name}"?`,
+      cancel: true,
+      persistent: true,
+    }).onOk(async () => {
+      try {
+        await api.delete(`${BASE}/organization/shift-type-templates-24h/${template.id}/`, {
+          headers: authHeaders(),
+        })
+        toast.success('24-hour shift template deleted successfully')
+        await fetchShiftTemplates24h()
+      } catch (error) {
+        console.error('Error deleting 24-hour shift template:', error)
+        toast.error(error.response?.data?.message || 'Failed to delete 24-hour shift template')
+      }
+    })
+  }
+
   // ─── Private helpers ───────────────────────────────────────────────────────
 
   /** Map from abbreviated (Mon, Tue, …) to full lowercase weekday names. */
   const ABBR_TO_FULL = {
-    mon: 'monday', tue: 'tuesday', wed: 'wednesday',
-    thu: 'thursday', fri: 'friday', sat: 'saturday', sun: 'sunday',
+    mon: 'monday',
+    tue: 'tuesday',
+    wed: 'wednesday',
+    thu: 'thursday',
+    fri: 'friday',
+    sat: 'saturday',
+    sun: 'sunday',
   }
 
   function _parseWeekdayString(wd) {
@@ -514,15 +709,31 @@ export function useAdminShifts() {
         : t.split(',')
     }
     const map = {
-      monday: 'monday', tuesday: 'tuesday', wednesday: 'wednesday',
-      thursday: 'thursday', friday: 'friday', saturday: 'saturday',
+      monday: 'monday',
+      tuesday: 'tuesday',
+      wednesday: 'wednesday',
+      thursday: 'thursday',
+      friday: 'friday',
+      saturday: 'saturday',
       sunday: 'sunday',
-      mon: 'monday', tue: 'tuesday', wed: 'wednesday',
-      thu: 'thursday', fri: 'friday', sat: 'saturday', sun: 'sunday',
-      Mon: 'monday', Tue: 'tuesday', Wed: 'wednesday',
-      Thu: 'thursday', Fri: 'friday', Sat: 'saturday', Sun: 'sunday',
+      mon: 'monday',
+      tue: 'tuesday',
+      wed: 'wednesday',
+      thu: 'thursday',
+      fri: 'friday',
+      sat: 'saturday',
+      sun: 'sunday',
+      Mon: 'monday',
+      Tue: 'tuesday',
+      Wed: 'wednesday',
+      Thu: 'thursday',
+      Fri: 'friday',
+      Sat: 'saturday',
+      Sun: 'sunday',
     }
-    return Array.isArray(days) ? days.map((d) => map[d.trim()] || map[d.trim().toLowerCase()] || d.trim().toLowerCase()) : []
+    return Array.isArray(days)
+      ? days.map((d) => map[d.trim()] || map[d.trim().toLowerCase()] || d.trim().toLowerCase())
+      : []
   }
 
   return {
@@ -555,5 +766,17 @@ export function useAdminShifts() {
     openEditWeeklyTemplateDialog,
     saveWeeklyTemplate,
     deleteWeeklyTemplate,
+    shiftTemplates24h,
+    loadingShiftTemplates24h,
+    savingShiftTemplate24h,
+    shiftTemplate24hDialog,
+    editingShiftTemplate24h,
+    shiftTemplate24hForm,
+    parseShiftList,
+    fetchShiftTemplates24h,
+    openShiftTemplate24hDialog,
+    openEditShiftTemplate24hDialog,
+    saveShiftTemplate24h,
+    deleteShiftTemplate24h,
   }
 }

@@ -6,29 +6,33 @@
         <p class="table-subtitle">Manage payroll cost centers and bank accounts</p>
       </div>
       <div class="table-actions">
-        <q-btn color="primary" label="Add Cost Center" icon="add" class="add-btn" @click="openCostCenterDialog" />
+        <q-btn
+          color="primary"
+          label="Add Cost Center"
+          icon="add"
+          class="add-btn"
+          @click="openCostCenterDialog"
+        />
       </div>
     </div>
 
     <div class="modern-table-container">
+      <!-- Built from the live `costCenterColumns`, so the placeholder shares the
+           real table's columns, labels and alignment. -->
       <template v-if="loadingCostCenters">
-        <div class="table-skeleton">
-          <div class="skeleton-header">
-            <div class="skeleton-header-cell">Name</div>
-            <div class="skeleton-header-cell">Bank Accounts</div>
-            <div class="skeleton-header-cell">Status</div>
-            <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
-          </div>
-          <div class="skeleton-row" v-for="n in 4" :key="n">
-            <div class="skeleton-cell"><q-skeleton type="text" /></div>
-            <div class="skeleton-cell"><q-skeleton type="text" width="120px" /></div>
-            <div class="skeleton-cell"><q-skeleton type="text" width="60px" /></div>
-            <div class="skeleton-cell" style="flex: 0 0 60px"><q-skeleton type="text" width="40px" /></div>
-          </div>
-        </div>
+        <TableSkeleton :columns="costCenterColumns" :rows="5" />
       </template>
       <template v-else>
-        <q-table :rows="filteredCostCenters" :columns="costCenterColumns" row-key="id" flat no-data-label="No cost centers found" class="settings-table" hide-pagination :rows-per-page-options="[0]">
+        <q-table
+          :rows="filteredCostCenters"
+          :columns="costCenterColumns"
+          row-key="id"
+          flat
+          no-data-label="No cost centers found"
+          class="dash-qtable settings-table"
+          hide-pagination
+          :rows-per-page-options="[0]"
+        >
           <template v-slot:header>
             <q-tr class="table-header-row">
               <q-th class="table-header-cell">Name</q-th>
@@ -39,27 +43,65 @@
           </template>
           <template v-slot:body="props">
             <q-tr class="table-body-row">
-              <q-td class="table-body-cell"><span class="item-name">{{ props.row.name }}</span></q-td>
+              <q-td class="table-body-cell"
+                ><span class="item-name">{{ props.row.name }}</span></q-td
+              >
               <q-td class="table-body-cell">
                 <div v-if="props.row.bank_accounts && props.row.bank_accounts.length">
-                  <q-chip v-for="(bank, idx) in props.row.bank_accounts.slice(0, 2)" :key="idx" dense size="sm" color="blue-1" text-color="blue-8" :label="bank.bank_name || bank.bank_account_name" class="permission-chip" />
-                  <q-chip v-if="props.row.bank_accounts.length > 2" dense size="sm" color="grey-3" text-color="grey-8" :label="`+${props.row.bank_accounts.length - 2}`" class="permission-chip" />
+                  <q-chip
+                    v-for="(bank, idx) in props.row.bank_accounts.slice(0, 2)"
+                    :key="idx"
+                    dense
+                    size="sm"
+                    color="blue-1"
+                    text-color="blue-8"
+                    :label="bank.bank_name || bank.bank_account_name"
+                    class="permission-chip"
+                  />
+                  <q-chip
+                    v-if="props.row.bank_accounts.length > 2"
+                    dense
+                    size="sm"
+                    color="grey-3"
+                    text-color="grey-8"
+                    :label="`+${props.row.bank_accounts.length - 2}`"
+                    class="permission-chip"
+                  />
                 </div>
                 <span v-else class="text-grey-5">No bank accounts</span>
               </q-td>
               <q-td class="table-body-cell">
-                <div :class="['status-badge', props.row.is_active ? 'status-active' : 'status-inactive']">{{ props.row.is_active ? 'Active' : 'Inactive' }}</div>
+                <div
+                  :class="[
+                    'status-badge',
+                    props.row.is_active ? 'status-active' : 'status-inactive',
+                  ]"
+                >
+                  {{ props.row.is_active ? 'Active' : 'Inactive' }}
+                </div>
               </q-td>
               <q-td class="table-body-cell actions-cell">
                 <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                   <q-menu anchor="bottom right" self="top right" class="action-dropdown">
                     <q-list dense style="min-width: 150px">
-                      <q-item clickable v-close-popup class="dropdown-item" @click="editCostCenter(props.row)">
+                      <q-item
+                        clickable
+                        v-close-popup
+                        class="dropdown-item"
+                        @click="editCostCenter(props.row)"
+                      >
                         <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
                         <q-item-section>Edit Cost Center</q-item-section>
                       </q-item>
-                      <q-item clickable v-close-popup class="dropdown-item dropdown-item-danger" @click="deleteCostCenter(props.row)">
-                        <q-item-section side><q-icon name="delete" size="16px" color="negative" /></q-item-section>
+                      <q-item
+                        clickable
+                        v-close-popup
+                        class="dropdown-item dropdown-item-danger"
+                        @click="deleteCostCenter(props.row)"
+                      >
+                        <q-item-section side
+                          ><q-icon name="delete" size="16px" color="negative"
+                        /></q-item-section>
                         <q-item-section>Delete</q-item-section>
                       </q-item>
                     </q-list>
@@ -76,9 +118,13 @@
       <q-card class="admin-modal-card admin-modal-card--md">
         <q-card-section class="admin-modal-header">
           <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"><q-icon name="account_balance" size="22px" /></q-avatar>
+            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+              ><q-icon name="account_balance" size="22px"
+            /></q-avatar>
             <div>
-              <div class="admin-modal-title">{{ editingCostCenter ? 'Edit Cost Center' : 'Add Cost Center' }}</div>
+              <div class="admin-modal-title">
+                {{ editingCostCenter ? 'Edit Cost Center' : 'Add Cost Center' }}
+              </div>
               <div class="admin-modal-subtitle">Manage payroll cost centers and bank accounts</div>
             </div>
           </div>
@@ -93,29 +139,77 @@
               </q-input>
             </div>
             <div class="col-12">
-              <q-toggle v-model="costCenterForm.is_active" label="Active" color="primary" class="brand-toggle" />
+              <q-toggle
+                v-model="costCenterForm.is_active"
+                label="Active"
+                color="primary"
+                class="brand-toggle"
+              />
             </div>
           </div>
           <div class="form-section-label">Bank Accounts</div>
-          <div v-for="(bank, idx) in costCenterForm.bank_accounts" :key="idx" class="q-mb-md" style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 14px 8px">
+          <div
+            v-for="(bank, idx) in costCenterForm.bank_accounts"
+            :key="idx"
+            class="q-mb-md"
+            style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 14px 8px"
+          >
             <div class="row q-col-gutter-sm items-center q-mb-xs">
-              <div class="col text-caption text-weight-medium text-grey-7">Bank Account {{ idx + 1 }}</div>
+              <div class="col text-caption text-weight-medium text-grey-7">
+                Bank Account {{ idx + 1 }}
+              </div>
               <div class="col-auto">
-                <q-btn flat round dense icon="remove_circle_outline" color="negative" size="sm" @click="removeBankAccount(idx)" :disable="costCenterForm.bank_accounts.length === 1" />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="remove_circle_outline"
+                  color="negative"
+                  size="sm"
+                  @click="removeBankAccount(idx)"
+                  :disable="costCenterForm.bank_accounts.length === 1"
+                />
               </div>
             </div>
             <div class="row q-col-gutter-sm">
-              <div class="col-12 col-sm-6"><q-input v-model="bank.bank_name" label="Bank Name" outlined dense /></div>
-              <div class="col-12 col-sm-6"><q-input v-model="bank.bank_account_name" label="Account Name" outlined dense /></div>
-              <div class="col-12 col-sm-6"><q-input v-model="bank.bank_account_number" label="Account Number" outlined dense /></div>
-              <div class="col-12 col-sm-6 flex items-center"><q-toggle v-model="bank.is_active" label="Active" color="primary" dense class="brand-toggle" /></div>
+              <div class="col-12 col-sm-6">
+                <q-input v-model="bank.bank_name" label="Bank Name" outlined dense />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input v-model="bank.bank_account_name" label="Account Name" outlined dense />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input v-model="bank.bank_account_number" label="Account Number" outlined dense />
+              </div>
+              <div class="col-12 col-sm-6 flex items-center">
+                <q-toggle
+                  v-model="bank.is_active"
+                  label="Active"
+                  color="primary"
+                  dense
+                  class="brand-toggle"
+                />
+              </div>
             </div>
           </div>
-          <q-btn flat color="primary" icon="add" label="Add Bank Account" class="q-mb-sm" @click="addBankAccount" />
+          <q-btn
+            flat
+            color="primary"
+            icon="add"
+            label="Add Bank Account"
+            class="q-mb-sm"
+            @click="addBankAccount"
+          />
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-          <q-btn color="primary" :label="editingCostCenter ? 'Update' : 'Save'" class="admin-save-btn" :loading="savingCostCenter" @click="saveCostCenter" />
+          <q-btn
+            color="primary"
+            :label="editingCostCenter ? 'Update' : 'Save'"
+            class="admin-save-btn"
+            :loading="savingCostCenter"
+            @click="saveCostCenter"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -124,6 +218,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useAdminCostCenters } from '@/composables/admin/useAdminCostCenters'
 
 const props = defineProps({

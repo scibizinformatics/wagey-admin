@@ -6,6 +6,24 @@
         <p class="table-subtitle">Manage contract type definitions</p>
       </div>
       <div class="table-actions">
+        <!-- Column groups. Multipliers are the rightmost of three groups behind
+             a dozen narrow check columns, so on any screen short of a wide
+             desktop they were off the right edge and the only way to them was a
+             horizontal scroll most people never tried. Picking one group brings
+             it to full width immediately. -->
+        <div class="col-groups" role="group" aria-label="Columns to show">
+          <button
+            v-for="option in groupOptions"
+            :key="option.value"
+            type="button"
+            class="col-groups__btn"
+            :class="{ 'is-on': visibleGroup === option.value }"
+            :aria-pressed="visibleGroup === option.value"
+            @click="visibleGroup = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
         <q-btn
           color="primary"
           label="Add Contract Type"
@@ -16,34 +34,22 @@
       </div>
     </div>
 
-    <div class="modern-table-container" :style="{ '--table-min-width': tableMinWidth + 'px' }">
+    <!-- Plain wrapper: the table scrolls inside its own `.q-table__middle`, which
+         is the element Quasar makes the scrollport. -->
+    <div class="modern-table-container">
+      <!-- Built from the same `tableColumns` as the live table, with the summed
+           column widths as its own min-width — the real table sizes itself to
+           its content, which a skeleton with no content cannot do. The old one
+           hard-coded six header cells above ten body cells, neither matching the
+           real column count. -->
       <template v-if="loadingContractTypes">
-        <div class="table-skeleton">
-          <div class="skeleton-header">
-            <div class="skeleton-header-cell">Name</div>
-            <div
-              class="skeleton-header-cell"
-              v-for="n in 6"
-              :key="n"
-              style="width: 50px; min-width: 50px"
-            ></div>
-            <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
-          </div>
-          <div class="skeleton-row" v-for="n in 4" :key="n">
-            <div class="skeleton-cell"><q-skeleton type="text" /></div>
-            <div
-              class="skeleton-cell"
-              v-for="m in 10"
-              :key="m"
-              style="width: 50px; min-width: 50px"
-            >
-              <q-skeleton type="text" />
-            </div>
-            <div class="skeleton-cell" style="flex: 0 0 60px">
-              <q-skeleton type="text" width="40px" />
-            </div>
-          </div>
-        </div>
+        <TableSkeleton
+          :columns="skeletonColumns"
+          :rows="5"
+          :min-width="tableMinWidth"
+          wrap-class="dash-scroll-x"
+          aria-label="Loading contract types"
+        />
       </template>
       <template v-else>
         <q-table
@@ -334,7 +340,13 @@
         </q-card-section>
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-          <q-btn color="primary" label="Save" class="admin-save-btn" :loading="savingContractType" @click="handleSave" />
+          <q-btn
+            color="primary"
+            label="Save"
+            class="admin-save-btn"
+            :loading="savingContractType"
+            @click="handleSave"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -404,6 +416,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 
 const {
@@ -545,12 +558,30 @@ function formatMultiplier(value) {
   return isNaN(num) ? '-' : num.toFixed(2)
 }
 
+/**
+ * Which column groups the table shows. `all` is the default and the only value a
+ * wide desktop needs; the three single-group values exist so the multiplier
+ * columns are reachable on a laptop or tablet without a horizontal scroll past
+ * every eligibility and contribution column.
+ */
+const visibleGroup = ref('all')
+
+const groupOptions = [
+  { value: 'all', label: 'All' },
+  { value: 'Eligibilities', label: 'Eligibility' },
+  { value: 'Contributions', label: 'Contributions' },
+  { value: 'Multipliers', label: 'Multipliers' },
+]
+
 const tableColumns = computed(() => {
   const cols = [
     { name: 'name', label: 'Name', type: 'name', group: null, tooltip: null, sortable: true },
   ]
   let prevGroup = null
   function push(col) {
+    // The name and actions columns are always present, so a filtered view is
+    // still a table of contract types rather than a bare block of figures.
+    if (visibleGroup.value !== 'all' && col.group !== visibleGroup.value) return
     col.groupFirst = col.group && col.group !== prevGroup
     prevGroup = col.group
     cols.push(col)
@@ -591,11 +622,13 @@ const tableColumns = computed(() => {
   return cols
 })
 
-// Column widths must stay in sync with the CSS widths set on
-// .col-elig / .col-mult / :first-child / :last-child below.
-const NAME_COL_WIDTH = 180
-const NARROW_COL_WIDTH = 38 // eligibility / contribution columns
-const MULT_COL_WIDTH = 40 // multiplier columns
+// Column widths. These mirror the `min-width` each column is given in CSS below
+// (.col-elig / .col-mult / :first-child / :last-child) and are summed for the
+// loading skeleton, which has no content to size itself from. The live table
+// takes its width from `max-content` and does not read these.
+const NAME_COL_WIDTH = 260
+const NARROW_COL_WIDTH = 34 // eligibility / contribution columns
+const MULT_COL_WIDTH = 36 // multiplier columns
 const ACTIONS_COL_WIDTH = 52
 
 const tableMinWidth = computed(() =>
@@ -605,6 +638,21 @@ const tableMinWidth = computed(() =>
     if (col.type === 'multiplier') return total + MULT_COL_WIDTH
     return total + NARROW_COL_WIDTH // eligibility / contribution
   }, 0),
+)
+
+/**
+ * The live columns, annotated with the widths their CSS gives them, so
+ * TableSkeleton can reproduce the same grid. Kept next to the width constants
+ * above rather than inside the component, which cannot know a check column is
+ * 38px wide.
+ */
+const skeletonColumns = computed(() =>
+  tableColumns.value.map((col) => {
+    if (col.type === 'name') return { ...col, align: 'left', width: NAME_COL_WIDTH }
+    if (col.type === 'actions') return { ...col, align: 'center', width: ACTIONS_COL_WIDTH }
+    if (col.type === 'multiplier') return { ...col, align: 'center', width: MULT_COL_WIDTH }
+    return { ...col, align: 'center', width: NARROW_COL_WIDTH }
+  }),
 )
 
 const tableGroups = computed(() => {
@@ -844,82 +892,126 @@ onMounted(async () => {
   box-sizing: border-box;
 }
 
+/* Plain wrapper. The scroll is inside the table, on `.q-table__middle`. */
 .modern-table-container {
-  overflow-x: auto;
+  overflow: visible;
   width: 0;
   min-width: 100%;
   max-width: 100%;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
 }
 
-/* Visible scrollbar so the horizontal scroll is discoverable */
-.modern-table-container::-webkit-scrollbar {
-  height: 10px;
-}
-
-.modern-table-container::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-
-.modern-table-container::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 6px;
-}
-
-.modern-table-container::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
+/* The visible-scrollbar treatment this panel invented is now in the shared
+   stylesheet for all nine, at 8px rather than 10px. */
 
 .spreadsheet-table {
   width: 100%;
   min-width: 100%;
 }
 
-.spreadsheet-table :deep(.q-table__card) {
-  box-shadow: none;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  overflow: visible;
-}
-
-.spreadsheet-table :deep(.q-table__container) {
-  overflow: visible;
-}
-
-/* The real horizontal scroll happens on .modern-table-container; this just
-   needs to not clip and let the table grow to its natural width */
+/* ── Where the horizontal scroll lives ───────────────────────────────────────
+ * Quasar already makes `.q-table__middle` the scrollport: it ships with the
+ * `scroll` class (`overflow: auto`) and `max-width: 100%`. This panel used to
+ * override that to `overflow: visible` and try to scroll an outer wrapper
+ * instead — which is why the table could not be scrolled at all. The middle
+ * stayed capped at the container's width, the `max-content` table spilled out of
+ * it as visible overflow, and the first ancestor that did anything with overflow
+ * was the settings card's `overflow: hidden`, which clipped it. The extra
+ * columns were not off-screen-but-reachable; they were cut off.
+ *
+ * Every other table in the app scrolls because it leaves this element alone.
+ * This one now does too — the rules below only add the visible scroll track. */
 .spreadsheet-table :deep(.q-table__middle) {
-  overflow: visible;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dash-line-strong) transparent;
 }
 
+.spreadsheet-table :deep(.q-table__middle)::-webkit-scrollbar {
+  height: 8px;
+}
+
+.spreadsheet-table :deep(.q-table__middle)::-webkit-scrollbar-track {
+  background: var(--dash-n-50);
+  border-top: 1px solid var(--dash-line-soft);
+}
+
+.spreadsheet-table :deep(.q-table__middle)::-webkit-scrollbar-thumb {
+  background: var(--dash-line-strong);
+  border-radius: var(--dash-r-pill);
+}
+
+.spreadsheet-table :deep(.q-table__middle)::-webkit-scrollbar-thumb:hover {
+  background: var(--dash-n-400);
+}
+
+/* `table-layout: auto` with `width: max-content`, deliberately.
+ *
+ * Under `fixed`, column widths are taken from the FIRST row — which here is the
+ * group header, five cells carrying colspans of 1, N, M, 7 and 1. Fixed layout
+ * splits a colspan cell's width evenly across its columns and ignores the widths
+ * declared on the real header row below it, so the 38px check columns and 40px
+ * multiplier columns never took effect: the browser divided the table between
+ * five groups instead of across every column.
+ *
+ * `auto` alone was not enough either. With the table capped at the container's
+ * width, auto layout still had to fit twenty-odd columns into it, and a declared
+ * `width` is only a suggestion there — so the multiplier columns were compressed
+ * instead of overflowing, and there was nothing to scroll to.
+ *
+ * `max-content` is what makes the scroll exist: the table takes exactly the
+ * width its columns need (their `min-width` is respected, so a check column
+ * cannot fall below 38px), and overflows `.modern-table-container`, which
+ * scrolls. `min-width: 100%` keeps it filling the panel when a single column
+ * group is selected and the columns do not reach the edge. */
 .spreadsheet-table :deep(.q-table__middle > table),
 .spreadsheet-table :deep(.q-table__middle > .q-table) {
-  width: auto;
-  min-width: max(var(--table-min-width, 1200px), 100%);
-  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
   white-space: nowrap;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 /* ── Group header row ── */
 
+/* No fill on the group band or the column labels below it. Grey bands behind
+   Eligibilities, Contributions and Multipliers made three quarters of the header
+   a block of colour; the group rules and the hairline under the labels already
+   say where one group ends and the next begins. */
 .spreadsheet-table :deep(.group-header-row th) {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #334155;
-  background: #f1f5f9;
-  border-bottom: 2px solid #cbd5e1;
+  color: var(--dash-ink);
+  background: transparent;
+  border-bottom: 2px solid var(--dash-line-strong);
   padding: 5px 4px;
   text-align: center;
 }
 
+/* Pinned with the two rows below it. Without this the group labels scrolled
+   while the column header and the body's first cell stayed put, so the header
+   stack came apart from its own columns the moment you scrolled sideways —
+   exactly where the reader needs the labels most. */
 .spreadsheet-table :deep(.group-header-row th:first-child) {
   text-align: left;
   padding-left: 10px;
-  border-right: 2px solid #cbd5e1;
+  border-right: 2px solid var(--dash-line-strong);
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  /* Opaque so columns pass behind it rather than through it, but white rather
+     than grey: the pinned cells should not be the one part of the header still
+     carrying a band. */
+  background: var(--dash-surface);
+}
+
+.spreadsheet-table :deep(.group-header-row th:last-child) {
+  position: sticky;
+  right: 0;
+  z-index: 4;
+  background: var(--dash-surface);
 }
 
 .spreadsheet-table :deep(.group-header-row th.group-end) {
@@ -928,19 +1020,20 @@ onMounted(async () => {
 
 /* vertical group separators */
 .spreadsheet-table :deep(.group-header-row th:not(.group-end)) {
-  border-right: 2px solid #cbd5e1;
+  border-right: 2px solid var(--dash-line-strong);
 }
 
 /* ── Column header row ── */
 
 .spreadsheet-table :deep(.table-header-row th) {
+  z-index: 2;
   font-size: 10px !important;
   font-weight: 700 !important;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: #475569 !important;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0 !important;
+  color: var(--dash-ink-2) !important;
+  background: transparent;
+  border-bottom: 1px solid var(--dash-line) !important;
   padding: 4px 2px !important;
   text-align: center !important;
   white-space: nowrap;
@@ -948,31 +1041,32 @@ onMounted(async () => {
 }
 
 .spreadsheet-table :deep(.table-header-row th.col-elig) {
-  min-width: 38px;
-  width: 38px;
+  min-width: 34px;
+  width: 34px;
   padding: 4px 2px !important;
   font-size: 10px !important;
 }
 
 .spreadsheet-table :deep(.table-header-row th.col-mult) {
-  min-width: 40px;
-  width: 40px;
+  min-width: 36px;
+  width: 36px;
   padding: 4px 2px !important;
 }
 
 .spreadsheet-table :deep(.table-header-row th:first-child) {
   text-align: left !important;
   min-width: 180px;
-  width: 180px;
+  width: 260px;
+  max-width: 260px;
   padding-left: 12px !important;
   padding-right: 12px !important;
   position: sticky;
   left: 0;
   z-index: 3;
-  background: #f8fafc;
+  background: var(--dash-surface);
   overflow: hidden;
   text-overflow: ellipsis;
-  border-right: 2px solid #e2e8f0;
+  border-right: 2px solid var(--dash-line);
 }
 
 .spreadsheet-table :deep(.table-header-row th:last-child) {
@@ -983,12 +1077,12 @@ onMounted(async () => {
   position: sticky;
   right: 0;
   z-index: 3;
-  background: #f8fafc;
+  background: var(--dash-surface);
 }
 
 .header-label {
   cursor: help;
-  border-bottom: 1px dashed #94a3b8;
+  border-bottom: 1px dashed var(--dash-ink-4);
 }
 
 /* ── Body cells ── */
@@ -997,30 +1091,39 @@ onMounted(async () => {
   text-align: center !important;
   padding: 4px 2px !important;
   font-size: 12px;
-  border-bottom: 1px solid #f1f5f9 !important;
+  /* Opaque, so a value passing under the pinned name or actions column is
+     covered rather than showing through it. */
+  background: var(--dash-surface);
+  border-bottom: 1px solid var(--dash-n-100) !important;
   vertical-align: middle;
   min-width: 0;
 }
 
 .spreadsheet-table :deep(.q-table tbody td.col-elig) {
-  min-width: 38px;
-  width: 38px;
+  min-width: 34px;
+  width: 34px;
   padding: 4px 2px !important;
 }
 
 .spreadsheet-table :deep(.q-table tbody td.col-mult) {
-  min-width: 40px;
-  width: 40px;
+  min-width: 36px;
+  width: 36px;
   padding: 4px 2px !important;
 }
 
+/* Capped, not just declared: `width` alone is a suggestion under auto layout, so
+   the cell grew to fit the longest contract name — around 260px here, and
+   unbounded as names get longer — and every pixel of that came out of the
+   multiplier columns at the far end of the row. The ellipsis and the `title`
+   tooltip below were already in place for exactly this. */
 .spreadsheet-table :deep(.q-table tbody td:first-child) {
   text-align: left !important;
   min-width: 180px;
-  width: 180px;
+  width: 260px;
+  max-width: 260px;
   padding: 6px 12px !important;
   font-size: 12px;
-  color: #1e293b;
+  color: var(--dash-ink);
   font-weight: 500;
   position: sticky;
   left: 0;
@@ -1028,7 +1131,7 @@ onMounted(async () => {
   background: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-right: 2px solid #e2e8f0;
+  border-right: 2px solid var(--dash-line);
 }
 
 .spreadsheet-table :deep(.q-table tbody td:last-child) {
@@ -1046,7 +1149,7 @@ onMounted(async () => {
 /* hover highlight for sticky cells too */
 .spreadsheet-table :deep(.q-table tbody tr:hover td:first-child),
 .spreadsheet-table :deep(.q-table tbody tr:hover td:last-child) {
-  background-color: #f8fafc;
+  background-color: var(--dash-n-50);
 }
 
 .spreadsheet-table :deep(.q-table tbody tr:last-child td) {
@@ -1056,7 +1159,7 @@ onMounted(async () => {
 /* ── Group column separators in body (adds left border to first col of each group except name) ── */
 
 .spreadsheet-table :deep(.q-table tbody td.group-first:not(:nth-child(2))) {
-  border-left: 2px solid #e2e8f0;
+  border-left: 2px solid var(--dash-line);
 }
 
 /* ── Checkmark and multiplier styles ── */
@@ -1072,7 +1175,7 @@ onMounted(async () => {
 }
 
 .check-mark {
-  color: #16a34a;
+  color: var(--dash-good);
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
@@ -1081,15 +1184,15 @@ onMounted(async () => {
 .mult-value {
   font-size: 12px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--dash-ink);
   font-variant-numeric: tabular-nums;
 }
 
 .multipliers-section {
   margin-top: 8px;
   padding: 12px 14px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--dash-n-50);
+  border: 1px solid var(--dash-line);
   border-radius: 8px;
 }
 
@@ -1098,7 +1201,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--dash-line);
 }
 
 .multiplier-row:last-child {
@@ -1118,8 +1221,8 @@ onMounted(async () => {
 }
 
 .multiplier-icon {
-  color: #3b82f6;
-  background: #dbeafe;
+  color: var(--dash-info-mark);
+  background: var(--dash-info-bg);
   padding: 6px;
   border-radius: 6px;
 }
@@ -1131,7 +1234,7 @@ onMounted(async () => {
 
 .section-label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--dash-ink-3);
   margin-bottom: 6px;
   font-weight: 500;
 }
@@ -1139,12 +1242,12 @@ onMounted(async () => {
 .multiplier-label {
   font-size: 13px;
   font-weight: 400;
-  color: #1e293b;
+  color: var(--dash-ink);
 }
 
 .multiplier-desc {
   font-size: 11px;
-  color: #64748b;
+  color: var(--dash-ink-3);
 }
 
 .multiplier-controls {
@@ -1161,12 +1264,12 @@ onMounted(async () => {
 .multiplier-value-display {
   font-size: 14px;
   font-weight: 600;
-  color: #059669;
+  color: var(--dash-good);
 }
 
 .multiplier-source {
   font-size: 10px;
-  color: #94a3b8;
+  color: var(--dash-ink-4);
   margin-left: 4px;
 }
 
@@ -1179,8 +1282,8 @@ onMounted(async () => {
 }
 
 .gov-violations-list {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--dash-n-50);
+  border: 1px solid var(--dash-line);
   border-radius: 8px;
   padding: 4px 0;
 }
@@ -1190,8 +1293,73 @@ onMounted(async () => {
 }
 
 .gov-banner {
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  background: var(--dash-warn-bg);
+  border: 1px solid var(--dash-warn-line);
+}
+
+/* ── Column-group control ── */
+.col-groups {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--dash-n-100);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+}
+
+/* A segmented track rather than separate pills: exactly one group shows at a
+   time, and a connected track is what says "pick one of these". */
+.col-groups__btn {
+  padding: 5px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--dash-r-sm);
+  color: var(--dash-ink-3);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
+}
+.col-groups__btn:hover {
+  color: var(--dash-ink);
+}
+.col-groups__btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dash-accent-ring);
+}
+.col-groups__btn.is-on {
+  background: var(--dash-surface);
+  color: var(--dash-ink);
+  box-shadow: var(--dash-shadow-xs);
+}
+
+/* ── Responsive ──
+   The panel header stacks at 1023 with the rest of the settings panels, so the
+   group track gets its own line and spreads across it rather than being squeezed
+   beside a full-width Add button. */
+@media (max-width: 1023px) {
+  /* The shared panel header already gives `.table-actions` the full width and
+     the Add button 100% of it. This panel puts two controls in there, so they
+     stack instead of halving a line neither fits on. */
+  .table-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .col-groups {
+    width: 100%;
+  }
+  .col-groups__btn {
+    flex: 1;
+  }
+}
+
+@media (max-width: 599px) {
+  .col-groups__btn {
+    padding: 5px 6px;
+    font-size: 11.5px;
+  }
 }
 
 @media (max-width: 768px) {

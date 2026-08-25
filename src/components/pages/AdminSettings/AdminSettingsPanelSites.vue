@@ -6,31 +6,33 @@
         <p class="table-subtitle">Manage site locations and configurations</p>
       </div>
       <div class="table-actions">
-        <q-btn color="primary" label="Add Site" icon="add" class="add-btn" @click="openSiteDialog" />
+        <q-btn
+          color="primary"
+          label="Add Site"
+          icon="add"
+          class="add-btn"
+          @click="openSiteDialog"
+        />
       </div>
     </div>
 
     <div class="modern-table-container">
+      <!-- Built from the live `siteColumns`, so the placeholder shares the
+           real table's columns, labels and alignment. -->
       <template v-if="loadingSites">
-        <div class="table-skeleton">
-          <div class="skeleton-header">
-            <div class="skeleton-header-cell">Site Name</div>
-            <div class="skeleton-header-cell">Address</div>
-            <div class="skeleton-header-cell">Ownership</div>
-            <div class="skeleton-header-cell">Status</div>
-            <div class="skeleton-header-cell" style="flex: 0 0 60px">Actions</div>
-          </div>
-          <div class="skeleton-row" v-for="n in 4" :key="n">
-            <div class="skeleton-cell"><q-skeleton type="text" /></div>
-            <div class="skeleton-cell"><q-skeleton type="text" /></div>
-            <div class="skeleton-cell"><q-skeleton type="text" width="80px" /></div>
-            <div class="skeleton-cell"><q-skeleton type="text" width="60px" /></div>
-            <div class="skeleton-cell" style="flex: 0 0 60px"><q-skeleton type="text" width="40px" /></div>
-          </div>
-        </div>
+        <TableSkeleton :columns="siteColumns" :rows="5" />
       </template>
       <template v-else>
-        <q-table :rows="filteredSites" :columns="siteColumns" row-key="id" flat no-data-label="No sites found" class="settings-table" hide-pagination :rows-per-page-options="[0]">
+        <q-table
+          :rows="filteredSites"
+          :columns="siteColumns"
+          row-key="id"
+          flat
+          no-data-label="No sites found"
+          class="dash-qtable settings-table"
+          hide-pagination
+          :rows-per-page-options="[0]"
+        >
           <template v-slot:header>
             <q-tr class="table-header-row">
               <q-th class="table-header-cell">Site Name</q-th>
@@ -42,24 +44,52 @@
           </template>
           <template v-slot:body="props">
             <q-tr class="table-body-row">
-              <q-td class="table-body-cell"><span class="item-name">{{ props.row.name }}</span></q-td>
+              <q-td class="table-body-cell"
+                ><span class="item-name">{{ props.row.name }}</span></q-td
+              >
               <q-td class="table-body-cell">{{ props.row.location }}</q-td>
               <q-td class="table-body-cell">
-                <div :class="['ownership-badge', props.row.ownership_type === 'owned' ? 'owned-badge' : 'leased-badge']">{{ props.row.ownership_type }}</div>
+                <div
+                  :class="[
+                    'ownership-badge',
+                    props.row.ownership_type === 'owned' ? 'owned-badge' : 'leased-badge',
+                  ]"
+                >
+                  {{ props.row.ownership_type }}
+                </div>
               </q-td>
               <q-td class="table-body-cell">
-                <div :class="['status-badge', props.row.is_active ? 'status-active' : 'status-inactive']">{{ props.row.is_active ? 'Active' : 'Inactive' }}</div>
+                <div
+                  :class="[
+                    'status-badge',
+                    props.row.is_active ? 'status-active' : 'status-inactive',
+                  ]"
+                >
+                  {{ props.row.is_active ? 'Active' : 'Inactive' }}
+                </div>
               </q-td>
               <q-td class="table-body-cell actions-cell">
                 <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                   <q-menu anchor="bottom right" self="top right" class="action-dropdown">
                     <q-list dense style="min-width: 150px">
-                      <q-item clickable v-close-popup class="dropdown-item" @click="editSite(props.row)">
+                      <q-item
+                        clickable
+                        v-close-popup
+                        class="dropdown-item"
+                        @click="editSite(props.row)"
+                      >
                         <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
                         <q-item-section>Edit Site</q-item-section>
                       </q-item>
-                      <q-item clickable v-close-popup class="dropdown-item dropdown-item-danger" @click="deleteSite(props.row)">
-                        <q-item-section side><q-icon name="delete" size="16px" color="negative" /></q-item-section>
+                      <q-item
+                        clickable
+                        v-close-popup
+                        class="dropdown-item dropdown-item-danger"
+                        @click="deleteSite(props.row)"
+                      >
+                        <q-item-section side
+                          ><q-icon name="delete" size="16px" color="negative"
+                        /></q-item-section>
                         <q-item-section>Delete</q-item-section>
                       </q-item>
                     </q-list>
@@ -76,7 +106,9 @@
       <q-card class="admin-modal-card admin-modal-card--md">
         <q-card-section class="admin-modal-header">
           <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"><q-icon name="location_on" size="22px" /></q-avatar>
+            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+              ><q-icon name="location_on" size="22px"
+            /></q-avatar>
             <div>
               <div class="admin-modal-title">{{ editingSite ? 'Edit Site' : 'Add Site' }}</div>
               <div class="admin-modal-subtitle">Manage site locations and configurations</div>
@@ -103,7 +135,14 @@
           <div class="form-section-label">Location Details</div>
           <div class="row q-col-gutter-md q-mb-sm">
             <div class="col-12">
-              <q-input v-model="siteForm.location" label="Location / Address *" outlined dense :loading="mapSearchLoading" @update:model-value="onLocationInput">
+              <q-input
+                v-model="siteForm.location"
+                label="Location / Address *"
+                outlined
+                dense
+                :loading="mapSearchLoading"
+                @update:model-value="onLocationInput"
+              >
                 <template v-slot:prepend><q-icon name="map" size="18px" /></template>
                 <template v-slot:hint>Type an address to auto-pin on the map</template>
               </q-input>
@@ -113,7 +152,10 @@
             <div class="col-12" v-show="showSiteMap">
               <div class="map-picker-wrapper">
                 <div v-if="siteForm.latitude && siteForm.longitude" class="map-picker-toggle-row">
-                  <span class="map-coords-hint">📍 {{ Number(siteForm.latitude).toFixed(6) }}, {{ Number(siteForm.longitude).toFixed(6) }}</span>
+                  <span class="map-coords-hint"
+                    >📍 {{ Number(siteForm.latitude).toFixed(6) }},
+                    {{ Number(siteForm.longitude).toFixed(6) }}</span
+                  >
                 </div>
                 <div class="site-map-wrapper">
                   <div ref="siteMapContainer" class="site-map-container" />
@@ -121,12 +163,26 @@
               </div>
             </div>
             <div class="col-6">
-              <q-input v-model.number="siteForm.radius_meters" label="Radius (meters)" type="number" outlined dense>
-                <template v-slot:prepend><q-icon name="radio_button_unchecked" size="18px" /></template>
+              <q-input
+                v-model.number="siteForm.radius_meters"
+                label="Radius (meters)"
+                type="number"
+                outlined
+                dense
+              >
+                <template v-slot:prepend
+                  ><q-icon name="radio_button_unchecked" size="18px"
+                /></template>
               </q-input>
             </div>
             <div class="col-6">
-              <q-select v-model="siteForm.ownership_type" :options="ownershipOptions" label="Ownership Type" outlined dense>
+              <q-select
+                v-model="siteForm.ownership_type"
+                :options="ownershipOptions"
+                label="Ownership Type"
+                outlined
+                dense
+              >
                 <template v-slot:prepend><q-icon name="home_work" size="18px" /></template>
               </q-select>
             </div>
@@ -149,21 +205,33 @@
               </div>
             </div>
             <div class="toggle-item">
-              <q-toggle v-model="siteForm.allow_manual_attendance" color="primary" class="brand-toggle" />
+              <q-toggle
+                v-model="siteForm.allow_manual_attendance"
+                color="primary"
+                class="brand-toggle"
+              />
               <div class="toggle-label-group">
                 <span class="toggle-label">Manual Attendance</span>
                 <span class="toggle-hint">Allow manual clock-in/out</span>
               </div>
             </div>
             <div class="toggle-item">
-              <q-toggle v-model="siteForm.allow_service_charge" color="primary" class="brand-toggle" />
+              <q-toggle
+                v-model="siteForm.allow_service_charge"
+                color="primary"
+                class="brand-toggle"
+              />
               <div class="toggle-label-group">
                 <span class="toggle-label">Service Charge</span>
                 <span class="toggle-hint">Include service charge</span>
               </div>
             </div>
             <div class="toggle-item">
-              <q-toggle v-model="siteForm.multiply_nd_by_holiday" color="primary" class="brand-toggle" />
+              <q-toggle
+                v-model="siteForm.multiply_nd_by_holiday"
+                color="primary"
+                class="brand-toggle"
+              />
               <div class="toggle-label-group">
                 <span class="toggle-label">Multiply ND by Holiday</span>
                 <span class="toggle-hint">Apply holiday multiplier</span>
@@ -174,7 +242,13 @@
           <div class="form-section-label">Additional</div>
           <div class="row q-mb-md">
             <div class="col-12">
-              <q-input v-model="siteForm.extended_shift_days" label="Extended Shift Days" outlined dense placeholder="e.g. Mon,Tue,Wed">
+              <q-input
+                v-model="siteForm.extended_shift_days"
+                label="Extended Shift Days"
+                outlined
+                dense
+                placeholder="e.g. Mon,Tue,Wed"
+              >
                 <template v-slot:prepend><q-icon name="date_range" size="18px" /></template>
                 <template v-slot:hint>Comma-separated days for extended shifts</template>
               </q-input>
@@ -184,7 +258,13 @@
 
         <q-card-actions align="right" class="admin-modal-footer">
           <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-          <q-btn color="primary" :label="editingSite ? 'Update Site' : 'Save Site'" class="admin-save-btn" :loading="savingSite" @click="saveSite" />
+          <q-btn
+            color="primary"
+            :label="editingSite ? 'Update Site' : 'Save Site'"
+            class="admin-save-btn"
+            :loading="savingSite"
+            @click="saveSite"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -193,6 +273,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useAdminSites } from '@/composables/admin/useAdminSites'
 
 const props = defineProps({
@@ -375,54 +456,10 @@ onMounted(fetchSites)
 </script>
 
 <style scoped lang="scss">
+/* The panel's local block used to redeclare `.item-name`, `.status-badge`,
+   `.status-active` / `.status-inactive` and the two ownership badges verbatim
+   after this import, which overrode the shared file and meant a badge here
+   drifted from the same badge on every other panel. The shared definitions are
+   the only ones now. */
 @import './AdminSettingsPanelShared.scss';
-
-/* ── Component-Specific Styles ── */
-
-.item-name {
-  font-weight: 600;
-  color: #111827;
-  font-size: 13px;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.status-active {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-
-.status-inactive {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.ownership-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: capitalize;
-  white-space: nowrap;
-}
-
-.owned-badge {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.leased-badge {
-  background: #ffedd5;
-  color: #c2410c;
-}
 </style>
