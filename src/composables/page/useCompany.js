@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useCompanyStore } from 'src/stores/company'
 
 const KEYS = ['selectCompany', 'selectedCompany', 'company_id', 'companyId']
@@ -42,8 +42,15 @@ export { resolvedCompanyId }
 export function useCompany() {
   const store = useCompanyStore()
 
-  // Keep the legacy companyId ref for compatibility, but back it with the store
-  const companyId = ref(store.companyId || resolvedCompanyId())
+  /**
+   * Reactive, not a snapshot. This used to be `ref(store.companyId || …)`, read
+   * once when the consumer was created — so anything built before the workspace
+   * switcher had settled (first login fetches the company list, then picks one)
+   * kept whichever id existed at that moment, usually none. Consumers that also
+   * read `resolvedCompanyId()` or the store directly then disagreed with it, and
+   * the same page could read one company and write to another.
+   */
+  const companyId = computed(() => store.companyId || resolvedCompanyId())
 
   // Full company object from store
   const company = computed(() => store.company)
@@ -51,7 +58,6 @@ export function useCompany() {
   /** Re-read from storage (useful after login / company switch). */
   function refreshCompanyId() {
     store.hydrate()
-    companyId.value = store.companyId || resolvedCompanyId()
   }
 
   return { companyId, company, refreshCompanyId }
