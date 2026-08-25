@@ -102,8 +102,8 @@
               <span :class="['status-pill', statusPillClass(props.row.status)]">
                 {{ props.row.status_display || capitalizeStatus(props.row.status) }}
               </span>
-              <div v-if="props.row.approved_by" class="status-note">
-                by {{ props.row.approved_by }}
+              <div v-if="approverName(props.row)" class="status-note">
+                by {{ approverName(props.row) }}
               </div>
             </q-td>
 
@@ -144,6 +144,7 @@
 <script setup>
 import { computed } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import { getApproverName as approverName } from 'src/composables/utils/employee'
 
 const props = defineProps({
   rows: Array,

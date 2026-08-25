@@ -23,6 +23,25 @@ function setCached(key, data) {
   cache.set(key, { data, timestamp: Date.now() })
 }
 
+/**
+ * Drops cached list-page data after a mutation. A review, a payslip release or a
+ * disbursement moves the run's status and its figures, and the dashboard and
+ * payout-group lists hold both for five minutes — long enough to send a person
+ * back to a list still describing the run they just moved.
+ *
+ * Pass a `fn` prefix ('dashboard', 'pgi', 'cutoffs') to clear one family of
+ * entries; pass nothing to clear the lot.
+ */
+function invalidateCache(fn) {
+  if (!fn) {
+    cache.clear()
+    return
+  }
+  for (const key of [...cache.keys()]) {
+    if (key === fn || key.startsWith(`${fn}:`)) cache.delete(key)
+  }
+}
+
 export function useDisbursementApi() {
 
   // ── Cutoff Instances ──
@@ -226,6 +245,7 @@ export function useDisbursementApi() {
   }
 
   return {
+    invalidateCache,
     fetchCutoffInstances,
     fetchDashboardSummary,
     fetchPayoutGroupInstances,

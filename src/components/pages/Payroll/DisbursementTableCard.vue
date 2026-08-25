@@ -238,6 +238,18 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
    and the laptop padding step all come from `dash-qtable`. What is left is the
    two things the system deliberately does not decide for every table. */
 
+/* `dash-qtable--flush` zeroes the header's top padding on the theory that the
+   band above it already supplies the space. Above a toolbar this dense — title,
+   count, action and a search field — it does not: the column labels came up
+   against the toolbar's hairline and read as a second line of the bar rather
+   than as the top of the table. This puts the strip back, a touch more above
+   the labels than below, since the border is what they need clearing from.
+   The progress row is excluded: it carries the loading bar and must stay at
+   zero, or the header jumps down mid-fetch. */
+.table-card__scroll :deep(.q-table thead tr:not(.q-table__progress) th) {
+  padding-top: 14px;
+}
+
 /* Hover applies to every row here rather than being opted into per row: each
    of the five disbursement tables is a flat list of records, with no detail
    rows or spacers that would light up wrongly. */

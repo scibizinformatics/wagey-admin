@@ -56,7 +56,7 @@
               </div>
               <div class="detail-row">
                 <span class="detail-label">Approved by:</span>
-                <span class="detail-value">{{ request.approved_by || '-' }}</span>
+                <span class="detail-value">{{ approverName(request) || '-' }}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Status:</span>
@@ -109,6 +109,8 @@
 </template>
 
 <script setup>
+import { getApproverName as approverName } from 'src/composables/utils/employee'
+
 const AVATAR_COLORS = ['primary', 'secondary', 'accent', 'purple', 'deep-orange']
 
 defineProps({

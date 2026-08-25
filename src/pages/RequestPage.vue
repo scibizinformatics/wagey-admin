@@ -614,6 +614,8 @@ import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { useCompany } from 'src/composables/page/useCompany'
+import { useAuthStore } from 'src/boot/auth'
+import { getApproverName } from 'src/composables/utils/employee'
 import RequestStatsCards from 'src/components/pages/Request/RequestStatsCards.vue'
 import RequestLeaveTable from 'src/components/pages/Request/RequestLeaveTable.vue'
 import RequestCashAdvanceTable from 'src/components/pages/Request/RequestCashAdvanceTable.vue'
@@ -631,6 +633,7 @@ const $q = useQuasar()
 
 const { employees, fetchEmployees } = useEmployees()
 const { company } = useCompany()
+const authStore = useAuthStore()
 
 const companyName = computed(() => company.value?.name || '')
 
@@ -927,6 +930,41 @@ const extractEmployeeName = (request) => {
   }
   if (request.employee_id) return `Employee #${request.employee_id}`
   return 'Unknown Employee'
+}
+
+/** The signed-in admin's own name, for a request they approved themselves. */
+const signedInName = () => {
+  const user = authStore.user
+  if (!user) return ''
+  return (
+    user.full_name ||
+    `${user.first_name || ''} ${user.last_name || ''}`.trim() ||
+    user.username ||
+    ''
+  )
+}
+
+/**
+ * Names the approver on a cash-advance request.
+ *
+ * `approved_by` comes back as the approver's id, which is what the Status column
+ * was printing — "by 14". A name is used when the payload carries one; failing
+ * that, an id matching the signed-in user is resolved locally, since an admin
+ * approving from this screen is the common case and their own name is the one
+ * fact the client can establish without guessing.
+ *
+ * It deliberately does not match the id against the employee list: `approved_by`
+ * identifies a user, employees are a different id space, and naming the wrong
+ * person is worse than naming nobody. Rows approved by someone else stay
+ * unnamed until the endpoint returns `approved_by_name`, as the leave and
+ * overtime endpoints already do.
+ */
+const resolveApproverName = (request) => {
+  const named = getApproverName(request)
+  if (named) return named
+  const by = request?.approved_by
+  if (by != null && String(by) === String(authStore.user?.id)) return signedInName()
+  return ''
 }
 
 const updateCaStats = (sourceList = caRequests.value) => {
@@ -1519,6 +1557,7 @@ const fetchCaRequests = async () => {
     caRequests.value = data.map((req) => ({
       ...req,
       employee_name: req.employee_name || extractEmployeeName(req),
+      approved_by_name: resolveApproverName(req),
     }))
     updateCaStats(caRequests.value)
   } catch (err) {
@@ -1563,6 +1602,7 @@ const fetchCaCutoffRequests = async (logId) => {
     caCutoffRequests.value = data.map((req) => ({
       ...req,
       employee_name: req.employee_name || extractEmployeeName(req),
+      approved_by_name: resolveApproverName(req),
     }))
     updateCaStats(caCutoffRequests.value)
   } catch (err) {

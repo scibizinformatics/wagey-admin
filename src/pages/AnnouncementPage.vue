@@ -40,16 +40,6 @@
         </div>
       </header>
 
-      <AnnouncementStatsCards
-        :total="announcements.length"
-        :live="counts.live"
-        :scheduled="counts.scheduled"
-        :inactive="counts.inactive"
-        :urgent="counts.urgent"
-        :urgent-live="counts.urgentLive"
-        :loading="loading && !announcements.length"
-      />
-
       <!-- ── Error ─────────────────────────────────────────────────────────
            One line in the critical tone with a retry. A failed fetch used to
            surface only as a console error and an empty table. -->
@@ -304,7 +294,6 @@ import { useCompanyStore } from '@/stores/company'
 import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
 import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
-import AnnouncementStatsCards from '@/components/pages/Announcement/AnnouncementStatsCards.vue'
 import AnnouncementTable from '@/components/pages/Announcement/AnnouncementTable.vue'
 import AnnouncementCardList from '@/components/pages/Announcement/AnnouncementCardList.vue'
 import AnnouncementEditDialog from '@/components/pages/Announcement/AnnouncementEditDialog.vue'

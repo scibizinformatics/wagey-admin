@@ -108,6 +108,7 @@ import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import PageShell from 'src/components/layout/PageShell.vue'
 import PayoutTable from 'src/components/pages/Payroll/PayoutTable.vue'
+import { stepRouteForPgiStatus } from 'src/constants/pgiStatus'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
@@ -275,8 +276,24 @@ onMounted(async () => {
   }
 })
 
+/**
+ * Opens the run where it actually is — the step its own progress bar names —
+ * rather than always at Review.
+ *
+ * The step pages also show the run's name and cutoff in their header, and no
+ * step endpoint returns either, so the row that already has them passes them on.
+ * They are a courtesy, not a contract: a deep link that arrives without them
+ * resolves the same facts from the API.
+ */
 function openRun(row) {
-  router.push({ path: `/app/payroll/review/${row.id}`, query: { pgi_status: row.status } })
+  router.push({
+    path: `/app/payroll/${stepRouteForPgiStatus(row.status)}/${row.id}`,
+    query: {
+      pgi_status: row.status,
+      group: row.group || undefined,
+      cutoff: row.cutoff || undefined,
+    },
+  })
 }
 
 function exportRuns() {

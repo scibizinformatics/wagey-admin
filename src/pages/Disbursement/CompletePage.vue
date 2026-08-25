@@ -4,7 +4,7 @@
       :group-id="groupId"
       :step="5"
       :group-name="groupName"
-      subtitle="The finished record of this payout group."
+      :subtitle="subtitle"
       :status="pgiStatus"
     >
       <!-- The terminal step is a result, not a worklist, so it opens by saying
@@ -140,11 +140,13 @@ import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStep
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
+import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 
 const route = useRoute()
 const router = useRouter()
 const groupId = route.params.id
+const { identity, resolveQuietly } = usePayoutGroupIdentity()
 const { fetchPayoutGroupCompletion, fetchPayoutSummaryByEmployee } = useDisbursementApi()
 const { notifyLoaded } = useLoadedToast()
 
@@ -167,15 +169,31 @@ const columns = [
   { name: 'received_by', label: 'Received by', field: 'received_by', align: 'left' },
 ]
 
-const pgiStatus = computed(() => route.query.pgi_status || '')
+// The resolved run first: `pgi_status` in the query is a snapshot from whenever
+// the list page last loaded, so on a refresh it can name a step the run has long
+// since left. It stands in only until the run itself answers.
+const pgiStatus = computed(() => identity.value?.status || route.query.pgi_status || '')
 
 const groupName = computed(
   () =>
     completion.value?.payout_group_name ||
     completion.value?.group_name ||
     route.query.group ||
+    identity.value?.name ||
     '',
 )
+
+// The period this run settles, from whichever of the three knows it. Naming it
+// in the header saves opening the run to find out which cutoff you are looking
+// at — every step page said only what the step was for.
+const cutoffName = computed(
+  () => completion.value?.cutoff_name || route.query.cutoff || identity.value?.cutoff || '',
+)
+
+const subtitle = computed(() => {
+  const purpose = 'The finished record of this payout group.'
+  return cutoffName.value ? `${cutoffName.value} · ${purpose}` : purpose
+})
 
 const statTiles = computed(() => [
   {
@@ -306,6 +324,11 @@ function parseAmount(val) {
 }
 
 onMounted(async () => {
+  // The list page hands the run's name, cutoff and status over in the query, and
+  // no step endpoint returns any of them — but a deep link arrives with none of
+  // them and a refresh can arrive with a stale status, so the run is resolved by
+  // its id either way.
+  resolveQuietly(groupId)
   try {
     const [comp, emp] = await Promise.all([
       fetchPayoutGroupCompletion(groupId),

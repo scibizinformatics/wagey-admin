@@ -49,7 +49,12 @@
         </q-td>
 
         <q-td key="progress" :props="props">
-          <PayoutProgressStepper :group-id="props.row.id" :pgi-status="props.row.status" />
+          <PayoutProgressStepper
+            :group-id="props.row.id"
+            :pgi-status="props.row.status"
+            :group-name="props.row.group"
+            :cutoff-name="props.row.cutoff"
+          />
         </q-td>
 
         <q-td key="open" :props="props" class="col-open">
@@ -180,6 +185,17 @@ function formatPeso(value) {
   text-align: right;
 }
 
+/* `dash-qtable--flush` zeroes the header's top padding, on the theory that the
+   band above already supplies the space. Under the runs toolbar it does not:
+   the column labels came up against its hairline and read as a second line of
+   the bar rather than as the top of the table. Matched to the five step tables,
+   so the flow's list and its steps share one header strip.
+   The progress row is excluded — it carries the loading bar and must stay at
+   zero, or the header jumps down mid-fetch. */
+.payout-table :deep(.q-table thead tr:not(.q-table__progress) th) {
+  padding-top: 14px;
+}
+
 /* ── Identity ── */
 .run__id {
   display: flex;
@@ -248,8 +264,10 @@ function formatPeso(value) {
 }
 
 @media (max-width: 1279px) {
-  .payout-table :deep(.q-table thead th) {
-    padding: 0 9px 10px;
+  /* Same selector shape as the rule above, so the laptop step still wins on
+     order rather than losing the top padding back to zero. */
+  .payout-table :deep(.q-table thead tr:not(.q-table__progress) th) {
+    padding: 12px 9px 10px;
   }
   .payout-table :deep(.q-table tbody td) {
     padding: 12px 9px;

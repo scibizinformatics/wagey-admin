@@ -7,13 +7,13 @@
       base     — the static navy gradient ground
       aurora   — three slow-drifting colour blobs, screened over the ground
       grid     — a fine rule grid that is only *revealed* where the light falls
-      spot     — the spotlight itself, following the cursor
+      spot     — the spotlight itself, fixed above the card
       sweep    — a diagonal specular streak crossing every few seconds
       marks    — the drifting field of Wagey marks (see LoginMarkField.vue)
       grain    — a little film grain, which is what stops the gradients banding
       vignette — darkens the corners so the card sits in the brightest area
   -->
-  <div ref="stageEl" class="stage" :class="{ 'stage--tracking': tracking }" aria-hidden="true">
+  <div class="stage" aria-hidden="true">
     <div class="stage__base"></div>
 
     <div class="aurora">
@@ -34,102 +34,21 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
 import LoginMarkField from './LoginMarkField.vue'
-
-// `--px` / `--py` are registered custom properties (see the style block), which
-// is what lets the spotlight both *transition* toward the cursor and *animate*
-// on its own idle drift. While no pointer has moved we leave the drift keyframes
-// running; the first movement adds `.stage--tracking`, which stops the animation
-// so the inline values written below can take over.
-const stageEl = ref(null)
-const tracking = ref(false)
-
-let frame = 0
-let latest = null
-
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' &&
-  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
-
-function apply() {
-  frame = 0
-  const el = stageEl.value
-  if (!el || !latest) return
-  const x = (latest.clientX / window.innerWidth) * 100
-  const y = (latest.clientY / window.innerHeight) * 100
-  el.style.setProperty('--px', `${x.toFixed(2)}%`)
-  el.style.setProperty('--py', `${y.toFixed(2)}%`)
-  if (!tracking.value) tracking.value = true
-}
-
-function onPointerMove(event) {
-  latest = event
-  if (frame) return
-  frame = requestAnimationFrame(apply)
-}
-
-onMounted(() => {
-  if (prefersReducedMotion()) return
-  window.addEventListener('pointermove', onPointerMove, { passive: true })
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('pointermove', onPointerMove)
-  if (frame) cancelAnimationFrame(frame)
-})
 </script>
 
 <style lang="scss" scoped>
-// Registering the two spotlight coordinates as real typed properties is what
-// makes them animatable and transitionable. Browsers without @property still
-// read the fallbacks below — the light just snaps instead of easing.
-@property --px {
-  syntax: '<percentage>';
-  initial-value: 50%;
-  inherits: true;
-}
-
-@property --py {
-  syntax: '<percentage>';
-  initial-value: 38%;
-  inherits: true;
-}
-
+// `--px` / `--py` place the light. They are plain values now — the light does
+// not follow the cursor and does not drift, so nothing needs to animate them.
 .stage {
   --px: 50%;
-  --py: 38%;
+  --py: 34%;
 
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
-
-  // Idle behaviour: the light wanders on its own until the cursor arrives.
-  animation: driftLight 26s var(--lg-ease) infinite alternate;
-  transition:
-    --px 0.55s cubic-bezier(0.16, 1, 0.3, 1),
-    --py 0.55s cubic-bezier(0.16, 1, 0.3, 1);
-
-  &--tracking {
-    animation: none;
-  }
-}
-
-@keyframes driftLight {
-  0% {
-    --px: 34%;
-    --py: 30%;
-  }
-  50% {
-    --px: 62%;
-    --py: 46%;
-  }
-  100% {
-    --px: 46%;
-    --py: 24%;
-  }
 }
 
 // ── Ground ──────────────────────────────────────────────────────────────────
@@ -195,8 +114,8 @@ onBeforeUnmount(() => {
 
 // ── Grid, revealed by the light ─────────────────────────────────────────────
 // The grid is drawn across the whole viewport but masked to the spotlight, so
-// moving the cursor uncovers structure rather than adding brightness. That reads
-// as a lit surface instead of a glow pasted on top.
+// structure only shows where the light falls. That reads as a lit surface
+// instead of a glow pasted on top.
 .grid {
   position: absolute;
   inset: 0;
@@ -283,16 +202,9 @@ onBeforeUnmount(() => {
 }
 
 // ── Reduced motion ──────────────────────────────────────────────────────────
-// The light settles into one fixed, flattering position and nothing moves. The
-// spotlight itself stays — it is what makes the card legible, not decoration.
+// The remaining motion is the aurora drift and the specular sweep; both stop.
+// The spotlight stays — it is what makes the card legible, not decoration.
 @media (prefers-reduced-motion: reduce) {
-  .stage {
-    --px: 50%;
-    --py: 34%;
-    animation: none;
-    transition: none;
-  }
-
   .aurora__blob {
     animation: none;
   }

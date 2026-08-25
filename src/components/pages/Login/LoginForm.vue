@@ -100,7 +100,7 @@
     <footer class="card__foot" style="--d: 300ms">
       <span class="card__rule"></span>
       <p class="card__note">
-        Admin accounts are created by your organisation. Ask your administrator for an invite.
+        Admin accounts are created by your organization. Ask your administrator for an invite.
       </p>
     </footer>
   </section>

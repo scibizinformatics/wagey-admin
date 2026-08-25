@@ -40,15 +40,6 @@
         </div>
       </header>
 
-      <InviteStatsCards
-        :total="invites.length"
-        :accepted="counts.accepted"
-        :pending="counts.pending"
-        :expiring="counts.expiring"
-        :expired="counts.expired"
-        :loading="loading && !invites.length"
-      />
-
       <!-- ── Error ─────────────────────────────────────────────────────────
            One line in the critical tone with a retry, rather than a banner with
            an avatar slot — the message is never longer than a sentence. -->
@@ -156,7 +147,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useQuasar, copyToClipboard } from 'quasar'
 import { useInvites } from '@/composables/page/useInvites'
 import { useCompany } from '@/composables/page/useCompany'
-import InviteStatsCards from '@/components/pages/Invite/InviteStatsCards.vue'
 import InviteTable from '@/components/pages/Invite/InviteTable.vue'
 import InviteCardList from '@/components/pages/Invite/InviteCardList.vue'
 import InviteInviteModal from '@/components/pages/Invite/InviteInviteModal.vue'

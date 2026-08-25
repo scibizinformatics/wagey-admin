@@ -23,7 +23,7 @@
 
         <component
           :is="step.state === 'locked' ? 'div' : 'router-link'"
-          :to="step.state === 'locked' ? undefined : step.route"
+          :to="step.state === 'locked' ? undefined : { path: step.route, query: carriedQuery }"
           class="step__body"
           :class="{ 'step__body--locked': step.state === 'locked' }"
         >
@@ -77,6 +77,22 @@ const props = defineProps({
 
 const BASE_PATH = '/app/payroll'
 
+/**
+ * Moving between steps used to drop the query, so the run's status and name —
+ * which the list page hands over and no step endpoint returns — survived only
+ * the first page you landed on. Every step after it fell back to a shimmering
+ * header and a stepper that had to refetch its progress. The identity of the
+ * run does not change between its own steps, so it travels with the link.
+ */
+const carriedQuery = computed(() => {
+  const { pgi_status: status, group, cutoff } = route.query
+  const query = {}
+  if (status) query.pgi_status = status
+  if (group) query.group = group
+  if (cutoff) query.cutoff = cutoff
+  return query
+})
+
 const stepDefs = [
   { label: 'Review', routeKey: 'review' },
   { label: 'Payslips', routeKey: 'payslips' },
@@ -96,33 +112,70 @@ const STATE_LABELS = {
 
 const stateLabel = (state) => STATE_LABELS[state] ?? ''
 
-const steps = computed(() => {
-  const effectiveStatus = props.pgiStatus || route.query.pgi_status
+const withRoute = (def) => ({
+  ...def,
+  route: `${BASE_PATH}/${def.routeKey}/${props.groupId}`,
+})
 
-  if (effectiveStatus) {
-    const mapped = computeStepsFromPgiStatus(
-      effectiveStatus,
-      stepDefs.map((d) => ({ name: d.routeKey })),
-    )
-    if (mapped) {
-      return mapped.map((s, i) => ({
-        ...stepDefs[i],
-        route: `${BASE_PATH}/${stepDefs[i].routeKey}/${props.groupId}`,
-        state: s.state === 'completed' ? 'completed' : s.state === 'in_progress' ? 'current' : 'locked',
-      }))
-    }
-  }
-
-  if (!progressData.value) return []
-
+/** The bar as the run's own progress endpoint describes it. */
+const progressSteps = computed(() => {
+  const progress = progressData.value?.progress
+  if (!Array.isArray(progress) || !progress.length) return []
   return stepDefs.map((def, i) => {
-    const prog = progressData.value.progress?.[i]
+    const prog = progress[i]
     let state = 'upcoming'
     if (prog?.status === 'completed') state = 'completed'
     else if (prog?.status === 'in_progress') state = 'current'
     else if (prog?.status === 'locked') state = 'locked'
-    return { ...def, route: `${BASE_PATH}/${def.routeKey}/${props.groupId}`, state }
+    return { ...withRoute(def), state }
   })
+})
+
+/** The bar as the status this header was handed maps it. */
+const statusSteps = computed(() => {
+  const effectiveStatus = props.pgiStatus || route.query.pgi_status
+  if (!effectiveStatus) return []
+  const mapped = computeStepsFromPgiStatus(
+    effectiveStatus,
+    stepDefs.map((d) => ({ name: d.routeKey })),
+  )
+  if (!mapped) return []
+  return mapped.map((s, i) => ({
+    ...withRoute(stepDefs[i]),
+    state: s.state === 'completed' ? 'completed' : s.state === 'in_progress' ? 'current' : 'locked',
+  }))
+})
+
+/** How far along the run a given reading of the bar puts it. */
+function positionOf(steps) {
+  let position = -1
+  steps.forEach((step, i) => {
+    if (step.state === 'completed' || step.state === 'current') position = Math.max(position, i)
+  })
+  return position
+}
+
+/**
+ * Two sources, both fallible in opposite directions, so the further-along one
+ * wins — a run only ever moves forward, which makes "behind" the tell for stale.
+ *
+ * The status is a snapshot. It reaches this header from the list page's query,
+ * and on a refresh that query still says whatever the run was when the list last
+ * loaded, so a run that has since reached payslips read "Review, in progress" on
+ * every reload. That reading is behind, and loses.
+ *
+ * The progress endpoint is authoritative but is fetched once on mount, so it is
+ * the one that lags right after an action: release the payslips and the page
+ * knows the run has moved to awaiting acknowledgment before a refetch could say
+ * so. That reading is behind too, and loses in its turn. Ties go to progress,
+ * which describes each step rather than inferring it from one status.
+ */
+const steps = computed(() => {
+  const fromProgress = progressSteps.value
+  const fromStatus = statusSteps.value
+  if (!fromProgress.length) return fromStatus
+  if (!fromStatus.length) return fromProgress
+  return positionOf(fromProgress) >= positionOf(fromStatus) ? fromProgress : fromStatus
 })
 
 onMounted(async () => {

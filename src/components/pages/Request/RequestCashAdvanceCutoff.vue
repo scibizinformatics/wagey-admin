@@ -207,8 +207,8 @@
                       <span :class="['status-pill', statusPillClass(props.row.status)]">
                         {{ props.row.status_display || capitalize(props.row.status) }}
                       </span>
-                      <div v-if="props.row.approved_by" class="status-note">
-                        by {{ props.row.approved_by }}
+                      <div v-if="approverName(props.row)" class="status-note">
+                        by {{ approverName(props.row) }}
                       </div>
                     </q-td>
                     <q-td key="actions" :props="props" class="grid-cell cut-cell-actions">
@@ -251,6 +251,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { getApproverName as approverName } from 'src/composables/utils/employee'
 
 const props = defineProps({
   logs: { type: Array, default: () => [] },

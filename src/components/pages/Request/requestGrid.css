@@ -117,6 +117,28 @@
 .request-grid {
   width: 100%;
 }
+
+/* `dash-qtable--flush` zeroes the header's top padding, on the theory that the
+   band above already supplies the space. Under these toolbars — search, a
+   status filter and a count — it does not: the column labels came up against
+   the toolbar's hairline and read as a second line of it rather than as the top
+   of the table. One rule here covers all four request tabs and the cash-advance
+   cutoff grid, and matches the value the disbursement tables use. */
+.request-grid .grid-head-cell {
+  padding-top: 14px;
+}
+/* A bare `<th>` centres its text — that is the HTML default, and nothing in
+   Quasar's table CSS overrides it. `<q-th>` only supplies an alignment class
+   (`text-left` / `text-right`) when it is given `:props`, which the cash
+   advance and swap headers do not do: they are written as plain cells. Their
+   labels were therefore centred over left-aligned data, so no column in those
+   two tables lined up with its own heading.
+   Headers that do pass `:props` carry Quasar's class and are left alone here,
+   as are the two modifiers below, which are `!important`. */
+.grid-head-cell:not(.text-left):not(.text-right):not(.text-center) {
+  text-align: left;
+}
+
 .grid-head-cell--center,
 .grid-cell--center {
   text-align: center !important;

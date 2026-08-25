@@ -21,6 +21,47 @@ export function getFullName(employee) {
   )
 }
 
+/**
+ * Who approved a request, by name.
+ *
+ * The cash-advance endpoints return `approved_by` as the approver's id, and the
+ * table printed it straight out, so an approved row read "by 14". The sibling
+ * request endpoints (leave, overtime) return `approved_by_name` beside it, so
+ * the name is often already in the payload under a different key — this looks
+ * under every spelling in use and unwraps the object form.
+ *
+ * Returns '' when all that is available is an id. A bare number names nobody, so
+ * callers show nothing rather than showing that.
+ */
+export function getApproverName(record) {
+  if (!record) return ''
+
+  const named = record.approved_by_name || record.approver_name || record.approved_by_full_name
+  if (named) return String(named).trim()
+
+  const by = record.approved_by ?? record.approver ?? record.approved_by_user
+  if (by == null) return ''
+
+  // Some payloads put the name straight in `approved_by`; an id, whether it
+  // arrives as 14 or as "14", is not one.
+  if (typeof by === 'string') {
+    const text = by.trim()
+    return /^d+$/.test(text) ? '' : text
+  }
+
+  if (typeof by === 'object') {
+    const full =
+      by.full_name ||
+      by.name ||
+      `${by.first_name || ''} ${by.last_name || ''}`.trim() ||
+      by.username ||
+      by.email
+    return full ? String(full).trim() : ''
+  }
+
+  return ''
+}
+
 export function getEmail(employee) {
   return employee?.user?.email || 'N/A'
 }

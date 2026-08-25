@@ -53,7 +53,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
-import { computeStepsFromPgiStatus, PGI_STATUS_MAP } from 'src/constants/pgiStatus'
+import {
+  computeStepsFromPgiStatus,
+  PGI_STATUS_MAP,
+  PGI_STEP_ROUTES,
+} from 'src/constants/pgiStatus'
 
 const router = useRouter()
 const { fetchPayoutGroupProgress } = useDisbursementApi()
@@ -61,9 +65,12 @@ const { fetchPayoutGroupProgress } = useDisbursementApi()
 const props = defineProps({
   groupId: { type: [Number, String], required: true },
   pgiStatus: { type: String, default: null },
+  /** Passed through to the step page's header, which no step endpoint returns. */
+  groupName: { type: String, default: '' },
+  cutoffName: { type: String, default: '' },
 })
 
-const ROUTES = ['review', 'payslips', 'funding', 'disburse', 'complete']
+const ROUTES = PGI_STEP_ROUTES
 const STEP_LABELS = ['Review', 'Payslips', 'Funding', 'Disbursement', 'Complete']
 const STATE_WORDS = { done: 'done', active: 'in progress', pending: 'locked' }
 
@@ -125,7 +132,17 @@ onMounted(async () => {
 
 function goToStep(index) {
   if (steps.value[index]?.state === 'pending') return
-  if (ROUTES[index]) router.push(`/app/payroll/${ROUTES[index]}/${props.groupId}`)
+  if (!ROUTES[index]) return
+  // The same identity the row click hands over: without it the step page has no
+  // way to name the run it is showing until it resolves one by id.
+  router.push({
+    path: `/app/payroll/${ROUTES[index]}/${props.groupId}`,
+    query: {
+      pgi_status: props.pgiStatus || undefined,
+      group: props.groupName || undefined,
+      cutoff: props.cutoffName || undefined,
+    },
+  })
 }
 </script>
 

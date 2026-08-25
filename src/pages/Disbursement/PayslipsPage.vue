@@ -4,7 +4,7 @@
       :group-id="groupId"
       :step="2"
       :group-name="groupName"
-      subtitle="Track who has seen and acknowledged their payslip."
+      :subtitle="subtitle"
       :status="pgiStatus"
       :stepper-key="stepperKey"
     >
@@ -26,9 +26,15 @@
         <!-- Beside search, so it is reachable without scrolling past the table. -->
         <template #actions>
           <span class="action-note dash-num">
-            {{ overview?.acknowledged ?? 0 }}/{{ overview?.payslip_sent ?? 0 }} acknowledged
+            {{ acknowledgedCount }}/{{ payslipsSent }} acknowledged
           </span>
+
+          <!-- Funding is money leaving the company against payslips the people
+               being paid have not yet agreed to. The step stays shut until they
+               have, and says what it is waiting for rather than showing a
+               button that would be wrong to press. -->
           <q-btn
+            v-if="allAcknowledged"
             unelevated
             no-caps
             dense
@@ -37,6 +43,10 @@
             class="btn-primary"
             @click="goToFunding"
           />
+          <span v-else class="action-wait">
+            <q-icon name="o_schedule" size="15px" />
+            Funding opens once everyone has acknowledged
+          </span>
         </template>
 
         <!-- Filter tabs live inside the list card, under its toolbar, because
@@ -152,12 +162,14 @@ import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStep
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
+import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 
 const route = useRoute()
 const router = useRouter()
 const $q = useQuasar()
 const groupId = route.params.id
+const { identity, resolveQuietly } = usePayoutGroupIdentity()
 const stepperKey = ref(0)
 const { fetchPayslipOverview, fetchEmployeePayslips, fetchPayslipIssues, resolveIssue, rejectIssue } = useDisbursementApi()
 const { notifyLoaded } = useLoadedToast()
@@ -182,11 +194,31 @@ const columns = [
   { name: 'actions', label: '', field: 'actions', align: 'right' },
 ]
 
-const pgiStatus = computed(() => route.query.pgi_status || '')
+// The resolved run first: `pgi_status` in the query is a snapshot from whenever
+// the list page last loaded, so on a refresh it can name a step the run has long
+// since left. It stands in only until the run itself answers.
+const pgiStatus = computed(() => identity.value?.status || route.query.pgi_status || '')
 
 const groupName = computed(
-  () => overview.value?.payout_group_name || overview.value?.group_name || route.query.group || '',
+  () =>
+    overview.value?.payout_group_name ||
+    overview.value?.group_name ||
+    route.query.group ||
+    identity.value?.name ||
+    '',
 )
+
+// The period this run settles, from whichever of the three knows it. Naming it
+// in the header saves opening the run to find out which cutoff you are looking
+// at — every step page said only what the step was for.
+const cutoffName = computed(
+  () => overview.value?.cutoff_name || route.query.cutoff || identity.value?.cutoff || '',
+)
+
+const subtitle = computed(() => {
+  const purpose = 'Track who has seen and acknowledged their payslip.'
+  return cutoffName.value ? `${cutoffName.value} · ${purpose}` : purpose
+})
 
 /**
  * Tabs carry their own counts, which is what the figures strip was duplicating —
@@ -204,6 +236,17 @@ const tabs = computed(() => [
   { value: 'pending', label: 'Pending', icon: 'o_schedule', count: overview.value?.pending ?? 0 },
   { value: 'disputed', label: 'Disputed', icon: 'o_report', count: overview.value?.disputed ?? 0 },
 ])
+
+const acknowledgedCount = computed(() => overview.value?.acknowledged ?? 0)
+const payslipsSent = computed(() => overview.value?.payslip_sent ?? 0)
+
+/**
+ * Whether this step is finished. Zero payslips sent is not "all acknowledged" —
+ * it is a run that has not released yet, and it must not open funding.
+ */
+const allAcknowledged = computed(
+  () => payslipsSent.value > 0 && acknowledgedCount.value >= payslipsSent.value,
+)
 
 const statTiles = computed(() => [
   {
@@ -248,7 +291,7 @@ function clearFilters() {
 }
 
 function goToFunding() {
-  router.push(`/app/payroll/funding/${groupId}`)
+  router.push({ path: `/app/payroll/funding/${groupId}`, query: route.query })
 }
 
 
@@ -274,6 +317,11 @@ const paginatedData = computed(() => {
 })
 
 onMounted(async () => {
+  // The list page hands the run's name, cutoff and status over in the query, and
+  // no step endpoint returns any of them — but a deep link arrives with none of
+  // them and a refresh can arrive with a stale status, so the run is resolved by
+  // its id either way.
+  resolveQuietly(groupId)
   try {
     const [ov, data] = await Promise.all([
       fetchPayslipOverview(groupId),
@@ -395,6 +443,22 @@ async function reject(row) {
   white-space: nowrap;
 }
 
+/* Stands where the action would, at the action's height, so the toolbar keeps
+   its shape while the step waits — but muted, because it is a statement about
+   the run rather than something to press. */
+.action-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px dashed var(--dash-line);
+  border-radius: var(--dash-r-md);
+  font-size: 12.5px;
+  color: var(--dash-ink-4);
+  white-space: nowrap;
+}
+
 /* ── Filter tabs ──
    A recessed segmented control, the same language as the dashboard's view
    toggle and the schedule's grouping switch. Was a row of custom pills with
@@ -465,6 +529,11 @@ async function reject(row) {
 @media (max-width: 1023px) {
   .action-note {
     display: none;
+  }
+  /* The wait note keeps its words but drops the frame, so the row stays short. */
+  .action-wait {
+    padding: 0;
+    border: none;
   }
   .tab__label {
     display: none;
