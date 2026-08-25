@@ -53,13 +53,13 @@
 
     <!-- Grid -->
     <template v-else>
-      <div class="grid-scroll">
+      <div class="grid-scroll dash-scroll-x">
         <q-table
           :rows="rows"
           :columns="columns"
           row-key="id"
           flat
-          class="request-grid swap-grid"
+          class="dash-qtable dash-qtable--flush request-grid swap-grid"
           hide-pagination
           :rows-per-page-options="[0]"
         >
@@ -74,10 +74,15 @@
           </template>
 
           <template v-slot:body="props">
-            <q-tr class="grid-row" :class="{ 'grid-row--waiting': isPendingApproval(props.row) }">
+            <q-tr
+              class="dash-qtable__row grid-row"
+              :class="{ 'grid-row--waiting': isPendingApproval(props.row) }"
+            >
               <q-td class="grid-cell cell-requester">
                 <div class="identity">
-                  <span class="identity-avatar">{{ getInitials(props.row.requested_by_name) }}</span>
+                  <span class="identity-avatar">{{
+                    getInitials(props.row.requested_by_name)
+                  }}</span>
                   <span class="identity-text">
                     <span class="identity-name">{{ props.row.requested_by_name || 'N/A' }}</span>
                     <span class="identity-sub">{{ formatDateTime(props.row.requested_at) }}</span>
@@ -123,7 +128,9 @@
               <q-td class="grid-cell cell-actions">
                 <div class="grid-actions">
                   <q-btn
-                    flat dense round
+                    flat
+                    dense
+                    round
                     icon="visibility"
                     size="sm"
                     class="grid-action"
@@ -133,7 +140,9 @@
                   </q-btn>
                   <template v-if="isPendingApproval(props.row)">
                     <q-btn
-                      flat dense round
+                      flat
+                      dense
+                      round
                       icon="check"
                       size="sm"
                       class="grid-action grid-action--approve"
@@ -150,7 +159,9 @@
                       </q-tooltip>
                     </q-btn>
                     <q-btn
-                      flat dense round
+                      flat
+                      dense
+                      round
                       icon="close"
                       size="sm"
                       class="grid-action grid-action--reject"
@@ -315,7 +326,7 @@ const getApprovalProgressText = (request) => {
 .swap-from {
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--dash-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -323,12 +334,12 @@ const getApprovalProgressText = (request) => {
 .swap-arrow {
   display: flex;
   align-items: center;
-  color: #cbd5e1;
+  color: var(--dash-n-300);
   line-height: 1;
 }
 .swap-to {
   font-size: 12px;
-  color: #64748b;
+  color: var(--dash-ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

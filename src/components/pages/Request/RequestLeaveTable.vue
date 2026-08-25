@@ -35,26 +35,9 @@
         <strong>{{ rows.length }}</strong> {{ rows.length === 1 ? 'request' : 'requests' }}
       </div>
     </div>
-
-    <!-- Loading -->
-    <div v-if="loading" class="grid-scroll">
-      <div class="skel-head">
-        <div class="skel-head-cell" style="flex: 2.2">Employee</div>
-        <div class="skel-head-cell" style="flex: 1.4">Type</div>
-        <div class="skel-head-cell" style="flex: 1.9">Period</div>
-        <div class="skel-head-cell" style="flex: 2">Reason</div>
-        <div class="skel-head-cell" style="flex: 1.2">Status</div>
-        <div class="skel-head-cell" style="flex: 0 0 110px">Actions</div>
-      </div>
-      <div class="skel-row" v-for="n in 5" :key="n">
-        <div class="skel-cell" style="flex: 2.2"><q-skeleton type="text" width="160px" /></div>
-        <div class="skel-cell" style="flex: 1.4"><q-skeleton type="text" width="90px" /></div>
-        <div class="skel-cell" style="flex: 1.9"><q-skeleton type="text" width="140px" /></div>
-        <div class="skel-cell" style="flex: 2"><q-skeleton type="text" width="180px" /></div>
-        <div class="skel-cell" style="flex: 1.2"><q-skeleton type="text" width="80px" /></div>
-        <div class="skel-cell" style="flex: 0 0 110px"><q-skeleton type="text" width="70px" /></div>
-      </div>
-    </div>
+    <!-- Loading. Built from the live `leaveColumns`, so the placeholder shares
+         the real table's columns, labels and alignment. -->
+    <TableSkeleton v-if="loading" :columns="leaveColumns" :rows="5" flush />
 
     <!-- Empty -->
     <div v-else-if="rows.length === 0" class="grid-empty">
@@ -64,13 +47,13 @@
     </div>
 
     <!-- Grid -->
-    <div v-else class="grid-scroll">
+    <div v-else class="grid-scroll dash-scroll-x">
       <q-table
         :rows="rows"
         :columns="leaveColumns"
         row-key="id"
         flat
-        class="request-grid leave-grid"
+        class="dash-qtable dash-qtable--flush request-grid leave-grid"
         hide-pagination
         :rows-per-page-options="[0]"
       >
@@ -89,7 +72,7 @@
 
         <template v-slot:body="props">
           <q-tr
-            class="grid-row"
+            class="dash-qtable__row grid-row"
             :class="{ 'grid-row--waiting': props.row.status === 'pending' }"
             :props="props"
           >
@@ -131,7 +114,9 @@
             <q-td key="actions" :props="props" class="grid-cell cell-actions">
               <div class="grid-actions">
                 <q-btn
-                  flat dense round
+                  flat
+                  dense
+                  round
                   icon="visibility"
                   size="sm"
                   class="grid-action"
@@ -141,7 +126,9 @@
                 </q-btn>
                 <template v-if="props.row.status === 'pending'">
                   <q-btn
-                    flat dense round
+                    flat
+                    dense
+                    round
                     icon="check"
                     size="sm"
                     class="grid-action grid-action--approve"
@@ -151,7 +138,9 @@
                     <q-tooltip>Approve</q-tooltip>
                   </q-btn>
                   <q-btn
-                    flat dense round
+                    flat
+                    dense
+                    round
                     icon="close"
                     size="sm"
                     class="grid-action grid-action--reject"
@@ -172,6 +161,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 
 const props = defineProps({
   rows: Array,
@@ -201,8 +191,7 @@ const leaveColumns = [
 ]
 
 const isNarrowed = computed(
-  () =>
-    (!!props.statusFilter && props.statusFilter !== 'all') || !!(props.search || '').trim(),
+  () => (!!props.statusFilter && props.statusFilter !== 'all') || !!(props.search || '').trim(),
 )
 
 const emptyTitle = computed(() =>

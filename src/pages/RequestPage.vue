@@ -23,7 +23,9 @@
 
         <div class="page-actions">
           <q-btn
-            round flat icon="refresh"
+            round
+            flat
+            icon="refresh"
             class="refresh-btn"
             @click="handleRefresh"
             :loading="refreshLoading"
@@ -33,7 +35,8 @@
           <span class="action-divider" aria-hidden="true"></span>
           <q-btn
             v-if="activeTab === 'leave'"
-            unelevated no-caps
+            unelevated
+            no-caps
             icon="add"
             label="Apply leave"
             class="primary-action-btn"
@@ -41,7 +44,8 @@
           />
           <q-btn
             v-else-if="activeTab === 'overtime'"
-            unelevated no-caps
+            unelevated
+            no-caps
             icon="add"
             label="Overtime advance"
             class="primary-action-btn"
@@ -52,11 +56,9 @@
             v-model="caViewMode"
             no-caps
             unelevated
-            toggle-color="#102335"
-            text-color="#475569"
             :options="[
               { label: 'All requests', value: 'all', icon: 'list' },
-              { label: 'By cutoff', value: 'cutoff', icon: 'calendar_today' }
+              { label: 'By cutoff', value: 'cutoff', icon: 'calendar_today' },
             ]"
             class="view-toggle"
           />
@@ -128,378 +130,485 @@
           </div>
         </div>
 
-      <!-- Tab Panels -->
-      <q-tab-panels v-model="activeTab" class="tab-panels">
-        <q-tab-panel name="leave" class="tab-panel-content">
-          <RequestLeaveTable
-            :rows="filteredLeaveRequests"
-            :loading="loading"
-            :action-loading="actionLoading"
-            :status-filter="statusFilter"
-            :search="searchTerm"
-            @update:status-filter="statusFilter = $event"
-            @update:search="searchTerm = $event"
-            @view-details="openLeaveDetails"
-            @approve="approveRequest"
-            @reject="rejectRequest"
-          />
-        </q-tab-panel>
+        <!-- Tab Panels -->
+        <q-tab-panels v-model="activeTab" class="tab-panels">
+          <q-tab-panel name="leave" class="tab-panel-content">
+            <RequestLeaveTable
+              :rows="filteredLeaveRequests"
+              :loading="loading"
+              :action-loading="actionLoading"
+              :status-filter="statusFilter"
+              :search="searchTerm"
+              @update:status-filter="statusFilter = $event"
+              @update:search="searchTerm = $event"
+              @view-details="openLeaveDetails"
+              @approve="approveRequest"
+              @reject="rejectRequest"
+            />
+          </q-tab-panel>
 
-        <q-tab-panel name="overtime" class="tab-panel-content">
-          <div class="panel-surface">
+          <q-tab-panel name="overtime" class="tab-panel-content">
+            <div class="panel-surface">
+              <div v-if="overtimeSummary.length" class="overtime-summary-list">
+                <div
+                  v-for="log in overtimeSummary"
+                  :key="log.id"
+                  :class="['overtime-summary-card', { active: selectedDisbursementLog === log.id }]"
+                  @click="selectDisbursementLog(log.id)"
+                >
+                  <div class="summary-card-header">
+                    <div class="summary-card-name-group">
+                      <q-icon
+                        name="expand_more"
+                        :style="{
+                          transform:
+                            selectedDisbursementLog === log.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.3s ease',
+                        }"
+                        size="18px"
+                        class="expand-icon"
+                      />
+                      <div class="summary-name-stack">
+                        <div class="summary-name">{{ getBaseName(log.name) }}</div>
+                        <div class="summary-period" v-if="getPeriodFromName(log.name)">
+                          {{ getPeriodFromName(log.name) }}
+                        </div>
+                      </div>
+                    </div>
 
-            <div v-if="overtimeSummary.length" class="overtime-summary-list">
-              <div
-                v-for="log in overtimeSummary"
-                :key="log.id"
-                :class="['overtime-summary-card', { active: selectedDisbursementLog === log.id }]"
-                @click="selectDisbursementLog(log.id)"
-              >
-                <div class="summary-card-header">
-                  <div class="summary-card-name-group">
-                    <q-icon
-                      name="expand_more"
-                      :style="{ transform: selectedDisbursementLog === log.id ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease' }"
-                      size="18px"
-                      class="expand-icon"
-                    />
-                    <div class="summary-name-stack">
-                      <div class="summary-name">{{ getBaseName(log.name) }}</div>
-                      <div class="summary-period" v-if="getPeriodFromName(log.name)">
-                        {{ getPeriodFromName(log.name) }}
+                    <div class="summary-stat-cols">
+                      <div class="summary-stat-col">
+                        <span class="summary-stat-label">Total OT</span>
+                        <span class="summary-stat-val">{{ log.overtime_total_count }}</span>
+                      </div>
+                      <div class="summary-stat-col">
+                        <span class="summary-stat-label">Approved</span>
+                        <span class="summary-stat-val">{{ log.overtime_approved_count }}</span>
+                      </div>
+                      <div class="summary-stat-col">
+                        <span class="summary-stat-label">Requested</span>
+                        <span class="summary-stat-val">{{
+                          log.overtime_total_count - log.overtime_approved_count
+                        }}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div class="summary-stat-cols">
-                    <div class="summary-stat-col">
-                      <span class="summary-stat-label">Total OT</span>
-                      <span class="summary-stat-val">{{ log.overtime_total_count }}</span>
-                    </div>
-                    <div class="summary-stat-col">
-                      <span class="summary-stat-label">Approved</span>
-                      <span class="summary-stat-val">{{ log.overtime_approved_count }}</span>
-                    </div>
-                    <div class="summary-stat-col">
-                      <span class="summary-stat-label">Requested</span>
-                      <span class="summary-stat-val">{{ log.overtime_total_count - log.overtime_approved_count }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Expanded Panel with Overtime Requests Table -->
-                <div v-if="selectedDisbursementLog === log.id" class="overtime-panel-wrapper" @click.stop>
-                  <div class="overtime-panel">
-                    <div class="overtime-panel-header">
-                      <div class="panel-title">
-                        <q-icon name="schedule" size="16px" color="primary" />
-                        <span>Overtime Requests</span>
-                        <span class="panel-count">{{ overtimeRequests.length }}</span>
+                  <!-- Expanded Panel with Overtime Requests Table -->
+                  <div
+                    v-if="selectedDisbursementLog === log.id"
+                    class="overtime-panel-wrapper"
+                    @click.stop
+                  >
+                    <div class="overtime-panel">
+                      <div class="overtime-panel-header">
+                        <div class="panel-title">
+                          <q-icon name="schedule" size="16px" color="primary" />
+                          <span>Overtime Requests</span>
+                          <span class="panel-count">{{ overtimeRequests.length }}</span>
+                        </div>
                       </div>
-                    </div>
-
-                    <!-- Loading -->
-                    <div v-if="overtimeLoading" class="overtime-table-container">
-                      <div class="skel-head">
-                        <div class="skel-head-cell" style="flex: 0 0 44px"></div>
-                        <div class="skel-head-cell" style="flex: 1.6">Employee</div>
-                        <div class="skel-head-cell" style="flex: 1.3">Scheduled / actual</div>
-                        <div class="skel-head-cell" style="flex: 1">Date</div>
-                        <div class="skel-head-cell" style="flex: 0.8">Hours</div>
-                        <div class="skel-head-cell" style="flex: 0.9">Status</div>
-                        <div class="skel-head-cell" style="flex: 0 0 90px">Actions</div>
-                      </div>
-                      <div class="skel-row" v-for="n in 4" :key="n">
-                        <div class="skel-cell" style="flex: 0 0 44px"><q-skeleton type="text" width="18px" /></div>
-                        <div class="skel-cell" style="flex: 1.6"><q-skeleton type="text" width="140px" /></div>
-                        <div class="skel-cell" style="flex: 1.3"><q-skeleton type="text" width="120px" /></div>
-                        <div class="skel-cell" style="flex: 1"><q-skeleton type="text" width="90px" /></div>
-                        <div class="skel-cell" style="flex: 0.8"><q-skeleton type="text" width="50px" /></div>
-                        <div class="skel-cell" style="flex: 0.9"><q-skeleton type="text" width="70px" /></div>
-                        <div class="skel-cell" style="flex: 0 0 90px"><q-skeleton type="text" width="50px" /></div>
-                      </div>
-                    </div>
-
-                    <!-- Empty -->
-                    <div v-else-if="filteredOvertimeRequests.length === 0" class="grid-empty">
-                      <div class="grid-empty-icon"><q-icon name="more_time" size="26px" /></div>
-                      <div class="grid-empty-title">
-                        {{ overtimeNarrowed ? 'No overtime matches your search' : 'No overtime in this run' }}
-                      </div>
-                      <div class="grid-empty-text">
-                        {{
-                          overtimeNarrowed
-                            ? 'Clear the search or switch back to All statuses to see every overtime request in this payroll run.'
-                            : 'Overtime logged against this payroll run will appear here for approval.'
-                        }}
-                      </div>
-                    </div>
-
-                    <div v-else>
-                      <!-- Bulk Actions -->
-                      <div v-if="selectedOvertimeIds.size > 0" class="bulk-actions-bar">
-                        <span class="bulk-count">{{ selectedOvertimeIds.size }} selected</span>
-                        <q-btn
-                          unelevated dense no-caps
-                          icon="check" color="positive"
-                          label="Approve Selected"
-                          :loading="overtimeSubmitting.size > 0"
-                          @click="bulkApproveOvertime"
-                        />
-                        <q-btn
-                          unelevated dense no-caps
-                          icon="close" color="negative"
-                          label="Reject Selected"
-                          :loading="overtimeSubmitting.size > 0"
-                          @click="bulkRejectOvertime"
-                        />
-                        <q-btn flat dense label="Clear" @click="clearOvertimeSelection" />
-                      </div>
-
-                      <div class="overtime-table-container">
-                      <q-table
-                        :rows="filteredOvertimeRequests"
+                      <!-- Loading. Built from the live `otColumns`, so the placeholder
+                         shares the real table's columns, labels and alignment. -->
+                      <TableSkeleton
+                        v-if="overtimeLoading"
                         :columns="otColumns"
-                        row-key="id"
-                        flat
-                        hide-pagination
-                        :rows-per-page-options="[0]"
-                        class="request-grid overtime-grid"
-                      >
-                        <template v-slot:header="props">
-                          <q-tr class="grid-head-row" :props="props">
-                            <q-th key="select" :props="props" class="grid-head-cell ot-cell-select">
-                              <q-checkbox
-                                :model-value="allOvertimeSelected"
-                                @update:model-value="toggleSelectAllOvertime"
-                                dense
-                                size="xs"
-                              />
-                            </q-th>
-                            <q-th key="employeeName" :props="props" class="grid-head-cell ot-cell-employee">Employee</q-th>
-                            <q-th key="schedule" :props="props" class="grid-head-cell ot-cell-time">Scheduled / actual</q-th>
-                            <q-th key="dates" :props="props" class="grid-head-cell ot-cell-date">Date</q-th>
-                            <q-th key="hours" :props="props" class="grid-head-cell ot-cell-hours">Hours</q-th>
-                            <q-th key="status" :props="props" class="grid-head-cell ot-cell-status">Status</q-th>
-                            <q-th key="actions" :props="props" class="grid-head-cell grid-head-cell--right ot-cell-actions">Actions</q-th>
-                          </q-tr>
-                        </template>
-                        <template v-slot:body="props">
-                          <q-tr
-                            class="grid-row"
-                            :class="{ 'grid-row--waiting': ['requested', 'qualified'].includes(props.row.status) }"
-                            :props="props"
+                        :rows="4"
+                        flush
+                        wrap-class="overtime-table-container dash-scroll-x"
+                      />
+
+                      <!-- Empty -->
+                      <div v-else-if="filteredOvertimeRequests.length === 0" class="grid-empty">
+                        <div class="grid-empty-icon"><q-icon name="more_time" size="26px" /></div>
+                        <div class="grid-empty-title">
+                          {{
+                            overtimeNarrowed
+                              ? 'No overtime matches your search'
+                              : 'No overtime in this run'
+                          }}
+                        </div>
+                        <div class="grid-empty-text">
+                          {{
+                            overtimeNarrowed
+                              ? 'Clear the search or switch back to All statuses to see every overtime request in this payroll run.'
+                              : 'Overtime logged against this payroll run will appear here for approval.'
+                          }}
+                        </div>
+                      </div>
+
+                      <div v-else>
+                        <!-- Bulk Actions -->
+                        <div v-if="selectedOvertimeIds.size > 0" class="bulk-actions-bar">
+                          <span class="bulk-count">{{ selectedOvertimeIds.size }} selected</span>
+                          <q-btn
+                            unelevated
+                            dense
+                            no-caps
+                            icon="check"
+                            color="positive"
+                            label="Approve Selected"
+                            :loading="overtimeSubmitting.size > 0"
+                            @click="bulkApproveOvertime"
+                          />
+                          <q-btn
+                            unelevated
+                            dense
+                            no-caps
+                            icon="close"
+                            color="negative"
+                            label="Reject Selected"
+                            :loading="overtimeSubmitting.size > 0"
+                            @click="bulkRejectOvertime"
+                          />
+                          <q-btn flat dense label="Clear" @click="clearOvertimeSelection" />
+                        </div>
+
+                        <div class="overtime-table-container dash-scroll-x">
+                          <q-table
+                            :rows="filteredOvertimeRequests"
+                            :columns="otColumns"
+                            row-key="id"
+                            flat
+                            hide-pagination
+                            :rows-per-page-options="[0]"
+                            class="dash-qtable dash-qtable--flush request-grid overtime-grid"
                           >
-                            <q-td key="select" :props="props" class="grid-cell grid-cell--center ot-cell-select">
-                              <q-checkbox
-                                v-if="['requested', 'qualified'].includes(props.row.status)"
-                                :model-value="selectedOvertimeIds.has(props.row.id)"
-                                @update:model-value="toggleOvertimeSelection(props.row.id)"
-                                dense
-                                size="xs"
-                              />
-                            </q-td>
-                            <q-td key="employeeName" :props="props" class="grid-cell ot-cell-employee">
-                              <div class="identity">
-                                <span class="identity-avatar">
-                                  {{ props.row.employeeName ? props.row.employeeName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?' }}
-                                </span>
-                                <span class="identity-text">
-                                  <span class="identity-name">{{ props.row.employeeName }}</span>
-                                  <span class="identity-sub">{{ props.row.categoryName }}</span>
-                                </span>
-                              </div>
-                            </q-td>
-                            <q-td key="schedule" :props="props" class="grid-cell ot-cell-time">
-                              <div v-if="props.row.schedules?.[0]" class="range">
-                                {{ props.row.schedules[0].actual_start }}
-                                <span class="range-sep">&rarr;</span>
-                                {{ props.row.schedules[0].actual_end }}
-                              </div>
-                              <div v-else class="range muted">&mdash;</div>
-                              <div v-if="props.row.attendances?.[0]" class="range-meta">
-                                actual {{ props.row.attendances[0].time_in }} &rarr;
-                                {{ props.row.attendances[0].time_out }}
-                              </div>
-                              <div v-else class="range-meta">no attendance</div>
-                            </q-td>
-                            <q-td key="dates" :props="props" class="grid-cell ot-cell-date">
-                              <span class="stat-num">{{ props.row.date ? new Date(props.row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A' }}</span>
-                            </q-td>
-                            <q-td key="hours" :props="props" class="grid-cell ot-cell-hours">
-                              <div class="hours-cell-content">
-                                <q-input
-                                  v-if="['requested', 'qualified'].includes(props.row.status)"
-                                  :model-value="overtimeEditableHours[props.row.id] ?? props.row.hours"
-                                  @update:model-value="overtimeEditableHours[props.row.id] = $event"
-                                  @click.stop
-                                  dense outlined type="number" step="0.01"
-                                  class="hours-input"
-                                />
-                                <span v-else class="amount">
-                                  {{ props.row.hours === '-' ? '—' : props.row.hours + 'h' }}
-                                </span>
-                                <span v-if="props.row.convertedToCto" class="cto-badge">CTO</span>
-                              </div>
-                            </q-td>
-                            <q-td key="status" :props="props" class="grid-cell ot-cell-status">
-                              <span :class="['status-pill', overtimeStatusPill(props.row.status)]">
-                                {{ props.row.status ? props.row.status.charAt(0).toUpperCase() + props.row.status.slice(1) : 'N/A' }}
-                              </span>
-                            </q-td>
-                            <q-td key="actions" :props="props" class="grid-cell ot-cell-actions">
-                              <div class="grid-actions">
-                                <q-btn flat dense round icon="visibility" size="sm" class="grid-action" @click.stop="openOvertimeDetail(props.row)">
-                                  <q-tooltip>View details</q-tooltip>
-                                </q-btn>
-                                <q-btn
-                                  v-if="['requested', 'qualified'].includes(props.row.status)"
-                                  flat dense round icon="check" size="sm"
-                                  class="grid-action grid-action--approve"
-                                  @click.stop="approveOvertimeSingle(props.row)"
-                                  :loading="overtimeSubmitting.has(props.row.id)"
+                            <template v-slot:header="props">
+                              <q-tr class="grid-head-row" :props="props">
+                                <q-th
+                                  key="select"
+                                  :props="props"
+                                  class="grid-head-cell ot-cell-select"
                                 >
-                                  <q-tooltip>Approve</q-tooltip>
-                                </q-btn>
-                                <q-btn
-                                  v-if="['requested', 'qualified'].includes(props.row.status)"
-                                  flat dense round icon="close" size="sm"
-                                  class="grid-action grid-action--reject"
-                                  @click.stop="rejectOvertimeSingle(props.row)"
-                                  :loading="overtimeSubmitting.has(props.row.id)"
+                                  <q-checkbox
+                                    :model-value="allOvertimeSelected"
+                                    @update:model-value="toggleSelectAllOvertime"
+                                    dense
+                                    size="xs"
+                                  />
+                                </q-th>
+                                <q-th
+                                  key="employeeName"
+                                  :props="props"
+                                  class="grid-head-cell ot-cell-employee"
+                                  >Employee</q-th
                                 >
-                                  <q-tooltip>Reject</q-tooltip>
-                                </q-btn>
-                              </div>
-                            </q-td>
-                          </q-tr>
-                        </template>
-                      </q-table>
-                    </div>
+                                <q-th
+                                  key="schedule"
+                                  :props="props"
+                                  class="grid-head-cell ot-cell-time"
+                                  >Scheduled / actual</q-th
+                                >
+                                <q-th key="dates" :props="props" class="grid-head-cell ot-cell-date"
+                                  >Date</q-th
+                                >
+                                <q-th
+                                  key="hours"
+                                  :props="props"
+                                  class="grid-head-cell ot-cell-hours"
+                                  >Hours</q-th
+                                >
+                                <q-th
+                                  key="status"
+                                  :props="props"
+                                  class="grid-head-cell ot-cell-status"
+                                  >Status</q-th
+                                >
+                                <q-th
+                                  key="actions"
+                                  :props="props"
+                                  class="grid-head-cell grid-head-cell--right ot-cell-actions"
+                                  >Actions</q-th
+                                >
+                              </q-tr>
+                            </template>
+                            <template v-slot:body="props">
+                              <q-tr
+                                class="dash-qtable__row grid-row"
+                                :class="{
+                                  'grid-row--waiting': ['requested', 'qualified'].includes(
+                                    props.row.status,
+                                  ),
+                                }"
+                                :props="props"
+                              >
+                                <q-td
+                                  key="select"
+                                  :props="props"
+                                  class="grid-cell grid-cell--center ot-cell-select"
+                                >
+                                  <q-checkbox
+                                    v-if="['requested', 'qualified'].includes(props.row.status)"
+                                    :model-value="selectedOvertimeIds.has(props.row.id)"
+                                    @update:model-value="toggleOvertimeSelection(props.row.id)"
+                                    dense
+                                    size="xs"
+                                  />
+                                </q-td>
+                                <q-td
+                                  key="employeeName"
+                                  :props="props"
+                                  class="grid-cell ot-cell-employee"
+                                >
+                                  <div class="identity">
+                                    <span class="identity-avatar">
+                                      {{
+                                        props.row.employeeName
+                                          ? props.row.employeeName
+                                              .split(' ')
+                                              .map((n) => n[0])
+                                              .join('')
+                                              .toUpperCase()
+                                              .slice(0, 2)
+                                          : '?'
+                                      }}
+                                    </span>
+                                    <span class="identity-text">
+                                      <span class="identity-name">{{
+                                        props.row.employeeName
+                                      }}</span>
+                                      <span class="identity-sub">{{ props.row.categoryName }}</span>
+                                    </span>
+                                  </div>
+                                </q-td>
+                                <q-td key="schedule" :props="props" class="grid-cell ot-cell-time">
+                                  <div v-if="props.row.schedules?.[0]" class="range">
+                                    {{ props.row.schedules[0].actual_start }}
+                                    <span class="range-sep">&rarr;</span>
+                                    {{ props.row.schedules[0].actual_end }}
+                                  </div>
+                                  <div v-else class="range muted">&mdash;</div>
+                                  <div v-if="props.row.attendances?.[0]" class="range-meta">
+                                    actual {{ props.row.attendances[0].time_in }} &rarr;
+                                    {{ props.row.attendances[0].time_out }}
+                                  </div>
+                                  <div v-else class="range-meta">no attendance</div>
+                                </q-td>
+                                <q-td key="dates" :props="props" class="grid-cell ot-cell-date">
+                                  <span class="stat-num">{{
+                                    props.row.date
+                                      ? new Date(props.row.date).toLocaleDateString('en-US', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          year: 'numeric',
+                                        })
+                                      : 'N/A'
+                                  }}</span>
+                                </q-td>
+                                <q-td key="hours" :props="props" class="grid-cell ot-cell-hours">
+                                  <div class="hours-cell-content">
+                                    <q-input
+                                      v-if="['requested', 'qualified'].includes(props.row.status)"
+                                      :model-value="
+                                        overtimeEditableHours[props.row.id] ?? props.row.hours
+                                      "
+                                      @update:model-value="
+                                        overtimeEditableHours[props.row.id] = $event
+                                      "
+                                      @click.stop
+                                      dense
+                                      outlined
+                                      type="number"
+                                      step="0.01"
+                                      class="hours-input"
+                                    />
+                                    <span v-else class="amount">
+                                      {{ props.row.hours === '-' ? '—' : props.row.hours + 'h' }}
+                                    </span>
+                                    <span v-if="props.row.convertedToCto" class="cto-badge"
+                                      >CTO</span
+                                    >
+                                  </div>
+                                </q-td>
+                                <q-td key="status" :props="props" class="grid-cell ot-cell-status">
+                                  <span
+                                    :class="['status-pill', overtimeStatusPill(props.row.status)]"
+                                  >
+                                    {{
+                                      props.row.status
+                                        ? props.row.status.charAt(0).toUpperCase() +
+                                          props.row.status.slice(1)
+                                        : 'N/A'
+                                    }}
+                                  </span>
+                                </q-td>
+                                <q-td
+                                  key="actions"
+                                  :props="props"
+                                  class="grid-cell ot-cell-actions"
+                                >
+                                  <div class="grid-actions">
+                                    <q-btn
+                                      flat
+                                      dense
+                                      round
+                                      icon="visibility"
+                                      size="sm"
+                                      class="grid-action"
+                                      @click.stop="openOvertimeDetail(props.row)"
+                                    >
+                                      <q-tooltip>View details</q-tooltip>
+                                    </q-btn>
+                                    <q-btn
+                                      v-if="['requested', 'qualified'].includes(props.row.status)"
+                                      flat
+                                      dense
+                                      round
+                                      icon="check"
+                                      size="sm"
+                                      class="grid-action grid-action--approve"
+                                      @click.stop="approveOvertimeSingle(props.row)"
+                                      :loading="overtimeSubmitting.has(props.row.id)"
+                                    >
+                                      <q-tooltip>Approve</q-tooltip>
+                                    </q-btn>
+                                    <q-btn
+                                      v-if="['requested', 'qualified'].includes(props.row.status)"
+                                      flat
+                                      dense
+                                      round
+                                      icon="close"
+                                      size="sm"
+                                      class="grid-action grid-action--reject"
+                                      @click.stop="rejectOvertimeSingle(props.row)"
+                                      :loading="overtimeSubmitting.has(props.row.id)"
+                                    >
+                                      <q-tooltip>Reject</q-tooltip>
+                                    </q-btn>
+                                  </div>
+                                </q-td>
+                              </q-tr>
+                            </template>
+                          </q-table>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+
+              <!-- Featured-icon empty state, so an overtime tab with no runs
+                   looks designed rather than broken. -->
+              <div v-else class="overtime-empty-state dash-empty">
+                <span class="dash-featured-icon">
+                  <q-icon name="o_more_time" size="20px" />
+                </span>
+                <p class="dash-empty__title">No payroll runs with overtime</p>
+                <p class="dash-empty__sub">
+                  Once a payroll run records overtime, it appears here as a card you can expand to
+                  review and approve each request.
+                </p>
+              </div>
             </div>
+          </q-tab-panel>
 
-            <div v-else class="overtime-empty-state">
-              <span class="text-grey-5">No payroll runs with overtime data found</span>
+          <q-tab-panel name="cash_advance" class="tab-panel-content">
+            <div class="panel-surface">
+              <RequestCashAdvanceTable
+                v-if="caViewMode === 'all'"
+                :rows="filteredCaRequests"
+                :loading="loading"
+                :ca-filter-status="caFilterStatus"
+                :ca-status-options="caStatusOptions"
+                :ca-pagination="caPagination"
+                :search="searchTerm"
+                @update:ca-filter-status="caFilterStatus = $event"
+                @update:search="searchTerm = $event"
+                @view="viewCaRequest"
+                @approve="openCaApprovalModal"
+              />
+
+              <RequestCashAdvanceCutoff
+                v-else
+                :logs="caDisbursementLogs"
+                :loading="loading"
+                :expanded-log-id="selectedCaDisbursementLog"
+                :cutoff-requests="caCutoffRequests"
+                :cutoff-loading="caCutoffLoading"
+                :search="caCutoffSearch"
+                @expand="selectCaDisbursementLog"
+                @view="viewCaRequest"
+                @approve="openCaApprovalModal"
+                @update:search="caCutoffSearch = $event"
+              />
             </div>
-          </div>
-        </q-tab-panel>
+          </q-tab-panel>
 
-        <q-tab-panel name="cash_advance" class="tab-panel-content">
-          <div class="panel-surface">
-
-            <RequestCashAdvanceTable
-              v-if="caViewMode === 'all'"
-              :rows="filteredCaRequests"
-              :loading="loading"
-              :ca-filter-status="caFilterStatus"
-              :ca-status-options="caStatusOptions"
-              :ca-pagination="caPagination"
+          <q-tab-panel name="swap" class="tab-panel-content">
+            <RequestSwapTable
+              :rows="filteredSwapRequests"
+              :loading="swapLoading"
+              :sortBy="swapSortBy"
+              :processingId="swapActionLoading"
+              :pagination="swapPagination"
+              :totalRecords="swapRequests.length"
               :search="searchTerm"
-              @update:ca-filter-status="caFilterStatus = $event"
               @update:search="searchTerm = $event"
-              @view="viewCaRequest"
-              @approve="openCaApprovalModal"
+              @update:sortBy="swapSortBy = $event"
+              @update:pagination="swapPagination = $event"
+              @view="viewSwapRequest"
+              @approve="approveSwapRequest"
+              @reject="rejectSwapRequest"
             />
-
-            <RequestCashAdvanceCutoff
-              v-else
-              :logs="caDisbursementLogs"
-              :loading="loading"
-              :expanded-log-id="selectedCaDisbursementLog"
-              :cutoff-requests="caCutoffRequests"
-              :cutoff-loading="caCutoffLoading"
-              :search="caCutoffSearch"
-              @expand="selectCaDisbursementLog"
-              @view="viewCaRequest"
-              @approve="openCaApprovalModal"
-              @update:search="caCutoffSearch = $event"
-            />
-          </div>
-        </q-tab-panel>
-
-        <q-tab-panel name="swap" class="tab-panel-content">
-          <RequestSwapTable
-            :rows="filteredSwapRequests"
-            :loading="swapLoading"
-            :sortBy="swapSortBy"
-            :processingId="swapActionLoading"
-            :pagination="swapPagination"
-            :totalRecords="swapRequests.length"
-            :search="searchTerm"
-            @update:search="searchTerm = $event"
-            @update:sortBy="swapSortBy = $event"
-            @update:pagination="swapPagination = $event"
-            @view="viewSwapRequest"
-            @approve="approveSwapRequest"
-            @reject="rejectSwapRequest"
-          />
-        </q-tab-panel>
-      </q-tab-panels>
+          </q-tab-panel>
+        </q-tab-panels>
       </section>
 
-    <!-- Modals -->
-    <RequestLeaveDetailModal
-      v-model="showLeaveDetails"
-      :request="selectedLeaveRequest"
-      :action-loading="actionLoading"
-      @approve="approveRequest"
-      @reject="rejectRequest"
-    />
+      <!-- Modals -->
+      <RequestLeaveDetailModal
+        v-model="showLeaveDetails"
+        :request="selectedLeaveRequest"
+        :action-loading="actionLoading"
+        @approve="approveRequest"
+        @reject="rejectRequest"
+      />
 
-    <RequestCaApprovalModal
-      v-model="caApprovalModal"
-      :request="selectedCaRequest"
-      :approval-data="caApprovalData"
-      :submitting="caSubmitting"
-      @update:approval-data="caApprovalData = $event"
-      @submit="submitCaApproval"
-    />
+      <RequestCaApprovalModal
+        v-model="caApprovalModal"
+        :request="selectedCaRequest"
+        :approval-data="caApprovalData"
+        :submitting="caSubmitting"
+        @update:approval-data="caApprovalData = $event"
+        @submit="submitCaApproval"
+      />
 
-    <RequestCaViewModal
-      v-model="caViewDialog"
-      :request="selectedCaRequest"
-    />
+      <RequestCaViewModal v-model="caViewDialog" :request="selectedCaRequest" />
 
-    <RequestOvertimeDetailModal
-      v-model="showOvertimeDetail"
-      :request="selectedOvertimeRow"
-    />
+      <RequestOvertimeDetailModal v-model="showOvertimeDetail" :request="selectedOvertimeRow" />
 
-     <OvertimeAdvanceModal
-      v-model="showOvertimeAdvanceModal"
-      :categories="overtimeCategories"
-      :employee-options="overtimeAdvanceEmployeeOptions"
-      :submitting="overtimeAdvanceSubmitting"
-      :company-id="selectedCompany"
-      @filter-employees="filterOvertimeAdvanceEmployees"
-      @submit="submitOvertimeAdvance"
-    />
+      <OvertimeAdvanceModal
+        v-model="showOvertimeAdvanceModal"
+        :categories="overtimeCategories"
+        :employee-options="overtimeAdvanceEmployeeOptions"
+        :submitting="overtimeAdvanceSubmitting"
+        :company-id="selectedCompany"
+        @filter-employees="filterOvertimeAdvanceEmployees"
+        @submit="submitOvertimeAdvance"
+      />
 
-    <RequestSwapViewModal
-      v-model="showSwapViewDialog"
-      :request="selectedSwapRequest"
-      @approve="approveSwapRequest"
-      @reject="rejectSwapRequest"
-    />
+      <RequestSwapViewModal
+        v-model="showSwapViewDialog"
+        :request="selectedSwapRequest"
+        @approve="approveSwapRequest"
+        @reject="rejectSwapRequest"
+      />
 
-    <RequestApplyLeaveModal
-      v-model="showApplyLeaveModal"
-      :employee-options="applyLeaveEmployeeOptions"
-      :leave-types="applyLeaveTypes"
-      :submitting="applyLeaveSubmitting"
-      @filter-employees="filterApplyLeaveEmployees"
-      @submit="submitApplyLeave"
-    />
+      <RequestApplyLeaveModal
+        v-model="showApplyLeaveModal"
+        :employee-options="applyLeaveEmployeeOptions"
+        :leave-types="applyLeaveTypes"
+        :submitting="applyLeaveSubmitting"
+        @filter-employees="filterApplyLeaveEmployees"
+        @submit="submitApplyLeave"
+      />
     </div>
   </PageShell>
 </template>
 
 <script setup>
 import PageShell from '@/components/layout/PageShell.vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
@@ -543,7 +652,9 @@ const getCompanyId = () => {
     const parsed = JSON.parse(localStorage.getItem('selectedCompany'))
     const id = parsed?.id || parsed?.companyId
     if (id) return String(id)
-  } catch { /* ignore parse errors */ }
+  } catch {
+    /* ignore parse errors */
+  }
   const raw = localStorage.getItem('selectedCompany')
   if (raw) return String(raw)
   const direct = localStorage.getItem('company_id')
@@ -618,14 +729,19 @@ const leaveStats = computed(() => ({
 
 const overtimeStats = computed(() => ({
   total: overtimeSummary.value.reduce((sum, log) => sum + (log.overtime_total_count || 0), 0),
-  pending: overtimeSummary.value.reduce((sum, log) => sum + ((log.overtime_total_count || 0) - (log.overtime_approved_count || 0)), 0),
+  pending: overtimeSummary.value.reduce(
+    (sum, log) => sum + ((log.overtime_total_count || 0) - (log.overtime_approved_count || 0)),
+    0,
+  ),
   approved: overtimeSummary.value.reduce((sum, log) => sum + (log.overtime_approved_count || 0), 0),
   rejected: 0,
 }))
 
 const swapStatistics = computed(() => ({
   total: swapRequests.value.length,
-  pending: swapRequests.value.filter((r) => r.status === 'pending' || r.status === 'to_employee_approved').length,
+  pending: swapRequests.value.filter(
+    (r) => r.status === 'pending' || r.status === 'to_employee_approved',
+  ).length,
   approved: swapRequests.value.filter((r) => r.status === 'approved').length,
   rejected: swapRequests.value.filter((r) => r.status === 'rejected').length,
 }))
@@ -744,13 +860,13 @@ const refreshLoading = computed(() => {
 
 const actionableOvertimeIds = computed(() => {
   return filteredOvertimeRequests.value
-    .filter(r => ['requested', 'qualified'].includes(r.status))
-    .map(r => r.id)
+    .filter((r) => ['requested', 'qualified'].includes(r.status))
+    .map((r) => r.id)
 })
 
 const allOvertimeSelected = computed(() => {
   const actionable = actionableOvertimeIds.value
-  return actionable.length > 0 && actionable.every(id => selectedOvertimeIds.value.has(id))
+  return actionable.length > 0 && actionable.every((id) => selectedOvertimeIds.value.has(id))
 })
 
 const selectDisbursementLog = (id) => {
@@ -872,7 +988,9 @@ const fetchOvertimeCategories = async () => {
     })
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
     overtimeCategories.value = data.filter((c) => c.is_active)
-  } catch { /* non-critical, fail silently */ }
+  } catch {
+    /* non-critical, fail silently */
+  }
 }
 
 const fetchOvertimeSummary = async () => {
@@ -961,7 +1079,12 @@ const approveOvertimeSingle = async (row) => {
     await fetchOvertimeSummary()
   } catch (e) {
     console.log('Overtime approve error:', JSON.stringify(e.response?.data, null, 2))
-    const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.response?.data?.detail || e.message || 'Failed to approve overtime'
+    const msg =
+      e.response?.data?.message ||
+      e.response?.data?.non_field_errors?.[0] ||
+      e.response?.data?.detail ||
+      e.message ||
+      'Failed to approve overtime'
     $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
   } finally {
     overtimeSubmitting.value.delete(row.id)
@@ -989,7 +1112,12 @@ const rejectOvertimeSingle = async (row) => {
     await fetchOvertimeSummary()
   } catch (e) {
     console.log('Overtime reject error:', JSON.stringify(e.response?.data, null, 2))
-    const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.response?.data?.detail || e.message || 'Failed to reject overtime'
+    const msg =
+      e.response?.data?.message ||
+      e.response?.data?.non_field_errors?.[0] ||
+      e.response?.data?.detail ||
+      e.message ||
+      'Failed to reject overtime'
     $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
   } finally {
     overtimeSubmitting.value.delete(row.id)
@@ -1027,26 +1155,41 @@ const fetchOvertimeAdvanceEmployees = async () => {
     await fetchEmployees({ force: true })
     overtimeAdvanceEmployeeOptions.value = employees.value.map((e) => ({
       id: e.id,
-      name: e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() || 'Unknown',
+      name:
+        e.user?.full_name ||
+        `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
+        'Unknown',
     }))
-  } catch { /* silent */ }
+  } catch {
+    /* silent */
+  }
 }
 
 const filterOvertimeAdvanceEmployees = (val) => {
   if (!val || val.trim() === '') {
     overtimeAdvanceEmployeeOptions.value = employees.value.map((e) => ({
       id: e.id,
-      name: e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() || 'Unknown',
+      name:
+        e.user?.full_name ||
+        `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
+        'Unknown',
     }))
     return
   }
   const search = val.toLowerCase()
   overtimeAdvanceEmployeeOptions.value = employees.value
     .filter((e) => {
-      const name = e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim()
+      const name =
+        e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim()
       return name.toLowerCase().includes(search)
     })
-    .map((e) => ({ id: e.id, name: e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() || 'Unknown' }))
+    .map((e) => ({
+      id: e.id,
+      name:
+        e.user?.full_name ||
+        `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
+        'Unknown',
+    }))
 }
 
 const submitOvertimeAdvance = async (payload) => {
@@ -1080,7 +1223,11 @@ const submitOvertimeAdvance = async (payload) => {
     }
     await fetchOvertimeSummary()
   } catch (e) {
-    const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.message || 'Failed to create overtime advance'
+    const msg =
+      e.response?.data?.message ||
+      e.response?.data?.non_field_errors?.[0] ||
+      e.message ||
+      'Failed to create overtime advance'
     $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
   } finally {
     overtimeAdvanceSubmitting.value = false
@@ -1095,7 +1242,10 @@ const openApplyLeaveModal = async () => {
     await fetchEmployees({ force: true })
     applyLeaveEmployeeOptions.value = employees.value.map((e) => ({
       id: e.id,
-      name: e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() || 'Unknown',
+      name:
+        e.user?.full_name ||
+        `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
+        'Unknown',
     }))
     const companyId = selectedCompany.value
     if (companyId) {
@@ -1105,7 +1255,9 @@ const openApplyLeaveModal = async () => {
       const data = Array.isArray(res.data) ? res.data : res.data?.data || res.data?.results || []
       applyLeaveTypes.value = data
     }
-  } catch { /* silent */ }
+  } catch {
+    /* silent */
+  }
   showApplyLeaveModal.value = true
 }
 
@@ -1113,17 +1265,27 @@ const filterApplyLeaveEmployees = (val) => {
   if (!val || val.trim() === '') {
     applyLeaveEmployeeOptions.value = employees.value.map((e) => ({
       id: e.id,
-      name: e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() || 'Unknown',
+      name:
+        e.user?.full_name ||
+        `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
+        'Unknown',
     }))
     return
   }
   const search = val.toLowerCase()
   applyLeaveEmployeeOptions.value = employees.value
     .filter((e) => {
-      const name = e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim()
+      const name =
+        e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim()
       return name.toLowerCase().includes(search)
     })
-    .map((e) => ({ id: e.id, name: e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() || 'Unknown' }))
+    .map((e) => ({
+      id: e.id,
+      name:
+        e.user?.full_name ||
+        `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
+        'Unknown',
+    }))
 }
 
 const submitApplyLeave = async (payload) => {
@@ -1142,7 +1304,12 @@ const submitApplyLeave = async (payload) => {
     showApplyLeaveModal.value = false
     await fetchLeaveRequests()
   } catch (e) {
-    const msg = e.response?.data?.detail || e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.message || 'Failed to assign leave'
+    const msg =
+      e.response?.data?.detail ||
+      e.response?.data?.message ||
+      e.response?.data?.non_field_errors?.[0] ||
+      e.message ||
+      'Failed to assign leave'
     $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
   } finally {
     applyLeaveSubmitting.value = false
@@ -1156,11 +1323,11 @@ const bulkApproveOvertime = async () => {
     message: `Approve ${ids.length} overtime request(s)?`,
     ok: { label: 'Approve', color: 'positive', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
-    }).onOk(async () => {
+  }).onOk(async () => {
     overtimeSubmitting.value = new Set(ids)
     try {
       for (const id of ids) {
-        const row = overtimeRequests.value.find(r => r.id === id)
+        const row = overtimeRequests.value.find((r) => r.id === id)
         const hours = overtimeEditableHours.value[id] ?? row?.hours
         await api.patch(`/payroll/overtime-approve/${id}/`, {
           approved_hours: String(hours),
@@ -1180,7 +1347,12 @@ const bulkApproveOvertime = async () => {
       await fetchOvertimeSummary()
     } catch (e) {
       console.log('Overtime bulk approve error:', JSON.stringify(e.response?.data, null, 2))
-      const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.response?.data?.detail || e.message || 'Failed to bulk approve'
+      const msg =
+        e.response?.data?.message ||
+        e.response?.data?.non_field_errors?.[0] ||
+        e.response?.data?.detail ||
+        e.message ||
+        'Failed to bulk approve'
       $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
     } finally {
       overtimeSubmitting.value = new Set()
@@ -1195,11 +1367,11 @@ const bulkRejectOvertime = async () => {
     message: `Reject ${ids.length} overtime request(s)?`,
     ok: { label: 'Reject', color: 'negative', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
-    }).onOk(async () => {
+  }).onOk(async () => {
     overtimeSubmitting.value = new Set(ids)
     try {
       for (const id of ids) {
-        const row = overtimeRequests.value.find(r => r.id === id)
+        const row = overtimeRequests.value.find((r) => r.id === id)
         const hours = overtimeEditableHours.value[id] ?? row?.hours
         await api.patch(`/payroll/overtime-approve/${id}/`, {
           approved_hours: String(hours),
@@ -1219,7 +1391,12 @@ const bulkRejectOvertime = async () => {
       await fetchOvertimeSummary()
     } catch (e) {
       console.log('Overtime bulk reject error:', JSON.stringify(e.response?.data, null, 2))
-      const msg = e.response?.data?.message || e.response?.data?.non_field_errors?.[0] || e.response?.data?.detail || e.message || 'Failed to bulk reject'
+      const msg =
+        e.response?.data?.message ||
+        e.response?.data?.non_field_errors?.[0] ||
+        e.response?.data?.detail ||
+        e.message ||
+        'Failed to bulk reject'
       $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
     } finally {
       overtimeSubmitting.value = new Set()
@@ -1251,10 +1428,7 @@ const overtimeNarrowed = computed(
 const approveRequest = async (request) => {
   try {
     actionLoading.value = `approve-${request.id}`
-    await api.patch(
-      `/attendance/leave-approval/${request.id}/`,
-      { status: 'approved' },
-    )
+    await api.patch(`/attendance/leave-approval/${request.id}/`, { status: 'approved' })
     const index = leaveList.value.findIndex((r) => r.id === request.id)
     if (index !== -1) leaveList.value[index].status = 'approved'
     $q.notify({
@@ -1292,10 +1466,7 @@ const approveRequest = async (request) => {
 const rejectRequest = async (request) => {
   try {
     actionLoading.value = `reject-${request.id}`
-    await api.patch(
-      `/attendance/leave-approval/${request.id}/`,
-      { status: 'rejected' },
-    )
+    await api.patch(`/attendance/leave-approval/${request.id}/`, { status: 'rejected' })
     const index = leaveList.value.findIndex((r) => r.id === request.id)
     if (index !== -1) leaveList.value[index].status = 'rejected'
     $q.notify({
@@ -1342,7 +1513,9 @@ const fetchCaRequests = async () => {
     const companyId = selectedCompany.value
     if (!companyId) throw new Error('No company selected')
     const res = await api.get(`/cash_advance/admin/company/${companyId}/requests/`)
-    let data = Array.isArray(res.data) ? res.data : res.data?.data?.requests || res.data?.requests || res.data?.results || []
+    let data = Array.isArray(res.data)
+      ? res.data
+      : res.data?.data?.requests || res.data?.requests || res.data?.results || []
     caRequests.value = data.map((req) => ({
       ...req,
       employee_name: req.employee_name || extractEmployeeName(req),
@@ -1384,7 +1557,9 @@ const fetchCaCutoffRequests = async (logId) => {
     if (!companyId) throw new Error('No company selected')
     const params = { log_id: logId }
     const res = await api.get(`/cash_advance/admin/company/${companyId}/requests/`, { params })
-    let data = Array.isArray(res.data) ? res.data : res.data?.data?.requests || res.data?.requests || res.data?.results || []
+    let data = Array.isArray(res.data)
+      ? res.data
+      : res.data?.data?.requests || res.data?.requests || res.data?.results || []
     caCutoffRequests.value = data.map((req) => ({
       ...req,
       employee_name: req.employee_name || extractEmployeeName(req),
@@ -1416,10 +1591,7 @@ const submitCaApproval = async () => {
       status: caApprovalData.value.status,
       remarks: caApprovalData.value.remarks || '',
     }
-    await api.patch(
-      `/cash_advance/admin/cash-advances/${requestId}/action/`,
-      payload,
-    )
+    await api.patch(`/cash_advance/admin/cash-advances/${requestId}/action/`, payload)
     caApprovalModal.value = false
     selectedCaRequest.value = null
     $q.notify({ type: 'positive', message: 'Request updated successfully!', position: 'top' })
@@ -1483,7 +1655,7 @@ const fetchSwapRequests = async () => {
     const res = await api.get('/organization/swap-requests/', {
       params: { company: companyId },
     })
-    const data = Array.isArray(res.data) ? res.data : res.data?.data ?? res.data?.results ?? []
+    const data = Array.isArray(res.data) ? res.data : (res.data?.data ?? res.data?.results ?? [])
     swapRequests.value = data
   } catch (e) {
     const errorMessage = Array.isArray(e.response?.data)
@@ -1680,53 +1852,65 @@ onUnmounted(() => {
 <style scoped src="../components/pages/Request/requestGrid.css"></style>
 
 <style scoped>
-/* ===== Page frame ===== */
+/* ===========================================================================
+   Requests page chrome.
+
+   Everything here reads from the design system in src/css/dashboard.scss — the
+   same `--dash-*` neutral ramp, radii, shadows and type scale the tables inside
+   this page already use through requestGrid.css. The page previously carried
+   its own slate palette (#102335, #e8ecf0, #f8fafc), its own radii (14–16px)
+   and its own micro-label convention (10px uppercase at 0.06em tracking), so
+   the frame around the queues read as a different product from the queues
+   themselves.
+   =========================================================================== */
+
 .requests-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--dash-gap);
 }
 
-/* ===== Page header ===== */
+/* ===== Page header =====
+   Matched to Contributions and Attendance: a 22px/600 title over a single meta
+   line, so the three pages share one masthead rather than three. */
 .page-head {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 18px;
-  padding: 0 2px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 .page-identity {
   display: flex;
   flex-direction: column;
-  gap: 3px;
   min-width: 0;
 }
 .page-heading {
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.032em;
-  color: #102335;
   margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  color: var(--dash-ink);
 }
 .page-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0 7px;
-  font-size: 12px;
-  color: #64748b;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--dash-ink-3);
 }
 .page-meta-item {
   white-space: nowrap;
 }
 .page-meta-item.waiting {
-  color: #b45309;
-  font-weight: 600;
+  color: var(--dash-warn);
+  font-weight: 500;
 }
 .page-meta-dot {
-  color: #cbd5e1;
+  color: var(--dash-n-300);
 }
 /* Small live indicator on the freshness stamp, so "Updated 2m ago" reads as a
    running clock rather than a static string. */
@@ -1739,7 +1923,7 @@ onUnmounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #22c55e;
+  background: var(--dash-good-mark);
   flex-shrink: 0;
   animation: live-pulse 2.4s ease-in-out infinite;
 }
@@ -1747,14 +1931,17 @@ onUnmounted(() => {
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.35);
+    box-shadow: 0 0 0 0 rgba(23, 178, 106, 0.3);
   }
   50% {
-    opacity: 0.75;
-    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0);
+    opacity: 0.7;
+    box-shadow: 0 0 0 4px rgba(23, 178, 106, 0);
   }
 }
 
+/* Every header control stands 36px tall, so the refresh button, the primary
+   action and the view toggle centre on each other by construction instead of
+   by a per-item nudge. */
 .page-actions {
   display: flex;
   gap: 8px;
@@ -1763,66 +1950,159 @@ onUnmounted(() => {
 }
 .action-divider {
   width: 1px;
-  height: 22px;
+  height: 20px;
   margin: 0 2px;
-  background: #e2e8f0;
+  background: var(--dash-line);
   flex-shrink: 0;
 }
+.refresh-btn {
+  height: 36px;
+  width: 36px;
+  min-height: 36px;
+  border-radius: var(--dash-r-md);
+  color: var(--dash-ink-4) !important;
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
+}
+.refresh-btn:hover {
+  background: var(--dash-n-100) !important;
+  color: var(--dash-ink) !important;
+}
+/* Flat, not floating. The previous button lifted 1px and cast a 22px glow on
+   hover, which reads as consumer software beside the rest of the dashboard;
+   depth here is one hairline-dark plate plus the system's smallest shadow. */
+.primary-action-btn {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-brand) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dash-shadow-xs);
+  transition: background var(--dash-fast) var(--dash-ease);
+}
+.primary-action-btn:hover {
+  background: var(--dash-n-800) !important;
+}
 
+/* Segmented control: a recessed track carrying a raised white plate on the
+   active segment, the same shape the Contributions view switcher uses. It
+   replaced a solid navy pill, which made "which list am I looking at" the
+   loudest element on the page. */
+.view-toggle {
+  padding: 3px;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  background: var(--dash-n-100);
+  box-shadow: none;
+}
+.view-toggle :deep(.q-btn) {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 11px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: var(--dash-r-sm);
+  background: transparent !important;
+  color: var(--dash-ink-3) !important;
+  box-shadow: none;
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
+}
+.view-toggle :deep(.q-btn .q-icon) {
+  font-size: 15px;
+  margin-right: 5px;
+  color: var(--dash-ink-4);
+}
+.view-toggle :deep(.q-btn:hover:not(.q-btn--active)) {
+  background: rgba(255, 255, 255, 0.6) !important;
+  color: var(--dash-ink-2) !important;
+}
+.view-toggle :deep(.q-btn--active) {
+  background: var(--dash-surface) !important;
+  border-color: var(--dash-line);
+  color: var(--dash-ink) !important;
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
+}
+.view-toggle :deep(.q-btn--active .q-icon) {
+  color: var(--dash-accent);
+}
 
-/* ===== Work surface ===== */
+/* ===== Work surface =====
+   One panel on the system's panel chrome: hairline edge, 12px radius, and the
+   near-invisible shadow that keeps it flat against the canvas. */
 .queue-content {
-  background: #ffffff;
-  border: 1px solid #e8ecf0;
-  border-radius: 16px;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-lg);
+  box-shadow: var(--dash-shadow-xs);
   overflow: hidden;
-  box-shadow:
-    0 1px 2px rgba(16, 35, 53, 0.04),
-    0 12px 28px -20px rgba(16, 35, 53, 0.28);
 }
 
 /* ===== Tab bar =====
-   Underline tabs on the card's top edge — an unambiguous "these are tabs"
+   Underline tabs riding the panel's top edge — an unambiguous "these are tabs"
    affordance, with the active queue's breakdown sharing the same band. */
+/* Both halves stretch to the band's height: the tabs then anchor themselves to
+   its bottom edge so the active indicator lands on the border, while the search
+   and the stat chips centre inside the same height. Bottom-aligning the whole
+   row instead left the chips sitting ~3px below the tab labels they read
+   alongside. */
 .tab-bar-row {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 16px;
-  border-bottom: 1px solid #e6ebf1;
-  background: #ffffff;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--dash-line);
+  background: var(--dash-surface);
   flex-wrap: wrap;
 }
 .tab-bar {
   display: flex;
+  align-items: flex-end;
   gap: 2px;
   min-width: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tab-bar::-webkit-scrollbar {
+  display: none;
 }
 .queue-tab {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   /* -1px lets the indicator sit over the row's 1px border, so the active tab
      reads as connected to the panel below it. */
   margin-bottom: -1px;
-  padding: 11px 13px 12px;
+  padding: 12px 12px 13px;
   background: transparent;
   border: none;
-  border-radius: 9px 9px 0 0;
+  border-radius: var(--dash-r-sm) var(--dash-r-sm) 0 0;
+  font-family: inherit;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background var(--dash-fast) var(--dash-ease);
 }
 .queue-tab:hover {
-  background: #f4f6f9;
+  background: var(--dash-n-50);
 }
+/* Soft halo rather than a hard outline, which would fight the hairline borders
+   it sits between. */
 .queue-tab:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: -2px;
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 /* Rounded indicator that grows out from the centre on selection, rather than a
    hard border switching on. */
@@ -1832,102 +2112,73 @@ onUnmounted(() => {
   left: 10px;
   right: 10px;
   bottom: -1px;
-  height: 2.5px;
-  border-radius: 3px 3px 0 0;
-  background: #102335;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--dash-accent);
   transform: scaleX(0);
   transform-origin: center;
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.22s var(--dash-ease);
 }
 .queue-tab.active::after {
   transform: scaleX(1);
 }
 /* No tile behind the icon — selection is carried by colour alone. */
 .queue-tab-icon {
-  color: #94a3b8;
+  color: var(--dash-ink-4);
   flex-shrink: 0;
-  transition: color 0.15s ease;
+  transition: color var(--dash-fast) var(--dash-ease);
 }
 .queue-tab:hover .queue-tab-icon {
-  color: #475569;
+  color: var(--dash-ink-2);
 }
 .queue-tab.active .queue-tab-icon {
-  color: #102335;
+  color: var(--dash-accent);
 }
 .queue-tab-label {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink-3);
   line-height: 1.3;
-  transition: color 0.15s ease;
+  transition: color var(--dash-fast) var(--dash-ease);
 }
 .queue-tab:hover .queue-tab-label {
-  color: #1e293b;
+  color: var(--dash-ink-2);
 }
 .queue-tab.active .queue-tab-label {
-  color: #102335;
-  font-weight: 700;
+  color: var(--dash-ink);
+  font-weight: 600;
 }
-/* Replaces the two-line "3 pending" caption: same signal, no extra tab height. */
+/* Bordered rather than flat-filled, so the count holds its edge against both
+   the white strip and the hover plate. */
 .queue-tab-count {
-  min-width: 18px;
+  min-width: 19px;
   padding: 0 5px;
-  border-radius: 999px;
-  background: #fde9b5;
-  color: #92400e;
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 17px;
+  border-radius: var(--dash-r-xs);
+  background: var(--dash-warn-bg);
+  border: 1px solid var(--dash-warn-line);
+  color: var(--dash-warn);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 .tab-bar-aside {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
+  gap: 10px;
+  padding: 6px 0;
   min-width: 0;
 }
 .tab-bar-search {
-  flex: 0 1 260px;
+  flex: 0 1 240px;
 }
 .tab-bar-stats {
   flex-shrink: 0;
 }
-.refresh-btn {
-  height: 38px;
-  width: 38px;
-  border-radius: 10px;
-  background: #f1f4f8 !important;
-  color: #64748b !important;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-.refresh-btn:hover {
-  background: #e2e8f0 !important;
-  color: #102335 !important;
-}
-.primary-action-btn {
-  height: 38px;
-  padding: 0 15px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  border-radius: 10px;
-  background: #102335 !important;
-  color: #ffffff !important;
-  box-shadow: 0 6px 16px -8px rgba(16, 35, 53, 0.75);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
-}
-.primary-action-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 22px -10px rgba(16, 35, 53, 0.85);
-}
+
 .panel-surface {
-  background: #ffffff;
+  background: var(--dash-surface);
 }
 .tab-panels {
   background: transparent;
@@ -1936,128 +2187,47 @@ onUnmounted(() => {
   padding: 0;
 }
 
-@media (min-width: 1440px) {
-  .page-heading {
-    font-size: 26px;
-  }
-}
-
-/* Laptop */
-@media (max-width: 1279px) {
-  .page-heading {
-    font-size: 21px;
-  }
-  .queue-tab {
-    gap: 8px;
-    padding: 11px 11px 10px;
-  }
-  .queue-tab-label {
-    font-size: 13px;
-  }
-}
-
-/* Tablet */
-@media (max-width: 1023px) {
-  .page-head {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 13px;
-  }
-  .page-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-  .action-divider {
-    display: none;
-  }
-  .tab-bar-row {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 0;
-    padding: 0 14px;
-  }
-  .queue-tab {
-    flex: 1 0 auto;
-    justify-content: center;
-  }
-  .tab-bar-aside {
-    padding: 0 0 11px;
-  }
-  .tab-bar-search {
-    flex: 1 1 auto;
-  }
-}
-
-@media (max-width: 599px) {
-  .page-heading {
-    font-size: 19px;
-  }
-  .page-meta {
-    font-size: 11.5px;
-  }
-  .queue-tab {
-    padding: 11px 9px 10px;
-  }
-  /* Keep the icon and the pending count; the label is the first thing to go. */
-  .queue-tab-label {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .queue-tab,
-  .queue-tab::after,
-  .primary-action-btn {
-    transition: none;
-  }
-  .primary-action-btn:hover {
-    transform: none;
-  }
-  .live-dot {
-    animation: none;
-  }
-}
+/* ===== Overtime: payroll-run cards =====
+   Each run is an expandable row of its own. It is a control, so its header
+   takes a hover plate — but no shadow lift, which would promise a depth the
+   panel underneath does not have. */
 .overtime-summary-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: 12px;
+  padding: var(--dash-pad-y) var(--dash-pad-x);
 }
 .overtime-summary-card {
-  background: #ffffff;
-  border: 1px solid #e6ebf1;
-  border-radius: 14px;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-lg);
   cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
   overflow: hidden;
+  transition: border-color var(--dash-fast) var(--dash-ease);
 }
-.overtime-summary-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 8px 20px -14px rgba(16, 35, 53, 0.5);
-}
+.overtime-summary-card:hover,
 .overtime-summary-card.active {
-  border-color: #cbd5e1;
-  box-shadow: 0 10px 24px -16px rgba(16, 35, 53, 0.6);
+  border-color: var(--dash-line-strong);
 }
 .summary-card-header {
   display: flex;
   align-items: center;
-  padding: 14px 20px;
   gap: 16px;
-  flex-wrap: nowrap;
+  padding: 12px 16px;
   width: 100%;
   box-sizing: border-box;
   border-bottom: 1px solid transparent;
-  background: #f8fafc;
+  background: var(--dash-surface);
   transition:
-    background 0.2s ease,
-    border-color 0.2s ease;
+    background var(--dash-fast) var(--dash-ease),
+    border-color var(--dash-fast) var(--dash-ease);
+}
+.overtime-summary-card:hover .summary-card-header {
+  background: var(--dash-hover);
 }
 .overtime-summary-card.active .summary-card-header {
-  border-bottom-color: #e6ebf1;
-  background: #f1f5f9;
+  background: var(--dash-n-25);
+  border-bottom-color: var(--dash-line);
 }
 .summary-card-name-group {
   display: flex;
@@ -2077,16 +2247,15 @@ onUnmounted(() => {
 .summary-name {
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: var(--dash-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
 .summary-period {
-  font-size: 11px;
-  font-weight: 400;
-  color: #6b7280;
+  font-size: 12px;
+  color: var(--dash-ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2095,107 +2264,86 @@ onUnmounted(() => {
 .summary-stat-cols {
   display: flex;
   align-items: center;
-  gap: 0;
   flex: 0 0 auto;
 }
 .summary-stat-col {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
-  padding: 0 12px;
-  border-right: 1px solid #e2e8f0;
+  gap: 2px;
+  padding: 0 14px;
+  border-right: 1px solid var(--dash-line);
 }
 .summary-stat-col:first-child {
   padding-left: 0;
 }
 .summary-stat-col:last-of-type {
   border-right: none;
+  padding-right: 0;
 }
+/* Sentence case, not tracked-out small caps. Uppercase micro-labels are the
+   clearest single tell of an older dashboard, and every other table in the app
+   has already dropped them. */
 .summary-stat-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dash-ink-3);
   white-space: nowrap;
 }
 .summary-stat-val {
-  font-size: 13px;
-  font-weight: 700;
-  color: #111827;
-}
-.overtime-empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e8ecf0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 .expand-icon {
   flex-shrink: 0;
-  color: #6b7280;
-  transition: transform 0.3s ease;
+  color: var(--dash-ink-4);
+  transition: transform 0.24s var(--dash-ease);
+}
+.overtime-empty-state {
+  padding: 8px 0 22px;
 }
 
-@media (max-width: 1024px) {
-  .summary-stat-col { padding: 0 10px; }
-  .summary-stat-label { font-size: 9px; }
-  .summary-stat-val { font-size: 13px; }
-  .summary-card-header { padding: 12px 16px; gap: 12px; }
-}
-
-@media (max-width: 768px) {
-  .summary-card-header { flex-wrap: wrap; padding: 12px 14px; gap: 10px; }
-  .summary-card-name-group { flex: 1 1 100%; min-width: 0; }
-  .summary-stat-cols { flex: 1 1 auto; overflow-x: auto; padding-bottom: 2px; }
-  .summary-stat-col { padding: 0 8px; }
-}
-
-@media (max-width: 480px) {
-  .summary-card-header { flex-direction: column; align-items: flex-start; padding: 10px 12px; gap: 8px; }
-  .summary-card-name-group { width: 100%; }
-  .summary-stat-cols { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-}
-
-/* Expanded Panel Styles */
+/* ===== Overtime: expanded run ===== */
 .overtime-panel-wrapper {
-  border-top: 1px solid #e6ebf1;
-  background: #f8fafc;
+  border-top: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
 }
 .overtime-panel {
-  padding: 16px 20px;
+  padding: 14px 16px 16px;
 }
 .overtime-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
   gap: 10px;
 }
 .panel-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  gap: 7px;
+  font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--dash-ink);
 }
 .panel-count {
-  background: #f1f5f9;
-  color: #475569;
+  padding: 0 6px;
+  border-radius: var(--dash-r-xs);
+  background: var(--dash-n-100);
+  color: var(--dash-ink-3);
   font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-weight: 600;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
 }
 .overtime-table-container {
-  background: #ffffff;
-  border: 1px solid #e6ebf1;
-  border-radius: 12px;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
   overflow: auto;
 }
 .overtime-grid {
@@ -2222,90 +2370,204 @@ onUnmounted(() => {
 .ot-cell-actions {
   width: 110px;
 }
+/* An acronym, so it keeps its capitals — but not the extra tracking and 700
+   weight that turned it into a shout inside a 13px cell. */
 .cto-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  background: #e0f2fe;
-  color: #0369a1;
   margin-left: 6px;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: var(--dash-r-xs);
+  background: var(--dash-info-bg);
+  border: 1px solid var(--dash-info-line);
+  color: var(--dash-info);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 15px;
 }
 .hours-input {
-  max-width: 90px;
+  max-width: 84px;
 }
 .hours-input :deep(.q-field__control) {
-  height: 32px;
-  min-height: 32px;
+  height: 30px;
+  min-height: 30px;
   padding: 0 8px;
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-surface);
 }
 .hours-input :deep(.q-field__native) {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--dash-ink);
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .hours-cell-content {
   display: flex;
   align-items: center;
   gap: 6px;
 }
+/* Selection is a state, not an outcome — an informational band, rather than
+   the green "everything succeeded" bar this used to be. */
 .bulk-actions-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 8px;
+  gap: 8px;
+  padding: 8px 12px;
   margin-bottom: 10px;
+  background: var(--dash-info-bg);
+  border: 1px solid var(--dash-info-line);
+  border-radius: var(--dash-r-md);
   flex-wrap: wrap;
 }
 .bulk-count {
-  font-size: 13px;
+  margin-right: 2px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #16a34a;
+  color: var(--dash-info);
+  font-variant-numeric: tabular-nums;
+}
+.bulk-actions-bar :deep(.q-btn) {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: var(--dash-r-sm);
+}
+
+/* ===== Responsive ===== */
+@media (min-width: 1440px) {
+  .page-heading {
+    font-size: 24px;
+  }
+}
+
+/* Laptop */
+@media (max-width: 1279px) {
+  .page-heading {
+    font-size: 20px;
+  }
+  .queue-tab {
+    gap: 7px;
+    padding: 11px 10px 12px;
+  }
+  .summary-stat-col {
+    padding: 0 11px;
+  }
+}
+
+/* Tablet */
+@media (max-width: 1023px) {
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .page-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .action-divider {
+    display: none;
+  }
+  .tab-bar-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0;
+    padding: 0 12px;
+  }
+  .queue-tab {
+    flex: 1 0 auto;
+    justify-content: center;
+  }
+  .tab-bar-aside {
+    padding: 0 0 10px;
+  }
+  .tab-bar-search {
+    flex: 1 1 auto;
+  }
+  .summary-card-header {
+    padding: 12px 14px;
+    gap: 12px;
+  }
 }
 
 @media (max-width: 768px) {
-  .overtime-panel { padding: 12px 14px; }
-  .overtime-panel-header { flex-direction: column; align-items: stretch; }
+  .summary-card-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .summary-card-name-group {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .summary-stat-cols {
+    flex: 1 1 auto;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .summary-stat-col {
+    padding: 0 10px;
+  }
+  .overtime-panel {
+    padding: 12px 12px 14px;
+  }
+  .overtime-panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
-  .view-toggle {
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #f8fafc;
-  }
-  .view-toggle :deep(.q-btn) {
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 14px;
-    min-height: 32px;
-    border-radius: 0;
-    border: none;
-    background: transparent !important;
-    color: #475569 !important;
-    transition: all 0.2s ease;
-  }
-  .view-toggle :deep(.q-btn:hover:not(.q-btn--active)) {
-    background: #e2e8f0 !important;
-    color: #1e293b !important;
-  }
-  .view-toggle :deep(.q-btn--active) {
-    background: #102335 !important;
-    color: #ffffff !important;
-    box-shadow: 0 2px 8px rgba(16, 35, 53, 0.3);
-  }
-  .view-toggle :deep(.q-btn + .q-btn) {
-    border-left: 1px solid #e2e8f0;
-  }
-  .view-toggle :deep(.q-btn--active + .q-btn),
-  .view-toggle :deep(.q-btn + .q-btn--active) {
-    border-left-color: transparent;
-  }
-</style>
 
+@media (max-width: 599px) {
+  .page-heading {
+    font-size: 19px;
+  }
+  .page-meta {
+    font-size: 12px;
+  }
+  .queue-tab {
+    padding: 11px 9px 12px;
+  }
+  /* Keep the icon and the pending count; the label is the first thing to go. */
+  .queue-tab-label {
+    display: none;
+  }
+  .overtime-summary-list {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px;
+    gap: 10px;
+  }
+  .summary-card-name-group {
+    width: 100%;
+  }
+  .summary-stat-cols {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .summary-stat-col:last-of-type {
+    padding-right: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-tab,
+  .queue-tab::after,
+  .expand-icon,
+  .primary-action-btn,
+  .summary-card-header {
+    transition: none;
+  }
+  .live-dot {
+    animation: none;
+  }
+}
+</style>

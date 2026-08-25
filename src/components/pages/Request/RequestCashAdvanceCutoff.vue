@@ -5,10 +5,15 @@
       <span>Loading disbursement logs...</span>
     </div>
 
-    <div v-else-if="logs.length === 0" class="cutoff-empty">
-      <q-icon name="search_off" size="48px" color="grey-4" />
-      <div class="empty-title">No disbursement logs found</div>
-      <div class="empty-subtitle">Try adjusting your search or filters</div>
+    <div v-else-if="logs.length === 0" class="cutoff-empty dash-empty">
+      <span class="dash-featured-icon">
+        <q-icon name="o_event_busy" size="20px" />
+      </span>
+      <p class="dash-empty__title">No cutoffs found</p>
+      <p class="dash-empty__sub">
+        Cash advances are grouped by the payroll cutoff they are drawn against. Once a cutoff is
+        created, it appears here as a card you can expand.
+      </p>
     </div>
 
     <div v-else class="cutoff-list">
@@ -22,7 +27,10 @@
           <div class="cutoff-name-group">
             <q-icon
               name="expand_more"
-              :style="{ transform: expandedLogId === log.id ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease' }"
+              :style="{
+                transform: expandedLogId === log.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.3s ease',
+              }"
               size="18px"
               class="expand-icon"
             />
@@ -39,7 +47,7 @@
               <span class="cutoff-stat-label">Type</span>
               <span class="cutoff-stat-val">{{ log.type_display || log.type || '-' }}</span>
             </div>
-            <div class="cutoff-stat-col">
+            <div class="cutoff-stat-col cutoff-stat-col--status">
               <span class="cutoff-stat-label">Status</span>
               <span class="cutoff-stat-val">
                 <div :class="['status-badge-mini', getStatusClass(log.status)]">
@@ -102,9 +110,15 @@
             </div>
 
             <div v-else-if="filteredCutoffRequests.length === 0" class="grid-empty">
-              <div class="grid-empty-icon"><q-icon name="account_balance_wallet" size="26px" /></div>
+              <div class="grid-empty-icon">
+                <q-icon name="account_balance_wallet" size="26px" />
+              </div>
               <div class="grid-empty-title">
-                {{ isNarrowed ? 'No cash advances match your search' : 'No cash advances in this cutoff' }}
+                {{
+                  isNarrowed
+                    ? 'No cash advances match your search'
+                    : 'No cash advances in this cutoff'
+                }}
               </div>
               <div class="grid-empty-text">
                 {{
@@ -115,7 +129,7 @@
               </div>
             </div>
 
-            <div v-else class="cutoff-table-container">
+            <div v-else class="cutoff-table-container dash-scroll-x">
               <q-table
                 :rows="filteredCutoffRequests"
                 :columns="cutoffColumns"
@@ -123,34 +137,60 @@
                 flat
                 hide-pagination
                 :rows-per-page-options="[0]"
-                class="request-grid cutoff-grid"
+                class="dash-qtable dash-qtable--flush request-grid cutoff-grid"
               >
                 <template v-slot:header="props">
                   <q-tr class="grid-head-row" :props="props">
-                    <q-th key="employeeName" :props="props" class="grid-head-cell cut-cell-employee">Employee</q-th>
-                    <q-th key="requestedAmount" :props="props" class="grid-head-cell grid-head-cell--right cut-cell-amount">Amount</q-th>
-                    <q-th key="requestDate" :props="props" class="grid-head-cell cut-cell-date">Requested</q-th>
-                    <q-th key="payoutDate" :props="props" class="grid-head-cell cut-cell-date">Payout</q-th>
-                    <q-th key="status" :props="props" class="grid-head-cell cut-cell-status">Status</q-th>
-                    <q-th key="actions" :props="props" class="grid-head-cell grid-head-cell--right cut-cell-actions">Actions</q-th>
+                    <q-th key="employeeName" :props="props" class="grid-head-cell cut-cell-employee"
+                      >Employee</q-th
+                    >
+                    <q-th
+                      key="requestedAmount"
+                      :props="props"
+                      class="grid-head-cell grid-head-cell--right cut-cell-amount"
+                      >Amount</q-th
+                    >
+                    <q-th key="requestDate" :props="props" class="grid-head-cell cut-cell-date"
+                      >Requested</q-th
+                    >
+                    <q-th key="payoutDate" :props="props" class="grid-head-cell cut-cell-date"
+                      >Payout</q-th
+                    >
+                    <q-th key="status" :props="props" class="grid-head-cell cut-cell-status"
+                      >Status</q-th
+                    >
+                    <q-th
+                      key="actions"
+                      :props="props"
+                      class="grid-head-cell grid-head-cell--right cut-cell-actions"
+                      >Actions</q-th
+                    >
                   </q-tr>
                 </template>
                 <template v-slot:body="props">
                   <q-tr
-                    class="grid-row"
+                    class="dash-qtable__row grid-row"
                     :class="{ 'grid-row--waiting': props.row.status === 'pending' }"
                     :props="props"
                   >
                     <q-td key="employeeName" :props="props" class="grid-cell cut-cell-employee">
                       <div class="identity">
-                        <span class="identity-avatar">{{ getInitials(props.row.employee_name) }}</span>
+                        <span class="identity-avatar">{{
+                          getInitials(props.row.employee_name)
+                        }}</span>
                         <span class="identity-text">
                           <span class="identity-name">{{ props.row.employee_name }}</span>
                         </span>
                       </div>
                     </q-td>
-                    <q-td key="requestedAmount" :props="props" class="grid-cell grid-cell--right cut-cell-amount">
-                      <span class="amount">&#8369;{{ formatAmount(props.row.requested_amount) }}</span>
+                    <q-td
+                      key="requestedAmount"
+                      :props="props"
+                      class="grid-cell grid-cell--right cut-cell-amount"
+                    >
+                      <span class="amount"
+                        >&#8369;{{ formatAmount(props.row.requested_amount) }}</span
+                      >
                     </q-td>
                     <q-td key="requestDate" :props="props" class="grid-cell cut-cell-date">
                       <span class="stat-num">{{ formatDate(props.row.request_date) }}</span>
@@ -173,12 +213,24 @@
                     </q-td>
                     <q-td key="actions" :props="props" class="grid-cell cut-cell-actions">
                       <div class="grid-actions">
-                        <q-btn flat dense round icon="visibility" size="sm" class="grid-action" @click.stop="$emit('view', props.row)">
+                        <q-btn
+                          flat
+                          dense
+                          round
+                          icon="visibility"
+                          size="sm"
+                          class="grid-action"
+                          @click.stop="$emit('view', props.row)"
+                        >
                           <q-tooltip>View details</q-tooltip>
                         </q-btn>
                         <q-btn
                           v-if="props.row.status === 'pending'"
-                          flat dense round icon="rule" size="sm"
+                          flat
+                          dense
+                          round
+                          icon="rule"
+                          size="sm"
                           class="grid-action grid-action--approve"
                           @click.stop="$emit('approve', props.row)"
                         >
@@ -239,20 +291,22 @@ const filteredCutoffRequests = computed(() => {
     const search = props.search.toLowerCase()
     filtered = filtered.filter(
       (r) =>
-        (r.employee_name || '').toLowerCase().includes(search) ||
-        String(r.id).includes(search),
+        (r.employee_name || '').toLowerCase().includes(search) || String(r.id).includes(search),
     )
   }
   return filtered
 })
 
-const isNarrowed = computed(
-  () => statusFilter.value !== 'all' || !!(props.search || '').trim(),
-)
+const isNarrowed = computed(() => statusFilter.value !== 'all' || !!(props.search || '').trim())
 
 const getInitials = (name) => {
   if (!name || name === 'N/A') return '?'
-  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 }
 
 const capitalize = (str) => {
@@ -290,58 +344,65 @@ const statusPillClass = (status) => {
 <style scoped src="./requestGrid.css"></style>
 
 <style scoped>
-.cutoff-section { padding: 0; }
+/*
+ * Cutoff cards — the cash-advance twin of the payroll-run cards on the Overtime
+ * tab, and deliberately identical to them now. This view used to tint its whole
+ * card header blue (#eef3fb, deepening to #deeaf8 when open) against the
+ * overtime tab's neutral grey, so switching queues looked like switching
+ * products. Both now sit on the shared `--dash-*` neutral ramp and carry state
+ * in the border and a hover plate rather than in a hue.
+ */
+.cutoff-section {
+  padding: 0;
+}
 .cutoff-loading {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 32px;
+  padding: 28px var(--dash-pad-x);
   font-size: 13px;
-  color: #6b7280;
+  color: var(--dash-ink-3);
 }
 .cutoff-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  gap: 8px;
-  text-align: center;
+  padding: 10px 20px 26px;
 }
 .cutoff-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: 12px;
+  padding: var(--dash-pad-y) var(--dash-pad-x);
 }
 .cutoff-card {
-  background: #ffffff;
-  border: 1px solid #e0e7ef;
-  border-radius: 12px;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-lg);
   cursor: pointer;
-  transition: all 0.2s ease;
   overflow: hidden;
+  transition: border-color var(--dash-fast) var(--dash-ease);
 }
-.cutoff-card:hover {
-  background: #eef3fb;
-}
+.cutoff-card:hover,
 .cutoff-card.active {
-  background: #ffffff;
+  border-color: var(--dash-line-strong);
 }
 .cutoff-card-header {
   display: flex;
   align-items: center;
-  padding: 14px 20px;
   gap: 16px;
-  flex-wrap: nowrap;
+  padding: 12px 16px;
   width: 100%;
   box-sizing: border-box;
-  border-bottom: 1px solid #d8e4f0;
-  background: #eef3fb;
+  border-bottom: 1px solid transparent;
+  background: var(--dash-surface);
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    border-color var(--dash-fast) var(--dash-ease);
+}
+.cutoff-card:hover .cutoff-card-header {
+  background: var(--dash-hover);
 }
 .cutoff-card.active .cutoff-card-header {
-  border-bottom-color: #bfdbfe;
-  background: #deeaf8;
+  background: var(--dash-n-25);
+  border-bottom-color: var(--dash-line);
 }
 .cutoff-name-group {
   display: flex;
@@ -361,16 +422,15 @@ const statusPillClass = (status) => {
 .cutoff-name {
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: var(--dash-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
 .cutoff-period {
-  font-size: 11px;
-  font-weight: 400;
-  color: #6b7280;
+  font-size: 12px;
+  color: var(--dash-ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -379,67 +439,85 @@ const statusPillClass = (status) => {
 .cutoff-stat-cols {
   display: flex;
   align-items: center;
-  gap: 0;
   flex: 0 0 auto;
 }
 .cutoff-stat-col {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
-  padding: 0 12px;
-  border-right: 1px solid #d1dce8;
+  gap: 2px;
+  padding: 0 14px;
+  border-right: 1px solid var(--dash-line);
 }
-.cutoff-stat-col:first-child { padding-left: 0; }
-.cutoff-stat-col:last-of-type { border-right: none; }
+.cutoff-stat-col:first-child {
+  padding-left: 0;
+}
+.cutoff-stat-col:last-of-type {
+  border-right: none;
+  padding-right: 0;
+}
+/* Sentence case, matching the run cards on the Overtime tab and every table
+   header in the app; the tracked-out 10px capitals they replaced were the
+   loudest thing in the row. */
 .cutoff-stat-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: #8a9ab5;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dash-ink-3);
   white-space: nowrap;
 }
 .cutoff-stat-val {
-  font-size: 13px;
-  font-weight: 700;
-  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+/* The status column carries a chip rather than a figure, so it drops the
+   numeric weight and sits on the label's own line height. */
+.cutoff-stat-col--status .cutoff-stat-val {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 .expand-icon {
   flex-shrink: 0;
-  color: #6b7280;
-  transition: transform 0.3s ease;
+  color: var(--dash-ink-4);
+  transition: transform 0.24s var(--dash-ease);
 }
+
+/* ===== Expanded cutoff ===== */
 .cutoff-panel-wrapper {
-  border-top: 1px solid #d1dce8;
-  background: #f8fafc;
+  border-top: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
 }
 .cutoff-panel {
-  padding: 16px 20px;
+  padding: 14px 16px 16px;
 }
 .cutoff-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
   gap: 10px;
 }
 .panel-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  gap: 7px;
+  font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--dash-ink);
 }
 .panel-count {
-  background: #eef3fb;
-  color: #3b82f6;
+  padding: 0 6px;
+  border-radius: var(--dash-r-xs);
+  background: var(--dash-n-100);
+  color: var(--dash-ink-3);
   font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-weight: 600;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
 }
 .panel-actions {
   display: flex;
@@ -451,14 +529,14 @@ const statusPillClass = (status) => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px 24px;
+  padding: 20px 4px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--dash-ink-3);
 }
 .cutoff-table-container {
-  background: #ffffff;
-  border: 1px solid #e6ebf1;
-  border-radius: 12px;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
   overflow: auto;
 }
 .cutoff-grid {
@@ -480,45 +558,114 @@ const statusPillClass = (status) => {
 .cut-cell-actions {
   width: 100px;
 }
-.status-pending { background: #fffbeb; color: #92400e; }
-.status-approved { background: #f0fdf4; color: #16a34a; }
-.status-rejected { background: #fef2f2; color: #dc2626; }
-.status-default { background: #f1f5f9; color: #64748b; }
+
+/* Bordered status chip — a tint plus a 1px ring in the same hue, matching the
+   pills in the tables below rather than the flat 20px-radius pastel pill this
+   used to be. */
 .status-badge-mini {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
+  gap: 5px;
+  padding: 1px 7px;
+  border-radius: var(--dash-r-sm);
+  border: 1px solid var(--dash-neutral-line);
+  background: var(--dash-neutral-bg);
+  color: var(--dash-neutral);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 17px;
   white-space: nowrap;
 }
-.status-badge-mini.status-pending { background: #fffbeb; color: #92400e; }
-.status-badge-mini.status-approved { background: #f0fdf4; color: #16a34a; }
-.status-badge-mini.status-rejected { background: #fef2f2; color: #dc2626; }
-.status-badge-mini.status-default { background: #f1f5f9; color: #64748b; }
-.empty-title { font-size: 15px; font-weight: 500; color: #334155; }
-.empty-subtitle { font-size: 13px; color: #94a3b8; }
+.status-badge-mini.status-pending {
+  background: var(--dash-warn-bg);
+  border-color: var(--dash-warn-line);
+  color: var(--dash-warn);
+}
+.status-badge-mini.status-approved {
+  background: var(--dash-good-bg);
+  border-color: var(--dash-good-line);
+  color: var(--dash-good);
+}
+.status-badge-mini.status-rejected {
+  background: var(--dash-critical-bg);
+  border-color: var(--dash-critical-line);
+  color: var(--dash-critical);
+}
+.status-badge-mini.status-default {
+  background: var(--dash-neutral-bg);
+  border-color: var(--dash-neutral-line);
+  color: var(--dash-neutral);
+}
 
-@media (max-width: 1024px) {
-  .cutoff-stat-col { padding: 0 10px; }
-  .cutoff-stat-label { font-size: 9px; }
-  .cutoff-stat-val { font-size: 13px; }
-  .cutoff-card-header { padding: 12px 16px; gap: 12px; }
+@media (max-width: 1279px) {
+  .cutoff-stat-col {
+    padding: 0 11px;
+  }
+}
+@media (max-width: 1023px) {
+  .cutoff-card-header {
+    padding: 12px 14px;
+    gap: 12px;
+  }
 }
 @media (max-width: 768px) {
-  .cutoff-card-header { flex-wrap: wrap; padding: 12px 14px; gap: 10px; }
-  .cutoff-name-group { flex: 1 1 100%; min-width: 0; }
-  .cutoff-stat-cols { flex: 1 1 auto; overflow-x: auto; padding-bottom: 2px; }
-  .cutoff-stat-col { padding: 0 8px; }
-  .cutoff-panel { padding: 12px 14px; }
-  .panel-actions .grid-search { flex: 1 1 100%; max-width: 100%; }
-  .panel-actions .grid-filter { width: 100%; }
+  .cutoff-card-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .cutoff-name-group {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .cutoff-stat-cols {
+    flex: 1 1 auto;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .cutoff-stat-col {
+    padding: 0 10px;
+  }
+  .cutoff-panel {
+    padding: 12px 12px 14px;
+  }
+  .panel-actions .grid-search {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+  .panel-actions .grid-filter {
+    width: 100%;
+  }
+}
+@media (max-width: 599px) {
+  .cutoff-list {
+    padding: 12px;
+  }
 }
 @media (max-width: 480px) {
-  .cutoff-card-header { flex-direction: column; align-items: flex-start; padding: 10px 12px; gap: 8px; }
-  .cutoff-name-group { width: 100%; }
-  .cutoff-stat-cols { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cutoff-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px;
+    gap: 10px;
+  }
+  .cutoff-name-group {
+    width: 100%;
+  }
+  .cutoff-stat-cols {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cutoff-stat-col:last-of-type {
+    padding-right: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cutoff-card,
+  .cutoff-card-header,
+  .expand-icon {
+    transition: none;
+  }
 }
 </style>

@@ -35,26 +35,9 @@
         <strong>{{ rows.length }}</strong> {{ rows.length === 1 ? 'request' : 'requests' }}
       </div>
     </div>
-
-    <!-- Loading -->
-    <div v-if="loading" class="grid-scroll">
-      <div class="skel-head">
-        <div class="skel-head-cell" style="flex: 2">Employee</div>
-        <div class="skel-head-cell" style="flex: 1.2">Amount</div>
-        <div class="skel-head-cell" style="flex: 1.2">Requested</div>
-        <div class="skel-head-cell" style="flex: 1.2">Payout</div>
-        <div class="skel-head-cell" style="flex: 1.4">Status</div>
-        <div class="skel-head-cell" style="flex: 0 0 90px">Actions</div>
-      </div>
-      <div class="skel-row" v-for="n in 5" :key="n">
-        <div class="skel-cell" style="flex: 2"><q-skeleton type="text" width="150px" /></div>
-        <div class="skel-cell" style="flex: 1.2"><q-skeleton type="text" width="90px" /></div>
-        <div class="skel-cell" style="flex: 1.2"><q-skeleton type="text" width="90px" /></div>
-        <div class="skel-cell" style="flex: 1.2"><q-skeleton type="text" width="90px" /></div>
-        <div class="skel-cell" style="flex: 1.4"><q-skeleton type="text" width="80px" /></div>
-        <div class="skel-cell" style="flex: 0 0 90px"><q-skeleton type="text" width="50px" /></div>
-      </div>
-    </div>
+    <!-- Loading. Built from the live `caColumns`, so the placeholder shares
+         the real table's columns, labels and alignment. -->
+    <TableSkeleton v-if="loading" :columns="caColumns" :rows="5" flush />
 
     <!-- Empty -->
     <div v-else-if="rows.length === 0" class="grid-empty">
@@ -64,13 +47,13 @@
     </div>
 
     <!-- Grid -->
-    <div v-else class="grid-scroll">
+    <div v-else class="grid-scroll dash-scroll-x">
       <q-table
         :rows="rows"
         :columns="caColumns"
         row-key="id"
         flat
-        class="request-grid ca-grid"
+        class="dash-qtable dash-qtable--flush request-grid ca-grid"
         :pagination="caPagination"
       >
         <template v-slot:header>
@@ -85,7 +68,10 @@
         </template>
 
         <template v-slot:body="props">
-          <q-tr class="grid-row" :class="{ 'grid-row--waiting': props.row.status === 'pending' }">
+          <q-tr
+            class="dash-qtable__row grid-row"
+            :class="{ 'grid-row--waiting': props.row.status === 'pending' }"
+          >
             <q-td class="grid-cell cell-employee">
               <div class="identity">
                 <span class="identity-avatar">{{ getInitials(props.row.employee_name) }}</span>
@@ -124,7 +110,9 @@
             <q-td class="grid-cell cell-actions">
               <div class="grid-actions">
                 <q-btn
-                  flat dense round
+                  flat
+                  dense
+                  round
                   icon="visibility"
                   size="sm"
                   class="grid-action"
@@ -134,7 +122,9 @@
                 </q-btn>
                 <q-btn
                   v-if="props.row.status === 'pending'"
-                  flat dense round
+                  flat
+                  dense
+                  round
                   icon="rule"
                   size="sm"
                   class="grid-action grid-action--approve"
@@ -153,6 +143,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 
 const props = defineProps({
   rows: Array,
@@ -262,10 +253,9 @@ const statusPillClass = (status) => {
 
 .ca-grid :deep(.q-table__bottom) {
   padding: 10px 20px;
-  border-top: 1px solid #eef1f5 !important;
+  border-top: 1px solid var(--dash-line) !important;
   font-size: 12.5px;
-  color: #64748b;
+  color: var(--dash-ink-3);
   min-height: unset;
 }
-
 </style>
