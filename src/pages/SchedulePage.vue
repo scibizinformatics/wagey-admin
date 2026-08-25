@@ -98,47 +98,46 @@
       </section>
     </div>
 
-      <!-- Add Schedule Modal -->
-      <ScheduleAddModal
-        v-model="showAddModal"
-        v-model:new-schedule="newSchedule"
-        :filtered-employee-options="filteredEmployeeOptions"
-        :shift-template-options="shiftTemplateOptions"
-        :recurring-schedule-options="recurringScheduleOptions"
-        :department-options="departmentOptions"
-        :conflict-warning="addConflictWarning"
-        :checking-conflict="isCheckingConflict"
-        :loading-employees="loadingEmployees"
-        :site-options="siteOptionsForRotating"
-        :payroll-group-options="payrollGroupOptions"
-        @submit="addSchedule"
-        @filter-employees="filterEmployeeOptions"
-        @template-change="onRecurringTemplateChange"
-      />
+    <!-- Add Schedule Modal -->
+    <ScheduleAddModal
+      v-model="showAddModal"
+      v-model:new-schedule="newSchedule"
+      :filtered-employee-options="filteredEmployeeOptions"
+      :shift-template-options="shiftTemplateOptions"
+      :rotating-shift-template-options="rotatingShiftTemplateOptions"
+      :recurring-schedule-options="recurringScheduleOptions"
+      :department-options="departmentOptions"
+      :conflict-warning="addConflictWarning"
+      :checking-conflict="isCheckingConflict"
+      :loading-employees="loadingEmployees"
+      :payroll-group-options="payrollGroupOptions"
+      @submit="addSchedule"
+      @filter-employees="filterEmployeeOptions"
+      @template-change="onRecurringTemplateChange"
+    />
 
-      <!-- Quick Add Modal -->
-      <ScheduleQuickAddModal
-        v-model="showQuickAddModal"
-        v-model:quick-add="quickAdd"
-        :shift-template-options="shiftTemplateOptions"
-        :employee-name="getEmployeeName(quickAdd.userId)"
-        :day-label="days[quickAdd.day] || ''"
-        :adding="isAddingShift"
-        @submit="quickAddSchedule"
-        @remove-shift="removeShiftRow"
-      />
+    <!-- Quick Add Modal -->
+    <ScheduleQuickAddModal
+      v-model="showQuickAddModal"
+      v-model:quick-add="quickAdd"
+      :shift-template-options="shiftTemplateOptions"
+      :employee-name="getEmployeeName(quickAdd.userId)"
+      :day-label="days[quickAdd.day] || ''"
+      :adding="isAddingShift"
+      @submit="quickAddSchedule"
+      @remove-shift="removeShiftRow"
+    />
 
-      <!-- Reassign Modal -->
-      <ScheduleReassignModal
-        v-model="showReassignModal"
-        v-model:reassign-data="reassignData"
-        :shift-template-options="shiftTemplateOptions"
-        :employee-name="getEmployeeName(reassignData.currentEmployee)"
-        :saving="isReassigning"
-        @submit="handleReassignShift"
-        @back-to-original="reassignData.shiftTemplateId = reassignData.originalTemplateId"
-      />
-
+    <!-- Reassign Modal -->
+    <ScheduleReassignModal
+      v-model="showReassignModal"
+      v-model:reassign-data="reassignData"
+      :shift-template-options="shiftTemplateOptions"
+      :employee-name="getEmployeeName(reassignData.currentEmployee)"
+      :saving="isReassigning"
+      @submit="handleReassignShift"
+      @back-to-original="reassignData.shiftTemplateId = reassignData.originalTemplateId"
+    />
   </PageShell>
 </template>
 
@@ -170,6 +169,7 @@ const {
   applyLeaveForEmployee,
   fetchLeaveTypes: fetchLeaveTypesApi,
   fetchShiftTemplates: fetchShiftTemplatesApi,
+  fetchShiftTemplates24h: fetchShiftTemplates24hApi,
   schedulePagination,
   autoAssignRecurring,
 } = useSchedule()
@@ -207,13 +207,21 @@ const filters = ref({ payrollGroup: null })
 const searchTerm = ref('')
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+// Drives the grid's empty state: "no match" plus a reset button when something
+// is narrowing the list, "nothing to schedule" when the company is simply empty.
+const isFiltered = computed(() => Boolean(searchTerm.value.trim() || filters.value.payrollGroup))
+
+function clearScheduleFilters() {
+  searchTerm.value = ''
+  filters.value = { payrollGroup: null }
+}
+
 const schedulePage = ref(1)
 const schedulePageSize = ref(20)
 const pageSizeOptions = [10, 20, 50]
 
 const allSchedules = ref([])
 const scheduleCache = ref({})
-
 
 const showAddModal = ref(false)
 const showQuickAddModal = ref(false)
@@ -225,6 +233,9 @@ const quickActionLoading = ref(null)
 const refreshingRowUserId = ref(null)
 const leaveTypes = ref([])
 const shiftTemplates = ref([])
+// Rotating schedules assign a 24-hour template, which is a separate list from
+// the plain shift templates the one-time flow uses.
+const shiftTemplates24h = ref([])
 const addConflictWarning = ref(false)
 
 // ─── Fresh schedule factory ──────────────────────────────────────────────────
@@ -248,9 +259,8 @@ const _freshSchedule = () => ({
   recurringStartDate: null,
   recurringEndDate: null,
   rotatingPayrollGroups: [],
-  rotatingSites: [],
   rotatingShiftTemplate: null,
-  rotationMode: 'full_template',
+  rotationMode: 'daily',
 })
 
 const newSchedule = ref(_freshSchedule())
@@ -371,11 +381,8 @@ const totalShifts = computed(() => shifts.value.length)
 
 // `siteFilterOptions` and `userOptions` went with the two dropdowns they fed —
 // the toolbar filters by payout group now, and employee lookup is the search
-// box. `siteOptionsForRotating` stays: the Add Schedule modal still picks sites
-// for rotating schedules.
-const siteOptionsForRotating = computed(() =>
-  sites.value.map((site) => ({ label: site.name, value: site.id })),
-)
+// box. `siteOptionsForRotating` went too: a rotating schedule takes its sites
+// from the 24-hour template's own shifts, so the modal no longer asks for them.
 
 const employeeOptions = computed(() =>
   employees.value
@@ -415,6 +422,27 @@ const shiftTemplateOptions = computed(() => {
   })
   return opts
 })
+
+// 24-hour templates carry a name; fall back to their chained shift times so a
+// nameless one is still tellable apart in the dropdown.
+const rotatingShiftTemplateOptions = computed(() =>
+  shiftTemplates24h.value
+    .filter((t) => t.is_active !== false)
+    .map((t) => {
+      let label = t.name
+      if (!label) {
+        label = parseShifts(t.shifts_detail || t.shifts)
+          .map((sh) => {
+            const start = sh.start_time || sh.default_start_time || ''
+            const end = sh.end_time || sh.default_end_time || ''
+            return start && end ? `${start} - ${end}` : start || end
+          })
+          .filter(Boolean)
+          .join(' / ')
+      }
+      return { label: label || `Template ${t.id}`, value: Number(t.id) }
+    }),
+)
 
 const recurringScheduleOptions = computed(() =>
   recurringSchedules.value.map((r) => ({ label: r.name, value: r.id })),
@@ -511,7 +539,6 @@ function parseShifts(shiftsData) {
   return []
 }
 
-
 const filterEmployeeOptions = (val, update) => {
   update(() => {
     filteredEmployeeOptions.value = !val
@@ -576,6 +603,15 @@ const fetchLeaveTypes = async () => {
 
 const fetchShiftTemplatesList = async () => {
   shiftTemplates.value = await fetchShiftTemplatesApi()
+}
+
+const fetchShiftTemplates24hList = async () => {
+  try {
+    shiftTemplates24h.value = await fetchShiftTemplates24hApi()
+  } catch (e) {
+    console.error('Failed to load 24-hour shift templates', e)
+    shiftTemplates24h.value = []
+  }
 }
 
 const fetchLeaves = () => {
@@ -681,9 +717,7 @@ const renderPage = () => {
           null
       const endTime = isDayOffShift
         ? null
-        : schedule.actual_end_time?.substring(0, 5) ||
-          schedule.end_time?.substring(0, 5) ||
-          null
+        : schedule.actual_end_time?.substring(0, 5) || schedule.end_time?.substring(0, 5) || null
       let shiftTypeId = schedule.shift_type || null
       let shiftTypeName = isDayOffShift ? 'Day Off' : schedule.shift_type_name || null
       if (!isDayOffShift && !shiftTypeName && startTime) {
@@ -692,8 +726,7 @@ const renderPage = () => {
             const stStart = st.default_start_time?.substring(0, 5)
             const stEnd = st.default_end_time?.substring(0, 5)
             return stStart === startTime && stEnd === endTime
-          }) ||
-          shiftTypes.value.find((st) => st.default_start_time?.substring(0, 5) === startTime)
+          }) || shiftTypes.value.find((st) => st.default_start_time?.substring(0, 5) === startTime)
         if (match) {
           shiftTypeId = shiftTypeId || match.id
           shiftTypeName = match.name
@@ -702,8 +735,7 @@ const renderPage = () => {
       if (shiftTypeId && !shiftTypeName) {
         shiftTypeName = shiftTypes.value.find((st) => st.id === shiftTypeId)?.name || null
       }
-      const resolvedAssignmentId =
-        schedule.employee_assignment_id || schedule.assignment_id || null
+      const resolvedAssignmentId = schedule.employee_assignment_id || schedule.assignment_id || null
       shifts.value.push({
         id: `${schedule.id}-${sIndex}`,
         assignmentId: resolvedAssignmentId,
@@ -756,9 +788,7 @@ const mergeEmployeeData = (results) => {
       } else {
         map.set(empId, {
           ...empData,
-          schedules: [
-            ...(empData.schedules || empData.schedule || empData.schedule_list || []),
-          ],
+          schedules: [...(empData.schedules || empData.schedule || empData.schedule_list || [])],
         })
       }
     })
@@ -810,7 +840,9 @@ const refreshSingleEmployee = async (userId) => {
     console.error('Refresh single employee failed:', e)
     await fetchData()
   } finally {
-    setTimeout(() => { refreshingRowUserId.value = null }, 600)
+    setTimeout(() => {
+      refreshingRowUserId.value = null
+    }, 600)
   }
 }
 
@@ -943,6 +975,7 @@ const openAddModal = () => {
   addConflictWarning.value = false
   fetchEmployees()
   fetchShiftTemplatesList()
+  fetchShiftTemplates24hList()
   // Payout groups are loaded by the companyId watcher when the page mounts, so
   // the modal no longer needs to fetch them itself.
   showAddModal.value = true
@@ -1047,6 +1080,32 @@ const resolveId = (val) => {
   return isNaN(n) ? null : n
 }
 
+/**
+ * Sites a rotating schedule covers. Each shift in a 24-hour template names its
+ * own site, so `site_ids` is read off the template rather than picked in the
+ * form — the two can then never disagree. The site arrives as either a nested
+ * object or a bare id depending on the endpoint, hence the union.
+ */
+const templateSiteIds = (templateId) => {
+  const template = shiftTemplates24h.value.find((t) => Number(t.id) === Number(templateId))
+  if (!template) return []
+  const ids = parseShifts(template.shifts_detail || template.shifts)
+    .map((sh) => resolveId(sh.site?.id ?? sh.site_id))
+    .filter((id) => id !== null)
+  return [...new Set(ids)]
+}
+
+/**
+ * Auto-assign-recurring keys employees by UUID while the rest of this page
+ * carries the numeric roster pk, so resolve through the roster rather than
+ * sending whichever id the option happened to hold. Mirrors `rosterIdFor` in
+ * AttendancePage.vue, in the opposite direction.
+ */
+const employeeUuid = (key) => {
+  const found = employees.value.find((e) => e.id === key || e.uuid === key)
+  return found?.uuid ?? (typeof key === 'string' ? key : null)
+}
+
 const addSchedule = async () => {
   const n = newSchedule.value
   if (!n.userIds?.length)
@@ -1070,6 +1129,9 @@ const addSchedule = async () => {
     if (!n.recurringSchedule)
       return $q.notify({ type: 'negative', message: 'Please select a recurring template.' })
   }
+  // Resolved while validating the rotating form, then reused to build its payload.
+  let rotatingSiteIds = []
+  let rotatingEmployeeUuids = []
   if (n.scheduleType === 'rotating') {
     if (!n.recurringStartDate)
       return $q.notify({ type: 'negative', message: 'Please select a start date.' })
@@ -1079,6 +1141,21 @@ const addSchedule = async () => {
       return $q.notify({ type: 'negative', message: 'Please select a shift template.' })
     if (!n.weekdays?.length)
       return $q.notify({ type: 'negative', message: 'Please select at least one weekday.' })
+    // A rotation with no site isn't something to create quietly, so this fails
+    // loudly rather than posting an empty `site_ids`.
+    rotatingSiteIds = templateSiteIds(n.rotatingShiftTemplate)
+    if (!rotatingSiteIds.length)
+      return $q.notify({
+        type: 'negative',
+        message:
+          'That 24-hour template has no sites on its shifts. Add them in Admin Settings → Shifts first.',
+      })
+    rotatingEmployeeUuids = n.userIds.map(employeeUuid).filter(Boolean)
+    if (rotatingEmployeeUuids.length !== n.userIds.length)
+      return $q.notify({
+        type: 'negative',
+        message: 'Could not resolve every selected employee. Reload the page and try again.',
+      })
   }
   isCheckingConflict.value = true
   addConflictWarning.value = false
@@ -1088,10 +1165,10 @@ const addSchedule = async () => {
       const payload = {
         recurring_items: [
           {
-            employee_ids: n.userIds,
-            site_ids: n.rotatingSites.map((s) => resolveId(s)).filter(Boolean),
+            employee_ids: rotatingEmployeeUuids,
+            site_ids: rotatingSiteIds,
             shift_template_24h_id: resolveId(n.rotatingShiftTemplate),
-            rotation_mode: n.rotationMode || 'full_template',
+            rotation_mode: n.rotationMode || 'daily',
             weekdays: n.weekdays || [],
             start_date: n.recurringStartDate,
             end_date: n.recurringEndDate,

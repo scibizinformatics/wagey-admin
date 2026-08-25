@@ -190,6 +190,20 @@ export function useSchedule() {
   }
 
   /**
+   * Fetch the 24-hour shift type templates — the ones a rotating schedule
+   * assigns, sent as `shift_template_24h_id` in the auto-assign-recurring
+   * payload. Separate list from `fetchShiftTemplates`, whose plain templates
+   * back the one-time and quick-add flows.
+   */
+  async function fetchShiftTemplates24h() {
+    const response = await api.get(`${BASE}/organization/shift-type-templates-24h-list/`, {
+      params: { company: companyId.value },
+      headers: authHeaders(),
+    })
+    return response.data.data ?? response.data ?? []
+  }
+
+  /**
    * Fetch employees for a specific payroll group and site.
    * @param {number|string} companyId
    * @param {number|string} payrollGroupId
@@ -337,6 +351,7 @@ export function useSchedule() {
     fetchLeaveTypes,
     deleteLeave,
     fetchShiftTemplates,
+    fetchShiftTemplates24h,
     assignRecurringSchedule,
     fetchEmployeeSchedule,
     fetchEmployeesByPayrollSite,

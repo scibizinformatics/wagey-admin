@@ -1,5 +1,9 @@
 <template>
-  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
+  <q-dialog
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
+    persistent
+  >
     <q-card class="modal-card">
       <q-card-section class="modal-header">
         <div class="modal-title">Add New Schedule</div>
@@ -57,78 +61,12 @@
 
           <!-- One-Time: Multi-date picker + Shift rows -->
           <template v-if="newSchedule.scheduleType === 'one-time'">
-            <div class="one-time-calendar-section">
-              <div class="one-time-calendar-header">
-                <div style="display: flex; align-items: center; gap: 6px">
-                  <q-icon name="event_note" size="16px" color="primary" />
-                  <span class="calendar-preview-title">Select Date(s)</span>
-                </div>
-                <q-badge
-                  :color="(newSchedule.selectedDates || []).length ? 'primary' : 'grey'"
-                  :label="(newSchedule.selectedDates || []).length ? `${newSchedule.selectedDates.length} selected` : 'None selected'"
-                />
-              </div>
-              <div class="legend-row">
-                <span class="legend-dot legend-dot-active"></span>
-                <span class="legend-text">Click dates to select or deselect</span>
-              </div>
-              <!-- Dual calendar -->
-              <div class="dual-calendar-panel dual-calendar-panel--inline">
-                <div class="dual-calendar-grid">
-                  <div class="mini-calendar">
-                    <div class="mini-calendar-header">
-                      <q-btn flat round dense icon="chevron_left" size="sm" @click="oneTimePrevMonth" class="cal-nav-btn" />
-                      <span class="mini-calendar-title">{{ leftMonthLabel }}</span>
-                      <div style="width: 32px" />
-                    </div>
-                    <div class="mini-calendar-weekdays">
-                      <span v-for="d in ['Su','Mo','Tu','We','Th','Fr','Sa']" :key="d">{{ d }}</span>
-                    </div>
-                    <div class="mini-calendar-days">
-                      <span
-                        v-for="(cell, i) in leftCells"
-                        :key="'ol'+i"
-                        class="cal-day"
-                        :class="getDayCellClass(cell, leftYear, leftMonth)"
-                        @click="cell.day ? toggleDate(cell.day, leftYear, leftMonth) : null"
-                      >{{ cell.day || '' }}</span>
-                    </div>
-                  </div>
-                  <div class="mini-calendar">
-                    <div class="mini-calendar-header">
-                      <div style="width: 32px" />
-                      <span class="mini-calendar-title">{{ rightMonthLabel }}</span>
-                      <q-btn flat round dense icon="chevron_right" size="sm" @click="oneTimeNextMonth" class="cal-nav-btn" />
-                    </div>
-                    <div class="mini-calendar-weekdays">
-                      <span v-for="d in ['Su','Mo','Tu','We','Th','Fr','Sa']" :key="d">{{ d }}</span>
-                    </div>
-                    <div class="mini-calendar-days">
-                      <span
-                        v-for="(cell, i) in rightCells"
-                        :key="'or'+i"
-                        class="cal-day"
-                        :class="getDayCellClass(cell, rightYear, rightMonth)"
-                        @click="cell.day ? toggleDate(cell.day, rightYear, rightMonth) : null"
-                      >{{ cell.day || '' }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div v-if="(newSchedule.selectedDates || []).length > 0" class="calendar-weekdays-summary">
-                <span class="weekdays-label">Selected:</span>
-                <q-chip
-                  v-for="date in sortedSelectedDates"
-                  :key="date"
-                  dense color="primary" text-color="white" size="sm" removable
-                  @remove="removeDate(date)"
-                >{{ formatDisplayDate(date) }}</q-chip>
-              </div>
-              <div v-else class="calendar-weekdays-summary" style="color: #ef4444; font-size: 12px">
-                <q-icon name="info" size="14px" color="negative" />
-                Please select at least one date
-              </div>
-            </div>
+            <ScheduleRangeCalendar
+              :model-value="oneTimeRange"
+              @update:model-value="onOneTimeRangeChange"
+              title="Select dates"
+              empty-text="No dates selected yet — pick a start and end date"
+            />
 
             <!-- Shift rows -->
             <div v-for="(shift, index) in newSchedule.oneTimeShifts" :key="index" class="shift-row">
@@ -139,7 +77,11 @@
                 </span>
                 <q-btn
                   v-if="newSchedule.oneTimeShifts.length > 1"
-                  flat dense round icon="close" size="sm"
+                  flat
+                  dense
+                  round
+                  icon="close"
+                  size="sm"
                   @click="removeShift(index)"
                   class="remove-btn"
                 />
@@ -152,7 +94,11 @@
                   option-value="value"
                   option-label="label"
                   label="Shift Template"
-                  outlined dense emit-value map-options clearable
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  clearable
                   class="form-field full-width"
                   :rules="[(val) => !!val || 'Shift template is required']"
                 >
@@ -160,9 +106,23 @@
                     <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
                       <q-item-section>
                         <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
-                          <q-item-label v-for="(part, i) in scope.opt.label.split(' / ')" :key="i" style="font-size: 13px; line-height: 1.5">{{ part }}</q-item-label>
+                          <q-item-label
+                            v-for="(part, i) in scope.opt.label.split(' / ')"
+                            :key="i"
+                            style="font-size: 13px; line-height: 1.5"
+                            >{{ part }}</q-item-label
+                          >
                         </template>
-                        <q-item-label v-else style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px">{{ scope.opt.label }}</q-item-label>
+                        <q-item-label
+                          v-else
+                          style="
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                            font-size: 13px;
+                          "
+                          >{{ scope.opt.label }}</q-item-label
+                        >
                       </q-item-section>
                     </q-item>
                   </template>
@@ -173,70 +133,31 @@
 
           <!-- Recurring: Date Range -->
           <template v-if="newSchedule.scheduleType === 'recurring'">
-            <div class="form-row">
-              <q-input
-                :model-value="newSchedule.recurringStartDate"
-                @update:model-value="updateField('recurringStartDate', $event)"
-                label="Start Date" outlined class="form-field"
-                placeholder="YYYY-MM-DD"
-                :rules="[(val) => !!val || 'Start date is required']"
-                readonly
-              >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-date
-                        :model-value="newSchedule.recurringStartDate"
-                        @update:model-value="updateField('recurringStartDate', $event)"
-                        mask="YYYY-MM-DD"
-                      >
-                        <div class="row items-center justify-end">
-                          <q-btn v-close-popup label="Close" color="primary" flat />
-                        </div>
-                      </q-date>
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
-              <q-input
-                :model-value="newSchedule.recurringEndDate"
-                @update:model-value="updateField('recurringEndDate', $event)"
-                label="End Date" outlined class="form-field"
-                placeholder="YYYY-MM-DD"
-                :rules="[(val) => !!val || 'End date is required']"
-                readonly
-              >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-date
-                        :model-value="newSchedule.recurringEndDate"
-                        @update:model-value="updateField('recurringEndDate', $event)"
-                        mask="YYYY-MM-DD"
-                      >
-                        <div class="row items-center justify-end">
-                          <q-btn v-close-popup label="Close" color="primary" flat />
-                        </div>
-                      </q-date>
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
-            </div>
-
             <q-select
               :model-value="newSchedule.recurringSchedule"
-              @update:model-value="updateField('recurringSchedule', $event); $emit('template-change', $event)"
+              @update:model-value="onRecurringTemplateChange"
               :options="recurringScheduleOptions"
               option-value="value"
               option-label="label"
               label="Use Recurring Template"
-              outlined emit-value map-options
+              outlined
+              emit-value
+              map-options
               class="form-field full-width"
               clearable
             >
               <template #hint>Select a template to auto-fill schedule details</template>
             </q-select>
+
+            <ScheduleRangeCalendar
+              :model-value="recurringRange"
+              @update:model-value="onRecurringRangeChange"
+              :occurrence-weekdays="occurrenceWeekdays"
+              title="Schedule dates"
+              empty-text="No dates selected yet — pick the first and last day this schedule runs"
+              unit-label="shift"
+              unit-label-plural="shifts"
+            />
 
             <q-select
               :model-value="newSchedule.department"
@@ -245,7 +166,9 @@
               option-value="value"
               option-label="label"
               label="Department"
-              outlined emit-value map-options
+              outlined
+              emit-value
+              map-options
               class="form-field full-width"
               clearable
             />
@@ -253,7 +176,9 @@
             <q-input
               :model-value="newSchedule.repeatInterval"
               @update:model-value="updateField('repeatInterval', $event)"
-              label="Repeat Every (weeks)" type="number" outlined
+              label="Repeat Every (weeks)"
+              type="number"
+              outlined
               min="1"
               class="form-field full-width"
             >
@@ -270,115 +195,6 @@
 
           <!-- Rotating: Date Range + Details -->
           <template v-if="newSchedule.scheduleType === 'rotating'">
-            <div class="form-row">
-              <q-input
-                :model-value="newSchedule.recurringStartDate"
-                @update:model-value="updateField('recurringStartDate', $event)"
-                label="Start Date" outlined class="form-field"
-                placeholder="YYYY-MM-DD"
-                :rules="[(val) => !!val || 'Start date is required']"
-                readonly
-              >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-date
-                        :model-value="newSchedule.recurringStartDate"
-                        @update:model-value="updateField('recurringStartDate', $event)"
-                        mask="YYYY-MM-DD"
-                      >
-                        <div class="row items-center justify-end">
-                          <q-btn v-close-popup label="Close" color="primary" flat />
-                        </div>
-                      </q-date>
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
-              <q-input
-                :model-value="newSchedule.recurringEndDate"
-                @update:model-value="updateField('recurringEndDate', $event)"
-                label="End Date" outlined class="form-field"
-                placeholder="YYYY-MM-DD"
-                :rules="[(val) => !!val || 'End date is required']"
-                readonly
-              >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-date
-                        :model-value="newSchedule.recurringEndDate"
-                        @update:model-value="updateField('recurringEndDate', $event)"
-                        mask="YYYY-MM-DD"
-                      >
-                        <div class="row items-center justify-end">
-                          <q-btn v-close-popup label="Close" color="primary" flat />
-                        </div>
-                      </q-date>
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
-            </div>
-
-            <div class="form-row">
-              <q-select
-                :model-value="newSchedule.rotatingPayrollGroups"
-                @update:model-value="updateField('rotatingPayrollGroups', $event)"
-                :options="payrollGroupOptions"
-                option-value="value"
-                option-label="label"
-                label="Payroll Groups"
-                outlined
-                emit-value
-                map-options
-                multiple
-                use-chips
-                class="form-field"
-                clearable
-              />
-              <q-select
-                :model-value="newSchedule.rotatingSites"
-                @update:model-value="updateField('rotatingSites', $event)"
-                :options="siteOptions"
-                option-value="value"
-                option-label="label"
-                label="Sites"
-                outlined
-                emit-value
-                map-options
-                multiple
-                use-chips
-                class="form-field"
-                clearable
-              />
-            </div>
-
-            <q-select
-              :model-value="newSchedule.rotatingShiftTemplate"
-              @update:model-value="updateField('rotatingShiftTemplate', $event)"
-              :options="shiftTemplateOptions"
-              option-value="value"
-              option-label="label"
-              label="Shift Template"
-              outlined emit-value map-options
-              class="form-field full-width"
-              :rules="[(val) => !!val || 'Shift template is required']"
-            />
-
-            <q-select
-              :model-value="newSchedule.rotationMode"
-              @update:model-value="updateField('rotationMode', $event)"
-              :options="[
-                { label: 'Full Template', value: 'full_template' },
-              ]"
-              option-value="value"
-              option-label="label"
-              label="Rotation Mode"
-              outlined emit-value map-options
-              class="form-field full-width"
-            />
-
             <q-select
               :model-value="newSchedule.weekdays"
               @update:model-value="updateField('weekdays', $event)"
@@ -401,7 +217,78 @@
               use-chips
               class="form-field full-width"
               :rules="[(val) => (val && val.length > 0) || 'Select at least one weekday']"
+            >
+              <template #hint>The calendar fills in the days these weekdays land on</template>
+            </q-select>
+
+            <ScheduleRangeCalendar
+              :model-value="recurringRange"
+              @update:model-value="onRecurringRangeChange"
+              :occurrence-weekdays="occurrenceWeekdays"
+              title="Rotation dates"
+              empty-text="No dates selected yet — pick the first and last day of the rotation"
+              unit-label="shift"
+              unit-label-plural="shifts"
             />
+
+            <!-- No site picker here: the 24-hour template already carries the
+                 site on each of its shifts. -->
+            <q-select
+              :model-value="newSchedule.rotatingPayrollGroups"
+              @update:model-value="updateField('rotatingPayrollGroups', $event)"
+              :options="payrollGroupOptions"
+              option-value="value"
+              option-label="label"
+              label="Payroll Groups"
+              outlined
+              emit-value
+              map-options
+              multiple
+              use-chips
+              class="form-field full-width"
+              clearable
+            />
+
+            <q-select
+              :model-value="newSchedule.rotatingShiftTemplate"
+              @update:model-value="updateField('rotatingShiftTemplate', $event)"
+              :options="rotatingShiftTemplateOptions"
+              option-value="value"
+              option-label="label"
+              label="24-Hour Shift Template"
+              outlined
+              emit-value
+              map-options
+              class="form-field full-width"
+              :rules="[(val) => !!val || 'Shift template is required']"
+            >
+              <template #hint>The round-the-clock template this rotation cycles through</template>
+              <template #no-option>
+                <q-item>
+                  <q-item-section class="text-grey">No 24-hour templates found</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+
+            <q-select
+              :model-value="newSchedule.rotationMode"
+              @update:model-value="updateField('rotationMode', $event)"
+              :options="[
+                { label: 'Daily', value: 'daily' },
+                { label: 'Full Template', value: 'full_template' },
+              ]"
+              option-value="value"
+              option-label="label"
+              label="Rotation Mode"
+              outlined
+              emit-value
+              map-options
+              class="form-field full-width"
+            >
+              <template #hint>
+                Daily cycles one shift per day; full template assigns the whole day's chain
+              </template>
+            </q-select>
           </template>
 
           <!-- Conflict Warning -->
@@ -415,7 +302,12 @@
 
           <!-- Actions -->
           <div class="modal-actions">
-            <q-btn flat label="Cancel" @click="$emit('update:modelValue', false)" class="cancel-btn" />
+            <q-btn
+              flat
+              label="Cancel"
+              @click="$emit('update:modelValue', false)"
+              class="cancel-btn"
+            />
             <q-btn
               type="submit"
               color="primary"
@@ -438,7 +330,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch } from 'vue'
+import ScheduleRangeCalendar from './ScheduleRangeCalendar.vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -456,21 +349,22 @@ const props = defineProps({
       repeatInterval: 1,
       isRotating: false,
       rotatingPayrollGroups: [],
-      rotatingSites: [],
       rotatingShiftTemplate: null,
-      rotationMode: 'full_template',
+      rotationMode: 'daily',
     }),
   },
   filteredEmployeeOptions: { type: Array, default: () => [] },
   shiftTemplateOptions: { type: Array, default: () => [] },
+  // Rotating schedules assign a 24-hour template, a different list from the
+  // plain shift templates the one-time flow picks from.
+  rotatingShiftTemplateOptions: { type: Array, default: () => [] },
   recurringScheduleOptions: { type: Array, default: () => [] },
   departmentOptions: { type: Array, default: () => [] },
   conflictWarning: { type: Boolean, default: false },
   checkingConflict: { type: Boolean, default: false },
   loadingEmployees: { type: Boolean, default: false },
-  siteOptions: { type: Array, default: () => [] },
   payrollGroupOptions: { type: Array, default: () => [] },
-});
+})
 
 const emit = defineEmits([
   'update:modelValue',
@@ -478,7 +372,7 @@ const emit = defineEmits([
   'submit',
   'filter-employees',
   'template-change',
-]);
+])
 
 watch(
   () => props.newSchedule.scheduleType,
@@ -487,121 +381,117 @@ watch(
       emit('update:newSchedule', {
         ...props.newSchedule,
         weekdays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
-      });
+      })
     }
   },
-);
+)
 
-// ─── Calendar state ─────────────────────────────────────────────────────────
-const _today = new Date();
-const leftMonth = ref(_today.getMonth());
-const leftYear = ref(_today.getFullYear());
-
-const rightMonth = computed(() => (leftMonth.value + 1) % 12);
-const rightYear = computed(() => (leftMonth.value === 11 ? leftYear.value + 1 : leftYear.value));
-
-const _MONTH_NAMES = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
-
-const leftMonthLabel = computed(() => `${_MONTH_NAMES[leftMonth.value]} ${leftYear.value}`);
-const rightMonthLabel = computed(() => `${_MONTH_NAMES[rightMonth.value]} ${rightYear.value}`);
-
-function buildCalendarCells(year, month) {
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < firstDay; i++) cells.push({ day: null });
-  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d });
-  return cells;
-}
-
-const leftCells = computed(() => buildCalendarCells(leftYear.value, leftMonth.value));
-const rightCells = computed(() => buildCalendarCells(rightYear.value, rightMonth.value));
-
-function oneTimePrevMonth() {
-  if (leftMonth.value === 0) {
-    leftMonth.value = 11;
-    leftYear.value--;
-  } else {
-    leftMonth.value--;
-  }
-}
-function oneTimeNextMonth() {
-  if (leftMonth.value === 11) {
-    leftMonth.value = 0;
-    leftYear.value++;
-  } else {
-    leftMonth.value++;
-  }
-}
+// ─── Date range selection ───────────────────────────────────────
+// All three schedule types pick their dates on the same dual-month calendar.
+// One-time hands the parent a flat list of every day in the span; recurring and
+// rotating hand it a start/end pair and let the weekday pattern decide which
+// days inside that span actually get a shift.
 
 function _toDateStr(year, month, day) {
-  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-function getDayCellClass(cell, year, month) {
-  if (!cell.day) return 'cal-day--empty';
-  const dateStr = _toDateStr(year, month, cell.day);
-  const todayStr = _toDateStr(_today.getFullYear(), _today.getMonth(), _today.getDate());
-  const isPast = dateStr < todayStr;
-  const isSelected = (props.newSchedule.selectedDates || []).includes(dateStr);
-  return {
-    'cal-day--past': isPast,
-    'cal-day--disabled': isPast,
-    'cal-day--selected': isSelected,
-    'cal-day--multi': isSelected,
-  };
-}
-
-function toggleDate(day, year, month) {
-  const dateStr = _toDateStr(year, month, day);
-  const todayStr = _toDateStr(_today.getFullYear(), _today.getMonth(), _today.getDate());
-  if (dateStr < todayStr) return;
-  const current = [...(props.newSchedule.selectedDates || [])];
-  if (current.includes(dateStr)) {
-    updateField('selectedDates', current.filter((d) => d !== dateStr));
-  } else {
-    updateField('selectedDates', [...current, dateStr]);
+function expandRange(from, to) {
+  const out = []
+  const cursor = new Date(`${from}T00:00:00`)
+  const end = new Date(`${to}T00:00:00`)
+  while (cursor <= end) {
+    out.push(_toDateStr(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()))
+    cursor.setDate(cursor.getDate() + 1)
   }
+  return out
 }
 
-function removeDate(date) {
-  updateField('selectedDates', (props.newSchedule.selectedDates || []).filter((d) => d !== date));
+// One-time keeps the range local because the parent's contract is still the
+// flat `selectedDates` list: a finished range expands into it, a half-picked one
+// contributes only its start day.
+const oneTimeRange = ref({ from: '', to: '' })
+
+function onOneTimeRangeChange(range) {
+  oneTimeRange.value = range
+  const { from, to } = range
+  if (!from) return updateField('selectedDates', [])
+  updateField('selectedDates', to ? expandRange(from, to) : [from])
 }
 
-const sortedSelectedDates = computed(() => [...(props.newSchedule.selectedDates || [])].sort());
+// The parent empties selectedDates after a successful submit and when the
+// dialog reopens — don't leave a stale half-picked range behind.
+watch(
+  () => props.newSchedule.selectedDates,
+  (dates) => {
+    if (!dates || !dates.length) oneTimeRange.value = { from: '', to: '' }
+  },
+)
 
-function formatDisplayDate(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${String(d).padStart(2, '0')} ${months[parseInt(m) - 1]} ${y}`;
+watch(
+  () => props.modelValue,
+  (open) => {
+    if (open && !props.newSchedule.selectedDates?.length) {
+      oneTimeRange.value = { from: '', to: '' }
+    }
+  },
+)
+
+// Recurring and rotating write straight through to the parent's start/end
+// fields. An empty `to` means the range is still half-picked, so the end date
+// goes back as null rather than keeping its previous value.
+const recurringRange = computed(() => ({
+  from: props.newSchedule.recurringStartDate || '',
+  to: props.newSchedule.recurringEndDate || '',
+}))
+
+function onRecurringRangeChange({ from, to }) {
+  emit('update:newSchedule', {
+    ...props.newSchedule,
+    recurringStartDate: from || null,
+    recurringEndDate: to || null,
+  })
 }
+
+// Which days in the span get a shift: the weekdays the chosen recurring
+// template covers, or the ones picked by hand on a rotating schedule. Empty
+// until a template is loaded, which the calendar reports as such.
+const occurrenceWeekdays = computed(() => {
+  const days = props.newSchedule.weekdays
+  return Array.isArray(days) ? days : []
+})
 
 // ─── Form helpers ───────────────────────────────────────────────────────────
 function updateField(key, value) {
-  emit('update:newSchedule', { ...props.newSchedule, [key]: value });
+  emit('update:newSchedule', { ...props.newSchedule, [key]: value })
+}
+
+// Two statements, so it lives here rather than inline in the template.
+function onRecurringTemplateChange(value) {
+  updateField('recurringSchedule', value)
+  emit('template-change', value)
 }
 
 function updateShift(index, field, value) {
-  const updated = { ...props.newSchedule };
-  updated.oneTimeShifts = [...updated.oneTimeShifts];
-  updated.oneTimeShifts[index] = { ...updated.oneTimeShifts[index], [field]: value };
-  emit('update:newSchedule', updated);
+  const updated = { ...props.newSchedule }
+  updated.oneTimeShifts = [...updated.oneTimeShifts]
+  updated.oneTimeShifts[index] = { ...updated.oneTimeShifts[index], [field]: value }
+  emit('update:newSchedule', updated)
 }
 
 function removeShift(index) {
-  const updated = { ...props.newSchedule };
-  updated.oneTimeShifts = [...updated.oneTimeShifts];
-  updated.oneTimeShifts.splice(index, 1);
-  emit('update:newSchedule', updated);
+  const updated = { ...props.newSchedule }
+  updated.oneTimeShifts = [...updated.oneTimeShifts]
+  updated.oneTimeShifts.splice(index, 1)
+  emit('update:newSchedule', updated)
 }
 
 function filterEmployees(val, update) {
-  emit('filter-employees', val, update);
+  emit('filter-employees', val, update)
 }
 
 function onSubmit() {
-  emit('submit');
+  emit('submit')
 }
 </script>
 
@@ -726,147 +616,7 @@ function onSubmit() {
   flex-direction: column;
   gap: 12px;
 }
-/* Calendar */
-.one-time-calendar-section {
-  background: #f5f3ff;
-  border: 1px solid #ddd6fe;
-  border-radius: 10px;
-  padding: 10px;
-  margin-bottom: 16px;
-}
-.one-time-calendar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.calendar-preview-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4338ca;
-  flex: 1;
-}
-.legend-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.legend-dot-active {
-  background-color: #6366f1;
-}
-.legend-text {
-  font-size: 11px;
-  color: #6b7280;
-}
-.dual-calendar-panel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-}
-.dual-calendar-panel--inline {
-  box-shadow: none;
-  border: 1px solid #e0e7ff;
-  padding: 8px;
-}
-.dual-calendar-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.mini-calendar {
-  min-width: 0;
-}
-.mini-calendar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.mini-calendar-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #1a3a5c;
-  letter-spacing: 0.03em;
-  text-align: center;
-  flex: 1;
-}
-.cal-nav-btn {
-  color: #6b7280 !important;
-}
-.mini-calendar-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  text-align: center;
-  margin-bottom: 2px;
-}
-.mini-calendar-weekdays span {
-  font-size: 10px;
-  font-weight: 600;
-  color: #6b7280;
-  padding: 2px 0;
-}
-.mini-calendar-days {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 1px;
-}
-.cal-day {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 26px;
-  font-size: 11px;
-  color: #1a3a5c;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  user-select: none;
-}
-.cal-day:not(.cal-day--empty):not(.cal-day--disabled):hover {
-  background: #e8edf5;
-}
-.cal-day--empty {
-  cursor: default;
-}
-.cal-day--disabled {
-  color: #d1d5db;
-  cursor: not-allowed;
-}
-.cal-day--selected {
-  background: #1a3a5c !important;
-  color: #fff !important;
-  border-radius: 50% !important;
-  font-weight: 700;
-}
-.cal-day--multi {
-  background: #1a3a5c !important;
-  color: #fff !important;
-  border-radius: 50% !important;
-  font-weight: 700;
-}
-.calendar-weekdays-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #e0e7ff;
-}
-.weekdays-label {
-  font-size: 11px;
-  color: #6b7280;
-  font-weight: 500;
-}
+
 @media (max-width: 768px) {
   .modal-card {
     min-width: unset !important;
