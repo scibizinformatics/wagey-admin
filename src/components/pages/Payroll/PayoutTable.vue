@@ -8,14 +8,14 @@
     flat
     hide-pagination
     hide-no-data
-    class="payout-table"
+    class="dash-qtable dash-qtable--flush payout-table"
   >
     <template #body="props">
       <!-- The whole row opens the run. It used to take a click on one specific
            cell, which on a 7-column row meant most of the target did nothing. -->
       <q-tr
         :props="props"
-        class="run"
+        class="dash-qtable__row dash-qtable__row--clickable run"
         tabindex="0"
         :aria-label="`Open ${props.row.group}`"
         @click="$emit('view', props.row)"
@@ -168,58 +168,16 @@ function formatPeso(value) {
 </script>
 
 <style scoped>
+/* Card reset, header strip, row rhythm, hover plate, dividers, the pointer
+   cursor and the keyboard focus ring all come from `dash-qtable` in
+   src/css/dashboard.scss. The row padding here was 13px against the system's
+   11px, which made a payroll row visibly taller than the same row on the
+   contributions page. */
 .payout-table {
   width: 100%;
-  background: transparent;
-}
-.payout-table :deep(.q-table__container),
-.payout-table :deep(.q-table__card),
-.payout-table :deep(.q-table) {
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  background: transparent;
-}
-
-/* Sentence-case label strip over a hairline — no filled grey band. */
-.payout-table :deep(.q-table thead th) {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dash-ink-3);
-  padding: 0 12px 11px;
-  background: transparent;
-  border-bottom: 1px solid var(--dash-line);
-  white-space: nowrap;
 }
 .payout-table :deep(thead .col-num) {
   text-align: right;
-}
-
-.payout-table :deep(.q-table tbody td) {
-  padding: 13px 12px;
-  font-size: 13px;
-  color: var(--dash-ink-2);
-  border-bottom: 1px solid var(--dash-line-soft);
-  vertical-align: middle;
-}
-.payout-table :deep(.q-table tbody tr:last-child td) {
-  border-bottom: none;
-}
-
-/* ── Row ── */
-.payout-table :deep(.run) {
-  cursor: pointer;
-  transition: background var(--dash-fast) var(--dash-ease);
-}
-.payout-table :deep(.run:hover) > td {
-  background: var(--dash-n-50);
-}
-.payout-table :deep(.run:focus-visible) {
-  outline: none;
-}
-.payout-table :deep(.run:focus-visible) > td {
-  background: var(--dash-accent-bg);
-  box-shadow: inset 0 0 0 1px var(--dash-info-line);
 }
 
 /* ── Identity ── */

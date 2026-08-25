@@ -60,7 +60,7 @@
             dense
             hide-pagination
             hide-no-data
-            class="detail-table"
+            class="dash-qtable dash-qtable--compact detail-table"
           />
         </div>
 
@@ -73,7 +73,7 @@
             flat
             dense
             :rows-per-page-options="[10, 20, 50]"
-            class="detail-table"
+            class="dash-qtable dash-qtable--compact detail-table"
           />
         </div>
       </q-card-section>
@@ -259,33 +259,16 @@ const attendanceColumns = [
 }
 
 .modal-table-wrap {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
   overflow: hidden;
   margin-bottom: 4px;
 }
 
-.detail-table :deep(.q-table thead th) {
-  font-size: 10px;
-  font-weight: 700;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  padding: 6px 10px;
-  background: #f8f9fb;
-  border-bottom: 1px solid #e8ecf0;
-}
-
-.detail-table :deep(.q-table tbody td) {
-  padding: 6px 10px;
-  font-size: 12px;
-  color: #374151;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.detail-table :deep(.q-table tbody tr:last-child td) {
-  border-bottom: none;
-}
+/* Header strip, row rhythm and dividers come from `dash-qtable--compact`, the
+   in-dialog density. This block held a third type scale — 10px uppercase labels
+   at weight 700 over a filled #f8f9fb band — which is what a table looked like
+   in this product before the design system existed. */
 
 @media (max-width: 768px) {
   .detail-grid-cards {

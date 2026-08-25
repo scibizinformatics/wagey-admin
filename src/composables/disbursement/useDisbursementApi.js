@@ -71,6 +71,51 @@ export function useDisbursementApi() {
     return data
   }
 
+  /**
+   * Per-employee review rows for step 1: leave requests, cash advance
+   * (requested vs approved), OT requests, contributions and review status —
+   * plus the cutoff's name and date range at the top level.
+   *
+   * This is what the Review table reads. It supersedes `fetchAttendanceSummary`
+   * there: the step is about the requests and deductions that still need a
+   * decision, not about raw attendance tallies. Rows carry `epi_id`, which is
+   * the id `reviewToReady`, `releasePayslips` and `fetchEmployeePayrollItem`
+   * all expect, so no id translation is needed at the call site.
+   */
+  async function fetchEmployeeReviewSummary(payoutGroupInstanceId) {
+    const { data } = await api.get(`${BASE}/payroll/admin/employee-review-summary/${payoutGroupInstanceId}/`)
+    return data
+  }
+
+  /**
+   * One employee's statutory contributions for a run: the cutoff and tax month
+   * they fall in, the item's overall `epi_contribution_status`, and a row per
+   * contribution carrying whether it has been deducted and from which cutoff.
+   *
+   * Scoped by both ids because a contribution is a fact about an employee
+   * payroll item *within* a payout group instance, not about the employee alone.
+   */
+  async function fetchEpiContributions(payoutGroupInstanceId, epiId) {
+    const { data } = await api.get(
+      `${BASE}/payroll/admin/epi-contributions/${payoutGroupInstanceId}/${epiId}/`,
+    )
+    return data
+  }
+
+  /**
+   * Deducts the named contributions from an employee payroll item by hand — the
+   * fallback when a contribution did not come off automatically. Returns the
+   * server's response; callers should refetch, since deducting changes both the
+   * item's contribution status and the run's review figures.
+   */
+  async function deductContributions(epiId, contributionIds = []) {
+    const { data } = await api.post(`${BASE}/payroll/admin/deduct-contributions/`, {
+      epi_id: epiId,
+      contribution_ids: contributionIds,
+    })
+    return data
+  }
+
   async function fetchEmployeePayrollItem(id) {
     const { data } = await api.get(`${BASE}/payroll/admin/employee-payroll-item/${id}/`)
     return data
@@ -187,6 +232,9 @@ export function useDisbursementApi() {
     fetchPayoutGroupProgress,
     fetchReviewOverview,
     fetchAttendanceSummary,
+    fetchEmployeeReviewSummary,
+    fetchEpiContributions,
+    deductContributions,
     fetchEmployeePayrollItem,
     fetchPayslipOverview,
     fetchEmployeePayslips,

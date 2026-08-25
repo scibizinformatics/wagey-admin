@@ -152,6 +152,7 @@ import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStep
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
+import { useLoadedToast } from 'src/composables/useLoadedToast'
 
 const route = useRoute()
 const router = useRouter()
@@ -159,6 +160,7 @@ const $q = useQuasar()
 const groupId = route.params.id
 const stepperKey = ref(0)
 const { fetchPayslipOverview, fetchEmployeePayslips, fetchPayslipIssues, resolveIssue, rejectIssue } = useDisbursementApi()
+const { notifyLoaded } = useLoadedToast()
 
 const loading = ref(true)
 const processing = ref(false)
@@ -279,6 +281,10 @@ onMounted(async () => {
     ])
     overview.value = ov
     payslips.value = data || []
+    notifyLoaded('Payslips', payslips.value.length, {
+      noun: 'payslip',
+      nounPlural: 'payslips',
+    })
   } catch (err) {
     console.error('[PayslipsPage] fetch failed:', err)
   } finally {

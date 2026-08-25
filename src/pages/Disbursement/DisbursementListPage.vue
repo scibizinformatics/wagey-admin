@@ -110,11 +110,13 @@ import PageShell from 'src/components/layout/PageShell.vue'
 import PayoutTable from 'src/components/pages/Payroll/PayoutTable.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useCompany } from 'src/composables/page/useCompany'
+import { useLoadedToast } from 'src/composables/useLoadedToast'
 
 const router = useRouter()
 const $q = useQuasar()
 const { companyId } = useCompany()
 const { fetchCutoffInstances, fetchDashboardSummary, fetchPayoutGroupInstances } = useDisbursementApi()
+const { notifyLoaded } = useLoadedToast()
 
 const loading = ref(true)
 const loadingDashboards = ref(false)
@@ -252,6 +254,10 @@ onMounted(async () => {
       statusDisplay: item.payout_status_display,
     }))
     loading.value = false
+    notifyLoaded('Payout groups', rows.value.length, {
+      noun: 'payout group',
+      nounPlural: 'payout groups',
+    })
 
     // PHASE 2: Background-fetch dashboard summaries and aggregate stats
     loadingDashboards.value = true

@@ -44,7 +44,10 @@
     </div>
 
     <!-- ── Table ── -->
-    <div class="table-card__scroll">
+    <!-- `dash-qtable` sits on the scroll wrapper rather than on each slotted
+         table: it is the ancestor of all of them, so the five disbursement
+         pages inherit the system chrome without carrying the class each. -->
+    <div class="table-card__scroll dash-qtable dash-qtable--flush dash-scroll-x">
       <slot />
     </div>
 
@@ -231,50 +234,15 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
   padding: 0 6px;
 }
 
-.table-card__scroll :deep(.q-table__container),
-.table-card__scroll :deep(.q-table__card),
-.table-card__scroll :deep(.q-table) {
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  background: transparent;
-}
+/* The card reset, header strip, row rhythm, dividers, tabular figure columns
+   and the laptop padding step all come from `dash-qtable`. What is left is the
+   two things the system deliberately does not decide for every table. */
 
-/* Sentence-case label strip over a hairline — no filled grey band. */
-.table-card__scroll :deep(.q-table thead th) {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dash-ink-3);
-  padding: 0 12px 11px;
-  background: transparent;
-  border-bottom: 1px solid var(--dash-line);
-  white-space: nowrap;
-}
-
-.table-card__scroll :deep(.q-table tbody td) {
-  padding: 12px;
-  font-size: 13px;
-  color: var(--dash-ink-2);
-  border-bottom: 1px solid var(--dash-line-soft);
-  vertical-align: middle;
-}
-.table-card__scroll :deep(.q-table tbody tr:last-child td) {
-  border-bottom: none;
-}
+/* Hover applies to every row here rather than being opted into per row: each
+   of the five disbursement tables is a flat list of records, with no detail
+   rows or spacers that would light up wrongly. */
 .table-card__scroll :deep(.q-table tbody tr:hover td) {
   background: var(--dash-n-50);
-}
-
-/* Every figure column reads as figures: right-aligned and tabular, so a column
-   of pesos lines up on its decimal rather than ragging. */
-.table-card__scroll :deep(.q-table th.text-right),
-.table-card__scroll :deep(.q-table td.text-right) {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.table-card__scroll :deep(.q-table th.text-center),
-.table-card__scroll :deep(.q-table td.text-center) {
-  font-variant-numeric: tabular-nums;
 }
 
 /* The employee name is the row's subject, so it carries the weight. */
@@ -285,15 +253,6 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
 
 .table-card__scroll :deep(.q-table__progress) {
   height: 0;
-}
-
-@media (max-width: 1279px) {
-  .table-card__scroll :deep(.q-table thead th) {
-    padding: 0 9px 10px;
-  }
-  .table-card__scroll :deep(.q-table tbody td) {
-    padding: 11px 9px;
-  }
 }
 
 /* ── Footer ── */

@@ -126,12 +126,14 @@ import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStep
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
+import { useLoadedToast } from 'src/composables/useLoadedToast'
 
 const route = useRoute()
 const $q = useQuasar()
 const groupId = route.params.id
 const stepperKey = ref(0)
 const { fetchPayoutGroupInstanceSummary, fetchDisbursementEmployees, disbursePgi } = useDisbursementApi()
+const { notifyLoaded } = useLoadedToast()
 
 const loading = ref(true)
 const disbursing = ref(false)
@@ -242,6 +244,10 @@ onMounted(async () => {
     ])
     summary.value = summ
     disbursements.value = data || []
+    notifyLoaded('Disbursements', disbursements.value.length, {
+      noun: 'employee',
+      nounPlural: 'employees',
+    })
   } catch (err) {
     console.error('[DisbursePage] fetch failed:', err)
   } finally {

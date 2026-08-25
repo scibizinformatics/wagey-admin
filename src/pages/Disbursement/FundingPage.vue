@@ -150,7 +150,10 @@
             </div>
           </header>
 
-          <div class="earners__scroll">
+          <!-- `dash-qtable` on the scroll wrapper: it is the table's ancestor,
+               so the chrome comes from the system and only the sticky header —
+               which the other tables do not need — stays local. -->
+          <div class="earners__scroll dash-qtable dash-qtable--flush">
             <q-table
               :rows="allEarners"
               :columns="earnerColumns"
@@ -203,6 +206,7 @@ import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStep
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useAuthStore } from 'src/boot/auth'
+import { useLoadedToast } from 'src/composables/useLoadedToast'
 
 const route = useRoute()
 const router = useRouter()
@@ -211,6 +215,7 @@ const authStore = useAuthStore()
 const groupId = route.params.id
 const stepperKey = ref(0)
   const { fetchPayoutGroupInstanceAmounts, fetchEmployeePayslips, createPgiFunding } = useDisbursementApi()
+  const { notifyLoaded } = useLoadedToast()
 
   const loading = ref(true)
   const submitting = ref(false)
@@ -314,6 +319,10 @@ function parseAmount(val) {
       ])
       amounts.value = amt
       allEarners.value = (earners || []).sort((a, b) => parseFloat(b.net_pay || 0) - parseFloat(a.net_pay || 0))
+      notifyLoaded('Funding', allEarners.value.length, {
+        noun: 'employee',
+        nounPlural: 'employees',
+      })
     } catch (err) {
       console.error('[FundingPage] fetch failed:', err)
     } finally {
@@ -509,36 +518,17 @@ async function submitFunding() {
   max-height: 460px;
 }
 
-.earners__scroll :deep(.q-table__container),
-.earners__scroll :deep(.q-table) {
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent;
-}
-
-/* The header sticks so a long roster keeps its column names in view. */
+/* The header sticks so a long roster keeps its column names in view — the one
+   thing this table needs that the shared chrome does not give it. It has to
+   carry an opaque background of its own, or rows would show through as they
+   scroll under it. */
 .earners__scroll :deep(.q-table thead th) {
   position: sticky;
   top: 0;
   z-index: 1;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dash-ink-3);
-  padding: 10px 12px;
   background: var(--dash-surface);
-  border-bottom: 1px solid var(--dash-line);
-  white-space: nowrap;
 }
 
-.earners__scroll :deep(.q-table tbody td) {
-  padding: 11px 12px;
-  font-size: 13px;
-  color: var(--dash-ink-2);
-  border-bottom: 1px solid var(--dash-line-soft);
-}
-.earners__scroll :deep(.q-table tbody tr:last-child td) {
-  border-bottom: none;
-}
 .earners__scroll :deep(.q-table tbody tr:hover td) {
   background: var(--dash-n-50);
 }
