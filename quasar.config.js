@@ -18,7 +18,7 @@ export default defineConfig((ctx) => {
       errors: true,
     },
 
-    boot: ['pinia', 'auth', 'axios', 'suppressExtensionErrors'],
+    boot: ['pinia', 'auth', 'axios', 'toast', 'suppressExtensionErrors', 'dialogA11y'],
     css: ['app.scss'],
     // `material-icons-outlined` backs the `o_` icon prefix. The navigation rail
     // uses it for inactive items and swaps to the filled variant for the active
@@ -56,6 +56,19 @@ export default defineConfig((ctx) => {
     devServer: {
       server: { type: 'http' },
       open: true,
+      // ── Error overlay filter ──
+      // "ResizeObserver loop completed with undelivered notifications" is a
+      // browser-level notice, not an application error: Quasar's own
+      // QResizeObserver (QTable, QScrollArea, QSelect, QTabs) can settle a
+      // layout over two observation passes, and the browser reports the second
+      // pass this way. webpack-dev-server surfaces every window `error` as a
+      // full-screen overlay, so this benign notice was blanking the app in dev.
+      // Filtered here rather than globally so real runtime errors still stop us.
+      client: {
+        overlay: {
+          runtimeErrors: (error) => !/ResizeObserver loop/i.test(error?.message ?? ''),
+        },
+      },
       proxy: [
         {
           context: ['/api'],
