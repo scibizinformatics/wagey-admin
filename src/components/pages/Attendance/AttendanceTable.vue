@@ -1,12 +1,12 @@
 <template>
-  <div class="att-table-wrap">
+  <div class="att-table-wrap dash-scroll-x">
     <q-table
       :rows="rows"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      class="att-table"
+      class="dash-qtable att-table"
       hide-pagination
       :rows-per-page-options="[0]"
       separator="none"
@@ -26,7 +26,7 @@
       </template>
 
       <template v-slot:body="props">
-        <q-tr class="att-table__row">
+        <q-tr class="dash-qtable__row att-table__row">
           <!-- Every row is the same person while a single-employee range is
                active, so the date earns the lead column instead. -->
           <q-td v-if="singleEmployee" key="date" :props="props" class="att-table__td">
@@ -305,50 +305,11 @@ function auditTooltip(row) {
   padding: 0 6px;
 }
 
-.att-table,
-.att-table :deep(.q-table__container),
-.att-table :deep(.q-table__card),
-.att-table :deep(.q-table__top),
-.att-table :deep(.q-table__bottom),
-.att-table :deep(.q-table) {
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  background: transparent;
-}
-
-/* ── Header: sentence case over a hairline, no filled band ── */
-.att-table :deep(.att-table__head-row) {
-  background: transparent;
-}
-
-.att-table :deep(.att-table__th) {
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  color: var(--dash-ink-3) !important;
-  padding: 0 12px 11px !important;
-  border-bottom: 1px solid var(--dash-line) !important;
-  white-space: nowrap;
-}
-
-/* ── Body ── */
-.att-table :deep(.att-table__row) {
-  transition: background var(--dash-fast) var(--dash-ease);
-}
-.att-table :deep(.att-table__row:hover) > td {
-  background: var(--dash-n-50);
-}
-
-.att-table :deep(.att-table__td) {
-  font-size: 13px;
-  color: var(--dash-ink-2);
-  padding: 10px 12px !important;
-  border-bottom: 1px solid var(--dash-line-soft) !important;
-  vertical-align: middle;
-}
-.att-table :deep(.att-table__row:last-child) > td {
-  border-bottom: none !important;
-}
+/* The card reset, header strip, row rhythm, hover plate and dividers all come
+   from `dash-qtable` in src/css/dashboard.scss. This file used to restate every
+   one of them behind `:deep()` and `!important`; the only difference from the
+   system was a 10px row padding against its 11px, which is why an attendance
+   row sat a pixel shorter than an employees row on the same screen. */
 
 /* ── Employee ── */
 .who {
@@ -479,7 +440,7 @@ function auditTooltip(row) {
     padding: 0 2px;
   }
   .att-table :deep(.att-table__th) {
-    padding: 0 9px 10px !important;
+    padding: 12px 9px 10px !important;
   }
   .att-table :deep(.att-table__td) {
     padding: 10px 9px !important;

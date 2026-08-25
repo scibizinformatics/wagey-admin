@@ -328,10 +328,12 @@ import {
 } from '@/composables/utils/attendance'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
+import { useLoadedToast } from '@/composables/useLoadedToast'
 
 const $q = useQuasar()
 
 const { companyId } = useCompany()
+const { notifyLoaded } = useLoadedToast()
 
 // ─── Composables ──────────────────────────────────────────────────────────────
 const {
@@ -669,29 +671,30 @@ const filteredAttendanceRows = computed(() => {
 
 const filteredTotal = computed(() => filteredAttendanceRows.value.length)
 
-const totalPages = computed(() => {
-  return Math.ceil(filteredTotal.value / pagination.value.rowsPerPage) || 1
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredTotal.value / pagination.value.rowsPerPage)),
+)
+
+// Searching, picking a payout group or a shorter span can drop the row count
+// below the page the reader is on, which would show them an empty table with no
+// hint that the rows are behind them. Snap back to the last page that exists.
+watch(totalPages, (max) => {
+  if (pagination.value.page > max) pagination.value.page = max
 })
 
 // The rows actually handed to the table.
 //
-// A range covers whole months, so the API returns everything at once and the
-// page has to cut it down itself — without this the table built a DOM row for
-// every record in the span, which is what made a range feel slower than a day.
-// Day mode is left alone: there the server already returns one page, so slicing
-// again would blank out every page after the first.
+// Sliced here for both modes, because both hold the whole set in memory: a
+// range covers whole months, and a single day is one month's response filtered
+// down to a date. Day mode used to skip the slice on the assumption that the
+// server had already paged, which left the pager drawing pages that all
+// rendered the same rows — every record for the day, on every page.
 //
 // The per-row timezone stamp happens here rather than in filteredAttendanceRows
 // so it only ever runs over one page of rows instead of the whole span.
 const pagedRows = computed(() => {
-  const rows = filteredAttendanceRows.value
-
-  const visible = dateRangeActive.value
-    ? rows.slice(
-        (pagination.value.page - 1) * pagination.value.rowsPerPage,
-        pagination.value.page * pagination.value.rowsPerPage,
-      )
-    : rows
+  const start = (pagination.value.page - 1) * pagination.value.rowsPerPage
+  const visible = filteredAttendanceRows.value.slice(start, start + pagination.value.rowsPerPage)
 
   return visible.map((row) => ({
     ...row,
@@ -853,9 +856,13 @@ async function hasScheduleForEmployeeDate(employeeId, date) {
 // ─── Data fetching ────────────────────────────────────────────────────────────
 async function fetchAttendanceData(params = {}) {
   try {
+    // No page/limit, in either mode. The endpoint is keyed by year/month, and
+    // day mode narrows that month down to one date client-side (see
+    // filteredAttendanceRows), so a server-side page would be a slice of the
+    // *month*: the rows for the selected day would arrive scattered across
+    // pages, and asking for page 2 could return a page holding none of them.
+    // Both modes therefore fetch the month and paginate locally.
     const extraParams = {
-      page: pagination.value.page,
-      limit: pagination.value.rowsPerPage,
       ...(filters.value.cost_center ? { cost_center: filters.value.cost_center } : {}),
       ...params,
     }
@@ -898,6 +905,7 @@ async function fetchAttendanceData(params = {}) {
       if (inRange.length === 0) {
         showErrorNotification('No attendance records found for this range.')
       }
+      notifyLoaded('Attendance', inRange.length)
 
       // Only the rows that survived the span and employee filters — a whole
       // month of everyone would otherwise queue a timezone lookup per person to
@@ -906,9 +914,28 @@ async function fetchAttendanceData(params = {}) {
       return
     }
 
-    const { data, total } = await fetchAttendanceByDate(currentDate.value, extraParams)
+    let { data, total } = await fetchAttendanceByDate(currentDate.value, extraParams)
+
+    // A count larger than the rows delivered means the endpoint answered with a
+    // paginated slice of the month rather than the month itself. Since the day
+    // is picked out of that response locally, a slice would hide every record
+    // that fell outside it — so ask once more for the whole set. `limit` and
+    // `page_size` between them cover both of DRF's paginator styles, and either
+    // one is ignored as an unknown query param by the other, so the retry is
+    // safe whichever the backend uses. Costs nothing in the common case, where
+    // the first response already carried everything.
+    if (total > data.length) {
+      const full = await fetchAttendanceByDate(currentDate.value, {
+        ...extraParams,
+        limit: total,
+        page_size: total,
+      })
+      if (full.data.length > data.length) data = full.data
+    }
+
     attendanceData.value = [...data]
-    pagination.value.rowsNumber = total
+    // The API's count is for the whole month; the footer speaks for the day.
+    pagination.value.rowsNumber = filteredAttendanceRows.value.length
 
     const dateFilteredCount = data.filter((row) => {
       const recordDate = row.date || row.attendance_date || row.log_date
@@ -918,6 +945,7 @@ async function fetchAttendanceData(params = {}) {
     if (dateFilteredCount === 0) {
       showErrorNotification('No attendance records found for this date.')
     }
+    notifyLoaded('Attendance', dateFilteredCount)
 
     triggerTimezoneFetch(data)
   } catch (error) {
@@ -1351,19 +1379,16 @@ function filterEmployees(val, update) {
   })
 }
 
-// In range mode the whole span is already in memory and pagedRows slices it, so
-// turning a page is instant — refetching would re-download every month.
+// Both modes page over rows that are already in memory and pagedRows slices
+// them, so turning a page is instant and neither handler refetches. Day mode
+// used to, which spent a round trip to redisplay the records it already held.
 function onPageChange(newPage) {
   pagination.value.page = newPage
-  if (dateRangeActive.value) return
-  fetchAttendanceData()
 }
 
 function onRowsPerPageChange(newSize) {
   pagination.value.rowsPerPage = newSize
   pagination.value.page = 1
-  if (dateRangeActive.value) return
-  fetchAttendanceData()
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1452,19 +1477,11 @@ watch(attendanceData, async () => {
   await ensurePayoutGroups(ids)
 })
 
-// Range mode pages client-side, so the row count can shrink under the current
-// page — dropping the employee chip, for instance — and strand the user on an
-// empty one with no refetch to reset it.
-watch(totalPages, (max) => {
-  if (dateRangeActive.value && pagination.value.page > max) {
-    pagination.value.page = max
-  }
-})
-
 // Searching is a whole-roster action, so it takes precedence over a range that
 // has usually been narrowed to one person — typing into the box would otherwise
 // search within that one employee's span and look broken.
 watch(employeeSearch, (term) => {
+  pagination.value.page = 1
   if (term && term.trim() && dateRangeActive.value) {
     exitDateRange()
   }

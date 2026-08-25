@@ -67,10 +67,6 @@
             </q-select>
           </label>
           <q-toggle v-model="hideCompleted" dense size="sm" label="Hide completed" class="control__toggle" />
-          <span v-if="secondaryCutoffNotice" class="dash-chip dash-chip--critical">
-            <span class="dash-chip__dot" />
-            {{ secondaryCutoffNotice }}
-          </span>
         </template>
 
         <template v-if="activeView === 'monthly'">
@@ -88,17 +84,30 @@
           </label>
         </template>
 
-        <template v-if="activeView === 'annual'">
-          <span class="dash-chip dash-chip--good">
+        <!-- ── Trailing meta: the active tab's status chip beside the
+             freshness stamp. Grouped in one centred row so the two always sit
+             on the same line as each other, whichever tab's chip is showing —
+             as siblings of the fields they were each nudged separately off the
+             row's bottom edge and landed 5px apart on the Annual tab. ────── -->
+        <div class="header-meta" :class="{ 'header-meta--over-field': hasHeaderField }">
+          <span
+            v-if="activeView === 'current' && secondaryCutoffNotice"
+            class="dash-chip dash-chip--critical"
+          >
+            <span class="dash-chip__dot" />
+            {{ secondaryCutoffNotice }}
+          </span>
+
+          <span v-if="activeView === 'annual'" class="dash-chip dash-chip--good">
             <q-icon name="event_available" size="12px" />
             {{ annualSummary.closedMonthsCount ?? 0 }} of 12 cutoffs closed
           </span>
-        </template>
 
-        <p class="last-sync">
-          <q-icon name="sync" size="13px" />
-          <span>Data as of {{ formattedToday }}</span>
-        </p>
+          <p class="last-sync">
+            <q-icon name="sync" size="13px" />
+            <span>Data as of {{ formattedToday }}</span>
+          </p>
+        </div>
       </div>
     </header>
 
@@ -236,6 +245,14 @@ const {
 } = useDashboardSummary()
 
 const activeView = ref('today')
+
+// Today, Current Cutoff and Monthly Summary each put a labelled field in the
+// header; Annual Summary puts only a chip there. The label above a field makes
+// that column taller than the meta strip beside it, so the strip is lifted onto
+// the field's optical centre — a lift that would be wrong on the tab with no
+// field to line up against.
+const hasHeaderField = computed(() => activeView.value !== 'annual')
+
 const formattedToday = computed(() =>
   summaryToday.value?.toLocaleDateString('en-US', {
     month: 'short',
@@ -453,11 +470,26 @@ onMounted(async () => {
   padding-bottom: 7px;
 }
 
+/* Chip + freshness stamp, centred on one another. The row they sit in is
+   bottom-aligned so the labelled fields line up on their own bottom edge, which
+   means anything shorter than a field has to be lifted onto the field's optical
+   centre — done once here for the pair instead of per item. The lift only
+   applies on the tabs that actually render a field; the Annual tab has none, so
+   the pair would otherwise float above the tab rail's centre line. */
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.header-meta--over-field {
+  margin-bottom: 8px;
+}
+
 .last-sync {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 12px;
   color: var(--dash-ink-4);
   white-space: nowrap;
@@ -496,6 +528,13 @@ onMounted(async () => {
   }
   .control {
     flex: 1;
+  }
+  /* Narrow: the freshness stamp drops out and the row is space-between, where
+     an empty wrapper would still claim a slot and push the controls apart.
+     `display: contents` retires the wrapper's box so the chip — if the active
+     tab has one — sits in the row directly, as it did before it was grouped. */
+  .header-meta {
+    display: contents;
   }
   .last-sync {
     display: none;

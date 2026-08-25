@@ -11,12 +11,12 @@
       dense
       :pagination="pagination"
       :rows-per-page-options="[5, 10, 15]"
-      class="payout__table"
+      class="dash-qtable dash-qtable--flush payout__table"
       hide-no-data
       @request="onRequest"
     >
       <template v-slot:body-cell-payout_group="props">
-        <q-td>
+        <q-td :props="props">
           <div class="group">
             <q-icon :name="channelIcon(props.row.disbursement_type)" size="15px" class="group__icon" />
             <div class="group__info">
@@ -31,7 +31,7 @@
       </template>
 
       <template v-slot:body-cell-disbursement_type="props">
-        <q-td>
+        <q-td :props="props">
           <span class="channel">
             <q-icon :name="channelIcon(props.row.disbursement_type)" size="14px" />
             {{ props.row.disbursement_type }}
@@ -40,23 +40,23 @@
       </template>
 
       <template v-slot:body-cell-reviewed="props">
-        <q-td>
+        <q-td :props="props">
           <ProgressFraction :done="props.row.reviewed" :total="props.row.employees" />
         </q-td>
       </template>
 
       <template v-slot:body-cell-acknowledged="props">
-        <q-td>
+        <q-td :props="props">
           <ProgressFraction :done="props.row.acknowledged" :total="props.row.employees" />
         </q-td>
       </template>
 
       <template v-slot:body-cell-payroll_amount="props">
-        <q-td class="amount dash-num">{{ fmtAmount(props.row.payroll_amount) }}</q-td>
+        <q-td :props="props" class="amount dash-num">{{ fmtAmount(props.row.payroll_amount) }}</q-td>
       </template>
 
       <template v-slot:body-cell-status="props">
-        <q-td>
+        <q-td :props="props">
           <CutoffStatusBadge :status="props.row.status" />
         </q-td>
       </template>
@@ -161,31 +161,13 @@ function onRequest(pp) {
   padding: 0 var(--dash-pad-x) 4px;
 }
 
-/* ── Table chrome ── */
+/* ── Table chrome ──
+   Header strip, row rhythm, dividers and hover come from `dash-qtable`. Only
+   the border model is this table's own: the panel needs separate borders for
+   its own bottom rule to sit under the last row. */
 .payout__table :deep(.q-table) {
   border-collapse: separate;
   border-spacing: 0;
-}
-
-/* Sentence-case label strip, not an uppercase grey band — matches DashTable. */
-.payout__table :deep(.q-table thead th) {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dash-ink-3);
-  padding: 0 10px 10px;
-  background: transparent;
-  border-bottom: 1px solid var(--dash-line);
-  white-space: nowrap;
-}
-
-.payout__table :deep(.q-table tbody td) {
-  padding: 12px 10px;
-  font-size: 13px;
-  color: var(--dash-ink-2);
-  border-bottom: 1px solid var(--dash-line-soft);
-}
-.payout__table :deep(.q-table tbody tr:last-child td) {
-  border-bottom: none;
 }
 .payout__table :deep(.q-table tbody tr:hover td) {
   background: var(--dash-hover);

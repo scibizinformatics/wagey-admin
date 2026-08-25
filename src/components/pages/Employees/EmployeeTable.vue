@@ -1,12 +1,12 @@
 <template>
-  <div class="emp-table-wrap">
+  <div class="emp-table-wrap dash-scroll-x">
     <q-table
       :rows="employees"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      class="emp-table"
+      class="dash-qtable emp-table"
       hide-pagination
       :rows-per-page-options="[0]"
       selection="multiple"
@@ -40,8 +40,8 @@
 
       <template v-slot:body="props">
         <q-tr
-          class="emp-table__row"
-          :class="{ 'emp-table__row--inactive': isTerminated(props.row) }"
+          class="dash-qtable__row emp-table__row"
+          :class="{ 'dash-qtable__row--muted': isTerminated(props.row) }"
         >
           <q-td auto-width class="emp-table__td">
             <q-checkbox
@@ -79,11 +79,7 @@
                 <div class="who__line">
                   <!-- The name is the row's primary action. Reaching details via
                        the ⋯ menu only was two clicks for the most common intent. -->
-                  <button
-                    type="button"
-                    class="who__name"
-                    @click="$emit('view', props.row)"
-                  >
+                  <button type="button" class="who__name" @click="$emit('view', props.row)">
                     {{ getFullName(props.row) }}
                   </button>
                   <span class="who__role">{{ getRole(props.row) }}</span>
@@ -108,22 +104,12 @@
             :props="props"
             class="emp-table__td emp-table__td--num"
           >
-            <q-skeleton
-              v-if="isLoadingBalance(props.row)"
-              type="text"
-              width="30px"
-              height="14px"
-            />
+            <q-skeleton v-if="isLoadingBalance(props.row)" type="text" width="30px" height="14px" />
             <span v-else class="dash-num">{{ getLeaveBalanceForType(props.row, lt.id) }}</span>
           </q-td>
 
           <q-td key="ctoBalance" :props="props" class="emp-table__td emp-table__td--num">
-            <q-skeleton
-              v-if="isLoadingBalance(props.row)"
-              type="text"
-              width="30px"
-              height="14px"
-            />
+            <q-skeleton v-if="isLoadingBalance(props.row)" type="text" width="30px" height="14px" />
             <span v-else class="dash-num">{{ getCtoBalance(props.row) }}</span>
           </q-td>
 
@@ -343,65 +329,22 @@ const columns = computed(() => [
   padding: 0 6px;
 }
 
-.emp-table,
-.emp-table :deep(.q-table__container),
-.emp-table :deep(.q-table__card),
-.emp-table :deep(.q-table__top),
-.emp-table :deep(.q-table__bottom),
-.emp-table :deep(.q-table) {
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  background: transparent;
-}
-
-/* ── Header: sentence case over a hairline, no filled band ── */
-.emp-table :deep(.emp-table__head-row) {
-  background: transparent;
-}
-
-.emp-table :deep(.emp-table__th) {
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  color: var(--dash-ink-3) !important;
-  padding: 0 12px 11px !important;
-  border-bottom: 1px solid var(--dash-line) !important;
-  white-space: nowrap;
-}
+/* The card reset, header strip, row rhythm, hover plate, dividers and the
+   dimmed-record state all come from `dash-qtable` in src/css/dashboard.scss —
+   including the terminated-row tint, which used to be spelled
+   `emp-table__row--inactive` here, `--lapsed` on invitations and `--off` on
+   announcements, for the same two declarations. Only the two column modifiers
+   below are this table's own. */
 .emp-table :deep(.emp-table__th--num) {
   text-align: right !important;
-}
-.emp-table :deep(.emp-table__th--actions) {
-  width: 56px;
-}
-
-/* ── Body ── */
-.emp-table :deep(.emp-table__row) {
-  transition: background var(--dash-fast) var(--dash-ease);
-}
-.emp-table :deep(.emp-table__row:hover) > td {
-  background: var(--dash-n-50);
-}
-.emp-table :deep(.emp-table__row--inactive) > td {
-  background: var(--dash-n-25);
-}
-.emp-table :deep(.emp-table__row--inactive:hover) > td {
-  background: var(--dash-n-50);
-}
-
-.emp-table :deep(.emp-table__td) {
-  font-size: 13px;
-  color: var(--dash-ink-2);
-  padding: 11px 12px !important;
-  border-bottom: 1px solid var(--dash-line-soft) !important;
-  vertical-align: middle;
-}
-.emp-table :deep(.emp-table__row:last-child) > td {
-  border-bottom: none !important;
 }
 .emp-table :deep(.emp-table__td--num) {
   text-align: right;
   color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+}
+.emp-table :deep(.emp-table__th--actions) {
+  width: 56px;
 }
 .emp-table :deep(.emp-table__td--actions) {
   text-align: center;
@@ -460,7 +403,9 @@ const columns = computed(() => [
 .who__name:focus-visible {
   outline: none;
   border-radius: var(--dash-r-xs);
-  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 /* Role reads as metadata on the name, not as a second value competing with it. */
@@ -510,7 +455,7 @@ const columns = computed(() => [
     padding: 0 2px;
   }
   .emp-table :deep(.emp-table__th) {
-    padding: 0 9px 10px !important;
+    padding: 12px 9px 10px !important;
   }
   .emp-table :deep(.emp-table__td) {
     padding: 10px 9px !important;

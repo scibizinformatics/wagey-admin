@@ -349,6 +349,7 @@ import { useAdminPositions } from '@/composables/admin/useAdminPositions'
 import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 import { useEmployeeBalances } from '@/composables/page/useEmployeeBalances'
+import { useLoadedToast } from '@/composables/useLoadedToast'
 
 import EmployeeTable from '@/components/pages/Employees/EmployeeTable.vue'
 import EmployeeCardList from '@/components/pages/Employees/EmployeeCardList.vue'
@@ -374,6 +375,7 @@ import {
 } from '@/composables/utils/employee'
 
 const $q = useQuasar()
+const { notifyLoaded } = useLoadedToast()
 
 // ─── Composables ──────────────────────────────────────────────────────────────
 const {
@@ -791,6 +793,7 @@ const fetchEmployees = async () => {
 
     // Show table immediately — do not block on heavy per-employee fetches
     loading.value = false
+    notifyLoaded('Employees', list.length, { noun: 'employee', nounPlural: 'employees' })
 
     // Fetch leave types and the first page of contract / balance data in background
     await Promise.all([
@@ -2078,9 +2081,16 @@ watch(companyId, (newId, oldId) => {
   border-radius: var(--dash-r-sm);
   background: var(--dash-surface);
 }
+/* `min-height` + zeroed padding are what let the text centre: Quasar gives the
+   native a 28px line-height and 6px of vertical padding, which is exactly the
+   40px of a dense control. Squashing the control to 32px without touching the
+   native leaves a 40px box stretched inside a 32px one, so the label sits off
+   centre. Same treatment as the Attendance, Schedule and Disbursement footers. */
 .emp-foot__size :deep(.q-field__native) {
   font-size: 12.5px;
   color: var(--dash-ink-2);
+  min-height: 32px;
+  padding: 0;
 }
 .emp-foot__size :deep(.q-field__marginal) {
   height: 32px;
