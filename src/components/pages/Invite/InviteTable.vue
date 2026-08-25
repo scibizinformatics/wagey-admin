@@ -1,394 +1,362 @@
 <template>
-  <div class="modern-table-container">
-    <q-table
-      :rows="rows"
-      :columns="columns"
-      row-key="id"
-      flat
-      :loading="loading"
-      no-data-label="No invitations found"
-      class="loan-table"
-      hide-pagination
-      :rows-per-page-options="[0]"
-    >
-      <template v-slot:header>
-        <q-tr class="table-header-row">
-          <q-th class="table-header-cell th-sl">#</q-th>
-          <q-th class="table-header-cell th-email">Email Address</q-th>
-          <q-th class="table-header-cell th-company">Company</q-th>
-          <q-th class="table-header-cell th-role">Role</q-th>
-          <q-th class="table-header-cell th-code">Invitation Code</q-th>
-          <q-th class="table-header-cell th-status">Status</q-th>
-          <q-th class="table-header-cell th-used">Used</q-th>
-          <q-th class="table-header-cell th-created">Created</q-th>
-          <q-th class="table-header-cell th-expires">Expires</q-th>
-        </q-tr>
-      </template>
+  <div class="inv-tbl">
+    <!-- Loading. Built from `visibleColumns`, the same list the table below
+         renders, so the placeholder's columns are the table's columns — at every
+         width, including the one where "Sent" is dropped. -->
+    <TableSkeleton v-if="loading" :columns="visibleColumns" :rows="6" flush />
 
-      <template v-slot:body="props">
-        <q-tr class="table-body-row">
-          <q-td class="table-body-cell sl-cell td-sl">
-            {{ String(props.rowIndex + 1).padStart(2, '0') }}.
-          </q-td>
+    <!-- Empty -->
+    <div v-else-if="!rows.length" class="dash-empty">
+      <span class="dash-featured-icon">
+        <q-icon :name="isFiltered ? 'filter_alt_off' : 'o_mark_email_read'" size="20px" />
+      </span>
+      <p class="dash-empty__title">
+        {{ isFiltered ? 'Nothing matches this filter' : 'No invitations yet' }}
+      </p>
+      <p class="dash-empty__sub">
+        {{
+          isFiltered
+            ? 'No invitation matches what you typed or the status you picked.'
+            : 'Invite an employee and their invitation appears here with its join code and expiry.'
+        }}
+      </p>
+      <q-btn
+        v-if="isFiltered"
+        outline
+        no-caps
+        dense
+        size="12px"
+        icon="filter_alt_off"
+        label="Clear filters"
+        class="inv-tbl__empty-btn"
+        @click="$emit('clear-filters')"
+      />
+    </div>
 
-          <q-td class="table-body-cell email-name-cell td-email">
-            <div class="employee-info">
-              <q-avatar size="34px" class="avatar-fallback">
-                {{ getInitials(props.row.email) }}
-              </q-avatar>
-              <span class="employee-name">{{ props.row.email }}</span>
-            </div>
-          </q-td>
+    <!-- Grid -->
+    <div v-else class="inv-tbl__scroll dash-scroll-x">
+      <q-table
+        :rows="rows"
+        :columns="visibleColumns"
+        row-key="id"
+        flat
+        hide-pagination
+        :rows-per-page-options="[0]"
+        class="dash-qtable inv-grid"
+      >
+        <template v-slot:header="props">
+          <q-tr :props="props">
+            <q-th key="recipient" :props="props">Recipient</q-th>
+            <q-th key="role" :props="props">Role</q-th>
+            <q-th key="code" :props="props">Join code</q-th>
+            <q-th key="state" :props="props">Status</q-th>
+            <q-th v-if="showSent" key="sent" :props="props">Sent</q-th>
+            <q-th key="expires" :props="props">Expires</q-th>
+            <q-th key="actions" :props="props" class="num">&nbsp;</q-th>
+          </q-tr>
+        </template>
 
-          <q-td class="table-body-cell td-company">
-            {{ props.row.company || 'N/A' }}
-          </q-td>
+        <template v-slot:body="props">
+          <q-tr
+            :props="props"
+            class="dash-qtable__row dash-qtable__row--clickable inv-row"
+            :class="{ 'dash-qtable__row--muted': isLapsed(props.row) }"
+            tabindex="0"
+            @click="$emit('view', props.row)"
+            @keydown.enter.prevent="$emit('view', props.row)"
+          >
+            <q-td key="recipient" :props="props" class="strong">
+              <div class="who">
+                <span class="who__avatar">{{ inviteInitials(props.row.email) }}</span>
+                <span class="who__text">
+                  <span class="who__email">{{ props.row.email || '—' }}</span>
+                  <span class="who__company">{{ props.row.company || companyFallback }}</span>
+                </span>
+              </div>
+            </q-td>
 
-          <q-td class="table-body-cell td-role">
-            <span class="role-chip">{{ getRoleLabel(props.row.role ?? props.row.user_role) }}</span>
-          </q-td>
+            <q-td key="role" :props="props">
+              <span class="role-tag">{{ props.row._role }}</span>
+            </q-td>
 
-          <q-td class="table-body-cell td-code">
-            <code class="code-text">{{ props.row.code || 'N/A' }}</code>
-          </q-td>
+            <!-- The code is the one thing on the row a person hands to someone
+                 else, so copying it is a click rather than a select-and-drag
+                 across a monospace run. -->
+            <q-td key="code" :props="props">
+              <button
+                v-if="props.row.code"
+                type="button"
+                class="code"
+                :aria-label="`Copy join code ${props.row.code}`"
+                @click.stop="$emit('copy', props.row)"
+              >
+                <span class="code__text">{{ props.row.code }}</span>
+                <q-icon name="o_content_copy" size="13px" class="code__icon" />
+                <q-tooltip anchor="bottom middle" self="top middle">Copy code</q-tooltip>
+              </button>
+              <span v-else class="muted">—</span>
+            </q-td>
 
-          <q-td class="table-body-cell td-status">
-            <div :class="['status-badge', getStatusClass(props.row.status)]">
-              <span class="status-dot"></span>
-              {{ props.row.status || 'Pending' }}
-            </div>
-          </q-td>
+            <q-td key="state" :props="props">
+              <span class="dash-chip" :class="chipClass(props.row._state.tone)">
+                <span class="dash-chip__dot" />
+                {{ props.row._state.label }}
+              </span>
+            </q-td>
 
-          <q-td class="table-body-cell td-used">
-            <div :class="['status-badge', props.row.is_used ? 'status-active' : 'status-unused']">
-              <span class="status-dot"></span>
-              {{ props.row.is_used ? 'Used' : 'Unused' }}
-            </div>
-          </q-td>
+            <q-td v-if="showSent" key="sent" :props="props">
+              <span class="stamp">{{ formatDate(props.row.created_at) }}</span>
+              <span class="stamp__rel">{{ relativeDay(props.row.created_at) }}</span>
+            </q-td>
 
-          <q-td class="table-body-cell td-created">
-            {{ formatDate(props.row.created_at) }}
-          </q-td>
+            <q-td key="expires" :props="props">
+              <template v-if="props.row.is_used">
+                <span class="muted">Not applicable</span>
+              </template>
+              <template v-else>
+                <span class="stamp">{{ formatDate(props.row.expires_at) }}</span>
+                <span class="stamp__rel" :class="expiryClass(props.row)">
+                  {{ relativeDay(props.row.expires_at) }}
+                </span>
+              </template>
+            </q-td>
 
-          <q-td class="table-body-cell td-expires">
-            {{ formatDate(props.row.expires_at) }}
-          </q-td>
-        </q-tr>
-      </template>
-
-      <template v-slot:no-data>
-        <div class="empty-state">
-          <q-icon name="mail_outline" size="48px" class="empty-state-icon" />
-          <div class="empty-state-title">No invitations found</div>
-          <div class="empty-state-sub">
-            Try adjusting your search or send a new invitation.
-          </div>
-        </div>
-      </template>
-    </q-table>
+            <q-td key="actions" :props="props" class="num">
+              <q-btn
+                flat
+                dense
+                round
+                size="sm"
+                icon="o_visibility"
+                class="row-action"
+                :aria-label="`View invitation for ${props.row.email}`"
+                @click.stop="$emit('view', props.row)"
+              >
+                <q-tooltip anchor="bottom right" self="top right">View details</q-tooltip>
+              </q-btn>
+            </q-td>
+          </q-tr>
+        </template>
+      </q-table>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+/**
+ * Desktop and laptop view of the invitation queue. Below 1024px the page swaps
+ * this for InviteCardList — seven columns inside a tablet's content width meant
+ * a sideways scroll on every row.
+ *
+ * Rows arrive already carrying `_state` and `_role` from the page, so what a row
+ * displays is the same value the page filtered and counted on.
+ */
+import { computed } from 'vue'
+import { useQuasar } from 'quasar'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import { chipClass, formatDate, inviteInitials, relativeDay, daysUntil } from './inviteStatus'
 
-const props = defineProps({
+defineProps({
   rows: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
-  userRoleOptions: { type: Array, default: () => [] },
+  isFiltered: { type: Boolean, default: false },
+  companyFallback: { type: String, default: '—' },
 })
 
-defineEmits(['refresh'])
+defineEmits(['view', 'copy', 'clear-filters'])
 
-const columns = ref([
-  { name: 'sl_no', label: '#', field: 'id', align: 'left' },
-  { name: 'email', label: 'Email Address', field: 'email', align: 'left' },
-  { name: 'company', label: 'Company', field: 'company', align: 'left' },
-  { name: 'role', label: 'Role', field: 'role', align: 'left' },
-  { name: 'code', label: 'Invitation Code', field: 'code', align: 'left' },
-  { name: 'status', label: 'Status', field: 'status', align: 'left' },
-  { name: 'is_used', label: 'Used', field: 'is_used', align: 'center' },
-  { name: 'created_at', label: 'Created', field: 'created_at', align: 'left' },
-  { name: 'expires_at', label: 'Expires', field: 'expires_at', align: 'left' },
-])
+const $q = useQuasar()
 
-const getInitials = (email) => {
-  if (!email) return '?'
-  const parts = email.split('@')[0].split('.')
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
-  return email.substring(0, 2).toUpperCase()
-}
+const columns = [
+  { name: 'recipient', label: 'Recipient', field: 'email', align: 'left' },
+  { name: 'role', label: 'Role', field: '_role', align: 'left' },
+  { name: 'code', label: 'Join code', field: 'code', align: 'left' },
+  { name: 'state', label: 'Status', field: (row) => row._state.key, align: 'left' },
+  { name: 'sent', label: 'Sent', field: 'created_at', align: 'left' },
+  { name: 'expires', label: 'Expires', field: 'expires_at', align: 'left' },
+  { name: 'actions', label: '', field: 'id', align: 'right' },
+]
 
-const getStatusClass = (status) => {
-  if (!status) return 'status-default'
-  const s = status.toLowerCase()
-  if (s === 'accepted' || s === 'active') return 'status-active'
-  if (s === 'declined' || s === 'expired' || s === 'cancelled') return 'status-terminated'
-  return 'status-default'
-}
+/**
+ * Seven columns crowd below 1280, and "Sent" is the reading a person can lose:
+ * an invite's age is implied by the expiry beside it, which stays.
+ *
+ * Driven from here rather than from a CSS `display: none`, because the skeleton
+ * has to agree about which columns exist — with the rule in CSS, the loading
+ * state drew a Sent column the table then didn't render.
+ */
+const showSent = computed(() => $q.screen.width >= 1280)
 
-const getRoleLabel = (roleValue) => {
-  if (!roleValue && roleValue !== 0) return 'N/A'
-  const match = props.userRoleOptions.find((r) => r.value === Number(roleValue))
-  return match ? match.label : roleValue
-}
+const visibleColumns = computed(() =>
+  showSent.value ? columns : columns.filter((col) => col.name !== 'sent'),
+)
 
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+/** Expired and cancelled rows dim — they are history, not work. */
+const isLapsed = (row) => row._state.key === 'expired' || row._state.key === 'cancelled'
+
+const expiryClass = (row) => {
+  const left = daysUntil(row.expires_at)
+  if (left === null) return ''
+  if (left < 0) return 'stamp__rel--past'
+  if (left <= 3) return 'stamp__rel--soon'
+  return ''
 }
 </script>
 
 <style scoped>
-.modern-table-container {
+/* Horizontal only. Capping the height and pinning the header layered it over
+   the toolbar above; the page scrolls instead. */
+.inv-tbl__scroll {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.loan-table {
+.inv-grid {
   width: 100%;
-  min-width: 900px;
 }
 
-.table-header-row {
-  background: #f8fafc;
-}
-
-.table-header-cell {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  color: #6b7280 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 11px 16px !important;
-  border-bottom: 1px solid #e8ecf0 !important;
-  text-align: left !important;
-}
-
-.table-body-row {
-  transition: background 0.15s ease;
-}
-
-.table-body-row:hover .table-body-cell {
-  background: #f9fafb;
-}
-
-.table-body-cell {
-  font-size: 13px;
-  color: #374151;
-  padding: 12px 16px !important;
-  border-bottom: 1px solid #f1f3f5 !important;
-  vertical-align: middle;
-}
-
-.table-body-row:last-child .table-body-cell {
-  border-bottom: none !important;
-}
-
-.sl-cell {
-  color: #9ca3af;
-  font-size: 12px !important;
-  width: 48px;
-}
-
-.th-sl,
-.td-sl {
-  width: 52px;
-  min-width: 52px;
-  text-align: left !important;
-}
-
-.th-email,
-.td-email {
-  min-width: 200px;
-  text-align: left !important;
-}
-
-.th-company,
-.td-company {
-  min-width: 120px;
-  text-align: left !important;
-}
-
-.th-role,
-.td-role {
-  min-width: 110px;
-  text-align: left !important;
-}
-
-.th-code,
-.td-code {
-  min-width: 130px;
-  text-align: left !important;
-}
-
-.th-status,
-.td-status {
-  min-width: 110px;
-  text-align: left !important;
-}
-
-.th-used,
-.td-used {
-  min-width: 100px;
-  text-align: left !important;
-}
-
-.th-created,
-.td-created {
-  min-width: 110px;
-  text-align: left !important;
-}
-
-.th-expires,
-.td-expires {
-  min-width: 110px;
-  text-align: left !important;
-}
-
-.email-name-cell {
-  min-width: 220px;
-}
-
-.employee-info {
+/* ── Recipient ── */
+.who {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
-
-.employee-name {
-  font-weight: 600;
-  color: #111827;
-  font-size: 13px;
-  word-break: break-all;
-}
-
-.avatar-fallback {
-  background: #e0e7ff !important;
-  color: #4338ca !important;
-  font-weight: 600 !important;
-  min-width: 34px !important;
-  width: 34px !important;
-  height: 34px !important;
-  border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex-shrink: 0 !important;
-}
-
-.avatar-fallback :deep(.q-avatar__content) {
-  font-size: 12px !important;
-  line-height: 1 !important;
-}
-
-.role-chip {
-  display: inline-block;
-  padding: 3px 9px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #e5e7eb;
-  white-space: nowrap;
-}
-
-.code-text {
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 12px;
-  background: #f3f4f6;
-  padding: 3px 7px;
-  border-radius: 4px;
-  color: #374151;
-  border: 1px solid #e5e7eb;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
+.who__avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
   border-radius: 50%;
-  flex-shrink: 0;
+  background: var(--dash-n-100);
+  border: 1px solid var(--dash-line);
+  color: var(--dash-ink-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
-
-.status-active {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-.status-active .status-dot {
-  background: #22c55e;
-}
-
-.status-terminated {
-  background: #fef2f2;
-  color: #dc2626;
-}
-.status-terminated .status-dot {
-  background: #ef4444;
-}
-
-.status-unused {
-  background: #fffbeb;
-  color: #d97706;
-}
-.status-unused .status-dot {
-  background: #f59e0b;
-}
-
-.status-default {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-.status-default .status-dot {
-  background: #9ca3af;
-}
-
-.empty-state {
+.who__text {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 56px 20px;
-  text-align: center;
+  min-width: 0;
 }
-
-.empty-state-icon {
-  color: #d1d5db;
-  margin-bottom: 12px;
-}
-
-.empty-state-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 6px;
-}
-
-.empty-state-sub {
+.who__email {
   font-size: 13px;
-  color: #9ca3af;
+  font-weight: 500;
+  color: var(--dash-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Company rides under the address instead of holding its own column: it is the
+   same value on every row for a single-company admin, and folding it here is
+   what freed the width for the expiry reading. */
+.who__company {
+  font-size: 11.5px;
+  color: var(--dash-ink-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@media (max-width: 480px) {
-  .table-header-cell,
-  .table-body-cell {
-    padding: 10px 10px !important;
-    font-size: 12px;
+/* ── Role ── */
+.role-tag {
+  display: inline-block;
+  max-width: 150px;
+  padding: 2px 8px;
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-n-50);
+  border: 1px solid var(--dash-line);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--dash-ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* ── Join code ── */
+.code {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-n-50);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    border-color var(--dash-fast) var(--dash-ease);
+}
+.code:hover {
+  background: var(--dash-surface);
+  border-color: var(--dash-line-strong);
+}
+.code__text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--dash-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code__icon {
+  flex: none;
+  color: var(--dash-ink-4);
+}
+.code:hover .code__icon {
+  color: var(--dash-accent);
+}
+
+/* ── Dates ── */
+.stamp {
+  display: block;
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stamp__rel {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--dash-ink-4);
+  white-space: nowrap;
+}
+.stamp__rel--soon {
+  color: var(--dash-warn);
+  font-weight: 500;
+}
+.stamp__rel--past {
+  color: var(--dash-ink-4);
+}
+
+.row-action {
+  color: var(--dash-ink-4);
+}
+.row-action:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-100);
+}
+
+.inv-tbl__empty-btn {
+  margin-top: 4px;
+  color: var(--dash-ink-2);
+  border-color: var(--dash-line-strong);
+}
+
+/* ── Laptop ──
+   Cell padding is stepped by `dash-qtable` for every table in the product; the
+   dropped column is decided in script, so the skeleton agrees with the table. */
+@media (max-width: 1279px) {
+  .role-tag {
+    max-width: 110px;
   }
 }
 </style>

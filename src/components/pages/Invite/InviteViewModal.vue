@@ -1,82 +1,75 @@
 <template>
   <q-dialog
     :model-value="modelValue"
+    :maximized="$q.screen.lt.sm"
     @update:model-value="$emit('update:modelValue', $event)"
-    persistent
   >
-    <q-card class="modal-card view-modal">
-      <q-card-section class="modal-header">
-        <div class="modal-title-section">
-          <q-avatar size="52px" class="avatar-fallback avatar-fallback-lg">
-            {{ getInitials(invitation?.email) }}
-          </q-avatar>
-          <div>
-            <div class="modal-title">{{ invitation?.email }}</div>
-            <div class="modal-subtitle">
-              <span
-                :class="['status-badge', getStatusClass(invitation?.status)]"
-                style="font-size: 11px"
-              >
-                <span class="status-dot"></span>{{ invitation?.status || 'Pending' }}
-              </span>
-            </div>
-          </div>
+    <q-card class="inv-view">
+      <!-- ── Head ───────────────────────────────────────────────────────────
+           The recipient is named here rather than in the body: the dialog opens
+           from a table row, and once it covers the table nothing else on screen
+           says whose invitation this is. -->
+      <q-card-section class="inv-view__head">
+        <span class="inv-view__avatar">{{ inviteInitials(invitation?.email) }}</span>
+        <div class="inv-view__titles">
+          <div class="inv-view__email">{{ invitation?.email || 'Invitation' }}</div>
+          <div class="inv-view__sub">{{ invitation?.company || 'No company on record' }}</div>
         </div>
-        <q-btn
-          icon="close"
-          flat
-          round
-          dense
-          class="modal-close-btn"
-          @click="$emit('update:modelValue', false)"
-        />
+        <q-btn flat round dense icon="close" aria-label="Close" @click="close" />
       </q-card-section>
 
-      <q-card-section class="modal-content">
-        <div class="detail-grid-cards">
-          <div class="detail-card">
-            <div class="detail-card-label">Email</div>
-            <div class="detail-card-value">{{ invitation?.email || 'N/A' }}</div>
+      <q-card-section class="inv-view__body">
+        <!-- Status leads, with the sentence that explains what it means for this
+             invite — a chip on its own answers "which state", not "so what". -->
+        <div class="inv-view__status">
+          <span class="dash-chip inv-view__chip" :class="chipClass(state.tone)">
+            <span class="dash-chip__dot" />
+            {{ state.label }}
+          </span>
+          <p class="inv-view__status-note">{{ statusNote }}</p>
+        </div>
+
+        <dl class="inv-view__facts">
+          <div class="inv-view__fact">
+            <dt>Role</dt>
+            <dd>{{ invitation?._role || '—' }}</dd>
           </div>
-          <div class="detail-card">
-            <div class="detail-card-label">Company</div>
-            <div class="detail-card-value">{{ invitation?.company || 'N/A' }}</div>
+          <div class="inv-view__fact">
+            <dt>Sent</dt>
+            <dd>
+              {{ formatDate(invitation?.created_at) }}
+              <span class="inv-view__rel">{{ relativeDay(invitation?.created_at) }}</span>
+            </dd>
           </div>
-          <div class="detail-card">
-            <div class="detail-card-label">Role</div>
-            <div class="detail-card-value">
-              {{ getRoleLabel(invitation?.role ?? invitation?.user_role) }}
-            </div>
+          <div class="inv-view__fact">
+            <dt>Expires</dt>
+            <dd v-if="invitation?.is_used" class="inv-view__muted">
+              Not applicable — already used
+            </dd>
+            <dd v-else>
+              {{ formatDate(invitation?.expires_at) }}
+              <span class="inv-view__rel">{{ relativeDay(invitation?.expires_at) }}</span>
+            </dd>
           </div>
-          <div class="detail-card">
-            <div class="detail-card-label">Status</div>
-            <div class="detail-card-value">
-              <span :class="['status-badge', getStatusClass(invitation?.status)]">
-                <span class="status-dot"></span>{{ invitation?.status || 'Pending' }}
-              </span>
-            </div>
-          </div>
-          <div class="detail-card">
-            <div class="detail-card-label">Used</div>
-            <div class="detail-card-value">
-              <span :class="['status-badge', invitation?.is_used ? 'status-active' : 'status-unused']">
-                <span class="status-dot"></span>{{ invitation?.is_used ? 'Yes' : 'No' }}
-              </span>
-            </div>
-          </div>
-          <div class="detail-card">
-            <div class="detail-card-label">Created</div>
-            <div class="detail-card-value">{{ formatDate(invitation?.created_at) }}</div>
-          </div>
-          <div class="detail-card">
-            <div class="detail-card-label">Expires</div>
-            <div class="detail-card-value">{{ formatDate(invitation?.expires_at) }}</div>
-          </div>
-          <div class="detail-card detail-card-full">
-            <div class="detail-card-label">Invitation Code</div>
-            <div class="detail-card-value">
-              <code class="code-text">{{ invitation?.code || 'N/A' }}</code>
-            </div>
+        </dl>
+
+        <!-- The code sits last and largest: it is the thing a person opens this
+             dialog to read out or paste into a message. -->
+        <div class="inv-view__code-block">
+          <div class="inv-view__code-label">Join code</div>
+          <div class="inv-view__code-row">
+            <code class="inv-view__code">{{ invitation?.code || 'No code issued' }}</code>
+            <q-btn
+              v-if="invitation?.code"
+              flat
+              dense
+              no-caps
+              size="12px"
+              icon="o_content_copy"
+              label="Copy"
+              class="inv-view__copy"
+              @click="$emit('copy', invitation)"
+            />
           </div>
         </div>
       </q-card-section>
@@ -85,246 +78,228 @@
 </template>
 
 <script setup>
+/**
+ * One invitation in full. The old version laid eight grey tiles in a 2-column
+ * grid, which repeated the email in the body under the email in the header and
+ * gave "Used: No" the same weight as the join code. This orders it: state and
+ * what it means, three facts, then the code.
+ */
+import { computed } from 'vue'
+import { useQuasar } from 'quasar'
+import {
+  chipClass,
+  daysUntil,
+  formatDate,
+  inviteInitials,
+  inviteState,
+  relativeDay,
+} from './inviteStatus'
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   invitation: { type: Object, default: null },
-  userRoleOptions: { type: Array, default: () => [] },
 })
 
-defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'copy'])
 
-const getInitials = (email) => {
-  if (!email) return '?'
-  const parts = email.split('@')[0].split('.')
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
-  return email.substring(0, 2).toUpperCase()
-}
+const $q = useQuasar()
 
-const getStatusClass = (status) => {
-  if (!status) return 'status-default'
-  const s = status.toLowerCase()
-  if (s === 'accepted' || s === 'active') return 'status-active'
-  if (s === 'declined' || s === 'expired' || s === 'cancelled') return 'status-terminated'
-  return 'status-default'
-}
+/** Rows arrive decorated from the page, but the state is recomputed here so the
+ *  dialog still reads correctly if it is ever opened with a bare invite. */
+const state = computed(() => props.invitation?._state ?? inviteState(props.invitation))
 
-const getRoleLabel = (roleValue) => {
-  if (!roleValue && roleValue !== 0) return 'N/A'
-  const match = props.userRoleOptions.find((r) => r.value === Number(roleValue))
-  return match ? match.label : roleValue
-}
+const statusNote = computed(() => {
+  const invite = props.invitation
+  if (!invite) return ''
+  const left = daysUntil(invite.expires_at)
+  switch (state.value.key) {
+    case 'accepted':
+      return 'This person has used the code and their account is active.'
+    case 'expiring':
+      return left === 0
+        ? 'The code stops working at the end of today.'
+        : `The code stops working in ${left} ${left === 1 ? 'day' : 'days'}.`
+    case 'expired':
+      return 'The code no longer works. Send a fresh invitation to re-invite them.'
+    case 'declined':
+      return 'This person declined the invitation.'
+    case 'cancelled':
+      return 'This invitation was withdrawn before it was used.'
+    default:
+      return left === null
+        ? 'Waiting for this person to sign up with the code.'
+        : `Waiting for this person to sign up. The code is good for ${left} more ${left === 1 ? 'day' : 'days'}.`
+  }
+})
 
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
+const close = () => emit('update:modelValue', false)
 </script>
 
 <style scoped>
-.modal-card {
-  width: 560px;
+.inv-view {
+  width: 460px;
   max-width: 95vw;
-  max-height: 90vh;
-  border-radius: 16px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+  border-radius: var(--dash-r-lg);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
 }
 
-.view-modal {
-  max-width: 560px;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px !important;
-  background: #102335 !important;
-  border-bottom: none !important;
-}
-
-.modal-title-section {
+/* ── Head ── */
+.inv-view__head {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 15px 18px;
+  background: var(--dash-brand);
 }
-
-.modal-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff !important;
-}
-
-.modal-subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8) !important;
-  margin-top: 2px;
-}
-
-.modal-close-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-  flex-shrink: 0;
-}
-
-.modal-close-btn:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  color: #ffffff !important;
-}
-
-.modal-content {
-  padding: 20px !important;
-  overflow-y: auto;
-  flex: 1;
-  background: #f9fafb !important;
-  scrollbar-width: thin;
-  scrollbar-color: #e2e8f0 transparent;
-}
-
-.modal-content::-webkit-scrollbar {
-  width: 4px;
-}
-.modal-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-.modal-content::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 4px;
-}
-
-.detail-grid-cards {
+.inv-view__avatar {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
 }
-
-.detail-card {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 10px 14px;
-  border: 1px solid #f1f3f5;
+.inv-view__titles {
+  flex: 1;
+  min-width: 0;
 }
-
-.detail-card-full {
-  grid-column: 1 / -1;
-}
-
-.detail-card-label {
-  font-size: 11px;
-  color: #9ca3af;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 4px;
-}
-
-.detail-card-value {
-  font-size: 13px;
-  color: #111827;
-  font-weight: 500;
-  word-break: break-word;
-}
-
-.avatar-fallback {
-  background: #e0e7ff !important;
-  color: #4338ca !important;
-  font-weight: 600 !important;
-  min-width: 34px !important;
-  width: 34px !important;
-  height: 34px !important;
-  border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex-shrink: 0 !important;
-}
-
-.avatar-fallback :deep(.q-avatar__content) {
-  font-size: 12px !important;
-  line-height: 1 !important;
-}
-
-.avatar-fallback-lg {
-  min-width: 52px !important;
-  width: 52px !important;
-  height: 52px !important;
-}
-
-.avatar-fallback-lg :deep(.q-avatar__content) {
-  font-size: 16px !important;
-}
-
-.code-text {
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 12px;
-  background: #f3f4f6;
-  padding: 3px 7px;
-  border-radius: 4px;
-  color: #374151;
-  border: 1px solid #e5e7eb;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+.inv-view__email {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.inv-view__sub {
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.78);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inv-view__head :deep(.q-btn) {
+  color: rgba(255, 255, 255, 0.8);
+  flex: none;
+}
+.inv-view__head :deep(.q-btn:hover) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.15);
 }
 
-.status-active {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-.status-active .status-dot {
-  background: #22c55e;
-}
-
-.status-terminated {
-  background: #fef2f2;
-  color: #dc2626;
-}
-.status-terminated .status-dot {
-  background: #ef4444;
+/* ── Body ── */
+.inv-view__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  max-height: 68vh;
+  overflow-y: auto;
 }
 
-.status-unused {
-  background: #fffbeb;
-  color: #d97706;
+.inv-view__status {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
 }
-.status-unused .status-dot {
-  background: #f59e0b;
+.inv-view__chip {
+  flex: none;
+  margin-top: 1px;
+}
+.inv-view__status-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dash-ink-2);
 }
 
-.status-default {
-  background: #f3f4f6;
-  color: #6b7280;
+/* ── Facts ── */
+.inv-view__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--dash-sunken);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
 }
-.status-default .status-dot {
-  background: #9ca3af;
+.inv-view__fact {
+  min-width: 0;
+}
+.inv-view__fact dt {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--dash-ink-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.inv-view__fact dd {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+.inv-view__rel {
+  display: block;
+  font-size: 11px;
+  color: var(--dash-ink-4);
+}
+.inv-view__muted {
+  color: var(--dash-ink-3) !important;
 }
 
-@media (max-width: 768px) {
-  .detail-grid-cards {
-    grid-template-columns: 1fr;
+/* ── Code ── */
+.inv-view__code-block {
+  padding: 12px 14px;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+}
+.inv-view__code-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--dash-ink-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.inv-view__code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.inv-view__code {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: var(--dash-ink);
+  word-break: break-all;
+}
+.inv-view__copy {
+  flex: none;
+  color: var(--dash-accent);
+  font-weight: 600;
+}
+
+@media (max-width: 599px) {
+  .inv-view {
+    width: 100%;
+    border-radius: 0;
   }
-  .detail-card-full {
-    grid-column: span 1;
+  .inv-view__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .inv-view__body {
+    max-height: none;
   }
 }
 </style>
