@@ -1,42 +1,52 @@
 <template>
   <q-dialog
     :model-value="modelValue"
-    @update:model-value="$emit('update:modelValue', $event)"
     persistent
+    @update:model-value="$emit('update:modelValue', $event)"
   >
-    <q-card class="modal-card confirm-modal">
-      <q-card-section class="modal-header">
-        <div class="modal-title-section">
-          <q-icon name="warning" class="modal-icon warning-icon" />
-          <div>
-            <div class="modal-title">Delete Announcement</div>
-            <div class="modal-subtitle">This action cannot be undone</div>
-          </div>
-        </div>
-        <q-btn
-          icon="close"
-          flat
-          round
-          class="modal-close-btn"
-          @click="$emit('update:modelValue', false)"
-        />
-      </q-card-section>
-      <q-separator />
-      <q-card-section class="modal-content">
-        <p class="confirm-text">
-          Are you sure you want to delete <strong>{{ announcementTitle }}</strong>?
+    <q-card class="ann-del">
+      <q-card-section class="ann-del__body">
+        <span class="ann-del__icon">
+          <q-icon name="o_delete" size="20px" />
+        </span>
+
+        <h2 class="ann-del__title">Delete this announcement?</h2>
+        <p class="ann-del__text">
+          <strong>{{ announcementTitle || 'This announcement' }}</strong> will be removed for
+          everyone. There is no undo.
         </p>
       </q-card-section>
-      <q-separator />
-      <q-card-section class="form-actions">
-        <q-btn flat color="grey-7" label="Cancel" @click="$emit('update:modelValue', false)" />
-        <q-btn color="negative" label="Delete" :loading="deleting" @click="$emit('confirm')" />
-      </q-card-section>
+
+      <q-card-actions class="ann-del__foot">
+        <q-btn
+          flat
+          no-caps
+          label="Keep it"
+          class="ann-del__cancel"
+          @click="$emit('update:modelValue', false)"
+        />
+        <q-btn
+          unelevated
+          no-caps
+          label="Delete"
+          class="ann-del__confirm"
+          :loading="deleting"
+          @click="$emit('confirm')"
+        />
+      </q-card-actions>
     </q-card>
   </q-dialog>
 </template>
 
 <script setup>
+/**
+ * Delete confirmation. The old version wore the brand navy header with an amber
+ * warning tile and a #6b7280 subtitle that was unreadable on it — and its
+ * confirm button was Quasar's stock `negative`, a different red from every other
+ * destructive control in the app. This uses the design system's critical tone
+ * throughout, and the destructive verb sits on the filled button while the safe
+ * choice stays quiet.
+ */
 defineProps({
   modelValue: { type: Boolean, default: false },
   announcementTitle: { type: String, default: '' },
@@ -47,77 +57,99 @@ defineEmits(['update:modelValue', 'confirm'])
 </script>
 
 <style scoped>
-.modal-card {
-  border-radius: 16px;
+.ann-del {
+  width: 380px;
+  max-width: 95vw;
+  border-radius: var(--dash-r-lg);
   overflow: hidden;
 }
 
-.confirm-modal {
-  width: 420px;
-  max-width: 90vw;
+.ann-del__body {
+  padding: 22px 20px 18px;
+  text-align: center;
 }
 
-.modal-header {
-  display: flex;
-  justify-content: space-between;
+.ann-del__icon {
+  display: inline-flex;
   align-items: center;
-  padding: 20px 24px !important;
-  background: #102335;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 12px;
+  border-radius: var(--dash-r-lg);
+  background: var(--dash-critical-bg);
+  border: 1px solid var(--dash-critical-line);
+  color: var(--dash-critical);
+  box-shadow: 0 0 0 4px rgba(180, 35, 24, 0.05);
 }
 
-.modal-title-section {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.modal-icon {
-  font-size: 28px;
-  padding: 8px;
-  border-radius: 10px;
-}
-
-.warning-icon {
-  color: #f59e0b;
-  background: #fef3c7;
-}
-
-.modal-title {
-  font-size: 20px;
+.ann-del__title {
+  margin: 0;
+  font-size: 16.5px;
   font-weight: 600;
-  color: #ffffff;
+  letter-spacing: -0.015em;
+  color: var(--dash-ink);
 }
 
-.modal-subtitle {
-  font-size: 13px;
-  color: #6b7280;
+.ann-del__text {
+  margin: 6px auto 0;
+  max-width: 38ch;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--dash-ink-3);
+}
+.ann-del__text strong {
+  color: var(--dash-ink);
+  font-weight: 600;
+  word-break: break-word;
 }
 
-.modal-close-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
+.ann-del__foot :deep(.q-btn + .q-btn) {
+  /* Quasar spaces sibling buttons itself; the footer's own flex gap is the only
+     spacing this wants. */
+  margin-left: 0;
 }
-.modal-close-btn:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  color: #ffffff !important;
-}
-
-.modal-content {
-  padding: 20px 24px !important;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.confirm-text {
-  font-size: 14px;
-  color: #374151;
-  line-height: 1.6;
-}
-
-.form-actions {
+.ann-del__foot {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 24px !important;
-  background: #fafafa;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--dash-n-25);
+  border-top: 1px solid var(--dash-line);
+}
+
+.ann-del__cancel {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--dash-r-md);
+  color: var(--dash-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.ann-del__cancel:hover {
+  background: var(--dash-n-100);
+}
+
+.ann-del__confirm {
+  height: 36px;
+  padding: 0 18px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-critical);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+}
+.ann-del__confirm:hover {
+  background: #912018;
+}
+
+@media (max-width: 599px) {
+  .ann-del__foot {
+    flex-direction: column-reverse;
+  }
+  .ann-del__foot .q-btn {
+    width: 100%;
+    margin: 0;
+  }
 }
 </style>
