@@ -180,6 +180,9 @@
           :employees="employees"
           :is-filtered="activeFilters.length > 0"
           :single-employee="reviewingSingleEmployee"
+          :sort-by="sort.by"
+          :descending="sort.desc"
+          @update:sort="onSortChange"
           @view-selfie="viewSelfie"
           @view-photo="viewEmployeePhoto"
           @edit-time="openInlineEdit"
@@ -255,6 +258,8 @@
       :options-loading="filtersLoading"
       :saving="creating"
       :recorded-assignments="alreadyRecordedAssignments"
+      :completed-assignments="alreadyCompletedAssignments"
+      :completed-record-count="completedRecordCount"
       @submit="submitAttendance"
       @filter-employees="filterEmployees"
       @fetch-schedule="fetchEmployeeSchedule"
@@ -300,7 +305,7 @@
 
 <script setup>
 import { api } from 'src/boot/axios'
-import { BASE } from 'src/composables/utils/http'
+import { BASE, extractErrorMessage } from 'src/composables/utils/http'
 import { useCompany } from '@/composables/page/useCompany'
 import PageShell from '@/components/layout/PageShell.vue'
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
@@ -325,6 +330,10 @@ import {
   getEmployeeId,
   getEmployeeName as getEmployeeNameFor,
   getEmployeePhoto as getEmployeePhotoFor,
+  getShiftName,
+  getAssignmentId,
+  getLockedShiftRecordIds,
+  isRecordComplete,
 } from '@/composables/utils/attendance'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
@@ -397,6 +406,12 @@ const pagination = ref({
 })
 
 const pageSizeOptions = [10, 25, 50]
+
+// Column sort, held here rather than inside the table: the table only ever sees
+// one page of rows, so sorting there would reorder 25 records out of 56 and
+// leave the rest stranded on page 2. Sorting the whole filtered set here means
+// clicking "Work type" really does pull every rest-day row to the front.
+const sort = ref({ by: '', desc: false })
 
 const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -559,17 +574,52 @@ const newRecord = ref({
   selected_assignment_id: null,
 })
 
-const alreadyRecordedAssignments = computed(() => {
+// Every attendance the employee already has on the day being added. This is
+// what the Add dialog refuses against: a day that has already been clocked in
+// and out must not take a second record, because payroll would then count it
+// twice.
+//
+// `attendanceData` holds a whole month, so the date has to be part of the match
+// — without it a record on any other day of the month would block this one.
+const existingRecordsForNewRecord = computed(() => {
   if (!newRecord.value.employee || !newRecord.value.date) return []
   const employeeId = getEmployeeId(newRecord.value.employee)
-  return attendanceData.value
-    .filter((a) => {
-      const aEmp = a.employee?.id ?? a.employee?.uuid ?? a.employee_uuid ?? a.employee
-      return String(aEmp) === String(employeeId)
-    })
-    .map((a) => a.assignment_id)
-    .filter(Boolean)
+  return attendanceData.value.filter((a) => {
+    const aEmp = a.employee?.id ?? a.employee?.uuid ?? a.employee_uuid ?? a.employee
+    if (String(aEmp) !== String(employeeId)) return false
+    const recordDate = a.date || a.attendance_date || a.log_date
+    return recordDate === newRecord.value.date
+  })
 })
+
+// The same records keyed by the shift they were filed against, for the
+// per-shift badges. The assignment id is read through getAssignmentId rather
+// than `a.assignment_id` directly: the list endpoint nests it under
+// `employee_assignment`, and reading the flat spelling alone left this list
+// permanently empty, which is how a completed shift could be recorded twice in
+// the first place.
+const alreadyRecordedAssignments = computed(() =>
+  existingRecordsForNewRecord.value.map(getAssignmentId).filter(Boolean),
+)
+
+// A subset of the above: shifts whose record already has both punches. Those are
+// worked and done — the dialog says so rather than the vaguer "already recorded".
+const alreadyCompletedAssignments = computed(() =>
+  existingRecordsForNewRecord.value.filter(isRecordComplete).map(getAssignmentId).filter(Boolean),
+)
+
+// A count, not ids, so the dialog can still refuse a duplicate on a day whose
+// records carry no assignment id at all — the case where nothing can be matched
+// shift-by-shift and the per-shift badges have nothing to go on.
+const completedRecordCount = computed(
+  () => existingRecordsForNewRecord.value.filter(isRecordComplete).length,
+)
+
+// Shifts on the books for the day being added. A day is fully accounted for
+// once its completed records cover every one of them. Zero means the schedule
+// has not loaded (or does not exist), and a day with no schedule is refused
+// separately below with its own message.
+const shiftsScheduledForNewRecord = computed(() => employeeSchedule.value?.length ?? 0)
 
 const isAdmin = ref(false)
 const userData = JSON.parse(localStorage.getItem('user') || '{}')
@@ -692,14 +742,77 @@ watch(totalPages, (max) => {
 //
 // The per-row timezone stamp happens here rather than in filteredAttendanceRows
 // so it only ever runs over one page of rows instead of the whole span.
+// Records that cannot take a manual time because their shift is already
+// accounted for by another, completed record. Resolved over the whole loaded
+// month rather than over `filteredAttendanceRows`, so a search or a payout-group
+// filter that happens to hide the completed record does not quietly unlock its
+// duplicate.
+const lockedShiftRecordIds = computed(() => getLockedShiftRecordIds(attendanceData.value))
+
+function shiftLockReason(row) {
+  const shift = getShiftName(row)
+  return shift && shift !== '—'
+    ? `${shift} already has a completed attendance for this day. Edit that record instead — times entered here would count the shift twice.`
+    : 'This shift already has a completed attendance for this day. Edit that record instead — times entered here would count the shift twice.'
+}
+
+// The value a row sorts by for a given column. Kept as strings so the
+// comparator stays one code path — dates and times are already ISO-ordered, and
+// names and work types compare case-insensitively.
+function sortValueFor(row, key) {
+  switch (key) {
+    case 'employee':
+      return getEmployeeName(row.employee).toLowerCase()
+    case 'date':
+      return row.date || row.attendance_date || row.log_date || ''
+    case 'work_type':
+      return (row.work_type || '').toLowerCase()
+    case 'shift_name':
+      return (getShiftName(row) || '').toLowerCase()
+    case 'time_in':
+      return row.time_in || ''
+    case 'time_out':
+      return row.time_out || ''
+    default:
+      return ''
+  }
+}
+
+// Sorted before the page slice, over every row that survived the filters.
+//
+// Rows with no value for the sorted column sink to the bottom in both
+// directions: a descending sort on work type should lead with the work types,
+// not with a block of em dashes. Array#sort is stable, so records sharing a
+// value keep the order the fetch returned them in.
+const sortedAttendanceRows = computed(() => {
+  const key = sort.value.by
+  if (!key) return filteredAttendanceRows.value
+
+  const dir = sort.value.desc ? -1 : 1
+  return [...filteredAttendanceRows.value].sort((a, b) => {
+    const av = sortValueFor(a, key)
+    const bv = sortValueFor(b, key)
+    if (!av && !bv) return 0
+    if (!av) return 1
+    if (!bv) return -1
+    return av < bv ? -dir : av > bv ? dir : 0
+  })
+})
+
 const pagedRows = computed(() => {
   const start = (pagination.value.page - 1) * pagination.value.rowsPerPage
-  const visible = filteredAttendanceRows.value.slice(start, start + pagination.value.rowsPerPage)
+  const visible = sortedAttendanceRows.value.slice(start, start + pagination.value.rowsPerPage)
+  const locked = lockedShiftRecordIds.value
 
-  return visible.map((row) => ({
-    ...row,
-    _timezone: getTimezoneForEmployee(row.employee) || '',
-  }))
+  return visible.map((row) => {
+    const isLocked = locked.has(row.id)
+    return {
+      ...row,
+      _timezone: getTimezoneForEmployee(row.employee) || '',
+      _shiftLocked: isLocked,
+      _shiftLockedReason: isLocked ? shiftLockReason(row) : '',
+    }
+  })
 })
 
 // ─── Header + filters ─────────────────────────────────────────────────────────
@@ -1024,6 +1137,32 @@ async function submitAttendance(record) {
     return
   }
 
+  // The dialog already disables Save for this, but the check belongs on the
+  // submit path too — it is the last point before the POST. Same rule: a shift
+  // clocked in and out is finished, and a second record for it makes payroll
+  // count the day twice.
+  if (
+    shiftsScheduledForNewRecord.value > 0 &&
+    completedRecordCount.value >= shiftsScheduledForNewRecord.value
+  ) {
+    showErrorNotification(
+      shiftsScheduledForNewRecord.value > 1
+        ? 'Every shift scheduled for this day already has a completed attendance. Edit the existing records instead.'
+        : 'This employee already has an attendance with a time in and time out on this day. Edit the existing record instead.',
+    )
+    return
+  }
+
+  const targetAssignment = record.selected_assignment_id
+  if (targetAssignment != null && alreadyRecordedAssignments.value.includes(targetAssignment)) {
+    showErrorNotification(
+      alreadyCompletedAssignments.value.includes(targetAssignment)
+        ? 'That shift already has a completed attendance for this day. Edit the existing record instead.'
+        : 'That shift already has an attendance record for this day. Edit the existing record instead.',
+    )
+    return
+  }
+
   const employeeId = getEmployeeId(record.employee)
   const selectedEmp = employees.value.find(
     (emp) => emp.id === employeeId || emp.uuid === employeeId,
@@ -1099,12 +1238,7 @@ async function submitAttendance(record) {
         /* rollback failure is non-critical */
       }
     }
-    const data = error.response?.data
-    const msg =
-      typeof data === 'string'
-        ? data
-        : (data?.reason ?? data?.detail ?? data?.message ?? 'Failed to record attendance')
-    showErrorNotification(msg)
+    showErrorNotification(extractErrorMessage(error, 'Failed to record attendance'))
   } finally {
     creating.value = false
   }
@@ -1112,6 +1246,14 @@ async function submitAttendance(record) {
 
 // ─── Inline time edit ─────────────────────────────────────────────────────────
 async function openInlineEdit(row, field) {
+  // The cell renders as a lock rather than a pencil in this case, so reaching
+  // here means the row was opened some other way. Refuse it anyway — this is the
+  // one place every time edit funnels through.
+  if (lockedShiftRecordIds.value.has(row.id)) {
+    showErrorNotification(shiftLockReason(row))
+    return
+  }
+
   const employeeId = getEmployeeId(row.employee)
   if (!(await hasScheduleForEmployeeDate(employeeId, row.date))) {
     await $q.dialog({
@@ -1180,10 +1322,7 @@ async function saveInlineEdit() {
     closeInlineEdit()
     await fetchAttendanceData()
   } catch (error) {
-    const data = error.response?.data
-    const msg =
-      typeof data === 'string' ? data : (data?.detail ?? data?.message ?? 'Failed to update')
-    showErrorNotification(msg)
+    showErrorNotification(extractErrorMessage(error, 'Failed to update'))
   } finally {
     inlineEdit.value.saving = false
   }
@@ -1239,13 +1378,10 @@ async function updateAttendance(record) {
     showEditDialog.value = false
     await fetchAttendanceData()
   } catch (error) {
-    const data = error.response?.data
-    let msg = 'Failed to update attendance'
-    if (error.response?.status === 404)
-      msg = 'Update endpoint not found. Please check the API documentation.'
-    else if (typeof data === 'string') msg = data
-    else if (data?.detail) msg = data.detail
-    else if (data?.message) msg = data.message
+    const msg =
+      error.response?.status === 404
+        ? 'Update endpoint not found. Please check the API documentation.'
+        : extractErrorMessage(error, 'Failed to update attendance')
     showErrorNotification(msg)
   } finally {
     updating.value = false
@@ -1388,6 +1524,13 @@ function onPageChange(newPage) {
 
 function onRowsPerPageChange(newSize) {
   pagination.value.rowsPerPage = newSize
+  pagination.value.page = 1
+}
+
+// Back to page 1 on every sort change — the point of sorting is to see what now
+// ranks first, and staying on page 3 hides it.
+function onSortChange({ sortBy, descending }) {
+  sort.value = { by: sortBy || '', desc: Boolean(descending) }
   pagination.value.page = 1
 }
 
