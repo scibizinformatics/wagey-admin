@@ -48,10 +48,10 @@
 /**
  * A named breakdown with employee counts, an amount and a share bar.
  *
- * PayrollByCompanyPanel and PaymentChannelsPanel were the same ~130-line
- * component twice over, differing only in title, icon and the name of the array
- * prop. Both are now thin wrappers around this one, so the two tables cannot
- * drift apart again.
+ * The per-company and per-channel splits were once the same ~130-line component
+ * twice over, differing only in title, icon and the name of the array prop. The
+ * table lives here instead, so any panel of this shape — PaymentChannelsPanel
+ * today — is a thin wrapper and they cannot drift apart again.
  */
 import { computed } from 'vue'
 import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
