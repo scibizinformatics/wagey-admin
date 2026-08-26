@@ -379,6 +379,14 @@ onMounted(async () => {
   color: var(--dash-ink);
 }
 
+/* Every page header in the app carries the same title metrics, including the
+   one step down at tablet width. See EmployeesPage's .emp-head__title. */
+@media (max-width: 1023px) {
+  .inv-head__title {
+    font-size: 20px;
+  }
+}
+
 .inv-head__sub {
   display: flex;
   align-items: center;
@@ -546,12 +554,6 @@ onMounted(async () => {
   color: var(--dash-ink-4);
 }
 
-@media (min-width: 1440px) {
-  .inv-head__title {
-    font-size: 24px;
-  }
-}
-
 /* ── Tablet ──
    Header stacks, actions take the full width, and the toolbar's three parts go
    to two rows: search and filter share a line, the count sits under them. */
@@ -582,9 +584,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 599px) {
-  .inv-head__title {
-    font-size: 20px;
-  }
   .inv-head__actions {
     justify-content: stretch;
   }
