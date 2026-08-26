@@ -150,7 +150,6 @@
           :monthly-trend-series="monthlyTrendSeries"
           :thirteenth-month-pay="thirteenthMonthPay"
           :component-breakdown="componentBreakdown"
-          :payroll-by-company="payrollByCompany"
           :payment-channels="paymentChannels"
           :employee-releases="employeeReleases"
           :fmt-currency="fmtCurrencyPeso"
@@ -165,7 +164,6 @@
           :thirteenth-month-pay="thirteenthMonthPay"
           :component-breakdown="componentBreakdown"
           :monthly-comparison="monthlyComparison"
-          :payroll-by-company="payrollByCompany"
           :employee-releases="employeeReleases"
           :payment-channels="paymentChannels"
           :annual-indicators="annualIndicators"
@@ -211,7 +209,6 @@ const {
   thirteenthMonthPay,
   monthlyTrendSeries,
   componentBreakdown,
-  payrollByCompany,
   paymentChannels,
   employeeReleases,
   monthlyComparison,
