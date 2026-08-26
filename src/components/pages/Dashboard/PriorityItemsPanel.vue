@@ -11,10 +11,9 @@
     empty-title="Nothing needs action today"
     empty-sub="Attendance and payroll are clear. Anything that comes up will land here."
     skeleton="table"
-    :skeleton-rows="5"
-    scroll
+    :skeleton-rows="ROWS_PER_PAGE"
   >
-    <DashTable :columns="columns" :rows="items" :min-width="560">
+    <DashTable :columns="columns" :rows="pagedItems" :min-width="560">
       <template #cell-employee="{ row }">
         <span class="emp">
           <q-avatar size="24px" :style="{ background: avatarColor(row.employee) }" class="emp__avatar">
@@ -33,6 +32,16 @@
         </span>
       </template>
     </DashTable>
+
+    <template #footer>
+      <DashPager
+        class="queue-pager"
+        :page="page"
+        :rows-per-page="ROWS_PER_PAGE"
+        :total="items.length"
+        @update:page="page = $event"
+      />
+    </template>
   </DashPanel>
 </template>
 
@@ -45,8 +54,9 @@
  * queue is non-empty, so an admin can tell at a glance from the panel's edge
  * whether the day is clear without reading the rows.
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
+import DashPager from '@/components/pages/Dashboard/DashPager.vue'
 import DashTable from '@/components/pages/Dashboard/DashTable.vue'
 
 const props = defineProps({
@@ -60,6 +70,29 @@ const columns = [
   { key: 'issue', label: 'Issue', flex: 1.4 },
   { key: 'actionType', label: 'Impact', flex: 1 },
 ]
+
+// The queue routinely runs to dozens of rows — three per employee with an
+// incomplete day — which grew the panel far past everything beside it. It is
+// paged instead, so the card keeps one height and the subtitle still says how
+// much work is really queued.
+const ROWS_PER_PAGE = 6
+const page = ref(1)
+
+const pagedItems = computed(() => {
+  const start = (page.value - 1) * ROWS_PER_PAGE
+  return props.items.slice(start, start + ROWS_PER_PAGE)
+})
+
+// A refetch or a company switch replaces the queue wholesale, and resolving
+// items shortens it — either can strand the reader on a page that no longer
+// exists, so clamp back into range whenever the length changes.
+watch(
+  () => props.items.length,
+  (len) => {
+    const lastPage = Math.max(1, Math.ceil(len / ROWS_PER_PAGE))
+    if (page.value > lastPage) page.value = lastPage
+  },
+)
 
 const subtitle = computed(() => {
   if (props.loading) return ''
@@ -109,6 +142,13 @@ function avatarColor(name) {
 </script>
 
 <style scoped>
+/* DashTable insets its cells 10px inside the panel body, so the pager takes the
+   same inset — otherwise its range read-out and its next/prev buttons sit 10px
+   outside the first and last columns they page through. */
+.queue-pager {
+  padding: 0 10px;
+}
+
 .emp {
   display: flex;
   align-items: center;
