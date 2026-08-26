@@ -35,8 +35,8 @@
         </DashPanel>
       </div>
 
-      <!-- Detail: how the month divides across cutoffs, companies and channels. -->
-      <div class="monthly__row monthly__row--three">
+      <!-- Detail: how the month divides across cutoffs and payment channels. -->
+      <div class="monthly__row monthly__row--pair">
         <DashPanel
           icon="bar_chart"
           title="Cutoff comparison"
@@ -50,11 +50,6 @@
           <TrendChart :labels="cutoffLabels" :values="cutoffValues" type="bar" />
         </DashPanel>
 
-        <PayrollByCompanyPanel
-          :companies="currentPayrollByCompany"
-          :total-row="currentPayrollByCompanyTotal"
-          :loading="loading"
-        />
         <PaymentChannelsPanel
           :channels="currentPaymentChannels"
           :total-row="currentPaymentChannelsTotal"
@@ -79,16 +74,15 @@
  * Monthly Summary tab layout.
  *
  * Ordered so the month is understood before it is dissected: the trend places
- * the month in context and the donut says what it is made of, then the three
- * splits (by cutoff, by company, by channel) explain it, then the two
- * supporting ledgers close the tab.
+ * the month in context and the donut says what it is made of, then the two
+ * splits (by cutoff, by channel) explain it, then the two supporting ledgers
+ * close the tab.
  */
 import { computed } from 'vue'
 import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
 import TrendChart from '@/components/pages/Dashboard/TrendChart.vue'
 import DonutChart from '@/components/pages/Dashboard/DonutChart.vue'
 import MonthlyPayrollTrendPanel from '@/components/pages/Dashboard/MonthlyPayrollTrendPanel.vue'
-import PayrollByCompanyPanel from '@/components/pages/Dashboard/PayrollByCompanyPanel.vue'
 import PaymentChannelsPanel from '@/components/pages/Dashboard/PaymentChannelsPanel.vue'
 import OtherEmployeeReleasesPanel from '@/components/pages/Dashboard/OtherEmployeeReleasesPanel.vue'
 import ThirteenthMonthPayPanel from '@/components/pages/Dashboard/ThirteenthMonthPayPanel.vue'
@@ -98,7 +92,6 @@ const props = defineProps({
   monthlyTrendSeries: { type: Array, default: () => [] },
   thirteenthMonthPay: { type: Object, required: true },
   componentBreakdown: { type: Function, required: true },
-  payrollByCompany: { type: Array, default: () => [] },
   paymentChannels: { type: Array, default: () => [] },
   employeeReleases: { type: Array, default: () => [] },
   fmtCurrency: { type: Function, required: true },
@@ -119,8 +112,8 @@ const cutoffs = computed(() => selected.value?.cutoffs ?? [])
 const cutoffLabels = computed(() => cutoffs.value.map((c) => c.period_label.split(',')[0]))
 const cutoffValues = computed(() => cutoffs.value.map((c) => c.total_payroll))
 
-// Each of the three splits below is stored as a list of per-month entries, so
-// they all resolve the same way: find this month's entry, or fall back to empty.
+// The splits below are each stored as a list of per-month entries, so they both
+// resolve the same way: find this month's entry, or fall back to empty.
 function entryForSelectedMonth(list) {
   const month = selected.value?.month
   if (!month) return null
@@ -135,11 +128,6 @@ function totalsFor(rows) {
   if (!rows.length) return null
   return { employees: sumBy(rows, 'employees'), amount: sumBy(rows, 'amount') }
 }
-
-const currentPayrollByCompany = computed(
-  () => entryForSelectedMonth(props.payrollByCompany)?.companies ?? [],
-)
-const currentPayrollByCompanyTotal = computed(() => totalsFor(currentPayrollByCompany.value))
 
 const currentPaymentChannels = computed(
   () => entryForSelectedMonth(props.paymentChannels)?.channels ?? [],
@@ -172,8 +160,10 @@ const currentEmployeeReleasesTotal = computed(
   grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
 }
 
-.monthly__row--three {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+/* Two even columns: the by-company split used to sit here, and the cutoff and
+   channel panels take the freed width rather than leaving a gap. */
+.monthly__row--pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .monthly__row--split {
@@ -214,15 +204,9 @@ const currentEmployeeReleasesTotal = computed(
 }
 
 /* ── Responsive ── */
-@media (min-width: 1024px) and (max-width: 1439px) {
-  .monthly__row--three {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  }
-}
-
 @media (max-width: 1024px) {
   .monthly__row--lead,
-  .monthly__row--three,
+  .monthly__row--pair,
   .monthly__row--split {
     grid-template-columns: 1fr;
   }
