@@ -17,7 +17,25 @@
     </span>
 
     <div class="punch__body">
+      <!-- Locked: the shift this record belongs to already has a completed
+           attendance elsewhere, so this one must not take a manual time. It
+           stays a static field rather than a disabled button so it cannot be
+           focused or clicked at all, and carries the reason on hover. -->
+      <span
+        v-if="locked"
+        class="punch__time punch__time--locked dash-num"
+        :class="{ 'punch__time--set': !!formatted }"
+        :aria-label="`${label}: ${formatted ?? 'not recorded'}. Locked — ${lockedReason}`"
+      >
+        <span class="punch__value">{{ formatted ?? '--:--' }}</span>
+        <q-icon name="o_lock" size="12px" class="punch__pencil" />
+        <q-tooltip anchor="top middle" self="bottom middle" :offset="[0, 6]">
+          {{ lockedReason }}
+        </q-tooltip>
+      </span>
+
       <button
+        v-else
         type="button"
         class="punch__time dash-num"
         :class="{ 'punch__time--set': !!formatted }"
@@ -65,6 +83,17 @@ const props = defineProps({
   source: { type: String, default: '' },
   /** 'in' | 'out' — only affects the placeholder glyph and the label. */
   kind: { type: String, default: 'in' },
+  /**
+   * Set when this record's shift already has a completed attendance on another
+   * record. The time then becomes read-only: an admin correcting the shift
+   * should edit the record that actually holds it, not add a manual time to a
+   * duplicate.
+   */
+  locked: { type: Boolean, default: false },
+  lockedReason: {
+    type: String,
+    default: 'This shift already has a completed attendance record.',
+  },
 })
 
 defineEmits(['edit', 'view-selfie'])
@@ -108,7 +137,9 @@ const formatted = computed(() => formatTime(props.time, props.timezone))
 }
 .punch__thumb:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 .punch__thumb--none {
@@ -148,7 +179,8 @@ const formatted = computed(() => formatTime(props.time, props.timezone))
   color: var(--dash-ink-4);
   cursor: pointer;
   white-space: nowrap;
-  transition: color var(--dash-fast) var(--dash-ease),
+  transition:
+    color var(--dash-fast) var(--dash-ease),
     border-color var(--dash-fast) var(--dash-ease),
     background var(--dash-fast) var(--dash-ease);
 }
@@ -165,7 +197,7 @@ const formatted = computed(() => formatTime(props.time, props.timezone))
   background: var(--dash-n-25);
 }
 
-.punch__time:hover {
+.punch__time:hover:not(.punch__time--locked) {
   color: var(--dash-accent);
   border-color: var(--dash-accent);
   border-style: solid;
@@ -175,7 +207,9 @@ const formatted = computed(() => formatTime(props.time, props.timezone))
 .punch__time:focus-visible {
   outline: none;
   border-color: var(--dash-accent);
-  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 .punch__value {
@@ -187,9 +221,26 @@ const formatted = computed(() => formatTime(props.time, props.timezone))
   color: var(--dash-n-400);
   transition: color var(--dash-fast) var(--dash-ease);
 }
-.punch__time:hover .punch__pencil,
+.punch__time:hover:not(.punch__time--locked) .punch__pencil,
 .punch__time:focus-visible .punch__pencil {
   color: var(--dash-accent);
+}
+
+/* Locked reads as a field that is filled in and settled — flat, greyed, no
+   hover response — rather than as a broken control. The lock glyph replaces the
+   pencil in place so the row keeps its rhythm against unlocked rows. */
+.punch__time--locked {
+  cursor: not-allowed;
+  color: var(--dash-ink-3);
+  background: var(--dash-n-25);
+  border-style: dashed;
+}
+.punch__time--locked.punch__time--set {
+  color: var(--dash-ink-3);
+  font-weight: 500;
+}
+.punch__time--locked .punch__pencil {
+  color: var(--dash-n-400);
 }
 
 .punch__source {
