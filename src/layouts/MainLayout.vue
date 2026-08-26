@@ -304,7 +304,9 @@ import { useNotifications } from '@/composables/useNotifications'
 import { useCompanyStore } from '@/stores/company'
 import { api } from 'src/boot/axios'
 
-import wageyLogo from 'src/assets/wagey_icon(White).png'
+// The mark trimmed to the glyph. The untrimmed `wagey_icon(White).png` carries
+// ~69% transparent padding, so a 34px box of it drew an 11px logo.
+import wageyLogo from 'src/assets/wagey_mark.png'
 
 const $q = useQuasar()
 const router = useRouter()
@@ -906,14 +908,14 @@ onUnmounted(() => {
 }
 
 /* ── Brand ──────────────────────────────────────────────────────────────────
-   The rail's masthead, and deliberately the largest type in the drawer: a 34px
+   The rail's masthead, and deliberately the largest type in the drawer: a 21px
    mark beside a 19px wordmark against 13px nav labels. Padding is horizontal
    only so `min-height` can hold the block to exactly the header's height and
    the two line up across the seam. */
 .app-nav__brand {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
   padding: 0 16px;
   border-bottom: 1px solid var(--nav-line);
   flex-shrink: 0;
@@ -928,24 +930,37 @@ onUnmounted(() => {
   border-bottom: none;
 }
 
+/* The asset is trimmed to the glyph, so the box IS the mark's visual size and
+   there is no transparent padding to compensate for. Height is what is set —
+   width follows the mark's own 1.09:1 aspect — and 21px puts the mark's mass at
+   roughly the height of the whole word beside it, so the two read as one
+   lockup. Both are centred on the same line box; the mark's centre lands on the
+   wordmark's cap-height midpoint, so no optical nudge is needed. */
 .app-nav__logo {
-  width: 34px;
-  height: 34px;
+  height: 21px;
   display: flex;
   align-items: center;
+  /* Collapsed the brand is a column, so the box stretches the rail's width and
+     the mark has to centre itself inside it. */
   justify-content: center;
   flex-shrink: 0;
 }
 .app-nav__logo img {
-  width: 100%;
+  display: block;
   height: 100%;
-  object-fit: contain;
+  width: auto;
+}
+/* Collapsed, the mark is alone in a 72px rail and carries the brand by itself,
+   so it steps up. */
+.app-nav__brand--mini .app-nav__logo {
+  height: 26px;
 }
 
 .app-nav__wordmark {
   flex: 1;
   min-width: 0;
   font-size: 19px;
+  line-height: 1;
   font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--nav-ink);
@@ -1010,13 +1025,13 @@ onUnmounted(() => {
 }
 
 /* ── Items ──────────────────────────────────────────────────────────────────
-   Selection is carried by the icon: outlined when inactive, filled when active
-   (see navIcon()), with the label going white and semibold alongside it. There
-   is deliberately NO highlight block behind the active item — a filled glyph is
-   already much heavier than an outlined one, so the row reads as selected
-   without painting a shape around it, and the rail stays quiet. Hover is the
-   only thing that draws a surface. */
+   Selection is carried by the icon (outlined when inactive, filled when active,
+   see navIcon()), the label going white and semibold, and a blue bar pinned to
+   the row's left edge. There is still no highlight block behind the active item
+   — the bar marks the row without painting a shape around it, so the rail stays
+   quiet. Hover is the only thing that draws a surface. */
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1067,6 +1082,31 @@ onUnmounted(() => {
 }
 .nav-item--active:hover {
   background: var(--nav-hover);
+}
+
+/* The selection bar. Full row height rather than a short centred tick, so it
+   reads as the row being marked rather than as a bullet next to it, and it is
+   inset flush with the item's own left edge so it lines up with the group
+   labels above it instead of floating in the rail's padding. */
+.nav-item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--nav-accent);
+}
+
+/* Collapsed, the row is a 44px disc, so the bar moves out of the item and sits
+   in the rail's gutter, keeping the glyph centred. */
+.nav-item--mini.nav-item--active::before {
+  left: -10px;
+  top: 50%;
+  bottom: auto;
+  height: 22px;
+  transform: translateY(-50%);
 }
 
 .nav-item:focus-visible {
