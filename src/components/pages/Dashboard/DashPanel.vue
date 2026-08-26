@@ -30,7 +30,10 @@
       <slot v-else />
     </div>
 
-    <footer v-if="$slots.footer" class="dash-panel__footer">
+    <!-- The footer is chrome for the body's rows — a total or a pager — so it
+         goes away with them rather than sitting under a skeleton or an empty
+         state, where it would state a figure for rows that are not there. -->
+    <footer v-if="$slots.footer && !loading && !empty" class="dash-panel__footer">
       <slot name="footer" />
     </footer>
   </section>
