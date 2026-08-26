@@ -11,7 +11,7 @@
       dense
       :pagination="pagination"
       :rows-per-page-options="[5, 10, 15]"
-      class="dash-qtable dash-qtable--flush payout__table"
+      class="dash-qtable payout__table"
       hide-no-data
       @request="onRequest"
     >
@@ -171,6 +171,14 @@ function onRequest(pp) {
 }
 .payout__table :deep(.q-table tbody tr:hover td) {
   background: var(--dash-hover);
+}
+
+/* The panel head's rule sits directly above this header strip, so the column
+   labels keep `dash-qtable`'s own top padding rather than the flush variant's
+   zero — without it they read as a second line of the panel head. The skeleton
+   head takes the same offset so nothing shifts when the rows land. */
+.payout :deep(.dash-skeleton__head) {
+  padding-top: 13px;
 }
 
 .payout__table :deep(.q-table__bottom) {
