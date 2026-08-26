@@ -88,8 +88,8 @@
 
           <!-- One card per day, however many shifts it holds. A two-shift day
                merges into a single chip that lists both legs, so the cell holds
-               one object rather than two competing ones — and the dual rail plus
-               the second leg both say "twice today".
+               one object rather than two competing ones — and the dual-shift
+               edge colour plus the second leg both say "twice today".
 
                Each leg prints its own time and site. The shift type's name is
                left off: it is typically the same range written another way
@@ -98,7 +98,7 @@
           <div
             v-if="cellFor(user.id, dayIdx).working.length"
             class="chip chip--shift"
-            :style="{ '--chip-rail': shiftRail(isDualCell(user.id, dayIdx)) }"
+            :style="shiftChipTone(isDualCell(user.id, dayIdx))"
           >
             <div
               v-for="(shift, si) in cellFor(user.id, dayIdx).working"
@@ -253,7 +253,7 @@ import {
   splitDayShifts,
   getInitials,
   getAvatarColor,
-  shiftRail,
+  shiftChipTone,
   isSameDate,
 } from '@/composables/utils/schedule'
 
@@ -616,29 +616,35 @@ const isWeekend = (i) => {
 }
 
 /* ── Shift chips ──────────────────────────────────────────────────────────────
-   A white card with a 3px colour rail down its leading edge. The rail is drawn
-   with an inset shadow rather than a left border so it follows the card's radius
-   and does not shift the padding box.
+   A softly tinted card whose whole edge carries the colour, rather than a rail
+   down the leading edge only. A left-edge rail was easy to read as a divider or
+   as part of the cell next door; enclosing the card means the colour is
+   unambiguously about this card, whichever column it lands in.
 
-   Text stays in ink at every tint — see shiftRail() for why colour never lands
-   on 11px type here. */
+   The edge is a soft mix of the hue, not the hue itself, and the fill is a
+   fainter mix of the same — see shiftChipTone(). A full-strength 1px outline
+   repeated across this grid vibrates as the week scrolls, which is tiring to
+   look at; the tint carries the same identity as a block of colour the eye can
+   rest on. Text stays in ink at every tint — see shiftChipTone() for why colour
+   never lands on 11px type here. */
 .chip {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 6px 8px 6px 10px;
+  padding: 6px 9px;
   border-radius: var(--dash-r-sm);
-  border: 1px solid var(--dash-line);
-  background: var(--dash-surface);
-  box-shadow: inset 3px 0 0 var(--chip-rail, var(--dash-n-300));
+  border: 1px solid var(--chip-edge, var(--dash-line));
+  background: var(--chip-tint, var(--dash-surface));
   min-width: 0;
-  transition: border-color var(--dash-fast) var(--dash-ease),
-    background var(--dash-fast) var(--dash-ease);
+  transition: box-shadow var(--dash-fast) var(--dash-ease);
 }
+/* Hover washes the whole card a touch darker instead of adding a ring or
+   swapping the edge colour. The wash is hue-agnostic, so one rule deepens an
+   indigo, rust, violet or grey card by the same amount, and nothing sharpens
+   under the pointer. */
 .chip:hover {
-  border-color: var(--dash-line-strong);
-  background: var(--dash-n-25);
+  box-shadow: inset 0 0 0 100px rgba(16, 24, 40, 0.03);
 }
 
 .chip__time {
@@ -687,7 +693,8 @@ const isWeekend = (i) => {
 /* Leave keeps one identity colour on its rail — it is an absence with a reason,
    so it stays distinguishable from a day off. */
 .chip--leave {
-  --chip-rail: var(--dash-cat-4);
+  --chip-edge: var(--dash-cat-4-soft);
+  --chip-tint: var(--dash-cat-4-tint);
 }
 .chip--leave .chip__row .q-icon {
   color: var(--dash-cat-4);
@@ -697,8 +704,8 @@ const isWeekend = (i) => {
    type, which made every rest day the loudest thing in the week; it now recedes
    so the shifts around it are what the eye lands on. */
 .chip--off {
-  --chip-rail: var(--dash-n-300);
-  background: var(--dash-n-25);
+  --chip-edge: var(--dash-line);
+  --chip-tint: var(--dash-n-25);
   border-style: dashed;
 }
 .chip--off .chip__row {
@@ -707,16 +714,13 @@ const isWeekend = (i) => {
 .chip--off .chip__title {
   font-weight: 500;
 }
-.chip--off:hover {
-  background: var(--dash-n-50);
-}
 
 /* No `.chip--merged` and no `.chip__sub`: a merged card is a normal shift card
-   with the dual rail and a single time span, so it needs neither its own chrome
-   nor a nested list of per-shift rows. */
+   with the dual-shift edge colour and a single time span, so it needs neither
+   its own chrome nor a nested list of per-shift rows. */
 
 .chip--shift {
-  padding: 6px 8px 6px 10px;
+  padding: 6px 9px;
 }
 
 /* One leg per shift inside the card. The second is separated by a hairline
