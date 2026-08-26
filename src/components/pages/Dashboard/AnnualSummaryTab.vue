@@ -12,10 +12,9 @@
       <YtdPayrollBreakdownPanel :breakdown="componentBreakdown(annual)" :loading="loading" />
     </div>
 
-    <!-- The year read three ways: over time, by org unit, by channel. -->
-    <div class="annual__row annual__row--three">
+    <!-- The year read two ways: month over month, and by payment channel. -->
+    <div class="annual__row annual__row--pair">
       <MonthlyComparisonTablePanel :months="monthlyComparison" :loading="loading" />
-      <PayrollByCompanyDonutPanel :companies="ytdPayrollByCompany" :loading="loading" />
       <PaymentChannelsPanel
         :channels="ytdPaymentChannels"
         :total-row="ytdPaymentChannelsTotal"
@@ -51,7 +50,6 @@ import { computed } from 'vue'
 import MonthlyPayrollTrendPanel from '@/components/pages/Dashboard/MonthlyPayrollTrendPanel.vue'
 import YtdPayrollBreakdownPanel from '@/components/pages/Dashboard/YtdPayrollBreakdownPanel.vue'
 import MonthlyComparisonTablePanel from '@/components/pages/Dashboard/MonthlyComparisonTablePanel.vue'
-import PayrollByCompanyDonutPanel from '@/components/pages/Dashboard/PayrollByCompanyDonutPanel.vue'
 import OtherEmployeeReleasesPanel from '@/components/pages/Dashboard/OtherEmployeeReleasesPanel.vue'
 import PaymentChannelsPanel from '@/components/pages/Dashboard/PaymentChannelsPanel.vue'
 import KeyAnnualIndicatorsPanel from '@/components/pages/Dashboard/KeyAnnualIndicatorsPanel.vue'
@@ -65,7 +63,6 @@ const props = defineProps({
   thirteenthMonthPay: { type: Object, required: true },
   componentBreakdown: { type: Function, required: true },
   monthlyComparison: { type: Array, default: () => [] },
-  payrollByCompany: { type: Array, default: () => [] },
   employeeReleases: { type: Array, default: () => [] },
   paymentChannels: { type: Array, default: () => [] },
   annualIndicators: { type: Object, default: () => ({}) },
@@ -80,7 +77,6 @@ function latest(list) {
   return list.length ? list[list.length - 1] : null
 }
 
-const ytdPayrollByCompany = computed(() => latest(props.payrollByCompany)?.companies ?? [])
 const ytdEmployeeReleases = computed(() => latest(props.employeeReleases)?.releases ?? [])
 const ytdEmployeeReleasesTotal = computed(() => latest(props.employeeReleases)?.total ?? 0)
 const ytdPaymentChannels = computed(() => latest(props.paymentChannels)?.channels ?? [])
@@ -136,6 +132,12 @@ const computedIndicators = computed(() =>
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* Two even columns: the by-company donut used to sit here, and the month-by-month
+   table and channel split take the freed width rather than leaving a gap. */
+.annual__row--pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 @media (min-width: 1024px) and (max-width: 1439px) {
   .annual__row--three {
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -144,7 +146,8 @@ const computedIndicators = computed(() =>
 
 @media (max-width: 1024px) {
   .annual__row--lead,
-  .annual__row--three {
+  .annual__row--three,
+  .annual__row--pair {
     grid-template-columns: 1fr;
   }
 }
