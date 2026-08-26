@@ -778,6 +778,17 @@ function sortValueFor(row, key) {
   }
 }
 
+// "Work" is the status the reader comes to this table for, so those records are
+// pinned above every other work type — and above the untyped rows — no matter
+// which column is sorted or in which direction. The chosen sort then orders
+// rows inside each of the two blocks.
+function isWorkRecord(row) {
+  return String(row?.work_type || '')
+    .trim()
+    .toLowerCase()
+    .startsWith('work')
+}
+
 // Sorted before the page slice, over every row that survived the filters.
 //
 // Rows with no value for the sorted column sink to the bottom in both
@@ -786,10 +797,13 @@ function sortValueFor(row, key) {
 // value keep the order the fetch returned them in.
 const sortedAttendanceRows = computed(() => {
   const key = sort.value.by
-  if (!key) return filteredAttendanceRows.value
-
   const dir = sort.value.desc ? -1 : 1
+
   return [...filteredAttendanceRows.value].sort((a, b) => {
+    const pinned = (isWorkRecord(b) ? 1 : 0) - (isWorkRecord(a) ? 1 : 0)
+    if (pinned) return pinned
+    if (!key) return 0
+
     const av = sortValueFor(a, key)
     const bv = sortValueFor(b, key)
     if (!av && !bv) return 0
