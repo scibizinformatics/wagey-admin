@@ -117,6 +117,11 @@
   // Selection accent for the rail. --dash-accent is tuned for white surfaces
   // and goes muddy on the navy nav, so the drawer gets its own lighter blue.
   --nav-accent: #5b8cff;
+  // Deeper end of the same blue, for the brand tile's gradient.
+  --nav-accent-deep: #2f56c9;
+  // Colour reaches the rail as a wash over the navy, never as a saturated
+  // block: this sits behind the selected row and under the masthead.
+  --nav-accent-soft: rgba(91, 140, 255, 0.13);
 
   // App header
   --header-h: 60px;
