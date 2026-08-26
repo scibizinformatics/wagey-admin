@@ -104,6 +104,8 @@
             :timezone="row._timezone"
             :selfie="row.time_in_selfie"
             :source="row.time_in_source || row.source"
+            :locked="row._shiftLocked"
+            :locked-reason="row._shiftLockedReason"
             @edit="$emit('edit-time', row, 'time_in')"
             @view-selfie="(url, title) => $emit('view-selfie', url, title)"
           />
@@ -117,6 +119,8 @@
             :timezone="row._timezone"
             :selfie="row.time_out_selfie"
             :source="row.time_out_source || row.source"
+            :locked="row._shiftLocked"
+            :locked-reason="row._shiftLockedReason"
             @edit="$emit('edit-time', row, 'time_out')"
             @view-selfie="(url, title) => $emit('view-selfie', url, title)"
           />
