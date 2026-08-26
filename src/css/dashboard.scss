@@ -114,6 +114,9 @@
   --nav-ink-2: rgba(255, 255, 255, 0.66);
   --nav-ink-3: rgba(255, 255, 255, 0.4);
   --nav-ring: rgba(255, 255, 255, 0.22);
+  // Selection accent for the rail. --dash-accent is tuned for white surfaces
+  // and goes muddy on the navy nav, so the drawer gets its own lighter blue.
+  --nav-accent: #5b8cff;
 
   // App header
   --header-h: 60px;
@@ -128,6 +131,19 @@
   --dash-cat-4: #8b5cf6;
   --dash-cat-5: #b58b00;
   --dash-cat-6: #be185d;
+
+  // Softened pairs of the three hues used on repeating small cards (schedule
+  // shift chips). A full-strength 1px edge repeated across a dense grid
+  // vibrates while the grid scrolls, which is tiring to look at; the -soft edge
+  // (30% of the hue over white) and -tint fill (8%) carry the same identity
+  // without the hard line. Identity-only marks — icons, dots — keep the full
+  // hue above.
+  --dash-cat-1-soft: #c0caf2;
+  --dash-cat-1-tint: #eef1fc;
+  --dash-cat-3-soft: #edc2b6;
+  --dash-cat-3-tint: #faefeb;
+  --dash-cat-4-soft: #dccefc;
+  --dash-cat-4-tint: #f6f2fe;
 
   // ── Radius ────────────────────────────────────────────────────────────────
   --dash-r-xs: 4px;
@@ -1102,4 +1118,15 @@
   box-shadow:
     0 0 0 2px var(--dash-surface),
     0 0 0 4px var(--dash-accent-ring);
+}
+
+// A Quasar field already shows focus on its `.q-field__control` — the accent
+// border and halo declared by `dash-field` above. The descendant rule would ring
+// the inner `<input>` too, so a focused search box drew a second rounded
+// rectangle inside its own border and read as a lens rather than one field. The
+// control keeps the ring; everything inside it opts out.
+.dash-panel .q-field :focus-visible,
+.dash-focusable .q-field :focus-visible {
+  border-radius: 0;
+  box-shadow: none;
 }
