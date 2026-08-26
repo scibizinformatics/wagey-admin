@@ -3,16 +3,23 @@
     <div class="stat__head">
       <span class="dash-swatch stat__mark" :style="{ background: markColor }" />
       <p class="dash-eyebrow stat__label" :title="label">{{ label }}</p>
+      <q-icon :name="icon" size="15px" class="stat__icon" />
     </div>
 
     <div class="stat__value-row">
       <span v-if="loading" class="dash-shimmer stat__skeleton" />
       <p v-else class="dash-metric stat__value">{{ value }}</p>
-      <q-icon :name="icon" size="17px" class="stat__icon" />
-    </div>
 
-    <p v-if="subtitle" class="stat__meta">{{ subtitle }}</p>
-    <p v-if="sub" class="stat__meta" :class="subClass ? `stat__meta--${subClass}` : ''">{{ sub }}</p>
+      <p v-if="subtitle" class="stat__meta" :title="subtitle">{{ subtitle }}</p>
+      <p
+        v-if="sub"
+        class="stat__meta"
+        :class="subClass ? `stat__meta--${subClass}` : ''"
+        :title="sub"
+      >
+        {{ sub }}
+      </p>
+    </div>
   </div>
 </template>
 
@@ -26,10 +33,23 @@
  * reads as a row of numbers on a common baseline rather than as five separate
  * compositions.
  *
- * The colour mark is a 8px swatch beside the label, not a filled icon tile. A
+ * The tile is deliberately two lines tall, not three. Supporting text
+ * ("Year to date", a funded amount) sits on the value's baseline beside the
+ * figure rather than on a line of its own: a third line cost ~40px of height on
+ * every card in the row — the grid stretches all cards to the tallest — which
+ * pushed the actual dashboard content below the fold on the Annual tab, where
+ * all five cards carry a subtitle. Beside the number it also reads better,
+ * because the qualifier is attached to the figure it qualifies.
+ *
+ * The value row wraps, so a card too narrow to hold figure and qualifier side
+ * by side drops the qualifier underneath instead of squeezing either. The
+ * figure itself never shrinks or truncates — a clipped peso amount is a wrong
+ * number, so the meta gives way first.
+ *
+ * The colour mark is a small swatch beside the label, not a filled icon tile. A
  * 40px tinted tile per card put five competing focal points next to the numbers
- * they were supposed to support; the icon survives as a muted glyph trailing
- * the value, where it identifies the metric without shouting.
+ * they were supposed to support; the icon survives as a muted glyph closing the
+ * label row, where it identifies the metric without shouting.
  *
  * `iconBg` is still accepted so existing callers keep working, but the design
  * no longer uses a filled tile.
@@ -60,9 +80,9 @@ const markColor = computed(() => props.iconColor || props.valueColor || 'var(--d
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  padding: 16px 18px 18px;
+  padding: 13px 15px 14px;
   background: var(--dash-surface);
   border: 1px solid var(--dash-line);
   border-radius: var(--dash-r-lg);
@@ -72,38 +92,27 @@ const markColor = computed(() => props.iconColor || props.valueColor || 'var(--d
 .stat__head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 
 .stat__mark {
   /* Slightly taller than wide so it reads as a marker, not a bullet. */
-  width: 4px;
-  height: 12px;
+  width: 3px;
+  height: 11px;
   border-radius: var(--dash-r-pill);
+  flex-shrink: 0;
 }
 
 .stat__label {
   margin: 0;
+  flex: 1 1 auto;
   min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.stat__value-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 30px;
-}
-
-.stat__value {
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .stat__icon {
@@ -111,15 +120,47 @@ const markColor = computed(() => props.iconColor || props.valueColor || 'var(--d
   flex-shrink: 0;
 }
 
+.stat__value-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: 1px;
+  min-width: 0;
+  /* Holds the baseline steady across cards whose figure is still loading. */
+  min-height: 25px;
+}
+
+.stat__value {
+  margin: 0;
+  /* One step down from .dash-metric: at 24px the figure set the whole tile's
+     height, and 21px still reads as the loudest thing on the card. */
+  font-size: 21px;
+  line-height: 1.18;
+  /* Never shrinks — the meta beside it wraps away instead of the number
+     truncating. */
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .stat__skeleton {
-  height: 22px;
-  width: 82px;
+  height: 20px;
+  width: 78px;
   border-radius: var(--dash-r-sm);
+  /* Baseline alignment would hang the placeholder off the top of the row; the
+     loaded figure fills the row's full height, so centre it to keep the tile
+     from shifting when the value lands. */
+  align-self: center;
 }
 
 .stat__meta {
   margin: 0;
-  font-size: 12px;
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 11px;
   color: var(--dash-ink-3);
   line-height: 1.4;
   white-space: nowrap;
@@ -135,13 +176,28 @@ const markColor = computed(() => props.iconColor || props.valueColor || 'var(--d
   font-weight: 500;
 }
 
+@media (min-width: 1441px) {
+  .stat {
+    padding: 14px 17px 15px;
+  }
+  .stat__value {
+    font-size: 22px;
+  }
+}
+
 @media (max-width: 1024px) {
   .stat {
-    padding: 13px 14px 15px;
-    gap: 6px;
+    padding: 10px 12px 11px;
+    gap: 4px;
   }
   .stat__label {
     white-space: normal;
+  }
+  .stat__value {
+    font-size: 19px;
+  }
+  .stat__value-row {
+    min-height: 22px;
   }
 }
 </style>
