@@ -835,6 +835,14 @@ onMounted(loadAnnouncements)
   color: var(--dash-ink);
 }
 
+/* Every page header in the app carries the same title metrics, including the
+   one step down at tablet width. See EmployeesPage's .emp-head__title. */
+@media (max-width: 1023px) {
+  .ann-head__title {
+    font-size: 20px;
+  }
+}
+
 .ann-head__sub {
   display: flex;
   align-items: center;
@@ -1096,12 +1104,6 @@ onMounted(loadAnnouncements)
   color: var(--dash-ink-4);
 }
 
-@media (min-width: 1440px) {
-  .ann-head__title {
-    font-size: 24px;
-  }
-}
-
 /* ── Laptop ──
    Two filters plus a search field and a count is more than fits on one line at
    this width once the sidebar takes its share; the count wraps under. */
@@ -1139,9 +1141,6 @@ onMounted(loadAnnouncements)
 }
 
 @media (max-width: 599px) {
-  .ann-head__title {
-    font-size: 20px;
-  }
   .ann-head__cta {
     flex: 1;
   }
