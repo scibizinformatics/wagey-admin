@@ -104,12 +104,24 @@
             :props="props"
             class="emp-table__td emp-table__td--num"
           >
-            <q-skeleton v-if="isLoadingBalance(props.row)" type="text" width="30px" height="14px" />
+            <q-skeleton
+              v-if="isLoadingBalance(props.row)"
+              type="text"
+              width="30px"
+              height="14px"
+              class="cell-skel"
+            />
             <span v-else class="dash-num">{{ getLeaveBalanceForType(props.row, lt.id) }}</span>
           </q-td>
 
           <q-td key="ctoBalance" :props="props" class="emp-table__td emp-table__td--num">
-            <q-skeleton v-if="isLoadingBalance(props.row)" type="text" width="30px" height="14px" />
+            <q-skeleton
+              v-if="isLoadingBalance(props.row)"
+              type="text"
+              width="30px"
+              height="14px"
+              class="cell-skel"
+            />
             <span v-else class="dash-num">{{ getCtoBalance(props.row) }}</span>
           </q-td>
 
@@ -119,6 +131,7 @@
               type="text"
               width="54px"
               height="14px"
+              class="cell-skel"
             />
             <span
               v-else
@@ -343,6 +356,16 @@ const columns = computed(() => [
   color: var(--dash-ink);
   font-variant-numeric: tabular-nums;
 }
+/* A QSkeleton is a block box, so the cell's own `text-align: right` never moved
+   it: every placeholder sat against the left edge of a right-aligned column
+   while the numbers it stands in for sit against the right one. Making it
+   inline-block hands it back to the cell's text alignment, so a loading balance
+   occupies the same edge as the figure that replaces it. */
+.emp-table :deep(.cell-skel) {
+  display: inline-block;
+  vertical-align: middle;
+}
+
 .emp-table :deep(.emp-table__th--actions) {
   width: 56px;
 }
