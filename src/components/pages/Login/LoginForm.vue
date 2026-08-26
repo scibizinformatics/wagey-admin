@@ -1,13 +1,9 @@
 <template>
   <section class="card" :class="{ 'card--shake': shake, 'card--done': signedIn }">
-    <!-- A slowly rotating conic gradient, clipped to a 1px ring, so the card
-         edge catches the light the way the stage behind it does. -->
-    <span class="card__ring" aria-hidden="true"></span>
-
     <header class="card__head">
       <img :src="markWhite" alt="Wagey" class="brandmark" :class="{ 'brandmark--lit': signedIn }" />
-      <h1 class="card__title">Sign in to Wagey</h1>
-      <p class="card__sub">Use your admin credentials to reach the payroll console.</p>
+      <h1 class="card__title">Sign in</h1>
+      <p class="card__sub">Use your admin credentials to reach the Wagey console.</p>
     </header>
 
     <form class="form" novalidate @submit.prevent="handleLogin">
@@ -29,7 +25,10 @@
       </div>
 
       <div class="field" style="--d: 120ms">
-        <label class="field__label" for="login-password">Password</label>
+        <div class="field__top">
+          <label class="field__label" for="login-password">Password</label>
+          <a href="#" class="link" @click.prevent="goToForgotPassword">Forgot password?</a>
+        </div>
         <div class="input" :class="{ 'input--filled': !!formData.password }">
           <q-icon name="lock_outline" size="18px" class="input__icon" />
           <input
@@ -63,14 +62,11 @@
         </transition>
       </div>
 
-      <div class="row" style="--d: 180ms">
-        <label class="check">
-          <input v-model="formData.rememberMe" type="checkbox" class="check__input" />
-          <span class="check__box"><q-icon name="check" size="12px" /></span>
-          <span class="check__label">Keep me signed in</span>
-        </label>
-        <a href="#" class="link" @click.prevent="goToForgotPassword">Forgot password?</a>
-      </div>
+      <label class="check" style="--d: 180ms">
+        <input v-model="formData.rememberMe" type="checkbox" class="check__input" />
+        <span class="check__box"><q-icon name="check" size="12px" /></span>
+        <span class="check__label">Keep me signed in on this device</span>
+      </label>
 
       <button
         type="submit"
@@ -79,7 +75,6 @@
         :class="{ 'submit--busy': loading, 'submit--done': signedIn }"
         :disabled="!isFormValid || busy"
       >
-        <span class="submit__shine" aria-hidden="true"></span>
         <span class="submit__label">
           <template v-if="signedIn">
             <q-icon name="check" size="18px" />
@@ -98,7 +93,6 @@
     </form>
 
     <footer class="card__foot" style="--d: 300ms">
-      <span class="card__rule"></span>
       <p class="card__note">
         Admin accounts are created by your organization. Ask your administrator for an invite.
       </p>
@@ -255,24 +249,45 @@ const goToForgotPassword = () => router.push('/forgot-password')
 .card {
   position: relative;
   width: 100%;
-  max-width: 404px;
-  padding: 32px 30px 26px;
+  max-width: 392px;
+  padding: 30px 30px 24px;
   border-radius: var(--lg-r);
-  // Opaque panel, no backdrop blur: this is a solid surface sitting on the
-  // stage, not a pane of glass in front of it. Depth comes from the hairline
-  // border, a single top-edge highlight, and one deep soft shadow.
+  // Opaque panel, no backdrop blur: a solid surface sitting on the stage, not a
+  // pane of glass in front of it. Depth is a hairline border, one top-edge
+  // highlight, and a single deep shadow — nothing else.
   background: var(--lg-card);
   border: 1px solid var(--lg-card-line);
+  // Two shadows, doing different jobs: a tight one that seats the card on the
+  // ground, and a wide soft one that gives it real distance from it. On a dark
+  // surface a single shadow is nearly invisible, which is what leaves a card
+  // looking pasted flat onto the background.
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 24px 64px -20px rgba(2, 6, 14, 0.85);
-  animation: cardIn 0.72s var(--lg-ease) both;
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    0 34px 80px -28px rgba(0, 0, 0, 0.95);
+  animation: cardIn 0.6s var(--lg-ease) both;
   transition:
     box-shadow var(--lg-slow) var(--lg-ease),
     border-color var(--lg-slow) var(--lg-ease);
 
+  // The light in the stage arrives from above, so the card's top edge catches
+  // it: a hairline that fades out towards both corners. One inset highlight
+  // alone is uniform across the whole width, which is not how an edge behaves
+  // under a point source.
+  &::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 16px;
+    right: 16px;
+    height: 1px;
+    border-radius: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34) 50%, transparent);
+    pointer-events: none;
+  }
+
   @media (max-width: 480px) {
-    padding: 26px 20px 22px;
+    padding: 26px 22px 22px;
   }
 
   &--shake {
@@ -280,24 +295,23 @@ const goToForgotPassword = () => router.push('/forgot-password')
   }
 
   &--done {
-    border-color: rgba(23, 178, 106, 0.42);
+    border-color: rgba(23, 178, 106, 0.4);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.07),
-      0 0 0 4px rgba(23, 178, 106, 0.12),
-      0 24px 64px -20px rgba(2, 6, 14, 0.85);
+      0 0 0 4px rgba(23, 178, 106, 0.1),
+      0 34px 80px -28px rgba(0, 0, 0, 0.95);
   }
 }
 
 @keyframes cardIn {
   from {
     opacity: 0;
-    transform: translateY(18px) scale(0.985);
-    filter: blur(6px);
+    transform: translateY(14px) scale(0.99);
   }
+
   to {
     opacity: 1;
     transform: none;
-    filter: blur(0);
   }
 }
 
@@ -306,105 +320,60 @@ const goToForgotPassword = () => router.push('/forgot-password')
   90% {
     transform: translateX(-2px);
   }
+
   20%,
   80% {
     transform: translateX(4px);
   }
+
   30%,
   50%,
   70% {
-    transform: translateX(-7px);
+    transform: translateX(-6px);
   }
+
   40%,
   60% {
-    transform: translateX(7px);
-  }
-}
-
-// The ring: a full-bleed conic gradient masked down to the border box, so only
-// the 1px edge shows. `mask-composite` subtracts the inner rectangle.
-//
-// Guarded behind @supports on purpose. Every browser in this project's
-// browserslist handles it, so autoprefixer emits no `-webkit-` fallback; on
-// anything older the mask cannot be hollowed out and the conic gradient would
-// wash across the whole card face. No ring at all beats a bright sweep over the
-// form, so the effect is opt-in for engines that can cut the hole.
-.card__ring {
-  display: none;
-}
-
-@supports (mask-composite: exclude) {
-  .card__ring {
-    display: block;
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: conic-gradient(
-      from var(--ring-angle, 0deg),
-      transparent 0deg,
-      rgba(255, 255, 255, 0.5) 42deg,
-      rgba(120, 150, 255, 0.75) 66deg,
-      transparent 120deg,
-      transparent 360deg
-    );
-    mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    opacity: 0.55;
-    pointer-events: none;
-    animation: spinRing 9s linear infinite;
-  }
-}
-
-@property --ring-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-@keyframes spinRing {
-  to {
-    --ring-angle: 360deg;
+    transform: translateX(6px);
   }
 }
 
 // ── Head ────────────────────────────────────────────────────────────────────
+// Centred: the mark, the title and the subtitle share the card's vertical axis,
+// and the fields below keep their own left edge. The subtitle is held to a
+// narrower measure than the card so it breaks into balanced lines instead of
+// running the full width and leaving a short orphan on the second line.
 .card__head {
+  margin-bottom: 24px;
   text-align: center;
-  margin-bottom: 22px;
 }
 
-// The bare mark, with no plate or ring behind it. Sizes here are the mark's real
-// visual size because `wagey_mark.png` is trimmed to the glyph — the untrimmed
-// `wagey_icon(White).png` carries ~69% transparent padding, so a 46px box of it
-// drew a 14px logo.
+// The bare mark, with no plate or ring behind it. The size here is the mark's
+// real visual size because `wagey_mark.png` is trimmed to the glyph — the
+// untrimmed asset carries ~69% transparent padding, so a 46px box of it drew a
+// 14px logo.
 .brandmark {
   display: block;
-  width: 30px;
+  width: 26px;
   height: auto;
-  margin: 0 auto 14px;
-  // With the plate gone, the glow is the only thing making the mark read as lit
-  // rather than pasted on, so it does the work the box used to do.
-  filter: drop-shadow(0 0 11px rgba(126, 158, 255, 0.42));
-  animation: markIn 0.8s var(--lg-ease) 0.08s both;
+  margin: 0 auto 16px;
+  // With no plate, the glow is what makes the mark read as lit rather than
+  // pasted on.
+  filter: drop-shadow(0 0 10px rgba(126, 158, 255, 0.4));
+  animation: markIn 0.7s var(--lg-ease) 0.06s both;
   transition: filter var(--lg-slow) var(--lg-ease);
 
-  @media (max-width: 480px) {
-    width: 27px;
-  }
-
   &--lit {
-    filter: drop-shadow(0 0 14px rgba(23, 178, 106, 0.52));
+    filter: drop-shadow(0 0 13px rgba(23, 178, 106, 0.5));
   }
 }
 
 @keyframes markIn {
   from {
     opacity: 0;
-    transform: translateY(-10px) scale(0.78);
+    transform: translateY(-8px) scale(0.82);
   }
+
   to {
     opacity: 1;
     transform: none;
@@ -413,40 +382,48 @@ const goToForgotPassword = () => router.push('/forgot-password')
 
 .card__title {
   margin: 0 0 6px;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
   // Declared, not inherited: Quasar's base typography gives `h1` a 6rem line
-  // height, which on a 20px title opens a ~96px line box and blows the whole
+  // height, which on a 22px title opens a ~105px line box and blows the whole
   // header apart. Any heading in this card has to set its own.
-  line-height: 1.3;
-  letter-spacing: -0.02em;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.025em;
   color: var(--lg-ink);
-  animation: riseIn 0.6s var(--lg-ease) 0.14s both;
+  animation: riseIn 0.55s var(--lg-ease) 0.12s both;
 }
 
 .card__sub {
-  margin: 0;
+  margin: 0 auto;
+  max-width: 30ch;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--lg-ink-3);
-  animation: riseIn 0.6s var(--lg-ease) 0.2s both;
+  animation: riseIn 0.55s var(--lg-ease) 0.18s both;
 }
 
 // ── Fields ──────────────────────────────────────────────────────────────────
 .form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 15px;
 }
 
 .field {
-  animation: riseIn 0.6s var(--lg-ease) var(--d, 0ms) both;
+  animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
+}
+
+.field__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .field__label {
   display: block;
-  margin-bottom: 6px;
-  font-size: 12px;
+  margin-bottom: 7px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--lg-ink-2);
 }
@@ -454,10 +431,10 @@ const goToForgotPassword = () => router.push('/forgot-password')
 .input {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 46px;
+  gap: 9px;
+  height: 44px;
   padding: 0 12px;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--lg-field);
   border: 1px solid var(--lg-line);
   transition:
@@ -473,8 +450,8 @@ const goToForgotPassword = () => router.push('/forgot-password')
   // A soft halo rather than a hard outline, so it doesn't fight the hairlines.
   &:focus-within {
     background: var(--lg-field-hover);
-    border-color: rgba(120, 150, 255, 0.72);
-    box-shadow: 0 0 0 4px rgba(88, 120, 255, 0.16);
+    border-color: rgba(120, 150, 255, 0.7);
+    box-shadow: 0 0 0 4px rgba(88, 120, 255, 0.15);
 
     .input__icon {
       color: rgba(160, 185, 255, 0.95);
@@ -505,20 +482,25 @@ const goToForgotPassword = () => router.push('/forgot-password')
   letter-spacing: -0.005em;
 
   &::placeholder {
-    color: rgba(255, 255, 255, 0.26);
+    color: rgba(255, 255, 255, 0.24);
+  }
+
+  // The browser default selection blue is a different blue from the product's.
+  &::selection {
+    background: rgba(88, 120, 255, 0.34);
   }
 
   &:disabled {
     color: var(--lg-ink-2);
   }
 
-  // Chrome paints its own yellow autofill plate, which would blow a hole in the
-  // glass. The inset shadow trick repaints it in the card's own colour.
+  // Chrome paints its own yellow autofill plate over the field. The inset
+  // shadow trick repaints it in the card's own colour.
   &:-webkit-autofill,
   &:-webkit-autofill:hover,
   &:-webkit-autofill:focus {
     -webkit-text-fill-color: #ffffff;
-    -webkit-box-shadow: 0 0 0 100px #14243a inset;
+    -webkit-box-shadow: 0 0 0 100px #16273a inset;
     caret-color: #ffffff;
   }
 }
@@ -542,7 +524,13 @@ const goToForgotPassword = () => router.push('/forgot-password')
 
   &:hover {
     color: var(--lg-ink);
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  &:focus-visible {
+    outline: none;
+    color: var(--lg-ink);
+    box-shadow: 0 0 0 3px rgba(88, 120, 255, 0.22);
   }
 }
 
@@ -550,7 +538,7 @@ const goToForgotPassword = () => router.push('/forgot-password')
   display: flex;
   align-items: center;
   gap: 5px;
-  margin: 6px 0 0;
+  margin: 7px 0 0;
   font-size: 11.5px;
   color: #fdb022;
 }
@@ -568,22 +556,27 @@ const goToForgotPassword = () => router.push('/forgot-password')
   transform: translateY(-3px);
 }
 
-// ── Options row ─────────────────────────────────────────────────────────────
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 2px;
-  animation: riseIn 0.6s var(--lg-ease) var(--d, 0ms) both;
+.link {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: rgba(150, 178, 255, 0.92);
+  text-decoration: none;
+  transition: color var(--lg-fast) var(--lg-ease);
+
+  &:hover {
+    color: #ffffff;
+  }
 }
 
+// ── Remember ────────────────────────────────────────────────────────────────
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  margin-top: 1px;
   cursor: pointer;
   user-select: none;
+  animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
 }
 
 .check__input {
@@ -609,6 +602,10 @@ const goToForgotPassword = () => router.push('/forgot-password')
     color var(--lg-fast) var(--lg-ease);
 }
 
+.check:hover .check__box {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
 .check__input:checked + .check__box {
   background: var(--lg-accent-soft);
   border-color: var(--lg-accent-soft);
@@ -624,102 +621,72 @@ const goToForgotPassword = () => router.push('/forgot-password')
   color: var(--lg-ink-2);
 }
 
-.link {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: rgba(150, 178, 255, 0.92);
-  text-decoration: none;
-  transition: color var(--lg-fast) var(--lg-ease);
-
-  &:hover {
-    color: #ffffff;
-  }
-}
-
 // ── Submit ──────────────────────────────────────────────────────────────────
+// A flat brand fill with one top-edge highlight. No sweeping shine on hover: a
+// light streak crossing the primary action is the kind of decoration that makes
+// a console look like a landing page.
 .submit {
   position: relative;
-  overflow: hidden;
-  height: 46px;
-  margin-top: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 9px;
-  background: linear-gradient(180deg, #3f61e8 0%, #2a45c4 100%);
+  height: 44px;
+  margin-top: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #3c5ee4 0%, #2a45c4 100%);
   color: #ffffff;
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.005em;
   cursor: pointer;
-  animation: riseIn 0.6s var(--lg-ease) var(--d, 0ms) both;
-  transition:
-    transform var(--lg-fast) var(--lg-ease),
-    box-shadow var(--lg-slow) var(--lg-ease),
-    background var(--lg-slow) var(--lg-ease),
-    opacity var(--lg-fast) var(--lg-ease);
+  animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 8px 20px -8px rgba(46, 79, 212, 0.7);
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 6px 18px -8px rgba(46, 79, 212, 0.7);
+  transition:
+    background var(--lg-fast) var(--lg-ease),
+    box-shadow var(--lg-slow) var(--lg-ease),
+    opacity var(--lg-fast) var(--lg-ease);
 
   &:hover:not(:disabled) {
-    transform: translateY(-1px);
+    background: linear-gradient(180deg, #4667ef 0%, #2f4cd2 100%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.28),
-      0 12px 26px -8px rgba(46, 79, 212, 0.85);
-
-    .submit__shine {
-      transform: translateX(220%);
-    }
+      inset 0 1px 0 rgba(255, 255, 255, 0.26),
+      0 10px 24px -8px rgba(46, 79, 212, 0.8);
 
     .submit__arrow {
       transform: translateX(3px);
     }
   }
 
-  &:active:not(:disabled) {
-    transform: translateY(0);
-  }
-
   &:focus-visible {
     outline: none;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.22),
-      0 0 0 4px rgba(88, 120, 255, 0.34);
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 0 0 4px rgba(88, 120, 255, 0.3);
   }
 
   &:disabled {
     cursor: not-allowed;
-    opacity: 0.45;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    color: var(--lg-ink-4);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--lg-line);
+    box-shadow: none;
   }
 
   &--busy {
-    opacity: 0.9;
+    opacity: 0.92;
   }
 
   &--done {
     background: linear-gradient(180deg, #17b26a 0%, #0f9155 100%);
     opacity: 1;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.24),
-      0 8px 22px -8px rgba(23, 178, 106, 0.7);
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 6px 20px -8px rgba(23, 178, 106, 0.7);
   }
 }
 
-.submit__shine {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -60%;
-  width: 44%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.32), transparent);
-  transform: translateX(0);
-  transition: transform 0.62s var(--lg-ease);
-  pointer-events: none;
-}
-
 .submit__label {
-  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -732,29 +699,25 @@ const goToForgotPassword = () => router.push('/forgot-password')
 
 // ── Foot ────────────────────────────────────────────────────────────────────
 .card__foot {
-  margin-top: 20px;
-  animation: riseIn 0.6s var(--lg-ease) var(--d, 0ms) both;
-}
-
-.card__rule {
-  display: block;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--lg-line), transparent);
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--lg-line);
+  animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
 }
 
 .card__note {
-  margin: 14px 0 0;
+  margin: 0;
   font-size: 11.5px;
-  line-height: 1.55;
-  text-align: center;
+  line-height: 1.6;
   color: var(--lg-ink-4);
 }
 
 @keyframes riseIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(9px);
   }
+
   to {
     opacity: 1;
     transform: none;
@@ -763,12 +726,11 @@ const goToForgotPassword = () => router.push('/forgot-password')
 
 @media (prefers-reduced-motion: reduce) {
   .card,
-  .card__ring,
   .card__title,
   .card__sub,
   .brandmark,
   .field,
-  .row,
+  .check,
   .submit,
   .card__foot {
     animation: none;
