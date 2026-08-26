@@ -78,7 +78,8 @@
                     >
                       {{ schedule.length > 1 ? `Shift ${idx + 1}` : s.employee_name }}
                     </span>
-                    <q-badge v-if="isRecorded(s)" color="grey">Already recorded</q-badge>
+                    <q-badge v-if="isCompleted(s)" color="grey">Already completed</q-badge>
+                    <q-badge v-else-if="isRecorded(s)" color="grey">Already recorded</q-badge>
                     <q-badge v-else :color="statusColor(s.status)">{{ s.status }}</q-badge>
                   </div>
                   <div class="schedule-compact-row text-caption text-grey-7">
@@ -102,6 +103,13 @@
             Loading schedule...
           </q-banner>
 
+          <q-banner v-if="addBlockReason" dense rounded class="bg-orange-1 q-mb-sm">
+            <template v-slot:avatar>
+              <q-icon name="lock" color="orange-9" />
+            </template>
+            <span class="text-orange-10 text-caption text-weight-medium">{{ addBlockReason }}</span>
+          </q-banner>
+
           <div class="form-row">
             <q-input
               filled
@@ -111,10 +119,11 @@
               label="Time In *"
               type="time"
               class="form-field"
-              :rules="[(val) => !!val || 'Required']"
+              :disable="!!addBlockReason"
+              :rules="addBlockReason ? [] : [(val) => !!val || 'Required']"
             >
               <template v-slot:prepend>
-                <q-icon name="login" size="xs" />
+                <q-icon :name="addBlockReason ? 'lock' : 'login'" size="xs" />
               </template>
             </q-input>
 
@@ -126,9 +135,10 @@
               label="Time Out"
               type="time"
               class="form-field"
+              :disable="!!addBlockReason"
             >
               <template v-slot:prepend>
-                <q-icon name="logout" size="xs" />
+                <q-icon :name="addBlockReason ? 'lock' : 'logout'" size="xs" />
               </template>
             </q-input>
           </div>
@@ -169,7 +179,7 @@
           class="primary-btn"
           @click="onSubmit"
           :loading="saving"
-          :disable="!record.employee || !record.time_in || saving || selectionRequired"
+          :disable="!record.employee || !record.time_in || saving || selectionRequired || !!addBlockReason"
         />
       </q-card-actions>
     </q-card>
@@ -192,6 +202,13 @@ const props = defineProps({
   optionsLoading: { type: Boolean, default: false },
   saving: { type: Boolean, default: false },
   recordedAssignments: { type: Array, default: () => [] },
+  // The subset of recordedAssignments whose record already has both punches.
+  // Only changes the wording — both sets are equally unselectable.
+  completedAssignments: { type: Array, default: () => [] },
+  // How many of the employee's attendances on this date are clocked in *and*
+  // out. A count rather than ids, so the dialog can still refuse a duplicate day
+  // when nothing carries an assignment id to match shift-by-shift.
+  completedRecordCount: { type: Number, default: 0 },
 });
 
 const emit = defineEmits(['update:modelValue', 'update:record', 'submit', 'filter-employees', 'fetch-schedule']);
@@ -229,13 +246,76 @@ function updateField(field, value) {
 }
 
 function isRecorded(s) {
-  return s.assignment_id && props.recordedAssignments.includes(s.assignment_id);
+  return Boolean(s.assignment_id) && props.recordedAssignments.includes(s.assignment_id);
+}
+
+// A shift that has been clocked in and out is finished, and a second record for
+// it would have payroll counting the day twice.
+function isCompleted(s) {
+  return Boolean(s.assignment_id) && props.completedAssignments.includes(s.assignment_id);
 }
 
 function selectShift(s) {
   if (isRecorded(s) || s.assignment_id == null) return;
   updateField('selected_assignment_id', s.assignment_id);
 }
+
+/**
+ * The shift this dialog would file the new record against, when that shift
+ * already has one. A single shift is implied rather than clicked, so without
+ * this the one case that most needs blocking — one scheduled shift, already
+ * clocked in and out — was the one case Save stayed enabled for.
+ */
+const blockedShift = computed(() => {
+  const sched = props.schedule || [];
+  if (!sched.length) return null;
+
+  const selectedId = props.record.selected_assignment_id;
+  const target =
+    selectedId != null
+      ? sched.find((s) => s.assignment_id === selectedId)
+      : sched.length === 1
+        ? sched[0]
+        : null;
+
+  return target && isRecorded(target) ? target : null;
+});
+
+/**
+ * Why this attendance cannot be added, or null when it can.
+ *
+ * The rule the page is built around: a shift that has been clocked in and out
+ * is finished, so a second record for it would have payroll counting the day
+ * twice. Two checks, because either one alone leaves a hole.
+ *
+ * The count check is the load-bearing one and needs no ids to work — once the
+ * day's completed records cover every shift scheduled for it, there is nothing
+ * left to file a new record against. The per-shift check then catches the case
+ * the counts allow: two shifts scheduled, one of them already recorded, and it
+ * is that one the reader has picked.
+ */
+const addBlockReason = computed(() => {
+  if (!props.record.employee || !props.record.date) return null;
+
+  // Nothing to compare against until the day's shifts are known. A day with no
+  // schedule at all is refused separately, on the page, with its own message.
+  const sched = props.schedule || [];
+  if (props.scheduleLoading || !sched.length) return null;
+
+  if (props.completedRecordCount >= sched.length) {
+    return sched.length > 1
+      ? 'Every shift scheduled for this day has already been clocked in and out. Edit one of those records instead — a new one would count the day twice.'
+      : 'This employee already has an attendance with a time in and time out on this day. Edit that record instead — a new one would count the day twice.';
+  }
+
+  if (blockedShift.value) {
+    return isCompleted(blockedShift.value)
+      ? 'That shift has already been clocked in and out. Edit its record instead — a new one would count the shift twice.'
+      : 'That shift already has an attendance record. Edit that record instead — a new one would count the shift twice.';
+  }
+
+  return null;
+});
 
 const selectionRequired = computed(() => {
   if (props.schedule && props.schedule.length > 1) {
@@ -256,6 +336,7 @@ function statusColor(status) {
 }
 
 function onSubmit() {
+  if (addBlockReason.value) return;
   emit('submit', props.record);
 }
 
@@ -271,8 +352,11 @@ watch(() => props.record.date, (newDate) => {
   }
 });
 
+// A lone shift selects itself so the reader does not have to click the only
+// option — unless it already has a record, in which case selecting it would
+// arm a Save that must not happen.
 watch(() => props.schedule, (sched) => {
-  if (sched && sched.length === 1 && sched[0].assignment_id) {
+  if (sched && sched.length === 1 && sched[0].assignment_id && !isRecorded(sched[0])) {
     updateField('selected_assignment_id', sched[0].assignment_id);
   }
 }, { immediate: true });
