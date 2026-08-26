@@ -1933,6 +1933,14 @@ onUnmounted(() => {
   letter-spacing: -0.025em;
   color: var(--dash-ink);
 }
+
+/* Every page header in the app carries the same title metrics, including the
+   one step down at tablet width. See EmployeesPage's .emp-head__title. */
+@media (max-width: 1023px) {
+  .page-heading {
+    font-size: 20px;
+  }
+}
 .page-meta {
   display: flex;
   align-items: center;
@@ -2477,17 +2485,8 @@ onUnmounted(() => {
 }
 
 /* ===== Responsive ===== */
-@media (min-width: 1440px) {
-  .page-heading {
-    font-size: 24px;
-  }
-}
-
 /* Laptop */
 @media (max-width: 1279px) {
-  .page-heading {
-    font-size: 20px;
-  }
   .queue-tab {
     gap: 7px;
     padding: 11px 10px 12px;
@@ -2560,9 +2559,6 @@ onUnmounted(() => {
 }
 
 @media (max-width: 599px) {
-  .page-heading {
-    font-size: 19px;
-  }
   .page-meta {
     font-size: 12px;
   }
