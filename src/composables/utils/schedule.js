@@ -128,7 +128,7 @@ export function getAvatarColor(name) {
 }
 
 /**
- * Rail colour for a working shift card — exactly two, and they encode one thing:
+ * Colour for a working shift card — exactly two hues, and they encode one thing:
  * how many shifts the card holds.
  *
  *   SINGLE  indigo   one shift that day
@@ -141,16 +141,29 @@ export function getAvatarColor(name) {
  * colour did not carry. Two colours answer that question at a glance and need no
  * legend.
  *
- * Both values come from the app's categorical ramp (validated for colour-vision
- * separation in src/css/dashboard.scss) and are far apart in hue. Colour lands
- * only on the 3px rail, never on text: parts of that ramp sit between 3:1 and
- * 4.5:1 against white, fine for a solid mark but failing for 11px type.
+ * Each hue ships as a pair rather than as one value: a softened edge and a very
+ * faint fill (see the -soft/-tint tokens in src/css/dashboard.scss). The card
+ * is read as a tinted block, not as an outline. At full strength a saturated
+ * 1px edge repeated down a scrolling grid of small cards shimmers and is tiring
+ * to look at, so the strong hue is kept for single marks like the leave icon.
+ *
+ * Both hues come from the app's categorical ramp (validated for colour-vision
+ * separation in src/css/dashboard.scss) and are far apart in hue. Colour never
+ * lands on text: parts of that ramp sit between 3:1 and 4.5:1 against white,
+ * fine for a solid mark but failing for 11px type.
  */
-export const RAIL_SINGLE = 'var(--dash-cat-1)'
-export const RAIL_DUAL = 'var(--dash-cat-3)'
+const SINGLE_TONE = {
+  '--chip-edge': 'var(--dash-cat-1-soft)',
+  '--chip-tint': 'var(--dash-cat-1-tint)',
+}
+const DUAL_TONE = {
+  '--chip-edge': 'var(--dash-cat-3-soft)',
+  '--chip-tint': 'var(--dash-cat-3-tint)',
+}
 
-export function shiftRail(isMerged) {
-  return isMerged ? RAIL_DUAL : RAIL_SINGLE
+/** The pair of custom properties a shift card is drawn with. */
+export function shiftChipTone(isMerged) {
+  return isMerged ? DUAL_TONE : SINGLE_TONE
 }
 
 
