@@ -10,6 +10,9 @@
       hide-pagination
       :rows-per-page-options="[0]"
       separator="none"
+      :pagination="tablePagination"
+      :sort-method="keepGivenOrder"
+      @update:pagination="onPaginationUpdate"
     >
       <template v-slot:header="props">
         <q-tr class="att-table__head-row">
@@ -77,6 +80,8 @@
               :timezone="props.row._timezone"
               :selfie="props.row.time_in_selfie"
               :source="props.row.time_in_source || props.row.source"
+              :locked="props.row._shiftLocked"
+              :locked-reason="props.row._shiftLockedReason"
               @edit="$emit('edit-time', props.row, 'time_in')"
               @view-selfie="(url, title) => $emit('view-selfie', url, title)"
             />
@@ -89,6 +94,8 @@
               :timezone="props.row._timezone"
               :selfie="props.row.time_out_selfie"
               :source="props.row.time_out_source || props.row.source"
+              :locked="props.row._shiftLocked"
+              :locked-reason="props.row._shiftLockedReason"
               @edit="$emit('edit-time', props.row, 'time_out')"
               @view-selfie="(url, title) => $emit('view-selfie', url, title)"
             />
@@ -177,9 +184,39 @@ const props = defineProps({
   // Set while the list is narrowed to one employee over a date range: the
   // Employee column carries no information then, so Date takes its place.
   singleEmployee: { type: Boolean, default: false },
+  // Sort lives on the page, not here — see below.
+  sortBy: { type: String, default: '' },
+  descending: { type: Boolean, default: false },
 })
 
-defineEmits(['view-selfie', 'view-photo', 'edit-time', 'clear-filters', 'view-audit'])
+const emit = defineEmits([
+  'view-selfie',
+  'view-photo',
+  'edit-time',
+  'clear-filters',
+  'view-audit',
+  'update:sort',
+])
+
+// `rows` is one page of an already-sorted list, so the header arrows only report
+// which column the reader clicked; the page re-sorts every filtered record and
+// hands back a fresh first page. Sorting here instead would shuffle the 25 rows
+// on screen and leave matching records sitting on page 2.
+const tablePagination = computed(() => ({
+  sortBy: props.sortBy || null,
+  descending: props.descending,
+  page: 1,
+  rowsPerPage: 0,
+}))
+
+function onPaginationUpdate(value) {
+  emit('update:sort', {
+    sortBy: value?.sortBy || '',
+    descending: Boolean(value?.descending),
+  })
+}
+
+const keepGivenOrder = (rows) => rows
 
 // Employee, shift, time in and time out are the point of the page and always
 // show — the table only renders at 1024px and up, where all four fit without
