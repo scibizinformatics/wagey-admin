@@ -300,6 +300,14 @@ watch(activeTab, () => {
   color: var(--dash-ink);
 }
 
+/* Every page header in the app carries the same title metrics, including the
+   one step down at tablet width. See EmployeesPage's .emp-head__title. */
+@media (max-width: 1023px) {
+  .as-head__title {
+    font-size: 20px;
+  }
+}
+
 .as-head__sub {
   display: flex;
   align-items: center;
@@ -455,9 +463,6 @@ watch(activeTab, () => {
 }
 
 @media (min-width: 1440px) {
-  .as-head__title {
-    font-size: 24px;
-  }
   .as-body {
     grid-template-columns: 200px minmax(0, 1fr);
   }
@@ -530,9 +535,6 @@ watch(activeTab, () => {
 }
 
 @media (max-width: 599px) {
-  .as-head__title {
-    font-size: 20px;
-  }
   .as-strip {
     display: none;
   }
