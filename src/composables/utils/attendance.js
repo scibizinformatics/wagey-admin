@@ -151,3 +151,136 @@ export function formatTime(dateTimeString, timezone) {
   if (!dateTimeString) return null
   return formatInTimezone(dateTimeString, timezone || undefined) || null
 }
+
+/**
+ * The assignment a record is filed against — the backend's own id for one
+ * employee's one shift on one day.
+ *
+ * It arrives under a different name on almost every endpoint, and is absent on
+ * some, so every caller needs the same fallback chain rather than picking one
+ * spelling and silently reading undefined on the others.
+ */
+export function getAssignmentId(row) {
+  return (
+    row?.assignment_id ??
+    row?.employee_assignment_id ??
+    row?.employee_assignment?.id ??
+    row?.employee_assignment?.schedule?.id ??
+    null
+  )
+}
+
+/**
+ * The shift a record belongs to, as a comparison key.
+ *
+ * The backend identifies a shift by its assignment, but that id arrives under
+ * three different names depending on the endpoint and is sometimes absent
+ * entirely. When it is missing the shift's display name stands in, which is
+ * enough to recognise two records of the same employee's same shift on the same
+ * day — the duplicate case this exists to catch. Employee and date are always
+ * part of the key so an assignment id that repeats across people or days cannot
+ * collapse unrelated records together.
+ *
+ * Returns null when the row carries nothing that identifies a shift, so callers
+ * can skip it rather than bucket every unidentifiable row together.
+ */
+export function getShiftKey(row) {
+  if (!row) return null
+
+  const assignment = getAssignmentId(row)
+  const shiftName = getShiftName(row)
+  const identity =
+    assignment != null ? `a:${assignment}` : shiftName !== '—' ? `s:${shiftName}` : null
+  if (!identity) return null
+
+  const employeeId = getEmployeeId(row.employee)
+  const date = row.date || row.attendance_date || row.log_date || ''
+  return `${employeeId ?? '?'}|${date}|${identity}`
+}
+
+/** A record is complete once both punches are in — the shift has been worked. */
+export function isRecordComplete(row) {
+  return Boolean(row?.time_in && row?.time_out)
+}
+
+/**
+ * Punches captured by a device rather than typed in by an admin. A shift's
+ * device-captured record is the one that actually happened, so it outranks a
+ * hand-entered duplicate when deciding which record owns the shift.
+ */
+const DEVICE_SOURCES = new Set(['terminal', 'qr_scan', 'app', 'auto_login', 'system'])
+
+function isDeviceCaptured(row) {
+  const sources = [row?.time_in_source, row?.time_out_source, row?.source].filter(Boolean)
+  return sources.some((s) => DEVICE_SOURCES.has(s))
+}
+
+/**
+ * How strongly a record claims to be *the* record for its shift. Lower wins.
+ * Device capture first, then a finished pair of punches, then the earliest time
+ * in, and finally the id purely so the choice is stable rather than dependent on
+ * the order the API happened to return.
+ */
+function primacyRank(row) {
+  const timeIn = row?.time_in ? new Date(row.time_in).getTime() : NaN
+  return [
+    isDeviceCaptured(row) ? 0 : 1,
+    isRecordComplete(row) ? 0 : 1,
+    Number.isNaN(timeIn) ? Infinity : timeIn,
+    String(row?.id ?? ''),
+  ]
+}
+
+function comparePrimacy(a, b) {
+  const ra = primacyRank(a)
+  const rb = primacyRank(b)
+  for (let i = 0; i < ra.length; i++) {
+    if (ra[i] < rb[i]) return -1
+    if (ra[i] > rb[i]) return 1
+  }
+  return 0
+}
+
+/**
+ * Ids of the attendance records whose times must not be edited because their
+ * shift has already been completed by a different record.
+ *
+ * A shift with a finished pair of punches has been worked, and the second row an
+ * employee sometimes ends up with for it — usually an empty one, or one an admin
+ * started filling in by hand — is a duplicate, not a correction. Typing times
+ * into the duplicate produces two attendances for one shift and the payroll run
+ * then counts the day twice, so those rows are read-only. The record that owns
+ * the shift stays editable, because a mis-punched terminal time still has to be
+ * correctable somewhere.
+ *
+ * Pass the widest set of records available (the whole loaded month, not one
+ * page): the completed record and its duplicate can easily land on different
+ * pages, and a lock that depends on what is currently on screen is no lock.
+ */
+export function getLockedShiftRecordIds(rows = []) {
+  const byShift = new Map()
+
+  for (const row of rows) {
+    if (row?.id == null) continue
+    const key = getShiftKey(row)
+    if (!key) continue
+    if (!byShift.has(key)) byShift.set(key, [])
+    byShift.get(key).push(row)
+  }
+
+  const locked = new Set()
+
+  for (const group of byShift.values()) {
+    // One record for the shift is never a duplicate of itself, and a shift
+    // nobody has finished yet is still open for editing.
+    if (group.length < 2) continue
+    if (!group.some(isRecordComplete)) continue
+
+    const primary = group.reduce((best, row) => (comparePrimacy(row, best) < 0 ? row : best))
+    for (const row of group) {
+      if (row.id !== primary.id) locked.add(row.id)
+    }
+  }
+
+  return locked
+}
