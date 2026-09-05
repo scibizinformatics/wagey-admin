@@ -2,11 +2,32 @@
   <section class="card" :class="{ 'card--shake': shake, 'card--done': signedIn }">
     <header class="card__head">
       <img :src="markWhite" alt="Wagey" class="brandmark" :class="{ 'brandmark--lit': signedIn }" />
-      <h1 class="card__title">Sign in</h1>
-      <p class="card__sub">Use your admin credentials to reach the Wagey console.</p>
+      <h1 class="card__title">{{ heading.title }}</h1>
+      <p class="card__sub">{{ heading.sub }}</p>
     </header>
 
-    <form class="form" novalidate @submit.prevent="handleLogin">
+    <!-- Numbered because the reset genuinely is a sequence of three: the code
+         cannot be asked for after it is entered, and the password cannot be set
+         before the code is verified. Sign-in is not part of it and shows no
+         rail. -->
+    <ol v-if="resetStep" class="steps" aria-label="Password reset progress">
+      <li
+        v-for="s in RESET_STEPS"
+        :key="s.index"
+        class="step"
+        :class="{ 'step--done': s.index < resetStep, 'step--now': s.index === resetStep }"
+        :aria-current="s.index === resetStep ? 'step' : undefined"
+      >
+        <span class="step__mark">
+          <q-icon v-if="s.index < resetStep" name="check" size="11px" />
+          <template v-else>{{ s.index }}</template>
+        </span>
+        <span class="step__label">{{ s.label }}</span>
+      </li>
+    </ol>
+
+    <!-- ═══ Sign in ═══════════════════════════════════════════════════════ -->
+    <form v-if="view === 'signin'" class="form" novalidate @submit.prevent="handleLogin">
       <div class="field" style="--d: 60ms">
         <label class="field__label" for="login-username">Username</label>
         <div class="input" :class="{ 'input--filled': !!formData.username }">
@@ -27,7 +48,9 @@
       <div class="field" style="--d: 120ms">
         <div class="field__top">
           <label class="field__label" for="login-password">Password</label>
-          <a href="#" class="link" @click.prevent="goToForgotPassword">Forgot password?</a>
+          <button type="button" class="link" :disabled="busy" @click="openReset">
+            Forgot password?
+          </button>
         </div>
         <div class="input" :class="{ 'input--filled': !!formData.password }">
           <q-icon name="lock_outline" size="18px" class="input__icon" />
@@ -92,21 +115,252 @@
       </button>
     </form>
 
+    <!-- ═══ Reset · 1 of 3 — where to send the code ════════════════════════ -->
+    <form v-else-if="view === 'email'" class="form" novalidate @submit.prevent="handleRequestCode">
+      <div class="field" style="--d: 60ms">
+        <label class="field__label" for="reset-email">Work email</label>
+        <div class="input" :class="{ 'input--filled': !!reset.email }">
+          <q-icon name="mail_outline" size="18px" class="input__icon" />
+          <input
+            id="reset-email"
+            ref="emailEl"
+            v-model.trim="reset.email"
+            type="email"
+            class="input__el"
+            autocomplete="email"
+            spellcheck="false"
+            placeholder="you@company.com"
+            :disabled="busy"
+          />
+        </div>
+        <p class="field__hint field__hint--quiet">
+          The email on your admin account — not your username.
+        </p>
+      </div>
+
+      <button
+        type="submit"
+        class="submit"
+        style="--d: 140ms"
+        :class="{ 'submit--busy': loading }"
+        :disabled="!emailLooksValid || busy"
+      >
+        <span class="submit__label">
+          <template v-if="loading">
+            <q-spinner size="16px" />
+            Sending code…
+          </template>
+          <template v-else>
+            Send code
+            <q-icon name="arrow_forward" size="16px" class="submit__arrow" />
+          </template>
+        </span>
+      </button>
+    </form>
+
+    <!-- ═══ Reset · 2 of 3 — the emailed code ══════════════════════════════ -->
+    <form v-else-if="view === 'otp'" class="form" novalidate @submit.prevent="handleVerifyCode">
+      <p class="sentto" style="--d: 40ms">
+        <q-icon name="mark_email_read" size="15px" />
+        <span class="sentto__text">Sent to <strong>{{ reset.email }}</strong></span>
+        <button type="button" class="link" :disabled="busy" @click="editEmail">Change</button>
+      </p>
+
+      <div class="field" style="--d: 90ms">
+        <label class="field__label" for="reset-otp">6-digit code</label>
+        <div class="input" :class="{ 'input--filled': !!reset.otp }">
+          <q-icon name="dialpad" size="18px" class="input__icon" />
+          <!-- `:value` with an explicit handler rather than v-model: the handler
+               strips anything that is not a digit, so a pasted "123 456" or a
+               code copied with stray punctuation still lands correctly. -->
+          <input
+            id="reset-otp"
+            ref="otpEl"
+            :value="reset.otp"
+            type="text"
+            class="input__el input__el--code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            spellcheck="false"
+            placeholder="000000"
+            :disabled="busy"
+            @input="onOtpInput"
+          />
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        class="submit"
+        style="--d: 160ms"
+        :class="{ 'submit--busy': loading }"
+        :disabled="!otpComplete || busy"
+      >
+        <span class="submit__label">
+          <template v-if="loading">
+            <q-spinner size="16px" />
+            Checking code…
+          </template>
+          <template v-else>
+            Verify code
+            <q-icon name="arrow_forward" size="16px" class="submit__arrow" />
+          </template>
+        </span>
+      </button>
+
+      <p class="resend" style="--d: 220ms" aria-live="polite">
+        <template v-if="resendIn > 0">
+          Didn't get it? You can ask for a new code in {{ resendIn }}s
+        </template>
+        <template v-else>
+          Didn't get it?
+          <button type="button" class="link" :disabled="busy" @click="handleResend">
+            Send a new code
+          </button>
+        </template>
+      </p>
+    </form>
+
+    <!-- ═══ Reset · 3 of 3 — the new password ══════════════════════════════ -->
+    <form v-else class="form" novalidate @submit.prevent="handleResetPassword">
+      <div class="field" style="--d: 60ms">
+        <label class="field__label" for="reset-new">New password</label>
+        <div class="input" :class="{ 'input--filled': !!reset.password }">
+          <q-icon name="lock_outline" size="18px" class="input__icon" />
+          <input
+            id="reset-new"
+            ref="newPasswordEl"
+            v-model="reset.password"
+            :type="showNewPassword ? 'text' : 'password'"
+            class="input__el"
+            autocomplete="new-password"
+            placeholder="••••••••"
+            :disabled="busy"
+            @keyup="trackCapsLock"
+            @keydown="trackCapsLock"
+          />
+          <button
+            type="button"
+            class="input__reveal"
+            :aria-label="showNewPassword ? 'Hide password' : 'Show password'"
+            :aria-pressed="showNewPassword"
+            @click="showNewPassword = !showNewPassword"
+          >
+            <q-icon :name="showNewPassword ? 'visibility_off' : 'visibility'" size="18px" />
+          </button>
+        </div>
+      </div>
+
+      <div class="field" style="--d: 110ms">
+        <label class="field__label" for="reset-confirm">Confirm new password</label>
+        <!-- The mismatch tint is on the field itself as well as in the checklist
+             below: at this point the two rows look identical, and the person is
+             comparing two things they cannot read. -->
+        <div
+          class="input"
+          :class="{
+            'input--filled': !!reset.confirm,
+            'input--mismatch': reset.confirm.length > 0 && !rules.match,
+          }"
+        >
+          <q-icon name="lock_reset" size="18px" class="input__icon" />
+          <input
+            id="reset-confirm"
+            v-model="reset.confirm"
+            :type="showConfirmPassword ? 'text' : 'password'"
+            class="input__el"
+            autocomplete="new-password"
+            placeholder="••••••••"
+            :disabled="busy"
+            :aria-invalid="reset.confirm.length > 0 && !rules.match"
+            @keyup="trackCapsLock"
+            @keydown="trackCapsLock"
+          />
+          <!-- Its own toggle, not one shared with the field above: revealing
+               both at once is the whole point of a confirm field you cannot
+               read. -->
+          <button
+            type="button"
+            class="input__reveal"
+            :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'"
+            :aria-pressed="showConfirmPassword"
+            @click="showConfirmPassword = !showConfirmPassword"
+          >
+            <q-icon :name="showConfirmPassword ? 'visibility_off' : 'visibility'" size="18px" />
+          </button>
+        </div>
+      </div>
+
+      <ul class="rules" style="--d: 160ms" aria-live="polite">
+        <li class="rule" :class="{ 'rule--ok': rules.long }">
+          <q-icon
+            :name="rules.long ? 'check_circle' : 'radio_button_unchecked'"
+            size="14px"
+            class="rule__mark"
+          />
+          At least {{ MIN_PASSWORD_LENGTH }} characters
+        </li>
+        <li
+          class="rule"
+          :class="{ 'rule--ok': rules.match, 'rule--bad': reset.confirm.length > 0 && !rules.match }"
+        >
+          <q-icon :name="matchIcon" size="14px" class="rule__mark" />
+          {{ matchLabel }}
+        </li>
+      </ul>
+
+      <transition name="hint">
+        <p v-if="capsLock" class="field__hint">
+          <q-icon name="keyboard_capslock" size="14px" />
+          Caps Lock is on
+        </p>
+      </transition>
+
+      <button
+        type="submit"
+        class="submit"
+        style="--d: 220ms"
+        :class="{ 'submit--busy': loading, 'submit--done': passwordChanged }"
+        :disabled="!canSubmitPassword || busy || passwordChanged"
+      >
+        <span class="submit__label">
+          <template v-if="passwordChanged">
+            <q-icon name="check" size="18px" />
+            Password updated
+          </template>
+          <template v-else-if="loading">
+            <q-spinner size="16px" />
+            Updating…
+          </template>
+          <template v-else>
+            Update password
+            <q-icon name="arrow_forward" size="16px" class="submit__arrow" />
+          </template>
+        </span>
+      </button>
+    </form>
+
     <footer class="card__foot" style="--d: 300ms">
-      <p class="card__note">
+      <p v-if="view === 'signin'" class="card__note">
         Admin accounts are created by your organization. Ask your administrator for an invite.
       </p>
+      <button v-else type="button" class="back" :disabled="busy" @click="backToSignIn">
+        <q-icon name="arrow_back" size="15px" />
+        Back to sign in
+      </button>
     </footer>
   </section>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, onUnmounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from 'boot/auth'
 import { useCompanyStore } from '@/stores/company'
 import { useAuth } from '@/composables/page/useAuth'
 import { useToast } from 'src/composables/useToast'
+import { writeStored } from 'src/composables/utils/storage'
+import { extractErrorMessage } from 'src/composables/utils/http'
 import markWhite from '@/assets/wagey_mark.png'
 
 const router = useRouter()
@@ -115,7 +369,15 @@ const authStore = useAuthStore()
 const companyStore = useCompanyStore()
 const toast = useToast()
 
-const { loading, login, fetchCurrentUserCompanies, fetchUserProfile } = useAuth()
+const {
+  loading,
+  login,
+  fetchCurrentUserCompanies,
+  fetchUserProfile,
+  requestPasswordReset,
+  verifyResetOtp,
+  resetPassword,
+} = useAuth()
 
 const showPassword = ref(false)
 const capsLock = ref(false)
@@ -132,6 +394,245 @@ const formData = ref({
 
 const isFormValid = computed(() => !!formData.value.username && !!formData.value.password)
 const busy = computed(() => loading.value || signedIn.value)
+
+// ═══ Password reset ════════════════════════════════════════════════════════
+//
+// One card, four views. The reset is not a separate page: the person is already
+// looking at the thing they are trying to get into, and sending them somewhere
+// else to fix it loses that context. `view` is the whole state machine.
+//
+// Three steps rather than two because the OTP is exchanged for a short-lived
+// token (`/user/verify-otp/`) and it is that token which authorises the new
+// password (`/user/reset-password/`). A practical consequence: the code stops
+// being held in component state the moment it is verified.
+const RESET_STEPS = [
+  { index: 1, label: 'Email' },
+  { index: 2, label: 'Code' },
+  { index: 3, label: 'Password' },
+]
+const STEP_OF_VIEW = { email: 1, otp: 2, password: 3 }
+
+const MIN_PASSWORD_LENGTH = 8
+const RESEND_COOLDOWN_SECONDS = 45
+
+// Enough to catch a missing @ or a trailing comma, and nothing more: the server
+// is the only thing that knows whether an address exists, and a stricter
+// pattern here only ever rejects valid addresses.
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
+/** 'signin' | 'email' | 'otp' | 'password' */
+const view = ref('signin')
+
+const reset = ref({ email: '', otp: '', token: '', password: '', confirm: '' })
+const showNewPassword = ref(false)
+const showConfirmPassword = ref(false)
+const passwordChanged = ref(false)
+
+const resendIn = ref(0)
+let resendTimer = null
+// The confirmation hold before the card swaps back. Tracked so unmounting
+// inside that window cannot leave it to fire on a dead component — the same
+// mistake `useWebSocket.reconnect()` was making.
+let settleTimer = null
+
+const emailEl = ref(null)
+const otpEl = ref(null)
+const newPasswordEl = ref(null)
+
+const resetStep = computed(() => STEP_OF_VIEW[view.value] ?? 0)
+
+const heading = computed(
+  () =>
+    ({
+      signin: {
+        title: 'Sign in',
+        sub: 'Use your admin credentials to reach the Wagey console.',
+      },
+      email: {
+        title: 'Reset your password',
+        sub: 'We will email you a one-time code to confirm it is you.',
+      },
+      otp: {
+        title: 'Enter your code',
+        sub: 'Type the 6-digit code from the email we just sent.',
+      },
+      password: {
+        title: 'Choose a new password',
+        sub: 'Enter it twice so a typo cannot lock you out.',
+      },
+    })[view.value],
+)
+
+const emailLooksValid = computed(() => EMAIL_SHAPE.test(reset.value.email))
+const otpComplete = computed(() => reset.value.otp.length === 6)
+
+const rules = computed(() => ({
+  long: reset.value.password.length >= MIN_PASSWORD_LENGTH,
+  match: reset.value.password.length > 0 && reset.value.password === reset.value.confirm,
+}))
+const canSubmitPassword = computed(() => rules.value.long && rules.value.match)
+
+// Three states, not two: an empty confirm field has not failed yet, and saying
+// so would scold someone mid-keystroke.
+const matchIcon = computed(() => {
+  if (rules.value.match) return 'check_circle'
+  if (reset.value.confirm.length > 0) return 'cancel'
+  return 'radio_button_unchecked'
+})
+const matchLabel = computed(() =>
+  reset.value.confirm.length > 0 && !rules.value.match
+    ? 'Both entries must match'
+    : 'Both entries match',
+)
+
+function clearResendTimer() {
+  if (resendTimer) clearInterval(resendTimer)
+  resendTimer = null
+  resendIn.value = 0
+}
+
+function startResendCooldown() {
+  clearResendTimer()
+  resendIn.value = RESEND_COOLDOWN_SECONDS
+  resendTimer = setInterval(() => {
+    resendIn.value -= 1
+    if (resendIn.value <= 0) clearResendTimer()
+  }, 1000)
+}
+
+/** Move to a view and put the cursor in the field that view is asking about. */
+async function goToView(next) {
+  view.value = next
+  await nextTick()
+  const target = { email: emailEl, otp: otpEl, password: newPasswordEl }[next]
+  target?.value?.focus()
+}
+
+function openReset() {
+  // Carry nothing over from a previous attempt, but do keep the username if it
+  // happens to look like an email — it usually is, and retyping it is friction
+  // at the exact moment someone is already stuck.
+  const guess = formData.value.username
+  reset.value = {
+    email: EMAIL_SHAPE.test(guess) ? guess : '',
+    otp: '',
+    token: '',
+    password: '',
+    confirm: '',
+  }
+  passwordChanged.value = false
+  showNewPassword.value = false
+  showConfirmPassword.value = false
+  capsLock.value = false
+  clearResendTimer()
+  goToView('email')
+}
+
+function backToSignIn() {
+  // Wiped rather than left in place: this object holds a reset token and two
+  // plaintext passwords, and none of it has any business outliving the flow.
+  reset.value = { email: '', otp: '', token: '', password: '', confirm: '' }
+  passwordChanged.value = false
+  showNewPassword.value = false
+  showConfirmPassword.value = false
+  capsLock.value = false
+  clearResendTimer()
+  view.value = 'signin'
+}
+
+function editEmail() {
+  reset.value.otp = ''
+  reset.value.token = ''
+  clearResendTimer()
+  goToView('email')
+}
+
+/**
+ * Digits only, six at most — so a code pasted as "123 456" still lands.
+ *
+ * Deliberately no `maxlength="6"` on the input: the browser applies it to the
+ * *raw* value before this handler runs, so pasting "123 456" would be cut to
+ * "123 45" and arrive here as five digits. The cap belongs after the strip.
+ */
+function onOtpInput(event) {
+  const digits = event.target.value.replace(/\D/g, '').slice(0, 6)
+  reset.value.otp = digits
+  // The input is bound with :value, so a rejected character would otherwise
+  // stay on screen until the next render that happens to change the value.
+  if (event.target.value !== digits) event.target.value = digits
+}
+
+const handleRequestCode = async () => {
+  if (!emailLooksValid.value || busy.value) return
+  try {
+    await requestPasswordReset(reset.value.email)
+    // The same message either way. An endpoint that says "no such account" is
+    // an account-enumeration oracle, and it would be this screen that leaked
+    // it, so the wording here never confirms whether the address is registered.
+    toast.success('Check your email', {
+      caption: `If ${reset.value.email} has an account, a code is on its way.`,
+    })
+    startResendCooldown()
+    goToView('otp')
+  } catch (error) {
+    fail(extractErrorMessage(error, 'Could not send the code. Try again.'))
+  }
+}
+
+const handleResend = async () => {
+  if (busy.value || resendIn.value > 0) return
+  try {
+    await requestPasswordReset(reset.value.email)
+    reset.value.otp = ''
+    toast.info('A new code is on its way')
+    startResendCooldown()
+    await nextTick()
+    otpEl.value?.focus()
+  } catch (error) {
+    fail(extractErrorMessage(error, 'Could not send a new code. Try again.'))
+  }
+}
+
+const handleVerifyCode = async () => {
+  if (!otpComplete.value || busy.value) return
+  try {
+    reset.value.token = await verifyResetOtp(reset.value.email, reset.value.otp)
+    // The code has done its job; holding it any longer serves nothing.
+    reset.value.otp = ''
+    clearResendTimer()
+    goToView('password')
+  } catch (error) {
+    fail(extractErrorMessage(error, 'That code was not accepted. Check it and try again.'))
+  }
+}
+
+const handleResetPassword = async () => {
+  if (!canSubmitPassword.value || busy.value || passwordChanged.value) return
+  if (!reset.value.token) {
+    // Only reachable if the token was lost between steps; without this the
+    // request would fail server-side with a message about a field the person
+    // never saw.
+    fail('Your reset session expired. Ask for a new code.')
+    editEmail()
+    return
+  }
+  try {
+    await resetPassword(reset.value.token, reset.value.password)
+    passwordChanged.value = true
+    toast.success('Password updated', { caption: 'Sign in with your new password.' })
+    // Let the button land on its confirmed state before the card swaps back,
+    // the way the sign-in button does.
+    clearTimeout(settleTimer)
+    settleTimer = setTimeout(backToSignIn, 900)
+  } catch (error) {
+    fail(extractErrorMessage(error, 'Could not update your password. Try again.'))
+  }
+}
+
+onUnmounted(() => {
+  clearResendTimer()
+  clearTimeout(settleTimer)
+})
 
 function trackCapsLock(event) {
   if (typeof event.getModifierState !== 'function') return
@@ -160,9 +661,17 @@ const handleLogin = async () => {
       return
     }
 
+    // Both halves of the pair go into the auth store, which persists them. The
+    // refresh token used to be written straight to localStorage from here and
+    // then read by nobody: the access token simply expired mid-session and every
+    // request failed. `boot/axios.js` now spends it, and it is credential
+    // material, so it belongs behind the store like the access token rather than
+    // in a loose key. A null-ish value is fine — the login response does not
+    // always carry one, and `persist()` removes the key rather than storing the
+    // *string* "undefined", the bad value that used to break the store's own
+    // rehydration.
     authStore.setToken(access)
-    localStorage.setItem('access_token', access)
-    localStorage.setItem('refresh_token', refresh)
+    authStore.setRefreshToken(refresh)
 
     const companiesData = await fetchCurrentUserCompanies(access)
 
@@ -180,7 +689,7 @@ const handleLogin = async () => {
       profileData = await fetchUserProfile(access)
       employeeUuid = profileData?.profile?.id || null
       if (profileData?.user_type === 'business_owner' && profileData?.profile?.id) {
-        localStorage.setItem('business_owner_uuid', profileData.profile.id)
+        writeStored('business_owner_uuid', profileData.profile.id)
       }
     } catch {
       // non-critical — will be null if this endpoint fails
@@ -204,17 +713,19 @@ const handleLogin = async () => {
     }
     companyStore.setCompany(companyPayload)
 
-    localStorage.setItem('account_uuid', accountUuid)
-    localStorage.setItem('user_id', userId)
-    localStorage.setItem('company_id', companyId)
-    localStorage.setItem('username', formData.value.username)
+    writeStored('account_uuid', accountUuid)
+    writeStored('user_id', userId)
+    // Read back by `resolvedCompanyId()`, so a stringified `undefined` here would
+    // reach request URLs as a company id.
+    writeStored('company_id', companyId)
+    writeStored('username', formData.value.username)
 
     const displayName =
       firstCompany.user?.full_name ||
       `${firstCompany.user?.first_name || ''} ${firstCompany.user?.last_name || ''}`.trim() ||
       firstCompany.user?.username ||
       formData.value.username
-    localStorage.setItem('cached_username', displayName)
+    writeStored('cached_username', displayName)
 
     authStore.setAuth(access, {
       employee_uuid: employeeUuid,
@@ -240,13 +751,18 @@ const handleLogin = async () => {
     }
   }
 }
-
-const goToForgotPassword = () => router.push('/forgot-password')
 </script>
 
 <style lang="scss" scoped>
 // ── Card ────────────────────────────────────────────────────────────────────
 .card {
+  // Status tints for the reset flow. The app's own --dash-good-mark (#17b26a)
+  // and --dash-critical-mark (#f04438) are tuned for white surfaces and go
+  // muddy on this navy, so these are the same hues re-levelled for a dark
+  // ground — the same adjustment --nav-accent makes for the navigation rail.
+  --lg-ok: #5fdca0;
+  --lg-bad: #ff9f97;
+
   position: relative;
   width: 100%;
   max-width: 392px;
@@ -481,6 +997,25 @@ const goToForgotPassword = () => router.push('/forgot-password')
   font-size: 14px;
   letter-spacing: -0.005em;
 
+  // Edge/Chromium draw their own reveal control inside a password field the
+  // moment it has characters, and Safari adds an auto-fill key — either one
+  // lands next to `.input__reveal` and the field shows two eyes while typing.
+  // The field already owns a reveal button, so the built-in ones are removed.
+  &::-ms-reveal,
+  &::-ms-clear {
+    display: none;
+  }
+
+  // Not `-webkit-textfield-decoration-container` — that shadow node wraps the
+  // editing area itself, and hiding it blanks the field in Safari.
+  &::-webkit-credentials-auto-fill-button,
+  &::-webkit-strong-password-auto-fill-button {
+    visibility: hidden;
+    pointer-events: none;
+    width: 0;
+    margin: 0;
+  }
+
   &::placeholder {
     color: rgba(255, 255, 255, 0.24);
   }
@@ -556,15 +1091,33 @@ const goToForgotPassword = () => router.push('/forgot-password')
   transform: translateY(-3px);
 }
 
+// Used as both an <a> and a <button> — the reset flow's links are buttons,
+// because they change what the card shows rather than navigating anywhere.
 .link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
   font-size: 12.5px;
   font-weight: 500;
   color: rgba(150, 178, 255, 0.92);
   text-decoration: none;
+  cursor: pointer;
   transition: color var(--lg-fast) var(--lg-ease);
 
-  &:hover {
+  &:hover:not(:disabled) {
     color: #ffffff;
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(120, 150, 255, 0.75);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+
+  &:disabled {
+    color: var(--lg-ink-4);
+    cursor: default;
   }
 }
 
@@ -709,6 +1262,242 @@ const goToForgotPassword = () => router.push('/forgot-password')
   margin: 0;
   font-size: 11.5px;
   line-height: 1.6;
+  color: var(--lg-ink-4);
+}
+
+// ── Back out of the reset flow ──────────────────────────────────────────────
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lg-ink-3);
+  cursor: pointer;
+  transition: color var(--lg-fast) var(--lg-ease);
+
+  &:hover:not(:disabled) {
+    color: var(--lg-ink);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(120, 150, 255, 0.75);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+
+  &:disabled {
+    color: var(--lg-ink-4);
+    cursor: default;
+  }
+}
+
+// ── Step rail ───────────────────────────────────────────────────────────────
+// A real sequence, so it is numbered. Quiet by construction: the marks carry
+// the state and the labels stay at label weight, because this is orientation,
+// not the thing being read.
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+  animation: riseIn 0.55s var(--lg-ease) both;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+
+  // Hairline connector, drawn after every step but the last.
+  &:not(:last-child)::after {
+    content: '';
+    flex: 1;
+    min-width: 10px;
+    height: 1px;
+    margin-left: 2px;
+    background: var(--lg-line-strong);
+  }
+}
+
+.step__mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--lg-line-strong);
+  background: transparent;
+  color: var(--lg-ink-4);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition:
+    color var(--lg-fast) var(--lg-ease),
+    border-color var(--lg-fast) var(--lg-ease),
+    background var(--lg-fast) var(--lg-ease);
+}
+
+.step__label {
+  color: var(--lg-ink-4);
+  white-space: nowrap;
+  transition: color var(--lg-fast) var(--lg-ease);
+}
+
+// A soft tint, not a saturated fill — three of these sit in one short row.
+.step--now {
+  .step__mark {
+    border-color: rgba(120, 150, 255, 0.8);
+    background: rgba(88, 120, 255, 0.16);
+    color: #ffffff;
+  }
+
+  .step__label {
+    color: var(--lg-ink);
+    font-weight: 500;
+  }
+}
+
+.step--done {
+  .step__mark {
+    border-color: rgba(95, 220, 160, 0.5);
+    background: rgba(95, 220, 160, 0.14);
+    color: var(--lg-ok);
+  }
+
+  .step__label {
+    color: var(--lg-ink-3);
+  }
+}
+
+// ── "Sent to …" line ───────────────────────────────────────────────────────
+.sentto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--lg-line);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12.5px;
+  color: var(--lg-ink-2);
+  animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
+
+  .q-icon {
+    flex-shrink: 0;
+    color: var(--lg-ok);
+  }
+}
+
+// The address is the long part, so it is the part that truncates — the icon and
+// the Change control must stay reachable.
+.sentto__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  strong {
+    font-weight: 600;
+    color: var(--lg-ink);
+  }
+}
+
+// ── One-time code ───────────────────────────────────────────────────────────
+.input__el--code {
+  font-size: 16px;
+  font-weight: 600;
+  // Tabular figures so the six digits hold a fixed rhythm as they are typed,
+  // and wide tracking so a code can be read back over the phone.
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.34em;
+
+  &::placeholder {
+    letter-spacing: 0.34em;
+    font-weight: 500;
+  }
+}
+
+.resend {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--lg-ink-4);
+  animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
+}
+
+// ── Mismatched confirmation ─────────────────────────────────────────────────
+// Tinted, not outlined: it is a state the person is mid-way through fixing,
+// not an error they have committed.
+.input--mismatch {
+  border-color: rgba(255, 159, 151, 0.55);
+  background: rgba(255, 159, 151, 0.07);
+
+  .input__icon {
+    color: var(--lg-bad);
+  }
+
+  &:focus-within {
+    border-color: rgba(255, 159, 151, 0.8);
+    box-shadow: 0 0 0 4px rgba(255, 159, 151, 0.14);
+  }
+}
+
+// ── Password checklist ──────────────────────────────────────────────────────
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: -2px 0 0;
+  padding: 0;
+  list-style: none;
+  animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
+}
+
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--lg-ink-4);
+  transition: color var(--lg-fast) var(--lg-ease);
+}
+
+.rule__mark {
+  flex-shrink: 0;
+  color: var(--lg-ink-4);
+  transition: color var(--lg-fast) var(--lg-ease);
+}
+
+.rule--ok {
+  color: var(--lg-ink-2);
+
+  .rule__mark {
+    color: var(--lg-ok);
+  }
+}
+
+.rule--bad {
+  color: var(--lg-bad);
+
+  .rule__mark {
+    color: var(--lg-bad);
+  }
+}
+
+// A hint that is guidance rather than a warning, so it does not borrow the
+// amber that `.field__hint` uses for Caps Lock.
+.field__hint--quiet {
   color: var(--lg-ink-4);
 }
 

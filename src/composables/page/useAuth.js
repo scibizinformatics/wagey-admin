@@ -1,5 +1,6 @@
 // composables/useAuth.js
-// Authentication — login and company selection used in LoginPage.vue
+// Authentication — login, password reset, and the company/profile lookups the
+// login flow needs. Used by LoginPage.vue via LoginForm.vue.
 
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
@@ -12,6 +13,11 @@ const ENDPOINTS = {
   USER_PROFILE:         `${BASE}/user/check-type/`,
   POSITIONS:            `${BASE}/user/positions/`,
   USER_ROLES:           `${BASE}/user/user-roles/`,
+
+  // ─── Password reset (three steps, two of them server round trips) ─────────
+  FORGOT_PASSWORD:      `${BASE}/user/forgot-password/`,
+  VERIFY_OTP:           `${BASE}/user/verify-otp/`,
+  RESET_PASSWORD:       `${BASE}/user/reset-password/`,
 }
 
 export function useAuth() {
@@ -29,6 +35,78 @@ export function useAuth() {
     try {
       const response = await api.post(ENDPOINTS.LOGIN, credentials)
       return response.data
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // ─── Password reset ───────────────────────────────────────────────────────
+  //
+  // Three steps, and the middle one is why it is not a single call: the OTP is
+  // exchanged for a short-lived token, and it is that token — not the code, and
+  // not the email — which authorises the new password. So the code never has to
+  // be held in component state past the step that verifies it.
+
+  /**
+   * Ask for a one-time code to be emailed.
+   *
+   * Deliberately not distinguishing "no such account" from success at the call
+   * site: an endpoint that answers differently for a registered and an
+   * unregistered address is an account-enumeration oracle. Whatever the server
+   * returns, the UI says the same thing.
+   *
+   * @param {string} email
+   * @returns {Promise<object>}
+   */
+  async function requestPasswordReset(email) {
+    loading.value = true
+    try {
+      const response = await api.post(ENDPOINTS.FORGOT_PASSWORD, { email })
+      return response.data ?? {}
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Exchange the emailed code for a reset token.
+   *
+   * @param {string} email
+   * @param {string} otp
+   * @returns {Promise<string>} the reset token
+   * @throws if the response carries no token — a 200 without one would
+   *   otherwise let the flow advance to a password step that cannot succeed.
+   */
+  async function verifyResetOtp(email, otp) {
+    loading.value = true
+    try {
+      const response = await api.post(ENDPOINTS.VERIFY_OTP, { email, otp })
+      const data = response.data ?? {}
+      // Every spelling the endpoint has been seen to use, since this is the one
+      // value the last step depends on.
+      const token = data.token ?? data.reset_token ?? data.data?.token ?? null
+      if (!token) throw new Error('The code was accepted but no reset token was returned.')
+      return token
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Set the new password, authorised by the token from `verifyResetOtp`.
+   *
+   * @param {string} token
+   * @param {string} newPassword
+   * @returns {Promise<object>}
+   */
+  async function resetPassword(token, newPassword) {
+    loading.value = true
+    try {
+      const response = await api.post(ENDPOINTS.RESET_PASSWORD, {
+        token,
+        new_password: newPassword,
+      })
+      return response.data ?? {}
     } finally {
       loading.value = false
     }
@@ -104,6 +182,9 @@ export function useAuth() {
     loading,
     // methods
     login,
+    requestPasswordReset,
+    verifyResetOtp,
+    resetPassword,
     fetchUserCompanies,
     fetchCurrentUserCompanies,
     fetchUserProfile,
