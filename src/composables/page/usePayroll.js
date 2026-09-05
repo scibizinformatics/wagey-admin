@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 // import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
 
 export function usePayroll() {
   // const { companyId } = useCompany()
@@ -118,7 +118,6 @@ export function usePayroll() {
     try {
       const response = await api.get(`${BASE}/attendance/${employeeId}/hours-breakdown/`, {
         params: { period },
-        headers: authHeaders(),
         signal: controller.signal,
       })
 
@@ -147,7 +146,6 @@ export function usePayroll() {
     breakdownLoading.value = true
     try {
       const response = await api.get(`${BASE}/payroll/admin/payslips/${payslipId}/breakdown/`, {
-        headers: authHeaders(),
         signal: controller.signal,
       })
       selectedBreakdown.value = response.data
@@ -177,7 +175,6 @@ export function usePayroll() {
     setLoading('fetchingAllowanceTypes', true)
     try {
       const response = await api.get(`${BASE}/payroll/admin/allowance-types/`, {
-        headers: authHeaders(),
         signal: controller.signal,
       })
       allowanceTypes.value = response.data.data ?? response.data ?? []
@@ -203,9 +200,7 @@ export function usePayroll() {
 
     setSaving('creatingAllowanceType', true)
     try {
-      const response = await api.post(`${BASE}/payroll/admin/allowance-types/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/payroll/admin/allowance-types/`, payload)
 
       return response.data
     } catch (err) {
@@ -224,9 +219,7 @@ export function usePayroll() {
 
     setSaving('updatingAllowanceType', true)
     try {
-      const response = await api.put(`${BASE}/payroll/admin/allowance-types/${typeId}/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.put(`${BASE}/payroll/admin/allowance-types/${typeId}/`, payload)
 
       return response.data
     } catch (err) {
@@ -245,9 +238,7 @@ export function usePayroll() {
 
     setSaving('deletingAllowanceType', true)
     try {
-      const response = await api.delete(`${BASE}/payroll/admin/allowance-types/${typeId}/`, {
-        headers: authHeaders(),
-      })
+      const response = await api.delete(`${BASE}/payroll/admin/allowance-types/${typeId}/`)
 
       return response.data
     } catch (err) {
@@ -270,7 +261,6 @@ export function usePayroll() {
     setLoading('fetchingContracts', true)
     try {
       const response = await api.get(`${BASE}/contracts/employee-contracts/`, {
-        headers: authHeaders(),
         signal: controller.signal,
       })
       contracts.value = response.data.data ?? response.data ?? []
@@ -298,7 +288,6 @@ export function usePayroll() {
     setLoading('fetchingContractTypes', true)
     try {
       const response = await api.get(`${BASE}/contracts/contract-types/`, {
-        headers: authHeaders(),
         signal: controller.signal,
       })
       contractTypes.value = response.data.data ?? response.data ?? []
@@ -324,9 +313,7 @@ export function usePayroll() {
 
     setSaving('creatingContract', true)
     try {
-      const response = await api.post(`${BASE}/contracts/employee-contracts/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/contracts/employee-contracts/`, payload)
 
       return response.data
     } catch (err) {
@@ -348,7 +335,6 @@ export function usePayroll() {
       const response = await api.patch(
         `${BASE}/contracts/employee-contracts/${contractId}/`,
         payload,
-        { headers: authHeaders() },
       )
 
       return response.data
@@ -368,9 +354,7 @@ export function usePayroll() {
 
     setSaving('deletingContract', true)
     try {
-      const response = await api.delete(`${BASE}/contracts/employee-contracts/${contractId}/`, {
-        headers: authHeaders(),
-      })
+      const response = await api.delete(`${BASE}/contracts/employee-contracts/${contractId}/`)
 
       return response.data
     } catch (err) {
@@ -396,7 +380,6 @@ export function usePayroll() {
       const response = await api.patch(
         `${BASE}/payroll/admin/payslips/bulk-review/`,
         { disbursement_log_id: disbursementLogId, employee_ids: ids },
-        { headers: authHeaders() },
       )
 
       return response.data
@@ -426,7 +409,6 @@ export function usePayroll() {
       if (companyId) params.company = companyId
       const response = await api.get(`${BASE}/employee/payslips/`, {
         params,
-        headers: authHeaders(),
         signal: controller.signal,
       })
       const raw = response.data
@@ -462,7 +444,6 @@ export function usePayroll() {
         {},
         {
           headers: {
-            ...authHeaders(),
             'X-Acknowledge-Source': source,
           },
         },
@@ -492,7 +473,6 @@ export function usePayroll() {
       const response = await api.patch(
         `${BASE}/employee/payslips/${payslipId}/money-received/`,
         {},
-        { headers: authHeaders() },
       )
 
       return response.data
@@ -514,9 +494,7 @@ export function usePayroll() {
 
     setSaving('addingFunding', true)
     try {
-      const response = await api.post(`${BASE}/payroll/admin/disbursement-fundings/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/payroll/admin/disbursement-fundings/`, payload)
 
       return response.data
     } catch (err) {
@@ -545,7 +523,6 @@ export function usePayroll() {
       }
       const response = await api.get(`${BASE}/payroll/admin/disbursement-fundings/`, {
         params,
-        headers: authHeaders(),
         signal: controller.signal,
       })
       const result = response.data.results ?? response.data.data ?? response.data ?? []
@@ -578,7 +555,6 @@ export function usePayroll() {
       const response = await api.patch(
         `${BASE}/payroll/admin/disburse-payslips/`,
         { disbursement_log_id: disbursementLogId, employee_ids: ids },
-        { headers: authHeaders() },
       )
 
       return response.data
@@ -600,7 +576,6 @@ export function usePayroll() {
     try {
       const response = await api.get(`${BASE}/payroll/admin/issues/all/`, {
         params,
-        headers: authHeaders(),
       })
       return response.data ?? []
     } catch (err) {
@@ -620,7 +595,6 @@ export function usePayroll() {
       const response = await api.patch(
         `${BASE}/payroll/admin/payslips/${payslipId}/resolve/`,
         { admin_notes: adminNotes },
-        { headers: authHeaders() },
       )
       return response.data
     } catch (err) {
@@ -641,7 +615,6 @@ export function usePayroll() {
       const response = await api.patch(
         `${BASE}/payroll/admin/payslips/${payslipId}/reject/`,
         { admin_notes: adminNotes },
-        { headers: authHeaders() },
       )
       return response.data
     } catch (err) {
@@ -671,7 +644,6 @@ export function usePayroll() {
         `${BASE}/payroll/admin/disbursement-logs/${logId}/employees/`,
         {
           params,
-          headers: authHeaders(),
           signal: controller.signal,
         },
       )
@@ -853,7 +825,6 @@ export function usePayroll() {
     try {
       const response = await api.get(`${BASE}/payroll/admin/disbursement-logs/summary/`, {
         params,
-        headers: authHeaders(),
         signal: controller.signal,
       })
       const raw = response.data
@@ -916,7 +887,6 @@ export function usePayroll() {
     try {
       const response = await api.get(
         `${BASE}/payroll/admin/disbursement-logs/${logId}/cost-center-bank-accounts/`,
-        { headers: authHeaders() },
       )
       // API returns { count, bank_accounts: [...] }
       const result = response.data.bank_accounts ?? response.data.data?.bank_accounts ?? []
@@ -956,7 +926,6 @@ export function usePayroll() {
     try {
       const response = await api.get(`${BASE}/payroll/admin/company-custom-multipliers/`, {
         params: { company: companyId },
-        headers: authHeaders(),
         signal: controller.signal,
       })
       const data = response.data.data ?? response.data ?? []
@@ -986,7 +955,6 @@ export function usePayroll() {
       const response = await api.post(
         `${BASE}/payroll/admin/company-custom-multipliers/`,
         payload,
-        { headers: authHeaders() },
       )
 
       return response.data
@@ -1009,7 +977,6 @@ export function usePayroll() {
       const response = await api.patch(
         `${BASE}/payroll/admin/company-custom-multipliers/${companyId}/`,
         payload,
-        { headers: authHeaders() },
       )
 
       return response.data
@@ -1035,9 +1002,7 @@ export function usePayroll() {
 
     setSaving('creatingPayrollRun', true)
     try {
-      const response = await api.post(`${BASE}/payroll/admin/generate-payslip/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/payroll/admin/generate-payslip/`, payload)
 
       return response.data
     } catch (err) {

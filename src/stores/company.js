@@ -12,18 +12,34 @@ const STORAGE_KEY = 'selectedCompany'
  * @property {string} country_name – Human-readable country name (e.g. 'Philippines')
  */
 
+/** A company object carrying nothing but an id — all we can recover from a legacy value. */
+function idOnly(id) {
+  return { id, name: '', logo: null, country: '', country_name: '' }
+}
+
 function readStoredCompany() {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) return null
+
+  let parsed
   try {
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object' && parsed.id != null) {
-      return parsed
-    }
+    parsed = JSON.parse(raw)
   } catch {
-    // Legacy: plain string ID stored previously
-    return { id: raw, name: '', logo: null, country: '', country_name: '' }
+    // Not JSON at all — a plain string id written by an older build.
+    return idOnly(raw)
   }
+
+  if (parsed && typeof parsed === 'object') {
+    return parsed.id != null ? parsed : null
+  }
+
+  // A JSON *primitive*: `"5"` parses to the number 5, which is not an object and
+  // used to fall through to `null` here — so a legacy numeric id silently meant
+  // "no company selected", while `resolvedCompanyId()` in
+  // composables/page/useCompany.js read the same value and answered 5. Two
+  // readers, one storage value, opposite answers; this is the half that was
+  // wrong.
+  if (parsed != null && parsed !== '') return idOnly(parsed)
   return null
 }
 

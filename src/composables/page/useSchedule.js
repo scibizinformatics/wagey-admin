@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
+import { createRequestToken } from 'src/composables/utils/requestToken'
 
 export function useSchedule() {
   const { companyId } = useCompany()
@@ -17,6 +18,12 @@ export function useSchedule() {
     previous: null,
   })
 
+  // Both fetchers below publish into the same `schedules` ref, and both are
+  // driven by the week arrows — which a person clicks through faster than the
+  // endpoint answers. One guard covers both, so whichever week was asked for
+  // last is the one that renders, whatever order the responses arrive in.
+  const commitGuard = createRequestToken()
+
   // ─── Monthly schedule grid ────────────────────────────────────────────────
 
   /**
@@ -25,13 +32,16 @@ export function useSchedule() {
    */
   async function fetchMonthlySchedules(params = {}) {
     loading.value = true
+    const token = commitGuard.next()
     try {
       const response = await api.get(`${BASE}/organization/schedules/company/monthly/`, {
         params: { company: companyId.value, ...params },
-        headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
-      schedules.value = Array.isArray(data) ? data : []
+      const rows = Array.isArray(data) ? data : []
+      // Superseded: hand the rows back to whoever asked, but do not publish them.
+      if (!commitGuard.isCurrent(token)) return rows
+      schedules.value = rows
       return schedules.value
     } finally {
       loading.value = false
@@ -46,13 +56,15 @@ export function useSchedule() {
    */
   async function fetchScheduleByDateRange(startDate, endDate, params = {}) {
     loading.value = true
+    const token = commitGuard.next()
     try {
       const response = await api.get(`${BASE}/organization/schedules/company/monthly/`, {
         params: { company: companyId.value, start_date: startDate, end_date: endDate, ...params },
-        headers: authHeaders(),
       })
       const data = response.data ?? {}
-      schedules.value = Array.isArray(data.results) ? data.results : []
+      const rows = Array.isArray(data.results) ? data.results : []
+      if (!commitGuard.isCurrent(token)) return rows
+      schedules.value = rows
       schedulePagination.value = {
         page: params.page || 1,
         page_size: params.page_size || 20,
@@ -75,9 +87,7 @@ export function useSchedule() {
   async function assignShift(payload) {
     saving.value = true
     try {
-      const response = await api.post(`${BASE}/organization/assignments/assign/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/organization/assignments/assign/`, payload)
       return response.data
     } catch (error) {
       console.error('assignShift error:', error.response?.data)
@@ -94,9 +104,7 @@ export function useSchedule() {
   async function reassignShift(payload) {
     saving.value = true
     try {
-      const response = await api.patch(`${BASE}/organization/assignments/reassign/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.patch(`${BASE}/organization/assignments/reassign/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -111,7 +119,6 @@ export function useSchedule() {
     const response = await api.patch(
       `${BASE}/organization/assignments/${assignmentId}/cancel/`,
       { status: 'cancelled' },
-      { headers: authHeaders() },
     )
     return response.data
   }
@@ -125,9 +132,7 @@ export function useSchedule() {
   async function assignDayOff(payload) {
     saving.value = true
     try {
-      const response = await api.patch(`${BASE}/organization/assignments/assign-off/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.patch(`${BASE}/organization/assignments/assign-off/`, payload)
       return response.data
     } catch (error) {
       console.error('assignDayOff error:', error.response?.data)
@@ -149,7 +154,6 @@ export function useSchedule() {
       const response = await api.post(
         `${BASE}/attendance/leave/apply-for-employee/`,
         { ...payload, status: 'approved' },
-        { headers: authHeaders() },
       )
       return response.data
     } catch (error) {
@@ -164,7 +168,6 @@ export function useSchedule() {
   async function fetchLeaveTypes() {
     const response = await api.get(`${BASE}/attendance/leave-types/`, {
       params: { company: companyId.value },
-      headers: authHeaders(),
     })
     return response.data.data ?? response.data ?? []
   }
@@ -174,9 +177,7 @@ export function useSchedule() {
    * @param {string|number} leaveId
    */
   async function deleteLeave(leaveId) {
-    const response = await api.delete(`${BASE}/attendance/leaves/${leaveId}/`, {
-      headers: authHeaders(),
-    })
+    const response = await api.delete(`${BASE}/attendance/leaves/${leaveId}/`)
     return response.data
   }
 
@@ -184,7 +185,6 @@ export function useSchedule() {
   async function fetchShiftTemplates() {
     const response = await api.get(`${BASE}/organization/shift-type-templates-list/`, {
       params: { company: companyId.value },
-      headers: authHeaders(),
     })
     return response.data.data ?? response.data ?? []
   }
@@ -198,7 +198,6 @@ export function useSchedule() {
   async function fetchShiftTemplates24h() {
     const response = await api.get(`${BASE}/organization/shift-type-templates-24h-list/`, {
       params: { company: companyId.value },
-      headers: authHeaders(),
     })
     return response.data.data ?? response.data ?? []
   }
@@ -212,7 +211,6 @@ export function useSchedule() {
   async function fetchEmployeesByPayrollSite(companyId, payrollGroupId, siteId) {
     const response = await api.get(
       `${BASE}/user/companies/${companyId}/employees/by-payroll-site/${payrollGroupId}/${siteId}/`,
-      { headers: authHeaders() },
     )
     return response.data ?? []
   }
@@ -224,9 +222,7 @@ export function useSchedule() {
   async function autoAssignRecurring(payload) {
     saving.value = true
     try {
-      const response = await api.post(`${BASE}/organization/auto-assign-recurring/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/organization/auto-assign-recurring/`, payload)
       return response.data
     } catch (error) {
       console.error('autoAssignRecurring error:', error.response?.data)
@@ -251,7 +247,6 @@ export function useSchedule() {
         employee_id: employeeId,
         page_size: 100,
       },
-      headers: authHeaders(),
     })
     return response.data ?? {}
   }
@@ -323,7 +318,6 @@ export function useSchedule() {
       const response = await api.post(
         `${BASE}/organization/assignments/assign/`,
         { company_id, employee_ids, schedules },
-        { headers: authHeaders() },
       )
       return response.data
     } catch (error) {

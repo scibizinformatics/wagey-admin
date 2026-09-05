@@ -34,24 +34,44 @@ export function useEmployees() {
       return cached.data
     }
 
-    // 2. Deduplicate: reuse an already in-flight request for the same company
-    if (inflightByCompany[cid]) return inflightByCompany[cid]
+    // 2. Deduplicate: reuse an already in-flight request for the same company.
+    //
+    // The shared promise resolves to the rows and does nothing else. It used to
+    // assign `employees.value` from inside its own `.then`, which closed over
+    // whichever consumer happened to start the request — so a second consumer
+    // that joined an in-flight fetch got the rows as a return value while its
+    // own `employees` ref was never filled. Anything that awaited the call and
+    // then read the ref rather than the result (the attendance page builds its
+    // employee dropdown that way) saw an empty list, intermittently, depending
+    // on which caller won the race. Same for `loading`, which the winner
+    // cleared on everybody's behalf.
+    let request = inflightByCompany[cid]
+
+    if (force === true || request === undefined) {
+      request = api
+        .get(`${BASE}/user/companies/${cid}/employees/`)
+        .then((response) => {
+          const data = normaliseList(response.data)
+          cacheByCompany[cid] = { data, timestamp: Date.now() }
+          return data
+        })
+        .finally(() => {
+          // Guarded: a forced re-fetch replaces the entry, and the older
+          // request settling later must not delete its successor.
+          if (inflightByCompany[cid] === request) delete inflightByCompany[cid]
+        })
+
+      inflightByCompany[cid] = request
+    }
 
     loading.value = true
-    inflightByCompany[cid] = api
-      .get(`${BASE}/user/companies/${cid}/employees/`)
-      .then((response) => {
-        const data = normaliseList(response.data)
-        employees.value = data
-        cacheByCompany[cid] = { data, timestamp: Date.now() }
-        return data
-      })
-      .finally(() => {
-        loading.value = false
-        delete inflightByCompany[cid]
-      })
-
-    return inflightByCompany[cid]
+    try {
+      const data = await request
+      employees.value = data
+      return data
+    } finally {
+      loading.value = false
+    }
   }
 
   /**
