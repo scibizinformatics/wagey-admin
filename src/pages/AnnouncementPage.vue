@@ -290,6 +290,7 @@ import {
   useAnnouncements,
 } from '@/composables/page/useAnnouncements'
 import { useCompany } from '@/composables/page/useCompany'
+import { extractErrorMessage } from '@/composables/utils/http'
 import { useCompanyStore } from '@/stores/company'
 import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
 import { useAdminDepartments } from '@/composables/admin/useAdminDepartments'
@@ -513,7 +514,7 @@ const loadAnnouncements = async () => {
       if (announcements.value.some((row) => row.target_users?.length)) loadRecipients()
     }
   } catch (error) {
-    loadError.value = errorMessage(error, 'Failed to load announcements')
+    loadError.value = extractErrorMessage(error, 'Failed to load announcements')
   }
 }
 
@@ -596,7 +597,7 @@ const loadRecipients = (filters = {}) => {
   fetchRecipients(filters).catch((error) => {
     loadedRecipientKey = null
     console.error('[AnnouncementPage] failed to load employees:', error)
-    recipientError.value = errorMessage(error, 'Could not load the employee list')
+    recipientError.value = extractErrorMessage(error, 'Could not load the employee list')
   })
 }
 
@@ -775,31 +776,23 @@ const confirmDeleteAction = async () => {
     await loadAnnouncements()
   } catch (error) {
     console.error('[AnnouncementPage] delete failed:', error)
-    toast.error(errorMessage(error, 'Failed to delete announcement'))
+    toast.error(extractErrorMessage(error, 'Failed to delete announcement'))
   } finally {
     deleting.value = false
   }
 }
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
-function errorMessage(error, fallback) {
-  return error?.response?.data?.detail || error?.response?.data?.message || fallback
-}
-
 /**
- * DRF reports field errors as `{ field: ["message"] }`, so the first value in
- * the body is usually the useful sentence; an HTML error page is not.
+ * `extractErrorMessage` already reads DRF's `{ field: ["message"] }` shape,
+ * prefers a named key over a positional one, and refuses an HTML error page —
+ * everything the hand-rolled version here used to do, and the markup guard it
+ * only half did. All this adds is the one refusal the server never sees, since
+ * it is raised before the request goes out.
  */
 function saveErrorMessage(error) {
   if (error?.message === NO_COMPANY) return 'Select a company before posting an announcement'
-  const data = error?.response?.data
-  if (data && typeof data === 'object') {
-    const first = Object.values(data)[0]
-    if (Array.isArray(first) && first.length) return String(first[0])
-    return data.detail || data.message || 'Failed to save announcement'
-  }
-  if (typeof data === 'string' && !data.trimStart().startsWith('<')) return data
-  return 'Failed to save announcement'
+  return extractErrorMessage(error, 'Failed to save announcement')
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

@@ -5,25 +5,25 @@
     persistent
     @update:model-value="$emit('update:modelValue', $event)"
   >
-    <q-card class="ann-dlg">
-      <q-card-section class="ann-dlg__head">
-        <span class="ann-dlg__head-icon">
-          <q-icon name="o_campaign" size="19px" />
+    <q-card class="dash-modal">
+      <q-card-section class="dash-modal__head">
+        <span class="dash-modal__head-icon">
+          <q-icon name="o_campaign" size="20px" />
         </span>
-        <div class="ann-dlg__head-titles">
-          <div class="ann-dlg__head-title">
+        <div class="dash-modal__head-titles">
+          <div class="dash-modal__title">
             {{ isEditing ? 'Edit announcement' : 'New announcement' }}
           </div>
-          <div class="ann-dlg__head-sub">{{ headSub }}</div>
+          <div class="dash-modal__sub">{{ headSub }}</div>
         </div>
         <q-btn flat round dense icon="close" aria-label="Close" @click="close" />
       </q-card-section>
 
-      <q-form class="ann-dlg__form" @submit="onSave">
-        <q-card-section class="ann-dlg__body">
+      <q-form class="dash-modal__form" @submit="onSave">
+        <q-card-section class="dash-modal__body dash-modal__stack">
           <!-- ── What it says ─────────────────────────────────────────────── -->
-          <div class="ann-field">
-            <span class="ann-field__label">Title</span>
+          <div class="dash-modal__field">
+            <span class="dash-modal__field-label">Title</span>
             <q-input
               v-model="localForm.title"
               outlined
@@ -36,8 +36,8 @@
             />
           </div>
 
-          <div class="ann-field">
-            <span class="ann-field__label">Message</span>
+          <div class="dash-modal__field">
+            <span class="dash-modal__field-label">Message</span>
             <q-input
               v-model="localForm.message"
               type="textarea"
@@ -51,8 +51,8 @@
           </div>
 
           <div class="ann-row2">
-            <div class="ann-field">
-              <span class="ann-field__label">Type</span>
+            <div class="dash-modal__field">
+              <span class="dash-modal__field-label">Type</span>
               <q-select
                 v-model="localForm.announcement_type"
                 :options="typeSelectOptions"
@@ -73,8 +73,8 @@
             <!-- The switch reads as a state, not a checkbox: "Live" / "Switched
                  off" says what employees see, which "Active" on its own did
                  not. -->
-            <div class="ann-field">
-              <span class="ann-field__label">Visibility</span>
+            <div class="dash-modal__field">
+              <span class="dash-modal__field-label">Visibility</span>
               <div class="ann-switch">
                 <q-toggle v-model="localForm.is_active" dense class="ann-switch__toggle" />
                 <span class="ann-switch__text">
@@ -91,8 +91,8 @@
               <span class="ann-group__hint">{{ scheduleHint }}</span>
             </div>
             <div class="ann-row2">
-              <div class="ann-field">
-                <span class="ann-field__label">Starts</span>
+              <div class="dash-modal__field">
+                <span class="dash-modal__field-label">Starts</span>
                 <q-input
                   v-model="localForm.start_at"
                   type="datetime-local"
@@ -102,8 +102,8 @@
                   class="dash-field"
                 />
               </div>
-              <div class="ann-field">
-                <span class="ann-field__label">Ends</span>
+              <div class="dash-modal__field">
+                <span class="dash-modal__field-label">Ends</span>
                 <q-input
                   v-model="localForm.end_at"
                   type="datetime-local"
@@ -147,9 +147,9 @@
                    which employees it offers — they are not the audience, and
                    putting them above the picker made the one control that
                    matters the last thing in a scrolling dialog. -->
-              <div class="ann-field">
+              <div class="dash-modal__field">
                 <div class="ann-people__head">
-                  <span class="ann-field__label">Employees</span>
+                  <span class="dash-modal__field-label">Employees</span>
                   <span class="ann-people__meta">{{ peopleMeta }}</span>
                   <button
                     type="button"
@@ -240,8 +240,8 @@
                 </div>
 
                 <div class="ann-filters">
-                  <div class="ann-field">
-                    <span class="ann-field__label">Payroll group</span>
+                  <div class="dash-modal__field">
+                    <span class="dash-modal__field-label">Payroll group</span>
                     <q-select
                       v-model="filters.payrollGroupId"
                       :options="payrollGroupOptions"
@@ -258,8 +258,8 @@
                     />
                   </div>
 
-                  <div class="ann-field">
-                    <span class="ann-field__label">Department</span>
+                  <div class="dash-modal__field">
+                    <span class="dash-modal__field-label">Department</span>
                     <q-select
                       v-model="filters.departmentId"
                       :options="departmentOptions"
@@ -276,8 +276,8 @@
                     />
                   </div>
 
-                  <div class="ann-field">
-                    <span class="ann-field__label">Position</span>
+                  <div class="dash-modal__field">
+                    <span class="dash-modal__field-label">Position</span>
                     <q-select
                       v-model="filters.positionId"
                       :options="positionOptions"
@@ -294,8 +294,8 @@
                     />
                   </div>
 
-                  <div class="ann-field">
-                    <span class="ann-field__label">Pay type</span>
+                  <div class="dash-modal__field">
+                    <span class="dash-modal__field-label">Pay type</span>
                     <q-select
                       v-model="filters.payType"
                       :options="payTypeOptions"
@@ -377,14 +377,14 @@
           </div>
         </q-card-section>
 
-        <q-card-actions class="ann-dlg__foot">
-          <q-btn flat no-caps label="Cancel" class="ann-dlg__cancel" @click="close" />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" @click="close" />
           <q-btn
             type="submit"
             unelevated
             no-caps
             :label="isEditing ? 'Save changes' : 'Post announcement'"
-            class="ann-dlg__submit"
+            class="dash-modal__submit"
             :loading="saving"
             :disable="!canSave"
           />
@@ -786,128 +786,6 @@ watch(
 </script>
 
 <style scoped>
-.ann-dlg {
-  width: 560px;
-  max-width: 95vw;
-  max-height: 92vh;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--dash-r-lg);
-  overflow: hidden;
-}
-
-/* ── Head ── */
-.ann-dlg__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 15px 18px;
-  background: var(--dash-brand);
-  flex-shrink: 0;
-}
-.ann-dlg__head-icon {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  flex: none;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-}
-.ann-dlg__head-titles {
-  flex: 1;
-  min-width: 0;
-}
-.ann-dlg__head-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #ffffff;
-  line-height: 1.3;
-}
-/* The old subtitle was #6b7280 on the navy bar — grey text on a dark ground it
-   could not carry. */
-.ann-dlg__head-sub {
-  margin-top: 1px;
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.78);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ann-dlg__head :deep(.q-btn) {
-  color: rgba(255, 255, 255, 0.8);
-  flex: none;
-}
-.ann-dlg__head :deep(.q-btn:hover) {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-/* ── Body ── */
-/* The form is a flex child of the card, between it and the scrolling body. With
-   no styling of its own it sized to its content, so the body never received a
-   bounded height, `overflow-y: auto` below never engaged, and the card's
-   `overflow: hidden` simply clipped everything past 92vh — the fields at the
-   bottom could not be reached at all. It has to be a bounded flex column that
-   clips, so the body inside it is the thing that scrolls. */
-.ann-dlg__form {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.ann-dlg__body {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  padding: 18px;
-  /* `min-height: 0` is what lets a flex child shrink below its content height —
-     without it the auto minimum keeps the body at full height and nothing
-     scrolls. */
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  background: var(--dash-surface);
-  /* Scrollbar hidden by request. Scrolling itself is untouched — wheel,
-     trackpad, touch, and Page Up/Down or arrows once the body has focus all
-     still work; only the indicator is gone. The pinned footer is what tells a
-     reader the panel above it continues. */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* legacy Edge */
-}
-.ann-dlg__body::-webkit-scrollbar {
-  /* Chrome, Safari, current Edge */
-  width: 0;
-  height: 0;
-}
-
-.ann-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-.ann-field__label {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--dash-ink-2);
-}
-.ann-field :deep(.q-field__control) {
-  min-height: 38px;
-  border-radius: var(--dash-r-md);
-  background: var(--dash-surface);
-}
-.ann-field :deep(.q-field__native),
-.ann-field :deep(textarea) {
-  font-size: 13px;
-  color: var(--dash-ink);
-}
-.ann-field :deep(.q-field__marginal) {
-  color: var(--dash-ink-4);
-}
 .ann-field__area :deep(.q-field__control) {
   padding: 6px 12px;
 }
@@ -1261,67 +1139,12 @@ watch(
   color: var(--dash-ink-3);
 }
 
-/* ── Foot ── */
-.ann-dlg__foot :deep(.q-btn + .q-btn) {
-  /* Quasar spaces sibling buttons itself; the footer's own flex gap is the only
-     spacing this wants. */
-  margin-left: 0;
-}
-.ann-dlg__foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 18px;
-  background: var(--dash-n-25);
-  border-top: 1px solid var(--dash-line);
-  flex-shrink: 0;
-}
-.ann-dlg__cancel {
-  height: 36px;
-  padding: 0 14px;
-  border-radius: var(--dash-r-md);
-  color: var(--dash-ink-2);
-  font-size: 13px;
-  font-weight: 500;
-}
-.ann-dlg__cancel:hover {
-  background: var(--dash-n-100);
-}
-.ann-dlg__submit {
-  height: 36px;
-  padding: 0 16px;
-  border-radius: var(--dash-r-md);
-  background: var(--dash-brand);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 500;
-}
-.ann-dlg__submit:hover {
-  background: #193d5c;
-}
-
 /* Tablet: the paired rows stack rather than halving to 130px each. */
 @media (max-width: 767px) {
   .ann-row2,
   .ann-audience,
   .ann-filters {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 599px) {
-  .ann-dlg {
-    width: 100%;
-    height: 100%;
-    max-height: 100%;
-    border-radius: 0;
-  }
-  .ann-dlg__foot {
-    flex-direction: column-reverse;
-  }
-  .ann-dlg__foot .q-btn {
-    width: 100%;
-    margin: 0;
   }
 }
 </style>
