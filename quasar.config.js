@@ -18,7 +18,18 @@ export default defineConfig((ctx) => {
       errors: true,
     },
 
-    boot: ['pinia', 'auth', 'axios', 'toast', 'suppressExtensionErrors', 'dialogA11y'],
+    // Order matters: pinia before auth, auth before axios (its interceptors
+    // read the auth store), and toast before errorHandler — the handler raises
+    // a toast, so the queue has to be in place first.
+    boot: [
+      'pinia',
+      'auth',
+      'axios',
+      'toast',
+      'errorHandler',
+      'suppressExtensionErrors',
+      'dialogA11y',
+    ],
     css: ['app.scss'],
     // `material-icons-outlined` backs the `o_` icon prefix. The navigation rail
     // uses it for inactive items and swaps to the filled variant for the active
@@ -32,6 +43,26 @@ export default defineConfig((ctx) => {
 
     build: {
       vueRouterMode: 'hash',
+
+      // ── Console output in the production bundle ──────────────────────────
+      // Passed straight through to terser-webpack-plugin's `terserOptions`
+      // (see @quasar/app-webpack's config-tools.js), and only consulted when
+      // minification runs, i.e. in a production build.
+      //
+      // `console.log` / `.debug` / `.trace` are dropped: they are development
+      // aids and there are dozens of them, including per-request logging in
+      // `boot/axios.js`. `console.warn` and `console.error` are deliberately
+      // KEPT — this app has no error-reporting service, so those 150-odd calls
+      // are the only diagnostic trail a person can copy out of their console
+      // when they report a problem. A blanket `drop_console: true` would take
+      // them too and leave a failing payroll run with nothing to show for it.
+      uglifyOptions: ctx.prod
+        ? {
+            compress: {
+              pure_funcs: ['console.log', 'console.debug', 'console.trace'],
+            },
+          }
+        : undefined,
       esbuildTarget: {
         browser: ['es2022', 'firefox115', 'chrome115', 'safari14'],
         node: 'node20',
@@ -69,43 +100,30 @@ export default defineConfig((ctx) => {
           runtimeErrors: (error) => !/ResizeObserver loop/i.test(error?.message ?? ''),
         },
       },
+      // ── Proxy entries are grouped, not one-per-prefix ────────────────────
+      // http-proxy-middleware registers a `close` listener on the shared dev
+      // server for every entry in this array. Twelve entries meant twelve
+      // listeners on one emitter, which is past Node's default limit of ten,
+      // so `npm run dev` opened with a MaxListenersExceededWarning about a
+      // leak that was not one. Every prefix below shares the same target and
+      // options, so they belong in one `context` array. Add new API prefixes
+      // to that array rather than pushing another object onto this list.
       proxy: [
         {
-          context: ['/api'],
-          target: apiBaseUrl,
-          changeOrigin: true,
-          secure: false,
-          logLevel: 'debug',
-        },
-        {
-          context: ['/ws/notifications'],
-          target: apiBaseUrl,
-          changeOrigin: true,
-          secure: false,
-          ws: true,
-        },
-        {
-          context: ['/user'],
-          target: apiBaseUrl,
-          changeOrigin: true,
-          secure: false,
-        },
-        {
-          context: ['/organization'],
-          target: apiBaseUrl,
-          changeOrigin: true,
-          secure: false,
-          logLevel: 'debug',
-        },
-        {
-          context: ['/communication'],
-          target: apiBaseUrl,
-          changeOrigin: true,
-          secure: false,
-          logLevel: 'debug',
-        },
-        {
-          context: ['/attendance'],
+          // The whole REST surface. `/payroll` is deliberately absent here —
+          // see the narrow allowlist below.
+          context: [
+            '/api',
+            '/user',
+            '/organization',
+            '/communication',
+            '/attendance',
+            '/cash_advance',
+            '/contracts',
+            '/access',
+            '/admin',
+            '/audit',
+          ],
           target: apiBaseUrl,
           changeOrigin: true,
           secure: false,
@@ -114,6 +132,8 @@ export default defineConfig((ctx) => {
           // Only proxy actual API calls — not the bare /payroll SPA route.
           // Without this, refreshing /app/payroll forwards the request to
           // Django instead of letting Quasar's history-mode router handle it.
+          // Kept as its own entry so the enumeration stays legible; folding it
+          // into the group above would work but would bury the reason.
           context: [
             '/payroll/admin',
             '/payroll/payroll-components',
@@ -135,28 +155,14 @@ export default defineConfig((ctx) => {
           secure: false,
         },
         {
-          context: ['/cash_advance'],
+          // Separate because of `ws: true` — the notifications socket is the
+          // only upgraded connection, and the option cannot be shared with
+          // the plain HTTP prefixes above.
+          context: ['/ws/notifications'],
           target: apiBaseUrl,
           changeOrigin: true,
           secure: false,
-        },
-        {
-          context: ['/contracts'],
-          target: apiBaseUrl,
-          changeOrigin: true,
-          secure: false,
-        },
-        {
-          context: ['/access'],
-          target: apiBaseUrl,
-          changeOrigin: true,
-          secure: false,
-        },
-        {
-          context: ['/admin'],
-          target: apiBaseUrl,
-          changeOrigin: true,
-          secure: false,
+          ws: true,
         },
       ],
     },
