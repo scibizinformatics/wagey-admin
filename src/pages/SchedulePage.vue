@@ -31,11 +31,10 @@
         />
 
         <ScheduleTable
-          :users="users"
+          :users="usersWithAvatars"
           :shifts="shifts"
           :days="days"
           :week-dates="weekDates"
-          :leave-types="leaveTypes"
           :loading="isLoadingSchedule || resolvingGroups"
           :quick-action-loading="quickActionLoading"
           :assigning-day-off-id="assigningDayOffId"
@@ -103,6 +102,7 @@
       v-model="showAddModal"
       v-model:new-schedule="newSchedule"
       :filtered-employee-options="filteredEmployeeOptions"
+      :site-options="siteOptions"
       :shift-template-options="shiftTemplateOptions"
       :rotating-shift-template-options="rotatingShiftTemplateOptions"
       :recurring-schedule-options="recurringScheduleOptions"
@@ -110,7 +110,6 @@
       :conflict-warning="addConflictWarning"
       :checking-conflict="isCheckingConflict"
       :loading-employees="loadingEmployees"
-      :payroll-group-options="payrollGroupOptions"
       @submit="addSchedule"
       @filter-employees="filterEmployeeOptions"
       @template-change="onRecurringTemplateChange"
@@ -146,20 +145,27 @@ import PageShell from '@/components/layout/PageShell.vue'
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
 import { useCompany } from '@/composables/page/useCompany'
+import { useAuthStore } from '@/boot/auth'
+import { readStoredJson, safeParseJson } from '@/composables/utils/storage'
 import { useSchedule } from '@/composables/page/useSchedule'
 import { useOrganization } from '@/composables/page/useOrganization'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
+import { getEmployeePhoto, describeShiftTemplate } from '@/composables/utils/schedule'
+import { extractErrorMessage } from '@/composables/utils/http'
 import ScheduleFilters from '@/components/pages/Schedule/ScheduleFilters.vue'
 import ScheduleTable from '@/components/pages/Schedule/ScheduleTable.vue'
 import ScheduleAddModal from '@/components/pages/Schedule/ScheduleAddModal.vue'
 import ScheduleQuickAddModal from '@/components/pages/Schedule/ScheduleQuickAddModal.vue'
 import ScheduleReassignModal from '@/components/pages/Schedule/ScheduleReassignModal.vue'
+import { useToast } from '@/composables/useToast'
 
 const $q = useQuasar()
+const toast = useToast()
 
 const { companyId } = useCompany()
+const authStore = useAuthStore()
 const {
   fetchScheduleByDateRange,
   fetchEmployeeSchedule,
@@ -258,7 +264,7 @@ const _freshSchedule = () => ({
   repeatInterval: 1,
   recurringStartDate: null,
   recurringEndDate: null,
-  rotatingPayrollGroups: [],
+  rotatingSites: [],
   rotatingShiftTemplate: null,
   rotationMode: 'daily',
 })
@@ -366,6 +372,31 @@ const getSiteName = (siteId, shift = null) => {
 
 const getEmployeeName = (id) => users.value.find((u) => u.id === id)?.name || 'Unknown Employee'
 
+// Photos keyed by every id an employee answers to. The schedule payload does not
+// always carry one, so the roster fills the gap — and because this is derived
+// rather than baked into `users` at render time, a roster that arrives after the
+// grid has drawn still puts faces on it.
+const rosterPhotos = computed(() => {
+  const byId = new Map()
+  for (const employee of employees.value) {
+    const photo = getEmployeePhoto(employee)
+    if (!photo) continue
+    // Every identifier the roster answers to, because the schedule payload and
+    // the roster do not always name the same person with the same one.
+    for (const key of [employee.id, employee.uuid, employee.employee_id]) {
+      if (key != null) byId.set(String(key), photo)
+    }
+  }
+  return byId
+})
+
+const usersWithAvatars = computed(() =>
+  users.value.map((user) => ({
+    ...user,
+    photo: user.photo || rosterPhotos.value.get(String(user.id)) || '',
+  })),
+)
+
 const isEmployeeTerminated = (emp) => {
   if (emp.status?.toLowerCase() === 'terminated') return true
   const empStatus = emp.companies?.[0]?.employment_status
@@ -381,8 +412,10 @@ const totalShifts = computed(() => shifts.value.length)
 
 // `siteFilterOptions` and `userOptions` went with the two dropdowns they fed —
 // the toolbar filters by payout group now, and employee lookup is the search
-// box. `siteOptionsForRotating` went too: a rotating schedule takes its sites
-// from the 24-hour template's own shifts, so the modal no longer asks for them.
+// box. `siteOptions` stayed: the rotating form picks the sites its rotation
+// covers, since the 24-hour template only carries times.
+
+const siteOptions = computed(() => sites.value.map((s) => ({ label: s.name, value: s.id })))
 
 const employeeOptions = computed(() =>
   employees.value
@@ -398,30 +431,30 @@ const payrollGroupOptions = computed(() =>
   payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
 )
 
-const shiftTemplateOptions = computed(() => {
-  const opts = shiftTemplates.value.map((t) => {
-    let label = t.name
-    const shiftsDetail = parseShifts(t.shifts_detail)
-    if (!label && shiftsDetail.length) {
-      label = shiftsDetail
-        .map((s) => {
-          const site = s.site?.name || getSiteName(s.site?.id || t.site_id) || ''
-          const start = s.start_time || s.default_start_time || ''
-          const end = s.end_time || s.default_end_time || ''
-          const time = start && end ? `${start} - ${end}` : start || end
-          return site ? `${time} (${site})` : time
-        })
+// Each option carries the template's own reading of itself (site, times, and
+// every segment of a split shift) alongside its label, because the reassign
+// dialog has to preview what a template *would* schedule before anything is
+// written and no other payload can tell it.
+const shiftTemplateOptions = computed(() =>
+  shiftTemplates.value.map((t) => {
+    const detail = describeShiftTemplate(t, (siteId) => getSiteName(siteId))
+    const label =
+      t.name ||
+      detail.segments
+        .map((s) => (s.siteName ? `${s.timeLabel} (${s.siteName})` : s.timeLabel))
         .filter(Boolean)
         .join(' / ')
-    }
     return {
       label: label || `Template ${t.id}`,
       value: Number(t.id),
       site: t.site || t.site_id,
+      siteName: detail.siteName,
+      timeLabel: detail.timeLabel,
+      segments: detail.segments,
+      isMulti: detail.isMulti,
     }
-  })
-  return opts
-})
+  }),
+)
 
 // 24-hour templates carry a name; fall back to their chained shift times so a
 // nameless one is still tellable apart in the dropdown.
@@ -519,24 +552,24 @@ watch(
 // returns an empty list without a company resolved, and would do so silently.
 watch(
   companyId,
-  (id) => {
+  (id, prev) => {
     if (id) fetchPayrollGroups()
+    // Employee and site ids from the previous workspace mean nothing in the
+    // next one, so a half-filled draft is dropped rather than carried over.
+    if (prev !== undefined && id !== prev) newSchedule.value = _freshSchedule()
   },
   { immediate: true },
 )
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// `shifts` arrives either as an array or as a JSON string, depending on the
+// endpoint. AdminSettingsPanelShifts.vue holds a verbatim copy of this, and
+// useAdminShifts.js a near-identical `parseShiftList` — three copies of one
+// idea, worth collapsing next time this area is touched.
 function parseShifts(shiftsData) {
-  if (!shiftsData) return []
   if (Array.isArray(shiftsData)) return shiftsData
-  if (typeof shiftsData === 'string') {
-    try {
-      return JSON.parse(shiftsData)
-    } catch {
-      return []
-    }
-  }
-  return []
+  const parsed = safeParseJson(shiftsData, [])
+  return Array.isArray(parsed) ? parsed : []
 }
 
 const filterEmployeeOptions = (val, update) => {
@@ -558,13 +591,18 @@ const removeShiftRow = (index) => {
 
 // ─── localStorage leave helpers ───────────────────────────────────────────────
 const LEAVE_STORAGE_KEY = 'wagey_leaves'
-const getStoredLeaves = () => {
-  try {
-    return JSON.parse(localStorage.getItem(LEAVE_STORAGE_KEY) || '[]')
-  } catch {
-    return []
-  }
-}
+const getStoredLeaves = () => readStoredJson(LEAVE_STORAGE_KEY, [])
+/**
+ * The monthly payload flags a leave day but does not always name its type.
+ * Prefer a name it carries, then the leave-types lookup by id, then "On leave"
+ * — with no type to print, the chip should still say what the day is.
+ */
+const resolveLeaveTypeName = (schedule) =>
+  schedule.leave_type_name ||
+  schedule.leave_type?.name ||
+  leaveTypes.value.find((lt) => lt.id === (schedule.leave_type?.id ?? schedule.leave_type))?.name ||
+  'On leave'
+
 const saveLeaveToStorage = (leave) => {
   const leaves = getStoredLeaves()
   if (!leaves.find((l) => l.localId === leave.localId)) {
@@ -574,14 +612,20 @@ const saveLeaveToStorage = (leave) => {
 }
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
-const normalizeCompanyId = () => {
-  let raw = localStorage.getItem('selectedCompany')
-  try {
-    raw = JSON.parse(raw)?.id || raw
-  } catch {
-    // ignore parse errors
-  }
-  return parseInt(raw)
+/**
+ * The active company as the scheduling endpoints want it: an integer, or null.
+ *
+ * This replaces a private `normalizeCompanyId()` that read `selectedCompany`
+ * out of localStorage and returned `parseInt(raw)` — in the same file that
+ * already imported `useCompany()` two hundred lines above. The two disagreed in
+ * two ways that matter: the private one saw only one of the four historical
+ * storage keys, and it returned `NaN` rather than null when the stored value
+ * was an object without an `id`, which then went into a request URL as the
+ * literal string "NaN".
+ */
+const numericCompanyId = () => {
+  const n = parseInt(companyId.value, 10)
+  return Number.isFinite(n) ? n : null
 }
 
 const fetchSitesAndDepartments = async () => {
@@ -615,11 +659,17 @@ const fetchShiftTemplates24hList = async () => {
 }
 
 const fetchLeaves = () => {
-  const cId = String(normalizeCompanyId())
+  const cId = String(companyId.value ?? '')
   const ws = selectedWeek.value.start
   const weekStartStr = `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
   const allLeaves = getStoredLeaves().filter((l) => String(l.companyId) === cId)
-  shifts.value = shifts.value.filter((s) => !s.isLeave)
+  // Only locally-stored leaves are cleared and rebuilt here. Leaves that arrived
+  // in the monthly payload are part of the rendered schedule; clearing every
+  // isLeave shift would blank them on each refresh.
+  shifts.value = shifts.value.filter((s) => !s.isLocalLeave)
+  const apiLeaveDays = new Set(
+    shifts.value.filter((s) => s.isLeave).map((s) => `${s.userId}|${s.date}`),
+  )
   const weekStart = new Date(weekStartStr + 'T00:00:00')
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekEnd.getDate() + 6)
@@ -631,11 +681,14 @@ const fetchLeaves = () => {
     const leaveTypeName =
       leaveTypes.value.find((lt) => lt.id === leave.leave_type)?.name ||
       leave.leave_type_name ||
-      'Leave'
+      'On leave'
     for (let d = new Date(ls); d <= le; d.setDate(d.getDate() + 1)) {
       const daysDiff = Math.round((d.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24))
       if (daysDiff >= 0 && daysDiff < 7) {
         const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        // The backend already returned this day as leave — a local copy would
+        // draw a second identical chip in the same cell.
+        if (apiLeaveDays.has(`${leave.employee_id}|${dateStr}`)) continue
         shifts.value.push({
           id: `leave-${leave.localId}-${daysDiff}`,
           assignmentId: leave.localId,
@@ -650,6 +703,7 @@ const fetchLeaves = () => {
           status: 'approved',
           date: dateStr,
           isLeave: true,
+          isLocalLeave: true,
           leaveTypeName,
         })
       }
@@ -668,6 +722,7 @@ const renderPage = () => {
       id: emp.employee?.id || emp.id,
       name: emp.employee?.full_name || emp.full_name || emp.name || `Employee ${emp.id}`,
       email: emp.employee?.email || emp.email || '',
+      photo: getEmployeePhoto(emp.employee || emp) || '',
     }))
 
   shifts.value = []
@@ -687,15 +742,7 @@ const renderPage = () => {
     if (!employee?.id) return
     const scheduleList = empData.schedules || empData.schedule || empData.schedule_list || []
     const parsedSchedules =
-      typeof scheduleList === 'string'
-        ? (() => {
-            try {
-              return JSON.parse(scheduleList)
-            } catch {
-              return []
-            }
-          })()
-        : scheduleList
+      typeof scheduleList === 'string' ? safeParseJson(scheduleList, []) : scheduleList
     if (!Array.isArray(parsedSchedules) || parsedSchedules.length === 0) return
     parsedSchedules.forEach((schedule, sIndex) => {
       if (!schedule.date) return
@@ -705,17 +752,24 @@ const renderPage = () => {
         (scheduleDate.getTime() - weekStartLocal.getTime()) / (1000 * 60 * 60 * 24),
       )
       if (daysDiff < 0 || daysDiff >= 7) return
+      // Leave is read before day off: a payload row can carry both flags, and
+      // "Vacation Leave" tells the reader more than "Day off" when it does.
+      const isLeaveShift = schedule.is_leave === true
       const isDayOffShift =
-        schedule.is_off === true ||
-        schedule.is_day_off === true ||
-        schedule.status === 'day_off' ||
-        schedule.shift_type_name?.toLowerCase().includes('day off')
-      const startTime = isDayOffShift
+        !isLeaveShift &&
+        (schedule.is_off === true ||
+          schedule.is_day_off === true ||
+          schedule.status === 'day_off' ||
+          schedule.shift_type_name?.toLowerCase().includes('day off'))
+      // Neither kind is worked, so neither carries times into the hour totals.
+      const isNonWorking = isLeaveShift || isDayOffShift
+      const leaveTypeName = isLeaveShift ? resolveLeaveTypeName(schedule) : null
+      const startTime = isNonWorking
         ? null
         : schedule.actual_start_time?.substring(0, 5) ||
           schedule.start_time?.substring(0, 5) ||
           null
-      const endTime = isDayOffShift
+      const endTime = isNonWorking
         ? null
         : schedule.actual_end_time?.substring(0, 5) || schedule.end_time?.substring(0, 5) || null
       let shiftTypeId = schedule.shift_type || null
@@ -743,7 +797,7 @@ const renderPage = () => {
         day: daysDiff,
         startTime,
         endTime,
-        position: shiftTypeName || (startTime ? `${startTime}–${endTime}` : 'Shift'),
+        position: leaveTypeName || shiftTypeName || (startTime ? `${startTime}–${endTime}` : 'Shift'),
         shiftTypeId,
         shiftTemplateId: schedule.shift_template || schedule.shift_template_id || null,
         site: schedule.site || null,
@@ -752,6 +806,8 @@ const renderPage = () => {
         status: schedule.status || 'active',
         date: scheduleDateStr,
         is_off: isDayOffShift,
+        isLeave: isLeaveShift,
+        leaveTypeName,
       })
     })
   })
@@ -850,13 +906,10 @@ const fetchData = async () => {
   isLoadingSchedule.value = true
   await nextTick()
   try {
-    const token = localStorage.getItem('access_token')
-    const cId = normalizeCompanyId()
+    const token = authStore.token
+    const cId = numericCompanyId()
     if (!token || !cId) {
-      $q.notify({
-        type: 'negative',
-        message: !token ? 'Please log in to view schedules' : 'No company selected.',
-      })
+      toast.error(!token ? 'Please log in to view schedules' : 'No company selected.')
       return
     }
     const ws = selectedWeek.value.start
@@ -917,7 +970,7 @@ const fetchData = async () => {
 
     renderPage()
 
-    $q.notify({
+    toast.notify({
       type: shifts.value.length ? 'positive' : 'info',
       message: allSchedules.value.length
         ? `Loaded ${allSchedules.value.length} employees`
@@ -926,7 +979,7 @@ const fetchData = async () => {
     })
   } catch (e) {
     console.error('FETCH ERROR:', e)
-    $q.notify({ type: 'negative', message: 'Failed to load schedules', timeout: 5000 })
+    toast.error('Failed to load schedules', { timeout: 5000 })
   } finally {
     isLoadingSchedule.value = false
   }
@@ -957,7 +1010,7 @@ const onRecurringTemplateChange = (templateId) => {
       ...new Set(template.rules.map((r) => r.weekday?.toLowerCase()).filter(Boolean)),
     ]
   }
-  $q.notify({ type: 'info', message: 'Template loaded successfully', timeout: 3000 })
+  toast.info('Template loaded successfully', { timeout: 3000 })
 }
 
 const parseWeekdays = (weekdaysStr) => {
@@ -976,6 +1029,10 @@ const openAddModal = () => {
   fetchEmployees()
   fetchShiftTemplatesList()
   fetchShiftTemplates24hList()
+  // The rotating form picks from `sites`, so refresh them here rather than
+  // trusting whatever the page loaded on mount — the active company may have
+  // changed since.
+  fetchSites()
   // Payout groups are loaded by the companyId watcher when the page mounts, so
   // the modal no longer needs to fetch them itself.
   showAddModal.value = true
@@ -997,11 +1054,7 @@ const openReassignModal = async (shift) => {
   await fetchShiftTemplatesList()
   if (shift.isMerged && shift.shifts?.length > 1) {
     if (shift.shifts.find((s) => !s.assignmentId)) {
-      $q.notify({
-        type: 'negative',
-        message: 'Cannot update — missing assignment ID on one of the shifts',
-        timeout: 5000,
-      })
+      toast.error('Cannot update — missing assignment ID on one of the shifts', { timeout: 5000 })
       return
     }
     const resolveTemplateId = (s) => {
@@ -1035,9 +1088,7 @@ const openReassignModal = async (shift) => {
     return
   }
   if (!shift.assignmentId) {
-    $q.notify({
-      type: 'negative',
-      message: 'Cannot update this shift',
+    toast.error('Cannot update this shift', {
       caption: 'Missing required field: Assignment ID',
       timeout: 5000,
     })
@@ -1081,21 +1132,6 @@ const resolveId = (val) => {
 }
 
 /**
- * Sites a rotating schedule covers. Each shift in a 24-hour template names its
- * own site, so `site_ids` is read off the template rather than picked in the
- * form — the two can then never disagree. The site arrives as either a nested
- * object or a bare id depending on the endpoint, hence the union.
- */
-const templateSiteIds = (templateId) => {
-  const template = shiftTemplates24h.value.find((t) => Number(t.id) === Number(templateId))
-  if (!template) return []
-  const ids = parseShifts(template.shifts_detail || template.shifts)
-    .map((sh) => resolveId(sh.site?.id ?? sh.site_id))
-    .filter((id) => id !== null)
-  return [...new Set(ids)]
-}
-
-/**
  * Auto-assign-recurring keys employees by UUID while the rest of this page
  * carries the numeric roster pk, so resolve through the roster rather than
  * sending whichever id the option happened to hold. Mirrors `rosterIdFor` in
@@ -1109,58 +1145,48 @@ const employeeUuid = (key) => {
 const addSchedule = async () => {
   const n = newSchedule.value
   if (!n.userIds?.length)
-    return $q.notify({ type: 'negative', message: 'Please select at least one employee.' })
+    return toast.error('Please select at least one employee.')
   if (n.scheduleType === 'one-time') {
     if (!n.selectedDates?.length)
-      return $q.notify({ type: 'negative', message: 'Please select at least one date.' })
+      return toast.error('Please select at least one date.')
     for (const s of n.oneTimeShifts) {
       if (!s.shiftTemplate)
-        return $q.notify({
-          type: 'negative',
-          message: 'Please select a shift template for all shifts.',
-        })
+        return toast.error('Please select a shift template for all shifts.')
     }
   }
   if (n.scheduleType === 'recurring') {
     if (!n.recurringStartDate)
-      return $q.notify({ type: 'negative', message: 'Please select a start date.' })
+      return toast.error('Please select a start date.')
     if (!n.recurringEndDate)
-      return $q.notify({ type: 'negative', message: 'Please select an end date.' })
+      return toast.error('Please select an end date.')
     if (!n.recurringSchedule)
-      return $q.notify({ type: 'negative', message: 'Please select a recurring template.' })
+      return toast.error('Please select a recurring template.')
   }
   // Resolved while validating the rotating form, then reused to build its payload.
   let rotatingSiteIds = []
   let rotatingEmployeeUuids = []
   if (n.scheduleType === 'rotating') {
     if (!n.recurringStartDate)
-      return $q.notify({ type: 'negative', message: 'Please select a start date.' })
+      return toast.error('Please select a start date.')
     if (!n.recurringEndDate)
-      return $q.notify({ type: 'negative', message: 'Please select an end date.' })
+      return toast.error('Please select an end date.')
     if (!n.rotatingShiftTemplate)
-      return $q.notify({ type: 'negative', message: 'Please select a shift template.' })
+      return toast.error('Please select a shift template.')
     if (!n.weekdays?.length)
-      return $q.notify({ type: 'negative', message: 'Please select at least one weekday.' })
+      return toast.error('Please select at least one weekday.')
     // A rotation with no site isn't something to create quietly, so this fails
     // loudly rather than posting an empty `site_ids`.
-    rotatingSiteIds = templateSiteIds(n.rotatingShiftTemplate)
+    rotatingSiteIds = (n.rotatingSites || []).map(resolveId).filter((id) => id !== null)
     if (!rotatingSiteIds.length)
-      return $q.notify({
-        type: 'negative',
-        message:
-          'That 24-hour template has no sites on its shifts. Add them in Admin Settings → Shifts first.',
-      })
+      return toast.error('Please select at least one site.')
     rotatingEmployeeUuids = n.userIds.map(employeeUuid).filter(Boolean)
     if (rotatingEmployeeUuids.length !== n.userIds.length)
-      return $q.notify({
-        type: 'negative',
-        message: 'Could not resolve every selected employee. Reload the page and try again.',
-      })
+      return toast.error('Could not resolve every selected employee. Reload the page and try again.')
   }
   isCheckingConflict.value = true
   addConflictWarning.value = false
   try {
-    const cId = normalizeCompanyId()
+    const cId = numericCompanyId()
     if (n.scheduleType === 'rotating') {
       const payload = {
         recurring_items: [
@@ -1240,9 +1266,7 @@ const addSchedule = async () => {
       n.scheduleType === 'recurring' && n.recurringStartDate
         ? ` Starting ${n.recurringStartDate}.`
         : ''
-    $q.notify({
-      type: 'positive',
-      message: `${scheduleLabel} created successfully!`,
+    toast.success(`${scheduleLabel} created successfully!`, {
       caption: `Navigate to the correct week to see the new shifts.${startHint}`,
       icon: 'check_circle',
       timeout: 5000,
@@ -1257,17 +1281,14 @@ const addSchedule = async () => {
 const quickAddSchedule = async () => {
   const { userId, day, shifts: qShifts } = quickAdd.value
   if (!userId || day === null)
-    return $q.notify({ type: 'negative', message: 'Employee and day are required.' })
+    return toast.error('Employee and day are required.')
   for (let i = 0; i < qShifts.length; i++) {
     if (!qShifts[i].shiftTemplate)
-      return $q.notify({
-        type: 'negative',
-        message: `Please select a shift template for shift ${i + 1}`,
-      })
+      return toast.error(`Please select a shift template for shift ${i + 1}`)
   }
   isAddingShift.value = true
   try {
-    const cId = normalizeCompanyId()
+    const cId = numericCompanyId()
     const { start } = selectedWeek.value
     const targetDate = new Date(start)
     targetDate.setDate(targetDate.getDate() + day)
@@ -1287,9 +1308,7 @@ const quickAddSchedule = async () => {
         }
       }),
     })
-    $q.notify({
-      type: 'positive',
-      message: `${qShifts.length} shift${qShifts.length > 1 ? 's' : ''} added successfully for ${days[day]}!`,
+    toast.success(`${qShifts.length} shift${qShifts.length > 1 ? 's' : ''} added successfully for ${days[day]}!`, {
       icon: 'check_circle',
     })
     showQuickAddModal.value = false
@@ -1302,61 +1321,112 @@ const quickAddSchedule = async () => {
   }
 }
 
+/**
+ * Runs one write at a time and reports every outcome, in the
+ * `Promise.allSettled` shape the toasts read.
+ *
+ * Sequential rather than concurrent on purpose. A dual shift's writes differ
+ * only by `assignment_id` — same employee, same date, same target template —
+ * so firing them together had the backend deciding two requests for one target
+ * state at the same moment, which is how one reassign ended up recorded as two
+ * assignments. In order also means a refusal on the first write is known before
+ * the second is attempted.
+ */
+async function settleInOrder(items, run) {
+  const results = []
+  for (const item of items) {
+    try {
+      results.push({ status: 'fulfilled', value: await run(item) })
+    } catch (error) {
+      results.push({ status: 'rejected', reason: error })
+    }
+  }
+  return results
+}
+
 const handleReassignShift = async () => {
-  isReassigning.value = true
+  // A second submit while the first PATCH is still open writes the same
+  // reassign again. The submit button is disabled while `isReassigning` is
+  // set, but the form also submits on Enter from inside the template select.
+  if (isReassigning.value) return
+
   const r = reassignData.value
+  const templateId = parseInt(r.shiftTemplateId)
+  if (!templateId) {
+    toast.warning('Select a shift template first.')
+    return
+  }
+
+  // Every leg this submit could write, dual or single, in one shape.
+  const legs = r.isDualShift
+    ? r.dualShifts
+    : [{ assignmentId: r.assignmentId, originalTemplateId: r.originalTemplateId }]
+
+  // The dialog opens with the shift's current template already selected, so
+  // "Update Shift" on an untouched form used to PATCH the shift onto the
+  // template it was already on: nothing changed on screen, but the backend
+  // recorded another assignment for the day. A leg already on the target needs
+  // no write, and no leg needing one is not an error.
+  const changing = legs.filter((leg) => parseInt(leg.originalTemplateId) !== templateId)
+  if (!changing.length) {
+    showReassignModal.value = false
+    toast.info('That shift already uses this template — nothing to update.')
+    return
+  }
+
+  // Legs are keyed by the assignment the PATCH targets, so two legs reported
+  // under one assignment id (or with none at all) are one write, not two.
+  const seen = new Set()
+  const writes = changing.filter((leg) => {
+    const key = String(leg.assignmentId ?? '')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  isReassigning.value = true
   try {
-    if (r.isDualShift) {
-      await Promise.all(
-        r.dualShifts.map((s) => {
-          const templateId = parseInt(r.shiftTemplateId)
-          const template = shiftTemplates.value.find((t) => t.id === templateId)
-          const resolvedCompanyId = template?.company?.id || template?.company_id || companyId.value
-          const payload = {
-            employee_id: r.currentEmployee,
-            company_id: parseInt(resolvedCompanyId),
-            date: r.date,
-            shift_template_id: templateId,
-            assignment_id: s.assignmentId,
-          }
-          return reassignShiftApi(payload).then((res) => ({ ...res, assignmentId: s.assignmentId }))
-        }),
-      )
-      $q.notify({
-        type: 'positive',
-        message: 'Both shifts updated successfully!',
-        icon: 'check_circle',
-        timeout: 3000,
-      })
-      await refreshSingleEmployee(r.currentEmployee)
-    } else {
-      const templateId = parseInt(r.shiftTemplateId)
-      const template = shiftTemplates.value.find((t) => t.id === templateId)
-      const resolvedCompanyId = template?.company?.id || template?.company_id || companyId.value
-      const payload = {
+    const template = shiftTemplates.value.find((t) => t.id === templateId)
+    const resolvedCompanyId = template?.company?.id || template?.company_id || companyId.value
+    const results = await settleInOrder(writes, (leg) =>
+      reassignShiftApi({
         employee_id: r.currentEmployee,
         company_id: parseInt(resolvedCompanyId),
         date: r.date,
         shift_template_id: templateId,
-        assignment_id: r.assignmentId,
-      }
-      await reassignShiftApi(payload)
-      $q.notify({
-        type: 'positive',
-        message: 'Shift updated successfully!',
-        icon: 'check_circle',
-        timeout: 3000,
+        assignment_id: leg.assignmentId,
+      }),
+    )
+    const failed = results.filter((x) => x.status === 'rejected')
+    const done = results.length - failed.length
+
+    // Before the toasts, and regardless of the mix: whatever landed has to
+    // reach the grid.
+    await refreshSingleEmployee(r.currentEmployee)
+
+    if (failed.length && !done) {
+      toast.error(extractErrorMessage(failed[0].reason, 'Failed to reassign shift.'), {
+        timeout: 6000,
       })
-      await refreshSingleEmployee(r.currentEmployee)
+      return
+    }
+    if (failed.length) {
+      toast.warning(`${done} of ${results.length} shifts updated.`, {
+        caption: extractErrorMessage(failed[0].reason, 'The rest were refused'),
+        timeout: 6000,
+      })
+    } else {
+      toast.success(
+        writes.length > 1
+          ? `${writes.length} shifts updated successfully!`
+          : 'Shift updated successfully!',
+        { icon: 'check_circle', timeout: 3000 },
+      )
     }
     showReassignModal.value = false
   } catch (error) {
     console.error('Reassign failed:', error)
-    $q.notify({
-      type: 'negative',
-      message: error.response?.data?.detail || 'Failed to reassign shift.',
-      timeout: 6000,
-    })
+    toast.error(extractErrorMessage(error, 'Failed to reassign shift.'), { timeout: 6000 })
   } finally {
     isReassigning.value = false
   }
@@ -1365,7 +1435,7 @@ const handleReassignShift = async () => {
 const assignDayOff = async (element) => {
   assigningDayOffId.value = element.id
   try {
-    const cId = normalizeCompanyId()
+    const cId = numericCompanyId()
     await assignDayOffApi({
       employee_id: element.userId,
       company_id: cId,
@@ -1380,20 +1450,14 @@ const assignDayOff = async (element) => {
         startTime: null,
         endTime: null,
       }
-    $q.notify({
-      type: 'positive',
-      message: 'Day off assigned!',
+    toast.success('Day off assigned!', {
       caption: `${getEmployeeName(element.userId)}'s shift changed to Day Off`,
       icon: 'event_busy',
       timeout: 3000,
     })
     await refreshSingleEmployee(element.userId)
   } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message: error.response?.data?.detail || 'Failed to assign day off.',
-      timeout: 5000,
-    })
+    toast.error(extractErrorMessage(error, 'Failed to assign day off.'), { timeout: 5000 })
   } finally {
     assigningDayOffId.value = null
   }
@@ -1402,31 +1466,50 @@ const assignDayOff = async (element) => {
 const assignDualDayOff = async (mergedElement) => {
   assigningDayOffId.value = mergedElement.id
   try {
-    const cId = normalizeCompanyId()
-    await Promise.all(
-      mergedElement.shifts.map((s) =>
-        assignDayOffApi({
-          employee_id: mergedElement.userId,
-          company_id: cId,
-          date: s.date,
-          site_id: parseInt(s.site),
-        }),
-      ),
-    )
-    $q.notify({
-      type: 'positive',
-      message: 'Day off assigned to both shifts!',
-      caption: `${getEmployeeName(mergedElement.userId)}'s dual shift changed to Day Off`,
-      icon: 'event_busy',
-      timeout: 3000,
-    })
+    const cId = numericCompanyId()
+    // The day-off payload names no assignment, so both legs of a dual shift on
+    // one day at one site produce the *same* request — sending it twice asked
+    // the backend to record the same day off twice. One write per distinct
+    // payload, and in order rather than at once, for the reason
+    // `settleInOrder` documents.
+    const seen = new Set()
+    const payloads = mergedElement.shifts
+      .map((s) => ({
+        employee_id: mergedElement.userId,
+        company_id: cId,
+        date: s.date,
+        site_id: parseInt(s.site),
+      }))
+      .filter((payload) => {
+        const key = `${payload.date}|${payload.site_id}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    const results = await settleInOrder(payloads, (payload) => assignDayOffApi(payload))
+    const failed = results.filter((x) => x.status === 'rejected')
+    const done = results.length - failed.length
+
     await refreshSingleEmployee(mergedElement.userId)
+
+    if (failed.length && !done) {
+      toast.error(extractErrorMessage(failed[0].reason, 'Failed to assign day off.'), {
+        timeout: 5000,
+      })
+    } else if (failed.length) {
+      toast.warning(`Day off assigned to ${done} of ${results.length} shifts.`, {
+        caption: extractErrorMessage(failed[0].reason, 'The other was refused'),
+        timeout: 6000,
+      })
+    } else {
+      toast.success('Day off assigned!', {
+        caption: `${getEmployeeName(mergedElement.userId)}'s dual shift changed to Day Off`,
+        icon: 'event_busy',
+        timeout: 3000,
+      })
+    }
   } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message: error.response?.data?.detail || 'Failed to assign day off.',
-      timeout: 5000,
-    })
+    toast.error(extractErrorMessage(error, 'Failed to assign day off.'), { timeout: 5000 })
   } finally {
     assigningDayOffId.value = null
   }
@@ -1440,11 +1523,11 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
     const targetDate = new Date(start)
     targetDate.setDate(targetDate.getDate() + dayIdx)
     const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`
-    const cId = String(normalizeCompanyId())
+    const cId = String(companyId.value ?? '')
     if (type === 'leave') {
       const leaveType = leaveTypes.value.find((lt) => lt.id === leaveSubType)
       if (!leaveType) {
-        return $q.notify({ type: 'negative', message: 'Invalid leave type selected.' })
+        return toast.error('Invalid leave type selected.')
       }
       const payload = {
         employee_id: userId,
@@ -1468,9 +1551,7 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
         start_date: dateStr,
         end_date: dateStr,
       })
-      $q.notify({
-        type: 'positive',
-        message: `${leaveType.name} assigned!`,
+      toast.success(`${leaveType.name} assigned!`, {
         caption: `${getEmployeeName(userId)} — ${days[dayIdx]}`,
         icon: 'beach_access',
         timeout: 3000,
@@ -1479,16 +1560,14 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
       const siteOptionsList = sites.value.map((s) => ({ label: s.name, value: s.id }))
       const siteId = parseInt(siteOptionsList[0]?.value)
       if (!siteId)
-        return $q.notify({ type: 'negative', message: 'No sites available to assign day off.' })
+        return toast.error('No sites available to assign day off.')
       await assignDayOffApi({
         employee_id: userId,
         company_id: cId,
         date: dateStr,
         site_id: siteId,
       })
-      $q.notify({
-        type: 'positive',
-        message: 'Day off assigned!',
+      toast.success('Day off assigned!', {
         caption: `${getEmployeeName(userId)} — ${days[dayIdx]}`,
         icon: 'event_busy',
         timeout: 3000,
@@ -1496,25 +1575,27 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
     }
     await refreshSingleEmployee(userId)
   } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message:
-        error.response?.data?.detail ||
-        `Failed to assign ${type === 'dayoff' ? 'day off' : 'leave'}.`,
-      timeout: 5000,
-    })
+    toast.error(
+      extractErrorMessage(error, `Failed to assign ${type === 'dayoff' ? 'day off' : 'leave'}.`),
+      { timeout: 5000 },
+    )
   } finally {
     quickActionLoading.value = null
   }
 }
 
 const handleScheduleError = (error) => {
-  const data = error.response?.data
-  let msg = 'Failed to create schedule'
-  if (Array.isArray(data?.errors) && data.errors.length) msg = data.errors.join('; ')
-  else if (data?.detail) msg = data.detail
-  else if (typeof data === 'string') msg = data
-  $q.notify({ type: 'negative', message: msg, timeout: 10000, position: 'top', multiLine: true })
+  // The bulk-create endpoint is the only one that answers with an `errors`
+  // array of its own, and each entry names a different row — so they are all
+  // worth printing, joined. Everything else goes through the shared formatter,
+  // which unlike the chain this replaces refuses an HTML body: a raw string
+  // branch with no markup guard used to drop Django's entire 500 page into
+  // this toast, and `multiLine` with a 10-second timeout made it unmissable.
+  const errors = error.response?.data?.errors
+  const msg = Array.isArray(errors) && errors.length
+    ? errors.join('; ')
+    : extractErrorMessage(error, 'Failed to create schedule')
+  toast.error(msg, { timeout: 10000 })
 }
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────

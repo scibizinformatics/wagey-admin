@@ -4,60 +4,107 @@
     @update:model-value="$emit('update:modelValue', $event)"
     persistent
   >
-    <q-card class="modal-card">
-      <q-card-section class="modal-header">
-        <div class="modal-title">Add New Schedule</div>
+    <q-card class="dash-modal dash-modal--md">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <span class="dash-modal__head-icon"><q-icon name="event_available" size="20px" /></span>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">Add new schedule</div>
+            <div class="dash-modal__sub">Place one or more shifts on the calendar</div>
+          </div>
+        </div>
         <q-btn flat round dense icon="close" @click="$emit('update:modelValue', false)" />
       </q-card-section>
-      <q-card-section class="modal-body">
-        <q-form @submit.prevent="onSubmit" class="schedule-form">
+      <q-form @submit.prevent="onSubmit" class="dash-modal__form">
+        <q-card-section class="dash-modal__body">
           <!-- Schedule Type Selection -->
-          <q-select
-            :model-value="newSchedule.scheduleType"
-            @update:model-value="updateField('scheduleType', $event)"
-            :options="[
-              { label: 'One-Time Schedule', value: 'one-time' },
-              { label: 'Recurring Schedule', value: 'recurring' },
-              { label: 'Rotating Schedule', value: 'rotating' },
-            ]"
-            option-value="value"
-            option-label="label"
-            label="Schedule Type"
-            outlined
-            emit-value
-            map-options
-            class="form-field full-width"
-          >
-            <template #hint>Choose whether this is a single schedule or repeats weekly</template>
-          </q-select>
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Schedule type</span>
+            <q-select
+              :model-value="newSchedule.scheduleType"
+              @update:model-value="updateField('scheduleType', $event)"
+              :options="[
+                { label: 'One-time schedule', value: 'one-time' },
+                { label: 'Recurring schedule', value: 'recurring' },
+                { label: 'Rotating schedule', value: 'rotating' },
+              ]"
+              option-value="value"
+              option-label="label"
+              outlined
+              emit-value
+              map-options
+              class="dash-field form-field full-width"
+              dense
+              hide-bottom-space
+              popup-content-class="dash-popup dash-popup--modal"
+            >
+              <template #hint>Choose whether this is a single schedule or repeats weekly</template>
+            </q-select>
+          </label>
 
           <!-- Employee Selection -->
-          <q-select
-            ref="employeeSelectRef"
-            :model-value="newSchedule.userIds"
-            @update:model-value="updateField('userIds', $event)"
-            :options="filteredEmployeeOptions"
-            option-value="value"
-            option-label="label"
-            label="Select Employees"
-            outlined
-            emit-value
-            map-options
-            multiple
-            use-chips
-            use-input
-            input-debounce="0"
-            @filter="filterEmployees"
-            class="form-field full-width"
-            :rules="[(val) => (val && val.length > 0) || 'At least one employee is required']"
-            :loading="loadingEmployees"
-          >
-            <template #no-option>
-              <q-item>
-                <q-item-section class="text-grey">No employees found</q-item-section>
-              </q-item>
-            </template>
-          </q-select>
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Select employees</span>
+            <q-select
+              ref="employeeSelectRef"
+              :model-value="newSchedule.userIds"
+              @update:model-value="updateField('userIds', $event)"
+              :options="filteredEmployeeOptions"
+              option-value="value"
+              option-label="label"
+              outlined
+              emit-value
+              map-options
+              multiple
+              use-chips
+              use-input
+              input-debounce="0"
+              @filter="filterEmployees"
+              class="dash-field form-field full-width"
+              :rules="[(val) => (val && val.length > 0) || 'At least one employee is required']"
+              :loading="loadingEmployees"
+              dense
+              hide-bottom-space
+              popup-content-class="dash-popup dash-popup--modal"
+            >
+              <template #no-option>
+                <q-item>
+                  <q-item-section class="text-grey">No employees found</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+          </label>
+
+          <!-- Rotating only, and deliberately right under the employees it
+               applies to: the rotation spreads the picked people across these
+               sites, so the two fields are read together. -->
+          <label v-if="newSchedule.scheduleType === 'rotating'" class="dash-modal__field">
+            <span class="dash-modal__field-label">Select sites</span>
+            <q-select
+              :model-value="newSchedule.rotatingSites"
+              @update:model-value="updateField('rotatingSites', $event)"
+              :options="siteOptions"
+              option-value="value"
+              option-label="label"
+              outlined
+              emit-value
+              map-options
+              multiple
+              use-chips
+              class="dash-field form-field full-width"
+              :rules="[(val) => (val && val.length > 0) || 'At least one site is required']"
+              dense
+              hide-bottom-space
+              popup-content-class="dash-popup dash-popup--modal"
+            >
+              <template #hint>The sites this rotation covers</template>
+              <template #no-option>
+                <q-item>
+                  <q-item-section class="text-grey">No sites found</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+          </label>
 
           <!-- One-Time: Multi-date picker + Shift rows -->
           <template v-if="newSchedule.scheduleType === 'one-time'">
@@ -69,8 +116,12 @@
             />
 
             <!-- Shift rows -->
-            <div v-for="(shift, index) in newSchedule.oneTimeShifts" :key="index" class="shift-row">
-              <div class="shift-row-header">
+            <div
+              v-for="(shift, index) in newSchedule.oneTimeShifts"
+              :key="index"
+              class="dash-modal__group shift-row"
+            >
+              <div class="dash-modal__group-head">
                 <span class="row-label">
                   <q-icon name="schedule" size="16px" />
                   Shift {{ index + 1 }}
@@ -87,67 +138,76 @@
                 />
               </div>
               <div class="shift-fields">
-                <q-select
-                  :model-value="shift.shiftTemplate"
-                  @update:model-value="updateShift(index, 'shiftTemplate', $event)"
-                  :options="shiftTemplateOptions"
-                  option-value="value"
-                  option-label="label"
-                  label="Shift Template"
-                  outlined
-                  dense
-                  emit-value
-                  map-options
-                  clearable
-                  class="form-field full-width"
-                  :rules="[(val) => !!val || 'Shift template is required']"
-                >
-                  <template #option="scope">
-                    <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
-                      <q-item-section>
-                        <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Shift template</span>
+                  <q-select
+                    :model-value="shift.shiftTemplate"
+                    @update:model-value="updateShift(index, 'shiftTemplate', $event)"
+                    :options="shiftTemplateOptions"
+                    option-value="value"
+                    option-label="label"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    clearable
+                    class="dash-field form-field full-width"
+                    :rules="[(val) => !!val || 'Shift template is required']"
+                    hide-bottom-space
+                    popup-content-class="dash-popup dash-popup--modal"
+                  >
+                    <template #option="scope">
+                      <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
+                        <q-item-section>
+                          <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
+                            <q-item-label
+                              v-for="(part, i) in scope.opt.label.split(' / ')"
+                              :key="i"
+                              style="font-size: 13px; line-height: 1.5"
+                              >{{ part }}</q-item-label
+                            >
+                          </template>
                           <q-item-label
-                            v-for="(part, i) in scope.opt.label.split(' / ')"
-                            :key="i"
-                            style="font-size: 13px; line-height: 1.5"
-                            >{{ part }}</q-item-label
+                            v-else
+                            style="
+                              white-space: nowrap;
+                              overflow: hidden;
+                              text-overflow: ellipsis;
+                              font-size: 13px;
+                            "
+                            >{{ scope.opt.label }}</q-item-label
                           >
-                        </template>
-                        <q-item-label
-                          v-else
-                          style="
-                            white-space: nowrap;
-                            overflow: hidden;
-                            text-overflow: ellipsis;
-                            font-size: 13px;
-                          "
-                          >{{ scope.opt.label }}</q-item-label
-                        >
-                      </q-item-section>
-                    </q-item>
-                  </template>
-                </q-select>
+                        </q-item-section>
+                      </q-item>
+                    </template>
+                  </q-select>
+                </label>
               </div>
             </div>
           </template>
 
           <!-- Recurring: Date Range -->
           <template v-if="newSchedule.scheduleType === 'recurring'">
-            <q-select
-              :model-value="newSchedule.recurringSchedule"
-              @update:model-value="onRecurringTemplateChange"
-              :options="recurringScheduleOptions"
-              option-value="value"
-              option-label="label"
-              label="Use Recurring Template"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-              clearable
-            >
-              <template #hint>Select a template to auto-fill schedule details</template>
-            </q-select>
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label">Use recurring template</span>
+              <q-select
+                :model-value="newSchedule.recurringSchedule"
+                @update:model-value="onRecurringTemplateChange"
+                :options="recurringScheduleOptions"
+                option-value="value"
+                option-label="label"
+                outlined
+                emit-value
+                map-options
+                class="dash-field form-field full-width"
+                clearable
+                dense
+                hide-bottom-space
+                popup-content-class="dash-popup dash-popup--modal"
+              >
+                <template #hint>Select a template to auto-fill schedule details</template>
+              </q-select>
+            </label>
 
             <ScheduleRangeCalendar
               :model-value="recurringRange"
@@ -159,31 +219,40 @@
               unit-label-plural="shifts"
             />
 
-            <q-select
-              :model-value="newSchedule.department"
-              @update:model-value="updateField('department', $event)"
-              :options="departmentOptions"
-              option-value="value"
-              option-label="label"
-              label="Department"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-              clearable
-            />
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label">Department</span>
+              <q-select
+                :model-value="newSchedule.department"
+                @update:model-value="updateField('department', $event)"
+                :options="departmentOptions"
+                option-value="value"
+                option-label="label"
+                outlined
+                emit-value
+                map-options
+                class="dash-field form-field full-width"
+                clearable
+                dense
+                hide-bottom-space
+                popup-content-class="dash-popup dash-popup--modal"
+              />
+            </label>
 
-            <q-input
-              :model-value="newSchedule.repeatInterval"
-              @update:model-value="updateField('repeatInterval', $event)"
-              label="Repeat Every (weeks)"
-              type="number"
-              outlined
-              min="1"
-              class="form-field full-width"
-            >
-              <template #hint>1 = every week, 2 = every other week, etc.</template>
-            </q-input>
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label">Repeat every (weeks)</span>
+              <q-input
+                :model-value="newSchedule.repeatInterval"
+                @update:model-value="updateField('repeatInterval', $event)"
+                type="number"
+                outlined
+                min="1"
+                class="dash-field form-field full-width"
+                dense
+                hide-bottom-space
+              >
+                <template #hint>1 = every week, 2 = every other week, etc.</template>
+              </q-input>
+            </label>
 
             <q-checkbox
               :model-value="newSchedule.isRotating"
@@ -195,31 +264,36 @@
 
           <!-- Rotating: Date Range + Details -->
           <template v-if="newSchedule.scheduleType === 'rotating'">
-            <q-select
-              :model-value="newSchedule.weekdays"
-              @update:model-value="updateField('weekdays', $event)"
-              :options="[
-                { label: 'Monday', value: 'monday' },
-                { label: 'Tuesday', value: 'tuesday' },
-                { label: 'Wednesday', value: 'wednesday' },
-                { label: 'Thursday', value: 'thursday' },
-                { label: 'Friday', value: 'friday' },
-                { label: 'Saturday', value: 'saturday' },
-                { label: 'Sunday', value: 'sunday' },
-              ]"
-              option-value="value"
-              option-label="label"
-              label="Weekdays"
-              outlined
-              emit-value
-              map-options
-              multiple
-              use-chips
-              class="form-field full-width"
-              :rules="[(val) => (val && val.length > 0) || 'Select at least one weekday']"
-            >
-              <template #hint>The calendar fills in the days these weekdays land on</template>
-            </q-select>
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label">Weekdays</span>
+              <q-select
+                :model-value="newSchedule.weekdays"
+                @update:model-value="updateField('weekdays', $event)"
+                :options="[
+                  { label: 'Monday', value: 'monday' },
+                  { label: 'Tuesday', value: 'tuesday' },
+                  { label: 'Wednesday', value: 'wednesday' },
+                  { label: 'Thursday', value: 'thursday' },
+                  { label: 'Friday', value: 'friday' },
+                  { label: 'Saturday', value: 'saturday' },
+                  { label: 'Sunday', value: 'sunday' },
+                ]"
+                option-value="value"
+                option-label="label"
+                outlined
+                emit-value
+                map-options
+                multiple
+                use-chips
+                class="dash-field form-field full-width"
+                :rules="[(val) => (val && val.length > 0) || 'Select at least one weekday']"
+                dense
+                hide-bottom-space
+                popup-content-class="dash-popup dash-popup--modal"
+              >
+                <template #hint>The calendar fills in the days these weekdays land on</template>
+              </q-select>
+            </label>
 
             <ScheduleRangeCalendar
               :model-value="recurringRange"
@@ -231,64 +305,56 @@
               unit-label-plural="shifts"
             />
 
-            <!-- No site picker here: the 24-hour template already carries the
-                 site on each of its shifts. -->
-            <q-select
-              :model-value="newSchedule.rotatingPayrollGroups"
-              @update:model-value="updateField('rotatingPayrollGroups', $event)"
-              :options="payrollGroupOptions"
-              option-value="value"
-              option-label="label"
-              label="Payroll Groups"
-              outlined
-              emit-value
-              map-options
-              multiple
-              use-chips
-              class="form-field full-width"
-              clearable
-            />
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label">24-hour shift template</span>
+              <q-select
+                :model-value="newSchedule.rotatingShiftTemplate"
+                @update:model-value="updateField('rotatingShiftTemplate', $event)"
+                :options="rotatingShiftTemplateOptions"
+                option-value="value"
+                option-label="label"
+                outlined
+                emit-value
+                map-options
+                class="dash-field form-field full-width"
+                :rules="[(val) => !!val || 'Shift template is required']"
+                dense
+                hide-bottom-space
+                popup-content-class="dash-popup dash-popup--modal"
+              >
+                <template #hint>The round-the-clock template this rotation cycles through</template>
+                <template #no-option>
+                  <q-item>
+                    <q-item-section class="text-grey">No 24-hour templates found</q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
+            </label>
 
-            <q-select
-              :model-value="newSchedule.rotatingShiftTemplate"
-              @update:model-value="updateField('rotatingShiftTemplate', $event)"
-              :options="rotatingShiftTemplateOptions"
-              option-value="value"
-              option-label="label"
-              label="24-Hour Shift Template"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-              :rules="[(val) => !!val || 'Shift template is required']"
-            >
-              <template #hint>The round-the-clock template this rotation cycles through</template>
-              <template #no-option>
-                <q-item>
-                  <q-item-section class="text-grey">No 24-hour templates found</q-item-section>
-                </q-item>
-              </template>
-            </q-select>
-
-            <q-select
-              :model-value="newSchedule.rotationMode"
-              @update:model-value="updateField('rotationMode', $event)"
-              :options="[
-                { label: 'Daily', value: 'daily' },
-                { label: 'Full Template', value: 'full_template' },
-              ]"
-              option-value="value"
-              option-label="label"
-              label="Rotation Mode"
-              outlined
-              emit-value
-              map-options
-              class="form-field full-width"
-            >
-              <template #hint>
-                Daily cycles one shift per day; full template assigns the whole day's chain
-              </template>
-            </q-select>
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label">Rotation mode</span>
+              <q-select
+                :model-value="newSchedule.rotationMode"
+                @update:model-value="updateField('rotationMode', $event)"
+                :options="[
+                  { label: 'Daily', value: 'daily' },
+                  { label: 'Full Template', value: 'full_template' },
+                ]"
+                option-value="value"
+                option-label="label"
+                outlined
+                emit-value
+                map-options
+                class="dash-field form-field full-width"
+                dense
+                hide-bottom-space
+                popup-content-class="dash-popup dash-popup--modal"
+              >
+                <template #hint>
+                  Daily cycles one shift per day; full template assigns the whole day's chain
+                </template>
+              </q-select>
+            </label>
           </template>
 
           <!-- Conflict Warning -->
@@ -301,30 +367,30 @@
           </q-banner>
 
           <!-- Actions -->
-          <div class="modal-actions">
-            <q-btn
-              flat
-              label="Cancel"
-              @click="$emit('update:modelValue', false)"
-              class="cancel-btn"
-            />
-            <q-btn
-              type="submit"
-              color="primary"
-              :label="
-                newSchedule.scheduleType === 'recurring'
-                  ? 'Create Recurring Schedule'
-                  : newSchedule.scheduleType === 'rotating'
-                    ? 'Create Rotating Schedule'
-                    : 'Add Schedule'
-              "
-              unelevated
-              class="submit-btn"
-              :loading="checkingConflict"
-            />
-          </div>
-        </q-form>
-      </q-card-section>
+        </q-card-section>
+
+        <q-card-actions class="dash-modal__foot">
+          <q-btn
+            flat
+            label="Cancel"
+            @click="$emit('update:modelValue', false)"
+            class="dash-modal__cancel"
+          />
+          <q-btn
+            type="submit"
+            :label="
+              newSchedule.scheduleType === 'recurring'
+                ? 'Create Recurring Schedule'
+                : newSchedule.scheduleType === 'rotating'
+                  ? 'Create Rotating Schedule'
+                  : 'Add schedule'
+            "
+            unelevated
+            class="dash-modal__submit"
+            :loading="checkingConflict"
+          />
+        </q-card-actions>
+      </q-form>
     </q-card>
   </q-dialog>
 </template>
@@ -348,12 +414,13 @@ const props = defineProps({
       department: null,
       repeatInterval: 1,
       isRotating: false,
-      rotatingPayrollGroups: [],
+      rotatingSites: [],
       rotatingShiftTemplate: null,
       rotationMode: 'daily',
     }),
   },
   filteredEmployeeOptions: { type: Array, default: () => [] },
+  siteOptions: { type: Array, default: () => [] },
   shiftTemplateOptions: { type: Array, default: () => [] },
   // Rotating schedules assign a 24-hour template, a different list from the
   // plain shift templates the one-time flow picks from.
@@ -363,7 +430,6 @@ const props = defineProps({
   conflictWarning: { type: Boolean, default: false },
   checkingConflict: { type: Boolean, default: false },
   loadingEmployees: { type: Boolean, default: false },
-  payrollGroupOptions: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -496,50 +562,6 @@ function onSubmit() {
 </script>
 
 <style scoped>
-.modal-card {
-  border-radius: 14px !important;
-  width: 500px !important;
-  min-width: 500px !important;
-  max-width: 95vw !important;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.modal-header {
-  background: #102335;
-  border-bottom: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-}
-.modal-header .q-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-.modal-header .q-btn:hover {
-  color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-}
-.modal-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #ffffff;
-}
-.modal-body {
-  padding: 20px;
-  overflow-y: auto;
-  max-height: 70vh;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.modal-body::-webkit-scrollbar {
-  display: none;
-}
-.schedule-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -551,50 +573,12 @@ function onSubmit() {
 .full-width {
   grid-column: 1 / -1;
 }
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #f1f3f5;
-}
-.cancel-btn {
-  background: #102335;
-  color: #ffffff;
-  padding: 6px 16px;
-  border-radius: 8px !important;
-  font-size: 13px;
-  font-weight: 500;
-  text-transform: none;
-}
-.submit-btn {
-  background: #102335 !important;
-  color: white;
-  padding: 6px 16px;
-  border-radius: 8px !important;
-  font-size: 13px;
-  font-weight: 500;
-  text-transform: none;
-}
-.submit-btn:hover {
-  background: #193d5c !important;
-}
-.cancel-btn:hover {
-  background: #193d5c;
-}
 .warning-banner {
   margin-top: 14px;
-  background-color: #fffbeb;
-  border: 1px solid #fcd34d;
   padding: 12px;
-  border-radius: 8px;
-}
-.shift-row-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  background: var(--dash-warn-bg);
+  border: 1px solid var(--dash-warn-line);
+  border-radius: var(--dash-r-md);
 }
 .row-label {
   display: flex;
@@ -602,26 +586,23 @@ function onSubmit() {
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--dash-ink-2);
 }
 .remove-btn {
-  color: #9ca3af;
+  color: var(--dash-ink-4);
 }
 .remove-btn:hover {
-  color: #ef4444;
-  background: #fef2f2 !important;
+  color: var(--dash-critical-mark);
+  background: var(--dash-critical-bg) !important;
 }
 .shift-fields {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
 
 @media (max-width: 768px) {
-  .modal-card {
-    min-width: unset !important;
-    max-width: calc(100vw - 20px) !important;
-  }
   .form-row {
     grid-template-columns: 1fr;
   }

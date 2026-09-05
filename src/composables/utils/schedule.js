@@ -11,6 +11,8 @@
  * the same rules the cells render by.
  */
 
+import { safeParseJson } from '@/composables/utils/storage'
+
 /** Minutes since midnight for an 'HH:MM' string, or null. */
 function toMinutes(hhmm) {
   if (!hhmm || typeof hhmm !== 'string') return null
@@ -81,6 +83,30 @@ export function isDayOff(shift, positionName = null) {
  * `group` exists only for the "day off, both shifts" action, which needs a single
  * element holding every shift of the day.
  */
+/**
+ * A day's scheduled shifts in start-time order, earliest first.
+ *
+ * Null-safe on purpose, and the reason this lives here rather than in the page:
+ * AttendancePage sorted the same payload with a bare
+ * `a.start_time.localeCompare(b.start_time)`, so one shift with a null
+ * `start_time` threw a TypeError. It was inside a `try`, so it surfaced as
+ * "Failed to load schedule" — and the add-record dialog then refused the day
+ * for what looked like a missing schedule rather than a malformed one. Twenty
+ * lines below, `splitDayShifts` was already doing this comparison correctly
+ * with `(a.startTime || '')`.
+ *
+ * Returns a new array; the caller's input is not reordered. The field name
+ * differs by payload — the monthly grid normalises to `startTime`, the
+ * per-employee endpoint answers with `start_time` — so both are read.
+ *
+ * @param {Array<object>} shifts
+ * @returns {Array<object>} a new, sorted array
+ */
+export function sortShiftsByStart(shifts = []) {
+  const startOf = (s) => s?.startTime ?? s?.start_time ?? ''
+  return [...shifts].sort((a, b) => String(startOf(a)).localeCompare(String(startOf(b))))
+}
+
 export function splitDayShifts(dayShifts, resolvePosition) {
   const special = dayShifts.filter((s) => s.isLeave || isDayOff(s, resolvePosition?.(s.position)))
 
@@ -101,6 +127,12 @@ export function splitDayShifts(dayShifts, resolvePosition) {
 
   return { special, working, group }
 }
+
+// Re-exported rather than copied: the list of field names a photo can arrive
+// under is long and backend-dependent, and schedule and attendance disagreeing
+// about it would mean the same person showing a picture on one page and initials
+// on the other.
+export { getEmployeePhoto } from '@/composables/utils/attendance'
 
 export function getInitials(name) {
   if (!name) return '?'
@@ -166,11 +198,96 @@ export function shiftChipTone(isMerged) {
   return isMerged ? DUAL_TONE : SINGLE_TONE
 }
 
-
 export function isSameDate(a, b) {
   return (
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   )
+}
+
+/**
+ * What a *shift-type template* is, as opposed to what a scheduled shift became.
+ *
+ * The reassign dialog has to answer "what will this replace the current shift
+ * with" before anything is written, so the only thing it can read is the
+ * template's own payload — and that payload is awkward in three ways this
+ * function absorbs:
+ *
+ *   - `shifts_detail` arrives either as an array or as a JSON string, and a
+ *     template that predates it carries `shifts` instead.
+ *   - each segment names its times as `start_time`/`end_time` on the detail
+ *     payload but `default_start_time`/`default_end_time` on the plain one, and
+ *     a time may come back as `HH:MM:SS`.
+ *   - the site sits on the segment (`site: {id, name}` or `site_id`) for a
+ *     per-site template and only on the template itself for a rotating one, so
+ *     both have to be tried before falling back to the sites lookup.
+ *
+ * A split template has more than one segment, which is why the dialog cannot
+ * print a single site and time for it — `segments` is the honest answer and
+ * `isMulti` says whether to use it.
+ *
+ * @param {object} template raw shift-type template from the API
+ * @param {(siteId: number|string) => string|null} [resolveSiteName] sites lookup
+ * @returns {{name: string, segments: Array<{siteName: string, startTime: string,
+ *   endTime: string, timeLabel: string}>, isMulti: boolean, siteName: string,
+ *   timeLabel: string}}
+ */
+export function describeShiftTemplate(template, resolveSiteName = () => null) {
+  const empty = { name: '', segments: [], isMulti: false, siteName: '', timeLabel: '' }
+  if (!template) return empty
+
+  const parse = (value) => {
+    if (Array.isArray(value)) return value
+    const parsed = safeParseJson(value, [])
+    return Array.isArray(parsed) ? parsed : []
+  }
+  // `HH:MM:SS` and `HH:MM` both occur; the grid renders `HH:MM`, so match it.
+  const asTime = (value) => (value ? String(value).slice(0, 5) : '')
+
+  const raw = parse(template.shifts_detail).length
+    ? parse(template.shifts_detail)
+    : parse(template.shifts)
+
+  const templateSiteName =
+    template.site?.name ||
+    resolveSiteName(template.site?.id ?? template.site ?? template.site_id) ||
+    ''
+
+  const segments = raw.map((segment) => {
+    const startTime = asTime(segment.start_time || segment.default_start_time)
+    const endTime = asTime(segment.end_time || segment.default_end_time)
+    return {
+      siteName:
+        segment.site?.name ||
+        segment.site_name ||
+        resolveSiteName(segment.site?.id ?? segment.site ?? segment.site_id) ||
+        templateSiteName,
+      startTime,
+      endTime,
+      timeLabel: startTime && endTime ? `${startTime} - ${endTime}` : startTime || endTime,
+    }
+  })
+
+  // A template with no segment list at all still usually carries its own times.
+  if (!segments.length) {
+    const startTime = asTime(template.start_time || template.default_start_time)
+    const endTime = asTime(template.end_time || template.default_end_time)
+    if (startTime || endTime || templateSiteName) {
+      segments.push({
+        siteName: templateSiteName,
+        startTime,
+        endTime,
+        timeLabel: startTime && endTime ? `${startTime} - ${endTime}` : startTime || endTime,
+      })
+    }
+  }
+
+  return {
+    name: template.name || template.time_display || '',
+    segments,
+    isMulti: segments.length > 1,
+    siteName: segments[0]?.siteName || templateSiteName,
+    timeLabel: segments[0]?.timeLabel || '',
+  }
 }

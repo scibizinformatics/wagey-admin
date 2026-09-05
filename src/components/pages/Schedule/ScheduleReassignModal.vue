@@ -1,96 +1,157 @@
 <template>
-  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
-    <q-card class="modal-card" style="max-width: 520px">
-      <q-card-section class="modal-header">
-        <div class="modal-title">
-          {{ reassignData.isDualShift ? 'Update Dual Shift' : 'Update Shift Assignment' }}
+  <q-dialog
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
+    persistent
+  >
+    <q-card class="dash-modal dash-modal--sm">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <span class="dash-modal__head-icon"><q-icon name="swap_horiz" size="20px" /></span>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">
+              {{ reassignData.isDualShift ? 'Update dual shift' : 'Update Shift Assignment' }}
+            </div>
+          </div>
         </div>
         <q-btn flat round dense icon="close" @click="$emit('update:modelValue', false)" />
       </q-card-section>
-      <q-card-section class="modal-body">
-        <div class="quick-info">
-          <div class="info-item">
-            <q-icon name="person" size="20px" />
-            <span>{{ employeeName }}</span>
+      <q-form @submit.prevent="onSubmit" class="dash-modal__form">
+        <q-card-section class="dash-modal__body">
+          <div class="quick-info">
+            <div class="info-item">
+              <q-icon name="person" size="20px" />
+              <span>{{ employeeName }}</span>
+            </div>
+            <div class="info-item">
+              <q-icon name="event" size="20px" />
+              <span>{{ reassignData.date }}</span>
+            </div>
           </div>
-          <div class="info-item">
-            <q-icon name="event" size="20px" />
-            <span>{{ reassignData.date }}</span>
-          </div>
-        </div>
-        <q-form @submit.prevent="onSubmit" class="schedule-form">
+
           <!-- ── SINGLE SHIFT ── -->
           <template v-if="!reassignData.isDualShift">
-            <div class="shift-row">
-              <div class="shift-row-header">
-                <span class="row-label"><q-icon name="edit" size="16px" /> Select Shift Template</span>
+            <div class="dash-modal__group shift-row">
+              <div class="dash-modal__group-head">
+                <span class="row-label"
+                  ><q-icon name="edit" size="16px" /> Select Shift Template</span
+                >
               </div>
               <div class="shift-fields">
-                <q-select
-                  :model-value="reassignData.shiftTemplateId"
-                  @update:model-value="updateField('shiftTemplateId', $event)"
-                  :options="shiftTemplateOptions"
-                  option-value="value"
-                  option-label="label"
-                  :display-value="selectedTemplateLabel"
-                  label="Shift Template"
-                  outlined dense emit-value map-options
-                  class="form-field"
-                  :rules="[(val) => !!val || 'Shift template is required']"
-                >
-                  <template #option="scope">
-                    <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
-                      <q-item-section>
-                        <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Shift template</span>
+                  <q-select
+                    :model-value="reassignData.shiftTemplateId"
+                    @update:model-value="updateField('shiftTemplateId', $event)"
+                    :options="shiftTemplateOptions"
+                    option-value="value"
+                    option-label="label"
+                    :display-value="selectedTemplateLabel"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="dash-field form-field"
+                    :rules="[(val) => !!val || 'Shift template is required']"
+                    hide-bottom-space
+                    popup-content-class="dash-popup dash-popup--modal"
+                  >
+                    <template #option="scope">
+                      <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
+                        <q-item-section>
+                          <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
+                            <q-item-label
+                              v-for="(part, i) in scope.opt.label.split(' / ')"
+                              :key="i"
+                              style="font-size: 13px; line-height: 1.5"
+                              >{{ part }}</q-item-label
+                            >
+                          </template>
                           <q-item-label
-                            v-for="(part, i) in scope.opt.label.split(' / ')"
-                            :key="i"
-                            style="font-size: 13px; line-height: 1.5"
-                          >{{ part }}</q-item-label>
-                        </template>
-                        <q-item-label v-else style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px">
-                          {{ scope.opt.label }}
-                        </q-item-label>
-                      </q-item-section>
-                    </q-item>
-                  </template>
-                </q-select>
+                            v-else
+                            style="
+                              white-space: nowrap;
+                              overflow: hidden;
+                              text-overflow: ellipsis;
+                              font-size: 13px;
+                            "
+                          >
+                            {{ scope.opt.label }}
+                          </q-item-label>
+                        </q-item-section>
+                      </q-item>
+                    </template>
+                  </q-select>
+                </label>
               </div>
 
-              <div class="shift-row-header" style="margin-top: 16px">
+              <div class="dash-modal__group-head" style="margin-top: 16px">
                 <span class="row-label"><q-icon name="history" size="16px" /> Current Shift</span>
               </div>
               <div class="current-shift-info">
-                <div style="font-size: 13px; color: #374151">
-                  <div style="margin-bottom: 6px"><strong>Template:</strong> {{ reassignData.originalTemplateName || 'N/A' }}</div>
-                  <div style="margin-bottom: 6px"><strong>Site:</strong> {{ reassignData.originalSiteName || 'N/A' }}</div>
-                  <div style="margin-bottom: 6px"><strong>Time:</strong> {{ reassignData.originalTime || 'N/A' }}</div>
-                  <div v-if="reassignData.originalDuration"><strong>Duration:</strong> {{ reassignData.originalDuration }}</div>
+                <div class="rsm-preview__facts">
+                  <div style="margin-bottom: 6px">
+                    <strong>Template:</strong> {{ reassignData.originalTemplateName || 'N/A' }}
+                  </div>
+                  <div style="margin-bottom: 6px">
+                    <strong>Site:</strong> {{ reassignData.originalSiteName || 'N/A' }}
+                  </div>
+                  <div style="margin-bottom: 6px">
+                    <strong>Time:</strong> {{ reassignData.originalTime || 'N/A' }}
+                  </div>
+                  <div v-if="reassignData.originalDuration">
+                    <strong>Duration:</strong> {{ reassignData.originalDuration }}
+                  </div>
                 </div>
               </div>
 
               <div v-if="showNewPreview" class="new-shift-info">
-                <div style="font-size: 11px; color: #d97706; margin-bottom: 8px; font-weight: 600; text-transform: uppercase;">
-                  ⚠️ This will replace your current shift
+                <div class="rsm-preview__flag">
+                  <q-icon name="o_swap_horiz" size="15px" />
+                  Replaces the current shift
                 </div>
-                <div style="font-size: 13px; color: #374151">
-                  <div style="margin-bottom: 6px"><strong>Template:</strong> {{ newPreviewName || 'N/A' }}</div>
+                <div class="rsm-preview__facts">
+                  <div style="margin-bottom: 6px">
+                    <strong>Template:</strong> {{ newPreviewName || 'N/A' }}
+                  </div>
                   <template v-if="!newPreviewIsDual">
-                    <div style="margin-bottom: 6px"><strong>Site:</strong> {{ newPreviewSite || 'N/A' }}</div>
-                    <div style="margin-bottom: 6px"><strong>Time:</strong> {{ newPreviewTime || 'N/A' }}</div>
+                    <div style="margin-bottom: 6px">
+                      <strong>Site:</strong> {{ newPreviewSite || 'N/A' }}
+                    </div>
+                    <div style="margin-bottom: 6px">
+                      <strong>Time:</strong> {{ newPreviewTime || 'N/A' }}
+                    </div>
                   </template>
                   <template v-else>
-                    <div v-for="(sub, si) in newPreviewShifts" :key="si" style="margin-bottom: 6px; padding: 6px 8px; background: rgba(0,0,0,0.04); border-radius: 6px;">
-                      <div><strong>Shift {{ si + 1 }} Site:</strong> {{ sub.site?.name || sub.siteName || 'N/A' }}</div>
-                      <div><strong>Time:</strong> {{ sub.start_time || 'N/A' }} - {{ sub.end_time || 'N/A' }}</div>
+                    <div
+                      v-for="(sub, si) in newPreviewShifts"
+                      :key="si"
+                      style="
+                        margin-bottom: 6px;
+                        padding: 6px 8px;
+                        background: rgba(0, 0, 0, 0.04);
+                        border-radius: 6px;
+                      "
+                    >
+                      <div>
+                        <strong>Shift {{ si + 1 }} Site:</strong> {{ sub.siteName || 'N/A' }}
+                      </div>
+                      <div><strong>Time:</strong> {{ sub.timeLabel || 'N/A' }}</div>
                     </div>
                   </template>
                 </div>
               </div>
 
-              <div v-if="reassignData.shiftTemplateId !== reassignData.originalTemplateId" style="margin-top: 12px">
+              <div
+                v-if="reassignData.shiftTemplateId !== reassignData.originalTemplateId"
+                style="margin-top: 12px"
+              >
                 <q-btn
-                  flat size="sm" color="grey-7" icon="refresh" label="Back to Original"
+                  flat
+                  size="sm"
+                  color="grey-7"
+                  icon="refresh"
+                  label="Back to original"
                   @click="$emit('back-to-original')"
                 />
               </div>
@@ -99,91 +160,155 @@
 
           <!-- ── DUAL SHIFT ── -->
           <template v-else>
-            <div class="shift-row">
-              <div class="shift-row-header">
-                <span class="row-label"><q-icon name="edit" size="16px" /> Select Shift Template</span>
+            <div class="dash-modal__group shift-row">
+              <div class="dash-modal__group-head">
+                <span class="row-label"
+                  ><q-icon name="edit" size="16px" /> Select Shift Template</span
+                >
               </div>
               <div class="shift-fields">
-                <q-select
-                  :model-value="reassignData.shiftTemplateId"
-                  @update:model-value="updateField('shiftTemplateId', $event)"
-                  :options="shiftTemplateOptions"
-                  option-value="value"
-                  option-label="label"
-                  :display-value="selectedTemplateLabel"
-                  label="Shift Template"
-                  outlined dense emit-value map-options
-                  class="form-field"
-                  :rules="[(val) => !!val || 'Shift template is required']"
-                >
-                  <template #option="scope">
-                    <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
-                      <q-item-section>
-                        <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
-                          <q-item-label v-for="(part, i) in scope.opt.label.split(' / ')" :key="i" style="font-size: 13px; line-height: 1.5">{{ part }}</q-item-label>
-                        </template>
-                        <q-item-label v-else style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px">{{ scope.opt.label }}</q-item-label>
-                      </q-item-section>
-                    </q-item>
-                  </template>
-                </q-select>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Shift template</span>
+                  <q-select
+                    :model-value="reassignData.shiftTemplateId"
+                    @update:model-value="updateField('shiftTemplateId', $event)"
+                    :options="shiftTemplateOptions"
+                    option-value="value"
+                    option-label="label"
+                    :display-value="selectedTemplateLabel"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="dash-field form-field"
+                    :rules="[(val) => !!val || 'Shift template is required']"
+                    hide-bottom-space
+                    popup-content-class="dash-popup dash-popup--modal"
+                  >
+                    <template #option="scope">
+                      <q-item v-bind="scope.itemProps" style="min-width: 0; max-width: 100%">
+                        <q-item-section>
+                          <template v-if="scope.opt.label && scope.opt.label.includes(' / ')">
+                            <q-item-label
+                              v-for="(part, i) in scope.opt.label.split(' / ')"
+                              :key="i"
+                              style="font-size: 13px; line-height: 1.5"
+                              >{{ part }}</q-item-label
+                            >
+                          </template>
+                          <q-item-label
+                            v-else
+                            style="
+                              white-space: nowrap;
+                              overflow: hidden;
+                              text-overflow: ellipsis;
+                              font-size: 13px;
+                            "
+                            >{{ scope.opt.label }}</q-item-label
+                          >
+                        </q-item-section>
+                      </q-item>
+                    </template>
+                  </q-select>
+                </label>
               </div>
 
-              <div class="shift-row-header" style="margin-top: 16px">
+              <div class="dash-modal__group-head" style="margin-top: 16px">
                 <span class="row-label"><q-icon name="history" size="16px" /> Current Shifts</span>
               </div>
-              <div v-for="(sub, idx) in reassignData.dualShifts" :key="idx" class="current-shift-info">
-                <div style="font-size: 13px; color: #374151">
-                  <div style="font-weight: 600; margin-bottom: 4px; color: #4b5563">Shift {{ idx + 1 }}: {{ sub.startTime }} - {{ sub.endTime }}</div>
-                  <div style="margin-bottom: 6px"><strong>Template:</strong> {{ sub.originalTemplateName || 'N/A' }}</div>
-                  <div style="margin-bottom: 6px"><strong>Site:</strong> {{ sub.originalSiteName || 'N/A' }}</div>
+              <div
+                v-for="(sub, idx) in reassignData.dualShifts"
+                :key="idx"
+                class="current-shift-info"
+              >
+                <div class="rsm-preview__facts">
+                  <div style="font-weight: 600; margin-bottom: 4px; color: #4b5563">
+                    Shift {{ idx + 1 }}: {{ sub.startTime }} - {{ sub.endTime }}
+                  </div>
+                  <div style="margin-bottom: 6px">
+                    <strong>Template:</strong> {{ sub.originalTemplateName || 'N/A' }}
+                  </div>
+                  <div style="margin-bottom: 6px">
+                    <strong>Site:</strong> {{ sub.originalSiteName || 'N/A' }}
+                  </div>
                 </div>
               </div>
 
               <div v-if="showNewPreview" class="new-shift-info">
-                <div style="font-size: 11px; color: #d97706; margin-bottom: 8px; font-weight: 600; text-transform: uppercase;">
-                  ⚠️ This will replace your current shifts
+                <div class="rsm-preview__flag">
+                  <q-icon name="o_swap_horiz" size="15px" />
+                  Replaces the current shifts
                 </div>
-                <div style="font-size: 13px; color: #374151">
-                  <div style="margin-bottom: 6px"><strong>Template:</strong> {{ newPreviewName || 'N/A' }}</div>
+                <div class="rsm-preview__facts">
+                  <div style="margin-bottom: 6px">
+                    <strong>Template:</strong> {{ newPreviewName || 'N/A' }}
+                  </div>
                   <template v-if="!newPreviewIsDual">
-                    <div style="margin-bottom: 6px"><strong>Site:</strong> {{ newPreviewSite || 'N/A' }}</div>
-                    <div style="margin-bottom: 6px"><strong>Time:</strong> {{ newPreviewTime || 'N/A' }}</div>
+                    <div style="margin-bottom: 6px">
+                      <strong>Site:</strong> {{ newPreviewSite || 'N/A' }}
+                    </div>
+                    <div style="margin-bottom: 6px">
+                      <strong>Time:</strong> {{ newPreviewTime || 'N/A' }}
+                    </div>
                   </template>
                   <template v-else>
-                    <div v-for="(sub, si) in newPreviewShifts" :key="si" style="margin-bottom: 6px; padding: 6px 8px; background: rgba(0,0,0,0.04); border-radius: 6px;">
-                      <div><strong>Shift {{ si + 1 }} Site:</strong> {{ sub.site?.name || sub.siteName || 'N/A' }}</div>
-                      <div><strong>Time:</strong> {{ sub.start_time || 'N/A' }} - {{ sub.end_time || 'N/A' }}</div>
+                    <div
+                      v-for="(sub, si) in newPreviewShifts"
+                      :key="si"
+                      style="
+                        margin-bottom: 6px;
+                        padding: 6px 8px;
+                        background: rgba(0, 0, 0, 0.04);
+                        border-radius: 6px;
+                      "
+                    >
+                      <div>
+                        <strong>Shift {{ si + 1 }} Site:</strong> {{ sub.siteName || 'N/A' }}
+                      </div>
+                      <div><strong>Time:</strong> {{ sub.timeLabel || 'N/A' }}</div>
                     </div>
                   </template>
                 </div>
               </div>
 
-              <div v-if="reassignData.shiftTemplateId !== reassignData.originalTemplateId" style="margin-top: 12px">
-                <q-btn flat size="sm" color="grey-7" icon="refresh" label="Back to Original" @click="$emit('back-to-original')" />
+              <div
+                v-if="reassignData.shiftTemplateId !== reassignData.originalTemplateId"
+                style="margin-top: 12px"
+              >
+                <q-btn
+                  flat
+                  size="sm"
+                  color="grey-7"
+                  icon="refresh"
+                  label="Back to original"
+                  @click="$emit('back-to-original')"
+                />
               </div>
             </div>
           </template>
-
-          <div class="modal-actions">
-            <q-btn flat label="Cancel" @click="$emit('update:modelValue', false)" class="cancel-btn" />
-            <q-btn
-              type="submit"
-              color="primary"
-              :label="reassignData.isDualShift ? 'Update Both Shifts' : 'Update Shift'"
-              unelevated
-              class="submit-btn"
-              :loading="saving"
-            />
-          </div>
-        </q-form>
-      </q-card-section>
+        </q-card-section>
+        <q-card-actions class="dash-modal__foot">
+          <q-btn
+            flat
+            label="Cancel"
+            @click="$emit('update:modelValue', false)"
+            class="dash-modal__cancel"
+          />
+          <q-btn
+            type="submit"
+            :label="reassignData.isDualShift ? 'Update both shifts' : 'Update Shift'"
+            unelevated
+            class="dash-modal__submit"
+            :loading="saving"
+          />
+        </q-card-actions>
+      </q-form>
     </q-card>
   </q-dialog>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -207,160 +332,92 @@ const props = defineProps({
   shiftTemplateOptions: { type: Array, default: () => [] },
   employeeName: { type: String, default: '' },
   saving: { type: Boolean, default: false },
-});
+})
 
-const emit = defineEmits(['update:modelValue', 'update:reassignData', 'submit', 'back-to-original']);
+const emit = defineEmits(['update:modelValue', 'update:reassignData', 'submit', 'back-to-original'])
 
 const selectedTemplateLabel = computed(() => {
-  return props.shiftTemplateOptions.find((o) => o.value === props.reassignData.shiftTemplateId)?.label || '';
-});
+  return (
+    props.shiftTemplateOptions.find((o) => o.value === props.reassignData.shiftTemplateId)?.label ||
+    ''
+  )
+})
 
 const selectedTemplate = computed(() => {
-  const id = props.reassignData.shiftTemplateId;
-  if (!id) return null;
-  const n = typeof id === 'number' ? id : parseInt(id);
-  return props.shiftTemplateOptions.find((t) => t.value === n) || null;
-});
+  const id = props.reassignData.shiftTemplateId
+  if (!id) return null
+  const n = typeof id === 'number' ? id : parseInt(id)
+  return props.shiftTemplateOptions.find((t) => t.value === n) || null
+})
 
 const showNewPreview = computed(() => {
-  return props.reassignData.shiftTemplateId !== props.reassignData.originalTemplateId && selectedTemplate.value;
-});
+  return (
+    props.reassignData.shiftTemplateId !== props.reassignData.originalTemplateId &&
+    selectedTemplate.value
+  )
+})
 
-const newPreviewName = computed(() => selectedTemplate.value?.label || '');
-const newPreviewIsDual = computed(() => {
-  const t = selectedTemplate.value;
-  if (!t) return false;
-  // Check if template has multiple shifts
-  return false; // Simplified — parent can pass computed preview data if needed
-});
-const newPreviewSite = computed(() => '');
-const newPreviewTime = computed(() => '');
-const newPreviewShifts = computed(() => []);
+// The preview reads the selected option's own description of the template —
+// site, times and, for a split template, each segment. These four used to be
+// hardcoded to '' / false / [], which is why the replacement panel printed
+// "Site: N/A" and "Time: N/A" for every template no matter what it scheduled.
+const newPreviewName = computed(() => selectedTemplate.value?.label || '')
+const newPreviewIsDual = computed(() => selectedTemplate.value?.isMulti === true)
+const newPreviewSite = computed(() => selectedTemplate.value?.siteName || '')
+const newPreviewTime = computed(() => selectedTemplate.value?.timeLabel || '')
+const newPreviewShifts = computed(() => selectedTemplate.value?.segments || [])
 
 function updateField(key, value) {
-  emit('update:reassignData', { ...props.reassignData, [key]: value });
+  emit('update:reassignData', { ...props.reassignData, [key]: value })
 }
 
 function onSubmit() {
-  emit('submit');
+  emit('submit')
 }
 </script>
 
 <style scoped>
-.modal-card {
-  border-radius: 14px !important;
-  width: 500px !important;
-  min-width: 500px !important;
-  max-width: 95vw !important;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.modal-header {
-  background: #102335;
-  border-bottom: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-}
-.modal-header .q-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-.modal-header .q-btn:hover {
-  color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-}
-.modal-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #ffffff;
-}
-.modal-body {
-  padding: 20px;
-  overflow-y: auto;
-  max-height: 70vh;
-}
-.schedule-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.shift-row-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
 .row-label {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--dash-ink-2);
 }
 .shift-fields {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
 .form-field {
   width: 100%;
 }
+/* What the shift is now, and what it would become. The pair reads as before /
+   after, so only the second one is tinted: the change is the news. */
 .current-shift-info {
   padding: 12px;
-  background: #e5e7eb;
-  border-radius: 8px;
   margin-bottom: 12px;
+  background: var(--dash-n-25);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
 }
 .new-shift-info {
   padding: 12px;
-  background: #fef3c7;
-  border-radius: 8px;
   margin-bottom: 16px;
-  border: 1px solid #f59e0b;
-}
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #f1f3f5;
-}
-.cancel-btn {
-  background: #102335;
-  color: #ffffff;
-  padding: 6px 16px;
-  border-radius: 8px !important;
-  font-size: 13px;
-  font-weight: 500;
-  text-transform: none;
-}
-.submit-btn {
-  background: #102335 !important;
-  color: white;
-  padding: 6px 16px;
-  border-radius: 8px !important;
-  font-size: 13px;
-  font-weight: 500;
-  text-transform: none;
-}
-.submit-btn:hover {
-  background: #193d5c !important;
-}
-.cancel-btn:hover {
-  background: #193d5c;
+  background: var(--dash-warn-bg);
+  border: 1px solid var(--dash-warn-line);
+  border-radius: var(--dash-r-md);
 }
 .quick-info {
   display: flex;
   gap: 14px;
   margin-bottom: 16px;
   padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e8ecf0;
+  background: var(--dash-n-25);
+  border-radius: var(--dash-r-md);
+  border: 1px solid var(--dash-line);
 }
 .info-item {
   display: flex;
@@ -368,10 +425,22 @@ function onSubmit() {
   gap: 8px;
   font-size: 13px;
 }
-@media (max-width: 768px) {
-  .modal-card {
-    min-width: unset !important;
-    max-width: calc(100vw - 20px) !important;
-  }
+/* The line that says what the new template does to the existing assignment.
+   It was an emoji over 11px uppercase text in an inline style; the icon and the
+   warn tone come from the system now, and it keeps sentence case. */
+.rsm-preview__flag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dash-warn);
+}
+
+.rsm-preview__facts {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dash-ink-2);
 }
 </style>

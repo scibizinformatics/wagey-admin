@@ -35,7 +35,10 @@
       <!-- ── Rows ─────────────────────────────────────────────────────────── -->
       <template v-for="user in users" :key="user.id">
         <div class="cell cell--who" role="rowheader">
-          <q-avatar size="30px" class="who__avatar" :style="{ background: getAvatarColor(user.name) }">
+          <q-avatar v-if="avatarOf(user)" size="30px" class="who__avatar">
+            <img :src="avatarOf(user)" alt="" loading="lazy" @error="onAvatarError(user)" />
+          </q-avatar>
+          <q-avatar v-else size="30px" class="who__avatar" :style="{ background: getAvatarColor(user.name) }">
             <span class="who__initials">{{ getInitials(user.name) }}</span>
           </q-avatar>
           <div class="who__block">
@@ -168,24 +171,6 @@
                     <q-item-section avatar><q-icon name="o_event_busy" size="16px" /></q-item-section>
                     <q-item-section>Day off</q-item-section>
                   </q-item>
-
-                  <q-separator class="add-menu__sep" />
-
-                  <q-item-label header class="add-menu__header">Leave</q-item-label>
-                  <q-item
-                    v-for="lt in leaveTypes"
-                    :key="lt.id"
-                    v-close-popup
-                    clickable
-                    class="add-menu__item"
-                    @click="$emit('quick-direct-assign', user.id, dayIdx, 'leave', lt.id)"
-                  >
-                    <q-item-section avatar><q-icon name="o_beach_access" size="16px" /></q-item-section>
-                    <q-item-section>{{ lt.name }}</q-item-section>
-                  </q-item>
-                  <q-item v-if="!leaveTypes.length" class="add-menu__item add-menu__item--muted">
-                    <q-item-section>No leave types configured</q-item-section>
-                  </q-item>
                 </q-list>
               </q-menu>
             </button>
@@ -245,7 +230,7 @@
  *    a column.
  *  - Empty cells offer a single hover target rather than three stacked buttons.
  */
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import {
   shiftHours,
   formatHours,
@@ -263,7 +248,6 @@ const props = defineProps({
   days: { type: Array, default: () => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
   /** Seven Date objects for the week on screen, Monday first. */
   weekDates: { type: Array, default: () => [] },
-  leaveTypes: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   quickActionLoading: { type: String, default: null },
   assigningDayOffId: { type: String, default: null },
@@ -282,6 +266,19 @@ const emit = defineEmits([
   'quick-direct-assign',
   'clear-filters',
 ])
+
+// ─── Avatars ────────────────────────────────────────────────────────────────
+// A photo that 404s renders as an empty circle, and down a column of them that
+// reads as broken layout rather than as a missing picture. The first failure for
+// a given URL drops that row back to its initials, which is what the rest of the
+// app already shows for someone with no photo at all.
+const brokenAvatars = reactive(new Set())
+
+const avatarOf = (user) => (user.photo && !brokenAvatars.has(user.photo) ? user.photo : '')
+
+function onAvatarError(user) {
+  if (user.photo) brokenAvatars.add(user.photo)
+}
 
 const gridStyle = computed(() => ({
   gridTemplateColumns: `var(--who-w) repeat(${props.days.length}, minmax(var(--day-w), 1fr))`,
@@ -570,6 +567,13 @@ const isWeekend = (i) => {
 .who__avatar {
   flex-shrink: 0;
 }
+.who__avatar img {
+  width: 100%;
+  height: 100%;
+  /* Cover, not contain: a portrait that does not match the circle should be
+     cropped rather than letterboxed against the card behind it. */
+  object-fit: cover;
+}
 .who__initials {
   font-size: 11px;
   font-weight: 600;
@@ -628,6 +632,10 @@ const isWeekend = (i) => {
    rest on. Text stays in ink at every tint — see shiftChipTone() for why colour
    never lands on 11px type here. */
 .chip {
+  /* The height of a one-shift card: a 15px time line over a 14px site line,
+     6px of padding either side and the 1px border — 44px. It is a floor, not a
+     fixed height, so a two-shift card still grows. */
+  --chip-min-h: 44px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -649,6 +657,7 @@ const isWeekend = (i) => {
 
 .chip__time {
   font-size: 12px;
+  line-height: 15px;
   font-weight: 600;
   color: var(--dash-ink);
   white-space: nowrap;
@@ -662,6 +671,7 @@ const isWeekend = (i) => {
   gap: 3px;
   min-width: 0;
   font-size: 11px;
+  line-height: 14px;
   color: var(--dash-ink-3);
 }
 .chip__site .q-icon {
@@ -684,6 +694,7 @@ const isWeekend = (i) => {
 }
 .chip__title {
   font-size: 12px;
+  line-height: 15px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -695,6 +706,8 @@ const isWeekend = (i) => {
 .chip--leave {
   --chip-edge: var(--dash-cat-4-soft);
   --chip-tint: var(--dash-cat-4-tint);
+  min-height: var(--chip-min-h);
+  justify-content: center;
 }
 .chip--leave .chip__row .q-icon {
   color: var(--dash-cat-4);
@@ -721,6 +734,8 @@ const isWeekend = (i) => {
 
 .chip--shift {
   padding: 6px 9px;
+  min-height: var(--chip-min-h);
+  justify-content: center;
 }
 
 /* One leg per shift inside the card. The second is separated by a hairline

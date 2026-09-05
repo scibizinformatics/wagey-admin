@@ -97,6 +97,7 @@
  * which is what makes the hover preview possible without extra state.
  */
 import { ref, computed, watch } from 'vue'
+import { pad, toIso, fromIso, todayIso, longLabel } from 'src/composables/utils/calendarDate'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ from: '', to: '' }) },
@@ -107,9 +108,10 @@ const props = defineProps({
   emptyText: { type: String, default: 'No dates selected yet — pick a start and end date' },
   unitLabel: { type: String, default: 'day' },
   unitLabelPlural: { type: String, default: 'days' },
-  // Earliest selectable day. Schedules cannot be backdated, so this defaults to
-  // today; pass an empty string to allow any date.
-  minDate: { type: String, default: 'today' },
+  // Earliest selectable day: any date by default, since schedules are also
+  // filled in after the fact. Pass 'today' to forbid backdating, or a
+  // YYYY-MM-DD string for any other floor.
+  minDate: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -118,29 +120,15 @@ const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
 // ─── Date helpers ───────────────────────────────────────────────────────────
-function pad(value) {
-  return String(value).padStart(2, '0')
-}
-
-function toIso(date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-// Bare YYYY-MM-DD parses as UTC and can shift a day west of Greenwich
-function fromIso(iso) {
-  return new Date(`${iso}T00:00:00`)
-}
-
+// pad / toIso / fromIso / longLabel live in composables/utils/calendarDate.js —
+// this component and AttendanceDateRangePicker.vue held identical copies, and
+// the header comment there explains the UTC day-shift they exist to avoid.
 const now = new Date()
-const todayIso = toIso(now)
-const minIso = computed(() => (props.minDate === 'today' ? todayIso : props.minDate || null))
 
-function longLabel(iso) {
-  if (!iso) return ''
-  const date = fromIso(iso)
-  if (isNaN(date.getTime())) return iso
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
+// Resolved once per mount: the calendar is opened, used and closed, so it never
+// outlives the day it read. Anything long-lived should call todayIso() per use.
+const today = todayIso()
+const minIso = computed(() => (props.minDate === 'today' ? today : props.minDate || null))
 
 // ─── Selection ──────────────────────────────────────────────────────────────
 const hovered = ref('')
@@ -230,8 +218,8 @@ function normalize(year, month) {
   return { year: year + Math.floor(month / 12), month: ((month % 12) + 12) % 12 }
 }
 
-// Anchored on the current month: with past days disabled, a leading previous
-// month pane would be entirely dead space.
+// Anchored on the current month, the common starting point; the ‹ arrow pages
+// back from there into past months.
 const anchor = ref(normalize(now.getFullYear(), now.getMonth()))
 
 // A recurring template can carry a start date months in the past; clamp to the
@@ -319,7 +307,7 @@ function dayClasses(cell) {
     // gets an outline instead of the fill.
     'rc__day--edge-only': isEdge && !occurs,
     'rc__day--skipped': inRange && !occurs,
-    'rc__day--today': cell.iso === todayIso,
+    'rc__day--today': cell.iso === today,
     'rc__day--disabled': cell.disabled,
   }
 }
@@ -339,10 +327,14 @@ function dayClasses(cell) {
   gap: 12px;
 }
 
+/* The same weight and colour as a field label. It sits in a column of them —
+   "Schedule type", "Select employees", then this — and at 13px/600 in full ink
+   it read as a heading over the fields above it rather than as the label for
+   the calendar under it. */
 .rc__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dash-ink, #101828);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dash-ink-2, #475467);
 }
 
 .rc__meta {
