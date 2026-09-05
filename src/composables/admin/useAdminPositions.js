@@ -2,10 +2,12 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
+import { useToast } from 'src/composables/useToast'
 
 export function useAdminPositions() {
   const $q = useQuasar()
+  const toast = useToast()
   const { companyId } = useCompany()
 
   const positions = ref([])
@@ -31,7 +33,6 @@ export function useAdminPositions() {
     try {
       const response = await api.get(`${BASE}/user/positions/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       const raw = response.data.data ?? response.data ?? []
       positions.value = raw.map((pos) => {
@@ -76,7 +77,7 @@ export function useAdminPositions() {
 
   async function savePosition() {
     if (!form.value.name.trim()) {
-      $q.notify({ type: 'negative', message: 'Position name is required' })
+      toast.error('Position name is required')
       return
     }
 
@@ -89,20 +90,18 @@ export function useAdminPositions() {
       }
 
       if (editing.value) {
-        await api.put(`${BASE}/user/positions/${form.value.id}/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Position updated successfully' })
+        await api.put(`${BASE}/user/positions/${form.value.id}/`, payload)
+        toast.success('Position updated successfully')
       } else {
-        await api.post(`${BASE}/user/positions/`, payload, { headers: authHeaders() })
-        $q.notify({ type: 'positive', message: 'Position created successfully' })
+        await api.post(`${BASE}/user/positions/`, payload)
+        toast.success('Position created successfully')
       }
 
       dialog.value = false
       await fetchPositions()
     } catch (error) {
       console.error('Error saving position:', error)
-      $q.notify({ type: 'negative', message: 'Failed to save position' })
+      toast.error('Failed to save position')
     } finally {
       saving.value = false
     }
@@ -112,18 +111,19 @@ export function useAdminPositions() {
 
   async function deletePosition(position) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${position.name}"?`,
-      cancel: true,
+      title: 'Delete this position?',
+      message: `"${position.name}" is removed and can no longer be assigned. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/user/positions/${position.id}/`, { headers: authHeaders() })
-        $q.notify({ type: 'positive', message: 'Position deleted successfully' })
+        await api.delete(`${BASE}/user/positions/${position.id}/`)
+        toast.success('Position deleted successfully')
         await fetchPositions()
       } catch (error) {
         console.error('Error deleting position:', error)
-        $q.notify({ type: 'negative', message: 'Failed to delete position' })
+        toast.error('Failed to delete position')
       }
     })
   }

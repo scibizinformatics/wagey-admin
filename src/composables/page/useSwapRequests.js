@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
-import { authHeaders } from 'src/composables/utils/http'
+import { normalizeSwapRequests } from 'src/composables/utils/swapRequests'
 
 export function useSwapRequests() {
   const swapRequests = ref([])
@@ -12,13 +12,13 @@ export function useSwapRequests() {
   async function fetchSwapRequests(params = {}) {
     loading.value = true
     try {
-      // FIX: added headers: authHeaders() — was imported but never used,
-      // causing 401 Unauthorized on authenticated endpoints in production.
-       const response = await api.get(`/organization/swap-requests/`, {
-         params,
-         headers: authHeaders(),
-       })
-      swapRequests.value = response.data.data ?? response.data ?? []
+      const response = await api.get(`/organization/swap-requests/`, {
+        params,
+      })
+      // Normalised on the way in: the endpoint answers with ids and enum tokens
+      // for shift/site and with either flat names or nested employee objects,
+      // none of which is fit to print.
+      swapRequests.value = normalizeSwapRequests(response.data.data ?? response.data ?? [])
       return swapRequests.value
     } finally {
       loading.value = false
@@ -35,10 +35,7 @@ export function useSwapRequests() {
   async function updateSwapRequest(requestId, payload) {
     saving.value = true
     try {
-      // FIX: added headers: authHeaders() — was missing, causing 401 in production.
-       const response = await api.patch(`/organization/swap-requests/${requestId}/`, payload, {
-         headers: authHeaders(),
-       })
+      const response = await api.patch(`/organization/swap-requests/${requestId}/`, payload)
       return response.data
     } finally {
       saving.value = false

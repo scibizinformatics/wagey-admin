@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
 
 export function useRolesAndPositions() {
   const { companyId } = useCompany()
@@ -18,7 +18,6 @@ export function useRolesAndPositions() {
     try {
       const response = await api.get(`${BASE}/user/user-roles/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       userRoles.value = response.data.data ?? response.data ?? []
       return userRoles.value
@@ -30,9 +29,7 @@ export function useRolesAndPositions() {
   async function createUserRole(payload) {
     saving.value = true
     try {
-      const response = await api.post(`${BASE}/user/user-roles/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/user/user-roles/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -42,9 +39,7 @@ export function useRolesAndPositions() {
   async function updateUserRole(roleId, payload) {
     saving.value = true
     try {
-      const response = await api.patch(`${BASE}/user/user-roles/${roleId}/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.patch(`${BASE}/user/user-roles/${roleId}/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -52,9 +47,7 @@ export function useRolesAndPositions() {
   }
 
   async function deleteUserRole(roleId) {
-    const response = await api.delete(`${BASE}/user/user-roles/${roleId}/`, {
-      headers: authHeaders(),
-    })
+    const response = await api.delete(`${BASE}/user/user-roles/${roleId}/`)
     return response.data
   }
 
@@ -65,7 +58,6 @@ export function useRolesAndPositions() {
     try {
       const response = await api.get(`${BASE}/user/positions/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       positions.value = response.data.data ?? response.data ?? []
       return positions.value
@@ -77,9 +69,7 @@ export function useRolesAndPositions() {
   async function createPosition(payload) {
     saving.value = true
     try {
-      const response = await api.post(`${BASE}/user/positions/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/user/positions/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -89,9 +79,7 @@ export function useRolesAndPositions() {
   async function updatePosition(positionId, payload) {
     saving.value = true
     try {
-      const response = await api.put(`${BASE}/user/positions/${positionId}/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.put(`${BASE}/user/positions/${positionId}/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -99,9 +87,7 @@ export function useRolesAndPositions() {
   }
 
   async function deletePosition(positionId) {
-    const response = await api.delete(`${BASE}/user/positions/${positionId}/`, {
-      headers: authHeaders(),
-    })
+    const response = await api.delete(`${BASE}/user/positions/${positionId}/`)
     return response.data
   }
 

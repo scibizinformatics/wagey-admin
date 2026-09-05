@@ -2,10 +2,12 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
+import { useToast } from 'src/composables/useToast'
 
 export function useAdminPayrollGroups() {
   const $q = useQuasar()
+  const toast = useToast()
   const { companyId } = useCompany()
 
   const payrollGroups = ref([])
@@ -19,9 +21,7 @@ export function useAdminPayrollGroups() {
 
   async function fetchPaymentMethods() {
     try {
-      const response = await api.get(`${BASE}/payroll/payment-methods/`, {
-        headers: authHeaders(),
-      })
+      const response = await api.get(`${BASE}/payroll/payment-methods/`)
       const all = response.data.data ?? response.data ?? []
       paymentMethods.value = all.filter((pm) => pm.is_active)
       return paymentMethods.value
@@ -40,17 +40,12 @@ export function useAdminPayrollGroups() {
     try {
       const response = await api.get(`${BASE}/payroll/payroll-groups/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       payrollGroups.value = response.data.data ?? response.data ?? []
       return payrollGroups.value
     } catch (error) {
       console.error('Error fetching payroll groups:', error)
-      $q.notify({
-        type: 'negative',
-        message: error.response?.data?.message || 'Failed to load payroll groups',
-        position: 'top',
-      })
+      toast.error(error.response?.data?.message || 'Failed to load payroll groups')
     } finally {
       loading.value = false
     }
@@ -58,11 +53,17 @@ export function useAdminPayrollGroups() {
 
   function openDialog() {
     if (!companyId.value) {
-      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+      toast.warning('Please select a company first')
       return
     }
     editing.value = false
-    form.value = { id: null, name: '', company: companyId.value, payment_method: null, is_active: true }
+    form.value = {
+      id: null,
+      name: '',
+      company: companyId.value,
+      payment_method: null,
+      is_active: true,
+    }
     dialog.value = true
   }
 
@@ -80,16 +81,16 @@ export function useAdminPayrollGroups() {
 
   async function savePayrollGroup() {
     if (!form.value.name.trim()) {
-      $q.notify({ type: 'negative', message: 'Payroll group name is required', position: 'top' })
+      toast.error('Payroll group name is required')
       return
     }
     if (!form.value.payment_method) {
-      $q.notify({ type: 'negative', message: 'Payment method is required', position: 'top' })
+      toast.error('Payment method is required')
       return
     }
     const cId = form.value.company || companyId.value
     if (!cId) {
-      $q.notify({ type: 'negative', message: 'Company ID is required', position: 'top' })
+      toast.error('Company ID is required')
       return
     }
 
@@ -103,13 +104,11 @@ export function useAdminPayrollGroups() {
       }
 
       if (editing.value) {
-        await api.put(`${BASE}/payroll/payroll-groups/${form.value.id}/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Payroll group updated successfully' })
+        await api.put(`${BASE}/payroll/payroll-groups/${form.value.id}/`, payload)
+        toast.success('Payroll group updated successfully')
       } else {
-        await api.post(`${BASE}/payroll/payroll-groups/`, payload, { headers: authHeaders() })
-        $q.notify({ type: 'positive', message: 'Payroll group created successfully' })
+        await api.post(`${BASE}/payroll/payroll-groups/`, payload)
+        toast.success('Payroll group created successfully')
       }
 
       dialog.value = false
@@ -122,7 +121,7 @@ export function useAdminPayrollGroups() {
         else if (error.response.data.message) errorMessage = error.response.data.message
         else if (error.response.data.error) errorMessage = error.response.data.error
       }
-      $q.notify({ type: 'negative', message: errorMessage, position: 'top' })
+      toast.error(errorMessage)
     } finally {
       saving.value = false
     }
@@ -130,24 +129,19 @@ export function useAdminPayrollGroups() {
 
   async function deletePayrollGroup(group) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${group.name}"?`,
-      cancel: true,
+      title: 'Delete this payroll group?',
+      message: `"${group.name}" is removed and its cutoff no longer applies. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/payroll/payroll-groups/${group.id}/`, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Payroll group deleted successfully' })
+        await api.delete(`${BASE}/payroll/payroll-groups/${group.id}/`)
+        toast.success('Payroll group deleted successfully')
         await fetchPayrollGroups()
       } catch (error) {
         console.error('Error deleting payroll group:', error)
-        $q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to delete payroll group',
-          position: 'top',
-        })
+        toast.error(error.response?.data?.message || 'Failed to delete payroll group')
       }
     })
   }

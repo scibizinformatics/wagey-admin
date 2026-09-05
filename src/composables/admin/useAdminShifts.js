@@ -2,8 +2,9 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
 import { useToast } from 'src/composables/useToast'
+import { safeParseJson } from 'src/composables/utils/storage'
 
 export function useAdminShifts() {
   const $q = useQuasar()
@@ -106,15 +107,9 @@ export function useAdminShifts() {
     let days = weekdays
     if (typeof days === 'string') {
       const t = days.trim()
-      if (t.startsWith('[')) {
-        try {
-          days = JSON.parse(t)
-        } catch {
-          days = t.split(',')
-        }
-      } else {
-        days = t.split(',')
-      }
+      // A bracketed value is meant to be JSON; anything else — and anything
+      // that fails to parse — is the comma-separated form.
+      days = t.startsWith('[') ? (safeParseJson(t, null) ?? t.split(',')) : t.split(',')
     }
     if (!Array.isArray(days) || days.length === 0) return 'N/A'
     return days
@@ -133,18 +128,13 @@ export function useAdminShifts() {
     try {
       const response = await api.get(`${BASE}/organization/shift-types/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       shiftTemplates.value = response.data.data ?? response.data ?? []
       shiftTypes.value = shiftTemplates.value
       return shiftTemplates.value
     } catch (error) {
       console.error('Error fetching shift templates:', error)
-      $q.notify({
-        type: 'negative',
-        message: error.response?.data?.message || 'Failed to load shift templates',
-        position: 'top',
-      })
+      toast.error(error.response?.data?.message || 'Failed to load shift templates')
     }
   }
 
@@ -159,7 +149,6 @@ export function useAdminShifts() {
     try {
       const response = await api.get(`${BASE}/organization/recurring-schedules/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       weeklyShiftTemplates.value = (response.data.data ?? response.data ?? []).map((s) => {
         if (Array.isArray(s.rules)) return s
@@ -173,11 +162,7 @@ export function useAdminShifts() {
       return weeklyShiftTemplates.value
     } catch (error) {
       console.error('Error fetching weekly shift templates:', error)
-      $q.notify({
-        type: 'negative',
-        message: error.response?.data?.message || 'Failed to load shift templates',
-        position: 'top',
-      })
+      toast.error(error.response?.data?.message || 'Failed to load shift templates')
     } finally {
       loadingWeeklyTemplates.value = false
     }
@@ -187,7 +172,7 @@ export function useAdminShifts() {
 
   function openWeeklyTemplateDialog() {
     if (!companyId.value) {
-      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+      toast.warning('Please select a company first')
       return
     }
     editingWeeklyTemplate.value = false
@@ -249,17 +234,13 @@ export function useAdminShifts() {
 
   async function saveWeeklyTemplate() {
     if (!weeklyTemplateForm.value.name?.trim()) {
-      $q.notify({ type: 'warning', message: 'Template name is required', position: 'top' })
+      toast.warning('Template name is required')
       return
     }
 
     const validRules = weeklyTemplateForm.value.rules.filter((r) => r.shift_template)
     if (!validRules.length) {
-      $q.notify({
-        type: 'warning',
-        message: 'Please add at least one shift rule for a day',
-        position: 'top',
-      })
+      toast.warning('Please add at least one shift rule for a day')
       return
     }
 
@@ -279,14 +260,11 @@ export function useAdminShifts() {
         await api.put(
           `${BASE}/organization/recurring-schedules/${weeklyTemplateForm.value.id}/`,
           payload,
-          { headers: authHeaders() },
         )
-        $q.notify({ type: 'positive', message: 'Weekly shift template updated successfully' })
+        toast.success('Weekly shift template updated successfully')
       } else {
-        await api.post(`${BASE}/organization/recurring-schedules/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Weekly shift template created successfully' })
+        await api.post(`${BASE}/organization/recurring-schedules/`, payload)
+        toast.success('Weekly shift template created successfully')
       }
       weeklyTemplateDialog.value = false
       await fetchWeeklyShiftTemplates()
@@ -301,7 +279,7 @@ export function useAdminShifts() {
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message
       }
-      $q.notify({ type: 'negative', message: errorMessage, position: 'top', timeout: 5000 })
+      toast.error(errorMessage, { timeout: 5000 })
     } finally {
       savingWeeklyTemplate.value = false
     }
@@ -309,24 +287,19 @@ export function useAdminShifts() {
 
   async function deleteWeeklyTemplate(template) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${template.name}"?`,
-      cancel: true,
+      title: 'Delete this template?',
+      message: `"${template.name}" is removed and can no longer be scheduled. Shifts already placed from it are not affected. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/organization/recurring-schedules/${template.id}/`, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Weekly shift template deleted successfully' })
+        await api.delete(`${BASE}/organization/recurring-schedules/${template.id}/`)
+        toast.success('Weekly shift template deleted successfully')
         await fetchWeeklyShiftTemplates()
       } catch (error) {
         console.error('Error deleting weekly shift template:', error)
-        $q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to delete shift template',
-          position: 'top',
-        })
+        toast.error(error.response?.data?.message || 'Failed to delete shift template')
       }
     })
   }
@@ -342,7 +315,6 @@ export function useAdminShifts() {
     try {
       const response = await api.get(`${BASE}/organization/shift-type-templates-list/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       console.log('[fetchShiftTypeTemplates] raw response:', response.data)
       shiftTypeTemplates.value = response.data.data ?? response.data ?? []
@@ -354,11 +326,7 @@ export function useAdminShifts() {
     } catch (error) {
       console.error('[fetchShiftTypeTemplates] Error:', error)
       console.error('[fetchShiftTypeTemplates] Error response:', error.response?.data)
-      $q.notify({
-        type: 'negative',
-        message: error.response?.data?.message || 'Failed to load shift type templates',
-        position: 'top',
-      })
+      toast.error(error.response?.data?.message || 'Failed to load shift type templates')
     } finally {
       loadingShiftTypeTemplates.value = false
     }
@@ -368,7 +336,7 @@ export function useAdminShifts() {
 
   function openShiftTypeTemplateDialog() {
     if (!companyId.value) {
-      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+      toast.warning('Please select a company first')
       return
     }
     editingShiftTypeTemplate.value = false
@@ -401,11 +369,7 @@ export function useAdminShifts() {
     )
 
     if (!shiftTypeTemplateForm.value.shifts?.length) {
-      $q.notify({
-        type: 'warning',
-        message: 'Please add at least one shift',
-        position: 'top',
-      })
+      toast.warning('Please add at least one shift')
       return
     }
 
@@ -414,11 +378,7 @@ export function useAdminShifts() {
       (s) => !s.site_id || !s.default_start_time || !s.default_end_time,
     )
     if (invalidShifts.length) {
-      $q.notify({
-        type: 'warning',
-        message: 'All shifts must have site, start time, and end time',
-        position: 'top',
-      })
+      toast.warning('All shifts must have site, start time, and end time')
       return
     }
 
@@ -446,17 +406,14 @@ export function useAdminShifts() {
         response = await api.put(
           `${BASE}/organization/shift-type-templates/${shiftTypeTemplateForm.value.id}/`,
           payload,
-          { headers: authHeaders() },
         )
         console.log('[saveShiftTypeTemplate] PUT response:', response.data)
-        $q.notify({ type: 'positive', message: 'Shift template updated successfully' })
+        toast.success('Shift template updated successfully')
       } else {
         console.log('[saveShiftTypeTemplate] POST /organization/shift-type-templates/create/')
-        response = await api.post(`${BASE}/organization/shift-type-templates/create/`, payload, {
-          headers: authHeaders(),
-        })
+        response = await api.post(`${BASE}/organization/shift-type-templates/create/`, payload)
         console.log('[saveShiftTypeTemplate] POST response:', response.data)
-        $q.notify({ type: 'positive', message: 'Shift template created successfully' })
+        toast.success('Shift template created successfully')
       }
       shiftTypeTemplateDialog.value = false
       await fetchShiftTypeTemplates()
@@ -470,7 +427,7 @@ export function useAdminShifts() {
         )
         if (errors.length) errorMessage = errors.join(' | ')
       } else if (error.response?.data?.message) errorMessage = error.response.data.message
-      $q.notify({ type: 'negative', message: errorMessage, position: 'top', timeout: 5000 })
+      toast.error(errorMessage, { timeout: 5000 })
     } finally {
       savingShiftTypeTemplate.value = false
     }
@@ -478,24 +435,19 @@ export function useAdminShifts() {
 
   async function deleteShiftTypeTemplate(template) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${template.name}"?`,
-      cancel: true,
+      title: 'Delete this template?',
+      message: `"${template.name}" is removed and can no longer be scheduled. Shifts already placed from it are not affected. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/organization/shift-type-templates/${template.id}/`, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Shift template deleted successfully' })
+        await api.delete(`${BASE}/organization/shift-type-templates/${template.id}/`)
+        toast.success('Shift template deleted successfully')
         await fetchShiftTypeTemplates()
       } catch (error) {
         console.error('Error deleting shift template:', error)
-        $q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to delete shift template',
-          position: 'top',
-        })
+        toast.error(error.response?.data?.message || 'Failed to delete shift template')
       }
     })
   }
@@ -511,26 +463,45 @@ export function useAdminShifts() {
       name: '',
       is_active: true,
       shifts: [
-        { site_id: null, default_start_time: '', default_end_time: '' },
-        { site_id: null, default_start_time: '', default_end_time: '' },
-        { site_id: null, default_start_time: '', default_end_time: '' },
+        { default_start_time: '', default_end_time: '' },
+        { default_start_time: '', default_end_time: '' },
+        { default_start_time: '', default_end_time: '' },
       ],
     }
+  }
+
+  /**
+   * `<input type="time">` yields `HH:MM`, but the backend parses these with
+   * `%H:%M:%S` and raises `time data '11:42' does not match format` on anything
+   * shorter — so the seconds are filled in on the way out.
+   */
+  function toApiTime(t) {
+    if (!t) return t
+    const parts = String(t).split(':')
+    if (parts.length < 2) return t
+    const [h, m, sec = '00'] = parts
+    return `${h.padStart(2, '0')}:${m.padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+  }
+
+  /**
+   * Length of one segment in hours, wrapping past midnight so a 22:00-06:00
+   * night shift reads as 8 and not as -16.
+   */
+  function _shiftHours(start, end) {
+    if (!start || !end) return 0
+    const from = new Date(`2000-01-01T${extractTime(start)}`)
+    let to = new Date(`2000-01-01T${extractTime(end)}`)
+    if (isNaN(from) || isNaN(to)) return 0
+    if (to < from) to = new Date(to.getTime() + 24 * 60 * 60 * 1000)
+    return Math.round(((to - from) / (1000 * 60 * 60)) * 100) / 100
   }
 
   /** `shifts`/`shifts_detail` come back either as arrays or JSON strings. */
   function parseShiftList(value) {
     if (!value) return []
     if (Array.isArray(value)) return value
-    if (typeof value === 'string') {
-      try {
-        const parsed = JSON.parse(value)
-        return Array.isArray(parsed) ? parsed : []
-      } catch {
-        return []
-      }
-    }
-    return []
+    const parsed = safeParseJson(value, [])
+    return Array.isArray(parsed) ? parsed : []
   }
 
   async function fetchShiftTemplates24h() {
@@ -542,7 +513,6 @@ export function useAdminShifts() {
     try {
       const response = await api.get(`${BASE}/organization/shift-type-templates-24h-list/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       shiftTemplates24h.value = response.data.data ?? response.data ?? []
       return shiftTemplates24h.value
@@ -575,7 +545,6 @@ export function useAdminShifts() {
       is_active: row.is_active ?? true,
       shifts: shifts.length
         ? shifts.map((s) => ({
-            site_id: s.site?.id ?? s.site_id ?? null,
             default_start_time: extractTime(s.start_time || s.default_start_time),
             default_end_time: extractTime(s.end_time || s.default_end_time),
           }))
@@ -595,11 +564,25 @@ export function useAdminShifts() {
       toast.warning('Please add at least one shift')
       return
     }
-    const invalid = form.shifts.filter(
-      (s) => !s.site_id || !s.default_start_time || !s.default_end_time,
-    )
+    const invalid = form.shifts.filter((s) => !s.default_start_time || !s.default_end_time)
     if (invalid.length) {
-      toast.warning('All shifts must have site, start time, and end time')
+      toast.warning('All shifts must have a start time and an end time')
+      return
+    }
+    // The endpoint takes a segment of exactly 8 hrs (work only) or 9 hrs
+    // (8 work + 1 break) and rejects the whole template otherwise, so the same
+    // rule is checked here rather than spending a round-trip on a 400.
+    const badLength = form.shifts.findIndex((s) => {
+      const hours = _shiftHours(s.default_start_time, s.default_end_time)
+      return hours !== 8 && hours !== 9
+    })
+    if (badLength !== -1) {
+      const shift = form.shifts[badLength]
+      const hours = _shiftHours(shift.default_start_time, shift.default_end_time)
+      toast.warning(
+        `Shift ${badLength + 1} runs ${hours} hrs — each shift must be exactly 8 hrs (work only) or 9 hrs (8 hrs work + 1 hr break).`,
+        { timeout: 6000 },
+      )
       return
     }
 
@@ -611,9 +594,8 @@ export function useAdminShifts() {
       name: form.name.trim(),
       company_id: parseInt(companyId.value),
       shifts: form.shifts.map((s) => ({
-        site_id: parseInt(s.site_id),
-        default_start_time: s.default_start_time,
-        default_end_time: s.default_end_time,
+        default_start_time: toApiTime(s.default_start_time),
+        default_end_time: toApiTime(s.default_end_time),
       })),
     }
     if (editingShiftTemplate24h.value) payload.is_active = form.is_active ?? true
@@ -623,14 +605,10 @@ export function useAdminShifts() {
       if (editingShiftTemplate24h.value) {
         // Mirrors the regular shift-type-template detail route; the 24h list and
         // create endpoints are the only two the API documents explicitly.
-        await api.put(`${BASE}/organization/shift-type-templates-24h/${form.id}/`, payload, {
-          headers: authHeaders(),
-        })
+        await api.put(`${BASE}/organization/shift-type-templates-24h/${form.id}/`, payload)
         toast.success('24-hour shift template updated successfully')
       } else {
-        await api.post(`${BASE}/organization/shift-type-templates-24h/create/`, payload, {
-          headers: authHeaders(),
-        })
+        await api.post(`${BASE}/organization/shift-type-templates-24h/create/`, payload)
         toast.success('24-hour shift template created successfully')
       }
       shiftTemplate24hDialog.value = false
@@ -639,22 +617,22 @@ export function useAdminShifts() {
       console.error('Error saving 24-hour shift template:', error)
       // The payload is the first thing a backend dev needs when this endpoint
       // throws, and a 500 comes back as an HTML page with nothing else in it.
-      console.error(
-        '[saveShiftTemplate24h] payload that failed:',
-        JSON.stringify(payload, null, 2),
-      )
+      console.error('[saveShiftTemplate24h] payload that failed:', JSON.stringify(payload, null, 2))
       let errorMessage = 'Failed to save 24-hour shift template'
       if (error.response?.status >= 500) {
         errorMessage = 'The server failed while saving this template (500)'
       } else if (error.response?.data && typeof error.response.data === 'object') {
-        const errors = Object.entries(error.response.data).map(
-          ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`,
-        )
+        const errors = Object.entries(error.response.data).map(([k, v]) => {
+          const text = Array.isArray(v) ? v.join(', ') : v
+          // DRF's catch-all key means nothing to whoever is filling the form;
+          // its message already reads as a sentence.
+          return k === 'non_field_errors' || k === 'detail' ? text : `${k}: ${text}`
+        })
         if (errors.length) errorMessage = errors.join(' | ')
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message
       }
-      toast.error(errorMessage, { timeout: 5000 })
+      toast.error(errorMessage, { timeout: 6000 })
     } finally {
       savingShiftTemplate24h.value = false
     }
@@ -662,15 +640,14 @@ export function useAdminShifts() {
 
   async function deleteShiftTemplate24h(template) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${template.name}"?`,
-      cancel: true,
+      title: 'Delete this template?',
+      message: `"${template.name}" is removed and can no longer be scheduled. Shifts already placed from it are not affected. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/organization/shift-type-templates-24h/${template.id}/`, {
-          headers: authHeaders(),
-        })
+        await api.delete(`${BASE}/organization/shift-type-templates-24h/${template.id}/`)
         toast.success('24-hour shift template deleted successfully')
         await fetchShiftTemplates24h()
       } catch (error) {
@@ -698,15 +675,7 @@ export function useAdminShifts() {
     let days = wd
     if (typeof days === 'string') {
       const t = days.trim()
-      days = t.startsWith('[')
-        ? (() => {
-            try {
-              return JSON.parse(t)
-            } catch {
-              return t.split(',')
-            }
-          })()
-        : t.split(',')
+      days = t.startsWith('[') ? (safeParseJson(t, null) ?? t.split(',')) : t.split(',')
     }
     const map = {
       monday: 'monday',

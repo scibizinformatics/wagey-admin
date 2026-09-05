@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useRolesAndPositions } from 'src/composables/page/useRolesAndPositions.js'
-import { BASE, authHeaders } from 'src/composables/utils/http.js'
+import { BASE } from 'src/composables/utils/http.js'
 
 export function useInvites() {
   const { companyId } = useCompany()
@@ -21,7 +21,6 @@ export function useInvites() {
     try {
       const response = await api.get(`${BASE}/user/invite-list/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       invites.value = response.data.data ?? response.data ?? []
       return invites.value
@@ -39,9 +38,7 @@ export function useInvites() {
   async function sendInvite(invitationData) {
     saving.value = true
     try {
-      const response = await api.post(`${BASE}/user/invite/`, invitationData, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/user/invite/`, invitationData)
       return response.data
     } finally {
       saving.value = false

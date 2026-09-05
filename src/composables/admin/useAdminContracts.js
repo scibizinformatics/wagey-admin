@@ -3,21 +3,24 @@ import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useCompanyStore } from 'src/stores/company'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
+import { useToast } from 'src/composables/useToast'
+import { safeParseJson } from 'src/composables/utils/storage'
 
 // Philippines Labor Code default multipliers
 export const PHILIPPINES_DEFAULT_MULTIPLIERS = {
   overtime: 1.25,
-  special_holiday: 1.30,
-  regular_holiday: 2.00,
-  night_diff: 1.10,
-  regular_holiday_ot: 2.60,
+  special_holiday: 1.3,
+  regular_holiday: 2.0,
+  night_diff: 1.1,
+  regular_holiday_ot: 2.6,
   special_holiday_ot: 1.95,
-  undertime: 0.50,
+  undertime: 0.5,
 }
 
 export function useAdminContracts() {
   const $q = useQuasar()
+  const toast = useToast()
   const { companyId } = useCompany()
   const companyStore = useCompanyStore()
   const contracts = ref([])
@@ -111,9 +114,9 @@ export function useAdminContracts() {
     loading.value = true
     try {
       const contractResults = await Promise.allSettled(
-        employees.map((emp) => api.get(`${BASE}/user/employee/contracts/${companyId.value}/${emp.id}/`, {
-          headers: authHeaders(),
-        }))
+        employees.map((emp) =>
+          api.get(`${BASE}/user/employee/contracts/${companyId.value}/${emp.id}/`),
+        ),
       )
 
       const raw = []
@@ -122,12 +125,14 @@ export function useAdminContracts() {
           const emp = employees[index]
           const c = result.value.data
           // Handle new format (direct contract object with pay_type)
-          const contractData = c.pay_type ? c : (c.contract || c)
+          const contractData = c.pay_type ? c : c.contract || c
           const ct = contractTypes.value.find((t) => t.id === contractData?.contract_type_id)
           const co = companies.find((x) => x.id === c.companies?.[0]?.company_id)
           raw.push({
             ...c,
-            employee_name: emp ? `${emp.user?.first_name || ''} ${emp.user?.last_name || ''}`.trim() : null,
+            employee_name: emp
+              ? `${emp.user?.first_name || ''} ${emp.user?.last_name || ''}`.trim()
+              : null,
             contract_type_name: contractData?.name || ct?.name || null,
             company_name: c.companies?.[0]?.company_name || co?.name || null,
           })
@@ -138,7 +143,7 @@ export function useAdminContracts() {
       return contracts.value
     } catch (error) {
       console.error('Error fetching contracts:', error)
-      $q.notify({ type: 'negative', message: 'Failed to load contracts', position: 'top' })
+      toast.error('Failed to load contracts')
     } finally {
       loading.value = false
     }
@@ -146,9 +151,7 @@ export function useAdminContracts() {
 
   async function fetchContractTypes() {
     try {
-      const response = await api.get(`${BASE}/contracts/contract-types/`, {
-        headers: authHeaders(),
-      })
+      const response = await api.get(`${BASE}/contracts/contract-types/`)
       contractTypes.value = response.data.data ?? response.data ?? []
       return contractTypes.value
     } catch (error) {
@@ -158,9 +161,7 @@ export function useAdminContracts() {
 
   async function fetchHolidayTypes() {
     try {
-      const response = await api.get(`${BASE}/attendance/holiday-types/`, {
-        headers: authHeaders(),
-      })
+      const response = await api.get(`${BASE}/attendance/holiday-types/`)
       holidayTypes.value = response.data.data ?? response.data ?? []
       return holidayTypes.value
     } catch (error) {
@@ -169,15 +170,25 @@ export function useAdminContracts() {
     }
   }
 
+  /**
+   * A 404 here is an answer, not a failure: the employee has no active
+   * contract, the normal state for anyone not yet assigned one. It is declared
+   * expected so the shared axios interceptor stays quiet about it — otherwise
+   * loading a page of contractless employees fills the console with errors and
+   * hides the real ones.
+   */
   async function fetchActiveContract(employeeId) {
     try {
       const response = await api.get(
         `${BASE}/user/employee/${companyId.value}/${employeeId}/active-contract/`,
-        { headers: authHeaders() },
+        { expectedStatuses: [404, 500] },
       )
       return response.data ?? null
     } catch (error) {
-      if (error.response?.status !== 404) {
+      const status = error.response?.status
+      if (status === 500) {
+        console.warn('Server error fetching active contract for employee:', employeeId, error)
+      } else if (status !== 404) {
         console.error('Error fetching active contract:', error)
       }
       return null
@@ -188,23 +199,29 @@ export function useAdminContracts() {
     if (!raw) return []
     if (Array.isArray(raw)) return raw.map((item) => item.id ?? item)
     if (typeof raw === 'string') {
-      try {
-        const parsed = JSON.parse(raw)
-        return Array.isArray(parsed) ? parsed : []
-      } catch {
-        return raw
-          .split(',')
-          .map((s) => parseInt(s.trim(), 10))
-          .filter((n) => !isNaN(n))
-      }
+      // A value that parses as JSON is trusted as-is; one that does not is the
+      // comma-separated id list the older endpoint returned.
+      const parsed = safeParseJson(raw, null)
+      if (parsed !== null) return Array.isArray(parsed) ? parsed : []
+      return raw
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n))
     }
     return []
   }
 
   function matchContractTypeByMultipliers(multipliers) {
     if (!multipliers || !contractTypes.value.length) return null
-    const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
-      'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+    const mKeys = [
+      'overtime_multiplier',
+      'special_holiday_multiplier',
+      'regular_holiday_multiplier',
+      'night_diff_multiplier',
+      'regular_holiday_ot_multiplier',
+      'special_holiday_ot_multiplier',
+      'undertime_multiplier',
+    ]
     for (const ct of contractTypes.value) {
       const match = mKeys.every((key) => {
         if (!multipliers[key] && !ct[key]) return true
@@ -219,7 +236,7 @@ export function useAdminContracts() {
 
   async function openDialog(fetchDeps) {
     if (!companyId.value) {
-      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+      toast.warning('Please select a company first')
       return
     }
     if (fetchDeps) await fetchDeps()
@@ -266,15 +283,11 @@ export function useAdminContracts() {
       !form.value.contract_type_id ||
       !form.value.pay_structure?.position_id
     ) {
-      $q.notify({
-        type: 'negative',
-        message: 'Please fill all required fields (Employee, Contract Type, Position)',
-        position: 'top',
-      })
+      toast.error('Please fill all required fields (Employee, Contract Type, Position)')
       return
     }
     if (!form.value.pay_structure?.rate) {
-      $q.notify({ type: 'negative', message: 'Pay rate is required', position: 'top' })
+      toast.error('Pay rate is required')
       return
     }
 
@@ -296,24 +309,18 @@ export function useAdminContracts() {
       }
 
       if (editing.value) {
-        await api.patch(`${BASE}/contracts/employee-contracts/${form.value.id}/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Contract updated successfully' })
+        await api.patch(`${BASE}/contracts/employee-contracts/${form.value.id}/`, payload)
+        toast.success('Contract updated successfully')
       } else {
-        await api.post(`${BASE}/contracts/employee-contracts/`, payload, { headers: authHeaders() })
-        $q.notify({ type: 'positive', message: 'Contract created successfully' })
+        await api.post(`${BASE}/contracts/employee-contracts/`, payload)
+        toast.success('Contract created successfully')
       }
 
       dialog.value = false
       await fetchContracts()
     } catch (error) {
       console.error('Error saving contract:', error)
-      $q.notify({
-        type: 'negative',
-        message: error.response?.data?.message || 'Failed to save contract',
-        position: 'top',
-      })
+      toast.error(error.response?.data?.message || 'Failed to save contract')
     } finally {
       saving.value = false
     }
@@ -323,7 +330,7 @@ export function useAdminContracts() {
 
   async function openAssignDialog(employee) {
     if (!companyId.value) {
-      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+      toast.warning('Please select a company first')
       return
     }
 
@@ -346,8 +353,15 @@ export function useAdminContracts() {
       assignForm.value.eligibilities = parseEligibilities(existing.eligibilities)
       assignForm.value.holiday_pay_types = existing.holiday_pay_types ?? []
       assignForm.value.contributions = existing.contributions?.map((c) => c.id ?? c) ?? []
-      const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
-        'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+      const mKeys = [
+        'overtime_multiplier',
+        'special_holiday_multiplier',
+        'regular_holiday_multiplier',
+        'night_diff_multiplier',
+        'regular_holiday_ot_multiplier',
+        'special_holiday_ot_multiplier',
+        'undertime_multiplier',
+      ]
       for (const key of mKeys) {
         assignForm.value[key] = existing[key] ?? null
       }
@@ -363,11 +377,7 @@ export function useAdminContracts() {
 
   async function assignContract() {
     if (!assignForm.value.employee_id || !assignForm.value.company_id) {
-      $q.notify({
-        type: 'negative',
-        message: 'Employee and company are required',
-        position: 'top',
-      })
+      toast.error('Employee and company are required')
       return
     }
 
@@ -376,18 +386,18 @@ export function useAdminContracts() {
       if (assignForm.value.rate) {
         const rateNum = parseFloat(assignForm.value.rate)
         if (isNaN(rateNum) || rateNum < 0) {
-          $q.notify({ type: 'negative', message: 'Rate cannot be negative', position: 'top' })
+          toast.error('Rate cannot be negative')
           return
         }
         if (rateNum < 100) {
-          $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
+          toast.error('Rate must be at least ₱100')
           return
         }
       }
       if (assignForm.value.work_hours_per_week) {
         const hoursNum = Number(assignForm.value.work_hours_per_week)
         if (hoursNum < 8 || hoursNum > 48) {
-          $q.notify({ type: 'negative', message: 'Work hours must be between 8 and 48', position: 'top' })
+          toast.error('Work hours must be between 8 and 48')
           return
         }
       }
@@ -398,42 +408,45 @@ export function useAdminContracts() {
         !assignForm.value.pay_type ||
         !assignForm.value.rate
       ) {
-        $q.notify({
-          type: 'negative',
-          message: 'Please fill all required fields (Contract Type, Pay Type, Rate, Department)',
-          position: 'top',
-        })
+        toast.error('Please fill all required fields (Contract Type, Pay Type, Rate, Department)')
         return
       }
       const rateNum = parseFloat(assignForm.value.rate)
       if (isNaN(rateNum) || rateNum < 0) {
-        $q.notify({ type: 'negative', message: 'Rate cannot be negative', position: 'top' })
+        toast.error('Rate cannot be negative')
         return
       }
       if (rateNum < 100) {
-        $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
+        toast.error('Rate must be at least ₱100')
         return
       }
       const hoursNum = assignForm.value.work_hours_per_week
         ? Number(assignForm.value.work_hours_per_week)
         : null
       if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
-        $q.notify({ type: 'negative', message: 'Work hours must be between 8 and 48', position: 'top' })
+        toast.error('Work hours must be between 8 and 48')
         return
       }
       if (!assignForm.value.department) {
-        $q.notify({ type: 'negative', message: 'Department is required', position: 'top' })
+        toast.error('Department is required')
         return
       }
     }
 
     // Validate multiplier values (reject negatives)
-    const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
-      'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+    const mKeys = [
+      'overtime_multiplier',
+      'special_holiday_multiplier',
+      'regular_holiday_multiplier',
+      'night_diff_multiplier',
+      'regular_holiday_ot_multiplier',
+      'special_holiday_ot_multiplier',
+      'undertime_multiplier',
+    ]
     for (const key of mKeys) {
       const val = assignForm.value[key]
       if (val !== null && val !== undefined && val !== '' && parseFloat(val) < 0) {
-        $q.notify({ type: 'negative', message: `${key.replace(/_/g, ' ')} cannot be negative`, position: 'top' })
+        toast.error(`${key.replace(/_/g, ' ')} cannot be negative`)
         return
       }
     }
@@ -454,7 +467,8 @@ export function useAdminContracts() {
 
       if (activeContract.value) {
         // ── Renew payload ──
-        if (assignForm.value.contract_type_id) payload.contract_type_id = assignForm.value.contract_type_id
+        if (assignForm.value.contract_type_id)
+          payload.contract_type_id = assignForm.value.contract_type_id
         if (assignForm.value.pay_type) payload.pay_type = assignForm.value.pay_type
         if (rateNum) payload.rate = String(rateNum)
         if (hoursNum) payload.work_hours_per_week = hoursNum
@@ -465,17 +479,26 @@ export function useAdminContracts() {
         payload.payroll_group = assignForm.value.payroll_group || null
         payload.eligibilities = assignForm.value.eligibilities ?? []
         payload.holiday_pay_types = assignForm.value.holiday_pay_types ?? []
-        if (assignForm.value.contributions?.length) payload.contributions = assignForm.value.contributions.map((c) => c.id ?? c)
+        if (assignForm.value.contributions?.length)
+          payload.contributions = assignForm.value.contributions.map((c) => c.id ?? c)
 
-        const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
-          'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+        const mKeys = [
+          'overtime_multiplier',
+          'special_holiday_multiplier',
+          'regular_holiday_multiplier',
+          'night_diff_multiplier',
+          'regular_holiday_ot_multiplier',
+          'special_holiday_ot_multiplier',
+          'undertime_multiplier',
+        ]
         for (const key of mKeys) {
           const val = assignForm.value[key]
           if (val !== null && val !== undefined) payload[key] = String(val)
         }
       } else {
         // ── Create payload ──
-        if (assignForm.value.contract_type_id) payload.contract_type_id = assignForm.value.contract_type_id
+        if (assignForm.value.contract_type_id)
+          payload.contract_type_id = assignForm.value.contract_type_id
         payload.pay_type = assignForm.value.pay_type
         payload.rate = String(rateNum)
         if (hoursNum) payload.work_hours_per_week = hoursNum
@@ -486,10 +509,18 @@ export function useAdminContracts() {
         payload.payroll_group = assignForm.value.payroll_group || null
         payload.eligibilities = assignForm.value.eligibilities ?? []
         payload.holiday_pay_types = assignForm.value.holiday_pay_types ?? []
-        if (assignForm.value.contributions?.length) payload.contributions = assignForm.value.contributions.map((c) => c.id ?? c)
+        if (assignForm.value.contributions?.length)
+          payload.contributions = assignForm.value.contributions.map((c) => c.id ?? c)
 
-        const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
-          'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+        const mKeys = [
+          'overtime_multiplier',
+          'special_holiday_multiplier',
+          'regular_holiday_multiplier',
+          'night_diff_multiplier',
+          'regular_holiday_ot_multiplier',
+          'special_holiday_ot_multiplier',
+          'undertime_multiplier',
+        ]
         for (const key of mKeys) {
           const val = assignForm.value[key]
           if (val !== null && val !== undefined) payload[key] = String(val)
@@ -506,14 +537,11 @@ export function useAdminContracts() {
         await api.post(
           `${BASE}/user/employee/${payload.company_id}/${payload.employee_id}/renew-contract/`,
           payload,
-          { headers: authHeaders() },
         )
-        $q.notify({ type: 'positive', message: 'Contract renewed successfully', position: 'top' })
+        toast.success('Contract renewed successfully')
       } else {
-        await api.post(`${BASE}/user/employment-contracts/create/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Contract assigned successfully', position: 'top' })
+        await api.post(`${BASE}/user/employment-contracts/create/`, payload)
+        toast.success('Contract assigned successfully')
       }
       contractAssigned.value = assignForm.value.employee_id
       assignDialog.value = false
@@ -527,12 +555,7 @@ export function useAdminContracts() {
             .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
             .join(' | ')
         : 'Failed to assign contract'
-      $q.notify({
-        type: 'negative',
-        message,
-        position: 'top',
-        timeout: 8000,
-      })
+      toast.error(message, { timeout: 8000 })
     } finally {
       assigning.value = false
     }
@@ -543,11 +566,11 @@ export function useAdminContracts() {
   async function bulkAssignContract(employeeIds) {
     const rateNum = parseFloat(assignForm.value.rate)
     if (isNaN(rateNum) || rateNum < 0) {
-      $q.notify({ type: 'negative', message: 'Rate cannot be negative', position: 'top' })
+      toast.error('Rate cannot be negative')
       return { successCount: 0, failCount: 0 }
     }
     if (rateNum < 100) {
-      $q.notify({ type: 'negative', message: 'Rate must be at least ₱100', position: 'top' })
+      toast.error('Rate must be at least ₱100')
       return { successCount: 0, failCount: 0 }
     }
 
@@ -555,12 +578,12 @@ export function useAdminContracts() {
       ? Number(assignForm.value.work_hours_per_week)
       : null
     if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
-      $q.notify({ type: 'negative', message: 'Work hours must be between 8 and 48', position: 'top' })
+      toast.error('Work hours must be between 8 and 48')
       return { successCount: 0, failCount: 0 }
     }
 
     if (!assignForm.value.department) {
-      $q.notify({ type: 'negative', message: 'Department is required', position: 'top' })
+      toast.error('Department is required')
       return { successCount: 0, failCount: 0 }
     }
 
@@ -576,20 +599,29 @@ export function useAdminContracts() {
           contract_type_id: assignForm.value.contract_type_id,
           pay_type: assignForm.value.pay_type,
           rate: String(rateNum),
-        work_hours_per_week: hoursNum,
+          work_hours_per_week: hoursNum,
           position: assignForm.value.position ? Number(assignForm.value.position) : null,
-        department: Number(assignForm.value.department),
-        department_id: Number(assignForm.value.department || 0),
-        payroll_group_id: assignForm.value.payroll_group_id || null,
-        payroll_group: assignForm.value.payroll_group || null,
-        year: assignForm.value.year ? Number(assignForm.value.year) : null,
-        month: assignForm.value.month ? Number(assignForm.value.month) : null,
-        eligibilities: assignForm.value.eligibilities ?? [],
-        holiday_pay_types: assignForm.value.holiday_pay_types ?? [],
-        contributions: assignForm.value.contributions?.length ? assignForm.value.contributions.map((c) => c.id ?? c) : [],
-      }
-        const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
-          'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+          department: Number(assignForm.value.department),
+          department_id: Number(assignForm.value.department || 0),
+          payroll_group_id: assignForm.value.payroll_group_id || null,
+          payroll_group: assignForm.value.payroll_group || null,
+          year: assignForm.value.year ? Number(assignForm.value.year) : null,
+          month: assignForm.value.month ? Number(assignForm.value.month) : null,
+          eligibilities: assignForm.value.eligibilities ?? [],
+          holiday_pay_types: assignForm.value.holiday_pay_types ?? [],
+          contributions: assignForm.value.contributions?.length
+            ? assignForm.value.contributions.map((c) => c.id ?? c)
+            : [],
+        }
+        const mKeys = [
+          'overtime_multiplier',
+          'special_holiday_multiplier',
+          'regular_holiday_multiplier',
+          'night_diff_multiplier',
+          'regular_holiday_ot_multiplier',
+          'special_holiday_ot_multiplier',
+          'undertime_multiplier',
+        ]
         for (const key of mKeys) {
           if (assignForm.value[key]) payload[key] = String(assignForm.value[key])
         }
@@ -597,9 +629,7 @@ export function useAdminContracts() {
         if (!payload.position) delete payload.position
         if (!payload.contract_type_id) delete payload.contract_type_id
 
-        await api.post(`${BASE}/user/employment-contracts/create/`, payload, {
-          headers: authHeaders(),
-        })
+        await api.post(`${BASE}/user/employment-contracts/create/`, payload)
         successCount++
       } catch {
         failCount++
@@ -617,20 +647,19 @@ export function useAdminContracts() {
 
   async function deleteContract(contract) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete this contract for "${contract.employee_name}"?`,
-      cancel: true,
+      title: 'Delete this contract?',
+      message: `The contract for ${contract.employee_name} is removed, along with the pay terms it sets. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/contracts/employee-contracts/${contract.id}/`, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Contract deleted successfully' })
+        await api.delete(`${BASE}/contracts/employee-contracts/${contract.id}/`)
+        toast.success('Contract deleted successfully')
         await fetchContracts()
       } catch (error) {
         console.error('Error deleting contract:', error)
-        $q.notify({ type: 'negative', message: 'Failed to delete contract' })
+        toast.error('Failed to delete contract')
       }
     })
   }

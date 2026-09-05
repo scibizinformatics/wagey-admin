@@ -135,6 +135,20 @@ export function useDisbursementApi() {
     return data
   }
 
+  /**
+   * Undoes a manual or automatic deduction, putting the named contributions
+   * back to pending. The mirror of `deductContributions` and the way out of a
+   * contribution deducted from the wrong cutoff; same refetch obligation, since
+   * reverting moves the item's contribution status back off complete.
+   */
+  async function revertContributions(epiId, contributionIds = []) {
+    const { data } = await api.post(`${BASE}/payroll/admin/revert-contributions/`, {
+      epi_id: epiId,
+      contribution_ids: contributionIds,
+    })
+    return data
+  }
+
   async function fetchEmployeePayrollItem(id) {
     const { data } = await api.get(`${BASE}/payroll/admin/employee-payroll-item/${id}/`)
     return data
@@ -255,6 +269,7 @@ export function useDisbursementApi() {
     fetchEmployeeReviewSummary,
     fetchEpiContributions,
     deductContributions,
+    revertContributions,
     fetchEmployeePayrollItem,
     fetchPayslipOverview,
     fetchEmployeePayslips,

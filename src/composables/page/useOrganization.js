@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
 
 export function useOrganization() {
   const { companyId } = useCompany()
@@ -21,7 +21,6 @@ export function useOrganization() {
     try {
       const response = await api.get(`${BASE}/organization/sites/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
       sites.value = Array.isArray(data) ? data : []
@@ -34,9 +33,7 @@ export function useOrganization() {
   async function createSite(payload) {
     saving.value = true
     try {
-      const response = await api.post(`${BASE}/organization/sites/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/organization/sites/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -46,9 +43,7 @@ export function useOrganization() {
   async function updateSite(siteId, payload) {
     saving.value = true
     try {
-      const response = await api.put(`${BASE}/organization/sites/${siteId}/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.put(`${BASE}/organization/sites/${siteId}/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -56,9 +51,7 @@ export function useOrganization() {
   }
 
   async function deleteSite(siteId) {
-    const response = await api.delete(`${BASE}/organization/sites/${siteId}/`, {
-      headers: authHeaders(),
-    })
+    const response = await api.delete(`${BASE}/organization/sites/${siteId}/`)
     return response.data
   }
 
@@ -69,7 +62,6 @@ export function useOrganization() {
     try {
       const response = await api.get(`${BASE}/organization/departments/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
       departments.value = Array.isArray(data) ? data : []
@@ -82,9 +74,7 @@ export function useOrganization() {
   async function createDepartment(payload) {
     saving.value = true
     try {
-      const response = await api.post(`${BASE}/organization/departments/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/organization/departments/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -94,9 +84,7 @@ export function useOrganization() {
   async function updateDepartment(deptId, payload) {
     saving.value = true
     try {
-      const response = await api.put(`${BASE}/organization/departments/${deptId}/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.put(`${BASE}/organization/departments/${deptId}/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -104,9 +92,7 @@ export function useOrganization() {
   }
 
   async function deleteDepartment(deptId) {
-    const response = await api.delete(`${BASE}/organization/departments/${deptId}/`, {
-      headers: authHeaders(),
-    })
+    const response = await api.delete(`${BASE}/organization/departments/${deptId}/`)
     return response.data
   }
 
@@ -118,7 +104,6 @@ export function useOrganization() {
     try {
       const response = await api.get(`${BASE}/organization/shift-types/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
       shiftTypes.value = Array.isArray(data) ? data : []
@@ -131,9 +116,7 @@ export function useOrganization() {
   async function createShiftType(payload) {
     saving.value = true
     try {
-      const response = await api.post(`${BASE}/organization/shift-types/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.post(`${BASE}/organization/shift-types/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -143,9 +126,7 @@ export function useOrganization() {
   async function updateShiftType(shiftId, payload) {
     saving.value = true
     try {
-      const response = await api.put(`${BASE}/organization/shift-types/${shiftId}/`, payload, {
-        headers: authHeaders(),
-      })
+      const response = await api.put(`${BASE}/organization/shift-types/${shiftId}/`, payload)
       return response.data
     } finally {
       saving.value = false
@@ -153,9 +134,7 @@ export function useOrganization() {
   }
 
   async function deleteShiftType(shiftId) {
-    const response = await api.delete(`${BASE}/organization/shift-types/${shiftId}/`, {
-      headers: authHeaders(),
-    })
+    const response = await api.delete(`${BASE}/organization/shift-types/${shiftId}/`)
     return response.data
   }
 
@@ -167,7 +146,6 @@ export function useOrganization() {
     try {
       const response = await api.get(`${BASE}/organization/recurring-schedules/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
       recurringSchedules.value = Array.isArray(data) ? data : []
@@ -184,7 +162,6 @@ export function useOrganization() {
     try {
       const response = await api.get(`${BASE}/payroll/cost-centers/`, {
         params: { company: overrideCompanyId ?? companyId.value },
-        headers: authHeaders(),
       })
       const data = response.data.data ?? response.data ?? []
       costCenters.value = Array.isArray(data) ? data : []
@@ -202,9 +179,7 @@ export function useOrganization() {
    */
   async function fetchCompanies() {
     try {
-      const response = await api.get(`${BASE}/organization/companies/`, {
-        headers: authHeaders(),
-      })
+      const response = await api.get(`${BASE}/organization/companies/`)
       return response.data.data ?? response.data ?? []
     } catch (error) {
       console.error('[fetchCompanies] failed:', error)
@@ -214,9 +189,7 @@ export function useOrganization() {
 
   async function fetchCurrentUserCompanies() {
     try {
-      const response = await api.get(`${BASE}/user/current-user-companies/`, {
-        headers: authHeaders(),
-      })
+      const response = await api.get(`${BASE}/user/current-user-companies/`)
       return response.data.data ?? response.data ?? []
     } catch (error) {
       console.error('[fetchCurrentUserCompanies] failed:', error)
@@ -225,23 +198,17 @@ export function useOrganization() {
   }
 
   async function createCompany(formData) {
-    const response = await api.post(`${BASE}/organization/companies/create/`, formData, {
-      headers: authHeaders(),
-    })
+    const response = await api.post(`${BASE}/organization/companies/create/`, formData)
     return response.data
   }
 
   async function updateCompany(id, payload) {
-    const response = await api.put(`${BASE}/organization/companies/${id}/`, payload, {
-      headers: authHeaders(),
-    })
+    const response = await api.put(`${BASE}/organization/companies/${id}/`, payload)
     return response.data
   }
 
   async function deleteCompany(id) {
-    const response = await api.delete(`${BASE}/organization/companies/${id}/`, {
-      headers: authHeaders(),
-    })
+    const response = await api.delete(`${BASE}/organization/companies/${id}/`)
     return response.data
   }
 

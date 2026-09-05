@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
 
 export function useAdminDepartmentPolicies() {
   const { companyId } = useCompany()
@@ -18,7 +18,6 @@ export function useAdminDepartmentPolicies() {
     try {
       const response = await api.get(`${BASE}/access/department-policies/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       policies.value = response.data.data ?? response.data ?? []
       return policies.value

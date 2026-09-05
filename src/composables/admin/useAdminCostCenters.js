@@ -2,7 +2,8 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
+import { useToast } from 'src/composables/useToast'
 
 function defaultBankAccount() {
   return {
@@ -25,6 +26,7 @@ function defaultForm(companyId = null) {
 
 export function useAdminCostCenters() {
   const $q = useQuasar()
+  const toast = useToast()
   const { companyId } = useCompany()
 
   const costCenters = ref([])
@@ -47,17 +49,12 @@ export function useAdminCostCenters() {
     try {
       const response = await api.get(`${BASE}/payroll/cost-centers/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       costCenters.value = response.data.data ?? response.data ?? []
       return costCenters.value
     } catch (error) {
       console.error('Error fetching cost centers:', error)
-      $q.notify({
-        type: 'negative',
-        message: error.response?.data?.message || 'Failed to load cost centers',
-        position: 'top',
-      })
+      toast.error(error.response?.data?.message || 'Failed to load cost centers')
     } finally {
       loading.value = false
     }
@@ -67,7 +64,7 @@ export function useAdminCostCenters() {
 
   function openDialog() {
     if (!companyId.value) {
-      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+      toast.warning('Please select a company first')
       return
     }
     editing.value = false
@@ -106,12 +103,12 @@ export function useAdminCostCenters() {
 
   async function saveCostCenter() {
     if (!form.value.name.trim()) {
-      $q.notify({ type: 'negative', message: 'Cost center name is required', position: 'top' })
+      toast.error('Cost center name is required')
       return
     }
     const cId = form.value.company || companyId.value
     if (!cId) {
-      $q.notify({ type: 'negative', message: 'Company ID is required', position: 'top' })
+      toast.error('Company ID is required')
       return
     }
 
@@ -130,13 +127,11 @@ export function useAdminCostCenters() {
       }
 
       if (editing.value) {
-        await api.put(`${BASE}/payroll/cost-centers/${form.value.id}/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Cost center updated successfully' })
+        await api.put(`${BASE}/payroll/cost-centers/${form.value.id}/`, payload)
+        toast.success('Cost center updated successfully')
       } else {
-        await api.post(`${BASE}/payroll/cost-centers/`, payload, { headers: authHeaders() })
-        $q.notify({ type: 'positive', message: 'Cost center created successfully' })
+        await api.post(`${BASE}/payroll/cost-centers/`, payload)
+        toast.success('Cost center created successfully')
       }
 
       dialog.value = false
@@ -149,7 +144,7 @@ export function useAdminCostCenters() {
         else if (error.response.data.message) errorMessage = error.response.data.message
         else if (error.response.data.error) errorMessage = error.response.data.error
       }
-      $q.notify({ type: 'negative', message: errorMessage, position: 'top' })
+      toast.error(errorMessage)
     } finally {
       saving.value = false
     }
@@ -159,24 +154,19 @@ export function useAdminCostCenters() {
 
   async function deleteCostCenter(costCenter) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${costCenter.name}"?`,
-      cancel: true,
+      title: 'Delete this cost center?',
+      message: `"${costCenter.name}" is removed and can no longer be charged to. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/payroll/cost-centers/${costCenter.id}/`, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Cost center deleted successfully' })
+        await api.delete(`${BASE}/payroll/cost-centers/${costCenter.id}/`)
+        toast.success('Cost center deleted successfully')
         await fetchCostCenters()
       } catch (error) {
         console.error('Error deleting cost center:', error)
-        $q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to delete cost center',
-          position: 'top',
-        })
+        toast.error(error.response?.data?.message || 'Failed to delete cost center')
       }
     })
   }

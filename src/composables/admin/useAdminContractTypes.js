@@ -3,11 +3,13 @@ import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
 import { usePayroll } from 'src/composables/page/usePayroll'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
 import { PHILIPPINES_DEFAULT_MULTIPLIERS } from './useAdminContracts.js'
+import { useToast } from 'src/composables/useToast'
 
 export function useAdminContractTypes() {
   const $q = useQuasar()
+  const toast = useToast()
   const { companyId } = useCompany()
   const { fetchCustomMultipliers } = usePayroll()
 
@@ -106,7 +108,6 @@ export function useAdminContractTypes() {
     try {
       const response = await api.get(`${BASE}/organization/contract-types/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       const all = response.data.data ?? response.data ?? []
 
@@ -116,7 +117,7 @@ export function useAdminContractTypes() {
       return contractTypes.value
     } catch (error) {
       console.error('Error fetching contract types:', error)
-      $q.notify({ type: 'negative', message: 'Failed to load contract types', position: 'top' })
+      toast.error('Failed to load contract types')
     } finally {
       loading.value = false
     }
@@ -124,9 +125,7 @@ export function useAdminContractTypes() {
 
   async function fetchEligibilities() {
     try {
-      const response = await api.get(`${BASE}/access/payroll-eligibilities/`, {
-        headers: authHeaders(),
-      })
+      const response = await api.get(`${BASE}/access/payroll-eligibilities/`)
       const data = response.data.data ?? response.data ?? []
       eligibilities.value = Array.isArray(data) ? data : []
       return eligibilities.value
@@ -138,9 +137,7 @@ export function useAdminContractTypes() {
 
   async function fetchContributions() {
     try {
-      const response = await api.get(`${BASE}/payroll/contributions/${companyId.value}/`, {
-        headers: authHeaders(),
-      })
+      const response = await api.get(`${BASE}/payroll/contributions/${companyId.value}/`)
       const data = response.data.data ?? response.data ?? []
       contributions.value = Array.isArray(data) ? data : []
       return contributions.value
@@ -164,7 +161,7 @@ export function useAdminContractTypes() {
 
   async function openDialog() {
     if (!companyId.value) {
-      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+      toast.warning('Please select a company first')
       return
     }
     await fetchCompanyMultipliersForForm()
@@ -272,7 +269,7 @@ export function useAdminContractTypes() {
 
   async function saveContractType() {
     if (!form.value.name) {
-      $q.notify({ type: 'negative', message: 'Contract type name is required', position: 'top' })
+      toast.error('Contract type name is required')
       return
     }
 
@@ -290,11 +287,7 @@ export function useAdminContractTypes() {
     for (const key of multiplierKeys) {
       const num = Number(form.value[`${key}_multiplier`])
       if (isNaN(num) || num < 0) {
-        $q.notify({
-          type: 'negative',
-          message: `${key.replace(/_/g, ' ')} multiplier must be a valid number ≥ 0`,
-          position: 'top',
-        })
+        toast.error(`${key.replace(/_/g, ' ')} multiplier must be a valid number ≥ 0`)
         return
       }
       multiplierPayload[`${key}_multiplier`] = num
@@ -315,26 +308,18 @@ export function useAdminContractTypes() {
       }
 
       if (editing.value) {
-        await api.patch(`${BASE}/organization/contract-types/${form.value.id}/update/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Contract type updated successfully' })
+        await api.patch(`${BASE}/organization/contract-types/${form.value.id}/update/`, payload)
+        toast.success('Contract type updated successfully')
       } else {
-        await api.post(`${BASE}/organization/contract-types/create/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Contract type created successfully' })
+        await api.post(`${BASE}/organization/contract-types/create/`, payload)
+        toast.success('Contract type created successfully')
       }
 
       dialog.value = false
       await fetchContractTypes()
     } catch (error) {
       console.error('Error saving contract type:', error)
-      $q.notify({
-        type: 'negative',
-        message: error.response?.data?.message || 'Failed to save contract type',
-        position: 'top',
-      })
+      toast.error(error.response?.data?.message || 'Failed to save contract type')
     } finally {
       saving.value = false
     }
@@ -342,20 +327,19 @@ export function useAdminContractTypes() {
 
   async function deleteContractType(contractType) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${contractType.name}"?`,
-      cancel: true,
+      title: 'Delete this contract type?',
+      message: `"${contractType.name}" is removed and can no longer be assigned. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/organization/contract-types/${contractType.id}/delete/`, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Contract type deleted successfully' })
+        await api.delete(`${BASE}/organization/contract-types/${contractType.id}/delete/`)
+        toast.success('Contract type deleted successfully')
         await fetchContractTypes()
       } catch (error) {
         console.error('Error deleting contract type:', error)
-        $q.notify({ type: 'negative', message: 'Failed to delete contract type' })
+        toast.error('Failed to delete contract type')
       }
     })
   }

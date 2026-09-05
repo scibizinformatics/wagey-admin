@@ -2,10 +2,12 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
+import { useToast } from 'src/composables/useToast'
 
 export function useAdminSites() {
   const $q = useQuasar()
+  const toast = useToast()
   const { companyId } = useCompany()
 
   const sites = ref([])
@@ -46,17 +48,12 @@ export function useAdminSites() {
     try {
       const response = await api.get(`${BASE}/organization/sites/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       sites.value = response.data.data ?? response.data ?? []
       return sites.value
     } catch (error) {
       console.error('Error fetching sites:', error)
-      $q.notify({
-        type: 'negative',
-        message: error.response?.data?.message || 'Failed to load sites',
-        position: 'top',
-      })
+      toast.error(error.response?.data?.message || 'Failed to load sites')
     } finally {
       loading.value = false
     }
@@ -116,19 +113,15 @@ export function useAdminSites() {
 
   async function saveSite() {
     if (!form.value.name.trim()) {
-      $q.notify({ type: 'negative', message: 'Site name is required', position: 'top' })
+      toast.error('Site name is required')
       return
     }
     if (!form.value.location.trim()) {
-      $q.notify({ type: 'negative', message: 'Location is required', position: 'top' })
+      toast.error('Location is required')
       return
     }
     if (!form.value.latitude || !form.value.longitude) {
-      $q.notify({
-        type: 'negative',
-        message: 'Latitude and longitude are required',
-        position: 'top',
-      })
+      toast.error('Latitude and longitude are required')
       return
     }
 
@@ -159,13 +152,11 @@ export function useAdminSites() {
       if (form.value.business_type) payload.business_type = form.value.business_type
 
       if (editing.value) {
-        await api.put(`${BASE}/organization/sites/${form.value.id}/`, payload, {
-          headers: authHeaders(),
-        })
-        $q.notify({ type: 'positive', message: 'Site updated successfully', position: 'top' })
+        await api.put(`${BASE}/organization/sites/${form.value.id}/`, payload)
+        toast.success('Site updated successfully')
       } else {
-        await api.post(`${BASE}/organization/sites/`, payload, { headers: authHeaders() })
-        $q.notify({ type: 'positive', message: 'Site created successfully', position: 'top' })
+        await api.post(`${BASE}/organization/sites/`, payload)
+        toast.success('Site created successfully')
       }
 
       dialog.value = false
@@ -184,7 +175,7 @@ export function useAdminSites() {
           errorMessage = d
         }
       }
-      $q.notify({ type: 'negative', message: errorMessage, position: 'top', timeout: 3000 })
+      toast.error(errorMessage, { timeout: 3000 })
     } finally {
       saving.value = false
     }
@@ -194,23 +185,19 @@ export function useAdminSites() {
 
   async function deleteSite(site) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${site.name}"?`,
-      cancel: { color: 'grey', flat: true },
-      ok: { color: 'negative', label: 'Delete' },
+      title: 'Delete this site?',
+      message: `"${site.name}" is removed, along with its position requirements. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/organization/sites/${site.id}/`, { headers: authHeaders() })
-        $q.notify({ type: 'positive', message: 'Site deleted successfully', position: 'top' })
+        await api.delete(`${BASE}/organization/sites/${site.id}/`)
+        toast.success('Site deleted successfully')
         await fetchSites()
       } catch (error) {
         console.error('Error deleting site:', error)
-        $q.notify({
-          type: 'negative',
-          message: error.response?.data?.message || 'Failed to delete site',
-          position: 'top',
-        })
+        toast.error(error.response?.data?.message || 'Failed to delete site')
       }
     })
   }

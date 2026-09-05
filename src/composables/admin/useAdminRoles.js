@@ -2,7 +2,8 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE, extractErrorMessage } from 'src/composables/utils/http'
+import { useToast } from 'src/composables/useToast'
 
 export const PERMISSION_FIELDS = [
   { key: 'can_view_dashboard', label: 'View Dashboard' },
@@ -23,6 +24,7 @@ const PERM_LABEL_MAP = Object.fromEntries(PERMISSION_FIELDS.map((p) => [p.key, p
 
 export function useAdminRoles() {
   const $q = useQuasar()
+  const toast = useToast()
   const { companyId } = useCompany()
 
   const roles = ref([])
@@ -72,18 +74,13 @@ export function useAdminRoles() {
     try {
       const response = await api.get(`${BASE}/user/user-roles/`, {
         params: { company: companyId.value },
-        headers: authHeaders(),
       })
       const d = response.data
       roles.value = d.data ?? d.results ?? (Array.isArray(d) ? d : [])
       return roles.value
     } catch (error) {
       console.error('Error fetching roles:', error)
-      $q.notify({
-        type: 'negative',
-        message: error.response?.data?.message || 'Failed to load roles',
-        position: 'top',
-      })
+      toast.error(error.response?.data?.message || 'Failed to load roles')
       roles.value = []
     } finally {
       loading.value = false
@@ -94,7 +91,7 @@ export function useAdminRoles() {
 
   function openDialog() {
     if (!companyId.value) {
-      $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+      toast.warning('Please select a company first')
       return
     }
     editing.value = false
@@ -105,7 +102,7 @@ export function useAdminRoles() {
   function openEditDialog(role) {
     const roleId = role.id ?? role.role_id ?? role.pk ?? null
     if (!roleId) {
-      $q.notify({ type: 'negative', message: 'Role ID is missing.', position: 'top' })
+      toast.error('Role ID is missing.')
       return
     }
     editing.value = true
@@ -123,20 +120,16 @@ export function useAdminRoles() {
 
   async function saveRole() {
     if (!form.value.name.trim()) {
-      $q.notify({ type: 'negative', message: 'Role name is required', position: 'top' })
+      toast.error('Role name is required')
       return
     }
     const cId = form.value.company || companyId.value
     if (!cId) {
-      $q.notify({ type: 'negative', message: 'Company ID is missing', position: 'top' })
+      toast.error('Company ID is missing')
       return
     }
     if (editing.value && !form.value.id) {
-      $q.notify({
-        type: 'negative',
-        message: 'Cannot update: Role ID is missing.',
-        position: 'top',
-      })
+      toast.error('Cannot update: Role ID is missing.')
       return
     }
 
@@ -147,32 +140,22 @@ export function useAdminRoles() {
       )
 
       if (editing.value) {
-        await api.patch(
-          `${BASE}/user/user-roles/${form.value.id}/`,
-          { name: form.value.name.trim(), permissions },
-          { headers: authHeaders() },
-        )
-        $q.notify({ type: 'positive', message: 'Role updated successfully', position: 'top' })
+        await api.patch(`${BASE}/user/user-roles/${form.value.id}/`, {
+          name: form.value.name.trim(),
+          permissions,
+        })
+        toast.success('Role updated successfully')
       } else {
-        await api.post(
-          `${BASE}/user/user-roles/`,
-          { name: form.value.name.trim(), permissions },
-          { headers: authHeaders() },
-        )
-        $q.notify({ type: 'positive', message: 'Role created successfully', position: 'top' })
+        await api.post(`${BASE}/user/user-roles/`, { name: form.value.name.trim(), permissions })
+        toast.success('Role created successfully')
       }
 
       dialog.value = false
       await fetchRoles()
     } catch (error) {
       console.error('Error saving role:', error)
-      const msg =
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        error.response?.data?.non_field_errors?.[0] ||
-        (typeof error.response?.data === 'string' ? error.response.data : null) ||
-        `Request failed (${error.response?.status})`
-      $q.notify({ type: 'negative', message: msg, position: 'top', timeout: 6000 })
+      const msg = extractErrorMessage(error, 'Failed to save role')
+      toast.error(msg, { timeout: 6000 })
     } finally {
       saving.value = false
     }
@@ -182,14 +165,15 @@ export function useAdminRoles() {
 
   async function deleteRole(role) {
     $q.dialog({
-      title: 'Confirm Delete',
-      message: `Are you sure you want to delete "${role.name}"?`,
-      cancel: true,
+      title: 'Delete this role?',
+      message: `"${role.name}" is removed, along with the permissions it grants. This cannot be undone.`,
+      cancel: { label: 'Cancel', flat: true },
+      ok: { label: 'Delete', color: 'negative', unelevated: true },
       persistent: true,
     }).onOk(async () => {
       try {
-        await api.delete(`${BASE}/user/user-roles/${role.id}/`, { headers: authHeaders() })
-        $q.notify({ type: 'positive', message: 'Role deleted successfully' })
+        await api.delete(`${BASE}/user/user-roles/${role.id}/`)
+        toast.success('Role deleted successfully')
         await fetchRoles()
       } catch (error) {
         console.error('Error deleting role:', error)
@@ -197,7 +181,7 @@ export function useAdminRoles() {
           error.response?.status === 404
             ? 'Role not found. It may have been already deleted.'
             : error.response?.data?.message || 'Failed to delete role'
-        $q.notify({ type: 'negative', message })
+        toast.error(message)
         await fetchRoles()
       }
     })

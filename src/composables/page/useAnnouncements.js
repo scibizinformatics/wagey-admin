@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { resolvedCompanyId } from 'src/composables/page/useCompany'
 import { useCompanyStore } from 'src/stores/company'
-import { BASE, authHeaders } from 'src/composables/utils/http'
+import { BASE } from 'src/composables/utils/http'
 
 /** Thrown instead of firing a company-less request, so the caller can say so. */
 export const NO_COMPANY = 'No company selected'
@@ -77,7 +77,6 @@ export function useAnnouncements() {
           ...toContractParams({ payrollGroupId, positionId, departmentId, payType }),
           ...rest,
         },
-        headers: authHeaders(),
       })
       announcements.value = onlyThisCompany(toList(response.data), companyId.value)
       return announcements.value
@@ -130,7 +129,6 @@ export function useAnnouncements() {
       const response = await api.post(
         `${BASE}/communication/announcements/create/`,
         { ...payload, company },
-        { headers: authHeaders() },
       )
       warnOnDroppedTargets(payload, response.data)
       return response.data
@@ -148,7 +146,6 @@ export function useAnnouncements() {
       const response = await api.put(
         `${BASE}/communication/announcements/${announcementId}/`,
         { ...payload, company },
-        { headers: authHeaders() },
       )
       return response.data
     } finally {
@@ -161,7 +158,6 @@ export function useAnnouncements() {
   async function deleteAnnouncement(announcementId) {
     const response = await api.delete(`${BASE}/communication/announcements/${announcementId}/`, {
       params: companyParams(),
-      headers: authHeaders(),
     })
     return response.data
   }
