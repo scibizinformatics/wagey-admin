@@ -109,33 +109,50 @@
             </q-td>
           </template>
 
-          <!-- Attendance that needs a person. A zero is muted like any other
-               count; a real figure is not merely inked but toned — amber for
-               days the system found odd, red for days already flagged — because
-               this is the one place on the row where a number is a problem
-               rather than an amount. A manual entry is a fact about how the day
-               was recorded, not a fault, so it stays neutral. -->
+          <!-- Attendance that needs a person. Suspicious and flagged days each
+               read as `resolved/total`, so the pair that only means something
+               together stays in one cell instead of the resolved half sitting in
+               a column of its own. A zero is muted like any other count; a row
+               with something still outstanding is not merely inked but toned —
+               amber for days the system found odd, red for days already flagged
+               — because this is the one place on the row where a number is a
+               problem rather than an amount. Once every day has been dealt with
+               the tone drops away: the figure is history, not work. A manual
+               entry is a fact about how the day was recorded, not a fault, so it
+               stays neutral. -->
           <template #body-cell-suspicious_attendance_count="props">
             <q-td :props="props">
-              <span
-                class="dash-num"
-                :class="
-                  props.row.suspicious_attendance_count ? 'num-warn' : 'num-zero'
-                "
-              >
-                {{ props.row.suspicious_attendance_count ?? 0 }}
+              <span class="dash-num" :class="pairTone(props.row, 'suspicious', 'num-warn')">
+                <template v-if="attendancePair(props.row, 'suspicious').total">
+                  <span class="count-pair__done">{{
+                    attendancePair(props.row, 'suspicious').resolved
+                  }}</span
+                  ><span class="count-pair__sep">/</span
+                  >{{ attendancePair(props.row, 'suspicious').total }}
+                </template>
+                <template v-else>0</template>
               </span>
+              <q-tooltip v-if="attendancePair(props.row, 'suspicious').total" :delay="400">
+                {{ pairTitle(props.row, 'suspicious', 'suspicious') }}
+              </q-tooltip>
             </q-td>
           </template>
 
           <template #body-cell-flagged_attendance_count="props">
             <q-td :props="props">
-              <span
-                class="dash-num"
-                :class="props.row.flagged_attendance_count ? 'num-critical' : 'num-zero'"
-              >
-                {{ props.row.flagged_attendance_count ?? 0 }}
+              <span class="dash-num" :class="pairTone(props.row, 'flagged', 'num-critical')">
+                <template v-if="attendancePair(props.row, 'flagged').total">
+                  <span class="count-pair__done">{{
+                    attendancePair(props.row, 'flagged').resolved
+                  }}</span
+                  ><span class="count-pair__sep">/</span
+                  >{{ attendancePair(props.row, 'flagged').total }}
+                </template>
+                <template v-else>0</template>
               </span>
+              <q-tooltip v-if="attendancePair(props.row, 'flagged').total" :delay="400">
+                {{ pairTitle(props.row, 'flagged', 'flagged') }}
+              </q-tooltip>
             </q-td>
           </template>
 
@@ -389,6 +406,39 @@ function amount(val) {
 }
 
 /**
+ * Suspicious and flagged attendance each arrive as two numbers: how many days
+ * the run found, and how many of those somebody has already resolved. Neither
+ * says much alone — nine suspicious days matter or not depending on whether
+ * they have been looked at — so the table shows them as one `resolved/total`
+ * reading and derives everything else here: `outstanding` is what still needs a
+ * person, and drives both the column's sort and its tone.
+ *
+ * `resolved` is clamped to the total so a payload that over-counts resolutions
+ * cannot produce a negative outstanding and sort itself above the rows that do
+ * need attention.
+ */
+function attendancePair(row, kind) {
+  const total = amount(row[`${kind}_attendance_count`])
+  const resolved = Math.min(amount(row[`resolved_${kind}_attendance_count`]), total)
+  return { total, resolved, outstanding: total - resolved }
+}
+
+/** Tone the cell only while days are outstanding: muted at zero, plain once cleared. */
+function pairTone(row, kind, toneClass) {
+  const { total, outstanding } = attendancePair(row, kind)
+  if (!total) return 'num-zero'
+  return outstanding ? toneClass : ''
+}
+
+/** Spells the ratio out, which is quicker to trust than reading "2/9" as a fraction. */
+function pairTitle(row, kind, noun) {
+  const { total, resolved, outstanding } = attendancePair(row, kind)
+  const days = total === 1 ? 'day' : 'days'
+  if (!outstanding) return `All ${total} ${noun} ${days} resolved`
+  return `${resolved} of ${total} ${noun} ${days} resolved — ${outstanding} still open`
+}
+
+/**
  * Figures are right-aligned so a column of them reads as numbers.
  *
  * The money columns sort through a `field` function that coerces to Number: the
@@ -435,18 +485,21 @@ const columns = [
   // Attendance the run could not take at face value. Each is its own column
   // rather than one total, because they call for different things: a suspicious
   // day is worth a look, a flagged one has already been called out, and a manual
-  // entry was typed in by somebody. Sortable, so a run can be read worst-first.
+  // entry was typed in by somebody. Sortable, so a run can be read worst-first —
+  // and for the two that carry a resolved count, worst means what is still
+  // outstanding rather than what the run originally found, so a row whose days
+  // have all been dealt with sorts down among the quiet ones.
   {
     name: 'suspicious_attendance_count',
     label: 'Suspicious',
-    field: (row) => amount(row.suspicious_attendance_count),
+    field: (row) => attendancePair(row, 'suspicious').outstanding,
     align: 'right',
     sortable: true,
   },
   {
     name: 'flagged_attendance_count',
     label: 'Flagged',
-    field: (row) => amount(row.flagged_attendance_count),
+    field: (row) => attendancePair(row, 'flagged').outstanding,
     align: 'right',
     sortable: true,
   },
@@ -550,7 +603,16 @@ function readPgiStatus(payload) {
   return PGI_STATUS_MAP[status] ? status : ''
 }
 
-/** The server explains these refusals well; say what it said, not "failed". */
+/**
+ * The server explains these refusals well; say what it said, not "failed".
+ *
+ * Deliberately *not* `extractErrorMessage`, which is the shared formatter
+ * everywhere else: this returns `''` when the body carried no sentence worth
+ * quoting, and every caller depends on that emptiness — a reviewed/blocked
+ * summary falls back to its own wording via `reason || '…'`. The shared
+ * formatter always resolves to something (a status line, a fallback), so
+ * swapping it in here would make those fallbacks unreachable.
+ */
 function serverMessage(err) {
   return err?.response?.data?.message || err?.response?.data?.detail || ''
 }
@@ -1072,6 +1134,19 @@ async function releaseEmployee(row) {
 .num-warn {
   color: var(--dash-warn);
   font-weight: 600;
+}
+
+/* The resolved half of a `resolved/total` cell. It recedes rather than taking a
+   colour of its own: the eye should land on the days still outstanding, and the
+   pair has to stay legible under either tone, so it borrows whatever the cell is
+   inked in. */
+.count-pair__done,
+.count-pair__sep {
+  opacity: 0.5;
+  font-weight: 500;
+}
+.count-pair__sep {
+  padding: 0 1px;
 }
 
 /* Days already flagged, which is the strongest signal on the row. Same weight as

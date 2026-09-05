@@ -109,7 +109,12 @@ const selected = computed(
 const breakdown = computed(() => (selected.value ? props.componentBreakdown(selected.value) : []))
 
 const cutoffs = computed(() => selected.value?.cutoffs ?? [])
-const cutoffLabels = computed(() => cutoffs.value.map((c) => c.period_label.split(',')[0]))
+// Defensive only — these cutoffs reach here already normalised, so
+// `period_label` is a string. Guarded anyway because an unguarded `.split` in a
+// computed blanks the whole tab rather than just this label row.
+const cutoffLabels = computed(() =>
+  cutoffs.value.map((c) => (c.period_label || '').split(',')[0]),
+)
 const cutoffValues = computed(() => cutoffs.value.map((c) => c.total_payroll))
 
 // The splits below are each stored as a list of per-month entries, so they both

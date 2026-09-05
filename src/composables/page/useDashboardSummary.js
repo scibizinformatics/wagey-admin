@@ -37,10 +37,11 @@
  *    by 12. Pure earned-to-date VIEW — no release/action lives here.
  * ------------------------------------------------------------------
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onScopeDispose } from 'vue'
 import { api } from 'boot/axios'
 import { BASE } from 'src/composables/utils/http'
 import { resolvedCompanyId } from 'src/composables/page/useCompany'
+import { todayIso } from 'src/composables/utils/calendarDate'
 
 // ────────────────────────────────────────────────────────────────────
 // 1. CONFIGURE YOUR ENDPOINT — this is the only section you should
@@ -102,7 +103,47 @@ const MONTH_LABEL = (ym) => {
 export function useDashboardSummary() {
   const loading = ref(false)
   const cutoffs = ref([])
+
+  /**
+   * "Today", in the viewer's timezone, kept current.
+   *
+   * Two bugs used to live in these two refs.
+   *
+   * The dates were computed in UTC — `new Date().toISOString().slice(0, 10)` —
+   * which in Manila (UTC+8) reports *yesterday* until 08:00 local. `todayDate`
+   * is a path segment on `/attendance/today-summary/{company}/{date}/` and
+   * `/attendance/attendance-issues/...`, so an admin opening the dashboard at
+   * 7am was shown yesterday's attendance labelled as today's. It corrected
+   * itself at 08:00, which is why it survived. Both now go through
+   * `todayIso()` (composables/utils/calendarDate.js), which reads local
+   * calendar fields instead of serialising an instant.
+   *
+   * And both were captured once, when the composable was created, so a
+   * dashboard left open overnight — the sort of screen people never close —
+   * kept reporting the previous day, and `currentYearLabel` stayed stale for
+   * the whole of January. The rollover check below fixes that.
+   */
   const today = ref(new Date())
+  const todayDate = ref(todayIso())
+
+  // Checked once a minute rather than scheduled for midnight: a laptop that
+  // sleeps through midnight never fires a timer set for it, and a minute of
+  // staleness on a date label is not worth the complexity of rescheduling.
+  let lastIso = todayDate.value
+  const rolloverTimer = setInterval(() => {
+    const current = todayIso()
+    if (current === lastIso) return
+
+    today.value = new Date()
+    // `todayDate` is also the model of the dashboard's date picker, so it is
+    // only advanced while it still tracks the real today. Once a person has
+    // picked a different day, rolling it over under them would move the page
+    // out from under a reader.
+    if (todayDate.value === lastIso) todayDate.value = current
+    lastIso = current
+  }, 60_000)
+
+  onScopeDispose(() => clearInterval(rolloverTimer))
 
   /**
    * Call this from your page's onMounted, same as your other
@@ -171,7 +212,12 @@ export function useDashboardSummary() {
       .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
       .slice(-5)
     return {
-      labels: sorted.map((c) => c.period_label.split(',')[0]),
+      // Defensive only: `normalizeCutoff` coerces `period_label` to `''`, and
+      // everything in `cutoffs.value` goes through it, so this cannot be null
+      // today. Kept because the cost is one `|| ''` and the failure mode is
+      // disproportionate — a `.split` on null throws *inside a computed*, which
+      // takes down the render of every panel on the tab, not just this chart.
+      labels: sorted.map((c) => (c.period_label || '').split(',')[0]),
       values: sorted.map((c) => c.total_payroll),
     }
   })
@@ -231,7 +277,7 @@ export function useDashboardSummary() {
       ytd_basic_pay: ytdBasicPay,
       ytd_accrued: ytdBasicPay / 12,
       months_counted: monthly.length,
-      as_of: today.value.toISOString().slice(0, 10),
+      as_of: todayIso(),
     }
   })
 
@@ -672,7 +718,6 @@ export function useDashboardSummary() {
   const priorityItems = ref([])
   const workforceStatus = ref([])
   const pendingRequests = ref([])
-  const todayDate = ref(new Date().toISOString().slice(0, 10))
 
   const cutoffWarning = computed(() => {
     const c = currentCutoff.value

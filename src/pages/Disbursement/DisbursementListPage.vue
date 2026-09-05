@@ -112,9 +112,13 @@ import { stepRouteForPgiStatus } from 'src/constants/pgiStatus'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
+import { useToast } from 'src/composables/useToast'
+import { todayIso } from 'src/composables/utils/calendarDate'
 
 const router = useRouter()
 const $q = useQuasar()
+
+const toast = useToast()
 const { companyId } = useCompany()
 const { fetchCutoffInstances, fetchDashboardSummary, fetchPayoutGroupInstances } = useDisbursementApi()
 const { notifyLoaded } = useLoadedToast()
@@ -324,10 +328,10 @@ function exportRuns() {
       alternateRowStyles: { fillColor: [248, 250, 252] },
     })
 
-    doc.save(`disbursement-runs-${new Date().toISOString().slice(0, 10)}.pdf`)
-    $q.notify({ type: 'positive', message: 'PDF exported successfully', position: 'top' })
+    doc.save(`disbursement-runs-${todayIso()}.pdf`)
+    toast.success('PDF exported successfully')
   } catch (err) {
-    $q.notify({ type: 'negative', message: 'Failed to export PDF', position: 'top' })
+    toast.error('Failed to export PDF')
     console.error('[DisbursementListPage] PDF export error:', err)
   }
 }

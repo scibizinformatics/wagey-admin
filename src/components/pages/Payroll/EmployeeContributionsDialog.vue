@@ -4,25 +4,25 @@
     :maximized="$q.screen.lt.sm"
     @update:model-value="$emit('update:modelValue', $event)"
   >
-    <q-card class="contrib-card">
+    <q-card class="dash-modal dash-modal--md">
       <!-- ── Header ─────────────────────────────────────────────────────────
            The employee is named here rather than in the body: the dialog is
            opened from a table row, and once it covers the table nothing else on
            screen says whose contributions these are. -->
-      <q-card-section class="contrib-head">
-        <span class="contrib-head__icon">
+      <q-card-section class="dash-modal__head">
+        <span class="dash-modal__head-icon">
           <q-icon name="o_account_balance" size="19px" />
         </span>
 
-        <div class="contrib-head__titles">
-          <div class="contrib-head__name">{{ employeeName || 'Contributions' }}</div>
-          <div class="contrib-head__sub">{{ headerSub }}</div>
+        <div class="dash-modal__head-titles">
+          <div class="dash-modal__title">{{ employeeName || 'Contributions' }}</div>
+          <div class="dash-modal__sub">{{ headerSub }}</div>
         </div>
 
         <q-btn flat round dense icon="close" @click="close" />
       </q-card-section>
 
-      <q-card-section class="contrib-body">
+      <q-card-section class="dash-modal__body">
         <div v-if="loading" class="contrib-state">
           <q-spinner size="22px" />
           <span>Loading contributions…</span>
@@ -70,17 +70,19 @@
             <div class="contrib-section__head">
               <p class="contrib-section__label">
                 Contributions
-                <span v-if="contributions.length" class="dash-num">({{ contributions.length }})</span>
+                <span v-if="contributions.length" class="dash-num"
+                  >({{ contributions.length }})</span
+                >
               </p>
               <q-btn
-                v-if="pending.length > 1"
+                v-if="selectable.length > 1"
                 flat
                 dense
                 no-caps
                 size="12px"
                 class="contrib-selectall"
-                :label="allPendingSelected ? 'Clear selection' : `Select all ${pending.length} pending`"
-                @click="toggleAllPending"
+                :label="selectAllLabel"
+                @click="toggleAllSelectable"
               />
             </div>
 
@@ -89,27 +91,42 @@
                 v-for="row in contributions"
                 :key="row.id"
                 class="contrib-row"
-                :class="{ 'contrib-row--selected': selected.includes(row.id) }"
+                :class="{
+                  'contrib-row--selected': selected.includes(row.id),
+                  'contrib-row--reverting': selected.includes(row.id) && isComplete,
+                }"
               >
-                <!-- Only an undeducted contribution is selectable. Deducted rows
+                <!-- A row is selectable when there is an action for it: pending
+                     rows can be deducted, and once the item is complete the
+                     deducted rows can be reverted. Unselectable deducted rows
                      keep the same slot so names stay on one vertical line. -->
                 <span class="contrib-row__pick">
                   <q-checkbox
-                    v-if="!row.deducted"
+                    v-if="isSelectable(row)"
                     :model-value="selected.includes(row.id)"
                     dense
                     size="xs"
-                    :disable="deducting"
+                    :disable="busy"
                     @update:model-value="toggle(row.id)"
                   />
-                  <q-icon v-else name="o_check_circle" size="17px" class="contrib-row__done" />
+                  <q-icon
+                    v-else
+                    :name="row.deducted ? 'o_check_circle' : 'o_radio_button_unchecked'"
+                    size="17px"
+                    :class="row.deducted ? 'contrib-row__done' : 'contrib-row__waiting'"
+                  />
                 </span>
 
                 <span class="contrib-row__body">
                   <span class="contrib-row__name">{{ row.name }}</span>
                   <span class="contrib-row__meta">
                     <template v-if="row.deducted">
-                      Deducted<template v-if="row.deducted_from"> from {{ row.deducted_from }}</template>
+                      <!-- With the tick replaced by a checkbox on a complete
+                           item, this line carries the deducted state alone. -->
+                      <q-icon name="check" size="13px" class="contrib-row__meta-tick" />
+                      Deducted<template v-if="row.deducted_from">
+                        from {{ row.deducted_from }}</template
+                      >
                     </template>
                     <template v-else>Not yet deducted</template>
                   </span>
@@ -136,8 +153,8 @@
 
       <!-- The action states its own precondition beside itself, so a disabled
            button is never unexplained. -->
-      <q-card-actions class="contrib-actions">
-        <span v-if="!loading && !error && contributions.length" class="contrib-actions__note">
+      <q-card-actions class="dash-modal__foot">
+        <span v-if="!loading && !error && contributions.length" class="dash-modal__foot-note">
           <template v-if="selected.length">
             {{ selected.length }} selected · {{ formatCurrency(selectedAmount) }}
           </template>
@@ -146,17 +163,37 @@
           </template>
           <template v-else>All contributions deducted</template>
         </span>
-        <q-space />
-        <q-btn flat no-caps label="Close" class="contrib-btn" @click="close" />
+        <q-btn flat no-caps label="Close" class="dash-modal__cancel" @click="close" />
+        <!-- A complete item has nothing left to deduct, so the same slot turns
+             into the way back out: revert everything, or only the rows picked. -->
         <q-btn
-          v-if="pending.length"
+          v-if="isComplete"
+          unelevated
+          no-caps
+          icon="o_undo"
+          :label="selected.length ? `Revert ${selected.length}` : 'Revert all'"
+          class="contrib-revert"
+          :loading="reverting"
+          :disable="busy"
+          @click="confirmRevert"
+        >
+          <q-tooltip>
+            {{
+              selected.length
+                ? 'Put the selected contributions back to pending'
+                : 'Put every deducted contribution back to pending'
+            }}
+          </q-tooltip>
+        </q-btn>
+        <q-btn
+          v-else-if="pending.length"
           unelevated
           no-caps
           icon="o_playlist_add_check"
           :label="selected.length ? `Deduct ${selected.length}` : 'Deduct'"
-          class="contrib-btn contrib-btn--primary"
+          class="dash-modal__submit"
           :loading="deducting"
-          :disable="!selected.length || deducting"
+          :disable="!selected.length || busy"
           @click="deduct"
         >
           <q-tooltip v-if="!selected.length">Select a contribution to deduct</q-tooltip>
@@ -180,9 +217,11 @@ import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { formatCurrency } from 'src/composables/utils/format'
+import { useToast } from 'src/composables/useToast'
 
 const $q = useQuasar()
-const { fetchEpiContributions, deductContributions } = useDisbursementApi()
+const toast = useToast()
+const { fetchEpiContributions, deductContributions, revertContributions } = useDisbursementApi()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -193,7 +232,9 @@ const props = defineProps({
   employeeName: { type: String, default: '' },
 })
 
-// `deducted` tells the parent its review figures are stale.
+// `deducted` tells the parent its review figures are stale — reverting moves the
+// same figures, so it reuses the event rather than adding a second one the parent
+// would have to handle identically.
 const emit = defineEmits(['update:modelValue', 'deducted'])
 
 const MONTHS = [
@@ -211,11 +252,16 @@ const MONTHS = [
   'December',
 ]
 
+const COMPLETE_STATUSES = ['complete', 'completed']
+
 const loading = ref(false)
 const error = ref(false)
 const deducting = ref(false)
+const reverting = ref(false)
 const data = ref(null)
 const selected = ref([])
+
+const busy = computed(() => deducting.value || reverting.value)
 
 /** Decimal strings ("200.00") arrive from the API; sum them as numbers. */
 function amount(val) {
@@ -224,12 +270,39 @@ function amount(val) {
 
 const contributions = computed(() => data.value?.contributions || [])
 const pending = computed(() => contributions.value.filter((row) => !row.deducted))
+const deductedRows = computed(() => contributions.value.filter((row) => row.deducted))
+
+/**
+ * Reverting is offered only on a complete item, matching the backend's model of
+ * the action: it undoes a settled contribution status, not a half-finished one.
+ * The status string is the authority rather than the row flags, since the server
+ * can hold an item short of complete for reasons the rows do not show.
+ */
+const isComplete = computed(() => {
+  const status = String(data.value?.epi_contribution_status || '')
+    .trim()
+    .toLowerCase()
+  return COMPLETE_STATUSES.includes(status) && deductedRows.value.length > 0
+})
+
+/**
+ * A row is selectable only when the mode's action applies to it: reverting acts
+ * on deducted rows, deducting on pending ones. Keeping these disjoint is what
+ * stops the footer count from including rows the request would drop.
+ */
+function isSelectable(row) {
+  return isComplete.value ? Boolean(row.deducted) : !row.deducted
+}
+
+const selectable = computed(() => contributions.value.filter((row) => isSelectable(row)))
 
 const totalAmount = computed(() =>
   contributions.value.reduce((sum, row) => sum + amount(row.amount), 0),
 )
 const deductedAmount = computed(() =>
-  contributions.value.filter((row) => row.deducted).reduce((sum, row) => sum + amount(row.amount), 0),
+  contributions.value
+    .filter((row) => row.deducted)
+    .reduce((sum, row) => sum + amount(row.amount), 0),
 )
 const pendingAmount = computed(() =>
   pending.value.reduce((sum, row) => sum + amount(row.amount), 0),
@@ -240,9 +313,17 @@ const selectedAmount = computed(() =>
     .reduce((sum, row) => sum + amount(row.amount), 0),
 )
 
-const allPendingSelected = computed(
-  () => pending.value.length > 0 && pending.value.every((row) => selected.value.includes(row.id)),
+const allSelectableSelected = computed(
+  () =>
+    selectable.value.length > 0 && selectable.value.every((row) => selected.value.includes(row.id)),
 )
+
+const selectAllLabel = computed(() => {
+  if (allSelectableSelected.value) return 'Clear selection'
+  return isComplete.value
+    ? `Select all ${selectable.value.length}`
+    : `Select all ${selectable.value.length} pending`
+})
 
 const taxMonthLabel = computed(() => {
   const taxMonth = data.value?.tax_month
@@ -274,8 +355,8 @@ function toggle(id) {
   else selected.value.splice(index, 1)
 }
 
-function toggleAllPending() {
-  selected.value = allPendingSelected.value ? [] : pending.value.map((row) => row.id)
+function toggleAllSelectable() {
+  selected.value = allSelectableSelected.value ? [] : selectable.value.map((row) => row.id)
 }
 
 async function load() {
@@ -295,7 +376,7 @@ async function load() {
 }
 
 async function deduct() {
-  if (!selected.value.length) return
+  if (!selected.value.length || busy.value) return
   const count = selected.value.length
   deducting.value = true
   try {
@@ -304,24 +385,62 @@ async function deduct() {
     // can move the item's overall status, neither of which is knowable here.
     await load()
     emit('deducted')
-    $q.notify({
-      type: 'positive',
-      message: `Deducted ${count} contribution${count > 1 ? 's' : ''}.`,
+    toast.success(`Deducted ${count} contribution${count > 1 ? 's' : ''}.`, {
       icon: 'check_circle',
       timeout: 2500,
-      position: 'top',
     })
   } catch (err) {
     console.error('[EmployeeContributionsDialog] deduct ✖ error:', err)
-    $q.notify({
-      type: 'negative',
-      message: 'Failed to deduct contributions.',
-      icon: 'error',
-      timeout: 3000,
-      position: 'top',
-    })
+    toast.error('Failed to deduct contributions.', { icon: 'error', timeout: 3000 })
   } finally {
     deducting.value = false
+  }
+}
+
+/**
+ * Reverting undoes a settled deduction and changes the money on the run, so it
+ * asks first — and names exactly which contributions it will touch, because the
+ * button's default is every deducted row rather than the current selection.
+ */
+function confirmRevert() {
+  if (busy.value) return
+  const rows = selected.value.length
+    ? deductedRows.value.filter((row) => selected.value.includes(row.id))
+    : deductedRows.value
+  if (!rows.length) return
+
+  const names = rows.map((row) => row.name).join(', ')
+  $q.dialog({
+    title: 'Revert contributions?',
+    message:
+      rows.length === 1
+        ? `${names} will go back to pending and its amount will be added back to this payroll item.`
+        : `${rows.length} contributions (${names}) will go back to pending and their amounts will be added back to this payroll item.`,
+    cancel: true,
+    persistent: true,
+    ok: { label: 'Revert', unelevated: true, color: 'warning', noCaps: true },
+  }).onOk(() => revert(rows))
+}
+
+async function revert(rows) {
+  const ids = rows.map((row) => row.id)
+  const count = ids.length
+  reverting.value = true
+  try {
+    await revertContributions(props.epiId, ids)
+    // Refetched for the same reason as deducting: the server owns both
+    // `deducted_from` and the item's overall contribution status.
+    await load()
+    emit('deducted')
+    toast.success(`Reverted ${count} contribution${count > 1 ? 's' : ''}.`, {
+      icon: 'undo',
+      timeout: 2500,
+    })
+  } catch (err) {
+    console.error('[EmployeeContributionsDialog] revert error:', err)
+    toast.error('Failed to revert contributions.', { icon: 'error', timeout: 3000 })
+  } finally {
+    reverting.value = false
   }
 }
 
@@ -341,74 +460,6 @@ watch(
 </script>
 
 <style scoped>
-.contrib-card {
-  width: 100%;
-  max-width: 520px;
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-/* ── Header ────────────────────────────────────────────────────────────────── */
-.contrib-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 15px 18px;
-  background: var(--dash-brand, #102335);
-}
-
-.contrib-head__icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-}
-
-.contrib-head__titles {
-  min-width: 0;
-  flex: 1;
-}
-
-.contrib-head__name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.contrib-head__sub {
-  margin-top: 1px;
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.78);
-}
-
-.contrib-head :deep(.q-btn) {
-  color: rgba(255, 255, 255, 0.8);
-  flex: none;
-}
-
-.contrib-head :deep(.q-btn:hover) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-/* ── Body ──────────────────────────────────────────────────────────────────── */
-.contrib-body {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 18px;
-  max-height: 68vh;
-  overflow-y: auto;
-}
-
 .contrib-state {
   display: flex;
   align-items: center;
@@ -416,15 +467,15 @@ watch(
   gap: 9px;
   padding: 34px 0;
   font-size: 13px;
-  color: var(--dash-ink-3, #667085);
+  color: var(--dash-ink-3);
 }
 
 .contrib-state--error {
-  color: var(--dash-critical, #b42318);
+  color: var(--dash-critical);
 }
 
 .contrib-retry {
-  color: var(--dash-accent, #175cd3);
+  color: var(--dash-accent);
   font-weight: 600;
 }
 
@@ -434,9 +485,9 @@ watch(
   flex-direction: column;
   gap: 12px;
   padding: 13px 14px;
-  border: 1px solid var(--dash-line, #eaecf0);
-  border-radius: 10px;
-  background: var(--dash-sunken, #f9fafb);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  background: var(--dash-sunken);
 }
 
 .contrib-summary__status {
@@ -447,11 +498,10 @@ watch(
 }
 
 .contrib-summary__label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: var(--dash-ink-4, #98a2b3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--dash-ink-4);
 }
 
 .contrib-summary__figures {
@@ -460,25 +510,25 @@ watch(
   gap: 10px;
   margin: 0;
   padding-top: 11px;
-  border-top: 1px solid var(--dash-line-soft, #f2f4f7);
+  border-top: 1px solid var(--dash-line-soft);
 }
 
 .contrib-summary__figures dt {
   font-size: 11.5px;
-  color: var(--dash-ink-4, #98a2b3);
+  color: var(--dash-ink-4);
 }
 
 .contrib-summary__figures dd {
   margin: 2px 0 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--dash-ink, #101828);
+  color: var(--dash-ink);
 }
 
 /* Pending money is the reason to open this dialog, so it is the one figure that
    changes colour when it is non-zero. */
 .contrib-pending {
-  color: var(--dash-warn, #b54708);
+  color: var(--dash-warn);
 }
 
 /* ── List ──────────────────────────────────────────────────────────────────── */
@@ -492,15 +542,14 @@ watch(
 
 .contrib-section__label {
   margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: var(--dash-ink-4, #98a2b3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--dash-ink-4);
 }
 
 .contrib-selectall {
-  color: var(--dash-accent, #175cd3);
+  color: var(--dash-accent);
   font-weight: 600;
 }
 
@@ -508,8 +557,8 @@ watch(
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--dash-line, #eaecf0);
-  border-radius: 10px;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
   overflow: hidden;
 }
 
@@ -518,7 +567,7 @@ watch(
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--dash-line-soft, #f2f4f7);
+  border-bottom: 1px solid var(--dash-line-soft);
   transition: background 0.12s ease;
 }
 
@@ -527,7 +576,12 @@ watch(
 }
 
 .contrib-row--selected {
-  background: var(--dash-accent-bg, #eff8ff);
+  background: var(--dash-accent-bg);
+}
+
+/* A selected row about to be reverted reads as a warning, not as progress. */
+.contrib-row--reverting {
+  background: var(--dash-warn-bg);
 }
 
 .contrib-row__pick {
@@ -538,7 +592,11 @@ watch(
 }
 
 .contrib-row__done {
-  color: var(--dash-good-mark, #17b26a);
+  color: var(--dash-good-mark);
+}
+
+.contrib-row__waiting {
+  color: var(--dash-ink-4);
 }
 
 .contrib-row__body {
@@ -551,20 +609,27 @@ watch(
 .contrib-row__name {
   font-size: 13px;
   font-weight: 500;
-  color: var(--dash-ink, #101828);
+  color: var(--dash-ink);
   line-height: 1.35;
 }
 
 .contrib-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   font-size: 11.5px;
-  color: var(--dash-ink-4, #98a2b3);
+  color: var(--dash-ink-4);
+}
+
+.contrib-row__meta-tick {
+  color: var(--dash-good-mark);
 }
 
 .contrib-row__amount {
   flex: none;
   font-size: 13px;
   font-weight: 600;
-  color: var(--dash-ink, #101828);
+  color: var(--dash-ink);
 }
 
 .contrib-empty {
@@ -576,64 +641,29 @@ watch(
   margin: 10px 0 2px;
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--dash-ink-2, #344054);
+  color: var(--dash-ink-2);
 }
 
 .contrib-empty__sub {
   margin: 0;
   font-size: 12.5px;
-  color: var(--dash-ink-4, #98a2b3);
+  color: var(--dash-ink-4);
 }
 
-/* ── Actions ───────────────────────────────────────────────────────────────── */
-.contrib-actions {
-  align-items: center;
-  gap: 8px;
-  padding: 11px 18px;
-}
-
-.contrib-actions__note {
-  font-size: 12.5px;
-  color: var(--dash-ink-3, #667085);
-}
-
-.contrib-btn {
-  height: 34px;
-  padding: 0 14px;
-  border-radius: var(--dash-r-md, 8px);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.contrib-btn--primary {
-  background: var(--dash-brand, #102335);
-  color: #fff;
-  box-shadow: var(--dash-shadow-xs);
-}
-
-.contrib-btn--primary:hover {
-  background: #193d5c;
-}
-
-.contrib-btn--primary:disabled,
-.contrib-btn--primary[disabled] {
-  background: var(--dash-n-200, #eaecf0);
-  color: var(--dash-ink-4, #98a2b3);
+/* Reverting is a correction, not the happy path, so it is a soft amber button
+   rather than the footer's filled one — visible without competing with the
+   brand action it stands in for. */
+.contrib-revert {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-warn-bg);
+  color: var(--dash-warn);
+  border: 1px solid var(--dash-warn-line);
   box-shadow: none;
 }
 
-@media (max-width: 599px) {
-  .contrib-card {
-    max-width: 100%;
-    border-radius: 0;
-  }
-
-  .contrib-body {
-    max-height: none;
-  }
-
-  .contrib-actions__note {
-    display: none;
-  }
+.contrib-revert:hover {
+  background: #fef0c7;
 }
 </style>

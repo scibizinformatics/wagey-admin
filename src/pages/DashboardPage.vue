@@ -184,6 +184,7 @@ import { useAttendance } from '@/composables/page/useAttendance'
 import { usePayroll } from '@/composables/page/usePayroll'
 import { useRequests } from '@/composables/page/useRequests'
 import { useCompany, resolvedCompanyId } from '@/composables/page/useCompany'
+import { todayIso } from '@/composables/utils/calendarDate'
 import { useNotifications } from 'src/composables/useNotifications'
 import { useDashboardSummary } from '@/composables/page/useDashboardSummary'
 
@@ -280,10 +281,6 @@ watch(
   { immediate: true },
 )
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 // ─── Stats cards — tab-aware ────────────────────────────────────────────────
 // Colours reference the validated categorical ramp in src/css/dashboard.scss and
@@ -372,7 +369,7 @@ const statsCards = computed(() => {
 onMounted(async () => {
   const cid = resolvedCompanyId()
 
-  onDataUpdate('attendance', () => fetchAttendanceByDate(today()))
+  onDataUpdate('attendance', () => fetchAttendanceByDate(todayIso()))
   onDataUpdate('leave', () => fetchLeaveRequests())
   onDataUpdate('overtime', () => fetchOvertimeRequests())
 
@@ -382,7 +379,7 @@ onMounted(async () => {
 
   await Promise.allSettled([
     fetchEmployees(),
-    fetchAttendanceByDate(today()),
+    fetchAttendanceByDate(todayIso()),
     fetchPayrollRunsSummary({ company_id: cid }),
     fetchTodayTabData(cid, todayDate.value),
   ])

@@ -155,7 +155,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
@@ -164,10 +163,13 @@ import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTabl
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
+import { useToast } from 'src/composables/useToast'
+import { extractErrorMessage } from 'src/composables/utils/http'
 
 const route = useRoute()
 const router = useRouter()
-const $q = useQuasar()
+
+const toast = useToast()
 const groupId = route.params.id
 const { identity, resolveQuietly } = usePayoutGroupIdentity()
 const stepperKey = ref(0)
@@ -350,29 +352,67 @@ watch([searchTerm, activeTab, pageSize], () => {
   page.value = 1
 })
 
+/**
+ * Resolve or reject every open issue on one payslip.
+ *
+ * A payslip can carry several issues and each is decided by its own request, so
+ * this is N calls that can partly succeed. It used to run them through
+ * `Promise.all`, which rejects on the *first* failure while the rest keep going
+ * — so one refusal out of four reported a flat "Failed to resolve issue. Please
+ * try again.", skipped the refresh entirely, and left the screen listing issues
+ * that no longer existed. Trying again then re-decided the ones that had
+ * already succeeded.
+ *
+ * `allSettled` instead: nothing is hidden, the outcome is counted, and the
+ * refresh runs whatever happened, because the server has moved for every issue
+ * that did succeed. `Promise.all` is still right for the two *reads* below —
+ * there, one failure genuinely invalidates the pair.
+ */
 async function processIssue(row, action) {
   processing.value = true
   try {
     const issues = await fetchPayslipIssues(row.epi_id)
     const issueIds = Array.isArray(issues) ? issues.map((i) => i.id) : []
     if (!issueIds.length) {
-      $q.notify({ type: 'warning', message: 'No issues found for this payslip.', position: 'top' })
-      processing.value = false
+      toast.warning('No issues found for this payslip.')
       return
     }
+
     const fn = action === 'resolve' ? resolveIssue : rejectIssue
-    await Promise.all(issueIds.map((id) => fn(id, { admin_notes: '' })))
+    const results = await Promise.allSettled(issueIds.map((id) => fn(id, { admin_notes: '' })))
+    const failures = results.filter((r) => r.status === 'rejected')
+    const settled = issueIds.length - failures.length
+
+    // Always re-read: `settled` of them have changed server-side even when the
+    // rest were refused.
     stepperKey.value++
-    const [ov, data] = await Promise.all([
-      fetchPayslipOverview(groupId),
-      fetchEmployeePayslips(groupId),
-    ])
-    overview.value = ov
-    payslips.value = data || []
-    $q.notify({ type: 'positive', message: `Issue${issueIds.length > 1 ? 's' : ''} ${action}d successfully.`, position: 'top' })
+    try {
+      const [ov, data] = await Promise.all([
+        fetchPayslipOverview(groupId),
+        fetchEmployeePayslips(groupId),
+      ])
+      overview.value = ov
+      payslips.value = data || []
+    } catch (refreshError) {
+      console.error('[PayslipsPage] refresh after processIssue ✖', refreshError)
+    }
+
+    if (settled && failures.length) {
+      toast.warning(`${settled} of ${issueIds.length} issues ${action}d.`, {
+        caption: extractErrorMessage(
+          failures[0].reason,
+          `The other ${failures.length} were refused`,
+        ),
+      })
+    } else if (settled) {
+      toast.success(`Issue${settled > 1 ? 's' : ''} ${action}d successfully.`)
+    } else {
+      toast.error(extractErrorMessage(failures[0]?.reason, `Failed to ${action} issue.`))
+    }
   } catch (err) {
+    // Only the issue *lookup* reaches here now; the decisions handle themselves.
     console.error(`[PayslipsPage] ${action} ✖ error:`, err)
-    $q.notify({ type: 'negative', message: `Failed to ${action} issue. Please try again.`, position: 'top' })
+    toast.error(extractErrorMessage(err, `Failed to ${action} issue. Please try again.`))
   } finally {
     processing.value = false
   }

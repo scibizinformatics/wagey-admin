@@ -199,7 +199,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
@@ -208,10 +207,12 @@ import { useDisbursementApi } from 'src/composables/disbursement/useDisbursement
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { useAuthStore } from 'src/boot/auth'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
+import { useToast } from 'src/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
-const $q = useQuasar()
+
+const toast = useToast()
 const authStore = useAuthStore()
 const groupId = route.params.id
 const { identity, resolveQuietly } = usePayoutGroupIdentity()
@@ -371,7 +372,7 @@ async function submitFunding() {
       notes: form.value.notes || '',
     })
     stepperKey.value++
-    $q.notify({ type: 'positive', message: 'Funding added successfully!', position: 'top' })
+    toast.success('Funding added successfully!')
       const [amt, earners] = await Promise.all([
         fetchPayoutGroupInstanceAmounts(groupId),
         fetchEmployeePayslips(groupId),

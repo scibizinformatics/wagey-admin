@@ -128,9 +128,12 @@ import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTabl
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
+import { useToast } from 'src/composables/useToast'
 
 const route = useRoute()
 const $q = useQuasar()
+
+const toast = useToast()
 const groupId = route.params.id
 const { identity, resolveQuietly } = usePayoutGroupIdentity()
 const stepperKey = ref(0)
@@ -302,7 +305,7 @@ async function disburseAll() {
     const epiIds = disbursements.value.map((e) => e.epi_id)
     await disbursePgi(groupId, epiIds)
     stepperKey.value++
-    $q.notify({ type: 'positive', message: 'Disbursement successful!', position: 'top' })
+    toast.success('Disbursement successful!')
     const [summ, data] = await Promise.all([
       fetchPayoutGroupInstanceSummary(groupId),
       fetchDisbursementEmployees(groupId),

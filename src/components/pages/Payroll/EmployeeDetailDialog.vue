@@ -1,40 +1,40 @@
 <template>
   <q-dialog v-model="internalShow" persistent>
-    <q-card class="detail-modal-card">
-      <q-card-section class="modal-header">
-        <div class="modal-title-section">
-          <q-avatar size="44px" class="modal-avatar-icon">
+    <q-card class="dash-modal dash-modal--lg">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <q-avatar size="38px" class="dash-modal__head-icon">
             <q-icon name="receipt_long" size="22px" />
           </q-avatar>
-          <div>
-            <div class="modal-title">Attendance Details</div>
-            <div class="modal-subtitle" v-if="data">{{ data.full_name }}</div>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">Attendance details</div>
+            <div class="dash-modal__sub" v-if="data">{{ data.full_name }}</div>
           </div>
         </div>
-        <q-btn icon="close" flat round dense class="modal-close-btn" @click="internalShow = false" />
+        <q-btn icon="close" flat round dense aria-label="Close" @click="internalShow = false" />
       </q-card-section>
 
-      <q-separator />
-
-      <q-card-section v-if="loading" class="modal-content loading-section">
+      <q-card-section v-if="loading" class="dash-modal__body dash-modal__body--row loading-section">
         <q-spinner color="primary" size="24px" />
         <span>Loading...</span>
       </q-card-section>
 
-      <q-card-section v-else-if="data" class="modal-content">
-        <div class="modal-section-title">Attendance Summary</div>
+      <q-card-section v-else-if="data" class="dash-modal__body">
+        <div class="dash-modal__section-title">Attendance summary</div>
         <div class="detail-grid-cards">
           <div class="detail-card">
-            <div class="detail-card-label">Days Worked</div>
+            <div class="detail-card-label">Days worked</div>
             <div class="detail-card-value">{{ data.summary?.days_worked ?? 0 }}</div>
           </div>
           <div class="detail-card">
-            <div class="detail-card-label">Absent Days</div>
+            <div class="detail-card-label">Absent days</div>
             <div class="detail-card-value amount-red">{{ data.summary?.absent_days ?? 0 }}</div>
           </div>
           <div class="detail-card">
             <div class="detail-card-label">Undertime</div>
-            <div class="detail-card-value amount-amber">{{ data.summary?.total_undertime || '0h 0m' }}</div>
+            <div class="detail-card-value amount-amber">
+              {{ data.summary?.total_undertime || '0h 0m' }}
+            </div>
           </div>
           <div class="detail-card">
             <div class="detail-card-label">Late</div>
@@ -42,7 +42,9 @@
           </div>
           <div class="detail-card">
             <div class="detail-card-label">Overtime</div>
-            <div class="detail-card-value amount-green">{{ data.summary?.total_overtime || '0h 0m' }}</div>
+            <div class="detail-card-value amount-green">
+              {{ data.summary?.total_overtime || '0h 0m' }}
+            </div>
           </div>
           <div class="detail-card">
             <div class="detail-card-label">Leaves</div>
@@ -50,7 +52,7 @@
           </div>
         </div>
 
-        <div class="modal-section-title" v-if="data.issues?.length">Issues</div>
+        <div class="dash-modal__section-title" v-if="data.issues?.length">Issues</div>
         <div v-if="data.issues?.length" class="modal-table-wrap">
           <q-table
             :rows="data.issues"
@@ -64,7 +66,7 @@
           />
         </div>
 
-        <div class="modal-section-title">Attendance</div>
+        <div class="dash-modal__section-title">Attendance</div>
         <div class="modal-table-wrap">
           <q-table
             :rows="data.attendance || []"
@@ -78,8 +80,14 @@
         </div>
       </q-card-section>
 
-      <q-card-actions align="right">
-        <q-btn flat label="Close" @click="internalShow = false" class="dialog-btn" no-caps />
+      <q-card-actions class="dash-modal__foot">
+        <q-btn
+          flat
+          label="Close"
+          @click="internalShow = false"
+          class="dash-modal__cancel"
+          no-caps
+        />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -102,20 +110,23 @@ const internalShow = ref(false)
 const loading = ref(false)
 const data = ref(null)
 
-watch(() => props.modelValue, async (val) => {
-  internalShow.value = val
-  if (val && props.employeeId) {
-    loading.value = true
-    data.value = null
-    try {
-      data.value = await fetchEmployeePayrollItem(props.employeeId)
-    } catch (err) {
-      console.error('[EmployeeDetailDialog] fetch failed:', err)
-    } finally {
-      loading.value = false
+watch(
+  () => props.modelValue,
+  async (val) => {
+    internalShow.value = val
+    if (val && props.employeeId) {
+      loading.value = true
+      data.value = null
+      try {
+        data.value = await fetchEmployeePayrollItem(props.employeeId)
+      } catch (err) {
+        console.error('[EmployeeDetailDialog] fetch failed:', err)
+      } finally {
+        loading.value = false
+      }
     }
-  }
-})
+  },
+)
 
 watch(internalShow, (val) => {
   emit('update:modelValue', val)
@@ -123,7 +134,13 @@ watch(internalShow, (val) => {
 
 const issueColumns = [
   { name: 'type', label: 'Type', field: 'type', align: 'left' },
-  { name: 'description', label: 'Description', field: 'description', align: 'left', format: (v) => v || '-' },
+  {
+    name: 'description',
+    label: 'Description',
+    field: 'description',
+    align: 'left',
+    format: (v) => v || '-',
+  },
   { name: 'date', label: 'Date', field: 'date', align: 'left' },
 ]
 
@@ -138,126 +155,65 @@ const attendanceColumns = [
 </script>
 
 <style scoped>
-.detail-modal-card {
-  width: 560px;
-  max-width: 95vw;
-  max-height: 90vh;
-  border-radius: 14px !important;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+/* The card, header, body, section headings and button are the shared
+   `dash-modal` chrome. What is left is this dialog's fact grid and the two
+   tables it wraps. Everything reads from `--dash-*`; the block this replaces
+   carried eighteen literal hex values and 11px uppercase labels at 0.06em
+   tracking, the one convention the design system singles out as dated. */
+
+.loading-section {
+  gap: 10px;
+  padding: 40px 0;
+  font-size: 13px;
+  color: var(--dash-ink-3);
 }
 
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px !important;
-  background: #102335;
-}
-
-.modal-title-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.modal-avatar-icon {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: #ffffff !important;
-  border-radius: 10px !important;
-  flex-shrink: 0;
-}
-
-.modal-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #ffffff;
-}
-.modal-subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 2px;
-}
-.modal-close-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-  flex-shrink: 0;
-}
-.modal-close-btn:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  color: #ffffff !important;
-}
-
-.modal-content {
-  padding: 20px !important;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.modal-section-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin: 16px 0 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #f1f3f5;
-}
-.modal-section-title:first-child {
-  margin-top: 0;
-}
-
+/* ── Summary tiles ── */
 .detail-grid-cards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
 .detail-card {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 10px 14px;
-  border: 1px solid #f1f3f5;
+  padding: 10px 13px;
+  background: var(--dash-n-25);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  min-width: 0;
 }
+
 .detail-card-label {
-  font-size: 11px;
-  color: #9ca3af;
+  margin-bottom: 3px;
+  font-size: 11.5px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 4px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--dash-ink-3);
 }
+
 .detail-card-value {
-  font-size: 13px;
-  font-weight: 500;
-  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
   word-break: break-word;
 }
 
-.amount-green { color: #16a34a; }
-.amount-blue { color: #2563eb; }
-.amount-red { color: #dc2626; }
-.amount-amber { color: #d97706; }
-.amount-purple { color: #7c3aed; }
-
-.dialog-btn {
-  border-radius: 8px !important;
-  font-size: 13px;
-  text-transform: none;
+/* Status tones, and only where the figure means something is off — a count of
+   days worked is not "good news" and does not get painted green. */
+.amount-green {
+  color: var(--dash-good);
 }
-.primary-btn { font-weight: 500; }
-
-.loading-section {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 40px 0;
-  font-size: 13px;
-  color: #6b7280;
+.amount-red {
+  color: var(--dash-critical);
+}
+.amount-amber {
+  color: var(--dash-warn);
 }
 
+/* Header strip, row rhythm and dividers come from `dash-qtable--compact`, the
+   in-dialog density. This wrapper only supplies the edge around it. */
 .modal-table-wrap {
   border: 1px solid var(--dash-line);
   border-radius: var(--dash-r-md);
@@ -265,14 +221,15 @@ const attendanceColumns = [
   margin-bottom: 4px;
 }
 
-/* Header strip, row rhythm and dividers come from `dash-qtable--compact`, the
-   in-dialog density. This block held a third type scale — 10px uppercase labels
-   at weight 700 over a filled #f8f9fb band — which is what a table looked like
-   in this product before the design system existed. */
+@media (max-width: 1023px) {
+  .detail-grid-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 @media (max-width: 768px) {
   .detail-grid-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>
