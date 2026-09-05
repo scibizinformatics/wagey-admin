@@ -111,8 +111,13 @@
             >
               <q-icon name="o_visibility" size="16px" />
               <!-- A dot rather than a count: the row only ever has flags set or
-                   not, and a number here would imply a tally that doesn't exist. -->
-              <span v-if="hasAuditFlags(props.row)" class="audit-btn__dot" />
+                   not, and a number here would imply a tally that doesn't exist.
+                   Once an admin has acknowledged the record there is nothing left
+                   to chase, so the alert dot gives way to a settled check. -->
+              <span v-if="isAcknowledged(props.row)" class="audit-btn__check">
+                <q-icon name="check" size="9px" />
+              </span>
+              <span v-else-if="hasAuditFlags(props.row)" class="audit-btn__dot" />
               <q-tooltip>{{ auditTooltip(props.row) }}</q-tooltip>
             </button>
           </q-td>
@@ -318,8 +323,14 @@ function hasAuditFlags(row) {
   return Boolean(row.flagged || row.is_suspicious || row.auto_closed)
 }
 
-// Worst state wins the colour, matching the chip order inside the dialog.
+function isAcknowledged(row) {
+  return Boolean(row.acknowledged) && hasAuditFlags(row)
+}
+
+// Worst state wins the colour, matching the chip order inside the dialog — except
+// once acknowledged, where the record reads as settled rather than outstanding.
 function auditToneClass(row) {
+  if (isAcknowledged(row)) return 'audit-btn--good'
   if (row.is_suspicious) return 'audit-btn--critical'
   if (row.flagged) return 'audit-btn--warn'
   if (row.auto_closed) return 'audit-btn--info'
@@ -331,8 +342,9 @@ function auditTooltip(row) {
   if (row.is_suspicious) states.push('Suspicious')
   if (row.flagged) states.push('Flagged')
   if (row.auto_closed) states.push('Auto-closed')
-  if (row.acknowledged) states.push('Acknowledged')
-  return states.length ? `${states.join(' · ')} — view audit trail` : 'View audit trail'
+  if (!states.length) return 'View audit trail'
+  if (row.acknowledged) return `${states.join(' · ')} — acknowledged`
+  return `${states.join(' · ')} — view audit trail`
 }
 </script>
 
@@ -426,6 +438,13 @@ function auditTooltip(row) {
   color: var(--dash-info, #2e4fd4);
 }
 
+/* Settled: the flag is still on the record, but somebody has signed off on it. */
+.audit-btn--good {
+  border-color: var(--dash-good-line, #abefc6);
+  background: var(--dash-good-bg, #ecfdf3);
+  color: var(--dash-good, #067647);
+}
+
 .audit-btn__dot {
   position: absolute;
   top: -3px;
@@ -434,6 +453,21 @@ function auditTooltip(row) {
   height: 7px;
   border-radius: 50%;
   background: currentColor;
+  box-shadow: 0 0 0 2px var(--dash-surface, #fff);
+}
+
+.audit-btn__check {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--dash-good-mark, #17b26a);
+  color: #fff;
   box-shadow: 0 0 0 2px var(--dash-surface, #fff);
 }
 

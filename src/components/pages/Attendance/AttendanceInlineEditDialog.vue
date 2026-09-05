@@ -1,47 +1,67 @@
 <template>
-  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
-    <q-card class="inline-edit-card">
-      <q-card-section class="inline-edit-header">
-        <div>
-          <div class="dialog-title">Edit {{ field === 'time_in' ? 'Time In' : 'Time Out' }}</div>
-          <div class="dialog-subtitle text-grey-6 text-caption">
-            {{ employeeName }} — {{ date }}
+  <q-dialog
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
+    persistent
+  >
+    <!-- One field, so this is the narrowest step of the width ladder. -->
+    <q-card class="dash-modal dash-modal--xs">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <span class="dash-modal__head-icon">
+            <q-icon :name="field === 'time_in' ? 'login' : 'logout'" size="20px" />
+          </span>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">
+              Edit {{ field === 'time_in' ? 'time in' : 'time out' }}
+            </div>
+            <div class="dash-modal__sub">{{ employeeName }} &middot; {{ date }}</div>
           </div>
         </div>
-        <q-btn flat round dense icon="close" @click="$emit('update:modelValue', false)" />
-      </q-card-section>
-
-      <q-card-section class="q-pt-md q-pb-md">
-        <q-input
-          filled
+        <q-btn
+          flat
+          round
           dense
-          :model-value="value"
-          @update:model-value="$emit('update:value', $event)"
-          :label="field === 'time_in' ? 'New Time In' : 'New Time Out'"
-          type="time"
-          class="form-field"
-          autofocus
-        >
-          <template v-slot:prepend>
-            <q-icon :name="field === 'time_in' ? 'login' : 'logout'" size="xs" />
-          </template>
-        </q-input>
+          icon="close"
+          aria-label="Close"
+          @click="$emit('update:modelValue', false)"
+        />
       </q-card-section>
 
-      <q-separator />
+      <q-card-section class="dash-modal__body">
+        <label class="dash-modal__field">
+          <span class="dash-modal__field-label">
+            {{ field === 'time_in' ? 'New time in' : 'New time out' }}
+          </span>
+          <q-input
+            :model-value="value"
+            type="time"
+            outlined
+            dense
+            autofocus
+            hide-bottom-space
+            class="dash-field"
+            @update:model-value="$emit('update:value', $event)"
+          />
+        </label>
+      </q-card-section>
 
-      <q-card-actions align="right" class="q-pa-sm">
-        <q-btn flat label="Cancel" @click="$emit('update:modelValue', false)" size="sm" />
+      <q-card-actions class="dash-modal__foot">
+        <q-btn
+          flat
+          no-caps
+          label="Cancel"
+          class="dash-modal__cancel"
+          @click="$emit('update:modelValue', false)"
+        />
         <q-btn
           unelevated
-          color="primary"
+          no-caps
           label="Save"
-          icon="check"
-          size="sm"
-          class="primary-btn"
-          @click="$emit('save')"
+          class="dash-modal__submit"
           :loading="saving"
           :disable="!value"
+          @click="$emit('save')"
         />
       </q-card-actions>
     </q-card>
@@ -56,47 +76,7 @@ defineProps({
   date: { type: String, default: '' },
   value: { type: String, default: '' },
   saving: { type: Boolean, default: false },
-});
+})
 
-defineEmits(['update:modelValue', 'update:value', 'save']);
+defineEmits(['update:modelValue', 'update:value', 'save'])
 </script>
-
-<style scoped>
-.inline-edit-card {
-  width: 100%;
-  max-width: 320px;
-  border-radius: 12px;
-}
-.inline-edit-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 14px 16px;
-  background: #102335;
-}
-.inline-edit-header .q-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-.inline-edit-header .q-btn:hover {
-  color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-}
-.dialog-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #ffffff;
-  line-height: 1.3;
-}
-.dialog-subtitle {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.8) !important;
-  margin-top: 2px;
-}
-.primary-btn {
-  background: #102335 !important;
-  color: white;
-}
-.primary-btn:hover {
-  background: #193d5c !important;
-}
-</style>

@@ -1,13 +1,39 @@
 <template>
   <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)">
-    <q-card class="selfie-dialog-card">
-      <q-card-section class="selfie-dialog-header">
-        <div class="dialog-title">{{ title }}</div>
-        <q-btn flat round dense icon="close" @click="$emit('update:modelValue', false)" class="close-btn" />
+    <q-card class="dash-modal dash-modal--md">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <span class="dash-modal__head-icon"><q-icon name="photo_camera" size="20px" /></span>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">{{ title }}</div>
+            <div class="dash-modal__sub">Captured with the punch</div>
+          </div>
+        </div>
+        <q-btn
+          flat
+          round
+          dense
+          icon="close"
+          aria-label="Close"
+          @click="$emit('update:modelValue', false)"
+        />
       </q-card-section>
-      <q-card-section class="selfie-dialog-body">
-        <img :src="imageUrl" alt="Selfie" class="selfie-full-image" />
+
+      <!-- The image supplies its own edge, so the body drops its padding and
+           the picture sits on the sunken ground rather than on white. -->
+      <q-card-section class="dash-modal__body dash-modal__body--sunken selfie-body">
+        <img :src="imageUrl" alt="Selfie taken at the punch" class="selfie-image" />
       </q-card-section>
+
+      <q-card-actions class="dash-modal__foot">
+        <q-btn
+          flat
+          no-caps
+          label="Close"
+          class="dash-modal__cancel"
+          @click="$emit('update:modelValue', false)"
+        />
+      </q-card-actions>
     </q-card>
   </q-dialog>
 </template>
@@ -17,40 +43,24 @@ defineProps({
   modelValue: { type: Boolean, default: false },
   imageUrl: { type: String, default: '' },
   title: { type: String, default: 'Selfie' },
-});
+})
 
-defineEmits(['update:modelValue']);
+defineEmits(['update:modelValue'])
 </script>
 
 <style scoped>
-.selfie-dialog-card {
-  width: 100%;
-  max-width: 600px;
-  border-radius: 12px;
-}
-.selfie-dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.selfie-body {
+  display: grid;
+  place-items: center;
   padding: 16px;
 }
-.dialog-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a202c;
-  line-height: 1.3;
-}
-.selfie-dialog-body {
-  padding: 16px;
-}
-.selfie-full-image {
-  width: 100%;
-  height: auto;
-  border-radius: 8px;
-  max-height: 70vh;
+
+.selfie-image {
+  max-width: 100%;
+  max-height: 62vh;
+  border-radius: var(--dash-r-md);
+  border: 1px solid var(--dash-line);
+  background: var(--dash-surface);
   object-fit: contain;
-}
-.close-btn {
-  color: #64748b;
 }
 </style>

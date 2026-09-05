@@ -7,45 +7,52 @@
     :maximized="$q.screen.lt.sm"
     @update:model-value="$emit('update:modelValue', $event)"
   >
-    <q-card class="rr-card">
+    <q-card class="dash-modal dash-modal--lg">
       <!-- ── Header ─────────────────────────────────────────────────────── -->
-      <q-card-section class="rr-head">
-        <div>
-          <div class="rr-head__title">Review attendance</div>
-          <div class="rr-head__sub">{{ headerSummary }}</div>
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <span class="dash-modal__head-icon"><q-icon name="date_range" size="20px" /></span>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">Review attendance</div>
+            <div class="dash-modal__sub">{{ headerSummary }}</div>
+          </div>
         </div>
         <q-btn flat round dense icon="close" @click="$emit('update:modelValue', false)" />
       </q-card-section>
 
-      <q-card-section class="rr-body">
+      <q-card-section class="dash-modal__body">
         <!-- ── Employee ─────────────────────────────────────────────────── -->
-        <q-select
-          v-model="employee"
-          :options="filteredEmployeeOptions"
-          :loading="optionsLoading"
-          label="Employee"
-          hint="Leave blank to review everyone over the same dates"
-          filled
-          dense
-          clearable
-          emit-value
-          map-options
-          use-input
-          fill-input
-          hide-selected
-          input-debounce="200"
-          class="rr-field"
-          @filter="onEmployeeFilter"
-        >
-          <template v-slot:prepend>
-            <q-icon name="person" size="xs" />
-          </template>
-          <template v-slot:no-option>
-            <q-item>
-              <q-item-section class="text-grey-6">No employee matches</q-item-section>
-            </q-item>
-          </template>
-        </q-select>
+        <label class="dash-modal__field">
+          <span class="dash-modal__field-label">Employee</span>
+          <q-select
+            v-model="employee"
+            :options="filteredEmployeeOptions"
+            :loading="optionsLoading"
+            hint="Leave blank to review everyone over the same dates"
+            outlined
+            dense
+            clearable
+            emit-value
+            map-options
+            use-input
+            fill-input
+            hide-selected
+            input-debounce="200"
+            class="dash-field rr-field"
+            @filter="onEmployeeFilter"
+            hide-bottom-space
+            popup-content-class="dash-popup dash-popup--modal"
+          >
+            <template v-slot:prepend>
+              <q-icon name="person" size="xs" />
+            </template>
+            <template v-slot:no-option>
+              <q-item>
+                <q-item-section class="text-grey-6">No employee matches</q-item-section>
+              </q-item>
+            </template>
+          </q-select>
+        </label>
 
         <!-- ── Presets ──────────────────────────────────────────────────── -->
         <!-- Attendance review is nearly always a recent window, so the common
@@ -68,7 +75,7 @@
           <div class="rr-cal__bar">
             <button
               type="button"
-              class="rr-nav"
+              class="rr-nav rr-nav--prev"
               aria-label="Previous month"
               @click="shiftMonths(-1)"
             >
@@ -81,7 +88,7 @@
             </div>
             <button
               type="button"
-              class="rr-nav"
+              class="rr-nav rr-nav--next"
               aria-label="Next month"
               :disabled="atLatestMonth"
               @click="shiftMonths(1)"
@@ -135,18 +142,21 @@
         </div>
       </q-card-section>
 
-      <q-separator />
-
-      <q-card-actions align="right" class="rr-actions">
-        <q-btn flat no-caps label="Clear" class="rr-btn-quiet" @click="clearSelection" />
+      <q-card-actions class="dash-modal__foot">
+        <q-btn flat no-caps label="Clear" class="rr-clear" @click="clearSelection" />
         <q-space />
-        <q-btn flat no-caps label="Cancel" @click="$emit('update:modelValue', false)" />
+        <q-btn
+          flat
+          no-caps
+          label="Cancel"
+          class="dash-modal__cancel"
+          @click="$emit('update:modelValue', false)"
+        />
         <q-btn
           unelevated
           no-caps
           label="Apply"
-          icon="check"
-          class="rr-btn-primary"
+          class="dash-modal__submit"
           :disable="!isComplete"
           @click="onApply"
         />
@@ -166,6 +176,14 @@
  */
 import { ref, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
+import {
+  pad,
+  toIso,
+  fromIso,
+  todayIso,
+  shiftIso,
+  longLabel,
+} from 'src/composables/utils/calendarDate'
 
 const $q = useQuasar()
 
@@ -185,34 +203,15 @@ const emit = defineEmits(['update:modelValue', 'apply'])
 const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
-function pad(value) {
-  return String(value).padStart(2, '0')
-}
+// pad / toIso / fromIso / longLabel / shiftIso live in composables/utils/
+// calendarDate.js — this component and ScheduleRangeCalendar.vue held identical
+// copies, and the header comment there explains the UTC day-shift they exist to
+// avoid.
 
-function toIso(date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-const todayIso = toIso(new Date())
-const maxIso = computed(() => (props.maxDate === 'today' ? todayIso : props.maxDate || null))
-
-// Bare YYYY-MM-DD parses as UTC and can shift a day west of Greenwich
-function fromIso(iso) {
-  return new Date(`${iso}T00:00:00`)
-}
-
-function longLabel(iso) {
-  if (!iso) return ''
-  const date = fromIso(iso)
-  if (isNaN(date.getTime())) return iso
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function shiftIso(iso, days) {
-  const date = fromIso(iso)
-  date.setDate(date.getDate() + days)
-  return toIso(date)
-}
+// Resolved once per mount: the picker is opened, used and closed, so it never
+// outlives the day it read. Anything long-lived should call todayIso() per use.
+const today = todayIso()
+const maxIso = computed(() => (props.maxDate === 'today' ? today : props.maxDate || null))
 
 // ─── Selection ────────────────────────────────────────────────────────────────
 const range = ref({ from: '', to: '' })
@@ -270,13 +269,13 @@ const presets = [
 function presetRange(key) {
   const now = new Date()
 
-  if (key === 'last7') return { from: shiftIso(todayIso, -6), to: todayIso }
-  if (key === 'last30') return { from: shiftIso(todayIso, -29), to: todayIso }
+  if (key === 'last7') return { from: shiftIso(today, -6), to: today }
+  if (key === 'last30') return { from: shiftIso(today, -29), to: today }
 
   if (key === 'thisMonth') {
     const first = toIso(new Date(now.getFullYear(), now.getMonth(), 1))
     // Clamped to today: a month-to-date span should not reach into the future
-    return { from: first, to: todayIso }
+    return { from: first, to: today }
   }
 
   const firstOfLast = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -376,7 +375,7 @@ function dayClasses(cell) {
   const { from, to } = effectiveRange.value
   return {
     'rr-day--edge': cell.iso === from || (Boolean(to) && cell.iso === to),
-    'rr-day--today': cell.iso === todayIso,
+    'rr-day--today': cell.iso === today,
     'rr-day--disabled': cell.disabled,
   }
 }
@@ -396,7 +395,13 @@ const filteredEmployeeOptions = computed(() => {
 
 function onEmployeeFilter(val, update) {
   update(() => {
-    employeeNeedle.value = val || ''
+    // QSelect's `fill-input` puts the selected employee's name in the box, and
+    // `showPopup` re-runs the filter with whatever the box holds — so reopening
+    // the menu with someone already chosen filtered the list down to that one
+    // name. An echo of the current selection means "no filter", not "show me
+    // only them".
+    const typed = val || ''
+    employeeNeedle.value = typed === employeeName.value ? '' : typed
   })
 }
 
@@ -441,54 +446,6 @@ watch(
 </script>
 
 <style scoped>
-/* ── Shell ─────────────────────────────────────────────────────────────────── */
-.rr-card {
-  width: 100%;
-  max-width: 620px;
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-.rr-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px 20px;
-  background: var(--dash-brand, #102335);
-}
-
-.rr-head__title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #fff;
-  line-height: 1.3;
-}
-
-.rr-head__sub {
-  margin-top: 2px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.rr-head :deep(.q-btn) {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.rr-head :deep(.q-btn:hover) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.rr-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px 20px;
-  max-height: 72vh;
-  overflow-y: auto;
-}
-
 .rr-field {
   margin-bottom: 0;
 }
@@ -502,10 +459,10 @@ watch(
 
 .rr-preset {
   padding: 6px 12px;
-  border: 1px solid var(--dash-line, #eaecf0);
-  border-radius: 999px;
-  background: var(--dash-surface, #fff);
-  color: var(--dash-ink-2, #475467);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-pill);
+  background: var(--dash-surface);
+  color: var(--dash-ink-2);
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
@@ -517,36 +474,43 @@ watch(
 }
 
 .rr-preset:hover {
-  background: var(--dash-hover, #f9fafb);
-  border-color: var(--dash-line-strong, #d0d5dd);
+  background: var(--dash-hover);
+  border-color: var(--dash-line-strong);
 }
 
 .rr-preset--on {
-  background: var(--dash-accent-bg, #eef2ff);
-  border-color: var(--dash-accent, #2e4fd4);
-  color: var(--dash-accent, #2e4fd4);
+  background: var(--dash-accent-bg);
+  border-color: var(--dash-accent);
+  color: var(--dash-accent);
   font-weight: 600;
 }
 
 /* ── Calendar ──────────────────────────────────────────────────────────────── */
 .rr-cal {
-  border: 1px solid var(--dash-line, #eaecf0);
-  border-radius: 12px;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-lg);
   padding: 12px 12px 6px;
-  background: var(--dash-surface, #fff);
+  background: var(--dash-surface);
 }
 
 .rr-cal__bar {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
   margin-bottom: 6px;
 }
 
+/* Each title has to sit over the grid it names. The nav buttons used to take
+   their width out of this row, so the two labels were centred inside a track
+   72px narrower than the panes below — pulling July ~23px right of its grid and
+   August ~23px left of its own. Taking the buttons out of the flow leaves the
+   labels sharing the full width on the same two tracks, with the same 20px gap,
+   as .rr-cal__panes. */
 .rr-cal__labels {
   display: flex;
   flex: 1;
   min-width: 0;
+  gap: 20px;
 }
 
 .rr-cal__label {
@@ -554,30 +518,42 @@ watch(
   text-align: center;
   font-size: 13px;
   font-weight: 600;
-  color: var(--dash-ink, #101828);
+  color: var(--dash-ink);
   letter-spacing: 0.1px;
 }
 
 .rr-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
   flex: none;
-  border: 1px solid var(--dash-line, #eaecf0);
-  border-radius: 8px;
-  background: var(--dash-surface, #fff);
-  color: var(--dash-ink-2, #475467);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
+  color: var(--dash-ink-2);
   cursor: pointer;
   transition:
     background 0.15s ease,
     color 0.15s ease;
 }
 
+.rr-nav--prev {
+  left: 0;
+}
+
+.rr-nav--next {
+  right: 0;
+}
+
 .rr-nav:hover:not(:disabled) {
-  background: var(--dash-hover, #f9fafb);
-  color: var(--dash-ink, #101828);
+  background: var(--dash-hover);
+  color: var(--dash-ink);
 }
 
 .rr-nav:disabled {
@@ -608,7 +584,7 @@ watch(
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.3px;
-  color: var(--dash-ink-4, #98a2b3);
+  color: var(--dash-ink-4);
 }
 
 .rr-slot {
@@ -628,7 +604,7 @@ watch(
   right: 0;
   height: 32px;
   transform: translateY(-50%);
-  background: var(--dash-accent-bg, #eef2ff);
+  background: var(--dash-accent-bg);
 }
 
 .rr-slot--start::before {
@@ -642,7 +618,7 @@ watch(
 }
 
 .rr-slot--start.rr-slot--end::before {
-  border-radius: 999px;
+  border-radius: var(--dash-r-pill);
 }
 
 /* Softer while the end date is only a hover preview */
@@ -656,9 +632,9 @@ watch(
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--dash-r-pill);
   background: transparent;
-  color: var(--dash-ink, #101828);
+  color: var(--dash-ink);
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
@@ -669,12 +645,12 @@ watch(
 }
 
 .rr-day:hover:not(:disabled):not(.rr-day--edge) {
-  background: var(--dash-n-200, #eaecf0);
+  background: var(--dash-n-200);
 }
 
 .rr-day--edge,
 .rr-day--edge:hover {
-  background: var(--dash-accent, #2e4fd4);
+  background: var(--dash-accent);
   color: #fff;
   font-weight: 700;
   box-shadow: 0 1px 4px rgba(46, 79, 212, 0.35);
@@ -682,14 +658,14 @@ watch(
 
 /* Ring rather than fill, so it never competes with a selected edge */
 .rr-day--today:not(.rr-day--edge) {
-  box-shadow: inset 0 0 0 1.5px var(--dash-accent, #2e4fd4);
-  color: var(--dash-accent, #2e4fd4);
+  box-shadow: inset 0 0 0 1.5px var(--dash-accent);
+  color: var(--dash-accent);
   font-weight: 700;
 }
 
 .rr-day--disabled,
 .rr-day--disabled:hover {
-  color: var(--dash-ink-4, #98a2b3);
+  color: var(--dash-ink-4);
   background: transparent;
   cursor: default;
 }
@@ -698,7 +674,7 @@ watch(
   margin: 8px 0 4px;
   text-align: center;
   font-size: 11.5px;
-  color: var(--dash-ink-3, #667085);
+  color: var(--dash-ink-3);
 }
 
 /* ── Summary ───────────────────────────────────────────────────────────────── */
@@ -707,17 +683,17 @@ watch(
   align-items: center;
   gap: 9px;
   padding: 11px 13px;
-  border: 1px solid var(--dash-info-line, #c7d2fe);
-  border-radius: 10px;
-  background: var(--dash-accent-bg, #eef2ff);
-  color: var(--dash-accent, #2e4fd4);
+  border: 1px solid var(--dash-info-line);
+  border-radius: var(--dash-r-md);
+  background: var(--dash-accent-bg);
+  color: var(--dash-accent);
   font-size: 13px;
 }
 
 .rr-summary--empty {
-  border-color: var(--dash-line, #eaecf0);
-  background: var(--dash-sunken, #f9fafb);
-  color: var(--dash-ink-3, #667085);
+  border-color: var(--dash-line);
+  background: var(--dash-sunken);
+  color: var(--dash-ink-3);
 }
 
 .rr-summary__text {
@@ -727,47 +703,33 @@ watch(
 .rr-summary__count {
   margin-left: auto;
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--dash-r-pill);
   background: rgba(255, 255, 255, 0.75);
   font-size: 11.5px;
   font-weight: 700;
   white-space: nowrap;
 }
 
-/* ── Actions ───────────────────────────────────────────────────────────────── */
-.rr-actions {
-  padding: 12px 20px;
+/* A third action, quieter than Cancel: it edits the selection rather than
+   ending the dialog, so it stays plain text at the far left of the footer. */
+.rr-clear {
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--dash-ink-3);
+  font-size: 13px;
+  font-weight: 500;
 }
-
-.rr-btn-quiet {
-  color: var(--dash-ink-3, #667085);
-}
-
-.rr-btn-primary {
-  background: var(--dash-brand, #102335);
-  color: #fff;
-}
-
-.rr-btn-primary:hover {
-  background: #193d5c;
+.rr-clear:hover {
+  color: var(--dash-ink);
 }
 
 /* ── Narrow ────────────────────────────────────────────────────────────────── */
 @media (max-width: 599px) {
-  .rr-card {
-    max-width: 100%;
-    border-radius: 0;
-  }
-
-  .rr-body {
-    max-height: none;
-  }
-
   .rr-cal__panes {
     gap: 0;
   }
 
-  .rr-actions {
+  .dash-modal__foot {
     flex-wrap: wrap;
   }
 }

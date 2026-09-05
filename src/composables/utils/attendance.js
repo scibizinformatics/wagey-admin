@@ -15,6 +15,25 @@ export function getEmployeeId(employee) {
 }
 
 /**
+ * Does this attendance row belong to `wanted`?
+ *
+ * The id a caller holds comes from the employee dropdown (`uuid || id`) while a
+ * row's `employee` may be a bare id or a nested object, so every identifier the
+ * row carries is checked against it.
+ */
+export function rowMatchesEmployee(row, wanted) {
+  const employee = row?.employee
+  if (!employee || wanted == null || wanted === '') return false
+
+  const target = String(wanted)
+  if (typeof employee !== 'object') return String(employee) === target
+
+  return [employee.uuid, employee.id, employee.employee_id].some(
+    (candidate) => candidate != null && String(candidate) === target,
+  )
+}
+
+/**
  * `employees` is the roster used to resolve a bare id back to a person.
  */
 export function getEmployeeName(employee, employees = []) {
@@ -49,17 +68,45 @@ export function getEmployeeName(employee, employees = []) {
   return 'Unknown Employee'
 }
 
-const PHOTO_KEYS = ['photo', 'image', 'profile_picture', 'profile_photo', 'avatar', 'picture']
+// Endpoints disagree about where a person's picture lives, so every spelling the
+// API has been seen to use is tried. `picture_url` matters especially: the
+// employee roster (`/user/companies/{id}/employees/`) puts it on a nested `user`
+// object, which is why the Employees table reads `row.user.picture_url` directly
+// and why a resolver that only looked at top-level keys came back empty for
+// every row the roster supplied.
+const PHOTO_KEYS = [
+  'photo',
+  'image',
+  'profile_picture',
+  'profile_photo',
+  'avatar',
+  'picture',
+  'picture_url',
+]
+
+function pickPhoto(source) {
+  if (!source || typeof source !== 'object') return null
+
+  const own = PHOTO_KEYS.map((key) => source[key]).find(Boolean)
+  if (own) return own
+
+  const user = source.user
+  if (user && typeof user === 'object') {
+    return PHOTO_KEYS.map((key) => user[key]).find(Boolean) ?? null
+  }
+  return null
+}
 
 export function getEmployeePhoto(employee, employees = []) {
   if (!employee) return null
 
-  const pick = (obj) => PHOTO_KEYS.map((k) => obj?.[k]).find(Boolean) ?? null
+  if (typeof employee === 'object') return pickPhoto(employee)
 
-  if (typeof employee === 'object') return pick(employee)
-
-  const found = employees.find((emp) => emp.id === employee || emp.uuid === employee)
-  return found ? pick(found) : null
+  // Compared as strings: the same employee arrives as a number from one endpoint
+  // and a string from another, and `===` quietly missed the match.
+  const target = String(employee)
+  const found = employees.find((emp) => String(emp?.id) === target || String(emp?.uuid) === target)
+  return found ? pickPhoto(found) : null
 }
 
 export function getInitials(name) {
@@ -276,7 +323,14 @@ export function getLockedShiftRecordIds(rows = []) {
     if (group.length < 2) continue
     if (!group.some(isRecordComplete)) continue
 
-    const primary = group.reduce((best, row) => (comparePrimacy(row, best) < 0 ? row : best))
+    // Seeded with the first row rather than relying on reduce's no-initial-value
+    // form, which throws on an empty array. The `group.length < 2` guard above
+    // means that cannot happen today, but the guard and the reduce are free to
+    // drift apart; comparePrimacy(row, row) is 0, so seeding costs nothing.
+    const primary = group.reduce(
+      (best, row) => (comparePrimacy(row, best) < 0 ? row : best),
+      group[0],
+    )
     for (const row of group) {
       if (row.id !== primary.id) locked.add(row.id)
     }

@@ -252,7 +252,7 @@
       v-model="showAddDialog"
       v-model:record="newRecord"
       :cost-center-options="costCenterOptions"
-      :employee-options="employeeOptions"
+      :employee-options="addDialogEmployeeOptions"
       :schedule="employeeSchedule"
       :schedule-loading="loadingSchedule"
       :options-loading="filtersLoading"
@@ -261,7 +261,6 @@
       :completed-assignments="alreadyCompletedAssignments"
       :completed-record-count="completedRecordCount"
       @submit="submitAttendance"
-      @filter-employees="filterEmployees"
       @fetch-schedule="fetchEmployeeSchedule"
     />
 
@@ -272,6 +271,7 @@
       :employee-name="auditEmployeeName"
       :photo="auditPhoto"
       :timezone="auditTimezone"
+      @acknowledged="onAuditAcknowledged"
     />
 
     <!-- Employee Photo Viewer Dialog -->
@@ -306,6 +306,8 @@
 <script setup>
 import { api } from 'src/boot/axios'
 import { BASE, extractErrorMessage } from 'src/composables/utils/http'
+import { sortShiftsByStart } from 'src/composables/utils/schedule'
+import { useAuthStore } from 'src/boot/auth'
 import { useCompany } from '@/composables/page/useCompany'
 import PageShell from '@/components/layout/PageShell.vue'
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
@@ -334,12 +336,15 @@ import {
   getAssignmentId,
   getLockedShiftRecordIds,
   isRecordComplete,
+  rowMatchesEmployee,
 } from '@/composables/utils/attendance'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
 import { useLoadedToast } from '@/composables/useLoadedToast'
+import { useToast } from '@/composables/useToast'
 
 const $q = useQuasar()
+const toast = useToast()
 
 const { companyId } = useCompany()
 const { notifyLoaded } = useLoadedToast()
@@ -353,6 +358,7 @@ const {
   fetchEmployeeSchedule: fetchScheduleFromComposable,
   logAttendance,
   updateAttendance: updateAttendanceApi,
+  invalidateCache: invalidateAttendanceCache,
 } = useAttendance()
 
 const { employees, fetchEmployees, fetchEmployee } = useEmployees()
@@ -364,7 +370,12 @@ const {
 } = useOrganization()
 
 // ─── Local UI state ───────────────────────────────────────────────────────────
-const filtersLoading = ref(false)
+// Counted, not a flag. Sites and employees are fetched together on mount and
+// both drive this; with a plain boolean the first to finish reported the filters
+// ready while the employee list was still on the wire, so the dropdown rendered
+// as loaded and empty.
+const filtersInFlight = ref(0)
+const filtersLoading = computed(() => filtersInFlight.value > 0)
 
 // Dialog states
 const showDatePicker = ref(false)
@@ -522,18 +533,6 @@ const dateRangeLabel = computed(() => {
 // The option values come from `emp.id || emp.uuid` while getEmployeeId() on a
 // record prefers uuid, so a roster entry carrying both would compare unequal.
 // Match against every id the record exposes rather than picking one.
-function rowIsEmployee(row, wanted) {
-  const employee = row.employee
-  if (!employee) return false
-
-  const target = String(wanted)
-  if (typeof employee !== 'object') return String(employee) === target
-
-  return [employee.uuid, employee.id, employee.employee_id].some(
-    (candidate) => candidate != null && String(candidate) === target,
-  )
-}
-
 // Every calendar month the span touches, as ['2026-07', '2026-08', …]. The
 // attendance endpoint takes year and month in its path, so a span crossing a
 // month boundary needs one request per month.
@@ -621,11 +620,22 @@ const completedRecordCount = computed(
 // separately below with its own message.
 const shiftsScheduledForNewRecord = computed(() => employeeSchedule.value?.length ?? 0)
 
-const isAdmin = ref(false)
-const userData = JSON.parse(localStorage.getItem('user') || '{}')
-if (userData.role === 'admin') isAdmin.value = true
-
-const createdBy = userData.employee_uuid || null
+/**
+ * Who is looking at this page, from the auth store.
+ *
+ * This used to be `JSON.parse(localStorage.getItem('user') || '{}')` at the top
+ * level of setup. The `|| '{}'` guards a *missing* key, not a malformed one — so
+ * a `user` value that would not parse threw during setup and blanked the whole
+ * page, not just these two readings. It also re-derived `role === 'admin'`,
+ * which the store already exposes as an `isAdmin` getter, from a second read of
+ * the same key.
+ *
+ * Computed rather than resolved once, so both track a sign-in that completes
+ * after this page is created.
+ */
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.isAdmin)
+const createdBy = computed(() => authStore.user?.employee_uuid || null)
 
 // ─── Timezone cache ──────────────────────────────────────────────────────────────
 const employeeTimezoneCache = reactive({})
@@ -648,7 +658,6 @@ function getTimezoneForEmployee(employee) {
 }
 
 function triggerTimezoneFetch(data) {
-  const toFetch = []
   for (const row of data) {
     const empId = getEmployeeId(row.employee)
     if (!empId) continue
@@ -662,23 +671,41 @@ function triggerTimezoneFetch(data) {
       employeeTimezoneCache[empId] = found.timezone
       continue
     }
-    toFetch.push(empId)
-  }
-  for (const empId of toFetch) {
-    lazyFetchTimezone(empId)
+    queueTimezoneFetch(empId)
   }
 }
 
-async function lazyFetchTimezone(empId) {
+// A browser allows about six concurrent connections per host. Firing an
+// employee-detail request for everyone at once filled that queue with lookups,
+// and the attendance requests behind them — the next month of a range, the next
+// day — waited their turn. Four at a time keeps the timezone stamps arriving
+// without ever being what the table is waiting on.
+const MAX_CONCURRENT_TIMEZONE_FETCHES = 4
+const timezoneQueue = []
+let timezoneFetchesInFlight = 0
+
+function queueTimezoneFetch(empId) {
   if (fetchedEmployees.value[empId]) return
   fetchedEmployees.value[empId] = true
-  try {
-    const detail = await fetchEmployee(empId)
-    if (detail?.timezone) {
-      employeeTimezoneCache[empId] = detail.timezone
-    }
-  } catch {
-    /* timezone fetch failed, will use browser timezone */
+  timezoneQueue.push(empId)
+  pumpTimezoneQueue()
+}
+
+function pumpTimezoneQueue() {
+  while (timezoneFetchesInFlight < MAX_CONCURRENT_TIMEZONE_FETCHES && timezoneQueue.length) {
+    const empId = timezoneQueue.shift()
+    timezoneFetchesInFlight += 1
+    fetchEmployee(empId)
+      .then((detail) => {
+        if (detail?.timezone) employeeTimezoneCache[empId] = detail.timezone
+      })
+      .catch(() => {
+        /* timezone fetch failed, will use browser timezone */
+      })
+      .finally(() => {
+        timezoneFetchesInFlight -= 1
+        pumpTimezoneQueue()
+      })
   }
 }
 
@@ -696,7 +723,7 @@ const filteredAttendanceRows = computed(() => {
     })
 
     if (dateRangeEmployee.value) {
-      data = data.filter((row) => rowIsEmployee(row, dateRangeEmployee.value))
+      data = data.filter((row) => rowMatchesEmployee(row, dateRangeEmployee.value))
     }
   } else if (currentDate.value) {
     data = data.filter((row) => {
@@ -813,12 +840,19 @@ const sortedAttendanceRows = computed(() => {
   })
 })
 
-const pagedRows = computed(() => {
+// The current page's rows, undecorated. Split out of `pagedRows` so the timezone
+// prefetch below can watch what is on screen without also depending on the
+// timezone cache those fetches fill — which would make the watcher retrigger
+// itself on every arrival.
+const visibleRows = computed(() => {
   const start = (pagination.value.page - 1) * pagination.value.rowsPerPage
-  const visible = sortedAttendanceRows.value.slice(start, start + pagination.value.rowsPerPage)
+  return sortedAttendanceRows.value.slice(start, start + pagination.value.rowsPerPage)
+})
+
+const pagedRows = computed(() => {
   const locked = lockedShiftRecordIds.value
 
-  return visible.map((row) => {
+  return visibleRows.value.map((row) => {
     const isLocked = locked.has(row.id)
     return {
       ...row,
@@ -828,6 +862,17 @@ const pagedRows = computed(() => {
     }
   })
 })
+
+// Timezone stamps are resolved for the page being looked at, not for everything
+// the fetch returned. A range covering three months of a whole company used to
+// queue a lookup per person the moment the data landed — thousands of rows, one
+// request each, none of them on screen. Paging or re-sorting picks up whoever is
+// newly visible.
+watch(
+  () => visibleRows.value.map((row) => getEmployeeId(row.employee)).join(','),
+  () => triggerTimezoneFetch(visibleRows.value),
+  { immediate: true },
+)
 
 // ─── Header + filters ─────────────────────────────────────────────────────────
 const dateSummary = computed(() => {
@@ -947,7 +992,7 @@ async function fetchEmployeeSchedule(employeeId, date) {
   try {
     const schedulesList = await fetchScheduleFromComposable(employeeId, date)
     if (schedulesList && schedulesList.length > 0) {
-      const sortedList = schedulesList.sort((a, b) => a.start_time.localeCompare(b.start_time))
+      const sortedList = sortShiftsByStart(schedulesList)
       employeeSchedule.value = sortedList.map((s) => ({
         employee_id: s.employee_id,
         employee_name: s.employee_name,
@@ -963,8 +1008,7 @@ async function fetchEmployeeSchedule(employeeId, date) {
       employeeSchedule.value = null
     }
   } catch (error) {
-    scheduleError.value =
-      error.response?.data?.message ?? error.response?.data?.detail ?? 'Failed to load schedule'
+    scheduleError.value = extractErrorMessage(error, 'Failed to load schedule')
     employeeSchedule.value = null
   } finally {
     loadingSchedule.value = false
@@ -981,7 +1025,15 @@ async function hasScheduleForEmployeeDate(employeeId, date) {
 }
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
+// Stamped on each fetch so a superseded one cannot publish over its successor.
+// Changing the range while the previous span's months are still in the air used
+// to be a race decided by whichever server response happened to land last.
+let fetchToken = 0
+
 async function fetchAttendanceData(params = {}) {
+  const token = ++fetchToken
+  const isCurrent = () => token === fetchToken
+
   try {
     // No page/limit, in either mode. The endpoint is keyed by year/month, and
     // day mode narrows that month down to one date client-side (see
@@ -1000,30 +1052,46 @@ async function fetchAttendanceData(params = {}) {
 
       // No page/limit here: the span is narrowed client-side, so a server-side
       // page would silently clip days off the end of each month.
+      //
+      // The employee goes up as well. Reviewing one person over a fortnight was
+      // still downloading every punch the whole company made across the months
+      // it touched, which is the bulk of what makes a range slow. `loadMonth`
+      // works out for itself whether the endpoint honours it and stops sending
+      // it if not, so the rows are still narrowed client-side below either way.
       const rangeParams = {
         ...(filters.value.cost_center ? { cost_center: filters.value.cost_center } : {}),
+        ...(dateRangeEmployee.value ? { employee: dateRangeEmployee.value } : {}),
         ...params,
       }
 
-      // One request per calendar month the span touches — the endpoint keys off
-      // year/month in its path. Issued together rather than in sequence: a
-      // three-month span was costing three round trips end to end.
-      const perMonth = await Promise.all(
-        months.map(({ year, month }) => fetchAttendance(year, month, rangeParams)),
-      )
-      const collected = perMonth.flatMap((rows) => rows ?? [])
-
-      // Same record can't arrive twice, but months are fetched independently and
-      // a boundary record showing up in both would render as a duplicate row.
+      // The same record can't arrive twice, but months are fetched independently
+      // and a boundary record showing up in both would render as a duplicate.
+      const collected = []
       const seen = new Set()
-      const deduped = collected.filter((row) => {
-        const key = row.id ?? JSON.stringify(row)
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
 
-      attendanceData.value = deduped
+      // One request per calendar month the span touches — the endpoint keys off
+      // year/month in its path — issued together rather than in sequence, and
+      // published as each one lands rather than only once the slowest has. A
+      // span crossing several months used to sit blank for the whole round trip
+      // even though the first month back usually holds rows the reader can
+      // already work with. `commit: false` keeps each month from publishing
+      // itself, so what reaches the table is always the assembled span.
+      await Promise.all(
+        months.map(({ year, month }) =>
+          fetchAttendance(year, month, rangeParams, { commit: false }).then((rows) => {
+            for (const row of rows ?? []) {
+              const key = row.id ?? JSON.stringify(row)
+              if (seen.has(key)) continue
+              seen.add(key)
+              collected.push(row)
+            }
+            if (isCurrent()) attendanceData.value = collected.slice()
+          }),
+        ),
+      )
+
+      if (!isCurrent()) return
+
       // filteredAttendanceRows trims to the span and employee, so the API's own
       // month totals would overstate the footer count.
       const inRange = filteredAttendanceRows.value
@@ -1033,11 +1101,6 @@ async function fetchAttendanceData(params = {}) {
         showErrorNotification('No attendance records found for this range.')
       }
       notifyLoaded('Attendance', inRange.length)
-
-      // Only the rows that survived the span and employee filters — a whole
-      // month of everyone would otherwise queue a timezone lookup per person to
-      // stamp rows that are never rendered.
-      triggerTimezoneFetch(inRange)
       return
     }
 
@@ -1060,6 +1123,8 @@ async function fetchAttendanceData(params = {}) {
       if (full.data.length > data.length) data = full.data
     }
 
+    if (!isCurrent()) return
+
     attendanceData.value = [...data]
     // The API's count is for the whole month; the footer speaks for the day.
     pagination.value.rowsNumber = filteredAttendanceRows.value.length
@@ -1073,20 +1138,15 @@ async function fetchAttendanceData(params = {}) {
       showErrorNotification('No attendance records found for this date.')
     }
     notifyLoaded('Attendance', dateFilteredCount)
-
-    triggerTimezoneFetch(data)
   } catch (error) {
-    showErrorNotification(
-      error.response?.data?.detail ??
-        error.response?.data?.message ??
-        'Failed to load attendance data',
-    )
+    if (!isCurrent()) return
+    showErrorNotification(extractErrorMessage(error, 'Failed to load attendance data'))
     attendanceData.value = []
   }
 }
 
 async function fetchSites() {
-  filtersLoading.value = true
+  filtersInFlight.value += 1
   try {
     await fetchSitesApi()
     siteOptions.value = rawSites.value.map((site) => ({
@@ -1095,10 +1155,10 @@ async function fetchSites() {
       site,
     }))
   } catch (error) {
-    showErrorNotification(error.response?.data?.detail ?? 'Failed to load sites')
+    showErrorNotification(extractErrorMessage(error, 'Failed to load sites'))
     siteOptions.value = []
   } finally {
-    filtersLoading.value = false
+    filtersInFlight.value -= 1
   }
 }
 
@@ -1116,10 +1176,13 @@ async function fetchCostCenters() {
 }
 
 async function fetchEmployeeDetails() {
-  filtersLoading.value = true
+  filtersInFlight.value += 1
   try {
-    await fetchEmployees()
-    employeeOptions.value = employees.value
+    // The resolved rows, not `employees.value`. Two callers sharing one in-flight
+    // request left the ref of whichever one joined late unset, so the dropdown
+    // was built from an empty list often enough to look random.
+    const list = await fetchEmployees()
+    employeeOptions.value = list
       .map((emp) => ({
         label: getEmployeeName(emp) || 'Unknown Employee',
         value: emp.uuid || emp.id,
@@ -1131,10 +1194,10 @@ async function fetchEmployeeDetails() {
       showErrorNotification('No employees found. Please add employees first.')
     }
   } catch (error) {
-    showErrorNotification(error.response?.data?.detail ?? 'Failed to load employees')
+    showErrorNotification(extractErrorMessage(error, 'Failed to load employees'))
     employeeOptions.value = []
   } finally {
-    filtersLoading.value = false
+    filtersInFlight.value -= 1
   }
 }
 
@@ -1196,8 +1259,9 @@ async function submitAttendance(record) {
     !loadingSchedule.value
   ) {
     await $q.dialog({
-      title: 'Not Allowed',
-      message: 'Not allowed to add an attendance, add a schedule first',
+      title: 'No shift on this day',
+      message:
+        'Attendance is recorded against a scheduled shift, so this employee needs one for this date before a punch can be added.',
       persistent: true,
       ok: { label: 'OK', color: 'primary' },
     })
@@ -1221,7 +1285,7 @@ async function submitAttendance(record) {
       return
     }
 
-    if (!createdBy) {
+    if (!createdBy.value) {
       showErrorNotification('User not authenticated. Please log in again.')
       return
     }
@@ -1231,7 +1295,7 @@ async function submitAttendance(record) {
       time_in: timeIn.toISOString(),
       source: 'manual',
       connectivity: 'online',
-      created_by: createdBy,
+      created_by: createdBy.value,
       ...(record.selected_assignment_id != null && {
         assignment_id: Number(record.selected_assignment_id),
       }),
@@ -1248,6 +1312,7 @@ async function submitAttendance(record) {
     if (recordId != null) {
       try {
         await api.delete(`${BASE}/attendance/log/${companyId.value}/${recordId}/`)
+        invalidateAttendanceCache()
       } catch {
         /* rollback failure is non-critical */
       }
@@ -1271,8 +1336,9 @@ async function openInlineEdit(row, field) {
   const employeeId = getEmployeeId(row.employee)
   if (!(await hasScheduleForEmployeeDate(employeeId, row.date))) {
     await $q.dialog({
-      title: 'Not Allowed',
-      message: 'Not allowed to edit attendance, add a schedule first',
+      title: 'No shift on this day',
+      message:
+        'Attendance is recorded against a scheduled shift, so this employee needs one for this date before a punch can be edited.',
       persistent: true,
       ok: { label: 'OK', color: 'primary' },
     })
@@ -1302,6 +1368,23 @@ function closeInlineEdit() {
   }
 }
 
+/**
+ * Did the record actually land on the punch we sent?
+ *
+ * Compared to the minute, because that is all the editor can express: the
+ * server keeps the seconds it already had (or stamps its own), so an
+ * equality test on the ISO strings would call a stored edit a failure.
+ * Reads whatever the last refetch published, so call this after one.
+ */
+function punchLandedAsSent(recordId, field, sentTimestamp) {
+  const stored = (attendanceData.value || []).find((row) => row?.id === recordId)
+  if (!stored || !sentTimestamp) return false
+  const storedAt = new Date(stored[field] || 0).getTime()
+  const sentAt = new Date(sentTimestamp).getTime()
+  if (isNaN(storedAt) || isNaN(sentAt)) return false
+  return Math.floor(storedAt / 60000) === Math.floor(sentAt / 60000)
+}
+
 async function saveInlineEdit() {
   if (!inlineEdit.value.value || !inlineEdit.value.record) return
 
@@ -1326,16 +1409,40 @@ async function saveInlineEdit() {
       }
     }
 
-    await updateAttendanceApi(record.id, {
-      time_in: existingTimeIn,
-      time_out: timeOutTimestamp,
-      source: record.source || 'admin',
-    })
+    const label = field === 'time_in' ? 'Time In' : 'Time Out'
+    const sentTimestamp = field === 'time_in' ? existingTimeIn : timeOutTimestamp
 
-    showSuccessNotification(`${field === 'time_in' ? 'Time In' : 'Time Out'} updated successfully`)
+    try {
+      await updateAttendanceApi(record.id, {
+        time_in: existingTimeIn,
+        time_out: timeOutTimestamp,
+        source: record.source || 'admin',
+      })
+    } catch (error) {
+      // `attendance/log-update/` can save the punch and *then* fail — a 500
+      // has been observed arriving with the new time already stored. Reporting
+      // that as a flat failure says the opposite of what happened and leaves
+      // the stale time on screen until the reader reloads, so ask the server
+      // what it actually holds before deciding which message to raise. The
+      // error is still surfaced when the write genuinely did not land.
+      await fetchAttendanceData()
+      if (punchLandedAsSent(record.id, field, sentTimestamp)) {
+        showWarningNotification(
+          `${label} was saved, but the server reported an error while finishing the update.`,
+        )
+      } else {
+        showErrorNotification(extractErrorMessage(error, 'Failed to update'))
+      }
+      closeInlineEdit()
+      return
+    }
+
+    showSuccessNotification(`${label} updated successfully`)
     closeInlineEdit()
     await fetchAttendanceData()
   } catch (error) {
+    // Anything reaching here failed before the write was sent, so the rows on
+    // screen are still current and no refetch is owed.
     showErrorNotification(extractErrorMessage(error, 'Failed to update'))
   } finally {
     inlineEdit.value.saving = false
@@ -1492,42 +1599,23 @@ function exitDateRange() {
   fetchAttendanceData()
 }
 
-function filterEmployees(val, update) {
-  if (val === '') {
-    update(() => {
-      if (!isAdmin.value && newRecord.value.site_id) {
-        employeeOptions.value = employees.value
-          .filter((emp) => {
-            const empSiteId = emp.site_id || emp.siteId || emp.site
-            return empSiteId && Number(empSiteId) === Number(newRecord.value.site_id)
-          })
-          .map((emp) => ({ label: getEmployeeName(emp), value: emp.id || emp.uuid, employee: emp }))
-      } else {
-        employeeOptions.value = employees.value.map((emp) => ({
-          label: getEmployeeName(emp),
-          value: emp.id || emp.uuid,
-          employee: emp,
-        }))
-      }
-    })
-    return
-  }
+// Who the add dialog may pick from — a non-admin recording attendance is held to
+// the site they picked. Derived rather than assigned: this used to be a QSelect
+// `@filter` handler that rewrote `employeeOptions` in place, and since the same
+// array is handed to the date-range picker, the site narrowing (and anything
+// typed into the add dialog's search) stayed applied and showed up over there as
+// a dropdown with a couple of names in it. Matching text is filtered inside each
+// dialog now; the page only decides eligibility.
+const addDialogEmployeeOptions = computed(() => {
+  const siteId = newRecord.value.site_id
+  if (isAdmin.value || !siteId) return employeeOptions.value
 
-  update(() => {
-    const needle = val.toLowerCase()
-    const base =
-      !isAdmin.value && newRecord.value.site_id
-        ? employees.value.filter((emp) => {
-            const empSiteId = emp.site_id || emp.siteId || emp.site
-            return empSiteId && Number(empSiteId) === Number(newRecord.value.site_id)
-          })
-        : employees.value
-
-    employeeOptions.value = base
-      .map((emp) => ({ label: getEmployeeName(emp), value: emp.id || emp.uuid, employee: emp }))
-      .filter((emp) => emp.label.toLowerCase().indexOf(needle) > -1)
+  return employeeOptions.value.filter((option) => {
+    const employee = option.employee ?? {}
+    const employeeSiteId = employee.site_id || employee.siteId || employee.site
+    return employeeSiteId && Number(employeeSiteId) === Number(siteId)
   })
-}
+})
 
 // Both modes page over rows that are already in memory and pagedRows slices
 // them, so turning a page is instant and neither handler refetches. Day mode
@@ -1572,6 +1660,22 @@ function openAuditTrail(row) {
   showAuditDialog.value = true
 }
 
+// The dialog writes the acknowledgement itself; the rows are this page's to
+// refresh. Its snapshot is re-synced from the reloaded set afterwards so the
+// acknowledgement's author and stamp come from the server rather than being
+// assumed here — and so the table's Audit column agrees with the open dialog.
+async function onAuditAcknowledged(recordId) {
+  await fetchAttendanceData()
+
+  const id = recordId ?? auditRecord.value?.id
+  if (!id) return
+
+  const fresh = attendanceData.value.find(
+    (row) => String(row?.id) === String(id) || String(row?.uuid) === String(id),
+  )
+  if (fresh) auditRecord.value = { ...auditRecord.value, ...fresh }
+}
+
 function formatTimeForInput(dateTimeString, timezone) {
   if (!dateTimeString) return ''
   return formatInTimezone(dateTimeString, timezone, '24h')
@@ -1598,11 +1702,15 @@ function formatScheduleTime(timeString) {
 
 // ─── Notifications ────────────────────────────────────────────────────────────
 function showSuccessNotification(message) {
-  $q.notify({ type: 'positive', message, position: 'top', timeout: 3000 })
+  toast.success(message, { timeout: 3000 })
 }
 
 function showErrorNotification(message) {
-  $q.notify({ type: 'negative', message, position: 'top', timeout: 5000 })
+  toast.error(message, { timeout: 5000 })
+}
+
+function showWarningNotification(message) {
+  toast.warning(message, { timeout: 6000 })
 }
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────

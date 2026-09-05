@@ -89,7 +89,12 @@
           @click="$emit('view-audit', row)"
         >
           <q-icon name="o_visibility" size="16px" />
-          <span v-if="hasAuditFlags(row)" class="card__audit-dot" />
+          <!-- Acknowledged records read as settled: the alert dot gives way to a
+               check, matching the table's Audit column. -->
+          <span v-if="isAcknowledged(row)" class="card__audit-check">
+            <q-icon name="check" size="9px" />
+          </span>
+          <span v-else-if="hasAuditFlags(row)" class="card__audit-dot" />
         </button>
       </div>
 
@@ -179,8 +184,14 @@ function hasAuditFlags(row) {
   return Boolean(row.flagged || row.is_suspicious || row.auto_closed)
 }
 
-// Worst state wins the colour, matching the chip order inside the dialog.
+function isAcknowledged(row) {
+  return Boolean(row.acknowledged) && hasAuditFlags(row)
+}
+
+// Worst state wins the colour, matching the chip order inside the dialog — except
+// once acknowledged, where the record reads as settled rather than outstanding.
 function auditToneClass(row) {
+  if (isAcknowledged(row)) return 'card__audit--good'
   if (row.is_suspicious) return 'card__audit--critical'
   if (row.flagged) return 'card__audit--warn'
   if (row.auto_closed) return 'card__audit--info'
@@ -302,6 +313,13 @@ const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
   color: var(--dash-info);
 }
 
+/* Settled: the flag is still on the record, but somebody has signed off on it. */
+.card__audit--good {
+  border-color: var(--dash-good-line);
+  background: var(--dash-good-bg);
+  color: var(--dash-good);
+}
+
 .card__audit-dot {
   position: absolute;
   top: -3px;
@@ -310,6 +328,21 @@ const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
   height: 7px;
   border-radius: 50%;
   background: currentColor;
+  box-shadow: 0 0 0 2px var(--dash-surface);
+}
+
+.card__audit-check {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--dash-good-mark);
+  color: #fff;
   box-shadow: 0 0 0 2px var(--dash-surface);
 }
 
