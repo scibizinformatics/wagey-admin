@@ -17,6 +17,19 @@ const routes = [
   {
     path: '/app',
     component: MainLayout,
+    // Declared once on the parent: Vue Router merges `meta` down the matched
+    // chain, so this covers every page in the shell including the nested
+    // /app/payroll subtree.
+    //
+    // The guard in router/index.js has always read `to.meta.requiresAuth`, but
+    // no route set it, so the condition was permanently false and the guard had
+    // never fired. What actually kept the app together was the axios 401
+    // interceptor: an unauthenticated visitor to /#/app/employees got the whole
+    // admin shell rendered, which then fired its requests, 401'd, and bounced.
+    // That means a visible flash of the entire admin UI before the redirect, and
+    // real exposure the moment any endpoint answers anonymously — the page will
+    // render whatever it is given.
+    meta: { requiresAuth: true },
     children: [
       {
         path: '',
@@ -42,6 +55,11 @@ const routes = [
         path: 'schedule',
         name: 'schedule',
         component: () => import('pages/SchedulePage.vue'),
+      },
+      {
+        path: 'manning',
+        name: 'manning',
+        component: () => import('pages/ManningPage.vue'),
       },
       {
         path: 'requests',
@@ -98,6 +116,11 @@ const routes = [
         path: 'admin-settings',
         name: 'admin-settings',
         component: AdminSettingsPage,
+      },
+      {
+        path: 'audit',
+        name: 'audit',
+        component: () => import('pages/AuditPage.vue'),
       },
     ],
   },
