@@ -1,22 +1,24 @@
 // src/utils/http.js
-// NOTE: Prefer importing { api } from 'boot/axios' directly in your components.
-// This file exists only for legacy compatibility. Do not use BASE or authHeaders
-// for new code — the axios interceptor in boot/axios.js handles auth automatically.
+//
+// `extractErrorMessage` is the reason to import from here — it is the app-wide
+// error formatter and every catch block should use it.
+//
+// `api` is re-exported for convenience only; prefer `import { api } from
+// 'boot/axios'` in new code. `BASE` is legacy: the axios instance already has a
+// baseURL, so `${BASE}/path` and `/path` resolve identically, and new call sites
+// should just use the path.
+//
+// `authHeaders()` used to live here too. It read the access token straight out
+// of localStorage and returned an Authorization header, which made it a second
+// source of truth for credentials alongside the Pinia auth store — and one that
+// diverged after logout, when the store is cleared but localStorage may not be.
+// The request interceptor in boot/axios.js is now the only thing that
+// authenticates a request. All 140-odd call sites were removed and the function
+// deleted; don't reintroduce it.
 
 import { api } from 'boot/axios'
 
 export { api }
-
-/**
- * @deprecated No longer needed — the axios interceptor in `boot/axios.js`
- * automatically attaches the Authorization header from the Pinia auth store
- * to every request. This function is kept as a no-op for backward compatibility
- * and will be removed in a future cleanup.
- */
-export function authHeaders() {
-  const token = localStorage.getItem('access_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
 
 /**
  * @deprecated Use `api` from 'boot/axios' instead.
@@ -39,6 +41,13 @@ export const BASE =
  * attendance'.
  */
 export function extractErrorMessage(error, fallback = 'Something went wrong') {
+  // Raised by the request interceptor when the session has ended, before the
+  // request is sent — so there is no response to read a message out of, and the
+  // action the caller names in `fallback` is not what failed.
+  if (error?.code === 'ERR_NO_SESSION') {
+    return error.message || 'Your session has ended. Please sign in again.'
+  }
+
   const response = error?.response
   const data = response?.data
 
