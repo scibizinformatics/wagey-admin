@@ -31,6 +31,29 @@
           <q-icon name="o_filter_alt" size="16px" />
         </template>
       </q-select>
+      <!-- Payout group, resolved from each employee's active contract — the same
+           source and the same wording the Employees, Attendance and Schedule
+           filters use, so one reviewer's "group A" means one thing app-wide.
+           Hidden entirely when the company has no groups set up, rather than
+           offering a select whose only option is "All". -->
+      <q-select
+        v-if="payrollGroupOptions.length"
+        :model-value="payrollGroupFilter"
+        @update:model-value="$emit('update:payrollGroupFilter', $event)"
+        :options="payrollGroupSelectOptions"
+        emit-value
+        map-options
+        dense
+        outlined
+        hide-bottom-space
+        popup-content-class="dash-popup"
+        class="grid-filter grid-filter--wide dash-field"
+        aria-label="Filter by payout group"
+      >
+        <template v-slot:prepend>
+          <q-icon name="o_groups" size="16px" />
+        </template>
+      </q-select>
       <div class="grid-footer-info">
         <strong>{{ rows.length }}</strong> {{ rows.length === 1 ? 'request' : 'requests' }}
       </div>
@@ -113,24 +136,16 @@
                   flat
                   dense
                   round
-                  icon="visibility"
+                  icon="more_horiz"
                   size="sm"
                   class="grid-action"
-                  @click.stop="$emit('view', props.row)"
+                  aria-label="Row actions"
+                  @click.stop
                 >
-                  <q-tooltip>View details</q-tooltip>
-                </q-btn>
-                <q-btn
-                  v-if="props.row.status === 'pending'"
-                  flat
-                  dense
-                  round
-                  icon="rule"
-                  size="sm"
-                  class="grid-action grid-action--approve"
-                  @click.stop="$emit('approve', props.row)"
-                >
-                  <q-tooltip>Approve or reject</q-tooltip>
+                  <RequestRowMenu
+                    :actions="rowActions(props.row)"
+                    @select="$emit($event, props.row)"
+                  />
                 </q-btn>
               </div>
             </q-td>
@@ -144,6 +159,7 @@
 <script setup>
 import { computed } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import RequestRowMenu from './RequestRowMenu.vue'
 import { getApproverName as approverName } from 'src/composables/utils/employee'
 
 const props = defineProps({
@@ -153,8 +169,29 @@ const props = defineProps({
   caStatusOptions: Array,
   caPagination: Object,
   search: String,
+  // Null is "all groups"; ids arrive from the payroll-groups endpoint, which
+  // numbers them, but a string id would compare just as well.
+  payrollGroupFilter: { type: [Number, String], default: null },
+  payrollGroupOptions: { type: Array, default: () => [] },
 })
-defineEmits(['update:caFilterStatus', 'update:search', 'view', 'approve'])
+defineEmits([
+  'update:caFilterStatus',
+  'update:search',
+  'update:payrollGroupFilter',
+  'view',
+  'approve',
+])
+
+// The row's own actions. A cash advance is not decided in place — both outcomes
+// happen in the review modal — so the single decision item opens it rather than
+// offering an Approve and a Reject that would both lead to the same dialog.
+const rowActions = (row) => {
+  const actions = [{ key: 'view', label: 'View details', icon: 'o_visibility' }]
+  if (row.status === 'pending') {
+    actions.push({ key: 'approve', label: 'Approve or reject', icon: 'o_rule', tone: 'good' })
+  }
+  return actions
+}
 
 // Self-describing labels: the field is 34px tall, too short for a Quasar
 // stacked label, so the option text has to say which dimension it controls.
@@ -172,16 +209,32 @@ const statusChips = computed(() =>
   })),
 )
 
-const isNarrowed = computed(() => !!props.caFilterStatus || !!(props.search || '').trim())
+const payrollGroupSelectOptions = computed(() => [
+  { label: 'All payout groups', value: null },
+  ...props.payrollGroupOptions,
+])
+
+const isNarrowed = computed(
+  () =>
+    !!props.caFilterStatus || !!(props.search || '').trim() || props.payrollGroupFilter !== null,
+)
 
 const emptyTitle = computed(() =>
-  isNarrowed.value ? 'No requests match your search' : 'No cash advance requests',
+  isNarrowed.value ? 'No requests match your filters' : 'No cash advance requests',
 )
-const emptyText = computed(() =>
-  isNarrowed.value
-    ? 'Clear the search or switch back to All to see every request in this queue.'
-    : 'Cash advance requests from employees appear here for review.',
-)
+// Names only the controls actually in use: the payout-group select is hidden for
+// a company with no groups set up, so a fixed sentence listing all three would
+// point at a field that isn't on screen.
+const emptyText = computed(() => {
+  if (!isNarrowed.value) return 'Cash advance requests from employees appear here for review.'
+  const parts = []
+  if ((props.search || '').trim()) parts.push('clearing the search')
+  if (props.caFilterStatus) parts.push('switching back to All statuses')
+  if (props.payrollGroupFilter !== null) parts.push('switching back to All payout groups')
+  const list =
+    parts.length > 1 ? `${parts.slice(0, -1).join(', ')} or ${parts[parts.length - 1]}` : parts[0]
+  return `Try ${list} to see every request in this queue.`
+})
 
 // The approval date rides under Payout and the approver under Status, so six
 // columns cover what eight did. RequestCaViewModal still lists every field.
@@ -248,8 +301,10 @@ const statusPillClass = (status) => {
 .cell-status {
   width: 160px;
 }
+/* One 30px menu trigger, so the column only has to clear its own header
+   label. It used to be sized for up to three side-by-side buttons. */
 .cell-actions {
-  width: 100px;
+  width: 76px;
 }
 
 .ca-grid :deep(.q-table__bottom) {

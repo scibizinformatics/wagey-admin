@@ -1,276 +1,39 @@
 /*
- * Request-page dialog chrome.
+ * Request-page dialog content.
  *
- * Imported per component with `<style scoped src="./requestModal.css">` so all
+ * Imported per component with `<style scoped src="./requestModal.css">` by the
  * seven dialogs on this page — the four detail views, the cash-advance approval
- * form, apply-leave and overtime-advance — render one card, one header, one
- * section block and one button pair.
+ * form, apply-leave and overtime-advance.
  *
- * What that replaced: seven near-identical private copies of the same rules,
- * each with its own drift. The section headings were 11–12px uppercase at 0.06em
- * tracking, which is the clearest single tell of an older dashboard and the
- * convention every table in this app has already dropped. Status badges were
- * flat pastel fills on a 20px pill; they are bordered chips at the system radius
- * now, matching the pills in the queues behind them. Cancel and Submit were both
- * filled navy, so the two buttons in every form were indistinguishable until you
- * read them — Cancel is a secondary button here.
- *
- * The navy header stays: it is the convention the Attendance audit dialog set
- * when the dashboard moved onto the design system, so the dialogs across the app
- * open the same way. Everything else reads from the `--dash-*` tokens in
- * src/css/dashboard.scss.
+ * The card, header, body, footer, detail rows, status chips and button pair are
+ * NOT here any more: they are the `dash-modal` chrome in src/css/dashboard.scss,
+ * which every dialog in the app now shares. This file is only what is specific
+ * to a request — a leave type chip, and the two-party approval trail a swap
+ * carries. Everything below reads from the `--dash-*` tokens.
  */
 
-/* ===== Card ===== */
-.modal-card {
-  width: 600px;
-  max-width: 95vw;
-  max-height: 90vh;
-  border-radius: 14px !important;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--dash-shadow-lg);
+/* A titled group of form fields inside the body. Read-only groups use
+   `dash-modal__section`, which draws its own card; a form group is only a
+   heading over its fields, because boxing every input twice reads as clutter. */
+.form-section {
+  margin-bottom: 18px;
 }
-/* Swap review carries two shift columns side by side. */
-.details-modal {
-  width: 700px;
+.form-section:last-of-type {
+  margin-bottom: 0;
 }
 
-/* ===== Header ===== */
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 15px 18px !important;
-  background: var(--dash-brand);
-  border-bottom: none !important;
-}
-.modal-title-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-/* One tile for both the glyph headers and the initials headers, so a dialog
-   opened from a row and one opened from a toolbar button start the same. */
-.modal-icon,
-.modal-avatar-add {
-  background: rgba(255, 255, 255, 0.14) !important;
-  color: #ffffff !important;
-}
-.modal-icon {
-  font-size: 20px;
-  padding: 8px;
-  border-radius: var(--dash-r-md);
-}
-/* Initials sit in the same translucent white tile as the glyph headers. They
-   used to be filled with Quasar's `primary` (#1976d2), a bright blue that
-   clashed with the navy strip it sat on. */
-.modal-avatar,
-.modal-avatar-icon {
-  flex-shrink: 0;
-  border-radius: var(--dash-r-md) !important;
-}
-.modal-avatar {
-  background: rgba(255, 255, 255, 0.14) !important;
-  color: #ffffff !important;
-  font-size: 13px;
-  font-weight: 600;
-}
-.modal-title {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.3;
-  color: #ffffff;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.modal-subtitle {
-  margin-top: 1px;
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.78);
-}
-.modal-close-btn,
-.modal-header .q-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-  flex-shrink: 0;
-}
-.modal-close-btn:hover,
-.modal-header .q-btn:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  color: #ffffff !important;
-}
-
-/* ===== Body =====
-   White, not grey. The form dialogs used to fill the body with #f9fafb so their
-   white fields would separate from it; outlined fields on the system's hairline
-   do that on their own, and grey-on-grey-on-white was one surface too many. */
-.modal-content {
-  padding: 18px 20px !important;
-  overflow-y: auto;
-  flex: 1;
-  background: var(--dash-surface) !important;
-}
-.modal-content::-webkit-scrollbar {
-  width: 8px;
-}
-.modal-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-.modal-content::-webkit-scrollbar-thumb {
-  background: var(--dash-n-200);
-  border-radius: var(--dash-r-pill);
-}
-.modal-content::-webkit-scrollbar-thumb:hover {
-  background: var(--dash-n-300);
-}
-
-.modal-footer {
-  padding: 12px 20px;
-  background: var(--dash-n-25);
-  border-top: 1px solid var(--dash-line);
-}
-
-/* ===== Read-only detail blocks ===== */
-.detail-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.detail-section {
-  padding: 12px 14px 13px;
-  background: var(--dash-n-25);
-  border: 1px solid var(--dash-line);
-  border-radius: var(--dash-r-md);
-}
-/* Sentence case at the system's small-label size. Tracked-out capitals are the
-   convention this app dropped everywhere else. */
-.section-title {
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--dash-ink-2);
-  border-bottom: 1px solid var(--dash-line);
-}
-.detail-grid {
-  display: flex;
-  flex-direction: column;
-}
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--dash-line-soft);
-}
-.detail-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-.detail-label {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--dash-ink-3);
-  white-space: nowrap;
-}
-.detail-value {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dash-ink);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.amount-highlight {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--dash-ink);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Free-text blocks — a reason, a note, an admin reply. */
+/* A label-over-text pair inside a detail section, for free text that is too
+   long to sit in a label/value row. */
 .info-content {
   margin: 10px 0 8px;
 }
-.info-label {
-  margin-bottom: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dash-ink-3);
-}
-.info-text,
-.reason-content,
-.message-content,
-.admin-response {
-  padding: 2px 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--dash-ink-2);
-}
-.response-meta {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--dash-ink-4);
+.info-content:last-child {
+  margin-bottom: 0;
 }
 
-/* ===== Status and type chips =====
-   Bordered — a tint plus a 1px ring in the same hue — at the system radius, so
-   they match the pills in the queue behind the dialog. */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border-radius: var(--dash-r-sm);
-  border: 1px solid var(--dash-neutral-line);
-  background: var(--dash-neutral-bg);
-  color: var(--dash-neutral);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 18px;
-  white-space: nowrap;
-}
-.status-badge.status-pending,
-.status-badge.status-requested {
-  background: var(--dash-warn-bg);
-  border-color: var(--dash-warn-line);
-  color: var(--dash-warn);
-}
-.status-badge.status-approved {
-  background: var(--dash-good-bg);
-  border-color: var(--dash-good-line);
-  color: var(--dash-good);
-}
-.status-badge.status-rejected {
-  background: var(--dash-critical-bg);
-  border-color: var(--dash-critical-line);
-  color: var(--dash-critical);
-}
-.status-badge.status-qualified,
-.status-badge.status-employee-approved {
-  background: var(--dash-info-bg);
-  border-color: var(--dash-info-line);
-  color: var(--dash-info);
-}
-.status-badge.status-default {
-  background: var(--dash-neutral-bg);
-  border-color: var(--dash-neutral-line);
-  color: var(--dash-neutral);
-}
-/* A leave type is a name, not an abbreviation, so it loses the capitals and the
-   tracking the badge used to force on it. */
+/* A leave type is a name, not a status, so it is a neutral chip rather than one
+   of the reserved status tones — and it keeps sentence case, not the capitals
+   and tracking the old badge forced on it. */
 .type-badge {
   display: inline-flex;
   align-items: center;
@@ -287,7 +50,10 @@
   white-space: nowrap;
 }
 
-/* ===== Swap approval trail ===== */
+/* ===== Swap approval trail =====
+   A swap needs both employees to agree before an admin can act, so the dialog
+   shows the two consents as their own rows rather than folding them into the
+   status chip — "pending" alone cannot say which half is missing. */
 .approval-info {
   display: flex;
   flex-direction: column;
@@ -315,189 +81,4 @@
   border-color: var(--dash-warn-line);
   color: var(--dash-warn);
   font-weight: 500;
-}
-
-/* ===== Forms ===== */
-.form-section {
-  margin-bottom: 18px;
-}
-.form-section:last-of-type {
-  margin-bottom: 0;
-}
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.col-span-2 {
-  grid-column: 1 / -1;
-}
-
-.modal-content :deep(.q-field__control) {
-  border-radius: var(--dash-r-md) !important;
-  background: var(--dash-surface) !important;
-}
-.modal-content :deep(.q-field--outlined .q-field__control:before) {
-  border-color: var(--dash-line-strong) !important;
-  border-radius: var(--dash-r-md) !important;
-}
-.modal-content :deep(.q-field--outlined .q-field__control:hover:before) {
-  border-color: var(--dash-n-400) !important;
-}
-/* Focus is a soft halo rather than a thickened border, so the field does not
-   shift by a pixel when it takes focus. */
-.modal-content :deep(.q-field--outlined.q-field--focused .q-field__control:before) {
-  border-color: var(--dash-accent) !important;
-  border-width: 1px !important;
-}
-.modal-content :deep(.q-field--outlined.q-field--focused .q-field__control) {
-  box-shadow: 0 0 0 3px var(--dash-accent-ring);
-}
-.modal-content :deep(input[type='number'])::-webkit-outer-spin-button,
-.modal-content :deep(input[type='number'])::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.modal-content :deep(input[type='number']) {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-/* ===== Actions =====
-   Cancel is secondary. Both buttons used to be filled navy, which left every
-   form with two identical-looking choices. */
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--dash-line);
-}
-.modal-footer .form-actions {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
-}
-.cancel-btn {
-  min-height: 36px !important;
-  padding: 0 14px !important;
-  border: 1px solid var(--dash-line-strong) !important;
-  border-radius: var(--dash-r-md) !important;
-  background: var(--dash-surface) !important;
-  color: var(--dash-ink-2) !important;
-  font-weight: 500 !important;
-  text-transform: none !important;
-  box-shadow: none !important;
-}
-.cancel-btn:hover {
-  background: var(--dash-n-50) !important;
-  color: var(--dash-ink) !important;
-}
-.submit-btn {
-  min-height: 36px !important;
-  padding: 0 16px !important;
-  border-radius: var(--dash-r-md) !important;
-  background: var(--dash-brand) !important;
-  color: #ffffff !important;
-  font-weight: 600 !important;
-  text-transform: none !important;
-  box-shadow: var(--dash-shadow-xs) !important;
-}
-.submit-btn:hover {
-  background: var(--dash-n-800) !important;
-}
-/* Approve is the primary action of a review dialog, so it is the filled button
-   and it sits last. Reject is a bordered critical button rather than a second
-   filled one — two solid buttons side by side gave the destructive choice the
-   same weight as the constructive one. */
-.approve-btn {
-  min-height: 36px !important;
-  padding: 0 16px !important;
-  border-radius: var(--dash-r-md) !important;
-  background: var(--dash-good) !important;
-  color: #ffffff !important;
-  font-weight: 600 !important;
-  text-transform: none !important;
-  box-shadow: var(--dash-shadow-xs) !important;
-}
-.approve-btn:hover {
-  background: #05603a !important;
-}
-.reject-btn {
-  min-height: 36px !important;
-  padding: 0 14px !important;
-  border: 1px solid var(--dash-critical-line) !important;
-  border-radius: var(--dash-r-md) !important;
-  background: var(--dash-surface) !important;
-  color: var(--dash-critical) !important;
-  font-weight: 500 !important;
-  text-transform: none !important;
-  box-shadow: none !important;
-}
-.reject-btn:hover {
-  background: var(--dash-critical-bg) !important;
-}
-/* Catches any footer button that carries none of the classes above, so a stray
-   q-btn cannot reintroduce Quasar's uppercase default next to them. */
-.modal-footer :deep(.q-btn__content) {
-  text-transform: none;
-  font-size: 13px;
-  letter-spacing: 0;
-}
-
-/* ===== Responsive ===== */
-@media (max-width: 1023px) {
-  .modal-card,
-  .details-modal {
-    width: 100%;
-    max-width: 680px;
-  }
-}
-
-@media (max-width: 768px) {
-  .modal-card,
-  .details-modal {
-    width: 100%;
-    margin: 10px;
-    max-width: calc(100vw - 20px);
-    max-height: calc(100vh - 20px);
-  }
-  .modal-content {
-    padding: 14px !important;
-  }
-  .modal-footer {
-    padding: 12px 14px;
-  }
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  .col-span-2 {
-    grid-column: span 1;
-  }
-  .form-actions {
-    flex-direction: column-reverse;
-    align-items: stretch;
-  }
-  .form-actions .q-btn,
-  .form-actions button {
-    width: 100%;
-  }
-  /* Label above value once the row has no width to place them side by side. */
-  .detail-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 3px;
-  }
-  .detail-value {
-    justify-content: flex-start;
-    text-align: left;
-  }
-}
-
-@media (max-width: 480px) {
-  .modal-title {
-    font-size: 15px;
-  }
 }

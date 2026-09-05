@@ -4,106 +4,103 @@
     @update:model-value="$emit('update:modelValue', $event)"
     persistent
   >
-    <q-card class="modal-card details-modal">
-      <q-card-section class="modal-header">
-        <div class="modal-title-section">
-          <q-avatar size="40px" class="modal-avatar">
+    <q-card class="dash-modal dash-modal--md">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <q-avatar size="38px" class="dash-modal__head-icon">
             {{ request ? getInitials(request.requested_by_name) : '?' }}
           </q-avatar>
-          <div>
-            <div class="modal-title">
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">
               {{ request?.requested_by_name || 'Swap request details' }}
             </div>
-            <div class="modal-subtitle">Swap request</div>
+            <div class="dash-modal__sub">Swap request</div>
           </div>
         </div>
         <q-btn
           icon="close"
           flat
           round
-          class="modal-close-btn"
+          aria-label="Close"
           @click="$emit('update:modelValue', false)"
         />
       </q-card-section>
-      <q-separator />
-      <q-card-section class="modal-content" v-if="request">
-        <div class="detail-sections">
-          <div class="detail-section">
-            <div class="section-title">Swap details</div>
-            <div class="detail-grid">
-              <div class="detail-row">
-                <span class="detail-label">From employee:</span>
-                <span class="detail-value">{{ request.from_employee_name }}</span>
+      <q-card-section class="dash-modal__body" v-if="request">
+        <div class="dash-modal__stack">
+          <div class="dash-modal__section">
+            <div class="dash-modal__section-title">Swap details</div>
+            <div class="dash-modal__rows">
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">From employee:</span>
+                <span class="dash-modal__value">{{ request.from_employee_name || EM_DASH }}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">To employee:</span>
-                <span class="detail-value">{{ request.to_employee_name }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="detail-section">
-            <div class="section-title">Original assignment</div>
-            <div class="detail-grid">
-              <div class="detail-row">
-                <span class="detail-label">Date:</span>
-                <span class="detail-value">{{ formatDate(request.original_date) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Site:</span>
-                <span class="detail-value">{{ request.original_assignment?.site || 'N/A' }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Shift:</span>
-                <span class="detail-value">{{
-                  request.original_assignment?.shift_type || 'N/A'
-                }}</span>
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">To employee:</span>
+                <span class="dash-modal__value">{{ request.to_employee_name || EM_DASH }}</span>
               </div>
             </div>
           </div>
 
-          <div class="detail-section">
-            <div class="section-title">New assignment</div>
-            <div class="detail-grid">
-              <div class="detail-row">
-                <span class="detail-label">Date:</span>
-                <span class="detail-value">{{ formatDate(request.new_date) }}</span>
+          <div class="dash-modal__section">
+            <div class="dash-modal__section-title">Original assignment</div>
+            <div class="dash-modal__rows">
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Date:</span>
+                <span class="dash-modal__value">{{ request.original_date_label || EM_DASH }}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Site:</span>
-                <span class="detail-value">{{ request.new_assignment?.site || 'N/A' }}</span>
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Site:</span>
+                <span class="dash-modal__value">{{ request.original_site_label || EM_DASH }}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Shift:</span>
-                <span class="detail-value">{{ request.new_assignment?.shift_type || 'N/A' }}</span>
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Shift:</span>
+                <span class="dash-modal__value">{{ request.original_shift_label || EM_DASH }}</span>
               </div>
             </div>
           </div>
 
-          <div class="detail-section">
-            <div class="section-title">Status information</div>
-            <div class="detail-grid">
-              <div class="detail-row">
-                <span class="detail-label">Status:</span>
-                <span class="detail-value">
-                  <div :class="['status-badge', getStatusClass(request)]">
-                    {{ getStatusLabel(request) }}
+          <div class="dash-modal__section">
+            <div class="dash-modal__section-title">New assignment</div>
+            <div class="dash-modal__rows">
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Date:</span>
+                <span class="dash-modal__value">{{ request.new_date_label || EM_DASH }}</span>
+              </div>
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Site:</span>
+                <span class="dash-modal__value">{{ request.new_site_label || EM_DASH }}</span>
+              </div>
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Shift:</span>
+                <span class="dash-modal__value">{{ request.new_shift_label || EM_DASH }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dash-modal__section">
+            <div class="dash-modal__section-title">Status information</div>
+            <div class="dash-modal__rows">
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Status:</span>
+                <span class="dash-modal__value">
+                  <div :class="['dash-chip', statusBadgeClass(request)]">
+                    {{ request.status_label }}
                   </div>
                 </span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Requested at:</span>
-                <span class="detail-value">{{ formatDateTime(request.requested_at) }}</span>
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Requested at:</span>
+                <span class="dash-modal__value">{{ request.requested_at_label || EM_DASH }}</span>
               </div>
-              <div v-if="request.admin_approved_at" class="detail-row">
-                <span class="detail-label">Admin approved at:</span>
-                <span class="detail-value">{{ formatDateTime(request.admin_approved_at) }}</span>
+              <div v-if="request.admin_approved_at_label" class="dash-modal__row">
+                <span class="dash-modal__label">Admin approved at:</span>
+                <span class="dash-modal__value">{{ request.admin_approved_at_label }}</span>
               </div>
             </div>
           </div>
 
-          <div v-if="isPendingApproval(request)" class="detail-section">
-            <div class="section-title">Employee approvals</div>
+          <div v-if="isPendingApproval(request)" class="dash-modal__section">
+            <div class="dash-modal__section-title">Employee approvals</div>
             <div class="approval-info">
               <div class="approval-item">
                 <q-icon
@@ -112,7 +109,7 @@
                   size="20px"
                 />
                 <span>
-                  {{ request.to_employee_name }}:
+                  {{ request.to_employee_name || 'The other employee' }}:
                   <span :class="request.to_employee_approved ? 'text-positive' : 'text-warning'">
                     {{ request.to_employee_approved ? 'Approved' : 'Pending' }}
                   </span>
@@ -130,49 +127,52 @@
           </div>
         </div>
       </q-card-section>
-      <q-separator />
-      <q-card-section class="modal-footer">
+      <q-card-section class="dash-modal__foot">
         <!-- Close first, Approve last: the primary action of the dialog sits at
              the end of the row, where the eye finishes. -->
-        <div class="form-actions">
-          <q-btn
-            flat
-            no-caps
-            label="Close"
-            class="cancel-btn"
-            @click="$emit('update:modelValue', false)"
-          />
-          <q-btn
-            v-if="isPendingApproval(request)"
-            flat
-            no-caps
-            label="Reject"
-            class="reject-btn"
-            @click="$emit('reject', request)"
-          />
-          <q-btn
-            v-if="isPendingApproval(request)"
-            unelevated
-            no-caps
-            label="Approve"
-            class="approve-btn"
-            :disable="!canAdminApprove(request)"
-            @click="$emit('approve', request)"
-          >
-            <q-tooltip v-if="!canAdminApprove(request)"> Waiting for employee approval </q-tooltip>
-          </q-btn>
-        </div>
+        <q-btn
+          flat
+          no-caps
+          label="Close"
+          class="dash-modal__cancel"
+          @click="$emit('update:modelValue', false)"
+        />
+        <q-btn
+          v-if="isPendingApproval(request)"
+          flat
+          no-caps
+          label="Reject"
+          class="dash-modal__reject"
+          @click="$emit('reject', request)"
+        />
+        <q-btn
+          v-if="isPendingApproval(request)"
+          unelevated
+          no-caps
+          label="Approve"
+          class="dash-modal__approve"
+          :disable="!canAdminApprove(request)"
+          @click="$emit('approve', request)"
+        >
+          <q-tooltip v-if="!canAdminApprove(request)"> Waiting for employee approval </q-tooltip>
+        </q-btn>
       </q-card-section>
     </q-card>
   </q-dialog>
 </template>
 
 <script setup>
+import { EM_DASH } from 'src/composables/utils/swapRequests'
+
 defineProps({
   modelValue: Boolean,
   request: Object,
 })
 defineEmits(['update:modelValue', 'approve', 'reject'])
+
+// Dates, names, shift and site labels and the status wording arrive already
+// resolved on the request (composables/utils/swapRequests.js), so this dialog
+// and the grid behind it can never phrase the same request differently.
 
 const getInitials = (name) => {
   if (!name) return '?'
@@ -183,43 +183,16 @@ const getInitials = (name) => {
     .toUpperCase()
     .substring(0, 2)
 }
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-  })
+// The badge palette in requestModal.css is keyed by these class names; the tone
+// on the request is the shared vocabulary that maps onto them.
+const BADGE_CLASSES = {
+  pending: 'dash-chip--warn',
+  info: 'dash-chip--info',
+  approved: 'dash-chip--good',
+  rejected: 'dash-chip--critical',
+  default: '',
 }
-const formatDateTime = (dateTimeString) => {
-  if (!dateTimeString) return 'N/A'
-  return new Date(dateTimeString).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-const getStatusClass = (request) => {
-  if (!request) return 'status-default'
-  const status = request.status
-  if (status === 'pending') return 'status-pending'
-  if (status === 'to_employee_approved') return 'status-employee-approved'
-  if (status === 'approved') return 'status-approved'
-  if (status === 'rejected') return 'status-rejected'
-  return 'status-default'
-}
-const getStatusLabel = (request) => {
-  if (!request) return ''
-  const labels = {
-    pending: 'Pending',
-    to_employee_approved: 'Employee Approved',
-    approved: 'Approved',
-    rejected: 'Rejected',
-  }
-  return labels[request.status] || request.status
-}
+const statusBadgeClass = (request) => BADGE_CLASSES[request?.status_tone] || ''
 const isPendingApproval = (request) => {
   if (!request) return false
   return request.status === 'pending' || request.status === 'to_employee_approved'

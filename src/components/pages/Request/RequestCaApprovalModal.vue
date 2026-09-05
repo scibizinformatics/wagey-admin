@@ -4,89 +4,96 @@
     @update:model-value="$emit('update:modelValue', $event)"
     persistent
   >
-    <q-card class="modal-card approval-modal">
-      <q-card-section class="modal-header">
-        <div class="modal-title-section">
-          <q-icon name="edit" class="modal-icon" />
-          <div>
-            <div class="modal-title">Approve cash advance</div>
-            <div class="modal-subtitle">{{ request?.employee_name || '' }}</div>
+    <q-card class="dash-modal dash-modal--md">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <span class="dash-modal__head-icon"><q-icon name="edit" size="20px" /></span>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">Approve cash advance</div>
+            <div class="dash-modal__sub">{{ request?.employee_name || '' }}</div>
           </div>
         </div>
         <q-btn
           icon="close"
           flat
           round
-          class="modal-close-btn"
+          aria-label="Close"
           @click="$emit('update:modelValue', false)"
         />
       </q-card-section>
-      <q-separator />
-      <q-card-section class="modal-content">
-        <div class="detail-sections">
-          <div class="detail-section">
-            <div class="section-title">Request information</div>
-            <div class="detail-grid">
-              <div class="detail-row">
-                <span class="detail-label">Employee:</span>
-                <span class="detail-value">{{ request?.employee_name }}</span>
+      <q-card-section class="dash-modal__body">
+        <div class="dash-modal__stack">
+          <div class="dash-modal__section">
+            <div class="dash-modal__section-title">Request information</div>
+            <div class="dash-modal__rows">
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Employee:</span>
+                <span class="dash-modal__value">{{ request?.employee_name }}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Requested amount:</span>
-                <span class="detail-value amount-highlight"
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Requested amount:</span>
+                <span class="dash-modal__value dash-modal__value--strong"
                   >&#8369;{{ formatAmount(request?.requested_amount) }}</span
                 >
               </div>
             </div>
           </div>
-          <div class="detail-section">
-            <div class="section-title">Approval details</div>
-            <div class="form-grid">
-              <q-select
-                outlined
-                :model-value="approvalData.status"
-                @update:model-value="
-                  $emit('update:approvalData', { ...approvalData, status: $event })
-                "
-                :options="['approved', 'rejected']"
-                label="Status *"
-                :rules="[(val) => !!val || 'Status is required']"
-                class="col-span-2"
-              />
-              <q-input
-                outlined
-                :model-value="approvalData.remarks"
-                @update:model-value="
-                  $emit('update:approvalData', { ...approvalData, remarks: $event })
-                "
-                label="Remarks"
-                type="textarea"
-                rows="3"
-                class="col-span-2"
-              />
+          <div class="dash-modal__section">
+            <div class="dash-modal__section-title">Approval details</div>
+            <div class="dash-modal__grid">
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Status<span class="dash-modal__req">*</span></span
+                >
+                <q-select
+                  outlined
+                  :model-value="approvalData.status"
+                  @update:model-value="
+                    $emit('update:approvalData', { ...approvalData, status: $event })
+                  "
+                  :options="['approved', 'rejected']"
+                  :rules="[(val) => !!val || 'Status is required']"
+                  class="dash-field dash-modal__span-2"
+                  dense
+                  hide-bottom-space
+                  popup-content-class="dash-popup dash-popup--modal"
+                />
+              </label>
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Remarks</span>
+                <q-input
+                  outlined
+                  :model-value="approvalData.remarks"
+                  @update:model-value="
+                    $emit('update:approvalData', { ...approvalData, remarks: $event })
+                  "
+                  type="textarea"
+                  rows="3"
+                  class="dash-field dash-modal__span-2"
+                  dense
+                  hide-bottom-space
+                />
+              </label>
             </div>
           </div>
         </div>
       </q-card-section>
-      <q-separator />
-      <q-card-section class="modal-footer">
-        <div class="form-actions">
-          <q-btn
-            flat
-            no-caps
-            label="Cancel"
-            class="cancel-btn"
-            @click="$emit('update:modelValue', false)"
-          />
-          <q-btn
-            unelevated
-            no-caps
-            label="Submit approval"
-            class="submit-btn"
-            @click="$emit('submit')"
-            :loading="submitting"
-          />
-        </div>
+      <q-card-section class="dash-modal__foot">
+        <q-btn
+          flat
+          no-caps
+          label="Cancel"
+          class="dash-modal__cancel"
+          @click="$emit('update:modelValue', false)"
+        />
+        <q-btn
+          unelevated
+          no-caps
+          label="Submit approval"
+          class="dash-modal__submit"
+          @click="$emit('submit')"
+          :loading="submitting"
+        />
       </q-card-section>
     </q-card>
   </q-dialog>

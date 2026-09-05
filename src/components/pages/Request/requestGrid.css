@@ -75,6 +75,11 @@
   width: 158px;
   flex-shrink: 0;
 }
+/* Payout group names run longer than a status token, so that select gets the
+   same extra width its twin has on the Employees page. */
+.grid-filter--wide {
+  width: 166px;
+}
 .grid-filter :deep(.q-field__control) {
   height: 34px;
   min-height: 34px;
@@ -328,7 +333,11 @@
   color: var(--dash-good);
 }
 
-/* ===== Actions ===== */
+/* ===== Actions =====
+   One trigger per row, opening RequestRowMenu — the same affordance the
+   Employees table uses. The row used to carry two or three bare icon buttons,
+   which made every queue's rightmost column a different width and put a
+   destructive action one mis-click from a harmless one. */
 .grid-actions {
   display: flex;
   align-items: center;
@@ -349,14 +358,6 @@
 .grid-action:hover {
   background: var(--dash-n-100);
   color: var(--dash-ink);
-}
-.grid-action--approve:hover {
-  background: var(--dash-good-bg);
-  color: var(--dash-good);
-}
-.grid-action--reject:hover {
-  background: var(--dash-critical-bg);
-  color: var(--dash-critical);
 }
 
 /* ===== Empty / loading ===== */
@@ -449,7 +450,8 @@
     gap: 12px;
     padding: 13px 14px;
   }
-  .grid-filter {
+  .grid-filter,
+  .grid-filter--wide {
     width: 100%;
   }
   .grid-toolbar--sub .grid-footer-info {

@@ -4,116 +4,112 @@
     @update:model-value="$emit('update:modelValue', $event)"
     persistent
   >
-    <q-card class="modal-card details-modal">
-      <q-card-section class="modal-header">
-        <div class="modal-title-section">
-          <q-avatar size="40px" class="modal-avatar">
+    <q-card class="dash-modal dash-modal--md">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <q-avatar size="38px" class="dash-modal__head-icon">
             {{ request ? getInitials(request.employeeName) : '?' }}
           </q-avatar>
-          <div>
-            <div class="modal-title">{{ request?.employeeName || 'Request details' }}</div>
-            <div class="modal-subtitle">{{ request?.department || 'General' }}</div>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">{{ request?.employeeName || 'Request details' }}</div>
+            <div class="dash-modal__sub">{{ request?.department || 'General' }}</div>
           </div>
         </div>
         <q-btn
           icon="close"
           flat
           round
-          class="modal-close-btn"
+          aria-label="Close"
           @click="$emit('update:modelValue', false)"
         />
       </q-card-section>
-      <q-separator />
-      <q-card-section class="modal-content" v-if="request">
-        <div class="detail-sections">
-          <div class="detail-section">
-            <div class="section-title">Request status</div>
-            <div class="detail-grid">
-              <div class="detail-row">
-                <span class="detail-label">Status:</span>
-                <span class="detail-value">
-                  <div :class="['status-badge', getLeaveStatusClass(request)]">
+      <q-card-section class="dash-modal__body" v-if="request">
+        <div class="dash-modal__stack">
+          <div class="dash-modal__section">
+            <div class="dash-modal__section-title">Request status</div>
+            <div class="dash-modal__rows">
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Status:</span>
+                <span class="dash-modal__value">
+                  <div :class="['dash-chip', getLeaveStatusClass(request)]">
                     {{ capitalizeStatus(request.status) }}
                   </div>
                 </span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Type:</span>
-                <span class="detail-value">
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Type:</span>
+                <span class="dash-modal__value">
                   <div class="type-badge">{{ request.type }}</div>
                 </span>
               </div>
             </div>
           </div>
-          <div class="detail-section">
-            <div class="section-title">Request information</div>
-            <div class="detail-grid">
-              <div class="detail-row">
-                <span class="detail-label">Start date:</span>
-                <span class="detail-value">{{ formatDate(request.startDate) }}</span>
+          <div class="dash-modal__section">
+            <div class="dash-modal__section-title">Request information</div>
+            <div class="dash-modal__rows">
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Start date:</span>
+                <span class="dash-modal__value">{{ formatDate(request.startDate) }}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">End date:</span>
-                <span class="detail-value">{{ formatDate(request.endDate) }}</span>
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">End date:</span>
+                <span class="dash-modal__value">{{ formatDate(request.endDate) }}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Duration:</span>
-                <span class="detail-value">{{ request.duration }}</span>
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Duration:</span>
+                <span class="dash-modal__value">{{ request.duration }}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Submitted:</span>
-                <span class="detail-value">{{ formatDateTime(request.submittedDate) }}</span>
+              <div class="dash-modal__row">
+                <span class="dash-modal__label">Submitted:</span>
+                <span class="dash-modal__value">{{ formatDateTime(request.submittedDate) }}</span>
               </div>
             </div>
           </div>
-          <div v-if="request.reason" class="detail-section">
-            <div class="section-title">Reason</div>
-            <div class="reason-content">{{ request.reason }}</div>
+          <div v-if="request.reason" class="dash-modal__section">
+            <div class="dash-modal__section-title">Reason</div>
+            <div class="dash-modal__note">{{ request.reason }}</div>
           </div>
-          <div v-if="request.message" class="detail-section">
-            <div class="section-title">Additional message</div>
-            <div class="message-content">{{ request.message }}</div>
+          <div v-if="request.message" class="dash-modal__section">
+            <div class="dash-modal__section-title">Additional message</div>
+            <div class="dash-modal__note">{{ request.message }}</div>
           </div>
-          <div v-if="request.adminResponse" class="detail-section">
-            <div class="section-title">Admin response</div>
-            <div class="admin-response">{{ request.adminResponse }}</div>
-            <div v-if="request.respondedBy" class="response-meta">
+          <div v-if="request.adminResponse" class="dash-modal__section">
+            <div class="dash-modal__section-title">Admin response</div>
+            <div class="dash-modal__note">{{ request.adminResponse }}</div>
+            <div v-if="request.respondedBy" class="dash-modal__meta">
               By {{ request.respondedBy }} &bull; {{ formatDateTime(request.respondedDate) }}
             </div>
           </div>
         </div>
       </q-card-section>
-      <q-separator />
-      <q-card-section class="modal-footer">
+      <q-card-section class="dash-modal__foot">
         <!-- Close first, Approve last: the primary action of the dialog sits at
              the end of the row, where the eye finishes. -->
-        <div class="form-actions">
-          <q-btn
-            flat
-            no-caps
-            label="Close"
-            class="cancel-btn"
-            @click="$emit('update:modelValue', false)"
-          />
-          <q-btn
-            v-if="request && request.status === 'pending'"
-            flat
-            no-caps
-            label="Reject"
-            class="reject-btn"
-            @click="$emit('reject', request)"
-            :loading="actionLoading === `reject-${request.id}`"
-          />
-          <q-btn
-            v-if="request && request.status === 'pending'"
-            unelevated
-            no-caps
-            label="Approve"
-            class="approve-btn"
-            @click="$emit('approve', request)"
-            :loading="actionLoading === `approve-${request.id}`"
-          />
-        </div>
+        <q-btn
+          flat
+          no-caps
+          label="Close"
+          class="dash-modal__cancel"
+          @click="$emit('update:modelValue', false)"
+        />
+        <q-btn
+          v-if="request && request.status === 'pending'"
+          flat
+          no-caps
+          label="Reject"
+          class="dash-modal__reject"
+          @click="$emit('reject', request)"
+          :loading="actionLoading === `reject-${request.id}`"
+        />
+        <q-btn
+          v-if="request && request.status === 'pending'"
+          unelevated
+          no-caps
+          label="Approve"
+          class="dash-modal__approve"
+          @click="$emit('approve', request)"
+          :loading="actionLoading === `approve-${request.id}`"
+        />
       </q-card-section>
     </q-card>
   </q-dialog>
@@ -158,10 +154,10 @@ const formatDateTime = (dateString) => {
 }
 const getLeaveStatusClass = (request) => {
   const status = request.status
-  if (status === 'pending') return 'status-pending'
-  if (status === 'approved') return 'status-approved'
-  if (status === 'rejected') return 'status-rejected'
-  return 'status-default'
+  if (status === 'pending') return 'dash-chip--warn'
+  if (status === 'approved') return 'dash-chip--good'
+  if (status === 'rejected') return 'dash-chip--critical'
+  return ''
 }
 </script>
 

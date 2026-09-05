@@ -87,38 +87,6 @@
             </button>
           </nav>
           <div class="tab-bar-aside">
-            <!-- Overtime has no filter toolbar of its own — its rows live inside
-                 the expandable payroll-run cards — so its search sits here. -->
-            <template v-if="activeTab === 'overtime'">
-              <q-input
-                v-model="overtimeSearch"
-                placeholder="Search employee"
-                dense
-                outlined
-                clearable
-                class="grid-search tab-bar-search dash-field"
-              >
-                <template v-slot:prepend>
-                  <q-icon name="search" size="18px" />
-                </template>
-              </q-input>
-              <q-select
-                v-model="overtimeStatusFilter"
-                :options="overtimeStatusOptions"
-                emit-value
-                map-options
-                dense
-                outlined
-                hide-bottom-space
-                popup-content-class="dash-popup"
-                class="grid-filter dash-field"
-                aria-label="Filter overtime by status"
-              >
-                <template v-slot:prepend>
-                  <q-icon name="o_filter_alt" size="16px" />
-                </template>
-              </q-select>
-            </template>
             <RequestStatsCards
               class="tab-bar-stats"
               :active-tab="activeTab"
@@ -135,12 +103,15 @@
           <q-tab-panel name="leave" class="tab-panel-content">
             <RequestLeaveTable
               :rows="filteredLeaveRequests"
-              :loading="loading"
+              :loading="loading || resolvingGroups"
               :action-loading="actionLoading"
               :status-filter="statusFilter"
               :search="searchTerm"
+              :payroll-group-filter="leavePayrollGroupFilter"
+              :payroll-group-options="payrollGroupOptions"
               @update:status-filter="statusFilter = $event"
               @update:search="searchTerm = $event"
+              @update:payroll-group-filter="leavePayrollGroupFilter = $event"
               @view-details="openLeaveDetails"
               @approve="approveRequest"
               @reject="rejectRequest"
@@ -148,359 +119,29 @@
           </q-tab-panel>
 
           <q-tab-panel name="overtime" class="tab-panel-content">
-            <div class="panel-surface">
-              <div v-if="overtimeSummary.length" class="overtime-summary-list">
-                <div
-                  v-for="log in overtimeSummary"
-                  :key="log.id"
-                  :class="['overtime-summary-card', { active: selectedDisbursementLog === log.id }]"
-                  @click="selectDisbursementLog(log.id)"
-                >
-                  <div class="summary-card-header">
-                    <div class="summary-card-name-group">
-                      <q-icon
-                        name="expand_more"
-                        :style="{
-                          transform:
-                            selectedDisbursementLog === log.id ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 0.3s ease',
-                        }"
-                        size="18px"
-                        class="expand-icon"
-                      />
-                      <div class="summary-name-stack">
-                        <div class="summary-name">{{ getBaseName(log.name) }}</div>
-                        <div class="summary-period" v-if="getPeriodFromName(log.name)">
-                          {{ getPeriodFromName(log.name) }}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="summary-stat-cols">
-                      <div class="summary-stat-col">
-                        <span class="summary-stat-label">Total OT</span>
-                        <span class="summary-stat-val">{{ log.overtime_total_count }}</span>
-                      </div>
-                      <div class="summary-stat-col">
-                        <span class="summary-stat-label">Approved</span>
-                        <span class="summary-stat-val">{{ log.overtime_approved_count }}</span>
-                      </div>
-                      <div class="summary-stat-col">
-                        <span class="summary-stat-label">Requested</span>
-                        <span class="summary-stat-val">{{
-                          log.overtime_total_count - log.overtime_approved_count
-                        }}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Expanded Panel with Overtime Requests Table -->
-                  <div
-                    v-if="selectedDisbursementLog === log.id"
-                    class="overtime-panel-wrapper"
-                    @click.stop
-                  >
-                    <div class="overtime-panel">
-                      <div class="overtime-panel-header">
-                        <div class="panel-title">
-                          <q-icon name="schedule" size="16px" color="primary" />
-                          <span>Overtime Requests</span>
-                          <span class="panel-count">{{ overtimeRequests.length }}</span>
-                        </div>
-                      </div>
-                      <!-- Loading. Built from the live `otColumns`, so the placeholder
-                         shares the real table's columns, labels and alignment. -->
-                      <TableSkeleton
-                        v-if="overtimeLoading"
-                        :columns="otColumns"
-                        :rows="4"
-                        flush
-                        wrap-class="overtime-table-container dash-scroll-x"
-                      />
-
-                      <!-- Empty -->
-                      <div v-else-if="filteredOvertimeRequests.length === 0" class="grid-empty">
-                        <div class="grid-empty-icon"><q-icon name="more_time" size="26px" /></div>
-                        <div class="grid-empty-title">
-                          {{
-                            overtimeNarrowed
-                              ? 'No overtime matches your search'
-                              : 'No overtime in this run'
-                          }}
-                        </div>
-                        <div class="grid-empty-text">
-                          {{
-                            overtimeNarrowed
-                              ? 'Clear the search or switch back to All statuses to see every overtime request in this payroll run.'
-                              : 'Overtime logged against this payroll run will appear here for approval.'
-                          }}
-                        </div>
-                      </div>
-
-                      <div v-else>
-                        <!-- Bulk Actions -->
-                        <div v-if="selectedOvertimeIds.size > 0" class="bulk-actions-bar">
-                          <span class="bulk-count">{{ selectedOvertimeIds.size }} selected</span>
-                          <q-btn
-                            unelevated
-                            dense
-                            no-caps
-                            icon="check"
-                            color="positive"
-                            label="Approve Selected"
-                            :loading="overtimeSubmitting.size > 0"
-                            @click="bulkApproveOvertime"
-                          />
-                          <q-btn
-                            unelevated
-                            dense
-                            no-caps
-                            icon="close"
-                            color="negative"
-                            label="Reject Selected"
-                            :loading="overtimeSubmitting.size > 0"
-                            @click="bulkRejectOvertime"
-                          />
-                          <q-btn flat dense label="Clear" @click="clearOvertimeSelection" />
-                        </div>
-
-                        <div class="overtime-table-container dash-scroll-x">
-                          <q-table
-                            :rows="filteredOvertimeRequests"
-                            :columns="otColumns"
-                            row-key="id"
-                            flat
-                            hide-pagination
-                            :rows-per-page-options="[0]"
-                            class="dash-qtable dash-qtable--flush request-grid overtime-grid"
-                          >
-                            <template v-slot:header="props">
-                              <q-tr class="grid-head-row" :props="props">
-                                <q-th
-                                  key="select"
-                                  :props="props"
-                                  class="grid-head-cell ot-cell-select"
-                                >
-                                  <q-checkbox
-                                    :model-value="allOvertimeSelected"
-                                    @update:model-value="toggleSelectAllOvertime"
-                                    dense
-                                    size="xs"
-                                  />
-                                </q-th>
-                                <q-th
-                                  key="employeeName"
-                                  :props="props"
-                                  class="grid-head-cell ot-cell-employee"
-                                  >Employee</q-th
-                                >
-                                <q-th
-                                  key="schedule"
-                                  :props="props"
-                                  class="grid-head-cell ot-cell-time"
-                                  >Scheduled / actual</q-th
-                                >
-                                <q-th key="dates" :props="props" class="grid-head-cell ot-cell-date"
-                                  >Date</q-th
-                                >
-                                <q-th
-                                  key="hours"
-                                  :props="props"
-                                  class="grid-head-cell ot-cell-hours"
-                                  >Hours</q-th
-                                >
-                                <q-th
-                                  key="status"
-                                  :props="props"
-                                  class="grid-head-cell ot-cell-status"
-                                  >Status</q-th
-                                >
-                                <q-th
-                                  key="actions"
-                                  :props="props"
-                                  class="grid-head-cell grid-head-cell--right ot-cell-actions"
-                                  >Actions</q-th
-                                >
-                              </q-tr>
-                            </template>
-                            <template v-slot:body="props">
-                              <q-tr
-                                class="dash-qtable__row grid-row"
-                                :class="{
-                                  'grid-row--waiting': ['requested', 'qualified'].includes(
-                                    props.row.status,
-                                  ),
-                                }"
-                                :props="props"
-                              >
-                                <q-td
-                                  key="select"
-                                  :props="props"
-                                  class="grid-cell grid-cell--center ot-cell-select"
-                                >
-                                  <q-checkbox
-                                    v-if="['requested', 'qualified'].includes(props.row.status)"
-                                    :model-value="selectedOvertimeIds.has(props.row.id)"
-                                    @update:model-value="toggleOvertimeSelection(props.row.id)"
-                                    dense
-                                    size="xs"
-                                  />
-                                </q-td>
-                                <q-td
-                                  key="employeeName"
-                                  :props="props"
-                                  class="grid-cell ot-cell-employee"
-                                >
-                                  <div class="identity">
-                                    <span class="identity-avatar">
-                                      {{
-                                        props.row.employeeName
-                                          ? props.row.employeeName
-                                              .split(' ')
-                                              .map((n) => n[0])
-                                              .join('')
-                                              .toUpperCase()
-                                              .slice(0, 2)
-                                          : '?'
-                                      }}
-                                    </span>
-                                    <span class="identity-text">
-                                      <span class="identity-name">{{
-                                        props.row.employeeName
-                                      }}</span>
-                                      <span class="identity-sub">{{ props.row.categoryName }}</span>
-                                    </span>
-                                  </div>
-                                </q-td>
-                                <q-td key="schedule" :props="props" class="grid-cell ot-cell-time">
-                                  <div v-if="props.row.schedules?.[0]" class="range">
-                                    {{ props.row.schedules[0].actual_start }}
-                                    <span class="range-sep">&rarr;</span>
-                                    {{ props.row.schedules[0].actual_end }}
-                                  </div>
-                                  <div v-else class="range muted">&mdash;</div>
-                                  <div v-if="props.row.attendances?.[0]" class="range-meta">
-                                    actual {{ props.row.attendances[0].time_in }} &rarr;
-                                    {{ props.row.attendances[0].time_out }}
-                                  </div>
-                                  <div v-else class="range-meta">no attendance</div>
-                                </q-td>
-                                <q-td key="dates" :props="props" class="grid-cell ot-cell-date">
-                                  <span class="stat-num">{{
-                                    props.row.date
-                                      ? new Date(props.row.date).toLocaleDateString('en-US', {
-                                          month: 'short',
-                                          day: 'numeric',
-                                          year: 'numeric',
-                                        })
-                                      : 'N/A'
-                                  }}</span>
-                                </q-td>
-                                <q-td key="hours" :props="props" class="grid-cell ot-cell-hours">
-                                  <div class="hours-cell-content">
-                                    <q-input
-                                      v-if="['requested', 'qualified'].includes(props.row.status)"
-                                      :model-value="
-                                        overtimeEditableHours[props.row.id] ?? props.row.hours
-                                      "
-                                      @update:model-value="
-                                        overtimeEditableHours[props.row.id] = $event
-                                      "
-                                      @click.stop
-                                      dense
-                                      outlined
-                                      type="number"
-                                      step="0.01"
-                                      class="hours-input"
-                                    />
-                                    <span v-else class="amount">
-                                      {{ props.row.hours === '-' ? '—' : props.row.hours + 'h' }}
-                                    </span>
-                                    <span v-if="props.row.convertedToCto" class="cto-badge"
-                                      >CTO</span
-                                    >
-                                  </div>
-                                </q-td>
-                                <q-td key="status" :props="props" class="grid-cell ot-cell-status">
-                                  <span
-                                    :class="['status-pill', overtimeStatusPill(props.row.status)]"
-                                  >
-                                    {{
-                                      props.row.status
-                                        ? props.row.status.charAt(0).toUpperCase() +
-                                          props.row.status.slice(1)
-                                        : 'N/A'
-                                    }}
-                                  </span>
-                                </q-td>
-                                <q-td
-                                  key="actions"
-                                  :props="props"
-                                  class="grid-cell ot-cell-actions"
-                                >
-                                  <div class="grid-actions">
-                                    <q-btn
-                                      flat
-                                      dense
-                                      round
-                                      icon="visibility"
-                                      size="sm"
-                                      class="grid-action"
-                                      @click.stop="openOvertimeDetail(props.row)"
-                                    >
-                                      <q-tooltip>View details</q-tooltip>
-                                    </q-btn>
-                                    <q-btn
-                                      v-if="['requested', 'qualified'].includes(props.row.status)"
-                                      flat
-                                      dense
-                                      round
-                                      icon="check"
-                                      size="sm"
-                                      class="grid-action grid-action--approve"
-                                      @click.stop="approveOvertimeSingle(props.row)"
-                                      :loading="overtimeSubmitting.has(props.row.id)"
-                                    >
-                                      <q-tooltip>Approve</q-tooltip>
-                                    </q-btn>
-                                    <q-btn
-                                      v-if="['requested', 'qualified'].includes(props.row.status)"
-                                      flat
-                                      dense
-                                      round
-                                      icon="close"
-                                      size="sm"
-                                      class="grid-action grid-action--reject"
-                                      @click.stop="rejectOvertimeSingle(props.row)"
-                                      :loading="overtimeSubmitting.has(props.row.id)"
-                                    >
-                                      <q-tooltip>Reject</q-tooltip>
-                                    </q-btn>
-                                  </div>
-                                </q-td>
-                              </q-tr>
-                            </template>
-                          </q-table>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Featured-icon empty state, so an overtime tab with no runs
-                   looks designed rather than broken. -->
-              <div v-else class="overtime-empty-state dash-empty">
-                <span class="dash-featured-icon">
-                  <q-icon name="o_more_time" size="20px" />
-                </span>
-                <p class="dash-empty__title">No payroll runs with overtime</p>
-                <p class="dash-empty__sub">
-                  Once a payroll run records overtime, it appears here as a card you can expand to
-                  review and approve each request.
-                </p>
-              </div>
-            </div>
+            <RequestOvertimeTable
+              :rows="filteredOvertimeRequests"
+              :loading="overtimeLoading || resolvingGroups"
+              :submitting="overtimeSubmitting"
+              :selected-ids="selectedOvertimeIds"
+              :editable-hours="overtimeEditableHours"
+              :status-filter="overtimeStatusFilter"
+              :search="overtimeSearch"
+              :payroll-group-filter="overtimePayrollGroupFilter"
+              :payroll-group-options="payrollGroupOptions"
+              @update:status-filter="overtimeStatusFilter = $event"
+              @update:search="overtimeSearch = $event"
+              @update:payroll-group-filter="overtimePayrollGroupFilter = $event"
+              @update:editable-hours="setOvertimeEditableHours"
+              @toggle-selection="toggleOvertimeSelection"
+              @toggle-select-all="toggleSelectAllOvertime"
+              @clear-selection="clearOvertimeSelection"
+              @view-details="openOvertimeDetail"
+              @approve="approveOvertimeSingle"
+              @reject="rejectOvertimeSingle"
+              @bulk-approve="bulkApproveOvertime"
+              @bulk-reject="bulkRejectOvertime"
+            />
           </q-tab-panel>
 
           <q-tab-panel name="cash_advance" class="tab-panel-content">
@@ -508,13 +149,16 @@
               <RequestCashAdvanceTable
                 v-if="caViewMode === 'all'"
                 :rows="filteredCaRequests"
-                :loading="loading"
+                :loading="loading || resolvingGroups"
                 :ca-filter-status="caFilterStatus"
                 :ca-status-options="caStatusOptions"
                 :ca-pagination="caPagination"
                 :search="searchTerm"
+                :payroll-group-filter="caPayrollGroupFilter"
+                :payroll-group-options="payrollGroupOptions"
                 @update:ca-filter-status="caFilterStatus = $event"
                 @update:search="searchTerm = $event"
+                @update:payroll-group-filter="caPayrollGroupFilter = $event"
                 @view="viewCaRequest"
                 @approve="openCaApprovalModal"
               />
@@ -608,16 +252,17 @@
 
 <script setup>
 import PageShell from '@/components/layout/PageShell.vue'
-import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
+import { extractErrorMessage } from 'src/composables/utils/http'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useAuthStore } from 'src/boot/auth'
 import { getApproverName } from 'src/composables/utils/employee'
 import RequestStatsCards from 'src/components/pages/Request/RequestStatsCards.vue'
 import RequestLeaveTable from 'src/components/pages/Request/RequestLeaveTable.vue'
+import RequestOvertimeTable from 'src/components/pages/Request/RequestOvertimeTable.vue'
 import RequestCashAdvanceTable from 'src/components/pages/Request/RequestCashAdvanceTable.vue'
 import RequestLeaveDetailModal from 'src/components/pages/Request/RequestLeaveDetailModal.vue'
 import RequestCaApprovalModal from 'src/components/pages/Request/RequestCaApprovalModal.vue'
@@ -628,11 +273,27 @@ import RequestCashAdvanceCutoff from 'src/components/pages/Request/RequestCashAd
 import RequestSwapTable from 'src/components/pages/Request/RequestSwapTable.vue'
 import RequestSwapViewModal from 'src/components/pages/Request/RequestSwapViewModal.vue'
 import RequestApplyLeaveModal from 'src/components/pages/Request/RequestApplyLeaveModal.vue'
+import {
+  buildEmployeeDirectory,
+  normalizeSwapRequest,
+  normalizeSwapRequests,
+} from 'src/composables/utils/swapRequests'
+import { normalizeOvertimeRequests } from 'src/composables/utils/overtimeRequests'
+import { useAdminPayrollGroups } from 'src/composables/admin/useAdminPayrollGroups'
+import { useEmployeePayoutGroup } from 'src/composables/page/useEmployeePayoutGroup'
+import { useToast } from 'src/composables/useToast'
 
 const $q = useQuasar()
+const toast = useToast()
 
 const { employees, fetchEmployees } = useEmployees()
-const { company } = useCompany()
+// Aliased to `selectedCompany`: several functions in this file declare their own
+// local `companyId` from it, and an outer binding by that name would read as the
+// one being shadowed. It is a *computed* over the Pinia company store, so it
+// tracks a workspace switch in this tab — which the private localStorage
+// snapshot this replaces could not do, `storage` events being delivered only to
+// the tabs that did not make the change.
+const { company, companyId: selectedCompany } = useCompany()
 const authStore = useAuthStore()
 
 const companyName = computed(() => company.value?.name || '')
@@ -650,22 +311,139 @@ const applyLeaveTypes = ref([])
 
 // ===== SHARED STATE =====
 const activeTab = ref('leave')
-const getCompanyId = () => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem('selectedCompany'))
-    const id = parsed?.id || parsed?.companyId
-    if (id) return String(id)
-  } catch {
-    /* ignore parse errors */
-  }
-  const raw = localStorage.getItem('selectedCompany')
-  if (raw) return String(raw)
-  const direct = localStorage.getItem('company_id')
-  return direct ? String(direct) : ''
-}
-const selectedCompany = ref(getCompanyId())
 const loading = ref(false)
 const searchTerm = ref('')
+
+// ===== SHARED: PAYOUT GROUP FILTER =====
+// Every queue on this page can be narrowed to one payout group, the way the
+// Employees, Attendance and Schedule pages already can — a reviewer usually
+// works one group's cutoff at a time, across leave, overtime and cash advance
+// alike, so the same control and the same wording appear in all three toolbars.
+//
+// Client-side, and resolved per employee from their active contract: none of
+// `/attendance/leave-list/`, `/payroll/overtime-list/` or the cash-advance list
+// returns a payout group or accepts one as a query param. The contract lookups
+// are cached module-level by `useEmployeePayoutGroup`, shared with those other
+// pages, and only run for the queue whose filter is actually in use.
+const { payrollGroups, fetchPayrollGroups } = useAdminPayrollGroups()
+const {
+  resolving: resolvingPayoutGroups,
+  groupIdFor,
+  inlineGroupId,
+  ensure: ensurePayoutGroups,
+} = useEmployeePayoutGroup()
+
+// One ref per queue rather than one shared across the tabs: each toolbar shows
+// the state of the table under it, so switching tabs cannot silently hide rows
+// behind a filter set somewhere else.
+const leavePayrollGroupFilter = ref(null)
+const overtimePayrollGroupFilter = ref(null)
+const caPayrollGroupFilter = ref(null)
+
+const payrollGroupOptions = computed(() =>
+  payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
+)
+
+/**
+ * The roster record a request row's employee reference points at.
+ *
+ * These endpoints name people by primary key, and the id spaces in circulation
+ * across them overlap — employee id, user id and employee-company id are all
+ * used, and employee #3 is not user #3. So one candidate is tried at a time, in
+ * the order the payload's fields are most likely to mean, and within a candidate
+ * the employee-company fields are checked before widening to every id a roster
+ * entry answers to (the set `buildEmployeeDirectory` keys its names by).
+ *
+ * A key two people answer to resolves to nobody rather than to a guess: the
+ * group decides whether a row is shown at all, and listing the wrong person's
+ * request under "group A" is worse than leaving the row out.
+ *
+ * A record, not an id, because the contract endpoint wants the roster pk and
+ * only the record can give it.
+ */
+function rosterEmployeeForKey(candidate) {
+  const raw =
+    candidate && typeof candidate === 'object'
+      ? (candidate.id ?? candidate.uuid ?? null)
+      : candidate
+  if (raw === null || raw === undefined || raw === '') return null
+  const target = String(raw)
+  const answersTo = (ids) =>
+    ids.some((id) => id !== null && id !== undefined && String(id) === target)
+
+  const byCompanyId = employees.value.filter((emp) =>
+    answersTo([emp.employee_company, emp.employee_company_id]),
+  )
+  if (byCompanyId.length === 1) return byCompanyId[0]
+  if (byCompanyId.length > 1) return null
+
+  const byAnyId = employees.value.filter((emp) =>
+    answersTo([emp.id, emp.employee_id, emp.uuid, emp.user?.id, emp.user_id]),
+  )
+  return byAnyId.length === 1 ? byAnyId[0] : null
+}
+
+function rosterEmployeeFor(candidates) {
+  for (const candidate of candidates) {
+    const match = rosterEmployeeForKey(candidate)
+    if (match) return match
+  }
+  return null
+}
+
+/** Payout group for a row: inline on the roster record if present, else cached. */
+function rowPayoutGroupId(candidates) {
+  const employee = rosterEmployeeFor(candidates)
+  if (!employee) return null
+  const inline = inlineGroupId(employee)
+  if (inline !== null) return inline
+  return groupIdFor(employee.id)
+}
+
+// The employee reference each payload carries, most specific field first. The
+// three lists were written against different serializers, so none of them agrees
+// with the others on where the person's id lives.
+const leaveRowEmployeeRefs = (row) => [row.employeeCompany, row.employeeRef, row.employeeId]
+const overtimeRowEmployeeRefs = (row) => [row.employeeCompany]
+const caRowEmployeeRefs = (row) => [
+  row.employee_company,
+  row.employee_company_id,
+  row.employee,
+  row.employee_id,
+  row.user,
+  row.user_id,
+]
+
+/** True when the row belongs to the selected group; unresolved rows do not. */
+const matchesPayrollGroup = (refs, groupId) =>
+  String(rowPayoutGroupId(refs) ?? '') === String(groupId)
+
+// True while the roster the resolution needs is still on its way. Only the
+// overtime and swap fetches load employees for their own sake, so a filter used
+// on a tab that never needed the roster has to wait for one.
+const loadingGroupRoster = ref(false)
+
+/** Rows are hidden until resolution finishes, so the tables show a skeleton. */
+const resolvingGroups = computed(() => resolvingPayoutGroups.value || loadingGroupRoster.value)
+
+/** Fill the contract cache for the rows a group filter is currently narrowing. */
+async function ensureGroupsFor(rows, refsFor) {
+  if (!employees.value.length) {
+    loadingGroupRoster.value = true
+    try {
+      // Cached per company by useEmployees, so this is usually free — but every
+      // row's group is resolved through the roster, and without it a selected
+      // group would match nothing and read as an empty queue.
+      await fetchEmployees()
+    } catch {
+      /* names and groups degrade together; the queue itself still renders */
+    } finally {
+      loadingGroupRoster.value = false
+    }
+  }
+  const ids = [...new Set(rows.map((row) => rosterEmployeeFor(refsFor(row))?.id).filter(Boolean))]
+  if (ids.length) await ensurePayoutGroups(ids)
+}
 
 // ===== LEAVE STATE =====
 const leaveList = ref([])
@@ -675,20 +453,18 @@ const selectedLeaveRequest = ref(null)
 const showLeaveDetails = ref(false)
 
 // ===== OVERTIME STATE =====
-const overtimeSummary = ref([])
+// One flat queue for the whole company, the same shape the leave tab uses.
+// Overtime used to be grouped under the payroll run it belonged to, so an
+// approver had to open each run to find out whether anything was waiting.
 const overtimeCategories = ref([])
-const selectedDisbursementLog = ref(null)
 const overtimeRequests = ref([])
 const overtimeLoading = ref(false)
 const overtimeSearch = ref('')
 const overtimeStatusFilter = ref('all')
-const overtimeStatusOptions = [
-  { label: 'All statuses', value: 'all' },
-  { label: 'Requested', value: 'requested' },
-  { label: 'Qualified', value: 'qualified' },
-  { label: 'Approved', value: 'approved' },
-  { label: 'Rejected', value: 'rejected' },
-]
+// id -> employee name for the active company, rebuilt on every overtime fetch:
+// the list names people by primary key alone, so a stale directory would label
+// rows with the previous workspace's roster.
+const overtimeDirectory = ref(null)
 const overtimeSubmitting = ref(new Set())
 const overtimeEditableHours = ref({})
 const selectedOvertimeIds = ref(new Set())
@@ -719,6 +495,9 @@ const swapSortBy = ref('Newest')
 const swapPagination = ref({ page: 1, rowsPerPage: 10 })
 const swapLoading = ref(false)
 const swapActionLoading = ref(null)
+// id -> employee name for the active company, rebuilt on every swap fetch so a
+// workspace switch can't resolve names out of the previous company's roster.
+const swapDirectory = ref(null)
 const selectedSwapRequest = ref(null)
 const showSwapViewDialog = ref(false)
 
@@ -731,13 +510,10 @@ const leaveStats = computed(() => ({
 }))
 
 const overtimeStats = computed(() => ({
-  total: overtimeSummary.value.reduce((sum, log) => sum + (log.overtime_total_count || 0), 0),
-  pending: overtimeSummary.value.reduce(
-    (sum, log) => sum + ((log.overtime_total_count || 0) - (log.overtime_approved_count || 0)),
-    0,
-  ),
-  approved: overtimeSummary.value.reduce((sum, log) => sum + (log.overtime_approved_count || 0), 0),
-  rejected: 0,
+  total: overtimeRequests.value.length,
+  pending: overtimeRequests.value.filter((r) => r.actionable).length,
+  approved: overtimeRequests.value.filter((r) => r.statusGroup === 'approved').length,
+  rejected: overtimeRequests.value.filter((r) => r.statusGroup === 'rejected').length,
 }))
 
 const swapStatistics = computed(() => ({
@@ -812,6 +588,13 @@ const filteredLeaveRequests = computed(() => {
         (r.reason && r.reason.toLowerCase().includes(search)),
     )
   }
+  // A row whose group cannot be resolved is excluded while a group is selected —
+  // "show me group A" should not fall back to including unknowns.
+  if (leavePayrollGroupFilter.value) {
+    filtered = filtered.filter((r) =>
+      matchesPayrollGroup(leaveRowEmployeeRefs(r), leavePayrollGroupFilter.value),
+    )
+  }
   return filtered
 })
 
@@ -827,6 +610,9 @@ const filteredCaRequests = computed(() => {
         (r.employee_name || '').toLowerCase().includes(searchLower) ||
         String(r.id).includes(searchLower),
     )
+  }
+  if (caPayrollGroupFilter.value) {
+    list = list.filter((r) => matchesPayrollGroup(caRowEmployeeRefs(r), caPayrollGroupFilter.value))
   }
   return list
 })
@@ -861,56 +647,12 @@ const refreshLoading = computed(() => {
   return loading.value
 })
 
-const actionableOvertimeIds = computed(() => {
-  return filteredOvertimeRequests.value
-    .filter((r) => ['requested', 'qualified'].includes(r.status))
-    .map((r) => r.id)
-})
-
-const allOvertimeSelected = computed(() => {
-  const actionable = actionableOvertimeIds.value
-  return actionable.length > 0 && actionable.every((id) => selectedOvertimeIds.value.has(id))
-})
-
-const selectDisbursementLog = (id) => {
-  const isSame = selectedDisbursementLog.value === id
-  selectedDisbursementLog.value = isSame ? null : id
-  clearOvertimeSelection()
-  if (!isSame && id) {
-    fetchOvertimeRequests(id)
-  }
-}
-
-const getPeriodFromName = (name) => {
-  if (!name) return ''
-  const match = name.match(/(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2})/)
-  return match ? match[1] : ''
-}
-
-const getBaseName = (name) => {
-  if (!name) return '\u2014'
-  return name.replace(/\s*\|?\s*\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\s*$/, '').trim()
-}
-
-// Scheduled and actual times share one column so the grid fits without
-// horizontal cut-off; full detail is in RequestOvertimeDetailModal.
-const otColumns = [
-  { name: 'select', label: '', field: '', align: 'center' },
-  { name: 'employeeName', label: 'Employee', field: 'employeeName', align: 'left' },
-  { name: 'schedule', label: 'Scheduled / actual', field: 'schedule', align: 'left' },
-  { name: 'dates', label: 'Date', field: 'date', align: 'left' },
-  { name: 'hours', label: 'Hours', field: 'hours', align: 'left' },
-  { name: 'status', label: 'Status', field: 'status', align: 'center' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'right' },
-]
-
-const overtimeStatusPill = (status) => {
-  if (status === 'requested' || status === 'pending') return 'status-pill--pending'
-  if (status === 'qualified') return 'status-pill--info'
-  if (status === 'approved') return 'status-pill--approved'
-  if (status === 'rejected') return 'status-pill--rejected'
-  return 'status-pill--default'
-}
+// Select-all acts on the rows the filters actually left on screen, not on the
+// whole queue — approving something the approver cannot see is not a bulk
+// action, it is a surprise.
+const actionableOvertimeIds = computed(() =>
+  filteredOvertimeRequests.value.filter((r) => r.actionable).map((r) => r.id),
+)
 
 // ===== CASH ADVANCE HELPERS =====
 const extractEmployeeName = (request) => {
@@ -987,6 +729,12 @@ const fetchLeaveRequests = async () => {
     leaveList.value = data.map((item) => ({
       id: item.id,
       employeeName: item.employee_name,
+      // Kept only so the payout-group filter can reach the roster: the list
+      // renders `employee_name`, but a name cannot be matched to a contract.
+      // Which of these three the serializer sends varies, so all are carried.
+      employeeCompany: item.employee_company ?? item.employee_company_id ?? null,
+      employeeRef: item.employee ?? null,
+      employeeId: item.employee_id ?? null,
       company: item.company_name || '',
       type: item.leave_type_name || 'Leave',
       status: item.status?.toLowerCase(),
@@ -1005,13 +753,8 @@ const fetchLeaveRequests = async () => {
       approvedAt: item.approved_at || '',
     }))
   } catch (e) {
-    const errorMessage = Array.isArray(e.response?.data)
-      ? e.response.data[0]
-      : e.response?.data?.message ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to fetch leave requests.'
-    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+    const errorMessage = extractErrorMessage(e, 'Failed to fetch leave requests.')
+    toast.error(errorMessage, { icon: 'error' })
   } finally {
     loading.value = false
   }
@@ -1031,64 +774,53 @@ const fetchOvertimeCategories = async () => {
   }
 }
 
-const fetchOvertimeSummary = async () => {
-  try {
-    const companyId = selectedCompany.value
-    if (!companyId) return
-    const res = await api.get('/payroll/admin/disbursement-logs/overtime-summary/', {
-      params: { company: companyId },
-    })
-    const data = Array.isArray(res.data) ? res.data : res.data.results || []
-    overtimeSummary.value = data
-  } catch (e) {
-    console.error('Failed to fetch overtime summary', e)
-  }
-}
-
-const fetchOvertimeRequests = async (logId) => {
+const fetchOvertimeRequests = async () => {
   overtimeLoading.value = true
   overtimeEditableHours.value = {}
   try {
     const companyId = selectedCompany.value
     if (!companyId) throw new Error('No company selected')
-    const params = { company: companyId }
-    if (logId) {
-      params.disbursement_log_id = logId
-    }
-    const res = await api.get('/payroll/overtime-list/', { params })
+    // The overtime list names people by primary key alone, so the company's
+    // employees are the only place the names exist. useEmployees caches per
+    // company, so this is usually free; a failure here costs names, not the tab.
+    const [res] = await Promise.all([
+      api.get('/payroll/overtime-list/', { params: { company: companyId } }),
+      fetchEmployees().catch(() => []),
+    ])
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
-    overtimeRequests.value = data.map((item) => ({
-      id: item.id,
-      employeeCompany: item.employee_company,
-      employeeName:
-        typeof item.employee === 'object'
-          ? item.employee?.full_name || item.employee?.name || 'Unknown'
-          : item.employee || 'Unknown',
-      category: item.category,
-      categoryName: item.category_name || 'Uncategorized',
-      date: item.date,
-      hours: item.hours ?? item.qualified_hours ?? '-',
-      qualifiedHours: item.qualified_hours,
-      approvedHours: item.approved_hours,
-      attendances: item.attendances || [],
-      schedules: item.schedules || [],
-      status: item.status === 'REQUESTED' ? 'requested' : item.status?.toLowerCase(),
-      approvedByName: item.approved_by_name || 'Pending',
-      convertedToCto: item.converted_to_cto || false,
-      reason: item.reason,
-      submittedDate: item.submitted_at,
-    }))
+    // Resolved here rather than in the grid so the table, the details modal and
+    // the tab counter all read the same names, hours and status wording.
+    overtimeDirectory.value = buildEmployeeDirectory(employees.value)
+    overtimeRequests.value = normalizeOvertimeRequests(data, overtimeDirectory.value)
+    // Rows that vanished from the queue must not stay selected — a later bulk
+    // approve would then patch ids that are no longer on screen.
+    const live = new Set(overtimeRequests.value.filter((r) => r.actionable).map((r) => r.id))
+    selectedOvertimeIds.value = new Set(
+      Array.from(selectedOvertimeIds.value).filter((id) => live.has(id)),
+    )
   } catch (e) {
-    const errorMessage = Array.isArray(e.response?.data)
-      ? e.response.data[0]
-      : e.response?.data?.message ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to fetch overtime requests.'
-    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+    const errorMessage = extractErrorMessage(e, 'Failed to fetch overtime requests.')
+    toast.error(errorMessage, { icon: 'error' })
   } finally {
     overtimeLoading.value = false
   }
+}
+
+// The hours field is only editable while a row is still open, so the draft map
+// is keyed by request id and cleared on every refetch.
+const setOvertimeEditableHours = (id, value) => {
+  overtimeEditableHours.value = { ...overtimeEditableHours.value, [id]: value }
+}
+
+// What to settle the request at: the approver's edit if they made one, then the
+// hours claimed, then the qualified figure. A row carrying no figure at all
+// patches as 0 — the endpoint wants a decimal string, and sending the text of
+// whatever placeholder the payload used is how it ends up storing "null".
+const resolveApprovedHours = (row) => {
+  const parsed = Number(
+    overtimeEditableHours.value[row?.id] ?? row?.hours ?? row?.qualifiedHours ?? 0,
+  )
+  return String(Number.isFinite(parsed) ? parsed : 0)
 }
 
 const openOvertimeDetail = (row) => {
@@ -1099,31 +831,19 @@ const openOvertimeDetail = (row) => {
 const approveOvertimeSingle = async (row) => {
   overtimeSubmitting.value.add(row.id)
   try {
-    const hours = overtimeEditableHours.value[row.id] ?? row.hours
     await api.patch(`/payroll/overtime-approve/${row.id}/`, {
-      approved_hours: String(hours),
+      approved_hours: resolveApprovedHours(row),
       category: row.category ?? 0,
       reason: '',
       status: 'approved',
     })
-    $q.notify({
-      type: 'positive',
-      message: 'Overtime approved successfully',
-      icon: 'check_circle',
-      position: 'top',
-    })
+    toast.success('Overtime approved successfully', { icon: 'check_circle' })
     clearOvertimeSelection()
-    await fetchOvertimeRequests(selectedDisbursementLog.value)
-    await fetchOvertimeSummary()
+    await fetchOvertimeRequests()
   } catch (e) {
     console.log('Overtime approve error:', JSON.stringify(e.response?.data, null, 2))
-    const msg =
-      e.response?.data?.message ||
-      e.response?.data?.non_field_errors?.[0] ||
-      e.response?.data?.detail ||
-      e.message ||
-      'Failed to approve overtime'
-    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+    const msg = extractErrorMessage(e, 'Failed to approve overtime')
+    toast.error(msg, { icon: 'error' })
   } finally {
     overtimeSubmitting.value.delete(row.id)
   }
@@ -1132,31 +852,19 @@ const approveOvertimeSingle = async (row) => {
 const rejectOvertimeSingle = async (row) => {
   overtimeSubmitting.value.add(row.id)
   try {
-    const hours = overtimeEditableHours.value[row.id] ?? row.hours
     await api.patch(`/payroll/overtime-approve/${row.id}/`, {
-      approved_hours: String(hours),
+      approved_hours: resolveApprovedHours(row),
       category: row.category ?? 0,
       reason: '',
       status: 'rejected',
     })
-    $q.notify({
-      type: 'positive',
-      message: 'Overtime rejected',
-      icon: 'cancel',
-      position: 'top',
-    })
+    toast.success('Overtime rejected', { icon: 'cancel' })
     clearOvertimeSelection()
-    await fetchOvertimeRequests(selectedDisbursementLog.value)
-    await fetchOvertimeSummary()
+    await fetchOvertimeRequests()
   } catch (e) {
     console.log('Overtime reject error:', JSON.stringify(e.response?.data, null, 2))
-    const msg =
-      e.response?.data?.message ||
-      e.response?.data?.non_field_errors?.[0] ||
-      e.response?.data?.detail ||
-      e.message ||
-      'Failed to reject overtime'
-    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+    const msg = extractErrorMessage(e, 'Failed to reject overtime')
+    toast.error(msg, { icon: 'error' })
   } finally {
     overtimeSubmitting.value.delete(row.id)
   }
@@ -1170,11 +878,10 @@ const toggleOvertimeSelection = (id) => {
 }
 
 const toggleSelectAllOvertime = () => {
-  if (allOvertimeSelected.value) {
-    selectedOvertimeIds.value = new Set()
-  } else {
-    selectedOvertimeIds.value = new Set(actionableOvertimeIds.value)
-  }
+  const actionable = actionableOvertimeIds.value
+  const allSelected =
+    actionable.length > 0 && actionable.every((id) => selectedOvertimeIds.value.has(id))
+  selectedOvertimeIds.value = allSelected ? new Set() : new Set(actionable)
 }
 
 const clearOvertimeSelection = () => {
@@ -1234,7 +941,7 @@ const submitOvertimeAdvance = async (payload) => {
   overtimeAdvanceSubmitting.value = true
   const companyId = selectedCompany.value
   if (!companyId) {
-    $q.notify({ type: 'negative', message: 'No company selected', icon: 'error', position: 'top' })
+    toast.error('No company selected', { icon: 'error' })
     overtimeAdvanceSubmitting.value = false
     return
   }
@@ -1249,24 +956,12 @@ const submitOvertimeAdvance = async (payload) => {
       body.limit_hours = payload.limit_hours
     }
     await api.post(`/attendance/overtime/admin/${companyId}/`, body)
-    $q.notify({
-      type: 'positive',
-      message: 'Overtime advance created successfully',
-      icon: 'check_circle',
-      position: 'top',
-    })
+    toast.success('Overtime advance created successfully', { icon: 'check_circle' })
     showOvertimeAdvanceModal.value = false
-    if (selectedDisbursementLog.value) {
-      await fetchOvertimeRequests(selectedDisbursementLog.value)
-    }
-    await fetchOvertimeSummary()
+    await fetchOvertimeRequests()
   } catch (e) {
-    const msg =
-      e.response?.data?.message ||
-      e.response?.data?.non_field_errors?.[0] ||
-      e.message ||
-      'Failed to create overtime advance'
-    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+    const msg = extractErrorMessage(e, 'Failed to create overtime advance')
+    toast.error(msg, { icon: 'error' })
   } finally {
     overtimeAdvanceSubmitting.value = false
   }
@@ -1333,134 +1028,153 @@ const submitApplyLeave = async (payload) => {
       ...payload,
       status: 'approved',
     })
-    $q.notify({
-      type: 'positive',
-      message: 'Leave assigned successfully',
-      icon: 'check_circle',
-      position: 'top',
-    })
+    toast.success('Leave assigned successfully', { icon: 'check_circle' })
     showApplyLeaveModal.value = false
     await fetchLeaveRequests()
   } catch (e) {
-    const msg =
-      e.response?.data?.detail ||
-      e.response?.data?.message ||
-      e.response?.data?.non_field_errors?.[0] ||
-      e.message ||
-      'Failed to assign leave'
-    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+    const msg = extractErrorMessage(e, 'Failed to assign leave')
+    toast.error(msg, { icon: 'error' })
   } finally {
     applyLeaveSubmitting.value = false
   }
 }
 
-const bulkApproveOvertime = async () => {
-  const ids = Array.from(selectedOvertimeIds.value)
-  $q.dialog({
+/**
+ * Approve or reject every selected overtime request, and say what actually
+ * happened.
+ *
+ * The endpoint decides one request at a time, so a bulk action is N calls and
+ * any one of them can be refused on its own — a category the server rejects, a
+ * request someone else already actioned. Both handlers used to wrap the whole
+ * loop in a single try/catch, which meant the third failure of ten aborted the
+ * run with seven untouched, skipped the success toast, skipped
+ * `clearOvertimeSelection()` *and* skipped the refetch, and reported one flat
+ * "Failed to bulk approve". The first two were already committed on the server
+ * but still rendered as pending, so a retry patched them a second time, and
+ * there was no way for the reviewer to learn which two had gone through.
+ *
+ * So: each request gets its own try/catch, the outcome is counted, the queue is
+ * always re-read because the server has moved for whatever succeeded, and the
+ * closing toast distinguishes all / some / none. This is the shape
+ * `Disbursement/ReviewPage.vue` already uses for its own bulk review.
+ *
+ * The two handlers were also identical apart from the verb, which is why they
+ * are one function now — the bug had been fixed in neither copy.
+ */
+const OVERTIME_BULK_ACTIONS = {
+  approved: {
     title: 'Bulk Approve',
-    message: `Approve ${ids.length} overtime request(s)?`,
+    prompt: (n) => `Approve ${n} overtime request(s)?`,
     ok: { label: 'Approve', color: 'positive', unelevated: true },
-    cancel: { label: 'Cancel', flat: true },
-  }).onOk(async () => {
-    overtimeSubmitting.value = new Set(ids)
-    try {
-      for (const id of ids) {
-        const row = overtimeRequests.value.find((r) => r.id === id)
-        const hours = overtimeEditableHours.value[id] ?? row?.hours
-        await api.patch(`/payroll/overtime-approve/${id}/`, {
-          approved_hours: String(hours),
-          category: row?.category ?? 0,
-          reason: '',
-          status: 'approved',
-        })
-      }
-      $q.notify({
-        type: 'positive',
-        message: `${ids.length} overtime request(s) approved`,
-        icon: 'check_circle',
-        position: 'top',
-      })
-      clearOvertimeSelection()
-      await fetchOvertimeRequests(selectedDisbursementLog.value)
-      await fetchOvertimeSummary()
-    } catch (e) {
-      console.log('Overtime bulk approve error:', JSON.stringify(e.response?.data, null, 2))
-      const msg =
-        e.response?.data?.message ||
-        e.response?.data?.non_field_errors?.[0] ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to bulk approve'
-      $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
-    } finally {
-      overtimeSubmitting.value = new Set()
-    }
-  })
-}
-
-const bulkRejectOvertime = async () => {
-  const ids = Array.from(selectedOvertimeIds.value)
-  $q.dialog({
+    verb: 'approve',
+    past: 'approved',
+    icon: 'check_circle',
+  },
+  rejected: {
     title: 'Bulk Reject',
-    message: `Reject ${ids.length} overtime request(s)?`,
+    prompt: (n) => `Reject ${n} overtime request(s)?`,
     ok: { label: 'Reject', color: 'negative', unelevated: true },
+    verb: 'reject',
+    past: 'rejected',
+    icon: 'cancel',
+  },
+}
+
+const bulkDecideOvertime = (status) => {
+  const spec = OVERTIME_BULK_ACTIONS[status]
+  const ids = Array.from(selectedOvertimeIds.value)
+  if (!ids.length) return
+
+  $q.dialog({
+    title: spec.title,
+    message: spec.prompt(ids.length),
+    ok: spec.ok,
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
     overtimeSubmitting.value = new Set(ids)
+    const done = []
+    let reason = ''
+
     try {
       for (const id of ids) {
         const row = overtimeRequests.value.find((r) => r.id === id)
-        const hours = overtimeEditableHours.value[id] ?? row?.hours
-        await api.patch(`/payroll/overtime-approve/${id}/`, {
-          approved_hours: String(hours),
-          category: row?.category ?? 0,
-          reason: '',
-          status: 'rejected',
-        })
+        try {
+          await api.patch(`/payroll/overtime-approve/${id}/`, {
+            approved_hours: resolveApprovedHours(row),
+            category: row?.category ?? 0,
+            reason: '',
+            status,
+          })
+          done.push(id)
+        } catch (e) {
+          // First refusal wins the caption: they are usually the same reason,
+          // and a toast is not the place for ten of them.
+          reason = reason || extractErrorMessage(e, `Could not ${spec.verb} this request`)
+          console.error(
+            `[Requests] bulk ${spec.verb} failed for overtime ${id}:`,
+            e?.response?.data ?? e,
+          )
+        }
       }
-      $q.notify({
-        type: 'positive',
-        message: `${ids.length} overtime request(s) rejected`,
-        icon: 'cancel',
-        position: 'top',
-      })
-      clearOvertimeSelection()
-      await fetchOvertimeRequests(selectedDisbursementLog.value)
-      await fetchOvertimeSummary()
-    } catch (e) {
-      console.log('Overtime bulk reject error:', JSON.stringify(e.response?.data, null, 2))
-      const msg =
-        e.response?.data?.message ||
-        e.response?.data?.non_field_errors?.[0] ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to bulk reject'
-      $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
     } finally {
       overtimeSubmitting.value = new Set()
+      clearOvertimeSelection()
+    }
+
+    // Unconditional: the server state has moved for everything in `done`, so a
+    // partial run that left the table alone is exactly how approved rows kept
+    // showing as pending.
+    await fetchOvertimeRequests().catch((e) =>
+      console.error('[Requests] refetch after bulk overtime failed:', e),
+    )
+
+    const failed = ids.length - done.length
+    if (done.length && failed) {
+      toast.warning(`${done.length} ${spec.past}, ${failed} could not be.`, {
+        caption: reason || undefined,
+      })
+    } else if (done.length) {
+      toast.success(
+        `${done.length} overtime request${done.length === 1 ? '' : 's'} ${spec.past}`,
+        { icon: spec.icon },
+      )
+    } else {
+      toast.error(reason || `None of these requests could be ${spec.past}.`)
     }
   })
 }
 
+const bulkApproveOvertime = () => bulkDecideOvertime('approved')
+const bulkRejectOvertime = () => bulkDecideOvertime('rejected')
+
+// Filtered over the whole queue, then ordered — never over whatever happens to
+// be rendered. The grid shows every matching row, so there is no page slice to
+// filter behind. Newest overtime first, because a flat queue spanning every
+// payroll run has no other natural order; ties break on the request id so the
+// list does not reshuffle between refreshes.
 const filteredOvertimeRequests = computed(() => {
   let filtered = [...overtimeRequests.value]
   if (overtimeStatusFilter.value && overtimeStatusFilter.value !== 'all') {
-    filtered = filtered.filter((r) => r.status === overtimeStatusFilter.value)
+    filtered = filtered.filter((r) => r.statusGroup === overtimeStatusFilter.value)
   }
-  if ((overtimeSearch.value || '').trim()) {
-    const search = overtimeSearch.value.toLowerCase()
+  const search = (overtimeSearch.value || '').trim().toLowerCase()
+  if (search) {
     filtered = filtered.filter(
       (r) =>
         r.employeeName?.toLowerCase().includes(search) ||
+        r.categoryName?.toLowerCase().includes(search) ||
         (r.reason && r.reason.toLowerCase().includes(search)),
     )
   }
-  return filtered
+  // A row whose group cannot be resolved is excluded while a group is selected —
+  // "show me group A" should not fall back to including unknowns.
+  if (overtimePayrollGroupFilter.value) {
+    filtered = filtered.filter((r) =>
+      matchesPayrollGroup(overtimeRowEmployeeRefs(r), overtimePayrollGroupFilter.value),
+    )
+  }
+  return filtered.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id)
 })
-
-const overtimeNarrowed = computed(
-  () => !!(overtimeSearch.value || '').trim() || overtimeStatusFilter.value !== 'all',
-)
 
 // ===== LEAVE: APPROVE / REJECT =====
 const approveRequest = async (request) => {
@@ -1469,33 +1183,18 @@ const approveRequest = async (request) => {
     await api.patch(`/attendance/leave-approval/${request.id}/`, { status: 'approved' })
     const index = leaveList.value.findIndex((r) => r.id === request.id)
     if (index !== -1) leaveList.value[index].status = 'approved'
-    $q.notify({
-      type: 'positive',
-      message: 'Leave request approved successfully',
-      icon: 'check_circle',
-      position: 'top',
-    })
+    toast.success('Leave request approved successfully', { icon: 'check_circle' })
     if (showLeaveDetails.value) showLeaveDetails.value = false
   } catch (e) {
     if (e.response?.status === 500) {
       const index = leaveList.value.findIndex((r) => r.id === request.id)
       if (index !== -1) leaveList.value[index].status = 'approved'
-      $q.notify({
-        type: 'positive',
-        message: 'Leave request approved successfully',
-        icon: 'check_circle',
-        position: 'top',
-      })
+      toast.success('Leave request approved successfully', { icon: 'check_circle' })
       if (showLeaveDetails.value) showLeaveDetails.value = false
       return
     }
-    const errorMessage = Array.isArray(e.response?.data)
-      ? e.response.data[0]
-      : e.response?.data?.message ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to approve request.'
-    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+    const errorMessage = extractErrorMessage(e, 'Failed to approve request.')
+    toast.error(errorMessage, { icon: 'error' })
   } finally {
     actionLoading.value = null
   }
@@ -1507,33 +1206,18 @@ const rejectRequest = async (request) => {
     await api.patch(`/attendance/leave-approval/${request.id}/`, { status: 'rejected' })
     const index = leaveList.value.findIndex((r) => r.id === request.id)
     if (index !== -1) leaveList.value[index].status = 'rejected'
-    $q.notify({
-      type: 'warning',
-      message: 'Leave request rejected',
-      icon: 'cancel',
-      position: 'top',
-    })
+    toast.warning('Leave request rejected', { icon: 'cancel' })
     if (showLeaveDetails.value) showLeaveDetails.value = false
   } catch (e) {
     if (e.response?.status === 500) {
       const index = leaveList.value.findIndex((r) => r.id === request.id)
       if (index !== -1) leaveList.value[index].status = 'rejected'
-      $q.notify({
-        type: 'warning',
-        message: 'Leave request rejected',
-        icon: 'cancel',
-        position: 'top',
-      })
+      toast.warning('Leave request rejected', { icon: 'cancel' })
       if (showLeaveDetails.value) showLeaveDetails.value = false
       return
     }
-    const errorMessage = Array.isArray(e.response?.data)
-      ? e.response.data[0]
-      : e.response?.data?.message ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to reject request.'
-    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+    const errorMessage = extractErrorMessage(e, 'Failed to reject request.')
+    toast.error(errorMessage, { icon: 'error' })
   } finally {
     actionLoading.value = null
   }
@@ -1566,12 +1250,12 @@ const fetchCaRequests = async () => {
       403: 'Access forbidden.',
       404: 'Endpoint not found.',
     }
+    // The status map stays ahead of the body: these endpoints answer some
+    // failures with a code and no explanation, and the map is the only place
+    // that wording exists.
     const message =
-      errorMessages[err.response?.status] ||
-      err.response?.data?.detail ||
-      err.response?.data?.message ||
-      `Failed to fetch requests: ${err.message}`
-    $q.notify({ type: 'negative', message, position: 'top', timeout: 5000 })
+      errorMessages[err.response?.status] || extractErrorMessage(err, 'Failed to fetch requests')
+    toast.error(message, { timeout: 5000 })
   } finally {
     loading.value = false
   }
@@ -1611,12 +1295,12 @@ const fetchCaCutoffRequests = async (logId) => {
       403: 'Access forbidden.',
       404: 'Endpoint not found.',
     }
+    // The status map stays ahead of the body: these endpoints answer some
+    // failures with a code and no explanation, and the map is the only place
+    // that wording exists.
     const message =
-      errorMessages[err.response?.status] ||
-      err.response?.data?.detail ||
-      err.response?.data?.message ||
-      `Failed to fetch cutoff requests: ${err.message}`
-    $q.notify({ type: 'negative', message, position: 'top', timeout: 5000 })
+      errorMessages[err.response?.status] || extractErrorMessage(err, 'Failed to fetch cutoff requests')
+    toast.error(message, { timeout: 5000 })
   } finally {
     caCutoffLoading.value = false
   }
@@ -1634,7 +1318,7 @@ const submitCaApproval = async () => {
     await api.patch(`/cash_advance/admin/cash-advances/${requestId}/action/`, payload)
     caApprovalModal.value = false
     selectedCaRequest.value = null
-    $q.notify({ type: 'positive', message: 'Request updated successfully!', position: 'top' })
+    toast.success('Request updated successfully!')
     if (caViewMode.value === 'cutoff' && selectedCaDisbursementLog.value) {
       await fetchCaCutoffRequests(selectedCaDisbursementLog.value)
     } else {
@@ -1644,7 +1328,7 @@ const submitCaApproval = async () => {
     if (err.response?.status === 500) {
       caApprovalModal.value = false
       selectedCaRequest.value = null
-      $q.notify({ type: 'positive', message: 'Request updated successfully!', position: 'top' })
+      toast.success('Request updated successfully!')
       if (caViewMode.value === 'cutoff' && selectedCaDisbursementLog.value) {
         await fetchCaCutoffRequests(selectedCaDisbursementLog.value)
       } else {
@@ -1652,12 +1336,8 @@ const submitCaApproval = async () => {
       }
       return
     }
-    const message =
-      err.response?.data?.detail ||
-      err.response?.data?.message ||
-      err.message ||
-      'Failed to update request'
-    $q.notify({ type: 'negative', message, position: 'top', timeout: 5000 })
+    const message = extractErrorMessage(err, 'Failed to update request')
+    toast.error(message, { timeout: 5000 })
   } finally {
     caSubmitting.value = false
   }
@@ -1692,19 +1372,28 @@ const fetchSwapRequests = async () => {
   try {
     const companyId = selectedCompany.value
     if (!companyId) throw new Error('No company selected')
-    const res = await api.get('/organization/swap-requests/', {
-      params: { company: companyId },
-    })
+    // The swap endpoint names people by id alone, so the company's employees
+    // are the only place the names exist. useEmployees caches per company, so
+    // this is usually free; a failure here costs names, not the whole tab.
+    const [res] = await Promise.all([
+      api.get('/organization/swap-requests/', { params: { company: companyId } }),
+      fetchEmployees().catch(() => []),
+    ])
     const data = Array.isArray(res.data) ? res.data : (res.data?.data ?? res.data?.results ?? [])
-    swapRequests.value = data
+    // Resolved here rather than in the grid so the table, the details modal and
+    // the tab counter all read the same names, labels and status wording.
+    swapDirectory.value = buildEmployeeDirectory(employees.value)
+    swapRequests.value = normalizeSwapRequests(data, swapDirectory.value)
+    if (process.env.DEV) {
+      // If a row still can't be named, the payload identifies people by some key
+      // the resolver doesn't know yet — print that row's shape rather than let
+      // the column quietly read "Unknown employee".
+      const unnamed = swapRequests.value.find((r) => !r.requested_by_name)
+      if (unnamed) console.debug('[swap-requests] unresolved requester, raw row:', unnamed)
+    }
   } catch (e) {
-    const errorMessage = Array.isArray(e.response?.data)
-      ? e.response.data[0]
-      : e.response?.data?.message ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to fetch swap requests.'
-    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+    const errorMessage = extractErrorMessage(e, 'Failed to fetch swap requests.')
+    toast.error(errorMessage, { icon: 'error' })
   } finally {
     swapLoading.value = false
   }
@@ -1712,12 +1401,7 @@ const fetchSwapRequests = async () => {
 
 const approveSwapRequest = async (request) => {
   if (!request.to_employee_approved) {
-    $q.notify({
-      type: 'warning',
-      message: 'Employee has not yet approved the swap',
-      icon: 'warning',
-      position: 'top',
-    })
+    toast.warning('Employee has not yet approved the swap', { icon: 'warning' })
     return
   }
   swapActionLoading.value = `approve-${request.id}`
@@ -1727,23 +1411,18 @@ const approveSwapRequest = async (request) => {
       remarks: '',
     })
     const index = swapRequests.value.findIndex((r) => r.id === request.id)
-    if (index !== -1) swapRequests.value[index].status = 'approved'
-    $q.notify({
-      type: 'positive',
-      message: 'Swap request approved successfully',
-      icon: 'check_circle',
-      position: 'top',
-    })
+    if (index !== -1) {
+      swapRequests.value[index] = normalizeSwapRequest(
+        { ...swapRequests.value[index], status: 'approved' },
+        swapDirectory.value,
+      )
+    }
+    toast.success('Swap request approved successfully', { icon: 'check_circle' })
     if (showSwapViewDialog.value) showSwapViewDialog.value = false
     await fetchSwapRequests()
   } catch (e) {
-    const errorMessage = Array.isArray(e.response?.data)
-      ? e.response.data[0]
-      : e.response?.data?.message ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to approve swap request.'
-    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+    const errorMessage = extractErrorMessage(e, 'Failed to approve swap request.')
+    toast.error(errorMessage, { icon: 'error' })
   } finally {
     swapActionLoading.value = null
   }
@@ -1751,12 +1430,7 @@ const approveSwapRequest = async (request) => {
 
 const rejectSwapRequest = async (request) => {
   if (!request.to_employee_approved) {
-    $q.notify({
-      type: 'warning',
-      message: 'Employee has not yet approved the swap',
-      icon: 'warning',
-      position: 'top',
-    })
+    toast.warning('Employee has not yet approved the swap', { icon: 'warning' })
     return
   }
   swapActionLoading.value = `reject-${request.id}`
@@ -1766,23 +1440,18 @@ const rejectSwapRequest = async (request) => {
       remarks: '',
     })
     const index = swapRequests.value.findIndex((r) => r.id === request.id)
-    if (index !== -1) swapRequests.value[index].status = 'rejected'
-    $q.notify({
-      type: 'warning',
-      message: 'Swap request rejected',
-      icon: 'cancel',
-      position: 'top',
-    })
+    if (index !== -1) {
+      swapRequests.value[index] = normalizeSwapRequest(
+        { ...swapRequests.value[index], status: 'rejected' },
+        swapDirectory.value,
+      )
+    }
+    toast.warning('Swap request rejected', { icon: 'cancel' })
     if (showSwapViewDialog.value) showSwapViewDialog.value = false
     await fetchSwapRequests()
   } catch (e) {
-    const errorMessage = Array.isArray(e.response?.data)
-      ? e.response.data[0]
-      : e.response?.data?.message ||
-        e.response?.data?.detail ||
-        e.message ||
-        'Failed to reject swap request.'
-    $q.notify({ type: 'negative', message: errorMessage, icon: 'error', position: 'top' })
+    const errorMessage = extractErrorMessage(e, 'Failed to reject swap request.')
+    toast.error(errorMessage, { icon: 'error' })
   } finally {
     swapActionLoading.value = null
   }
@@ -1806,11 +1475,8 @@ const handleRefresh = () => {
       fetchCaRequests()
     }
   } else if (activeTab.value === 'overtime') {
-    fetchOvertimeSummary()
+    fetchOvertimeRequests()
     fetchOvertimeCategories()
-    if (selectedDisbursementLog.value) {
-      fetchOvertimeRequests(selectedDisbursementLog.value)
-    }
   } else if (activeTab.value === 'swap') {
     fetchSwapRequests()
   } else {
@@ -1828,7 +1494,7 @@ watch(activeTab, (newTab) => {
       fetchCaRequests()
     }
   } else if (newTab === 'overtime') {
-    fetchOvertimeSummary()
+    fetchOvertimeRequests()
     fetchOvertimeCategories()
   } else if (newTab === 'swap') {
     fetchSwapRequests()
@@ -1847,33 +1513,63 @@ watch(caViewMode, (mode) => {
   }
 })
 
+// Payout groups feed all three toolbar selects, so the list loads with the page
+// and reloads on a switch. Gated on companyId because fetchPayrollGroups
+// returns an empty list without one, and does so silently.
+watch(
+  selectedCompany,
+  (id) => {
+    if (id) fetchPayrollGroups()
+  },
+  { immediate: true },
+)
+
+// Contracts are only fetched once a group is actually selected, then cached
+// (module-level, shared with the Employees, Attendance and Schedule pages).
+// Filtering is client-side, so nothing needs refetching — just resolve, then let
+// the computed re-evaluate. Each queue also re-resolves when its rows change,
+// because a refreshed list brings employees the cache has not seen yet.
+watch([leavePayrollGroupFilter, leaveList], async () => {
+  if (!leavePayrollGroupFilter.value) return
+  await ensureGroupsFor(leaveList.value, leaveRowEmployeeRefs)
+})
+
+watch([overtimePayrollGroupFilter, overtimeRequests], async () => {
+  if (!overtimePayrollGroupFilter.value) return
+  await ensureGroupsFor(overtimeRequests.value, overtimeRowEmployeeRefs)
+})
+
+watch([caPayrollGroupFilter, caRequests], async () => {
+  if (!caPayrollGroupFilter.value) return
+  await ensureGroupsFor(caRequests.value, caRowEmployeeRefs)
+})
+
 // Re-fetch all data when selected company changes
 watch(selectedCompany, () => {
   markUpdated()
-  selectedDisbursementLog.value = null
   selectedCaDisbursementLog.value = null
   caCutoffRequests.value = []
+  // Ids from the previous workspace mean nothing in the next one.
+  clearOvertimeSelection()
+  overtimeRequests.value = []
+  overtimeDirectory.value = null
+  // Group ids belong to the company they were listed for, so the filters cannot
+  // survive a switch — they would silently match nothing in the new workspace.
+  leavePayrollGroupFilter.value = null
+  overtimePayrollGroupFilter.value = null
+  caPayrollGroupFilter.value = null
   fetchLeaveRequests()
-  fetchOvertimeSummary()
+  fetchOvertimeRequests()
   fetchOvertimeCategories()
   fetchCaRequests()
   fetchCaDisbursementLogs()
   fetchSwapRequests()
 })
 
-// Sync selectedCompany with localStorage
-const syncCompany = () => {
-  const stored = getCompanyId()
-  if (stored !== selectedCompany.value) {
-    selectedCompany.value = stored
-  }
-}
-window.addEventListener('storage', syncCompany)
-
 onMounted(() => {
   markUpdated()
   fetchLeaveRequests()
-  fetchOvertimeSummary()
+  fetchOvertimeRequests()
   fetchOvertimeCategories()
   fetchCaRequests()
   fetchCaDisbursementLogs()
@@ -1884,7 +1580,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('storage', syncCompany)
   if (tickTimer) clearInterval(tickTimer)
 })
 </script>
@@ -2218,9 +1913,6 @@ onUnmounted(() => {
   padding: 6px 0;
   min-width: 0;
 }
-.tab-bar-search {
-  flex: 0 1 240px;
-}
 .tab-bar-stats {
   flex-shrink: 0;
 }
@@ -2235,264 +1927,12 @@ onUnmounted(() => {
   padding: 0;
 }
 
-/* ===== Overtime: payroll-run cards =====
-   Each run is an expandable row of its own. It is a control, so its header
-   takes a hover plate — but no shadow lift, which would promise a depth the
-   panel underneath does not have. */
-.overtime-summary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: var(--dash-pad-y) var(--dash-pad-x);
-}
-.overtime-summary-card {
-  background: var(--dash-surface);
-  border: 1px solid var(--dash-line);
-  border-radius: var(--dash-r-lg);
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color var(--dash-fast) var(--dash-ease);
-}
-.overtime-summary-card:hover,
-.overtime-summary-card.active {
-  border-color: var(--dash-line-strong);
-}
-.summary-card-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  width: 100%;
-  box-sizing: border-box;
-  border-bottom: 1px solid transparent;
-  background: var(--dash-surface);
-  transition:
-    background var(--dash-fast) var(--dash-ease),
-    border-color var(--dash-fast) var(--dash-ease);
-}
-.overtime-summary-card:hover .summary-card-header {
-  background: var(--dash-hover);
-}
-.overtime-summary-card.active .summary-card-header {
-  background: var(--dash-n-25);
-  border-bottom-color: var(--dash-line);
-}
-.summary-card-name-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-}
-.summary-name-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  overflow: hidden;
-}
-.summary-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dash-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-.summary-period {
-  font-size: 12px;
-  color: var(--dash-ink-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-.summary-stat-cols {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-}
-.summary-stat-col {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  padding: 0 14px;
-  border-right: 1px solid var(--dash-line);
-}
-.summary-stat-col:first-child {
-  padding-left: 0;
-}
-.summary-stat-col:last-of-type {
-  border-right: none;
-  padding-right: 0;
-}
-/* Sentence case, not tracked-out small caps. Uppercase micro-labels are the
-   clearest single tell of an older dashboard, and every other table in the app
-   has already dropped them. */
-.summary-stat-label {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--dash-ink-3);
-  white-space: nowrap;
-}
-.summary-stat-val {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--dash-ink);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-.expand-icon {
-  flex-shrink: 0;
-  color: var(--dash-ink-4);
-  transition: transform 0.24s var(--dash-ease);
-}
-.overtime-empty-state {
-  padding: 8px 0 22px;
-}
-
-/* ===== Overtime: expanded run ===== */
-.overtime-panel-wrapper {
-  border-top: 1px solid var(--dash-line);
-  background: var(--dash-n-25);
-}
-.overtime-panel {
-  padding: 14px 16px 16px;
-}
-.overtime-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.panel-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dash-ink);
-}
-.panel-count {
-  padding: 0 6px;
-  border-radius: var(--dash-r-xs);
-  background: var(--dash-n-100);
-  color: var(--dash-ink-3);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 17px;
-  font-variant-numeric: tabular-nums;
-}
-.overtime-table-container {
-  background: var(--dash-surface);
-  border: 1px solid var(--dash-line);
-  border-radius: var(--dash-r-md);
-  overflow: auto;
-}
-.overtime-grid {
-  min-width: 790px;
-}
-.ot-cell-select {
-  width: 40px;
-}
-.ot-cell-employee {
-  width: 200px;
-}
-.ot-cell-time {
-  width: 175px;
-}
-.ot-cell-date {
-  width: 125px;
-}
-.ot-cell-hours {
-  width: 120px;
-}
-.ot-cell-status {
-  width: 120px;
-}
-.ot-cell-actions {
-  width: 110px;
-}
-/* An acronym, so it keeps its capitals — but not the extra tracking and 700
-   weight that turned it into a shout inside a 13px cell. */
-.cto-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-  padding: 1px 5px;
-  border-radius: var(--dash-r-xs);
-  background: var(--dash-info-bg);
-  border: 1px solid var(--dash-info-line);
-  color: var(--dash-info);
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 15px;
-}
-.hours-input {
-  max-width: 84px;
-}
-.hours-input :deep(.q-field__control) {
-  height: 30px;
-  min-height: 30px;
-  padding: 0 8px;
-  border-radius: var(--dash-r-sm);
-  background: var(--dash-surface);
-}
-.hours-input :deep(.q-field__native) {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dash-ink);
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.hours-cell-content {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-/* Selection is a state, not an outcome — an informational band, rather than
-   the green "everything succeeded" bar this used to be. */
-.bulk-actions-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-bottom: 10px;
-  background: var(--dash-info-bg);
-  border: 1px solid var(--dash-info-line);
-  border-radius: var(--dash-r-md);
-  flex-wrap: wrap;
-}
-.bulk-count {
-  margin-right: 2px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--dash-info);
-  font-variant-numeric: tabular-nums;
-}
-.bulk-actions-bar :deep(.q-btn) {
-  height: 28px;
-  min-height: 28px;
-  padding: 0 10px;
-  font-size: 12.5px;
-  font-weight: 500;
-  border-radius: var(--dash-r-sm);
-}
-
 /* ===== Responsive ===== */
 /* Laptop */
 @media (max-width: 1279px) {
   .queue-tab {
     gap: 7px;
     padding: 11px 10px 12px;
-  }
-  .summary-stat-col {
-    padding: 0 11px;
   }
 }
 
@@ -2523,39 +1963,6 @@ onUnmounted(() => {
   .tab-bar-aside {
     padding: 0 0 10px;
   }
-  .tab-bar-search {
-    flex: 1 1 auto;
-  }
-  .summary-card-header {
-    padding: 12px 14px;
-    gap: 12px;
-  }
-}
-
-@media (max-width: 768px) {
-  .summary-card-header {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .summary-card-name-group {
-    flex: 1 1 100%;
-    min-width: 0;
-  }
-  .summary-stat-cols {
-    flex: 1 1 auto;
-    overflow-x: auto;
-    padding-bottom: 2px;
-  }
-  .summary-stat-col {
-    padding: 0 10px;
-  }
-  .overtime-panel {
-    padding: 12px 12px 14px;
-  }
-  .overtime-panel-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
 }
 
 @media (max-width: 599px) {
@@ -2569,37 +1976,12 @@ onUnmounted(() => {
   .queue-tab-label {
     display: none;
   }
-  .overtime-summary-list {
-    padding: 12px;
-  }
-}
-
-@media (max-width: 480px) {
-  .summary-card-header {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 12px;
-    gap: 10px;
-  }
-  .summary-card-name-group {
-    width: 100%;
-  }
-  .summary-stat-cols {
-    width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .summary-stat-col:last-of-type {
-    padding-right: 10px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .queue-tab,
   .queue-tab::after,
-  .expand-icon,
-  .primary-action-btn,
-  .summary-card-header {
+  .primary-action-btn {
     transition: none;
   }
   .live-dot {

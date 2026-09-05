@@ -35,19 +35,16 @@ const stats = computed(() => {
   return { ...EMPTY, ...(source || {}) }
 })
 
-// Every bucket stays visible so the row does not reflow as counts change. The
-// overtime endpoint reports no rejected count at all, so that chip is dropped
-// there rather than always showing a hard-coded zero.
+// Every bucket stays visible so the row does not reflow as counts change. Every
+// queue now counts its own rows, overtime included — it used to read a summary
+// endpoint that reported no rejected count, so that chip had to be dropped.
 const segments = computed(() => {
   const s = stats.value
-  const list = [
+  return [
     { key: 'pending', label: 'pending', value: s.pending },
     { key: 'approved', label: 'approved', value: s.approved },
+    { key: 'rejected', label: 'rejected', value: s.rejected },
   ]
-  if (props.activeTab !== 'overtime') {
-    list.push({ key: 'rejected', label: 'rejected', value: s.rejected })
-  }
-  return list
 })
 </script>
 

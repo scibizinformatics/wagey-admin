@@ -217,24 +217,16 @@
                           flat
                           dense
                           round
-                          icon="visibility"
+                          icon="more_horiz"
                           size="sm"
                           class="grid-action"
-                          @click.stop="$emit('view', props.row)"
+                          aria-label="Row actions"
+                          @click.stop
                         >
-                          <q-tooltip>View details</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                          v-if="props.row.status === 'pending'"
-                          flat
-                          dense
-                          round
-                          icon="rule"
-                          size="sm"
-                          class="grid-action grid-action--approve"
-                          @click.stop="$emit('approve', props.row)"
-                        >
-                          <q-tooltip>Approve or reject</q-tooltip>
+                          <RequestRowMenu
+                            :actions="rowActions(props.row)"
+                            @select="$emit($event, props.row)"
+                          />
                         </q-btn>
                       </div>
                     </q-td>
@@ -251,6 +243,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import RequestRowMenu from './RequestRowMenu.vue'
 import { getApproverName as approverName } from 'src/composables/utils/employee'
 
 const props = defineProps({
@@ -263,6 +256,17 @@ const props = defineProps({
 })
 
 defineEmits(['expand', 'view', 'approve', 'update:search'])
+
+// The row's own actions. A cash advance is not decided in place — both outcomes
+// happen in the review modal — so the single decision item opens it rather than
+// offering an Approve and a Reject that would both lead to the same dialog.
+const rowActions = (row) => {
+  const actions = [{ key: 'view', label: 'View details', icon: 'o_visibility' }]
+  if (row.status === 'pending') {
+    actions.push({ key: 'approve', label: 'Approve or reject', icon: 'o_rule', tone: 'good' })
+  }
+  return actions
+}
 
 const cutoffColumns = [
   { name: 'employeeName', label: 'Employee', field: 'employee_name', align: 'left' },
@@ -556,8 +560,10 @@ const statusPillClass = (status) => {
 .cut-cell-status {
   width: 160px;
 }
+/* One 30px menu trigger, so the column only has to clear its own header
+   label. It used to be sized for up to three side-by-side buttons. */
 .cut-cell-actions {
-  width: 100px;
+  width: 76px;
 }
 
 /* Bordered status chip — a tint plus a 1px ring in the same hue, matching the

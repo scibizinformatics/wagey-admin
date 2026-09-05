@@ -84,38 +84,45 @@
                     getInitials(props.row.requested_by_name)
                   }}</span>
                   <span class="identity-text">
-                    <span class="identity-name">{{ props.row.requested_by_name || 'N/A' }}</span>
-                    <span class="identity-sub">{{ formatDateTime(props.row.requested_at) }}</span>
+                    <span class="identity-name">{{
+                      props.row.requested_by_name || 'Unknown employee'
+                    }}</span>
+                    <span class="identity-sub">{{ props.row.requested_at_label || EM_DASH }}</span>
                   </span>
                 </div>
               </q-td>
 
               <q-td class="grid-cell cell-employees">
                 <div class="swap-pair">
-                  <span class="swap-from">{{ props.row.from_employee_name }}</span>
+                  <span class="swap-from">{{ props.row.from_employee_name || EM_DASH }}</span>
                   <span class="swap-arrow">
                     <q-icon name="south" size="12px" />
                   </span>
-                  <span class="swap-to">{{ props.row.to_employee_name }}</span>
+                  <span class="swap-to">{{ props.row.to_employee_name || EM_DASH }}</span>
                 </div>
               </q-td>
 
               <q-td class="grid-cell cell-move">
                 <div class="range">
-                  <span>{{ formatDate(props.row.original_date) }}</span>
+                  <span>{{ props.row.original_date_label || EM_DASH }}</span>
                   <span class="range-sep">&rarr;</span>
-                  <span>{{ formatDate(props.row.new_date) }}</span>
+                  <span>{{ props.row.new_date_label || EM_DASH }}</span>
                 </div>
-                <div class="range-meta">
-                  {{ props.row.original_assignment?.shift_type || '—' }}
+                <!-- Only shown when the payload actually names a shift; a row of
+                     two em dashes says nothing and just crowds the date above. -->
+                <div
+                  v-if="props.row.original_shift_label || props.row.new_shift_label"
+                  class="range-meta"
+                >
+                  {{ props.row.original_shift_label || EM_DASH }}
                   &rarr;
-                  {{ props.row.new_assignment?.shift_type || '—' }}
+                  {{ props.row.new_shift_label || EM_DASH }}
                 </div>
               </q-td>
 
               <q-td class="grid-cell cell-status">
-                <span :class="['status-pill', statusPillClass(props.row)]">
-                  {{ getStatusLabel(props.row) }}
+                <span :class="['status-pill', `status-pill--${props.row.status_tone}`]">
+                  {{ props.row.status_label }}
                 </span>
                 <div
                   v-if="isPendingApproval(props.row)"
@@ -131,46 +138,18 @@
                     flat
                     dense
                     round
-                    icon="visibility"
+                    icon="more_horiz"
                     size="sm"
                     class="grid-action"
-                    @click.stop="$emit('view', props.row)"
+                    :loading="isBusy(props.row)"
+                    aria-label="Row actions"
+                    @click.stop
                   >
-                    <q-tooltip>View details</q-tooltip>
+                    <RequestRowMenu
+                      :actions="rowActions(props.row)"
+                      @select="$emit($event, props.row)"
+                    />
                   </q-btn>
-                  <template v-if="isPendingApproval(props.row)">
-                    <q-btn
-                      flat
-                      dense
-                      round
-                      icon="check"
-                      size="sm"
-                      class="grid-action grid-action--approve"
-                      :disable="!canAdminApprove(props.row)"
-                      :loading="processingId === `approve-${props.row.id}`"
-                      @click.stop="$emit('approve', props.row)"
-                    >
-                      <q-tooltip>
-                        {{
-                          canAdminApprove(props.row)
-                            ? 'Approve'
-                            : `Waiting for ${props.row.to_employee_name}`
-                        }}
-                      </q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      dense
-                      round
-                      icon="close"
-                      size="sm"
-                      class="grid-action grid-action--reject"
-                      :loading="processingId === `reject-${props.row.id}`"
-                      @click.stop="$emit('reject', props.row)"
-                    >
-                      <q-tooltip>Reject</q-tooltip>
-                    </q-btn>
-                  </template>
                 </div>
               </q-td>
             </q-tr>
@@ -200,7 +179,10 @@
 </template>
 
 <script setup>
-defineProps({
+import { EM_DASH } from 'src/composables/utils/swapRequests'
+import RequestRowMenu from './RequestRowMenu.vue'
+
+const props = defineProps({
   rows: Array,
   loading: Boolean,
   sortBy: String,
@@ -226,8 +208,8 @@ const sortOptions = [
 const columns = [
   { name: 'requested_by', label: 'Requested by', field: 'requested_by_name', align: 'left' },
   { name: 'employees', label: 'Employees', field: 'from_employee_name', align: 'left' },
-  { name: 'move', label: 'Shift moved', field: 'original_date', align: 'left' },
-  { name: 'status', label: 'Status', field: 'status', align: 'left' },
+  { name: 'move', label: 'Shift moved', field: 'original_date_label', align: 'left' },
+  { name: 'status', label: 'Status', field: 'status_label', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'right' },
 ]
 
@@ -240,43 +222,9 @@ const getInitials = (name) => {
     .toUpperCase()
     .substring(0, 2)
 }
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  const date = new Date(dateString)
-  if (isNaN(date)) return dateString
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' })
-}
-const formatDateTime = (dateTimeString) => {
-  if (!dateTimeString) return 'N/A'
-  const date = new Date(dateTimeString)
-  if (isNaN(date)) return dateTimeString
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-const statusPillClass = (request) => {
-  if (!request) return 'status-pill--default'
-  const status = request.status
-  if (status === 'pending') return 'status-pill--pending'
-  if (status === 'to_employee_approved') return 'status-pill--info'
-  if (status === 'approved') return 'status-pill--approved'
-  if (status === 'rejected') return 'status-pill--rejected'
-  return 'status-pill--default'
-}
-const getStatusLabel = (request) => {
-  if (!request) return ''
-  const labels = {
-    pending: 'Pending',
-    to_employee_approved: 'Employee approved',
-    approved: 'Approved',
-    rejected: 'Rejected',
-  }
-  return labels[request.status] || request.status
-}
+// Dates, names, shift labels and status wording are resolved once in
+// composables/utils/swapRequests.js and arrive on the row as *_label fields, so
+// the grid never has to interpret a raw payload value itself.
 const isPendingApproval = (request) => {
   if (!request) return false
   return request.status === 'pending' || request.status === 'to_employee_approved'
@@ -287,8 +235,38 @@ const canAdminApprove = (request) => {
 }
 const getApprovalProgressText = (request) => {
   if (canAdminApprove(request)) return 'Ready for your approval'
-  return `Waiting for ${request.to_employee_name}`
+  return request?.to_employee_name
+    ? `Waiting for ${request.to_employee_name}`
+    : 'Waiting for the other employee'
 }
+
+// The row's own actions. A swap the other employee has not accepted yet is not
+// the admin's to approve, so Approve stays in the menu but is unavailable and
+// carries the reason — an item that vanishes tells the reviewer nothing about
+// why, and rejecting is still allowed at that point.
+const rowActions = (row) => {
+  const actions = [{ key: 'view', label: 'View details', icon: 'o_visibility' }]
+  if (isPendingApproval(row)) {
+    const ready = canAdminApprove(row)
+    actions.push(
+      {
+        key: 'approve',
+        label: 'Approve',
+        icon: 'o_check_circle',
+        tone: 'good',
+        disabled: !ready,
+        caption: ready ? '' : getApprovalProgressText(row),
+      },
+      { key: 'reject', label: 'Reject', icon: 'o_cancel', tone: 'danger' },
+    )
+  }
+  return actions
+}
+
+// The spinner moved from the individual approve/reject buttons onto the trigger,
+// which is the only control still on the row once the menu has closed.
+const isBusy = (row) =>
+  props.processingId === `approve-${row.id}` || props.processingId === `reject-${row.id}`
 </script>
 
 <style scoped src="./requestGrid.css"></style>
@@ -313,8 +291,10 @@ const getApprovalProgressText = (request) => {
 .cell-status {
   width: 180px;
 }
+/* One 30px menu trigger, so the column only has to clear its own header
+   label. It used to be sized for up to three side-by-side buttons. */
 .cell-actions {
-  width: 110px;
+  width: 76px;
 }
 
 .swap-pair {
