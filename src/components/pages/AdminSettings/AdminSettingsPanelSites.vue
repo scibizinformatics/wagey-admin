@@ -8,7 +8,7 @@
       <div class="table-actions">
         <q-btn
           color="primary"
-          label="Add Site"
+          label="Add site"
           icon="add"
           class="add-btn"
           @click="openSiteDialog"
@@ -38,6 +38,7 @@
               <q-th class="table-header-cell">Site Name</q-th>
               <q-th class="table-header-cell">Address</q-th>
               <q-th class="table-header-cell">Ownership</q-th>
+              <q-th class="table-header-cell">Requirements</q-th>
               <q-th class="table-header-cell">Status</q-th>
               <q-th class="table-header-cell actions-header">Actions</q-th>
             </q-tr>
@@ -57,6 +58,29 @@
                 >
                   {{ props.row.ownership_type }}
                 </div>
+              </q-td>
+              <!-- The endpoint answers per site, so this column is a batch of
+                   one request each; until it lands the cell shimmers rather
+                   than claiming the site has nothing set. -->
+              <q-td class="table-body-cell">
+                <span v-if="loadingRequirements" class="dash-shimmer req-shimmer" />
+                <template v-else-if="requirementSummary(props.row)?.hasAny">
+                  <button
+                    type="button"
+                    class="req-cell"
+                    @click="openRequirements(props.row)"
+                    :aria-label="`Position requirements for ${props.row.name}`"
+                  >
+                    <span class="req-primary"
+                      >{{ requirementSummary(props.row).positions }}
+                      {{ requirementSummary(props.row).positions === 1 ? 'position' : 'positions' }}
+                    </span>
+                    <span class="req-secondary"
+                      >{{ requirementSummary(props.row).headcount }} needed</span
+                    >
+                  </button>
+                </template>
+                <span v-else class="req-none" aria-label="No position requirements set">—</span>
               </q-td>
               <q-td class="table-body-cell">
                 <div
@@ -79,7 +103,16 @@
                         @click="editSite(props.row)"
                       >
                         <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
-                        <q-item-section>Edit Site</q-item-section>
+                        <q-item-section>Edit site</q-item-section>
+                      </q-item>
+                      <q-item
+                        clickable
+                        v-close-popup
+                        class="dropdown-item"
+                        @click="openRequirements(props.row)"
+                      >
+                        <q-item-section side><q-icon name="groups" size="16px" /></q-item-section>
+                        <q-item-section>Position requirements</q-item-section>
                       </q-item>
                       <q-item
                         clickable
@@ -103,49 +136,75 @@
     </div>
 
     <q-dialog v-model="siteDialog" persistent @before-show="onDialogOpen">
-      <q-card class="admin-modal-card admin-modal-card--md">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+      <q-card class="dash-modal dash-modal--md">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="location_on" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">{{ editingSite ? 'Edit Site' : 'Add Site' }}</div>
-              <div class="admin-modal-subtitle">Manage site locations and configurations</div>
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">{{ editingSite ? 'Edit site' : 'Add Site' }}</div>
+              <div class="dash-modal__sub">Manage site locations and configurations</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
 
-        <q-card-section class="admin-modal-content">
+        <q-card-section class="dash-modal__body">
           <div class="form-section-label">Basic Information</div>
           <div class="row q-col-gutter-md q-mb-sm">
             <div class="col-12">
-              <q-input v-model="siteForm.name" label="Site Name *" outlined dense>
-                <template v-slot:prepend><q-icon name="business" size="18px" /></template>
-              </q-input>
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Site Name<span class="dash-modal__req">*</span></span
+                >
+                <q-input
+                  v-model="siteForm.name"
+                  outlined
+                  dense
+                  hide-bottom-space
+                  class="dash-field"
+                >
+                  <template v-slot:prepend><q-icon name="business" size="18px" /></template>
+                </q-input>
+              </label>
             </div>
             <div class="col-12">
-              <q-input v-model="siteForm.brand_name" label="Brand Name" outlined dense>
-                <template v-slot:prepend><q-icon name="label" size="18px" /></template>
-              </q-input>
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Brand Name</span>
+                <q-input
+                  v-model="siteForm.brand_name"
+                  outlined
+                  dense
+                  hide-bottom-space
+                  class="dash-field"
+                >
+                  <template v-slot:prepend><q-icon name="label" size="18px" /></template>
+                </q-input>
+              </label>
             </div>
           </div>
 
           <div class="form-section-label">Location Details</div>
           <div class="row q-col-gutter-md q-mb-sm">
             <div class="col-12">
-              <q-input
-                v-model="siteForm.location"
-                label="Location / Address *"
-                outlined
-                dense
-                :loading="mapSearchLoading"
-                @update:model-value="onLocationInput"
-              >
-                <template v-slot:prepend><q-icon name="map" size="18px" /></template>
-                <template v-slot:hint>Type an address to auto-pin on the map</template>
-              </q-input>
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Location / Address<span class="dash-modal__req">*</span></span
+                >
+                <q-input
+                  v-model="siteForm.location"
+                  outlined
+                  dense
+                  :loading="mapSearchLoading"
+                  @update:model-value="onLocationInput"
+                  hide-bottom-space
+                  class="dash-field"
+                >
+                  <template v-slot:prepend><q-icon name="map" size="18px" /></template>
+                  <template v-slot:hint>Type an address to auto-pin on the map</template>
+                </q-input>
+              </label>
             </div>
             <input type="hidden" v-model="siteForm.latitude" />
             <input type="hidden" v-model="siteForm.longitude" />
@@ -163,28 +222,37 @@
               </div>
             </div>
             <div class="col-6">
-              <q-input
-                v-model.number="siteForm.radius_meters"
-                label="Radius (meters)"
-                type="number"
-                outlined
-                dense
-              >
-                <template v-slot:prepend
-                  ><q-icon name="radio_button_unchecked" size="18px"
-                /></template>
-              </q-input>
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Radius (meters)</span>
+                <q-input
+                  v-model.number="siteForm.radius_meters"
+                  type="number"
+                  outlined
+                  dense
+                  hide-bottom-space
+                  class="dash-field"
+                >
+                  <template v-slot:prepend
+                    ><q-icon name="radio_button_unchecked" size="18px"
+                  /></template>
+                </q-input>
+              </label>
             </div>
             <div class="col-6">
-              <q-select
-                v-model="siteForm.ownership_type"
-                :options="ownershipOptions"
-                label="Ownership Type"
-                outlined
-                dense
-              >
-                <template v-slot:prepend><q-icon name="home_work" size="18px" /></template>
-              </q-select>
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Ownership Type</span>
+                <q-select
+                  v-model="siteForm.ownership_type"
+                  :options="ownershipOptions"
+                  outlined
+                  dense
+                  hide-bottom-space
+                  class="dash-field"
+                  popup-content-class="dash-popup dash-popup--modal"
+                >
+                  <template v-slot:prepend><q-icon name="home_work" size="18px" /></template>
+                </q-select>
+              </label>
             </div>
           </div>
 
@@ -242,39 +310,56 @@
           <div class="form-section-label">Additional</div>
           <div class="row q-mb-md">
             <div class="col-12">
-              <q-input
-                v-model="siteForm.extended_shift_days"
-                label="Extended Shift Days"
-                outlined
-                dense
-                placeholder="e.g. Mon,Tue,Wed"
-              >
-                <template v-slot:prepend><q-icon name="date_range" size="18px" /></template>
-                <template v-slot:hint>Comma-separated days for extended shifts</template>
-              </q-input>
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Extended Shift Days</span>
+                <q-input
+                  v-model="siteForm.extended_shift_days"
+                  outlined
+                  dense
+                  placeholder="e.g. Mon,Tue,Wed"
+                  hide-bottom-space
+                  class="dash-field"
+                >
+                  <template v-slot:prepend><q-icon name="date_range" size="18px" /></template>
+                  <template v-slot:hint>Comma-separated days for extended shifts</template>
+                </q-input>
+              </label>
             </div>
           </div>
         </q-card-section>
 
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
-            color="primary"
             :label="editingSite ? 'Update Site' : 'Save Site'"
-            class="admin-save-btn"
+            no-caps
+            class="dash-modal__submit"
             :loading="savingSite"
             @click="saveSite"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <SitePositionRequirementsDialog
+      v-model="requirementsDialog"
+      :site="requirementsSite"
+      :requirements="requirementsForOpenSite"
+      :positions="positions"
+      :loading="loadingSiteRequirements"
+      :loading-positions="loadingPositions"
+      :saving="savingRequirement"
+      @add="addRequirement"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import SitePositionRequirementsDialog from './SitePositionRequirementsDialog.vue'
 import { useAdminSites } from '@/composables/admin/useAdminSites'
+import { useAdminSitePositionRequirements } from '@/composables/admin/useAdminSitePositionRequirements'
 
 const props = defineProps({
   searchQuery: { type: String, default: '' },
@@ -300,6 +385,7 @@ const siteColumns = ref([
   { name: 'name', label: 'Site Name', field: 'name', align: 'left', sortable: true },
   { name: 'location', label: 'Location', field: 'location', align: 'left' },
   { name: 'ownership_type', label: 'Ownership', field: 'ownership_type', align: 'left' },
+  { name: 'requirements', label: 'Requirements', field: 'requirements', align: 'left' },
   { name: 'is_active', label: 'Status', field: 'is_active', align: 'center' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ])
@@ -452,6 +538,60 @@ watch(siteDialog, (val) => {
   }
 })
 
+// ─── Position requirements ─────────────────────────────────────────────────
+/*
+ * How many of each position a site is meant to have — the targets the manning
+ * board is read against. The endpoint is per site, so the table column is a
+ * batch of one request each, issued once the sites themselves land and again
+ * whenever that list changes (a company switch, an add, a delete).
+ */
+const {
+  positions,
+  loadingPositions,
+  loadingSummary: loadingRequirements,
+  loadingSite: loadingSiteRequirements,
+  saving: savingRequirement,
+  bySite: requirementsBySite,
+  summaryFor,
+  fetchAll: fetchAllRequirements,
+  fetchForSite: fetchSiteRequirements,
+  createRequirement,
+} = useAdminSitePositionRequirements()
+
+const requirementsDialog = ref(false)
+const requirementsSite = ref(null)
+
+const requirementsForOpenSite = computed(() => {
+  const id = requirementsSite.value?.id
+  return id == null ? [] : (requirementsBySite.value[id] ?? [])
+})
+
+function requirementSummary(site) {
+  return summaryFor(site.id)
+}
+
+async function openRequirements(site) {
+  requirementsSite.value = site
+  requirementsDialog.value = true
+  // Re-read on open rather than trusting the column's batch: the dialog is the
+  // place a stale count is actually acted on.
+  await fetchSiteRequirements(site.id)
+}
+
+async function addRequirement({ positionId, quantityNeeded }) {
+  const site = requirementsSite.value
+  if (!site) return
+  await createRequirement({ siteId: site.id, positionId, quantityNeeded })
+}
+
+watch(
+  sites,
+  (list) => {
+    fetchAllRequirements((list || []).map((site) => site.id))
+  },
+  { immediate: false },
+)
+
 onMounted(fetchSites)
 </script>
 
@@ -462,4 +602,65 @@ onMounted(fetchSites)
    drifted from the same badge on every other panel. The shared definitions are
    the only ones now. */
 @import './AdminSettingsPanelShared.scss';
+
+/* ── Requirements column ─────────────────────────────────────────────────────
+   Two readings of one figure — how many positions carry a target, and how many
+   people those targets add up to — so the count never has to be guessed at from
+   the headcount. The cell is a button because it opens the same dialog the row
+   menu does; a number you can already read is the most direct handle for it. */
+.req-cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  background: none;
+  border: none;
+  border-radius: var(--dash-r-sm);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dash-fast) var(--dash-ease);
+}
+
+.req-cell:hover,
+.req-cell:focus-visible {
+  background: var(--dash-n-100);
+}
+
+.req-primary {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Separated by a dot rather than a second badge: the ownership and status
+   columns already carry pills, and a third one turned the row into a row of
+   chips with no hierarchy left. */
+.req-secondary {
+  font-size: 11.5px;
+  color: var(--dash-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.req-secondary::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--dash-ink-4);
+}
+
+/* No target set is not a target of zero — the em dash says the question was
+   never answered for this site. */
+.req-none {
+  color: var(--dash-ink-4);
+}
+
+.req-shimmer {
+  display: inline-block;
+  width: 76px;
+  height: 11px;
+  border-radius: var(--dash-r-sm);
+  vertical-align: middle;
+}
 </style>

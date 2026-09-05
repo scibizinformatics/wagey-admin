@@ -8,7 +8,7 @@
       <div class="table-actions">
         <q-btn
           color="primary"
-          label="Add Department"
+          label="Add department"
           icon="add"
           class="add-btn"
           @click="openDepartmentDialog"
@@ -57,7 +57,7 @@
                         @click="editDepartment(props.row)"
                       >
                         <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
-                        <q-item-section>Edit Department</q-item-section>
+                        <q-item-section>Edit department</q-item-section>
                       </q-item>
                       <q-item
                         clickable
@@ -81,64 +81,77 @@
     </div>
 
     <q-dialog v-model="departmentDialog" persistent>
-      <q-card class="admin-modal-card">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+      <q-card class="dash-modal">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="corporate_fare" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">
-                {{ editingDepartment ? 'Edit Department' : 'Add Department' }}
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">
+                {{ editingDepartment ? 'Edit department' : 'Add Department' }}
               </div>
-              <div class="admin-modal-subtitle">Manage department information</div>
+              <div class="dash-modal__sub">Manage department information</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
-          <q-input
-            v-model="departmentForm.name"
-            label="Department Name *"
-            outlined
-            dense
-            class="q-mb-md"
-          />
-          <q-select
-            v-model="departmentForm.cost_center"
-            :options="costCenters"
-            option-value="id"
-            option-label="name"
-            emit-value
-            map-options
-            label="Cost Center (optional)"
-            outlined
-            dense
-            clearable
-            class="q-mt-md"
-          >
-            <template v-slot:prepend><q-icon name="account_balance" size="18px" /></template>
-          </q-select>
-          <q-select
-            v-model="departmentForm.policies"
-            :options="policies"
-            option-value="id"
-            option-label="name"
-            label="Policies"
-            outlined
-            dense
-            multiple
-            use-chips
-            clearable
-            class="q-mt-md"
-          />
+        <q-card-section class="dash-modal__body">
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label"
+              >Department name<span class="dash-modal__req">*</span></span
+            >
+            <q-input
+              v-model="departmentForm.name"
+              outlined
+              dense
+              class="dash-field"
+              hide-bottom-space
+            />
+          </label>
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Cost center</span>
+            <q-select
+              v-model="departmentForm.cost_center"
+              :options="costCenters"
+              option-value="id"
+              option-label="name"
+              emit-value
+              map-options
+              outlined
+              dense
+              clearable
+              class="dash-field"
+              hide-bottom-space
+              popup-content-class="dash-popup dash-popup--modal"
+            >
+              <template v-slot:prepend><q-icon name="account_balance" size="18px" /></template>
+            </q-select>
+          </label>
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Policies</span>
+            <q-select
+              v-model="departmentForm.policies"
+              :options="policies"
+              option-value="id"
+              option-label="name"
+              outlined
+              dense
+              multiple
+              use-chips
+              clearable
+              class="dash-field"
+              hide-bottom-space
+              popup-content-class="dash-popup dash-popup--modal"
+            />
+          </label>
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
-            color="primary"
             :label="editingDepartment ? 'Update' : 'Save'"
-            class="admin-save-btn"
+            no-caps
+            class="dash-modal__submit"
             :loading="savingDepartment"
             @click="saveDepartment"
           />

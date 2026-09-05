@@ -8,7 +8,7 @@
       <div class="table-actions">
         <q-btn
           color="primary"
-          label="Add Payroll Group"
+          label="Add payroll group"
           icon="add"
           class="add-btn"
           @click="openDialog"
@@ -70,7 +70,7 @@
                         @click="editPayrollGroup(props.row)"
                       >
                         <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
-                        <q-item-section>Edit Payroll Group</q-item-section>
+                        <q-item-section>Edit payroll group</q-item-section>
                       </q-item>
                       <q-item
                         clickable
@@ -94,36 +94,49 @@
     </div>
 
     <q-dialog v-model="dialog" persistent>
-      <q-card class="admin-modal-card">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon"
+      <q-card class="dash-modal">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="payments" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">
-                {{ editing ? 'Edit Payroll Group' : 'Add Payroll Group' }}
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">
+                {{ editing ? 'Edit payroll group' : 'Add Payroll Group' }}
               </div>
-              <div class="admin-modal-subtitle">Manage payroll group information</div>
+              <div class="dash-modal__sub">Manage payroll group information</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
-          <q-input v-model="form.name" label="Group Name *" outlined dense />
+        <q-card-section class="dash-modal__body">
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label"
+              >Group Name<span class="dash-modal__req">*</span></span
+            >
+            <q-input v-model="form.name" outlined dense hide-bottom-space class="dash-field" />
+          </label>
 
-          <q-select
-            v-model="form.payment_method"
-            :options="paymentMethodOptions"
-            label="Payment Method *"
-            outlined
-            dense
-            emit-value
-            map-options
-            class="q-mt-md"
-          >
-            <template v-slot:prepend><q-icon name="account_balance_wallet" size="18px" /></template>
-          </q-select>
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label"
+              >Payment Method<span class="dash-modal__req">*</span></span
+            >
+            <q-select
+              v-model="form.payment_method"
+              :options="paymentMethodOptions"
+              outlined
+              dense
+              emit-value
+              map-options
+              class="dash-field"
+              hide-bottom-space
+              popup-content-class="dash-popup dash-popup--modal"
+            >
+              <template v-slot:prepend
+                ><q-icon name="account_balance_wallet" size="18px"
+              /></template>
+            </q-select>
+          </label>
 
           <div class="q-mt-md toggle-item">
             <q-toggle v-model="form.is_active" color="primary" size="md" class="brand-toggle" />
@@ -133,12 +146,12 @@
             </div>
           </div>
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
-            color="primary"
             :label="editing ? 'Update' : 'Save'"
-            class="admin-save-btn"
+            no-caps
+            class="dash-modal__submit"
             :loading="saving"
             @click="savePayrollGroup"
           />

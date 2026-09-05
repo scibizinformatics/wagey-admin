@@ -8,7 +8,7 @@
       <div class="table-actions">
         <q-btn
           color="primary"
-          label="Add Role"
+          label="Add role"
           icon="add"
           class="add-btn"
           @click="openRoleDialog"
@@ -79,7 +79,7 @@
                         @click="editRole(props.row)"
                       >
                         <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
-                        <q-item-section>Edit Role</q-item-section>
+                        <q-item-section>Edit role</q-item-section>
                       </q-item>
                       <q-item
                         clickable
@@ -103,21 +103,26 @@
     </div>
 
     <q-dialog v-model="roleDialog" persistent>
-      <q-card class="admin-modal-card">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+      <q-card class="dash-modal">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="admin_panel_settings" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">{{ editingRole ? 'Edit Role' : 'Add Role' }}</div>
-              <div class="admin-modal-subtitle">Manage user roles and permissions</div>
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">{{ editingRole ? 'Edit role' : 'Add Role' }}</div>
+              <div class="dash-modal__sub">Manage user roles and permissions</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
-          <q-input v-model="roleForm.name" label="Role Name *" outlined dense class="q-mb-lg" />
+        <q-card-section class="dash-modal__body">
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label"
+              >Role Name<span class="dash-modal__req">*</span></span
+            >
+            <q-input v-model="roleForm.name" outlined dense class="dash-field" hide-bottom-space />
+          </label>
           <div class="text-subtitle2 q-mb-xs">Permissions</div>
           <q-separator class="q-mb-md" />
           <div class="row">
@@ -126,12 +131,12 @@
             </div>
           </div>
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
-            color="primary"
             :label="editingRole ? 'Update Role' : 'Save Role'"
-            class="admin-save-btn"
+            no-caps
+            class="dash-modal__submit"
             :loading="savingRole"
             @click="saveRole"
           />

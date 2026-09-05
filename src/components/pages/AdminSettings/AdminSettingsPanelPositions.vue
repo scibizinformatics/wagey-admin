@@ -8,7 +8,7 @@
       <div class="table-actions">
         <q-btn
           color="primary"
-          label="Add Position"
+          label="Add position"
           icon="add"
           class="add-btn"
           @click="openPositionDialog"
@@ -57,7 +57,7 @@
                         @click="editPosition(props.row)"
                       >
                         <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
-                        <q-item-section>Edit Position</q-item-section>
+                        <q-item-section>Edit position</q-item-section>
                       </q-item>
                       <q-item
                         clickable
@@ -81,44 +81,53 @@
     </div>
 
     <q-dialog v-model="positionDialog" persistent>
-      <q-card class="admin-modal-card">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+      <q-card class="dash-modal">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="work" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">
-                {{ editingPosition ? 'Edit Position' : 'Add Position' }}
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">
+                {{ editingPosition ? 'Edit position' : 'Add Position' }}
               </div>
-              <div class="admin-modal-subtitle">Manage job positions</div>
+              <div class="dash-modal__sub">Manage job positions</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
-          <q-input
-            v-model="positionForm.name"
-            label="Position Name *"
-            outlined
-            dense
-            class="q-mb-md"
-          />
-          <q-input
-            v-model="positionForm.description"
-            label="Description"
-            outlined
-            dense
-            type="textarea"
-            rows="3"
-          />
+        <q-card-section class="dash-modal__body">
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label"
+              >Position Name<span class="dash-modal__req">*</span></span
+            >
+            <q-input
+              v-model="positionForm.name"
+              outlined
+              dense
+              class="dash-field"
+              hide-bottom-space
+            />
+          </label>
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Description</span>
+            <q-input
+              v-model="positionForm.description"
+              outlined
+              dense
+              type="textarea"
+              rows="3"
+              hide-bottom-space
+              class="dash-field"
+            />
+          </label>
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
-            color="primary"
             :label="editingPosition ? 'Update' : 'Save'"
-            class="admin-save-btn"
+            no-caps
+            class="dash-modal__submit"
             :loading="savingPosition"
             @click="savePosition"
           />

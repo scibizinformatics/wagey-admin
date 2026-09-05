@@ -2,16 +2,16 @@
   <div class="table-section">
     <div class="table-header">
       <div class="table-title-section">
-        <h2 class="table-title">Custom Multipliers</h2>
+        <h2 class="table-title">Custom multipliers</h2>
         <p class="table-subtitle">Configure pay multipliers for your company</p>
       </div>
       <div class="table-actions">
         <q-btn
           color="primary"
-          :label="customMultipliers ? 'Update Multipliers' : 'Set Multipliers'"
+          :label="customMultipliers ? 'Update multipliers' : 'Set multipliers'"
           icon="tune"
           class="add-btn"
-          :loading="savingMultipliers"
+          :loading="savingMultipliers || saving"
           @click="saveMultipliers"
         />
       </div>
@@ -191,15 +191,27 @@
         </div>
       </div>
     </div>
+
+    <CustomMultipliersConfirmDialog
+      v-model="confirmOpen"
+      :changes="pendingChanges"
+      :saving="saving"
+      @confirm="onConfirmSave"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useQuasar } from 'quasar'
+import CustomMultipliersConfirmDialog from './CustomMultipliersConfirmDialog.vue'
+import { extractErrorMessage } from '@/composables/utils/http'
 import { usePayroll } from '@/composables/page/usePayroll'
+import { useToast } from '@/composables/useToast'
 
-const $q = useQuasar()
+const confirmOpen = ref(false)
+const pendingChanges = ref([])
+const saving = ref(false)
+const toast = useToast()
 const {
   customMultipliers,
   loading: loadingMultipliers,
@@ -258,7 +270,7 @@ async function saveMultipliers() {
   const { useCompany } = await import('@/composables/page/useCompany')
   const { companyId } = useCompany()
   if (!companyId.value) {
-    $q.notify({ type: 'warning', message: 'Please select a company first', position: 'top' })
+    toast.warning('Please select a company first')
     return
   }
 
@@ -308,76 +320,54 @@ async function saveMultipliers() {
     }
   })
 
+  // The confirmation is a component (CustomMultipliersConfirmDialog), not an
+  // HTML string handed to `$q.dialog({ html: true })`. It carries a list of
+  // before-and-after values, and that is content: it belongs in a template
+  // where the design system can reach it.
   if (modifiedMultipliers.length > 0) {
-    const modifiedListHtml = modifiedMultipliers
-      .map(
-        (m) => `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #fde68a;">
-          <span style="font-weight: 500;">${m.name}</span>
-          <span>
-            <span style="text-decoration: line-through; color: #9ca3af; margin-right: 12px;">×${m.standard.toFixed(2)}</span>
-            <span style="color: #dc2626; font-weight: 600;">×${m.current.toFixed(2)}</span>
-          </span>
-        </div>
-      `,
-      )
-      .join('')
-
-    const confirmed = await new Promise((resolve) => {
-      $q.dialog({
-        title: '⚠️ Save Custom Company Multipliers?',
-        message: `
-          <div style="margin-top: 12px;">
-            <p style="color: #92400e; font-size: 15px; margin-bottom: 16px; font-weight: 600;">
-              You are setting company-wide custom multipliers
-            </p>
-            <p style="color: #6b7280; font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
-              These values will affect <strong>all employee payroll calculations</strong> and
-              serve as "Standard" rates when creating new employee contracts.
-            </p>
-            <div style="background: #fef3c7; padding: 14px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 16px 0;">
-              <p style="margin: 0 0 12px 0; color: #92400e; font-weight: 600; font-size: 14px;">
-                Modified Values:
-              </p>
-              ${modifiedListHtml}
-            </div>
-            <p style="color: #dc2626; font-size: 13px; margin-top: 16px; font-style: italic;">
-              ⚠️ Ensure compliance with Philippines Labor Code (DOLE standards)
-            </p>
-          </div>
-        `,
-        html: true,
-        class: 'custom-multipliers-save-dialog',
-        cancel: { label: 'Go Back & Edit', color: 'grey', flat: true },
-        ok: { label: 'Save Custom Multipliers', color: 'warning', unelevated: true },
-        persistent: true,
-      })
-        .onOk(() => resolve(true))
-        .onCancel(() => resolve(false))
-    })
-
-    if (!confirmed) return
+    pendingChanges.value = modifiedMultipliers
+    confirmOpen.value = true
+    return
   }
 
+  await commitMultipliers(companyId.value)
+}
+
+/** Runs once the dialog is confirmed, or straight away when nothing differs
+ *  from the Philippine standards and there is nothing to confirm. */
+async function commitMultipliers(company) {
   const payload = {
-    company: companyId.value,
+    company,
     ...multipliersForm.value,
   }
+  saving.value = true
   try {
     if (customMultipliers.value) {
-      await updateCustomMultipliers(companyId.value, payload)
+      await updateCustomMultipliers(company, payload)
     } else {
       await createCustomMultipliers(payload)
     }
-    $q.notify({ type: 'positive', message: 'Multipliers saved successfully', position: 'top' })
-    await loadMultipliers(companyId.value)
+    toast.success('Multipliers saved')
+    confirmOpen.value = false
+    await loadMultipliers(company)
   } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message: error.response?.data?.message || 'Failed to save multipliers',
-      position: 'top',
-    })
+    toast.error(extractErrorMessage(error, 'Failed to save multipliers'))
+  } finally {
+    saving.value = false
   }
+}
+
+/** The company is re-resolved here rather than captured when the dialog opened:
+ *  the workspace switcher can move under a dialog that is still on screen. */
+async function onConfirmSave() {
+  const { useCompany } = await import('@/composables/page/useCompany')
+  const { companyId } = useCompany()
+  if (!companyId.value) {
+    toast.warning('Select a company first')
+    confirmOpen.value = false
+    return
+  }
+  await commitMultipliers(companyId.value)
 }
 
 onMounted(async () => {

@@ -8,7 +8,7 @@
       <div class="table-actions">
         <q-btn
           color="primary"
-          label="Add Cost Center"
+          label="Add cost center"
           icon="add"
           class="add-btn"
           @click="openCostCenterDialog"
@@ -91,7 +91,7 @@
                         @click="editCostCenter(props.row)"
                       >
                         <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
-                        <q-item-section>Edit Cost Center</q-item-section>
+                        <q-item-section>Edit cost center</q-item-section>
                       </q-item>
                       <q-item
                         clickable
@@ -115,28 +115,39 @@
     </div>
 
     <q-dialog v-model="costCenterDialog" persistent>
-      <q-card class="admin-modal-card admin-modal-card--md">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+      <q-card class="dash-modal dash-modal--md">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="account_balance" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">
-                {{ editingCostCenter ? 'Edit Cost Center' : 'Add Cost Center' }}
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">
+                {{ editingCostCenter ? 'Edit cost center' : 'Add Cost Center' }}
               </div>
-              <div class="admin-modal-subtitle">Manage payroll cost centers and bank accounts</div>
+              <div class="dash-modal__sub">Manage payroll cost centers and bank accounts</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
+        <q-card-section class="dash-modal__body">
           <div class="form-section-label">Basic Information</div>
           <div class="row q-col-gutter-md q-mb-md">
             <div class="col-12">
-              <q-input v-model="costCenterForm.name" label="Cost Center Name *" outlined dense>
-                <template v-slot:prepend><q-icon name="label" size="18px" /></template>
-              </q-input>
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Cost Center Name<span class="dash-modal__req">*</span></span
+                >
+                <q-input
+                  v-model="costCenterForm.name"
+                  outlined
+                  dense
+                  hide-bottom-space
+                  class="dash-field"
+                >
+                  <template v-slot:prepend><q-icon name="label" size="18px" /></template>
+                </q-input>
+              </label>
             </div>
             <div class="col-12">
               <q-toggle
@@ -173,13 +184,40 @@
             </div>
             <div class="row q-col-gutter-sm">
               <div class="col-12 col-sm-6">
-                <q-input v-model="bank.bank_name" label="Bank Name" outlined dense />
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Bank Name</span>
+                  <q-input
+                    v-model="bank.bank_name"
+                    outlined
+                    dense
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
               </div>
               <div class="col-12 col-sm-6">
-                <q-input v-model="bank.bank_account_name" label="Account Name" outlined dense />
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Account Name</span>
+                  <q-input
+                    v-model="bank.bank_account_name"
+                    outlined
+                    dense
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
               </div>
               <div class="col-12 col-sm-6">
-                <q-input v-model="bank.bank_account_number" label="Account Number" outlined dense />
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Account Number</span>
+                  <q-input
+                    v-model="bank.bank_account_number"
+                    outlined
+                    dense
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
               </div>
               <div class="col-12 col-sm-6 flex items-center">
                 <q-toggle
@@ -201,12 +239,12 @@
             @click="addBankAccount"
           />
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
-            color="primary"
             :label="editingCostCenter ? 'Update' : 'Save'"
-            class="admin-save-btn"
+            no-caps
+            class="dash-modal__submit"
             :loading="savingCostCenter"
             @click="saveCostCenter"
           />

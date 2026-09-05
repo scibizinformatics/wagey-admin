@@ -7,7 +7,7 @@
           @click="shiftSubTab = 'shift-types'"
         >
           <q-icon name="schedule" class="tab-pill-icon" />
-          <span>Shift Template</span>
+          <span>Shift template</span>
         </button>
         <button
           :class="['tab-pill', { active: shiftSubTab === 'weekly-templates' }]"
@@ -37,7 +37,7 @@
             <div class="table-actions">
               <q-btn
                 color="primary"
-                label="Add Shift Template"
+                label="Add shift template"
                 icon="add"
                 class="add-btn"
                 @click="openShiftTypeTemplateDialog"
@@ -347,31 +347,36 @@
     </q-tab-panels>
 
     <q-dialog v-model="weeklyTemplateDialog" persistent>
-      <q-card class="admin-modal-card weekly-template-modal">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+      <q-card class="dash-modal dash-modal--xl">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="date_range" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">
                 {{
                   editingWeeklyTemplate ? 'Edit Weekly Shift Template' : 'Add Weekly Shift Template'
                 }}
               </div>
-              <div class="admin-modal-subtitle">Configure weekly shift assignments</div>
+              <div class="dash-modal__sub">Configure weekly shift assignments</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
-          <q-input
-            v-model="weeklyTemplateForm.name"
-            label="Template Name *"
-            outlined
-            dense
-            class="q-mb-md"
-          />
+        <q-card-section class="dash-modal__body">
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label"
+              >Template Name<span class="dash-modal__req">*</span></span
+            >
+            <q-input
+              v-model="weeklyTemplateForm.name"
+              outlined
+              dense
+              class="dash-field"
+              hide-bottom-space
+            />
+          </label>
           <div class="form-section-label q-mb-sm">Weekly Shift Rules</div>
           <div class="week-grid">
             <div v-for="rule in weeklyTemplateForm.rules" :key="rule.weekday" class="day-cell">
@@ -425,7 +430,7 @@
               </q-btn-dropdown>
               <div v-if="!rule.shift_template" class="day-card day-off-card">
                 <q-icon name="event_busy" size="16px" class="day-off-icon" />
-                <div class="day-off-label">DAY OFF</div>
+                <div class="day-off-label">Day off</div>
               </div>
               <div v-else class="day-card shift-card">
                 <template v-for="(shift, idx) in getTemplateShifts(rule.shift_template)" :key="idx">
@@ -455,12 +460,12 @@
             />
           </div>
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
-            color="primary"
             label="Save"
-            class="admin-save-btn"
+            no-caps
+            class="dash-modal__submit"
             :loading="savingWeeklyTemplate"
             @click="saveWeeklyTemplate"
           />
@@ -469,29 +474,32 @@
     </q-dialog>
 
     <q-dialog v-model="shiftTypeTemplateDialog" persistent>
-      <q-card class="admin-modal-card admin-modal-card--lg">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+      <q-card class="dash-modal dash-modal--md">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="schedule" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">
-                {{ editingShiftTypeTemplate ? 'Edit Shift Template' : 'Add Shift Template' }}
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">
+                {{ editingShiftTypeTemplate ? 'Edit shift template' : 'Add Shift Template' }}
               </div>
-              <div class="admin-modal-subtitle">Define shift schedules and timings</div>
+              <div class="dash-modal__sub">Define shift schedules and timings</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
-          <q-input
-            v-model="shiftTypeTemplateForm.name"
-            label="Template Name"
-            outlined
-            dense
-            class="q-mb-md"
-          />
+        <q-card-section class="dash-modal__body">
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Template Name</span>
+            <q-input
+              v-model="shiftTypeTemplateForm.name"
+              outlined
+              dense
+              class="dash-field"
+              hide-bottom-space
+            />
+          </label>
           <div class="text-subtitle2 q-mb-sm">Shifts *</div>
           <div
             v-for="(shift, index) in shiftTypeTemplateForm.shifts"
@@ -499,38 +507,57 @@
             class="row q-col-gutter-sm q-mb-md items-start"
           >
             <div class="col-4">
-              <q-select
-                v-model="shift.site_id"
-                :options="sites"
-                option-value="id"
-                option-label="name"
-                emit-value
-                map-options
-                label="Site *"
-                outlined
-                dense
-                clearable
-              />
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Site<span class="dash-modal__req">*</span></span
+                >
+                <q-select
+                  v-model="shift.site_id"
+                  :options="sites"
+                  option-value="id"
+                  option-label="name"
+                  emit-value
+                  map-options
+                  outlined
+                  dense
+                  clearable
+                  hide-bottom-space
+                  class="dash-field"
+                  popup-content-class="dash-popup dash-popup--modal"
+                />
+              </label>
             </div>
             <div class="col-3">
-              <q-input
-                v-model="shift.default_start_time"
-                label="Start Time *"
-                type="time"
-                outlined
-                dense
-                @update:model-value="updateCalculations()"
-              />
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Start Time<span class="dash-modal__req">*</span></span
+                >
+                <q-input
+                  v-model="shift.default_start_time"
+                  type="time"
+                  outlined
+                  dense
+                  @update:model-value="updateCalculations()"
+                  hide-bottom-space
+                  class="dash-field"
+                />
+              </label>
             </div>
             <div class="col-3">
-              <q-input
-                v-model="shift.default_end_time"
-                label="End Time *"
-                type="time"
-                outlined
-                dense
-                @update:model-value="updateCalculations()"
-              />
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >End Time<span class="dash-modal__req">*</span></span
+                >
+                <q-input
+                  v-model="shift.default_end_time"
+                  type="time"
+                  outlined
+                  dense
+                  @update:model-value="updateCalculations()"
+                  hide-bottom-space
+                  class="dash-field"
+                />
+              </label>
             </div>
             <div class="col-2 flex items-center justify-end">
               <q-btn
@@ -548,13 +575,13 @@
             flat
             color="primary"
             icon="add"
-            label="Add Shift"
+            label="Add shift"
             class="q-mb-md"
             @click="addShift()"
           />
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
             color="primary"
             :label="editingShiftTypeTemplate ? 'Update' : 'Save'"
@@ -566,35 +593,38 @@
     </q-dialog>
 
     <q-dialog v-model="shiftTemplate24hDialog" persistent>
-      <q-card class="admin-modal-card admin-modal-card--lg">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+      <q-card class="dash-modal dash-modal--md">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="hourglass_full" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">
                 {{
                   editingShiftTemplate24h
                     ? 'Edit 24-Hour Shift Template'
                     : 'Add 24-Hour Shift Template'
                 }}
               </div>
-              <div class="admin-modal-subtitle">
-                Chain shifts around the clock to cover a full day
-              </div>
+              <div class="dash-modal__sub">Chain shifts around the clock to cover a full day</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
-          <q-input
-            v-model="shiftTemplate24hForm.name"
-            label="Template Name *"
-            outlined
-            dense
-            class="q-mb-md"
-          />
+        <q-card-section class="dash-modal__body">
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label"
+              >Template Name<span class="dash-modal__req">*</span></span
+            >
+            <q-input
+              v-model="shiftTemplate24hForm.name"
+              outlined
+              dense
+              class="dash-field"
+              hide-bottom-space
+            />
+          </label>
           <div class="row items-center justify-between q-mb-sm">
             <div class="text-subtitle2">Shifts *</div>
             <!-- Advisory, not a gate: the backend decides what counts as valid,
@@ -604,44 +634,59 @@
               {{ coverage24h }} / 24 hrs covered
             </div>
           </div>
+          <!-- The backend rejects anything else outright, so the rule is stated
+               up front and each row reports its own length. -->
+          <div class="shift-rule-note q-mb-sm">
+            Every shift must run exactly 8 hrs, or 9 hrs to include a 1-hour break.
+          </div>
+          <!-- Times only: a 24-hour template describes the round-the-clock
+               chain, and the site is chosen when the rotation is scheduled. -->
           <div
             v-for="(shift, index) in shiftTemplate24hForm.shifts"
             :key="index"
             class="row q-col-gutter-sm q-mb-md items-start"
           >
             <div class="col-4">
-              <q-select
-                v-model="shift.site_id"
-                :options="sites"
-                option-value="id"
-                option-label="name"
-                emit-value
-                map-options
-                label="Site *"
-                outlined
-                dense
-                clearable
-              />
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Start Time<span class="dash-modal__req">*</span></span
+                >
+                <q-input
+                  v-model="shift.default_start_time"
+                  type="time"
+                  outlined
+                  dense
+                  hide-bottom-space
+                  class="dash-field"
+                />
+              </label>
             </div>
-            <div class="col-3">
-              <q-input
-                v-model="shift.default_start_time"
-                label="Start Time *"
-                type="time"
-                outlined
-                dense
-              />
+            <div class="col-4">
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >End Time<span class="dash-modal__req">*</span></span
+                >
+                <q-input
+                  v-model="shift.default_end_time"
+                  type="time"
+                  outlined
+                  dense
+                  hide-bottom-space
+                  class="dash-field"
+                />
+              </label>
             </div>
-            <div class="col-3">
-              <q-input
-                v-model="shift.default_end_time"
-                label="End Time *"
-                type="time"
-                outlined
-                dense
-              />
+            <div class="col-2 flex items-center justify-center duration-cell">
+              <span
+                class="duration-chip"
+                :class="{
+                  'duration-chip--ok': isShift24hLengthValid(shift),
+                  'duration-chip--off': shift24hHours(shift) > 0 && !isShift24hLengthValid(shift),
+                }"
+                >{{ shift24hHours(shift) ? shift24hHours(shift) + ' hrs' : '—' }}</span
+              >
             </div>
-            <div class="col-2 flex items-center justify-end">
+            <div class="col-2 flex items-center justify-end duration-cell">
               <q-btn
                 v-if="shiftTemplate24hForm.shifts.length > 1"
                 flat
@@ -657,7 +702,7 @@
             flat
             color="primary"
             icon="add"
-            label="Add Shift"
+            label="Add shift"
             class="q-mb-md"
             @click="add24hShift()"
           />
@@ -672,12 +717,12 @@
             />
           </div>
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
-            color="primary"
             :label="editingShiftTemplate24h ? 'Update' : 'Save'"
-            class="admin-save-btn"
+            no-caps
+            class="dash-modal__submit"
             :loading="savingShiftTemplate24h"
             @click="saveShiftTemplate24h"
           />
@@ -692,6 +737,7 @@ import { ref, computed, onMounted } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useAdminShifts } from '@/composables/admin/useAdminShifts'
 import { useAdminSites } from '@/composables/admin/useAdminSites'
+import { safeParseJson } from '@/composables/utils/storage'
 
 const { sites, fetchSites } = useAdminSites()
 
@@ -825,17 +871,12 @@ function addShift() {
   updateCalculations()
 }
 
+// Verbatim copy of `parseShifts` in SchedulePage.vue — noted there too; worth
+// collapsing into one helper next time this area is touched.
 function parseShifts(shiftsData) {
-  if (!shiftsData) return []
   if (Array.isArray(shiftsData)) return shiftsData
-  if (typeof shiftsData === 'string') {
-    try {
-      return JSON.parse(shiftsData)
-    } catch {
-      return []
-    }
-  }
-  return []
+  const parsed = safeParseJson(shiftsData, [])
+  return Array.isArray(parsed) ? parsed : []
 }
 
 function formatTimeDisplay(timeString) {
@@ -1017,9 +1058,21 @@ function coverage24hFromRow(row) {
 
 const coverage24h = computed(() => sumCoverageHours(shiftTemplate24hForm.value.shifts))
 
+// The 24h endpoint accepts a segment of exactly 8 hrs (work only) or 9 hrs
+// (8 work + 1 break) and 400s on anything else, so the modal shows each row's
+// length rather than letting the save round-trip just to be refused.
+function shift24hHours(shift) {
+  const hours = calculateShiftDuration(shift.default_start_time, shift.default_end_time)
+  return Math.round(hours * 100) / 100
+}
+
+function isShift24hLengthValid(shift) {
+  const hours = shift24hHours(shift)
+  return hours === 8 || hours === 9
+}
+
 function add24hShift() {
   shiftTemplate24hForm.value.shifts.push({
-    site_id: null,
     default_start_time: '',
     default_end_time: '',
   })
@@ -1041,11 +1094,6 @@ onMounted(async () => {
 <style scoped lang="scss">
 @import './AdminSettingsPanelShared.scss';
 
-.weekly-template-modal {
-  width: 780px;
-  max-width: 92vw;
-}
-
 .week-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -1060,15 +1108,14 @@ onMounted(async () => {
 
 .day-header {
   text-align: center;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--dash-ink-3);
-  text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .day-card {
-  border-radius: 6px;
+  border-radius: var(--dash-r-sm);
   padding: 6px 8px;
   min-height: 60px;
   display: flex;
@@ -1088,10 +1135,9 @@ onMounted(async () => {
 }
 
 .day-off-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--dash-warn);
-  text-transform: uppercase;
   letter-spacing: 0.4px;
 }
 
@@ -1221,18 +1267,12 @@ onMounted(async () => {
 }
 
 @media (max-width: 1023px) {
-  .weekly-template-modal {
-    width: 640px;
-  }
   .week-grid {
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
 @media (max-width: 767px) {
-  .weekly-template-modal {
-    width: 340px;
-  }
   .week-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1259,6 +1299,40 @@ onMounted(async () => {
   color: var(--dash-good);
 }
 
+.shift-rule-note {
+  font-size: 11.5px;
+  color: var(--dash-ink-3);
+  line-height: 1.5;
+}
+
+/* Keeps the chip and the delete button optically centred against the dense
+   time inputs, which the row's `items-start` alignment otherwise pulls up. */
+.duration-cell {
+  min-height: 40px;
+}
+
+.duration-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: var(--dash-n-50);
+  color: var(--dash-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.duration-chip--ok {
+  background: var(--dash-good-bg);
+  color: var(--dash-good);
+}
+
+.duration-chip--off {
+  background: var(--dash-warn-bg);
+  color: var(--dash-warn);
+}
+
 .shifts-time-list {
   display: flex;
   flex-direction: column;
@@ -1270,7 +1344,7 @@ onMounted(async () => {
   color: var(--dash-ink-2);
   background: var(--dash-n-100);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--dash-r-xs);
   display: inline-block;
 }
 

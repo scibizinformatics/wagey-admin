@@ -26,7 +26,7 @@
         </div>
         <q-btn
           color="primary"
-          label="Add Contract Type"
+          label="Add contract type"
           icon="add"
           class="add-btn"
           @click="openContractTypeDialog"
@@ -157,69 +157,88 @@
     </div>
 
     <q-dialog v-model="contractTypeDialog" persistent>
-      <q-card class="admin-modal-card">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
-            <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add"
+      <q-card class="dash-modal">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
+            <q-avatar size="38px" class="dash-modal__head-icon"
               ><q-icon name="description" size="22px"
             /></q-avatar>
-            <div>
-              <div class="admin-modal-title">
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">
                 {{ editingContractType ? 'Edit' : 'Add' }} Contract Type
               </div>
-              <div class="admin-modal-subtitle">Manage contract type definitions</div>
+              <div class="dash-modal__sub">Manage contract type definitions</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
-          <q-input v-model="contractTypeForm.name" label="Name *" outlined dense class="q-mb-md" />
-          <q-select
-            v-model="contractTypeForm.pay_type"
-            :options="[
-              { label: 'Monthly', value: 'monthly' },
-              { label: 'Daily', value: 'daily' },
-            ]"
-            label="Pay Type"
-            outlined
-            dense
-            emit-value
-            map-options
-            class="q-mb-md"
-          />
-          <q-input
-            v-if="contractTypeForm.pay_type === 'daily'"
-            v-model.number="contractTypeForm.work_hours_per_week"
-            label="Work Hours Per Week"
-            outlined
-            dense
-            type="number"
-            min="0"
-            max="48"
-            :rules="[(val) => !val || val <= 48 || 'Maximum is 48 hours']"
-            class="q-mb-md"
-          />
+        <q-card-section class="dash-modal__body">
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Name<span class="dash-modal__req">*</span></span>
+            <q-input
+              v-model="contractTypeForm.name"
+              outlined
+              dense
+              class="dash-field"
+              hide-bottom-space
+            />
+          </label>
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Pay type</span>
+            <q-select
+              v-model="contractTypeForm.pay_type"
+              :options="[
+                { label: 'Monthly', value: 'monthly' },
+                { label: 'Daily', value: 'daily' },
+              ]"
+              outlined
+              dense
+              emit-value
+              map-options
+              class="dash-field"
+              hide-bottom-space
+              popup-content-class="dash-popup dash-popup--modal"
+            />
+          </label>
+          <label v-if="contractTypeForm.pay_type === 'daily'" class="dash-modal__field">
+            <span class="dash-modal__field-label">Work hours per week</span>
+            <q-input
+              v-model.number="contractTypeForm.work_hours_per_week"
+              outlined
+              dense
+              type="number"
+              min="0"
+              max="48"
+              :rules="[(val) => !val || val <= 48 || 'Maximum is 48 hours']"
+              class="dash-field"
+              hide-bottom-space
+            />
+          </label>
           <div class="section-label">Eligibilities</div>
-          <q-select
-            v-model="contractTypeForm.work_hours_type"
-            :options="[
-              { label: 'Work Hours Flexible', value: 'flexible' },
-              { label: 'Work Hours Strict', value: 'strict' },
-            ]"
-            label="Work Hours Type"
-            outlined
-            dense
-            emit-value
-            map-options
-            clearable
-            class="q-mb-md"
-          />
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Work Hours Type</span>
+            <q-select
+              v-model="contractTypeForm.work_hours_type"
+              :options="[
+                { label: 'Work Hours Flexible', value: 'flexible' },
+                { label: 'Work Hours Strict', value: 'strict' },
+              ]"
+              outlined
+              dense
+              emit-value
+              map-options
+              clearable
+              class="dash-field"
+              hide-bottom-space
+              popup-content-class="dash-popup dash-popup--modal"
+            />
+          </label>
           <div class="row">
             <div class="col-6 q-mb-sm" v-if="overtimeId">
               <q-checkbox
                 :model-value="contractTypeForm.eligibilities.includes(overtimeId)"
                 @update:model-value="toggleEligibility(overtimeId, $event)"
-                label="Overtime Eligible"
+                label="Overtime eligible"
                 dense
               />
             </div>
@@ -227,7 +246,7 @@
               <q-checkbox
                 :model-value="contractTypeForm.eligibilities.includes(ctoId)"
                 @update:model-value="toggleEligibility(ctoId, $event)"
-                label="Overtime Converted to CTO"
+                label="Overtime converted to CTO"
                 dense
               />
             </div>
@@ -235,7 +254,7 @@
               <q-checkbox
                 :model-value="contractTypeForm.eligibilities.includes(holidayPayId)"
                 @update:model-value="toggleEligibility(holidayPayId, $event)"
-                label="Holiday Pay"
+                label="Holiday pay"
                 dense
               />
             </div>
@@ -243,7 +262,7 @@
               <q-checkbox
                 :model-value="contractTypeForm.eligibilities.includes(undertimeId)"
                 @update:model-value="toggleEligibility(undertimeId, $event)"
-                label="Undertime Deduction"
+                label="Undertime deduction"
                 dense
               />
             </div>
@@ -251,7 +270,7 @@
               <q-checkbox
                 :model-value="contractTypeForm.eligibilities.includes(nightDiffId)"
                 @update:model-value="toggleEligibility(nightDiffId, $event)"
-                label="Night Differential Eligible"
+                label="Night differential eligible"
                 dense
               />
             </div>
@@ -338,12 +357,12 @@
             </div>
           </div>
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn
-            color="primary"
             label="Save"
-            class="admin-save-btn"
+            no-caps
+            class="dash-modal__submit"
             :loading="savingContractType"
             @click="handleSave"
           />
@@ -352,20 +371,20 @@
     </q-dialog>
 
     <q-dialog v-model="showGovWarning" persistent>
-      <q-card class="admin-modal-card" style="max-width: 520px">
-        <q-card-section class="admin-modal-header">
-          <div class="modal-title-section">
+      <q-card class="dash-modal">
+        <q-card-section class="dash-modal__head">
+          <div class="dash-modal__head-main">
             <q-avatar size="44px" color="negative" text-color="white">
               <q-icon name="warning" size="22px" />
             </q-avatar>
-            <div>
-              <div class="admin-modal-title">Government Compliance Warning</div>
-              <div class="admin-modal-subtitle">Government Mandated Multiplier Requirements</div>
+            <div class="dash-modal__head-titles">
+              <div class="dash-modal__title">Government Compliance Warning</div>
+              <div class="dash-modal__sub">Government Mandated Multiplier Requirements</div>
             </div>
           </div>
-          <q-btn icon="close" flat round dense class="modal-close-btn" v-close-popup />
+          <q-btn icon="close" flat round dense aria-label="Close" v-close-popup />
         </q-card-section>
-        <q-card-section class="admin-modal-content">
+        <q-card-section class="dash-modal__body">
           <div class="text-body2 q-mb-md">
             The following multipliers are set for this contract type. Values below government
             minimums may violate regulatory requirements.
@@ -405,8 +424,8 @@
             </div>
           </q-banner>
         </q-card-section>
-        <q-card-actions align="right" class="admin-modal-footer">
-          <q-btn flat label="Cancel" color="grey-7" v-close-popup />
+        <q-card-actions class="dash-modal__foot">
+          <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
           <q-btn color="negative" label="I Understand, Proceed" @click="confirmGovSave" />
         </q-card-actions>
       </q-card>
@@ -979,10 +998,9 @@ onMounted(async () => {
    a block of colour; the group rules and the hairline under the labels already
    say where one group ends and the next begins. */
 .spreadsheet-table :deep(.group-header-row th) {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--dash-ink);
   background: transparent;
   border-bottom: 2px solid var(--dash-line-strong);
@@ -1027,10 +1045,9 @@ onMounted(async () => {
 
 .spreadsheet-table :deep(.table-header-row th) {
   z-index: 2;
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0;
   color: var(--dash-ink-2) !important;
   background: transparent;
   border-bottom: 1px solid var(--dash-line) !important;
@@ -1128,7 +1145,7 @@ onMounted(async () => {
   position: sticky;
   left: 0;
   z-index: 1;
-  background: #fff;
+  background: var(--dash-surface);
   overflow: hidden;
   text-overflow: ellipsis;
   border-right: 2px solid var(--dash-line);
@@ -1142,7 +1159,7 @@ onMounted(async () => {
   position: sticky;
   right: 0;
   z-index: 1;
-  background: #fff;
+  background: var(--dash-surface);
   text-align: center !important;
 }
 
@@ -1193,7 +1210,7 @@ onMounted(async () => {
   padding: 12px 14px;
   background: var(--dash-n-50);
   border: 1px solid var(--dash-line);
-  border-radius: 8px;
+  border-radius: var(--dash-r-md);
 }
 
 .multiplier-row {
@@ -1224,7 +1241,7 @@ onMounted(async () => {
   color: var(--dash-info-mark);
   background: var(--dash-info-bg);
   padding: 6px;
-  border-radius: 6px;
+  border-radius: var(--dash-r-sm);
 }
 
 .multiplier-details {
@@ -1284,7 +1301,7 @@ onMounted(async () => {
 .gov-violations-list {
   background: var(--dash-n-50);
   border: 1px solid var(--dash-line);
-  border-radius: 8px;
+  border-radius: var(--dash-r-md);
   padding: 4px 0;
 }
 
