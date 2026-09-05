@@ -1,3 +1,5 @@
+import { toIso } from 'src/composables/utils/calendarDate'
+
 // ─── Country-to-locale / currency mappings ───────────────────────────────────
 
 const countryCurrencyMap = {
@@ -99,6 +101,8 @@ export function formatDate(date, countryCode, options = {}) {
   try {
     return new Intl.DateTimeFormat(locale, options).format(d)
   } catch {
-    return d.toISOString().split('T')[0]
+    // Local calendar fields, not `toISOString()`: an Intl failure should not
+    // also shift the date a day west of Greenwich.
+    return toIso(d)
   }
 }
