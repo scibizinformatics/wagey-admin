@@ -1,6 +1,8 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { useWebSocket } from 'src/composables/useWebSocket'
 import { api } from 'src/boot/axios'
+import { useAuthStore } from 'src/boot/auth'
+import { useCompanyStore } from 'src/stores/company'
 
 // ─── Module routing tables ─────────────────────────────────────────────────────
 // Maps a notification's notif_type field → data module
@@ -75,20 +77,21 @@ const lastDataEvent = ref({
 })
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-const getToken = () => sessionStorage.getItem('authToken') || localStorage.getItem('access_token')
-const getCompanyId = () => {
-  const stored =
-    localStorage.getItem('companyId') ||
-    localStorage.getItem('selectedCompany') ||
-    localStorage.getItem('company_id')
-  if (!stored) return null
-  try {
-    const parsed = JSON.parse(stored)
-    return parsed?.id ?? parsed
-  } catch {
-    return stored
-  }
-}
+// Both of these read the Pinia stores rather than localStorage, and that is the
+// point of them.
+//
+// The token used to come from `sessionStorage.authToken || localStorage
+// .access_token` — a third source of truth alongside the auth store and the
+// (now inert) `authHeaders()` helper, and one nothing else in the app ever
+// wrote to. The company id used to be resolved from three localStorage keys
+// here while the rest of the app resolved it from the store, so the socket
+// could subscribe to one workspace while the page fetched another.
+//
+// Calling a Pinia store outside a component is safe here: `boot/pinia.js`
+// installs the instance as the app's active one, which is the same thing
+// `boot/axios.js`'s interceptors rely on.
+const getToken = () => useAuthStore().token || null
+const getCompanyId = () => useCompanyStore().companyId
 
 // ─── Icon helpers (unchanged) ──────────────────────────────────────────────────
 function getNotificationIcon(type) {
@@ -326,7 +329,18 @@ function handleOpen() {
 }
 
 function handleError(error) {
-  console.warn('[Notifications] WebSocket error (expected if WS not configured):', error)
+  // The wording used to be "expected if WS not configured", from before the
+  // socket was wired up. It is configured now — `VITE_WS_URL` is baked in at
+  // build time and the endpoint is live — so an error here is a real failure to
+  // reach it, most often the backend being down or restarting rather than
+  // anything in this client. Saying "expected" taught the reader of the console
+  // to scroll past exactly that. The browser hands us a bare Event with no
+  // reason attached, so the diagnosis has to come from the request that failed
+  // alongside it (a 502 from nginx means the app server is unreachable).
+  console.warn(
+    '[Notifications] Could not reach the notifications WebSocket — live updates are off until it reconnects. Check whether the backend is up.',
+    error,
+  )
 }
 
 function handleClose() {
@@ -339,6 +353,23 @@ function handleClose() {
 // We store the returned controls in a module-level variable so every subsequent
 // caller shares the same socket without reopening it.
 
+/**
+ * SECURITY: the access token is passed as a query parameter because that is the
+ * only thing the backend's `ws/notifications/` consumer currently accepts.
+ *
+ * Query strings are written to proxy and web-server access logs by default, and
+ * those logs are retained far longer than the token's own lifetime, so this
+ * leaks a live credential into infrastructure that has no business holding one.
+ * The browser WebSocket API cannot send an Authorization header, so the fix has
+ * to come from the server side — either a short-lived single-use ticket endpoint
+ * whose value is worthless once redeemed, or accepting the token in the first
+ * message after `onopen` instead of in the URL.
+ *
+ * Until then: the values are percent-encoded (an unencoded token containing a
+ * reserved character would silently corrupt the handshake rather than fail
+ * loudly), and the staging/production nginx config should be checked to confirm
+ * it is not logging query strings for `/ws/`.
+ */
 const buildWebSocketUrl = () => {
   const token = getToken()
   const companyId = getCompanyId()
@@ -349,7 +380,8 @@ const buildWebSocketUrl = () => {
     })
     return null
   }
-  return `ws/notifications/?token=${token}&company=${companyId}`
+  const params = new URLSearchParams({ token, company: String(companyId) })
+  return `ws/notifications/?${params}`
 }
 
 let _ws = null // populated on the first useNotifications() call
@@ -403,19 +435,40 @@ async function markAllAsRead() {
 
   notifications.value.forEach((n) => (n.read = true)) // optimistic
 
+  // Revert the ids that never actually landed. `markAsRead` above already does
+  // this for a single notification; without it here, a bulk PATCH that failed
+  // *and* a per-id fallback that also failed left the bell reading zero unread
+  // while the server still held every one of them — until a full refresh, which
+  // nothing on this path triggers.
+  const revert = (ids) => {
+    const failed = new Set(ids.map(String))
+    for (const n of notifications.value) {
+      if (failed.has(String(n.id))) n.read = false
+    }
+  }
+
   try {
     await api.patch('communication/notifications/mark-all-read/', { is_read: true })
-  } catch {
-    await Promise.allSettled(
+    return true
+  } catch (bulkError) {
+    console.warn('[Notifications] mark-all-read failed; falling back per id', bulkError)
+    const results = await Promise.allSettled(
       unreadIds.map((id) =>
         api.patch(`communication/notifications/${id}/read/`, { is_read: true }),
       ),
     )
+    const stillUnread = unreadIds.filter((_, i) => results[i].status === 'rejected')
+    if (stillUnread.length) {
+      revert(stillUnread)
+      console.error(
+        `[Notifications] ${stillUnread.length} of ${unreadIds.length} could not be marked read`,
+      )
+    }
+    return stillUnread.length === 0
   } finally {
     lastUpdateTime.value = Date.now()
     isMarkingAsRead.value = false
   }
-  return true
 }
 
 function requestRefresh() {

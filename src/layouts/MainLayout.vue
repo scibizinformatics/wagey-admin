@@ -58,12 +58,24 @@
 
         <!-- ── Right cluster ── -->
         <div class="app-header__right">
-          <q-btn flat round dense class="icon-btn" aria-label="Notifications">
+          <q-btn
+            flat
+            round
+            dense
+            class="icon-btn"
+            :aria-label="
+              liveUpdatesDown ? 'Notifications — live updates disconnected' : 'Notifications'
+            "
+          >
             <q-icon name="o_notifications" size="19px" />
             <span v-if="unreadCount > 0" class="icon-btn__badge">
               {{ unreadCount > 9 ? '9+' : unreadCount }}
             </span>
-            <q-tooltip>Notifications</q-tooltip>
+            <!-- Sits opposite the unread badge so the two never overlap: a bell
+                 can carry both at once, and "3 unread" and "the feed is dead"
+                 are different facts that must stay separately readable. -->
+            <span v-if="liveUpdatesDown" class="icon-btn__offline" aria-hidden="true" />
+            <q-tooltip>{{ liveUpdatesDown ? liveUpdatesLabel : 'Notifications' }}</q-tooltip>
 
             <q-menu
               v-model="notifModal"
@@ -102,6 +114,27 @@
                     />
                   </div>
                 </header>
+
+                <!-- Shown only when the feed is actually down. An empty list
+                     is otherwise indistinguishable from a working one with
+                     nothing in it, which is how a backend outage reads as "no
+                     new notifications" for as long as the reader leaves the tab
+                     open. The retry is here rather than left to the automatic
+                     one because a person who has just fixed the backend should
+                     not have to wait out a 30s backoff to find out. -->
+                <div v-if="liveUpdatesDown" class="notif__offline">
+                  <q-icon name="o_cloud_off" size="15px" class="notif__offline-icon" />
+                  <span class="notif__offline-text">{{ liveUpdatesLabel }}</span>
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    size="11px"
+                    label="Retry"
+                    class="notif__link notif__offline-retry"
+                    @click="retryLiveUpdates"
+                  />
+                </div>
 
                 <!-- Scope and bulk action share one thin row, so the title row
                      stays a title row. The scope control borrows the header's
@@ -176,19 +209,6 @@
                     <p class="dash-empty__sub">{{ emptySub }}</p>
                   </div>
                 </q-scroll-area>
-
-                <footer v-if="!isConnected && !isConnecting" class="notif__foot">
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    size="12px"
-                    icon="wifi"
-                    label="Reconnect"
-                    class="notif__link"
-                    @click="reconnect"
-                  />
-                </footer>
               </div>
             </q-menu>
           </q-btn>
@@ -318,27 +338,6 @@
           </ul>
         </div>
       </nav>
-
-      <div class="app-nav__foot" :class="{ 'app-nav__foot--mini': isCollapsed }">
-        <button
-          type="button"
-          class="nav-item nav-item--button"
-          :class="{ 'nav-item--mini': isCollapsed }"
-          @click="logout"
-        >
-          <q-icon name="o_logout" size="19px" class="nav-item__icon" />
-          <span v-if="!isCollapsed" class="nav-item__label">Sign out</span>
-          <q-tooltip
-            v-if="isCollapsed"
-            anchor="center right"
-            self="center left"
-            :offset="[12, 0]"
-            class="nav-tooltip"
-          >
-            Sign out
-          </q-tooltip>
-        </button>
-      </div>
     </q-drawer>
 
     <!-- Tablet and below only: on desktop the rail is always full width, so the
@@ -381,14 +380,19 @@ import { useQuasar } from 'quasar'
 // ─── Composables ──────────────────────────────────────────────────────────────
 import { useOrganization } from '@/composables/page/useOrganization'
 import { useNotifications } from '@/composables/useNotifications'
+import { CONNECTION_STATES } from '@/composables/useWebSocket'
 import { useCompanyStore } from '@/stores/company'
+import { useAuthStore } from '@/boot/auth'
 import { api } from 'src/boot/axios'
 
-// The mark trimmed to the glyph. The untrimmed `wagey_icon(White).png` carries
-// ~69% transparent padding, so a 34px box of it drew an 11px logo.
+// The mark trimmed to the glyph. The untrimmed icon it replaced carried ~69%
+// transparent padding, so a 34px box of it drew an 11px logo; that file has
+// since been deleted.
 import wageyLogo from 'src/assets/wagey_mark.png'
+import { useToast } from '@/composables/useToast'
 
 const $q = useQuasar()
+const toast = useToast()
 const router = useRouter()
 const route = useRoute()
 
@@ -407,6 +411,9 @@ const navGroups = [
       { label: 'Employees', icon: 'groups', to: '/app/employees' },
       { label: 'Attendance', icon: 'event_available', to: '/app/attendance' },
       { label: 'Schedule', icon: 'calendar_month', to: '/app/schedule' },
+      // Sits after Schedule deliberately: manning reads the day's assignments
+      // and punches back, so it follows the two pages that create them.
+      { label: 'Manning', icon: 'store', to: '/app/manning' },
     ],
   },
   {
@@ -426,7 +433,12 @@ const navGroups = [
   },
   {
     label: 'Administration',
-    items: [{ label: 'Admin Settings', icon: 'settings', to: '/app/admin-settings' }],
+    items: [
+      { label: 'Admin Settings', icon: 'settings', to: '/app/admin-settings' },
+      // Reads the trail the settings above and the roster pages write, so it
+      // sits after them rather than leading the group.
+      { label: 'Audit Trail', icon: 'history', to: '/app/audit' },
+    ],
   },
 ]
 
@@ -463,6 +475,9 @@ const NOTIF_FILTERS = [
 const notifFilter = ref('all')
 
 const tabsWrapperRef = ref(null)
+// The element the scroll listener was actually attached to, kept so it can be
+// detached on unmount — see the comment in onMounted.
+let scrollHintTarget = null
 const showOverflowHint = ref(false)
 
 // ─── Company state ────────────────────────────────────────────────────────────
@@ -481,7 +496,7 @@ const {
   isInitialLoad,
   isMarkingAsRead,
   isConnected,
-  isConnecting,
+  connectionState,
   markAsRead,
   markAllAsRead,
   requestRefresh,
@@ -489,6 +504,30 @@ const {
   cleanup: cleanupNotifications,
   formatTimeAgo,
 } = useNotifications()
+
+// The socket retries on its own indefinitely now, so "not connected" is not by
+// itself worth telling anyone about — the first connect of a page load passes
+// through it. What the reader needs told is that a connection was up or
+// attempted and is not working: the error / retrying / gave-up trio.
+const LIVE_UPDATES_DOWN_STATES = [
+  CONNECTION_STATES.ERROR,
+  CONNECTION_STATES.RECONNECTING,
+  CONNECTION_STATES.GAVE_UP,
+]
+
+const liveUpdatesDown = computed(
+  () => !isConnected.value && LIVE_UPDATES_DOWN_STATES.includes(connectionState.value),
+)
+
+const liveUpdatesLabel = computed(() =>
+  connectionState.value === CONNECTION_STATES.GAVE_UP
+    ? 'Live updates stopped — retry to reconnect'
+    : 'Live updates disconnected — reconnecting…',
+)
+
+function retryLiveUpdates() {
+  reconnect()
+}
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const avatarInitials = computed(() => {
@@ -510,11 +549,18 @@ const visibleNotifications = computed(() =>
 // unread list is good news, an empty inbox is a different sentence, and neither
 // is true if the socket is down.
 const emptyTitle = computed(() => {
+  if (connectionState.value === CONNECTION_STATES.GAVE_UP) return 'Live updates stopped'
   if (!isConnected.value) return 'Reconnecting…'
   return notifFilter.value === 'unread' ? 'Nothing unread' : "You're all caught up"
 })
 
 const emptySub = computed(() => {
+  // Phrased as waiting only while something is actually waiting: a socket that
+  // has given up has no timer pending, so the old line was a promise nothing
+  // was keeping.
+  if (connectionState.value === CONNECTION_STATES.GAVE_UP) {
+    return 'Nothing is being retried. Use Retry above once the connection is back.'
+  }
   if (!isConnected.value) return 'Waiting for the connection to come back.'
   return notifFilter.value === 'unread'
     ? 'Everything here has been read.'
@@ -621,33 +667,30 @@ async function handleMarkAsRead(notif) {
   try {
     await markAsRead(notif.id)
   } catch {
-    $q.notify({ type: 'negative', message: 'Could not mark notification as read', position: 'top' })
+    toast.error('Could not mark notification as read')
   }
 }
 
 async function handleMarkAllRead() {
   try {
     await markAllAsRead()
-    $q.notify({ type: 'positive', message: 'All notifications marked as read', position: 'top' })
+    toast.success('All notifications marked as read')
   } catch {
-    $q.notify({ type: 'negative', message: 'Could not mark all as read', position: 'top' })
+    toast.error('Could not mark all as read')
   }
 }
 
 // ─── Companies ────────────────────────────────────────────────────────────────
 const { fetchCurrentUserCompanies } = useOrganization()
 const companyStore = useCompanyStore()
+const authStore = useAuthStore()
 
 async function fetchCompanies() {
   loadingCompanies.value = true
   try {
     const companiesData = await fetchCurrentUserCompanies()
     if (!Array.isArray(companiesData) || companiesData.length === 0) {
-      $q.notify({
-        type: 'warning',
-        message: 'No companies found for your account',
-        position: 'top',
-      })
+      toast.warning('No companies found for your account')
       return
     }
     companyOptions.value = companiesData.map((company) => ({
@@ -668,11 +711,7 @@ async function fetchCompanies() {
     } else if (typeof data === 'string' && !data.startsWith('<')) {
       msg = data
     }
-    $q.notify({
-      type: 'negative',
-      message: msg,
-      position: 'top',
-    })
+    toast.error(msg)
   } finally {
     loadingCompanies.value = false
   }
@@ -715,7 +754,30 @@ function loadSavedCompany() {
 
 function onCompanyChange(siteId) {
   setSelectedCompany(siteId)
+  // Kept for now, but no longer the thing that makes a switch correct: pages
+  // resolve the active company from the Pinia store, so their clear-and-refetch
+  // watchers now fire on their own. Removing this reload is safe and would spare
+  // the user a full app boot per switch — it is left in as a decision to make
+  // deliberately rather than as a side effect of this change.
   window.location.reload()
+}
+
+/**
+ * A company switch in *another tab*. `setCompany` writes localStorage, and the
+ * `storage` event fires only in the tabs that did not make the change, so this
+ * is the one path the store cannot see by itself.
+ *
+ * Lives here, once, rather than per page: hydrating the store is enough, because
+ * every page reads the active company through `useCompany().companyId`, which is
+ * a computed over it. RequestPage used to carry its own copy of this listener
+ * and assign to a private ref — which meant only that page reacted, and only to
+ * the cross-tab case.
+ */
+function onExternalCompanyChange(event) {
+  if (event.key !== null && event.key !== 'selectedCompany') return
+  companyStore.hydrate()
+  const current = companyStore.company
+  if (current) selectedCompany.value = String(current.id)
 }
 
 function scrollToActiveTab() {
@@ -745,7 +807,10 @@ async function loadCurrentUser() {
   if (cached) currentUsername.value = cached
 
   try {
-    const token = localStorage.getItem('access_token')
+    // From the store, not localStorage: the store is the one thing `clearToken()`
+    // empties, so reading around it is how a logged-out shell ends up still
+    // showing the previous user's email.
+    const token = authStore.token
     if (!token) return
     const payload = JSON.parse(atob(token.split('.')[1]))
     if (payload?.email) {
@@ -785,17 +850,24 @@ async function loadCurrentUser() {
 function logout() {
   cleanupNotifications()
   companyStore.clear()
-  localStorage.removeItem('access_token')
+  // Through the store, not around it. This used to delete
+  // `localStorage.access_token` by hand and leave the Pinia store still holding
+  // the token in memory — which only worked because of the reload two lines
+  // down. With `meta.requiresAuth` now live on /app, a logout that leaves
+  // `isAuthenticated` true is a logout the route guard does not believe in.
+  // `clearToken()` also drops the stored `user` object, which nothing else did.
+  authStore.clearToken()
   localStorage.removeItem('username')
+  localStorage.removeItem('cached_username')
   localStorage.removeItem('cached_user_picture')
   router.push({ name: 'login' }).then(() => window.location.reload())
 }
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  const token = localStorage.getItem('access_token')
+  const token = authStore.token
   if (!token) {
-    console.warn('[MainLayout] No access_token found; skipping fetchCompanies')
+    console.warn('[MainLayout] No access token in the auth store; skipping fetchCompanies')
     loadingCompanies.value = false
   } else {
     await fetchCompanies()
@@ -809,16 +881,24 @@ onMounted(async () => {
   await loadCurrentUser()
 
   window.addEventListener('resize', updateOverflowHint)
-  if (tabsWrapperRef.value) {
-    tabsWrapperRef.value.addEventListener('scroll', updateOverflowHint)
+  window.addEventListener('storage', onExternalCompanyChange)
+  // Held in a plain variable, not re-read from the template ref on the way out:
+  // Vue nulls template refs while unmounting the subtree, which happens *before*
+  // onUnmounted runs, so `if (tabsWrapperRef.value)` there is always false and
+  // the listener was never actually removed.
+  scrollHintTarget = tabsWrapperRef.value
+  if (scrollHintTarget) {
+    scrollHintTarget.addEventListener('scroll', updateOverflowHint)
   }
 })
 
 onUnmounted(() => {
   cleanupNotifications()
   window.removeEventListener('resize', updateOverflowHint)
-  if (tabsWrapperRef.value) {
-    tabsWrapperRef.value.removeEventListener('scroll', updateOverflowHint)
+  window.removeEventListener('storage', onExternalCompanyChange)
+  if (scrollHintTarget) {
+    scrollHintTarget.removeEventListener('scroll', updateOverflowHint)
+    scrollHintTarget = null
   }
 })
 </script>
@@ -1048,6 +1128,20 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   font-variant-numeric: tabular-nums;
+}
+
+/* Opposite corner from `icon-btn__badge`, and a dot rather than a glyph: it
+   answers "is the feed live" and nothing more, so it needs no reading. The
+   surface-coloured ring keeps it legible over the bell's own strokes. */
+.icon-btn__offline {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--dash-r-pill);
+  background: var(--dash-warn-mark);
+  border: 2px solid var(--dash-surface);
 }
 
 /* ── Account control ── */
@@ -1381,8 +1475,13 @@ onUnmounted(() => {
   align-items: center;
 }
 
+/* The gap between groups is the rail's main height budget: five of them at the
+   old 18px cost 72px on their own, which was most of what pushed the twelfth
+   item off a laptop screen. A group is already read as a group by its label and
+   by the items sitting flush under it — the separation only has to be larger
+   than the 1px between rows, not four times a row's own margin. */
 .nav-group {
-  margin-bottom: 18px;
+  margin-bottom: 11px;
   width: 100%;
 }
 .nav-group:last-child {
@@ -1390,11 +1489,19 @@ onUnmounted(() => {
 }
 
 /* Sentence case, matching the rest of the system. Uppercase letter-spaced
-   section headers are the clearest single tell of an older dashboard. */
+   section headers are the clearest single tell of an older dashboard.
+
+   `line-height` is set rather than left to the default: at 11px the inherited
+   1.5 leaves ~5px of half-leading above and below a label that has no
+   descenders to use it, so each of the five headers was silently taller than it
+   looked. Tightening it to 1.25 and halving the margin below buys back a row's
+   worth of height across the rail without the labels reading as cramped —
+   they sit closer to the items they name, which is the pairing that matters. */
 .nav-group__label {
-  margin: 0 0 6px;
+  margin: 0 0 3px;
   padding: 0 11px;
   font-size: 11px;
+  line-height: 1.25;
   font-weight: 600;
   letter-spacing: 0.004em;
   color: rgba(255, 255, 255, 0.34);
@@ -1424,9 +1531,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 38px;
-  padding: 7px 11px;
-  margin-bottom: 2px;
+  min-height: 34px;
+  padding: 6px 11px;
+  margin-bottom: 1px;
   border: none;
   background: transparent;
   border-radius: var(--dash-r-lg);
@@ -1437,9 +1544,6 @@ onUnmounted(() => {
   transition:
     background var(--dash-fast) var(--dash-ease),
     color var(--dash-fast) var(--dash-ease);
-}
-.nav-item--button {
-  text-align: left;
 }
 
 /* Collapsed: a circular hit area, so the hover surface is a disc centred on the
@@ -1454,7 +1558,11 @@ onUnmounted(() => {
   height: 44px;
   min-height: 0;
   padding: 0;
-  margin-bottom: 4px;
+  /* The 44px target below is deliberate and stays; the gap between targets is
+     what gives. Collapsed, twelve discs at the old 4px were the tallest the
+     rail ever gets — taller than the expanded list — so this is the state that
+     overflows first on a short screen. */
+  margin-bottom: 2px;
   gap: 0;
   justify-content: center;
   border-radius: var(--dash-r-pill);
@@ -1544,16 +1652,32 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-/* ── Foot ── */
-.app-nav__foot {
-  flex-shrink: 0;
-  padding: 8px 12px 14px;
-  border-top: 1px solid var(--nav-line);
-}
-.app-nav__foot--mini {
-  display: flex;
-  justify-content: center;
-  padding: 8px 0 14px;
+/* ── Breathing room, when the screen has the height to spend ─────────────────
+   The metrics above are the *compact* set, sized so all twelve items clear the
+   fold on a short laptop (a 1366×768 panel leaves roughly 660px of viewport).
+   On anything taller that set leaves a slab of empty rail under the last item
+   and a list that reads tighter than it needs to.
+
+   So the compact values are the floor and this restores the comfortable ones
+   once there is room: the rail comes to ~686px here against ~629px compact,
+   which fits a 700px viewport with the last item clear and still leaves a
+   modest, deliberate-looking margin below it rather than a third of a column.
+
+   Keyed on viewport *height*, because height is the constraint being spent —
+   width has nothing to do with whether the twelfth item fits. The width half of
+   the query keeps this off the narrow breakpoint below, which tunes the same
+   properties for its own reasons and should keep winning there. */
+@media (min-width: 1025px) and (min-height: 700px) {
+  .nav-group {
+    margin-bottom: 12px;
+  }
+  .nav-group__label {
+    margin: 0 0 4px;
+  }
+  .nav-item {
+    min-height: 38px;
+    padding: 7px 11px;
+  }
 }
 
 /* ═══ Notifications ════════════════════════════════════════════════════════
@@ -1575,7 +1699,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 10px 12px 16px;
+  padding: 3px 5px 3px 14px;
 }
 
 .notif__title {
@@ -1596,6 +1720,34 @@ onUnmounted(() => {
 .notif__link {
   color: var(--dash-accent);
   font-weight: 500;
+}
+
+/* A tinted strip rather than an outlined banner: it sits directly above the
+   scope row's hairline, and two hard edges stacked that close read as a defect
+   in the menu rather than as a notice. */
+.notif__offline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 16px;
+  background: var(--dash-warn-bg);
+  color: var(--dash-warn);
+}
+
+.notif__offline-icon {
+  flex-shrink: 0;
+  color: var(--dash-warn-mark);
+}
+
+.notif__offline-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.notif__offline-retry {
+  flex-shrink: 0;
 }
 
 .notif__icon-btn {
@@ -1809,14 +1961,6 @@ onUnmounted(() => {
   min-height: 320px;
 }
 
-.notif__foot {
-  display: flex;
-  justify-content: center;
-  padding: 9px 14px;
-  border-top: 1px solid var(--dash-line);
-  background: var(--dash-n-25);
-}
-
 /* ═══ Responsive ═══════════════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
   .app-header__inner {
@@ -1832,8 +1976,12 @@ onUnmounted(() => {
   .app-nav__body {
     padding: 10px 10px 6px;
   }
+  /* One step under the desktop values, not over them. These used to be 10px and
+     36px against a desktop 18px and 38px, which put the tablet rail's rows
+     *taller* than the desktop's once the desktop tightened — the narrower
+     breakpoint has less height to spend, not more. */
   .nav-group {
-    margin-bottom: 10px;
+    margin-bottom: 9px;
   }
   /* One step tighter again on tablet, with the masthead scaled to match so the
      size relationship between the two holds at every width. */
@@ -1853,8 +2001,8 @@ onUnmounted(() => {
     font-size: 10.5px;
   }
   .nav-item {
-    min-height: 36px;
-    padding: 6px 10px;
+    min-height: 32px;
+    padding: 5px 10px;
     gap: 11px;
   }
   .nav-item__label {
