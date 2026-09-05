@@ -1,18 +1,44 @@
 <template>
-  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
-    <q-card class="confirm-dialog">
-      <q-card-section class="confirm-header confirm-header-success">
-        <q-avatar size="44px" class="confirm-icon-wrap confirm-icon-success">
-          <q-icon name="restore" size="22px" />
-        </q-avatar>
-        <div class="confirm-title">Restore employee?</div>
+  <q-dialog
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
+    persistent
+  >
+    <q-card class="dash-modal dash-modal--confirm">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <span class="dash-modal__head-icon dash-modal__head-icon--good">
+            <q-icon name="restore" size="20px" />
+          </span>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">Restore employee?</div>
+            <div class="dash-modal__sub">{{ fullName }}</div>
+          </div>
+        </div>
       </q-card-section>
-      <q-card-section class="confirm-content">
-        <strong>{{ fullName }}</strong> will be restored to Active status and regain system access.
+
+      <q-card-section class="dash-modal__body">
+        <div class="dash-modal__confirm-text">
+          <strong>{{ fullName }}</strong> goes back to Active and regains access to the app.
+        </div>
       </q-card-section>
-      <q-card-actions align="right" class="confirm-actions">
-        <q-btn flat label="Cancel" class="cancel-btn" @click="$emit('update:modelValue', false)" />
-        <q-btn unelevated label="Restore" color="positive" @click="$emit('confirm')" :loading="loading" />
+
+      <q-card-actions class="dash-modal__foot">
+        <q-btn
+          flat
+          no-caps
+          label="Cancel"
+          class="dash-modal__cancel"
+          @click="$emit('update:modelValue', false)"
+        />
+        <q-btn
+          unelevated
+          no-caps
+          label="Restore"
+          class="dash-modal__approve"
+          :loading="loading"
+          @click="$emit('confirm')"
+        />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -27,81 +53,14 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 
-
+defineEmits(['update:modelValue', 'confirm'])
 
 const fullName = computed(() => {
   if (!props.employee) return 'N/A'
-  return `${props.employee.user?.first_name || ''} ${props.employee.user?.last_name || ''}`.trim() || props.employee.user?.username || 'N/A'
+  return (
+    `${props.employee.user?.first_name || ''} ${props.employee.user?.last_name || ''}`.trim() ||
+    props.employee.user?.username ||
+    'N/A'
+  )
 })
 </script>
-
-<style scoped>
-.confirm-dialog {
-  width: 400px;
-  max-width: 95vw;
-  border-radius: 16px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
-  overflow: hidden;
-}
-
-.confirm-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 18px 20px 16px !important;
-}
-
-.confirm-header-success {
-  background: #102335 !important;
-}
-
-.confirm-icon-wrap {
-  border-radius: 10px !important;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.2) !important;
-}
-
-.confirm-icon-success {
-  color: #ffffff !important;
-}
-
-.confirm-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.confirm-content {
-  padding: 16px 20px !important;
-  font-size: 13px;
-  color: #4b5563;
-  line-height: 1.6;
-  background: #f9fafb;
-}
-
-.confirm-actions {
-  padding: 12px 16px !important;
-  border-top: 1px solid #f1f3f5;
-  gap: 8px;
-  background: #f9fafb;
-}
-
-.cancel-btn {
-  background: #102335 !important;
-  color: #ffffff !important;
-  border-radius: 10px !important;
-  font-weight: 500 !important;
-  text-transform: none !important;
-  padding: 0 18px !important;
-  min-height: 38px !important;
-}
-.cancel-btn:hover {
-  background: #193d5c !important;
-}
-
-@media (max-width: 768px) {
-  .confirm-dialog {
-    max-width: calc(100vw - 20px);
-  }
-}
-</style>

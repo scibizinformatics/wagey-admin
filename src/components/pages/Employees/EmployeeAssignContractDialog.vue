@@ -1,242 +1,351 @@
 <template>
-  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
-    <q-card class="modal-card" style="width: 520px; max-width: 95vw">
-      <q-card-section class="modal-header">
-        <div class="modal-title-section">
-          <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add">
+  <q-dialog
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
+    persistent
+  >
+    <q-card class="dash-modal dash-modal--lg">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <q-avatar size="38px" class="dash-modal__head-icon">
             <q-icon name="assignment" size="22px" />
           </q-avatar>
-          <div>
-            <div class="modal-title">{{ isRenewing ? 'Renew Payroll Profile' : 'Assign Payroll Profile' }}</div>
-            <div v-if="isRenewing && employeeName" class="modal-subtitle">
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">
+              {{ isRenewing ? 'Renew Payroll Profile' : 'Assign Payroll Profile' }}
+            </div>
+            <div v-if="isRenewing && employeeName" class="dash-modal__sub">
               Renewing payroll profile
               <q-chip dense outline size="12px" icon="person" class="employee-chip">
                 {{ employeeName }}
               </q-chip>
             </div>
-            <div v-else class="modal-subtitle">Fill in the payroll profile details</div>
+            <div v-else class="dash-modal__sub">Fill in the payroll profile details</div>
           </div>
         </div>
-        <q-btn icon="close" flat round dense class="modal-close-btn" @click="$emit('update:modelValue', false)" />
+        <q-btn
+          icon="close"
+          flat
+          round
+          dense
+          aria-label="Close"
+          @click="$emit('update:modelValue', false)"
+        />
       </q-card-section>
 
-      <q-card-section class="modal-content">
+      <q-card-section class="dash-modal__body">
         <div class="form-section">
-          <div class="section-title">Contract Details</div>
-          <div class="form-grid">
+          <div class="dash-modal__section-title">Contract details</div>
+          <div class="dash-modal__grid">
             <!-- Assignment Mode -->
-            <q-select v-if="!isRenewing"
-              :model-value="form.assignment_mode"
-              @update:model-value="$emit('update:field', { field: 'assignment_mode', value: $event })"
-              :options="assignmentModeOptions"
-              label="Assignment Mode"
-              outlined
-              dense
-              emit-value
-              map-options
-              class="col-span-2"
-            />
+            <label v-if="!isRenewing" class="dash-modal__field">
+              <span class="dash-modal__field-label">Assignment mode</span>
+              <q-select
+                :model-value="form.assignment_mode"
+                @update:model-value="
+                  $emit('update:field', { field: 'assignment_mode', value: $event })
+                "
+                :options="assignmentModeOptions"
+                outlined
+                dense
+                emit-value
+                map-options
+                class="dash-field dash-modal__span-2"
+                hide-bottom-space
+                popup-content-class="dash-popup dash-popup--modal"
+              />
+            </label>
 
             <!-- Contract Type -->
-            <q-select v-if="form.assignment_mode === 'contract_type' && !isRenewing"
-              :model-value="form.contract_type_id"
-              @update:model-value="$emit('contractTypeChange', $event)"
-              :options="contractTypeOptions"
-              option-label="name"
-              option-value="id"
-              emit-value
-              map-options
-              label="Contract Type"
-              outlined
-              dense
-              class="col-span-2"
-            />
+            <label
+              v-if="form.assignment_mode === 'contract_type' && !isRenewing"
+              class="dash-modal__field"
+            >
+              <span class="dash-modal__field-label">Contract type</span>
+              <q-select
+                :model-value="form.contract_type_id"
+                @update:model-value="$emit('contractTypeChange', $event)"
+                :options="contractTypeOptions"
+                option-label="name"
+                option-value="id"
+                emit-value
+                map-options
+                outlined
+                dense
+                class="dash-field dash-modal__span-2"
+                hide-bottom-space
+                popup-content-class="dash-popup dash-popup--modal"
+              />
+            </label>
 
             <!-- ── Job Structure ── -->
-            <div class="section-title col-span-2" style="margin-top: 8px;">Job Structure</div>
+            <div class="dash-modal__section-title dash-modal__span-2" style="margin-top: 8px">
+              Job Structure
+            </div>
 
             <!-- Pay Type -->
-            <q-select
-              v-if="form.assignment_mode === 'custom'"
-              :model-value="form.pay_type"
-              @update:model-value="$emit('update:field', { field: 'pay_type', value: $event })"
-              :options="payTypeSelectOptions"
-              label="Pay Type *"
-              outlined
-              dense
-              emit-value
-              map-options
-              class="col-span-2"
-            />
-            <q-input
-              v-else-if="selectedContractType?.pay_type"
-              :model-value="payTypeLabel"
-              label="Pay Type"
-              outlined
-              dense
-              readonly
-              class="col-span-2"
-            />
+            <label v-if="form.assignment_mode === 'custom'" class="dash-modal__field">
+              <span class="dash-modal__field-label"
+                >Pay type<span class="dash-modal__req">*</span></span
+              >
+              <q-select
+                :model-value="form.pay_type"
+                @update:model-value="$emit('update:field', { field: 'pay_type', value: $event })"
+                :options="payTypeSelectOptions"
+                outlined
+                dense
+                emit-value
+                map-options
+                class="dash-field dash-modal__span-2"
+                hide-bottom-space
+                popup-content-class="dash-popup dash-popup--modal"
+              />
+            </label>
+            <label v-else-if="selectedContractType?.pay_type" class="dash-modal__field">
+              <span class="dash-modal__field-label">Pay type</span>
+              <q-input
+                :model-value="payTypeLabel"
+                outlined
+                dense
+                readonly
+                class="dash-field dash-modal__span-2"
+                hide-bottom-space
+              />
+            </label>
 
             <!-- Work Hours Per Week -->
-            <q-input
+            <label
               v-if="selectedContractType?.pay_type || form.assignment_mode === 'custom'"
-              :model-value="form.work_hours_per_week"
-              @update:model-value="$emit('update:field', { field: 'work_hours_per_week', value: $event })"
-              label="Work Hours Per Week"
-              type="number"
-              outlined
-              dense
-              :hint="'Min 8, max 48 hours per week'"
-              :rules="[(val) => !val || (val >= 8 && val <= 48) || 'Must be between 8 and 48 hours']"
-              class="col-span-2"
-            />
-
-            <!-- Position | Department -->
-            <q-select
-              :model-value="form.position"
-              @update:model-value="$emit('update:field', { field: 'position', value: $event })"
-              :options="positions"
-              option-label="name"
-              option-value="id"
-              emit-value
-              map-options
-              label="Position"
-              outlined
-              dense
-              clearable
-            />
-
-            <q-select
-              :model-value="form.department"
-              @update:model-value="$emit('update:field', { field: 'department', value: $event })"
-              :options="departments"
-              option-label="name"
-              option-value="id"
-              emit-value
-              map-options
-              label="Department *"
-              outlined
-              dense
-              clearable
-            />
-
-            <!-- Payroll Group -->
-            <q-select
-              :model-value="form.payroll_group_id"
-              @update:model-value="$emit('update:field', { field: 'payroll_group_id', value: $event })"
-              :options="payrollGroupOptions"
-              option-label="name"
-              option-value="id"
-              emit-value
-              map-options
-              label="Payroll Group"
-              outlined
-              dense
-              clearable
-              class="col-span-2"
-            />
-
-            <!-- ── Period & Compensation ── -->
-            <div class="section-title col-span-2" style="margin-top: 8px;">Period & Compensation</div>
-
-            <!-- Year | Month -->
-            <q-select
-              :model-value="form.year"
-              @update:model-value="$emit('update:field', { field: 'year', value: $event })"
-              :options="yearOptions"
-              label="Year *"
-              outlined
-              dense
-              emit-value
-              map-options
-            />
-
-            <q-select
-              :model-value="form.month"
-              @update:model-value="$emit('update:field', { field: 'month', value: $event })"
-              :options="monthOptions"
-              label="Month *"
-              outlined
-              dense
-              emit-value
-              map-options
-            />
-
-            <!-- Rate -->
-            <div class="col-span-2">
+              class="dash-modal__field"
+            >
+              <span class="dash-modal__field-label">Work hours per week</span>
               <q-input
-                :model-value="form.rate"
-                @update:model-value="$emit('update:field', { field: 'rate', value: $event })"
-                label="Rate *"
+                :model-value="form.work_hours_per_week"
+                @update:model-value="
+                  $emit('update:field', { field: 'work_hours_per_week', value: $event })
+                "
                 type="number"
                 outlined
                 dense
-                prefix="₱"
-                @wheel.prevent
-                :rules="[(val) => !val || val >= 100 || 'Minimum rate is ₱100']"
-                :hint="form.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate (min ₱100)'"
+                :hint="'Min 8, max 48 hours per week'"
+                :rules="[
+                  (val) => !val || (val >= 8 && val <= 48) || 'Must be between 8 and 48 hours',
+                ]"
+                class="dash-field dash-modal__span-2"
+                hide-bottom-space
               />
-              <div v-if="form.pay_type === 'monthly' && form.rate >= 100 && form.work_hours_per_week > 0" class="daily-rate-preview">
+            </label>
+
+            <!-- Position | Department -->
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label">Position</span>
+              <q-select
+                :model-value="form.position"
+                @update:model-value="$emit('update:field', { field: 'position', value: $event })"
+                :options="positions"
+                option-label="name"
+                option-value="id"
+                emit-value
+                map-options
+                outlined
+                dense
+                clearable
+                hide-bottom-space
+                class="dash-field"
+                popup-content-class="dash-popup dash-popup--modal"
+              />
+            </label>
+
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label"
+                >Department<span class="dash-modal__req">*</span></span
+              >
+              <q-select
+                :model-value="form.department"
+                @update:model-value="$emit('update:field', { field: 'department', value: $event })"
+                :options="departments"
+                option-label="name"
+                option-value="id"
+                emit-value
+                map-options
+                outlined
+                dense
+                clearable
+                hide-bottom-space
+                class="dash-field"
+                popup-content-class="dash-popup dash-popup--modal"
+              />
+            </label>
+
+            <!-- Payroll Group -->
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label">Payroll group</span>
+              <q-select
+                :model-value="form.payroll_group_id"
+                @update:model-value="
+                  $emit('update:field', { field: 'payroll_group_id', value: $event })
+                "
+                :options="payrollGroupOptions"
+                option-label="name"
+                option-value="id"
+                emit-value
+                map-options
+                outlined
+                dense
+                clearable
+                class="dash-field dash-modal__span-2"
+                hide-bottom-space
+                popup-content-class="dash-popup dash-popup--modal"
+              />
+            </label>
+
+            <!-- ── Period & Compensation ── -->
+            <div class="dash-modal__section-title dash-modal__span-2" style="margin-top: 8px">
+              Period & Compensation
+            </div>
+
+            <!-- Year | Month -->
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label"
+                >Year<span class="dash-modal__req">*</span></span
+              >
+              <q-select
+                :model-value="form.year"
+                @update:model-value="$emit('update:field', { field: 'year', value: $event })"
+                :options="yearOptions"
+                outlined
+                dense
+                emit-value
+                map-options
+                hide-bottom-space
+                class="dash-field"
+                popup-content-class="dash-popup dash-popup--modal"
+              />
+            </label>
+
+            <label class="dash-modal__field">
+              <span class="dash-modal__field-label"
+                >Month<span class="dash-modal__req">*</span></span
+              >
+              <q-select
+                :model-value="form.month"
+                @update:model-value="$emit('update:field', { field: 'month', value: $event })"
+                :options="monthOptions"
+                outlined
+                dense
+                emit-value
+                map-options
+                hide-bottom-space
+                class="dash-field"
+                popup-content-class="dash-popup dash-popup--modal"
+              />
+            </label>
+
+            <!-- Rate -->
+            <div class="dash-modal__span-2">
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Rate<span class="dash-modal__req">*</span></span
+                >
+                <q-input
+                  :model-value="form.rate"
+                  @update:model-value="$emit('update:field', { field: 'rate', value: $event })"
+                  type="number"
+                  outlined
+                  dense
+                  prefix="₱"
+                  @wheel.prevent
+                  :rules="[(val) => !val || val >= 100 || 'Minimum rate is ₱100']"
+                  :hint="form.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate (min ₱100)'"
+                  hide-bottom-space
+                  class="dash-field"
+                />
+              </label>
+              <div
+                v-if="
+                  form.pay_type === 'monthly' && form.rate >= 100 && form.work_hours_per_week > 0
+                "
+                class="daily-rate-preview"
+              >
                 <span class="daily-rate-label">Equivalent Daily Rate</span>
                 <span class="daily-rate-value">₱{{ dailyRate }}</span>
-                <span class="daily-rate-formula">based on {{ form.work_hours_per_week }} hrs/week</span>
+                <span class="daily-rate-formula"
+                  >based on {{ form.work_hours_per_week }} hrs/week</span
+                >
               </div>
             </div>
 
             <!-- Eligibilities (checkboxes in both modes, editable) -->
-            <div v-if="isRenewing || form.assignment_mode === 'custom' || (form.assignment_mode === 'contract_type' && selectedContractType)" class="col-span-2">
+            <div
+              v-if="
+                isRenewing ||
+                form.assignment_mode === 'custom' ||
+                (form.assignment_mode === 'contract_type' && selectedContractType)
+              "
+              class="dash-modal__span-2"
+            >
               <div class="section-label">Eligibilities</div>
               <div class="checkbox-grid">
                 <q-checkbox
                   v-if="overtimeId"
                   :model-value="form.eligibilities.includes(overtimeId)"
                   @update:model-value="toggleEligibility(overtimeId, $event)"
-                  label="Overtime Eligible" dense
+                  label="Overtime eligible"
+                  dense
                 />
                 <q-checkbox
                   v-if="ctoId && form.pay_type === 'monthly'"
                   :model-value="form.eligibilities.includes(ctoId)"
                   @update:model-value="toggleEligibility(ctoId, $event)"
-                  label="Overtime Converted to CTO" dense
+                  label="Overtime converted to CTO"
+                  dense
                 />
                 <q-checkbox
                   v-if="holidayPayId"
                   :model-value="form.eligibilities.includes(holidayPayId)"
                   @update:model-value="toggleEligibility(holidayPayId, $event)"
-                  label="Holiday Pay" dense
+                  label="Holiday pay"
+                  dense
                 />
                 <q-checkbox
                   v-if="undertimeId"
                   :model-value="form.eligibilities.includes(undertimeId)"
                   @update:model-value="toggleEligibility(undertimeId, $event)"
-                  label="Undertime Deduction" dense
+                  label="Undertime deduction"
+                  dense
                 />
                 <q-checkbox
                   v-if="nightDiffId"
                   :model-value="form.eligibilities.includes(nightDiffId)"
                   @update:model-value="toggleEligibility(nightDiffId, $event)"
-                  label="Night Differential Eligible" dense
+                  label="Night differential eligible"
+                  dense
                 />
                 <q-checkbox
                   v-if="contributionsEligId"
                   :model-value="form.eligibilities.includes(contributionsEligId)"
                   @update:model-value="toggleEligibility(contributionsEligId, $event)"
-                  label="Contributions" dense
+                  label="Contributions"
+                  dense
                 />
                 <q-checkbox
                   v-for="opt in otherEligibilityOptions"
                   :key="opt.id"
                   :model-value="form.eligibilities.includes(opt.id)"
                   @update:model-value="toggleEligibility(opt.id, $event)"
-                  :label="opt.name" dense
+                  :label="opt.name"
+                  dense
                 />
               </div>
             </div>
-            <div v-else-if="eligibilityObjects.length" class="col-span-2">
+            <div v-else-if="eligibilityObjects.length" class="dash-modal__span-2">
               <div class="section-label">Eligibilities</div>
               <div class="eligibility-formal-list">
-                <div v-for="(el, index) in eligibilityObjects" :key="el.id" class="eligibility-formal-item">
+                <div
+                  v-for="(el, index) in eligibilityObjects"
+                  :key="el.id"
+                  class="eligibility-formal-item"
+                >
                   <span class="eligibility-number">{{ index + 1 }}</span>
                   <span class="eligibility-name">{{ el.name }}</span>
                 </div>
@@ -244,7 +353,15 @@
             </div>
 
             <!-- Contributions -->
-            <div v-if="(isRenewing || form.assignment_mode === 'custom' || (form.assignment_mode === 'contract_type' && selectedContractType)) && contributionOptions.length" class="col-span-2">
+            <div
+              v-if="
+                (isRenewing ||
+                  form.assignment_mode === 'custom' ||
+                  (form.assignment_mode === 'contract_type' && selectedContractType)) &&
+                contributionOptions.length
+              "
+              class="dash-modal__span-2"
+            >
               <div class="section-label">Contributions</div>
               <div class="checkbox-grid">
                 <q-checkbox
@@ -252,16 +369,29 @@
                   :key="item.id"
                   :model-value="form.contributions?.includes(item.id)"
                   @update:model-value="toggleContribution(item.id, $event)"
-                  :label="item.name" dense
+                  :label="item.name"
+                  dense
                 />
               </div>
             </div>
 
             <!-- Multipliers -->
-            <div v-if="(isRenewing || form.assignment_mode === 'custom' || (form.assignment_mode === 'contract_type' && selectedContractType)) && visibleMultiplierFields.length" class="col-span-2">
+            <div
+              v-if="
+                (isRenewing ||
+                  form.assignment_mode === 'custom' ||
+                  (form.assignment_mode === 'contract_type' && selectedContractType)) &&
+                visibleMultiplierFields.length
+              "
+              class="dash-modal__span-2"
+            >
               <div class="section-label">Payroll Multipliers</div>
               <div class="multipliers-section">
-                <div v-for="field in visibleMultiplierFields" :key="field.key" class="multiplier-row">
+                <div
+                  v-for="field in visibleMultiplierFields"
+                  :key="field.key"
+                  class="multiplier-row"
+                >
                   <div class="multiplier-info">
                     <q-icon :name="field.icon" size="20px" class="multiplier-icon" />
                     <div class="multiplier-details">
@@ -273,11 +403,14 @@
                     <div class="multiplier-value-wrapper">
                       <q-input
                         :model-value="form[field.key]"
-                        @update:model-value="$emit('update:field', { field: field.key, value: $event })"
+                        @update:model-value="
+                          $emit('update:field', { field: field.key, value: $event })
+                        "
                         type="number"
                         step="0.01"
                         min="0"
-                        outlined dense
+                        outlined
+                        dense
                         class="multiplier-input"
                         placeholder="e.g. 1.50"
                       />
@@ -288,12 +421,23 @@
             </div>
           </div>
         </div>
-
-        <div class="form-actions">
-          <q-btn flat label="Cancel" class="cancel-btn" @click="$emit('update:modelValue', false)" />
-          <q-btn unelevated :label="isRenewing ? 'Renew Payroll Profile' : 'Assign Payroll Profile'" class="submit-btn" :loading="assigning" @click="$emit('submit')" />
-        </div>
       </q-card-section>
+
+      <q-card-actions class="dash-modal__foot">
+        <q-btn
+          flat
+          label="Cancel"
+          class="dash-modal__cancel"
+          @click="$emit('update:modelValue', false)"
+        />
+        <q-btn
+          unelevated
+          :label="isRenewing ? 'Renew Payroll Profile' : 'Assign Payroll Profile'"
+          class="dash-modal__submit"
+          :loading="assigning"
+          @click="$emit('submit')"
+        />
+      </q-card-actions>
     </q-card>
   </q-dialog>
 </template>
@@ -381,17 +525,34 @@ const dailyRate = computed(() => {
 
 // ── Renew mode: eligibility/contribution/multiplier helpers ──────────────
 
-const overtimeId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Overtime Eligible')?.id)
-const ctoId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Overtime Converted to CTO')?.id)
-const holidayPayId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Holiday Pay')?.id)
-const undertimeId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Undertime Deduction')?.id)
-const nightDiffId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Night Differential Eligible')?.id)
-const contributionsEligId = computed(() => props.allEligibilityOptions.find((e) => e.name === 'Contributions')?.id)
+const overtimeId = computed(
+  () => props.allEligibilityOptions.find((e) => e.name === 'Overtime Eligible')?.id,
+)
+const ctoId = computed(
+  () => props.allEligibilityOptions.find((e) => e.name === 'Overtime Converted to CTO')?.id,
+)
+const holidayPayId = computed(
+  () => props.allEligibilityOptions.find((e) => e.name === 'Holiday Pay')?.id,
+)
+const undertimeId = computed(
+  () => props.allEligibilityOptions.find((e) => e.name === 'Undertime Deduction')?.id,
+)
+const nightDiffId = computed(
+  () => props.allEligibilityOptions.find((e) => e.name === 'Night Differential Eligible')?.id,
+)
+const contributionsEligId = computed(
+  () => props.allEligibilityOptions.find((e) => e.name === 'Contributions')?.id,
+)
 
 const dedicatedEligibilityNames = [
-  'Overtime Eligible', 'Overtime Converted to CTO', 'Holiday Pay',
-  'Undertime Deduction', 'Night Differential Eligible', 'Contributions',
-  'Work Hours Flexible', 'Work Hours Strict',
+  'Overtime Eligible',
+  'Overtime Converted to CTO',
+  'Holiday Pay',
+  'Undertime Deduction',
+  'Night Differential Eligible',
+  'Contributions',
+  'Work Hours Flexible',
+  'Work Hours Strict',
 ]
 
 const otherEligibilityOptions = computed(() =>
@@ -412,25 +573,60 @@ function toggleContribution(id, checked) {
 
 const multiplierFields = [
   { key: 'overtime_multiplier', label: 'Overtime', icon: 'timer', desc: 'OT rate (e.g. 1.25×)' },
-  { key: 'special_holiday_multiplier', label: 'Special Holiday', icon: 'celebration', desc: 'Special holiday rate (e.g. 1.30×)' },
-  { key: 'regular_holiday_multiplier', label: 'Regular Holiday', icon: 'event', desc: 'Regular holiday rate (e.g. 2.00×)' },
-  { key: 'night_diff_multiplier', label: 'Night Diff', icon: 'nights_stay', desc: 'Night differential rate (e.g. 1.10×)' },
-  { key: 'regular_holiday_ot_multiplier', label: 'Regular Holiday OT', icon: 'event_note', desc: 'Regular holiday OT rate (e.g. 2.60×)' },
-  { key: 'special_holiday_ot_multiplier', label: 'Special Holiday OT', icon: 'star', desc: 'Special holiday OT rate (e.g. 1.95×)' },
-  { key: 'undertime_multiplier', label: 'Undertime', icon: 'remove_circle', desc: 'Undertime deduction (e.g. 0.50×)' },
+  {
+    key: 'special_holiday_multiplier',
+    label: 'Special Holiday',
+    icon: 'celebration',
+    desc: 'Special holiday rate (e.g. 1.30×)',
+  },
+  {
+    key: 'regular_holiday_multiplier',
+    label: 'Regular Holiday',
+    icon: 'event',
+    desc: 'Regular holiday rate (e.g. 2.00×)',
+  },
+  {
+    key: 'night_diff_multiplier',
+    label: 'Night Diff',
+    icon: 'nights_stay',
+    desc: 'Night differential rate (e.g. 1.10×)',
+  },
+  {
+    key: 'regular_holiday_ot_multiplier',
+    label: 'Regular Holiday OT',
+    icon: 'event_note',
+    desc: 'Regular holiday OT rate (e.g. 2.60×)',
+  },
+  {
+    key: 'special_holiday_ot_multiplier',
+    label: 'Special Holiday OT',
+    icon: 'star',
+    desc: 'Special holiday OT rate (e.g. 1.95×)',
+  },
+  {
+    key: 'undertime_multiplier',
+    label: 'Undertime',
+    icon: 'remove_circle',
+    desc: 'Undertime deduction (e.g. 0.50×)',
+  },
 ]
 
 function isMultiplierVisible(key) {
   const eligs = props.form.eligibilities
   switch (key) {
-    case 'overtime_multiplier': return overtimeId.value && eligs.includes(overtimeId.value)
+    case 'overtime_multiplier':
+      return overtimeId.value && eligs.includes(overtimeId.value)
     case 'special_holiday_multiplier':
     case 'regular_holiday_multiplier':
     case 'special_holiday_ot_multiplier':
-    case 'regular_holiday_ot_multiplier': return holidayPayId.value && eligs.includes(holidayPayId.value)
-    case 'night_diff_multiplier': return nightDiffId.value && eligs.includes(nightDiffId.value)
-    case 'undertime_multiplier': return undertimeId.value && eligs.includes(undertimeId.value)
-    default: return true
+    case 'regular_holiday_ot_multiplier':
+      return holidayPayId.value && eligs.includes(holidayPayId.value)
+    case 'night_diff_multiplier':
+      return nightDiffId.value && eligs.includes(nightDiffId.value)
+    case 'undertime_multiplier':
+      return undertimeId.value && eligs.includes(undertimeId.value)
+    default:
+      return true
   }
 }
 
@@ -438,168 +634,14 @@ const visibleMultiplierFields = computed(() => {
   if (props.form.assignment_mode === 'custom') return multiplierFields
   return multiplierFields.filter((f) => isMultiplierVisible(f.key))
 })
-
 </script>
 
 <style scoped>
-.modal-card {
-  border-radius: 16px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  background: #102335 !important;
-  border-bottom: none !important;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-}
-
-.modal-header .q-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-.modal-header .q-btn:hover {
-  color: #fff !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-}
-
-.modal-title-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.modal-avatar-icon {
-  border-radius: 10px !important;
-  flex-shrink: 0;
-}
-
-.modal-avatar-add {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: #ffffff !important;
-}
-
-.modal-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.modal-subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 2px;
-}
-
-.modal-close-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-  flex-shrink: 0;
-}
-
-.modal-content {
-  padding: 20px !important;
-  overflow-y: auto;
-  max-height: 70vh;
-  flex: 1;
-  background: #f9fafb !important;
-}
-
-.modal-content::-webkit-scrollbar {
-  width: 4px;
-}
-.modal-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-.modal-content::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 4px;
-}
-
 .employee-chip {
   background: rgba(255, 255, 255, 0.95) !important;
-  color: #1e3a5f !important;
+  color: var(--dash-brand) !important;
   font-weight: 600;
   margin-left: 4px;
-}
-
-.modal-content :deep(.q-field__control) {
-  background: #ffffff !important;
-  border-radius: 10px !important;
-}
-.modal-content :deep(.q-field--outlined .q-field__control:before) {
-  border-color: #e2e8f0 !important;
-  border-radius: 10px !important;
-}
-.modal-content :deep(.q-field--outlined .q-field__control:hover:before) {
-  border-color: #2563eb !important;
-}
-.modal-content :deep(.q-field--outlined.q-field--focused .q-field__control:before) {
-  border-color: #2563eb !important;
-  border-width: 2px !important;
-}
-
-.form-section {
-  margin-bottom: 20px;
-}
-
-.section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.col-span-2 {
-  grid-column: 1 / -1;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 16px;
-  border-top: 1px solid #f1f3f5;
-  margin-top: 8px;
-}
-
-.cancel-btn {
-  background: #102335 !important;
-  color: #ffffff !important;
-  border-radius: 10px !important;
-  font-weight: 500 !important;
-  text-transform: none !important;
-  padding: 0 18px !important;
-  min-height: 38px !important;
-}
-.cancel-btn:hover {
-  background: #193d5c !important;
-}
-.submit-btn {
-  background: #102335 !important;
-  color: white;
-  border-radius: 10px !important;
-  font-weight: 600 !important;
-  text-transform: none !important;
-  min-height: 38px !important;
-  padding: 0 22px !important;
-}
-.submit-btn:hover {
-  background: #193d5c !important;
-  box-shadow: 0 4px 12px rgba(16, 35, 53, 0.3) !important;
 }
 
 /* Daily rate preview */
@@ -609,33 +651,33 @@ const visibleMultiplierFields = computed(() => {
   gap: 8px;
   margin-top: 6px;
   padding: 8px 12px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 6px;
+  background: var(--dash-accent-bg);
+  border: 1px solid var(--dash-info-line);
+  border-radius: var(--dash-r-sm);
 }
 
 .daily-rate-label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--dash-ink-3);
   font-weight: 500;
 }
 
 .daily-rate-value {
   font-size: 13px;
   font-weight: 700;
-  color: #2563eb;
+  color: var(--dash-accent);
 }
 
 .daily-rate-formula {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dash-ink-4);
   margin-left: auto;
 }
 
 /* Section label */
 .section-label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--dash-ink-3);
   margin-bottom: 6px;
   font-weight: 500;
 }
@@ -647,9 +689,9 @@ const visibleMultiplierFields = computed(() => {
   gap: 2px 12px;
   margin-top: 6px;
   padding: 10px 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: var(--dash-n-25);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
 }
 .checkbox-grid :deep(.q-checkbox) {
   width: calc(50% - 6px);
@@ -659,9 +701,9 @@ const visibleMultiplierFields = computed(() => {
 .multipliers-section {
   margin-top: 8px;
   padding: 12px 14px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: var(--dash-n-25);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
 }
 
 .multiplier-row {
@@ -669,7 +711,7 @@ const visibleMultiplierFields = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--dash-line);
 }
 
 .multiplier-row:last-child {
@@ -689,10 +731,10 @@ const visibleMultiplierFields = computed(() => {
 }
 
 .multiplier-icon {
-  color: #3b82f6;
-  background: #dbeafe;
+  color: var(--dash-accent);
+  background: var(--dash-accent-bg);
   padding: 6px;
-  border-radius: 6px;
+  border-radius: var(--dash-r-sm);
 }
 
 .multiplier-details {
@@ -703,12 +745,12 @@ const visibleMultiplierFields = computed(() => {
 .multiplier-label {
   font-size: 13px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: var(--dash-brand);
 }
 
 .multiplier-desc {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--dash-ink-3);
 }
 
 .multiplier-controls {
@@ -725,12 +767,12 @@ const visibleMultiplierFields = computed(() => {
 .multiplier-value-display {
   font-size: 14px;
   font-weight: 600;
-  color: #059669;
+  color: var(--dash-good);
 }
 
 .multiplier-source {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--dash-ink-4);
   margin-left: 4px;
 }
 
@@ -743,7 +785,7 @@ const visibleMultiplierFields = computed(() => {
 }
 
 .multiplier-prefix {
-  color: #6b7280;
+  color: var(--dash-ink-3);
   font-weight: 500;
 }
 
@@ -754,9 +796,9 @@ const visibleMultiplierFields = computed(() => {
   gap: 6px 12px;
   margin-top: 6px;
   padding: 12px 14px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: var(--dash-n-25);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
 }
 
 .eligibility-formal-item {
@@ -765,8 +807,8 @@ const visibleMultiplierFields = computed(() => {
   gap: 8px;
   padding: 5px 8px;
   background: #ffffff;
-  border: 1px solid #dbeafe;
-  border-radius: 6px;
+  border: 1px solid var(--dash-accent-bg);
+  border-radius: var(--dash-r-sm);
 }
 
 .eligibility-number {
@@ -776,7 +818,7 @@ const visibleMultiplierFields = computed(() => {
   width: 20px;
   height: 20px;
   min-width: 20px;
-  background: #2563eb;
+  background: var(--dash-accent);
   color: #ffffff;
   border-radius: 50%;
   font-size: 11px;
@@ -785,27 +827,11 @@ const visibleMultiplierFields = computed(() => {
 
 .eligibility-name {
   font-size: 12.5px;
-  color: #1e3a5f;
+  color: var(--dash-brand);
   font-weight: 500;
 }
 
 @media (max-width: 768px) {
-  .modal-card {
-    max-width: calc(100vw - 20px);
-    max-height: calc(100vh - 24px);
-  }
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  .col-span-2 {
-    grid-column: span 1;
-  }
-  .form-actions {
-    flex-direction: column-reverse;
-  }
-  .form-actions .q-btn {
-    width: 100%;
-  }
   .eligibility-formal-list {
     grid-template-columns: 1fr;
   }
@@ -817,16 +843,5 @@ const visibleMultiplierFields = computed(() => {
     gap: 6px;
     align-items: flex-start;
   }
-}
-
-/* Hide number input spinners */
-.modal-content :deep(input[type=number])::-webkit-outer-spin-button,
-.modal-content :deep(input[type=number])::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.modal-content :deep(input[type=number]) {
-  -moz-appearance: textfield;
-  appearance: textfield;
 }
 </style>

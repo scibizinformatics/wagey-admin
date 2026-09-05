@@ -343,6 +343,7 @@ import { useEmployees } from '@/composables/page/useEmployees'
 import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
 import { useCompany } from '@/composables/page/useCompany'
+import { extractErrorMessage } from '@/composables/utils/http'
 import { useAdminContracts } from '@/composables/admin/useAdminContracts'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 import { useAdminPositions } from '@/composables/admin/useAdminPositions'
@@ -363,6 +364,8 @@ import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/Attenda
 import EmployeeLeaveBalanceModal from '@/components/pages/Employees/EmployeeLeaveBalanceModal.vue'
 import EmployeeCtoBalanceModal from '@/components/pages/Employees/EmployeeCtoBalanceModal.vue'
 
+import { useToast } from '@/composables/useToast'
+
 // Shared accessors — these were duplicated verbatim between this page and
 // EmployeeTable, which meant the two could disagree about the same record.
 import {
@@ -375,6 +378,7 @@ import {
 } from '@/composables/utils/employee'
 
 const $q = useQuasar()
+const toast = useToast()
 const { notifyLoaded } = useLoadedToast()
 
 // ─── Composables ──────────────────────────────────────────────────────────────
@@ -575,17 +579,10 @@ watch(
 
 watch(contractAssigned, (newVal) => {
   if (newVal) {
-    fetchEmployees()
+    refreshEmployees()
     resetContractAssigned()
   }
 })
-
-watch(
-  () => filteredEmployees.value?.length ?? 0,
-  () => {
-    employeePage.value = 1
-  },
-)
 
 watch(assignDialog, (open) => {
   if (!open) {
@@ -736,7 +733,7 @@ function clearFilter(key) {
   if (key === 'status') statusFilter.value = 'all'
   if (key === 'payrollGroup') payrollGroupFilter.value = null
   if (key === 'sort') sortBy.value = DEFAULT_SORT
-  filterEmployees()
+  filterEmployees({ resetPage: true })
 }
 
 function clearFilters() {
@@ -744,7 +741,7 @@ function clearFilters() {
   statusFilter.value = 'all'
   payrollGroupFilter.value = null
   sortBy.value = DEFAULT_SORT
-  filterEmployees()
+  filterEmployees({ resetPage: true })
 }
 
 // The card view has room for every configured leave type, so it is not subject
@@ -773,13 +770,18 @@ function formatPhilippinePhone(number) {
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
 
-const fetchEmployees = async () => {
+// Always hits the network (`force: true`) — this is the page's refresh path, so
+// it runs on open and after every mutation, and must never be answered from the
+// 5-minute list cache in useEmployees.
+const fetchEmployees = async ({ silent = false } = {}) => {
   try {
     loading.value = true
     const list = await fetchEmployeesList({ force: true })
     employees.value = list
-    filteredEmployees.value = list
-    sortEmployees()
+    // Re-apply the active search / status / group filters instead of dropping
+    // back to the unfiltered list: a refresh triggered by a row action must not
+    // silently widen what the user is looking at.
+    filterEmployees()
 
     // Clear stale contract / balance caches when the list refreshes. The payout
     // group is read off the same active contract, so it goes stale in lockstep —
@@ -793,13 +795,12 @@ const fetchEmployees = async () => {
 
     // Show table immediately — do not block on heavy per-employee fetches
     loading.value = false
-    notifyLoaded('Employees', list.length, { noun: 'employee', nounPlural: 'employees' })
+    if (!silent) {
+      notifyLoaded('Employees', list.length, { noun: 'employee', nounPlural: 'employees' })
+    }
 
     // Fetch leave types and the first page of contract / balance data in background
-    await Promise.all([
-      fetchLeaveTypes(companyId.value).catch(() => {}),
-      fetchPageData({ force: true }),
-    ])
+    await Promise.all([fetchLeaveTypes(companyId.value).catch(() => {}), fetchPageData()])
 
     // Re-resolve payout groups only if the filter that needs them is in use.
     if (payrollGroupFilter.value) {
@@ -807,13 +808,21 @@ const fetchEmployees = async () => {
       filterEmployees()
     }
   } catch (err) {
-    $q.notify({
-      type: 'negative',
-      message: err.response?.data?.detail ?? 'Failed to fetch employees',
-      position: 'top',
-    })
+    toast.error(extractErrorMessage(err, 'Failed to fetch employees'))
   } finally {
     loading.value = false
+  }
+}
+
+// Row actions (the 3-dots menu) all mutate server-side state that the table
+// renders — employment status, the active contract behind the Payout Group
+// column, leave / CTO balances — so each one re-reads the list rather than
+// patching a row in place. Silent: the action's own toast is the feedback.
+const refreshEmployees = async () => {
+  try {
+    await fetchEmployees({ silent: true })
+  } catch {
+    // fetchEmployees already surfaces its own error toast.
   }
 }
 
@@ -882,50 +891,50 @@ const fetchContracts = async (employeeList, concurrency = 20) => {
   }
 }
 
-let pageDataInFlight = null
+const runPageDataFetch = async () => {
+  const pageEmps = paginatedEmployees.value
+  if (!pageEmps.length) return
 
-// `force` skips the in-flight dedup: a refresh that has just cleared the caches
-// must not be answered by a request that computed its work list before the clear.
-const fetchPageData = async ({ force = false } = {}) => {
-  if (pageDataInFlight && !force) return pageDataInFlight
+  const uncachedContract = pageEmps.filter((emp) => {
+    const companyContracts = employeeContracts.value[companyId.value]
+    // `null` means "resolved: no active contract" — only `undefined` is unfetched.
+    return companyContracts?.[emp.id] === undefined
+  })
 
-  pageDataInFlight = (async () => {
-    const pageEmps = paginatedEmployees.value
-    if (!pageEmps.length) return
+  const uncachedBalance = pageEmps.filter((emp) => emp._balance === undefined)
 
-    const uncachedContract = pageEmps.filter((emp) => {
-      const companyContracts = employeeContracts.value[companyId.value]
-      // `null` means "resolved: no active contract" — only `undefined` is unfetched.
-      return companyContracts?.[emp.id] === undefined
-    })
+  if (!uncachedContract.length && !uncachedBalance.length) return
 
-    const uncachedBalance = pageEmps.filter((emp) => emp._balance === undefined)
-
-    if (!uncachedContract.length && !uncachedBalance.length) return
-
-    // Mark IDs as loading
-    uncachedContract.forEach((e) => loadingContractIds.value.add(e.id))
-    uncachedBalance.forEach((e) => loadingBalanceIds.value.add(e.id))
-
-    try {
-      await Promise.all([
-        uncachedContract.length ? fetchContracts(uncachedContract) : Promise.resolve(),
-        uncachedBalance.length ? fetchBalances(uncachedBalance) : Promise.resolve(),
-      ])
-    } catch {
-      // Silent
-    } finally {
-      // Clear loading state
-      uncachedContract.forEach((e) => loadingContractIds.value.delete(e.id))
-      uncachedBalance.forEach((e) => loadingBalanceIds.value.delete(e.id))
-    }
-  })()
+  // Mark IDs as loading
+  uncachedContract.forEach((e) => loadingContractIds.value.add(e.id))
+  uncachedBalance.forEach((e) => loadingBalanceIds.value.add(e.id))
 
   try {
-    return await pageDataInFlight
+    await Promise.all([
+      uncachedContract.length ? fetchContracts(uncachedContract) : Promise.resolve(),
+      uncachedBalance.length ? fetchBalances(uncachedBalance) : Promise.resolve(),
+    ])
+  } catch {
+    // Silent
   } finally {
-    pageDataInFlight = null
+    // Clear loading state
+    uncachedContract.forEach((e) => loadingContractIds.value.delete(e.id))
+    uncachedBalance.forEach((e) => loadingBalanceIds.value.delete(e.id))
   }
+}
+
+// Serialized rather than deduplicated. Each call computes its work list from
+// whatever rows are visible *at the moment it runs*, so an earlier in-flight
+// fetch can never answer for a page the user has since changed — that dedup was
+// why searching showed rows with no contract: the search's fetch was dropped in
+// favour of the initial page-1 fetch, which had already resolved page 1 only.
+let pageDataChain = Promise.resolve()
+
+const fetchPageData = () => {
+  // The trailing catch keeps one failed round from poisoning the chain (and from
+  // surfacing as an unhandled rejection) — the next call still runs.
+  pageDataChain = pageDataChain.then(runPageDataFetch, runPageDataFetch).catch(() => {})
+  return pageDataChain
 }
 
 const fetchRoles = async () => {
@@ -943,7 +952,7 @@ const fetchEmployeeDetails = async (employeeId) => {
   try {
     return await fetchEmployee(employeeId)
   } catch {
-    $q.notify({ type: 'negative', message: 'Failed to fetch employee details', position: 'top' })
+    toast.error('Failed to fetch employee details')
     return null
   }
 }
@@ -956,11 +965,7 @@ async function addEmployee(formData) {
     const formattedEmergency = formatPhilippinePhone(formData.emergency_contact)
 
     if (!formattedPhone) {
-      return $q.notify({
-        type: 'warning',
-        message: 'Invalid phone number format. Please use +639XXXXXXXXX or 09XXXXXXXXX.',
-        position: 'top',
-      })
+      return toast.warning('Invalid phone number format. Please use +639XXXXXXXXX or 09XXXXXXXXX.')
     }
 
     const payload = {
@@ -1004,42 +1009,22 @@ async function addEmployee(formData) {
             filteredEmployees.value = [...employees.value]
           }
         }
-        $q.notify({
-          type: 'positive',
-          message: 'Employee and profile picture added successfully!',
-          position: 'top',
-        })
+        toast.success('Employee and profile picture added successfully!')
       } catch {
         await fetchEmployees()
-        $q.notify({
-          type: 'warning',
-          message: 'Employee created but profile picture upload failed',
-          position: 'top',
-        })
+        toast.warning('Employee created but profile picture upload failed')
       } finally {
         uploadingAvatar.value = false
       }
     } else {
       await fetchEmployees()
-      $q.notify({ type: 'positive', message: 'Employee added successfully!', position: 'top' })
+      toast.success('Employee added successfully!')
     }
 
     resetAddForm()
     showAddModal.value = false
   } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message:
-        error.response?.data?.message ||
-        error.response?.data?.detail ||
-        error.response?.data?.error ||
-        Object.entries(error.response?.data || {})
-          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-          .join(' | ') ||
-        'Failed to add employee',
-      position: 'top',
-      timeout: 5000,
-    })
+    toast.error(addEmployeeErrorMessage(error), { timeout: 5000 })
   }
 }
 
@@ -1051,11 +1036,7 @@ const saveEmployee = async (formData) => {
     const formattedEmergency = formatPhilippinePhone(formData.emergency_contact)
 
     if (!formattedPhone) {
-      return $q.notify({
-        type: 'warning',
-        message: 'Invalid phone number format. Please use +639XXXXXXXXX or 09XXXXXXXXX.',
-        position: 'top',
-      })
+      return toast.warning('Invalid phone number format. Please use +639XXXXXXXXX or 09XXXXXXXXX.')
     }
 
     const payload = {
@@ -1096,37 +1077,24 @@ const saveEmployee = async (formData) => {
           }
         }
       } catch {
-        $q.notify({
-          type: 'warning',
-          message: 'Employee updated but profile picture upload failed',
-          position: 'top',
-        })
+        toast.warning('Employee updated but profile picture upload failed')
         const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
         if (index !== -1) employees.value[index] = updatedEmployee
-        filteredEmployees.value = [...employees.value]
-        sortEmployees()
+        filterEmployees()
       } finally {
         uploadingAvatar.value = false
       }
     } else {
       const index = employees.value.findIndex((emp) => emp.id === updatedEmployee.id)
       if (index !== -1) employees.value[index] = updatedEmployee
-      filteredEmployees.value = [...employees.value]
-      sortEmployees()
+      filterEmployees()
     }
 
-    $q.notify({
-      type: 'positive',
-      message: `Employee ${getFullName(selectedEmployee.value)} updated successfully.`,
-      position: 'top',
-    })
+    toast.success(`Employee ${getFullName(selectedEmployee.value)} updated successfully.`)
     showEditModal.value = false
+    await refreshEmployees()
   } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message: error.response?.data?.detail ?? 'Failed to update employee',
-      position: 'top',
-    })
+    toast.error(extractErrorMessage(error, 'Failed to update employee'))
   }
 }
 
@@ -1226,14 +1194,10 @@ async function handleAssignSubmit() {
     const { successCount, failCount } = await bulkAssignContract(ids)
     selectedEmployees.value = []
     if (successCount > 0) {
-      $q.notify({
-        type: 'positive',
-        message: `Contract assigned to ${successCount} employee(s)`,
-        position: 'top',
-      })
+      toast.success(`Contract assigned to ${successCount} employee(s)`)
     }
     if (failCount > 0) {
-      $q.notify({ type: 'warning', message: `${failCount} assignment(s) failed`, position: 'top' })
+      toast.warning(`${failCount} assignment(s) failed`)
     }
   } else {
     await assignContract()
@@ -1243,7 +1207,7 @@ async function handleAssignSubmit() {
 async function handleBulkTerminateDialog() {
   const active = selectedActiveEmployees.value
   if (active.length === 0) {
-    $q.notify({ type: 'warning', message: 'No active employees selected', position: 'top' })
+    toast.warning('No active employees selected')
     return
   }
 
@@ -1259,14 +1223,10 @@ async function handleBulkTerminateDialog() {
     const { successCount, failCount } = await bulkTerminateEmployees(ids)
     selectedEmployees.value = []
     if (successCount > 0) {
-      $q.notify({
-        type: 'positive',
-        message: `${successCount} employee(s) terminated`,
-        position: 'top',
-      })
+      toast.success(`${successCount} employee(s) terminated`)
     }
     if (failCount > 0) {
-      $q.notify({ type: 'warning', message: `${failCount} termination(s) failed`, position: 'top' })
+      toast.warning(`${failCount} termination(s) failed`)
     }
   })
 }
@@ -1298,6 +1258,33 @@ async function bulkTerminateEmployees(employeeIds) {
   sortEmployees()
 
   return { successCount, failCount }
+}
+
+/**
+ * Why this form does not just call `extractErrorMessage`.
+ *
+ * The create-employee endpoint refuses on several fields at once — username
+ * taken *and* email malformed — and the add modal marks none of them inline, so
+ * the toast is the only place a person can read them. `extractErrorMessage`
+ * deliberately returns the first field error only, which would hide the rest.
+ *
+ * The named keys and the shared formatter still do the work at either end: the
+ * formatter is what catches a Django HTML error page, a 5xx and a dropped
+ * connection, none of which a walk over field names can describe.
+ */
+function addEmployeeErrorMessage(error) {
+  const data = error?.response?.data
+  const named = data?.message || data?.detail || data?.error
+  if (named) return String(named)
+
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const fields = Object.entries(data)
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+      .join(' | ')
+    if (fields) return fields
+  }
+
+  return extractErrorMessage(error, 'Failed to add employee')
 }
 
 const resetAddForm = () => {
@@ -1344,30 +1331,20 @@ const terminateEmployee = async () => {
     }
     const response = await terminateEmployeeApi(employeeToTerminate.value.id, payload)
 
+    // Optimistic patch so the row updates before the refetch lands; the
+    // authoritative re-read happens below.
     const employeeIndex = employees.value.findIndex((e) => e.id === employeeToTerminate.value.id)
     if (employeeIndex !== -1) {
       employees.value[employeeIndex] = { ...response, is_active: false, status: 'terminated' }
     }
+    filterEmployees()
 
-    filteredEmployees.value = [...employees.value]
-    sortEmployees()
-
-    $q.notify({
-      type: 'positive',
-      message: `Employee ${getFullName(employeeToTerminate.value)} has been terminated`,
-      position: 'top',
-    })
+    toast.success(`Employee ${getFullName(employeeToTerminate.value)} has been terminated`)
     showTerminateDialog.value = false
     employeeToTerminate.value = {}
+    await refreshEmployees()
   } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message:
-        error.response?.data?.detail ??
-        error.response?.data?.message ??
-        'Failed to terminate employee',
-      position: 'top',
-    })
+    toast.error(extractErrorMessage(error, 'Failed to terminate employee'))
   } finally {
     terminating.value = false
   }
@@ -1388,26 +1365,14 @@ const restoreEmployee = async () => {
     if (employeeIndex !== -1) {
       employees.value[employeeIndex] = { ...response, is_active: true, status: 'active' }
     }
+    filterEmployees()
 
-    filteredEmployees.value = [...employees.value]
-    sortEmployees()
-
-    $q.notify({
-      type: 'positive',
-      message: `Employee ${getFullName(employeeToRestore.value)} has been restored successfully.`,
-      position: 'top',
-    })
+    toast.success(`Employee ${getFullName(employeeToRestore.value)} has been restored successfully.`)
     showRestoreDialog.value = false
     employeeToRestore.value = {}
+    await refreshEmployees()
   } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message:
-        error.response?.data?.detail ??
-        error.response?.data?.message ??
-        'Failed to restore employee',
-      position: 'top',
-    })
+    toast.error(extractErrorMessage(error, 'Failed to restore employee'))
   } finally {
     restoring.value = false
   }
@@ -1448,7 +1413,7 @@ let searchTimer = null
 
 function onSearchInput() {
   clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => filterEmployees(), 180)
+  searchTimer = setTimeout(() => filterEmployees({ resetPage: true }), 180)
 }
 
 const showSearchHint = computed(
@@ -1484,7 +1449,11 @@ const onPageSizeChange = (newSize) => {
   employeePage.value = 1
 }
 
-const filterEmployees = () => {
+// `resetPage` is for user-driven filter changes (typing a search, picking a
+// status): the result set is new, so page 1 is where the matches are. A refresh
+// or an in-place row patch passes it as false and keeps the reader where they
+// were — clamped, so a list that shrank never leaves them on an empty page.
+const filterEmployees = ({ resetPage = false } = {}) => {
   let filtered = employees.value
 
   // Optional-chained because the search field is `clearable`: Quasar sets the
@@ -1516,6 +1485,13 @@ const filterEmployees = () => {
 
   filteredEmployees.value = filtered
   sortEmployees()
+
+  if (resetPage) {
+    employeePage.value = 1
+  } else {
+    const maxPage = Math.max(1, Math.ceil(filtered.length / employeePageSize.value))
+    if (employeePage.value > maxPage) employeePage.value = maxPage
+  }
 }
 
 const sortEmployees = () => {
@@ -1665,14 +1641,10 @@ const openCtoBalanceModal = (emp) => {
 const handleAddLeaveBalance = async (payload) => {
   try {
     await addLeaveBalance(payload)
-    $q.notify({
-      type: 'positive',
-      message: 'Leave balance added successfully',
-      icon: 'check_circle',
-      position: 'top',
-    })
+    toast.success('Leave balance added successfully', { icon: 'check_circle' })
     showLeaveBalanceModal.value = false
-    // Refresh balance for this employee
+    // Refresh this row first so the grant shows immediately, then re-read the
+    // whole list so the rest of the table is current too.
     const empId = selectedBalanceEmployee.value?.id
     if (empId) {
       const updated = await fetchEmployeeBalances(companyId.value, empId)
@@ -1684,23 +1656,20 @@ const handleAddLeaveBalance = async (payload) => {
         }
       }
     }
+    await refreshEmployees()
   } catch (e) {
-    const msg = e.response?.data?.message || e.response?.data?.detail || e.message || 'Failed to add leave balance'
-    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+    const msg = extractErrorMessage(e, 'Failed to add leave balance')
+    toast.error(msg, { icon: 'error' })
   }
 }
 
 const handleAddCtoBalance = async (payload) => {
   try {
     await addCtoBalance(payload)
-    $q.notify({
-      type: 'positive',
-      message: 'CTO balance added successfully',
-      icon: 'check_circle',
-      position: 'top',
-    })
+    toast.success('CTO balance added successfully', { icon: 'check_circle' })
     showCtoBalanceModal.value = false
-    // Refresh balance for this employee
+    // Refresh this row first so the grant shows immediately, then re-read the
+    // whole list so the rest of the table is current too.
     const empId = selectedBalanceEmployee.value?.id
     if (empId) {
       const updated = await fetchEmployeeBalances(companyId.value, empId)
@@ -1712,9 +1681,10 @@ const handleAddCtoBalance = async (payload) => {
         }
       }
     }
+    await refreshEmployees()
   } catch (e) {
-    const msg = e.response?.data?.message || e.response?.data?.detail || e.message || 'Failed to add CTO balance'
-    $q.notify({ type: 'negative', message: msg, icon: 'error', position: 'top' })
+    const msg = extractErrorMessage(e, 'Failed to add CTO balance')
+    toast.error(msg, { icon: 'error' })
   }
 }
 
@@ -1729,7 +1699,7 @@ watch(sortBy, () => {
 // The status and site selects re-run the whole filter chain. Sort has its own
 // watcher above because it only needs to reorder, not re-filter.
 watch([statusFilter, payrollGroupFilter], () => {
-  filterEmployees()
+  filterEmployees({ resetPage: true })
 })
 
 // Contracts are only fetched once a payout group is actually selected, then
@@ -1737,50 +1707,61 @@ watch([statusFilter, payrollGroupFilter], () => {
 watch(payrollGroupFilter, async (groupId) => {
   if (!groupId) return
   await ensurePayoutGroups(employees.value.map((emp) => emp.id))
-  filterEmployees()
+  filterEmployees({ resetPage: true })
 })
 
-// Lazy-load contract / balance data whenever the visible page changes
-watch(
-  [employeePage, employeePageSize],
-  () => {
-    if (filteredEmployees.value.length > 0) {
-      fetchPageData()
-    }
-  },
-  { immediate: false },
-)
+// Lazy-load contract / balance data for whatever rows are actually on screen.
+// Keyed on the visible ids, not on [employeePage, employeePageSize]: searching,
+// filtering and sorting all change which employees are rendered without touching
+// the page number, and those rows showed a blank Payout Group / Contract column
+// because nothing ever fetched them. The id key also makes this idempotent —
+// fetchContracts / fetchBalances reassign `filteredEmployees` to re-render, which
+// would re-trigger a watcher that keyed on array identity.
+const visibleEmployeeKey = computed(() => paginatedEmployees.value.map((emp) => emp.id).join(','))
 
+watch(visibleEmployeeKey, (key) => {
+  if (key) fetchPageData()
+})
+
+// Runs once on mount (`immediate: true`) and again on every workspace switch, so
+// opening the page always re-reads the list from the network rather than showing
+// whatever was on screen last time. On a switch the previously loaded rows, the
+// contract cache and the payout-group filter are all dropped first — ids from the
+// other company mean nothing here.
 let initialised = false
 watch(
   companyId,
-  async (newId) => {
-    if (newId && !initialised) {
-      initialised = true
-      await Promise.all([
-        fetchRoles(),
-        // Feeds the payout-group filter; replaced fetchSites() here.
-        fetchPayrollGroups(),
-        fetchContractTypes(),
-        fetchDepartments(),
-        fetchEligibilityOptions(),
-        fetchPositions(),
-        fetchHolidayTypes(),
-        fetchContributions(),
-      ])
-      await fetchEmployees()
+  async (newId, oldId) => {
+    if (!newId) return
+    if (initialised && newId === oldId) return
+
+    const switchingCompany = initialised
+    initialised = true
+
+    if (switchingCompany) {
+      employees.value = []
+      filteredEmployees.value = []
+      employeeContracts.value = {}
+      selectedEmployees.value = []
+      payrollGroupFilter.value = null
+      employeePage.value = 1
     }
+
+    await Promise.all([
+      fetchRoles(),
+      // Feeds the payout-group filter; replaced fetchSites() here.
+      fetchPayrollGroups(),
+      fetchContractTypes(),
+      fetchDepartments(),
+      fetchEligibilityOptions(),
+      fetchPositions(),
+      fetchHolidayTypes(),
+      fetchContributions(),
+    ])
+    await fetchEmployees()
   },
   { immediate: true },
 )
-
-watch(companyId, (newId, oldId) => {
-  if (newId && oldId && newId !== oldId) {
-    fetchContractTypes()
-  }
-})
-
-// Initial data load handled by {immediate: true} watcher above
 </script>
 
 <style scoped>
@@ -2231,18 +2212,4 @@ watch(companyId, (newId, oldId) => {
   font-weight: 600;
 }
 
-/* Custom Multiplier Warning Dialog Styles */
-.custom-multiplier-warning-dialog .q-dialog__title {
-  color: #92400e;
-  font-weight: 600;
-  font-size: 18px;
-}
-.custom-multiplier-warning-dialog .q-dialog__message {
-  font-size: 14px;
-  line-height: 1.5;
-}
-.custom-multiplier-warning-dialog .q-card {
-  max-width: 480px;
-  border-radius: 12px;
-}
 </style>

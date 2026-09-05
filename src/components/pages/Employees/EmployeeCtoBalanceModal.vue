@@ -1,45 +1,61 @@
 <template>
-  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
-    <q-card class="modal-card">
-      <q-card-section class="modal-header">
-        <div class="modal-title-section">
-          <q-avatar size="44px" class="modal-avatar-icon modal-avatar-cto">
+  <q-dialog
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
+    persistent
+  >
+    <q-card class="dash-modal">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <q-avatar size="38px" class="dash-modal__head-icon">
             <q-icon name="more_time" size="22px" />
           </q-avatar>
-          <div>
-            <div class="modal-title">Add CTO Balance</div>
-            <div class="modal-subtitle">{{ employeeName }}</div>
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">Add CTO balance</div>
+            <div class="dash-modal__sub">{{ employeeName }}</div>
           </div>
         </div>
-        <q-btn icon="close" flat round dense class="modal-close-btn" @click="cancel" />
+        <q-btn icon="close" flat round dense aria-label="Close" @click="cancel" />
       </q-card-section>
 
-      <q-card-section class="modal-content">
-        <q-form @submit="submit" class="edit-form">
+      <q-form @submit="submit" class="dash-modal__form">
+        <q-card-section class="dash-modal__body">
           <div class="form-section">
-            <div class="section-title">CTO Balance Details</div>
-            <div class="form-grid">
-              <q-input
-                v-model.number="form.hours"
-                type="number"
-                step="0.01"
-                label="Hours *"
-                outlined
-                dense
-                :rules="[
-                  (val) => val !== null && val !== '' || 'Hours is required',
-                  (val) => !isNaN(val) || 'Must be a number',
-                ]"
-              />
+            <div class="dash-modal__section-title">CTO balance details</div>
+            <div class="dash-modal__grid">
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Hours<span class="dash-modal__req">*</span></span
+                >
+                <q-input
+                  v-model.number="form.hours"
+                  type="number"
+                  step="0.01"
+                  outlined
+                  dense
+                  :rules="[
+                    (val) => (val !== null && val !== '') || 'Hours is required',
+                    (val) => !isNaN(val) || 'Must be a number',
+                  ]"
+                  hide-bottom-space
+                  class="dash-field"
+                />
+              </label>
             </div>
           </div>
+        </q-card-section>
 
-          <div class="form-actions">
-            <q-btn label="Cancel" flat class="cancel-btn" @click="cancel" />
-            <q-btn label="Add Balance" type="submit" unelevated class="submit-btn" :loading="submitting" />
-          </div>
-        </q-form>
-      </q-card-section>
+        <q-card-actions class="dash-modal__foot">
+          <q-btn label="Cancel" flat class="dash-modal__cancel" @click="cancel" />
+          <q-btn
+            label="Add balance"
+            type="submit"
+            unelevated
+            class="dash-modal__submit"
+            :loading="submitting"
+          />
+        </q-card-actions>
+      </q-form>
     </q-card>
   </q-dialog>
 </template>
@@ -62,7 +78,11 @@ const form = ref({
 const employeeName = computed(() => {
   const emp = props.employee
   if (!emp) return 'Unknown'
-  return `${emp.user?.first_name || ''} ${emp.user?.last_name || ''}`.trim() || emp.user?.username || 'Unknown'
+  return (
+    `${emp.user?.first_name || ''} ${emp.user?.last_name || ''}`.trim() ||
+    emp.user?.username ||
+    'Unknown'
+  )
 })
 
 watch(
@@ -91,155 +111,4 @@ const cancel = () => {
 }
 </script>
 
-<style scoped>
-.modal-card {
-  border-radius: 16px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
-  width: 560px;
-  max-width: 95vw !important;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  background: #102335 !important;
-  border-bottom: none !important;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-}
-
-.modal-header .q-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-.modal-header .q-btn:hover {
-  color: #fff !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-}
-
-.modal-title-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.modal-avatar-icon {
-  border-radius: 10px !important;
-  flex-shrink: 0;
-}
-
-.modal-avatar-cto {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: #ffffff !important;
-}
-
-.modal-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.modal-subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 2px;
-}
-
-.modal-close-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-  flex-shrink: 0;
-}
-
-.modal-content {
-  padding: 20px !important;
-  overflow-y: auto;
-  max-height: 70vh;
-  flex: 1;
-  background: #f9fafb !important;
-}
-
-.modal-content::-webkit-scrollbar {
-  width: 4px;
-}
-.modal-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-.modal-content::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 4px;
-}
-
-.modal-content :deep(.q-field__control) {
-  background: #ffffff !important;
-  border-radius: 10px !important;
-}
-.modal-content :deep(.q-field--outlined .q-field__control:before) {
-  border-color: #e2e8f0 !important;
-  border-radius: 10px !important;
-}
-.modal-content :deep(.q-field--outlined .q-field__control:hover:before) {
-  border-color: #2563eb !important;
-}
-.modal-content :deep(.q-field--outlined.q-field--focused .q-field__control:before) {
-  border-color: #2563eb !important;
-  border-width: 2px !important;
-}
-
-.form-section {
-  margin-bottom: 16px;
-}
-
-.section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 10px;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 10px;
-  padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.cancel-btn {
-  text-transform: none;
-  font-weight: 500;
-  font-size: 13px;
-  border-radius: 8px;
-  min-height: 36px;
-  padding: 0 16px;
-  color: #475569;
-}
-
-.submit-btn {
-  text-transform: none;
-  font-weight: 500;
-  font-size: 13px;
-  border-radius: 8px;
-  min-height: 36px;
-  padding: 0 16px;
-  background: #102335 !important;
-  color: #ffffff !important;
-}
-
-@media (max-width: 480px) {
-  .modal-card {
-    width: 95vw;
-  }
-}
-</style>
+<style scoped></style>

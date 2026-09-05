@@ -4,21 +4,23 @@
     :maximized="$q.screen.lt.sm"
     @update:model-value="$emit('update:modelValue', $event)"
   >
-    <q-card class="inv-view">
+    <q-card class="dash-modal dash-modal--sm">
       <!-- ── Head ───────────────────────────────────────────────────────────
            The recipient is named here rather than in the body: the dialog opens
            from a table row, and once it covers the table nothing else on screen
            says whose invitation this is. -->
-      <q-card-section class="inv-view__head">
-        <span class="inv-view__avatar">{{ inviteInitials(invitation?.email) }}</span>
-        <div class="inv-view__titles">
-          <div class="inv-view__email">{{ invitation?.email || 'Invitation' }}</div>
-          <div class="inv-view__sub">{{ invitation?.company || 'No company on record' }}</div>
+      <q-card-section class="dash-modal__head">
+        <span class="dash-modal__head-icon inv-view__avatar">{{
+          inviteInitials(invitation?.email)
+        }}</span>
+        <div class="dash-modal__head-titles">
+          <div class="dash-modal__title">{{ invitation?.email || 'Invitation' }}</div>
+          <div class="dash-modal__sub">{{ invitation?.company || 'No company on record' }}</div>
         </div>
         <q-btn flat round dense icon="close" aria-label="Close" @click="close" />
       </q-card-section>
 
-      <q-card-section class="inv-view__body">
+      <q-card-section class="dash-modal__body">
         <!-- Status leads, with the sentence that explains what it means for this
              invite — a chip on its own answers "which state", not "so what". -->
         <div class="inv-view__status">
@@ -73,6 +75,10 @@
           </div>
         </div>
       </q-card-section>
+
+      <q-card-actions class="dash-modal__foot">
+        <q-btn flat no-caps label="Close" class="dash-modal__cancel" @click="close" />
+      </q-card-actions>
     </q-card>
   </q-dialog>
 </template>
@@ -136,71 +142,10 @@ const close = () => emit('update:modelValue', false)
 </script>
 
 <style scoped>
-.inv-view {
-  width: 460px;
-  max-width: 95vw;
-  border-radius: var(--dash-r-lg);
-  overflow: hidden;
-}
-
-/* ── Head ── */
-.inv-view__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 15px 18px;
-  background: var(--dash-brand);
-}
+/* A person's initials, so this tile is a disc rather than the rounded square the
+   glyph headers use. Everything else about it comes from `dash-modal__head-icon`. */
 .inv-view__avatar {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  flex: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.inv-view__titles {
-  flex: 1;
-  min-width: 0;
-}
-.inv-view__email {
-  font-size: 15.5px;
-  font-weight: 600;
-  color: #ffffff;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.inv-view__sub {
-  margin-top: 1px;
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.78);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.inv-view__head :deep(.q-btn) {
-  color: rgba(255, 255, 255, 0.8);
-  flex: none;
-}
-.inv-view__head :deep(.q-btn:hover) {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-/* ── Body ── */
-.inv-view__body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px;
-  max-height: 68vh;
-  overflow-y: auto;
+  border-radius: var(--dash-r-pill);
 }
 
 .inv-view__status {
@@ -234,11 +179,10 @@ const close = () => emit('update:modelValue', false)
   min-width: 0;
 }
 .inv-view__fact dt {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 500;
-  color: var(--dash-ink-4);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--dash-ink-3);
+  letter-spacing: 0;
 }
 .inv-view__fact dd {
   margin: 3px 0 0;
@@ -263,11 +207,10 @@ const close = () => emit('update:modelValue', false)
   border-radius: var(--dash-r-md);
 }
 .inv-view__code-label {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 500;
-  color: var(--dash-ink-4);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--dash-ink-3);
+  letter-spacing: 0;
 }
 .inv-view__code-row {
   display: flex;
@@ -291,15 +234,8 @@ const close = () => emit('update:modelValue', false)
 }
 
 @media (max-width: 599px) {
-  .inv-view {
-    width: 100%;
-    border-radius: 0;
-  }
   .inv-view__facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .inv-view__body {
-    max-height: none;
   }
 }
 </style>

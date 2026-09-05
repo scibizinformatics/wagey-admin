@@ -1,20 +1,30 @@
 <template>
-  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
-    <q-card class="modal-card add-modal">
-      <q-card-section class="modal-header">
-        <div class="modal-title-section">
-          <q-avatar size="44px" class="modal-avatar-icon modal-avatar-add">
+  <q-dialog
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
+    persistent
+  >
+    <q-card class="dash-modal dash-modal--md">
+      <q-card-section class="dash-modal__head">
+        <div class="dash-modal__head-main">
+          <q-avatar size="38px" class="dash-modal__head-icon">
             <q-icon name="person_add" size="22px" />
           </q-avatar>
-          <div>
-            <div class="modal-title">Add New Employee</div>
-            <div class="modal-subtitle" id="add-step-label">
+          <div class="dash-modal__head-titles">
+            <div class="dash-modal__title">Add employee</div>
+            <div class="dash-modal__sub" id="add-step-label">
               Step {{ step }} of 3 —
-              {{ step === 1 ? 'User & personal information' : step === 2 ? 'Employment information' : 'Review & confirm' }}
+              {{
+                step === 1
+                  ? 'User & personal information'
+                  : step === 2
+                    ? 'Employment information'
+                    : 'Review & confirm'
+              }}
             </div>
           </div>
         </div>
-        <q-btn icon="close" flat round dense class="modal-close-btn" @click="cancel" />
+        <q-btn icon="close" flat round dense aria-label="Close" @click="cancel" />
       </q-card-section>
 
       <!-- Stepper dots -->
@@ -24,8 +34,8 @@
         <span :class="['dot', step >= 3 ? 'dot-active' : '']"></span>
       </div>
 
-      <q-card-section class="modal-content">
-        <q-form @submit="submit" class="edit-form" ref="formRef">
+      <q-form @submit="submit" class="dash-modal__form" ref="formRef">
+        <q-card-section class="dash-modal__body">
           <!-- Step 1: User Info -->
           <div v-show="step === 1">
             <!-- Avatar Upload Section -->
@@ -37,37 +47,202 @@
                 <q-avatar v-else size="90px" class="avatar-placeholder">
                   <q-icon name="person" size="40px" />
                 </q-avatar>
-                <input type="file" ref="avatarInput" accept="image/*" style="display: none" @change="onAvatarSelect" />
+                <input
+                  type="file"
+                  ref="avatarInput"
+                  accept="image/*"
+                  style="display: none"
+                  @change="onAvatarSelect"
+                />
                 <div class="avatar-actions">
-                  <q-btn flat dense color="primary" icon="upload" label="Upload Photo" @click="$refs.avatarInput.click()" />
-                  <q-btn v-if="avatarPreview" flat dense color="negative" icon="delete" label="Remove" @click="removeAvatar" />
+                  <q-btn
+                    flat
+                    dense
+                    color="primary"
+                    icon="upload"
+                    label="Upload photo"
+                    @click="$refs.avatarInput.click()"
+                  />
+                  <q-btn
+                    v-if="avatarPreview"
+                    flat
+                    dense
+                    color="negative"
+                    icon="delete"
+                    label="Remove"
+                    @click="removeAvatar"
+                  />
                 </div>
                 <div class="avatar-hint">Max 5MB · JPG, PNG, GIF</div>
               </div>
             </div>
 
             <div class="form-section">
-              <div class="section-title">User information</div>
-              <div class="form-grid">
-                <q-input v-model="form.user.username" label="Username *" outlined dense :rules="[(val) => !!val || 'Username is required']" />
-                <q-input v-model="form.user.email" label="Email *" type="email" outlined dense :rules="[(val) => !!val || 'Email is required', (val) => /.+@.+\..+/.test(val) || 'Please enter a valid email']" />
-                <q-input v-model="form.user.first_name" label="First Name *" outlined dense :rules="[(val) => !!val || 'First name is required']" />
-                <q-input v-model="form.user.middle_name" label="Middle Name" outlined dense />
-                <q-input v-model="form.user.last_name" label="Last Name *" outlined dense :rules="[(val) => !!val || 'Last name is required']" />
-                <q-input v-model="form.password" label="Password *" type="password" outlined dense :rules="[(val) => !!val || 'Password is required', (val) => val.length >= 8 || 'Min 8 characters']" />
-                <q-input v-model="confirmPassword" label="Confirm Password *" type="password" outlined dense :rules="[(val) => !!val || 'Please confirm password', (val) => val === form.password || 'Passwords do not match']" />
+              <div class="dash-modal__section-title">User information</div>
+              <div class="dash-modal__grid">
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label"
+                    >Username<span class="dash-modal__req">*</span></span
+                  >
+                  <q-input
+                    v-model="form.user.username"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'Username is required']"
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label"
+                    >Email<span class="dash-modal__req">*</span></span
+                  >
+                  <q-input
+                    v-model="form.user.email"
+                    type="email"
+                    outlined
+                    dense
+                    :rules="[
+                      (val) => !!val || 'Email is required',
+                      (val) => /.+@.+\..+/.test(val) || 'Please enter a valid email',
+                    ]"
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label"
+                    >First name<span class="dash-modal__req">*</span></span
+                  >
+                  <q-input
+                    v-model="form.user.first_name"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'First name is required']"
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Middle name</span>
+                  <q-input
+                    v-model="form.user.middle_name"
+                    outlined
+                    dense
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label"
+                    >Last name<span class="dash-modal__req">*</span></span
+                  >
+                  <q-input
+                    v-model="form.user.last_name"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'Last name is required']"
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label"
+                    >Password<span class="dash-modal__req">*</span></span
+                  >
+                  <q-input
+                    v-model="form.password"
+                    type="password"
+                    outlined
+                    dense
+                    :rules="[
+                      (val) => !!val || 'Password is required',
+                      (val) => val.length >= 8 || 'Min 8 characters',
+                    ]"
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label"
+                    >Confirm password<span class="dash-modal__req">*</span></span
+                  >
+                  <q-input
+                    v-model="confirmPassword"
+                    type="password"
+                    outlined
+                    dense
+                    :rules="[
+                      (val) => !!val || 'Please confirm password',
+                      (val) => val === form.password || 'Passwords do not match',
+                    ]"
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
               </div>
             </div>
 
             <!-- Personal Information Section -->
             <div class="form-section">
-              <div class="section-title">Personal Information</div>
-              <div class="form-grid">
-                <q-select v-model="form.civil_status" :options="civilStatusOptions" label="Civil Status" outlined dense />
-                <q-input v-model="form.birthday" label="Birthday" type="date" outlined dense />
-                <q-input v-model="form.phone_number" label="Phone Number" outlined dense mask="###########" />
-                <q-input v-model="form.emergency_contact" label="Emergency Contact" outlined dense />
-                <q-input v-model="form.address" label="Address" outlined dense type="textarea" rows="2" class="col-span-2" />
+              <div class="dash-modal__section-title">Personal information</div>
+              <div class="dash-modal__grid">
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Civil status</span>
+                  <q-select
+                    v-model="form.civil_status"
+                    :options="civilStatusOptions"
+                    outlined
+                    dense
+                    hide-bottom-space
+                    class="dash-field"
+                    popup-content-class="dash-popup dash-popup--modal"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Birthday</span>
+                  <q-input
+                    v-model="form.birthday"
+                    type="date"
+                    outlined
+                    dense
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Phone number</span>
+                  <q-input
+                    v-model="form.phone_number"
+                    outlined
+                    dense
+                    mask="###########"
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Emergency contact</span>
+                  <q-input
+                    v-model="form.emergency_contact"
+                    outlined
+                    dense
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Address</span>
+                  <q-input
+                    v-model="form.address"
+                    outlined
+                    dense
+                    type="textarea"
+                    rows="2"
+                    class="dash-field dash-modal__span-2"
+                    hide-bottom-space
+                  />
+                </label>
               </div>
             </div>
           </div>
@@ -75,11 +250,49 @@
           <!-- Step 2: Employment Info -->
           <div v-show="step === 2">
             <div class="form-section">
-              <div class="section-title">Employment information</div>
-              <div class="form-grid">
-                <q-select v-model="form.user_role" :options="roleOptions" option-label="name" option-value="id" label="Role *" outlined dense :rules="[(val) => !!val || 'Role is required']" />
-                <q-input v-model="form.bank_acct" label="Bank Account" outlined dense />
-                <q-select v-model="form.timezone" :options="timezoneOptions" label="Timezone" outlined dense use-input @filter="filterTimezones" />
+              <div class="dash-modal__section-title">Employment information</div>
+              <div class="dash-modal__grid">
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label"
+                    >Role<span class="dash-modal__req">*</span></span
+                  >
+                  <q-select
+                    v-model="form.user_role"
+                    :options="roleOptions"
+                    option-label="name"
+                    option-value="id"
+                    outlined
+                    dense
+                    :rules="[(val) => !!val || 'Role is required']"
+                    hide-bottom-space
+                    class="dash-field"
+                    popup-content-class="dash-popup dash-popup--modal"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Bank account</span>
+                  <q-input
+                    v-model="form.bank_acct"
+                    outlined
+                    dense
+                    hide-bottom-space
+                    class="dash-field"
+                  />
+                </label>
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Timezone</span>
+                  <q-select
+                    v-model="form.timezone"
+                    :options="timezoneOptions"
+                    outlined
+                    dense
+                    use-input
+                    @filter="filterTimezones"
+                    hide-bottom-space
+                    class="dash-field"
+                    popup-content-class="dash-popup dash-popup--modal"
+                  />
+                </label>
               </div>
             </div>
           </div>
@@ -87,30 +300,79 @@
           <!-- Step 3: Review & Confirm -->
           <div v-show="step === 3">
             <div class="form-section">
-              <div class="section-title">Review & Confirm</div>
+              <div class="dash-modal__section-title">Review and confirm</div>
               <div class="detail-grid-cards">
-                <div class="detail-card"><div class="detail-card-label">Username</div><div class="detail-card-value">{{ form.user.username || '—' }}</div></div>
-                <div class="detail-card"><div class="detail-card-label">Email</div><div class="detail-card-value">{{ form.user.email || '—' }}</div></div>
-                <div class="detail-card"><div class="detail-card-label">Full Name</div><div class="detail-card-value">{{ [form.user.first_name, form.user.middle_name, form.user.last_name].filter(Boolean).join(' ') || '—' }}</div></div>
-                <div class="detail-card"><div class="detail-card-label">Role</div><div class="detail-card-value">{{ form.user_role?.name || '—' }}</div></div>
-                <div class="detail-card"><div class="detail-card-label">Civil Status</div><div class="detail-card-value">{{ form.civil_status || '—' }}</div></div>
-                <div class="detail-card"><div class="detail-card-label">Birthday</div><div class="detail-card-value">{{ form.birthday || '—' }}</div></div>
-                <div class="detail-card"><div class="detail-card-label">Phone Number</div><div class="detail-card-value">{{ form.phone_number || '—' }}</div></div>
-                <div class="detail-card"><div class="detail-card-label">Bank Account</div><div class="detail-card-value">{{ form.bank_acct || '—' }}</div></div>
-                <div class="detail-card"><div class="detail-card-label">Timezone</div><div class="detail-card-value">{{ form.timezone || '—' }}</div></div>
-                <div class="detail-card detail-card-full"><div class="detail-card-label">Address</div><div class="detail-card-value">{{ form.address || '—' }}</div></div>
+                <div class="detail-card">
+                  <div class="detail-card-label">Username</div>
+                  <div class="detail-card-value">{{ form.user.username || '—' }}</div>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-card-label">Email</div>
+                  <div class="detail-card-value">{{ form.user.email || '—' }}</div>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-card-label">Full name</div>
+                  <div class="detail-card-value">
+                    {{
+                      [form.user.first_name, form.user.middle_name, form.user.last_name]
+                        .filter(Boolean)
+                        .join(' ') || '—'
+                    }}
+                  </div>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-card-label">Role</div>
+                  <div class="detail-card-value">{{ form.user_role?.name || '—' }}</div>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-card-label">Civil status</div>
+                  <div class="detail-card-value">{{ form.civil_status || '—' }}</div>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-card-label">Birthday</div>
+                  <div class="detail-card-value">{{ form.birthday || '—' }}</div>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-card-label">Phone number</div>
+                  <div class="detail-card-value">{{ form.phone_number || '—' }}</div>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-card-label">Bank account</div>
+                  <div class="detail-card-value">{{ form.bank_acct || '—' }}</div>
+                </div>
+                <div class="detail-card">
+                  <div class="detail-card-label">Timezone</div>
+                  <div class="detail-card-value">{{ form.timezone || '—' }}</div>
+                </div>
+                <div class="detail-card detail-card-full">
+                  <div class="detail-card-label">Address</div>
+                  <div class="detail-card-value">{{ form.address || '—' }}</div>
+                </div>
               </div>
             </div>
           </div>
+        </q-card-section>
 
-          <div class="form-actions">
-            <q-btn v-if="step > 1" label="Back" flat class="cancel-btn" @click="step--" />
-            <q-btn label="Cancel" flat class="cancel-btn" @click="cancel" />
-            <q-btn v-if="step < 3" label="Next" unelevated class="submit-btn" @click="step++" />
-            <q-btn v-else label="Add Employee" type="submit" unelevated class="submit-btn" :loading="saving || uploadingAvatar" />
-          </div>
-        </q-form>
-      </q-card-section>
+        <q-card-actions class="dash-modal__foot">
+          <q-btn v-if="step > 1" label="Back" flat class="dash-modal__cancel" @click="step--" />
+          <q-btn label="Cancel" flat class="dash-modal__cancel" @click="cancel" />
+          <q-btn
+            v-if="step < 3"
+            label="Next"
+            unelevated
+            class="dash-modal__submit"
+            @click="step++"
+          />
+          <q-btn
+            v-else
+            label="Add employee"
+            type="submit"
+            unelevated
+            class="dash-modal__submit"
+            :loading="saving || uploadingAvatar"
+          />
+        </q-card-actions>
+      </q-form>
     </q-card>
   </q-dialog>
 </template>
@@ -121,11 +383,25 @@ import { ref, watch } from 'vue'
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   roleOptions: { type: Array, default: () => [] },
-  civilStatusOptions: { type: Array, default: () => ['Single', 'Married', 'Divorced', 'Widowed', 'Separated'] },
-  timezoneOptions: { type: Array, default: () => [
-    'UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles',
-    'Europe/London', 'Europe/Paris', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Manila', 'Australia/Sydney',
-  ] },
+  civilStatusOptions: {
+    type: Array,
+    default: () => ['Single', 'Married', 'Divorced', 'Widowed', 'Separated'],
+  },
+  timezoneOptions: {
+    type: Array,
+    default: () => [
+      'UTC',
+      'America/New_York',
+      'America/Chicago',
+      'America/Los_Angeles',
+      'Europe/London',
+      'Europe/Paris',
+      'Asia/Tokyo',
+      'Asia/Shanghai',
+      'Asia/Manila',
+      'Australia/Sydney',
+    ],
+  },
   saving: { type: Boolean, default: false },
   uploadingAvatar: { type: Boolean, default: false },
 })
@@ -153,34 +429,41 @@ const form = ref({
 
 const filteredTimezoneOptions = ref([...props.timezoneOptions])
 
-watch(() => props.modelValue, (val) => {
-  if (val) {
-    step.value = 1
-    confirmPassword.value = ''
-    avatarPreview.value = null
-    form.value = {
-      user: { username: '', email: '', first_name: '', middle_name: '', last_name: '' },
-      password: '',
-      user_role: null,
-      civil_status: '',
-      address: '',
-      phone_number: '',
-      emergency_contact: '',
-      birthday: '',
-      bank_acct: '',
-      timezone: '',
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (val) {
+      step.value = 1
+      confirmPassword.value = ''
+      avatarPreview.value = null
+      form.value = {
+        user: { username: '', email: '', first_name: '', middle_name: '', last_name: '' },
+        password: '',
+        user_role: null,
+        civil_status: '',
+        address: '',
+        phone_number: '',
+        emergency_contact: '',
+        birthday: '',
+        bank_acct: '',
+        timezone: '',
+      }
     }
-  }
-})
+  },
+)
 
 const filterTimezones = (val, update) => {
   if (val === '') {
-    update(() => { filteredTimezoneOptions.value = props.timezoneOptions })
+    update(() => {
+      filteredTimezoneOptions.value = props.timezoneOptions
+    })
     return
   }
   update(() => {
     const needle = val.toLowerCase()
-    filteredTimezoneOptions.value = props.timezoneOptions.filter((v) => v.toLowerCase().indexOf(needle) > -1)
+    filteredTimezoneOptions.value = props.timezoneOptions.filter(
+      (v) => v.toLowerCase().indexOf(needle) > -1,
+    )
   })
 }
 
@@ -192,7 +475,9 @@ const onAvatarSelect = (event) => {
   if (file.size > maxSize) return
   emit('avatarSelect', file)
   const reader = new FileReader()
-  reader.onload = (e) => { avatarPreview.value = e.target.result }
+  reader.onload = (e) => {
+    avatarPreview.value = e.target.result
+  }
   reader.readAsDataURL(file)
 }
 
@@ -208,122 +493,39 @@ const cancel = () => {
 }
 
 const submit = () => {
-  emit('submit', { ...form.value, confirmPassword: confirmPassword.value, avatarPreview: avatarPreview.value })
+  emit('submit', {
+    ...form.value,
+    confirmPassword: confirmPassword.value,
+    avatarPreview: avatarPreview.value,
+  })
 }
 </script>
 
 <style scoped>
-.modal-card {
-  border-radius: 16px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
-  width: 560px;
-  max-width: 95vw !important;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
+/* The card, header, body, field metrics and button pair are the shared
+   `dash-modal` chrome. What is left is this wizard's own furniture. */
 
-.modal-header {
-  background: #102335 !important;
-  border-bottom: none !important;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-}
-
-.modal-header .q-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-.modal-header .q-btn:hover {
-  color: #fff !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-}
-
-.modal-title-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.modal-avatar-icon {
-  border-radius: 10px !important;
-  flex-shrink: 0;
-}
-
-.modal-avatar-add {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: #ffffff !important;
-}
-
-.modal-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.modal-subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 2px;
-}
-
-.modal-close-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-  flex-shrink: 0;
-}
-
-.modal-content {
-  padding: 20px !important;
-  overflow-y: auto;
-  max-height: 70vh;
-  flex: 1;
-  background: #f9fafb !important;
-}
-
-.modal-content::-webkit-scrollbar {
-  width: 4px;
-}
-.modal-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-.modal-content::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 4px;
-}
-
-.modal-content :deep(.q-field__control) {
-  background: #ffffff !important;
-  border-radius: 10px !important;
-}
-.modal-content :deep(.q-field--outlined .q-field__control:before) {
-  border-color: #e2e8f0 !important;
-  border-radius: 10px !important;
-}
-.modal-content :deep(.q-field--outlined .q-field__control:hover:before) {
-  border-color: #2563eb !important;
-}
-.modal-content :deep(.q-field--outlined.q-field--focused .q-field__control:before) {
-  border-color: #2563eb !important;
-  border-width: 2px !important;
-}
-
-/* Stepper dots */
+/* ── Step indicator ──
+   Three dots on the navy, directly under the header, so the strip reads as part
+   of the header rather than as a band of its own. The header line already names
+   the step in words; the dots are only the shape of the progress. */
 .stepper-dots {
   display: flex;
   justify-content: center;
   gap: 6px;
   padding: 8px 0 10px;
-  background: #102335;
+  background: var(--dash-brand);
+  flex: none;
 }
 
 .dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
-  transition: background 0.2s ease, transform 0.2s ease;
+  border-radius: var(--dash-r-pill);
+  background: rgba(255, 255, 255, 0.32);
+  transition:
+    background var(--dash-slow) var(--dash-ease),
+    transform var(--dash-slow) var(--dash-ease);
 }
 
 .dot-active {
@@ -331,72 +533,13 @@ const submit = () => {
   transform: scale(1.25);
 }
 
-/* Form sections */
-.form-section {
-  margin-bottom: 20px;
-}
+/* A titled group of fields. Read-only groups get `dash-modal__section`, which
+   draws a card; a form group is only a heading over its inputs. */
 
-.section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f1f3f5;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.col-span-2 {
-  grid-column: 1 / -1;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 16px;
-  border-top: 1px solid #f1f3f5;
-  margin-top: 8px;
-}
-
-.cancel-btn {
-  background: #102335 !important;
-  color: #ffffff !important;
-  border-radius: 10px !important;
-  font-weight: 500 !important;
-  text-transform: none !important;
-  padding: 0 18px !important;
-  min-height: 38px !important;
-}
-.cancel-btn:hover {
-  background: #193d5c !important;
-}
-.submit-btn {
-  background: #102335 !important;
-  color: white;
-  border-radius: 10px !important;
-  font-weight: 600 !important;
-  text-transform: none !important;
-  min-height: 38px !important;
-  padding: 0 22px !important;
-}
-.submit-btn:hover {
-  background: #193d5c !important;
-  box-shadow: 0 4px 12px rgba(16, 35, 53, 0.3) !important;
-}
-
-/* Avatar upload */
+/* ── Photo ── */
 .avatar-upload-section {
-  margin-bottom: 20px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #f1f3f5;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--dash-line);
 }
 
 .avatar-preview-wrapper {
@@ -407,8 +550,8 @@ const submit = () => {
 }
 
 .avatar-placeholder {
-  background: #f3f4f6 !important;
-  color: #9ca3af !important;
+  background: var(--dash-n-100);
+  color: var(--dash-ink-4);
 }
 
 .avatar-actions {
@@ -419,23 +562,27 @@ const submit = () => {
 }
 
 .avatar-hint {
-  font-size: 11px;
-  color: #9ca3af;
+  font-size: 11.5px;
+  color: var(--dash-ink-4);
   text-align: center;
 }
 
-/* Detail grid cards */
+/* ── Review step ──
+   The same read-only fact grid the employee view dialog uses: a label over its
+   value, two to a row. The labels were 11px uppercase at 0.04em tracking, the
+   one convention the design system singles out as dated. */
 .detail-grid-cards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
 .detail-card {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 10px 14px;
-  border: 1px solid #f1f3f5;
+  padding: 10px 13px;
+  background: var(--dash-n-25);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  min-width: 0;
 }
 
 .detail-card-full {
@@ -443,43 +590,27 @@ const submit = () => {
 }
 
 .detail-card-label {
-  font-size: 11px;
-  color: #9ca3af;
+  margin-bottom: 3px;
+  font-size: 11.5px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 4px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--dash-ink-3);
 }
 
 .detail-card-value {
   font-size: 13px;
-  color: #111827;
   font-weight: 500;
+  color: var(--dash-ink);
   word-break: break-word;
 }
 
 @media (max-width: 768px) {
-  .modal-card {
-    max-width: calc(100vw - 20px);
-    max-height: calc(100vh - 24px);
-  }
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  .col-span-2 {
-    grid-column: span 1;
-  }
   .detail-grid-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .detail-card-full {
     grid-column: span 1;
-  }
-  .form-actions {
-    flex-direction: column-reverse;
-  }
-  .form-actions .q-btn {
-    width: 100%;
   }
 }
 </style>

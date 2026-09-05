@@ -147,14 +147,17 @@ import { computed, onMounted, ref } from 'vue'
 import { useQuasar, copyToClipboard } from 'quasar'
 import { useInvites } from '@/composables/page/useInvites'
 import { useCompany } from '@/composables/page/useCompany'
+import { extractErrorMessage } from '@/composables/utils/http'
 import InviteTable from '@/components/pages/Invite/InviteTable.vue'
 import InviteCardList from '@/components/pages/Invite/InviteCardList.vue'
 import InviteInviteModal from '@/components/pages/Invite/InviteInviteModal.vue'
 import InviteViewModal from '@/components/pages/Invite/InviteViewModal.vue'
 import InviteSuccessDialog from '@/components/pages/Invite/InviteSuccessDialog.vue'
 import { inviteState, roleLabel } from '@/components/pages/Invite/inviteStatus'
+import { useToast } from '@/composables/useToast'
 
 const $q = useQuasar()
+const toast = useToast()
 
 // ─── Composables ──────────────────────────────────────────────────────────────
 const { invites, loading, saving, fetchInvites, sendInvite, fetchUserRoles } = useInvites()
@@ -249,7 +252,7 @@ const loadInvitations = async () => {
   try {
     await fetchInvites()
   } catch (error) {
-    loadError.value = errorMessage(error, 'Failed to load invitations')
+    loadError.value = extractErrorMessage(error, 'Failed to load invitations')
   }
 }
 
@@ -265,12 +268,7 @@ const loadUserRoles = async () => {
       .filter((o) => o.value !== null)
   } catch (error) {
     userRoleOptions.value = []
-    $q.notify({
-      type: 'negative',
-      message: errorMessage(error, 'Failed to load roles'),
-      position: 'top',
-      timeout: 4000,
-    })
+    toast.error(extractErrorMessage(error, 'Failed to load roles'), { timeout: 4000 })
   } finally {
     loadingRoles.value = false
   }
@@ -286,14 +284,9 @@ const copyCode = async (row) => {
   if (!row?.code) return
   try {
     await copyToClipboard(row.code)
-    $q.notify({
-      type: 'positive',
-      message: `Join code ${row.code} copied`,
-      position: 'top',
-      timeout: 2000,
-    })
+    toast.success(`Join code ${row.code} copied`, { timeout: 2000 })
   } catch {
-    $q.notify({ type: 'negative', message: 'Could not copy the code', position: 'top' })
+    toast.error('Could not copy the code')
   }
 }
 
@@ -328,17 +321,8 @@ const sendInvitation = async (formData) => {
 
     await loadInvitations()
   } catch (error) {
-    $q.notify({
-      type: 'negative',
-      message: errorMessage(error, 'Failed to send invitation'),
-      position: 'top',
-      timeout: 10000,
-    })
+    toast.error(extractErrorMessage(error, 'Failed to send invitation'), { timeout: 10000 })
   }
-}
-
-function errorMessage(error, fallback) {
-  return error?.response?.data?.detail || error?.response?.data?.message || fallback
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
