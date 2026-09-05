@@ -171,6 +171,13 @@
   --dash-pad-y: 16px;
   --dash-row-y: 11px; // table row vertical padding
 
+  // ── Page width ────────────────────────────────────────────────────────────
+  // The cap `components/layout/PageShell.vue` centres page content within, and
+  // the number any page should read if it needs to line a fixed element up with
+  // that column. It lives here rather than in PageShell so the two exist once:
+  // the ladder is a design decision, not a component detail.
+  --dash-page-max: 1400px;
+
   // ── Motion ────────────────────────────────────────────────────────────────
   --dash-ease: cubic-bezier(0.2, 0.8, 0.3, 1);
   --dash-fast: 0.12s;
@@ -191,6 +198,42 @@
     --dash-pad-x: 16px;
     --dash-pad-y: 14px;
     --dash-row-y: 10px;
+  }
+}
+
+// ── The width ladder ────────────────────────────────────────────────────────
+// Every step is a `min-width` query at 1440px or above, which is what makes
+// widening the app safe: no rule here is ever evaluated on a phone, a tablet or
+// a 1280px laptop, so the small-screen layout cannot regress by changing these
+// numbers. Add steps, never lower one.
+//
+// Kept at 1440px rather than folded into the 1441px rhythm block above so the
+// cap lands exactly where PageShell used to put it — the two breakpoints differ
+// by a pixel for the same reason they always have, and merging them would move
+// the 1600px column on a screen that is exactly 1440px wide.
+@media (min-width: 1440px) {
+  :root {
+    --dash-page-max: 1600px;
+  }
+}
+
+// Past ~1920px the content column stops being the constraint and the empty
+// canvas either side becomes one: on a 2560px screen, a 1600px column sits
+// between roughly 340px of bare canvas on each side. These two steps spend that
+// space while keeping the column centred. They deliberately stop short of
+// full-bleed — a table row stretched across a 4K monitor puts the employee's
+// name and their status pill two feet apart, which reads as worse, not roomier.
+// Pages that genuinely want the whole viewport (Requests, Admin Settings) opt
+// out with PageShell's `fluid` prop instead.
+@media (min-width: 1920px) {
+  :root {
+    --dash-page-max: 1920px;
+  }
+}
+
+@media (min-width: 2400px) {
+  :root {
+    --dash-page-max: 2200px;
   }
 }
 
@@ -775,11 +818,31 @@
   padding: 4px;
 }
 .dash-popup .q-item {
-  min-height: 32px;
+  min-height: 30px;
   padding: 0 9px;
   border-radius: var(--dash-r-sm);
   font-size: 12.5px;
   color: var(--dash-ink-2);
+}
+
+// Inside a dialog the menu is a step smaller again, matching the 34px control
+// it drops from — an open menu at the page's density beside a dialog's fields
+// reads as belonging to the screen behind it.
+.dash-popup--modal .q-item {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.dash-popup--modal .q-item__section--side {
+  min-width: 0;
+  padding-right: 7px;
+}
+.dash-popup--modal .q-item__label {
+  font-size: 12px;
+  line-height: 1.35;
+}
+.dash-popup--modal .q-item__label--caption {
+  font-size: 11px;
 }
 .dash-popup .q-item:hover {
   background: var(--dash-n-50);
@@ -789,6 +852,955 @@
   background: var(--dash-accent-bg);
   color: var(--dash-accent);
   font-weight: 600;
+}
+
+// ============================================================================
+// MODAL — the single dialog chrome every QDialog in the app is built from.
+// ----------------------------------------------------------------------------
+// Why this is global rather than a component: a QDialog teleports its card to
+// `<body>`, and three separate copies of this chrome had already grown up in
+// the tree — `Request/requestModal.css`, the `.admin-modal-*` block in
+// `AdminSettings/AdminSettingsPanelShared.scss`, and a per-file version in each
+// of the Employees / Schedule / Attendance dialogs that still carried literal
+// hex values (#f9fafb, #102335, #e5e7eb...). They had already drifted: three
+// header heights, four cancel-button treatments, radii of 8 / 12 / 14 / 16px,
+// and two dialogs where Cancel was a filled navy button of the same weight as
+// the action it dismissed. Everything below is one system reading `--dash-*`.
+//
+// The anatomy is fixed, so a dialog opened from a table row and one opened from
+// a toolbar button start the same way:
+//
+//   .dash-modal            the QCard — width modifier, radius, clipping
+//     .dash-modal__head    navy bar: 38px icon tile, title, subtitle, close
+//     .dash-modal__body    white, scrolls, owns the field metrics
+//     .dash-modal__foot    --dash-n-25 bar, right-aligned, quiet + solid pair
+//
+// Rules of the chrome:
+//   - The head is always --dash-brand. Tone (danger, success) is carried by the
+//     icon tile and by the action button, never by repainting the header — a
+//     red banner across the top of a confirmation reads as an error that has
+//     already happened rather than a choice still to be made.
+//   - The body is white. Grey bodies existed to make white fields separate from
+//     the ground; an outlined field on the system hairline does that already,
+//     and grey-on-grey-on-white was one surface too many.
+//   - Exactly one solid button per footer, and it sits last. Cancel is quiet.
+// ============================================================================
+
+// Every width rule below is written twice, once compounded with `.q-card`.
+// Quasar caps a dialog card with `.q-dialog__inner--minimized > div`, a two-class
+// selector, so a plain `.dash-modal { width: 720px }` is overruled and every
+// wide dialog silently renders at 560px. The compound selector matches that
+// weight and, being later in the cascade, wins. This is also why the three
+// systems this replaced each reached for `!important` here.
+.dash-modal,
+.dash-modal.q-card {
+  display: flex;
+  flex-direction: column;
+  width: 480px;
+  max-width: 92vw;
+  max-height: 84vh;
+  border-radius: var(--dash-r-lg);
+  box-shadow: var(--dash-shadow-lg);
+  overflow: hidden;
+}
+
+// Widths are a ladder, not free numbers: a form of stacked single fields wants
+// --sm, a two-column form the base, a form beside a preview --lg, and a dialog
+// carrying a table --xl.
+//
+// Every rung is one step narrower than it was. A dialog is a focused task over
+// the page, not a second page: the earlier numbers came from adding up the
+// widest content each dialog happened to have, which made a two-field form as
+// wide as a table. The cap is 84vh rather than 90 for the same reason — a card
+// that reaches within a few pixels of the viewport edge stops reading as
+// something laid over the screen.
+.dash-modal--xs,
+.dash-modal--xs.q-card {
+  width: 360px;
+}
+.dash-modal--sm,
+.dash-modal--sm.q-card {
+  width: 420px;
+}
+.dash-modal--md,
+.dash-modal--md.q-card {
+  width: 520px;
+}
+.dash-modal--lg,
+.dash-modal--lg.q-card {
+  width: 600px;
+}
+.dash-modal--xl,
+.dash-modal--xl.q-card {
+  width: 700px;
+}
+.dash-modal--2xl,
+.dash-modal--2xl.q-card {
+  width: 820px;
+}
+
+// A dialog whose body is a table or a long list should take the height it can
+// get rather than sitting as a short card in the middle of a tall screen.
+.dash-modal--tall,
+.dash-modal--tall.q-card {
+  height: 84vh;
+}
+
+// ── Head ────────────────────────────────────────────────────────────────────
+
+.dash-modal__head.q-card__section,
+.dash-modal__head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: none;
+  padding: 13px 16px;
+  background: var(--dash-brand);
+  border-bottom: none;
+}
+
+// One tile for both the glyph headers and the initials headers. QAvatar applies
+// `size` as an inline font-size that its own `width: 1em` reads, so a tile that
+// arrives as a QAvatar needs the font size overridden too, not just the box.
+.dash-modal__head-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  flex: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+}
+.dash-modal__head-icon .q-avatar__content {
+  font-size: 13px;
+  font-weight: 600;
+}
+.dash-modal__head-icon .q-icon {
+  font-size: 20px;
+}
+.dash-modal__head-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dash-modal__head-icon--good {
+  background: rgba(23, 178, 106, 0.24);
+}
+.dash-modal__head-icon--warn {
+  background: rgba(247, 144, 9, 0.26);
+}
+.dash-modal__head-icon--danger {
+  background: rgba(240, 68, 56, 0.26);
+}
+
+// The icon + titles group, which sits left of the close button. It exists as a
+// wrapper because the close button has to stay hard right while the title
+// ellipsises, and a bare flex row of three children cannot do both.
+.dash-modal__head-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dash-modal__head-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.dash-modal__title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-modal__sub {
+  margin-top: 1px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.78);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Any button in the head — the close cross, and the occasional secondary icon
+// action next to it — is a ghost on the navy.
+.dash-modal__head .q-btn {
+  flex: none;
+  color: rgba(255, 255, 255, 0.8);
+}
+.dash-modal__head .q-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+// A QForm that has to wrap both the body and the footer, so a submit button in
+// the footer still belongs to the form. Without this the wrapper breaks the
+// card's flex column and the body stops scrolling under a pinned footer.
+.dash-modal__form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  // `min-height: 0` is what lets a flex child shrink below its content height.
+  // Without it the wrapper sizes to its content, the body never receives a
+  // bounded height, its own `overflow-y: auto` never engages, and the card's
+  // `overflow: hidden` simply clips the fields past the bottom — they cannot be
+  // scrolled to at all.
+  min-height: 0;
+  overflow: hidden;
+}
+
+// ── Body ────────────────────────────────────────────────────────────────────
+
+// The body is the thing that spaces a dialog's content, and it does it with a
+// flex gap rather than leaving each block to carry its own margin. Three of
+// these dialogs used to set `display: flex; gap` privately and the rest relied
+// on whatever margins their blocks happened to have, which is why a section
+// heading could sit flush against the paragraph above it in one dialog and 20px
+// clear of it in the next.
+//
+// A gap is the right mechanism rather than `& > * + *` margins because it never
+// collapses, it costs nothing on a body with one child, and a block moved
+// between dialogs keeps the spacing of wherever it lands instead of carrying
+// its own.
+.dash-modal__body.q-card__section,
+.dash-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--dash-surface);
+  // No scrollbar. Scrolling itself is untouched — wheel, trackpad, touch, and
+  // Page Up/Down or the arrow keys once the body has focus all still work; only
+  // the indicator is gone. This is the opposite call from `dash-scroll-x`,
+  // where the always-drawn track is the affordance that tells you a table
+  // continues sideways. A dialog body is different: it is bounded above by the
+  // header and below by the pinned footer, so the panel visibly continues past
+  // its own edge, and an 8px track running down the inside of a card this
+  // narrow was a second border beside the real one.
+  scrollbar-width: none; // Firefox
+  -ms-overflow-style: none; // legacy Edge
+}
+.dash-modal__body::-webkit-scrollbar {
+  // Chrome, Safari, current Edge
+  width: 0;
+  height: 0;
+}
+
+// A scrolling flex column shrinks its children to fit before it will overflow,
+// which is the opposite of what a scrolling body wants: a tall block — a
+// calendar, a table — would be squashed instead of scrolled to. Every direct
+// child keeps its own height and the body scrolls past it.
+.dash-modal__body > * {
+  flex-shrink: 0;
+}
+
+// For a body whose content supplies its own edge — a table, a full-bleed image.
+.dash-modal__body--flush.q-card__section,
+.dash-modal__body--flush {
+  padding: 0;
+}
+.dash-modal__body--sunken.q-card__section,
+.dash-modal__body--sunken {
+  background: var(--dash-n-25);
+}
+
+// The two dialogs with no header — the invite confirmation and the delete
+// confirmation — centre their icon and copy. `text-align: center` alone stopped
+// doing that once the body became a flex column: an icon is a flex item then,
+// and the cross-axis alignment decides where it sits, not the text alignment.
+.dash-modal__body--center.q-card__section,
+.dash-modal__body--center {
+  align-items: center;
+  text-align: center;
+}
+
+// A body that is a single centred message rather than a column of blocks.
+.dash-modal__body--row.q-card__section,
+.dash-modal__body--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+// Field metrics for everything inside a dialog body, so a form does not have to
+// tag each control. `dash-field` (above) still owns the border states; this is
+// only the box.
+//
+// 34px, not the 38 the panels use: a dialog is a denser surface than a page,
+// and the controls have to be a step smaller than the page's or a six-field
+// form is taller than the dialog that holds it. The label sits above the
+// control rather than floating inside it, which is what buys the height back —
+// a floating label needs the control to be tall enough to hold two lines of
+// text, and that is where the old 56px Quasar default came from.
+.dash-modal__body .q-field__control {
+  min-height: 34px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
+}
+// A textarea grows from its rows, so it only takes the border and the padding.
+.dash-modal__body .q-textarea .q-field__control {
+  min-height: 0;
+  padding: 2px 10px;
+}
+.dash-modal__body .q-textarea .q-field__native {
+  padding: 6px 0;
+  line-height: 1.5;
+}
+.dash-modal__body .q-field--outlined .q-field__control:before {
+  border-color: var(--dash-line-strong);
+  border-radius: var(--dash-r-md);
+}
+.dash-modal__body .q-field--outlined .q-field__control:hover:before {
+  border-color: var(--dash-n-400);
+}
+.dash-modal__body .q-field--outlined .q-field__control:after {
+  display: none;
+}
+// Focus is a halo, not a thicker border: a border that changes width shifts the
+// field by a pixel as it takes focus.
+.dash-modal__body .q-field--outlined.q-field--focused .q-field__control:before {
+  border-color: var(--dash-accent);
+  border-width: 1px;
+}
+.dash-modal__body .q-field--outlined.q-field--focused .q-field__control {
+  box-shadow: 0 0 0 3px var(--dash-accent-ring);
+}
+.dash-modal__body .q-field__native,
+.dash-modal__body .q-field__input {
+  min-height: 32px;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--dash-ink);
+}
+.dash-modal__body .q-field__marginal {
+  height: 34px;
+  font-size: 18px;
+  color: var(--dash-ink-4);
+}
+.dash-modal__body .q-field__marginal .q-icon {
+  font-size: 17px;
+}
+// The control's own padding, rather than Quasar's 12px, which on a 34px box
+// left the text closer to the edge than to the centre.
+.dash-modal__body .q-field--outlined .q-field__control {
+  padding: 0 10px;
+}
+.dash-modal__body .q-field--error .q-field__bottom {
+  padding-top: 3px;
+  min-height: 0;
+  font-size: 11px;
+}
+// A `use-chips` select puts its selection inside the control, so the chips have
+// to be smaller than the box they sit in.
+.dash-modal__body .q-field .q-chip {
+  height: 22px;
+  margin: 2px 4px 2px 0;
+  padding: 0 7px;
+  font-size: 11.5px;
+  background: var(--dash-n-100);
+  color: var(--dash-ink-2);
+}
+.dash-modal__body .q-field .q-chip .q-icon {
+  font-size: 14px;
+}
+// Toggles and checkboxes beside a field label, at the same scale as the text.
+.dash-modal__body .q-toggle__inner {
+  font-size: 32px;
+}
+.dash-modal__body .q-checkbox__inner {
+  font-size: 30px;
+}
+.dash-modal__body .q-toggle__label,
+.dash-modal__body .q-checkbox__label {
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+}
+// Spinners on a number field are decoration a payroll form never wants: they
+// invite a click-to-increment on a peso amount.
+.dash-modal__body input[type="number"]::-webkit-outer-spin-button,
+.dash-modal__body input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.dash-modal__body input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+// ── Body content primitives ─────────────────────────────────────────────────
+// A labelled field with a line under it saying what it decides. A real label
+// above the control rather than a floating one, because the hint needs somewhere
+// to attach and a floating label leaves an empty field resting state unclear.
+
+.dash-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.dash-modal__field-label {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--dash-ink-2);
+}
+// Required is marked on the label, not by an asterisk glued to the label text:
+// "Email *" reads as part of the field's name, and it is the only place in the
+// app where punctuation carries meaning silently.
+.dash-modal__req {
+  margin-left: 2px;
+  color: var(--dash-critical-mark);
+}
+.dash-modal__field-hint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--dash-ink-4);
+}
+
+
+
+// The default stack for a form body: one column of fields at a constant rhythm.
+// The same rhythm for a group nested inside the body — a fieldset within a
+// form, a run of sections inside a scrolling region.
+.dash-modal__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dash-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px 12px;
+  min-width: 0;
+}
+.dash-modal__grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dash-modal__span-2 {
+  grid-column: 1 / -1;
+}
+
+// Read-only detail block: a titled group of label/value rows. The title is
+// sentence case at the small-label size — tracked-out capitals are the single
+// clearest tell of an older dashboard, and every table in this app has already
+// dropped them.
+.dash-modal__section {
+  padding: 12px 14px 13px;
+  background: var(--dash-n-25);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+}
+
+// A heading over a block of content, where `__section` (which draws a card
+// around it) would be too much furniture. Sentence case at the small-label
+// size: the 11px uppercase 0.5px-tracked version several dialogs carried is the
+// single convention the design system calls out as dated, and it read as
+// shouting over content it was only introducing.
+.dash-modal__group-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.35;
+  color: var(--dash-ink-2);
+}
+
+// A group is its label plus what the label introduces, tight together, so the
+// body's gap separates groups rather than separating a label from its content.
+.dash-modal__group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+// A group whose label shares its line with an action — a refresh button on a
+// history block, a remove button on a repeated row.
+.dash-modal__group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.dash-modal__section-title {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--dash-ink-2);
+  border-bottom: 1px solid var(--dash-line);
+}
+
+.dash-modal__rows {
+  display: flex;
+  flex-direction: column;
+}
+.dash-modal__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--dash-line-soft);
+}
+.dash-modal__row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.dash-modal__label {
+  font-size: 13px;
+  color: var(--dash-ink-3);
+  white-space: nowrap;
+}
+.dash-modal__value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: right;
+  color: var(--dash-ink);
+  font-variant-numeric: tabular-nums;
+}
+.dash-modal__value--strong {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+// Free text — a reason, a note, an admin reply.
+.dash-modal__note {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dash-ink-2);
+  white-space: pre-line;
+}
+.dash-modal__meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--dash-ink-4);
+}
+
+// ── Foot ────────────────────────────────────────────────────────────────────
+
+.dash-modal__foot.q-card__section,
+.dash-modal__foot.q-card__actions,
+.dash-modal__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+  padding: 10px 16px;
+  background: var(--dash-n-25);
+  border-top: 1px solid var(--dash-line);
+}
+
+// Quasar spaces sibling buttons itself inside QCardActions, on top of the gap
+// this footer already has. Its rule is
+// `.q-card__actions--horiz > .q-btn-item + .q-btn-item` — three classes and a
+// child combinator — so cancelling it needs at least that weight; a plain
+// `.dash-modal__foot .q-btn + .q-btn` loses and the pair ends up 16px apart.
+.dash-modal__foot.q-card__actions > .q-btn-item + .q-btn-item,
+.dash-modal__foot .q-btn + .q-btn {
+  margin-left: 0;
+}
+
+// Base metrics for every footer button, so a stray QBtn carrying none of the
+// semantic classes below cannot reintroduce Quasar uppercase default beside
+// the ones that do. Compounded once for the same reason as above: Quasar sets
+// `.q-card__actions .q-btn--rectangle { padding: 0 8px }` at equal weight.
+.dash-modal__foot .q-btn,
+.dash-modal__foot.q-card__actions .q-btn {
+  min-height: 36px;
+  padding: 0 15px;
+  border-radius: var(--dash-r-md);
+  box-shadow: none;
+}
+.dash-modal__foot .q-btn__content {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+// Quiet dismissal. Both buttons used to be filled navy in several dialogs,
+// which left every form with two identical-looking choices.
+.dash-modal__cancel.q-btn,
+.dash-modal__foot .dash-modal__cancel.q-btn {
+  border: 1px solid var(--dash-line-strong);
+  background: var(--dash-surface);
+  color: var(--dash-ink-2);
+}
+.dash-modal__cancel.q-btn:hover,
+.dash-modal__foot .dash-modal__cancel.q-btn:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+
+// The one solid button, last in the row where the eye finishes.
+.dash-modal__submit.q-btn,
+.dash-modal__foot .dash-modal__submit.q-btn {
+  padding: 0 16px;
+  background: var(--dash-brand);
+  color: #ffffff;
+  box-shadow: var(--dash-shadow-xs);
+}
+.dash-modal__submit.q-btn:hover,
+.dash-modal__foot .dash-modal__submit.q-btn:hover {
+  background: var(--dash-n-800);
+}
+.dash-modal__submit.q-btn .q-btn__content {
+  font-weight: 600;
+}
+
+// A review dialog constructive action.
+.dash-modal__approve.q-btn,
+.dash-modal__foot .dash-modal__approve.q-btn {
+  padding: 0 16px;
+  background: var(--dash-good);
+  color: #ffffff;
+  box-shadow: var(--dash-shadow-xs);
+}
+.dash-modal__approve.q-btn:hover,
+.dash-modal__foot .dash-modal__approve.q-btn:hover {
+  background: #05603a;
+}
+.dash-modal__approve.q-btn .q-btn__content {
+  font-weight: 600;
+}
+
+// Bordered rather than a second solid button: two filled buttons side by side
+// give the destructive choice the same weight as the constructive one.
+.dash-modal__reject.q-btn,
+.dash-modal__foot .dash-modal__reject.q-btn {
+  border: 1px solid var(--dash-critical-line);
+  background: var(--dash-surface);
+  color: var(--dash-critical);
+}
+.dash-modal__reject.q-btn:hover,
+.dash-modal__foot .dash-modal__reject.q-btn:hover {
+  background: var(--dash-critical-bg);
+}
+
+// The exception: on a confirmation whose whole subject is the destructive act,
+// the destructive button IS the primary one and carries the fill.
+.dash-modal__danger.q-btn,
+.dash-modal__foot .dash-modal__danger.q-btn {
+  padding: 0 16px;
+  background: var(--dash-critical);
+  color: #ffffff;
+  box-shadow: var(--dash-shadow-xs);
+}
+.dash-modal__danger.q-btn:hover,
+.dash-modal__foot .dash-modal__danger.q-btn:hover {
+  background: #912018;
+}
+.dash-modal__danger.q-btn .q-btn__content {
+  font-weight: 600;
+}
+
+// A footer that also has to say something — a count, a validation summary —
+// puts it here and lets the buttons stay right-aligned.
+.dash-modal__foot-note {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--dash-ink-3);
+}
+
+// ── Confirmation ────────────────────────────────────────────────────────────
+// The narrow variant: an icon, one sentence naming exactly what is about to
+// happen and whether it can be undone, and the pair of buttons.
+
+.dash-modal--confirm {
+  width: 380px;
+}
+// No icon in the body: the head tile already carries the tone, and a second
+// tinted glyph beside the sentence says the same thing twice.
+.dash-modal--confirm .dash-modal__body {
+  padding: 16px;
+}
+.dash-modal__confirm-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dash-ink-2);
+}
+.dash-modal__confirm-text strong {
+  font-weight: 600;
+  color: var(--dash-ink);
+}
+
+// ── Responsive ──────────────────────────────────────────────────────────────
+// Below the tablet step every width modifier collapses to the viewport, and the
+// button pair stacks with the primary action on top — at that width a row of
+// two buttons puts the destructive one under the reader thumb.
+
+@media (max-width: 1023px) {
+  .dash-modal,
+  .dash-modal.q-card {
+    width: 100%;
+    max-width: 600px;
+  }
+  .dash-modal--lg.q-card,
+  .dash-modal--xl.q-card,
+  .dash-modal--2xl.q-card {
+    max-width: 680px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dash-modal,
+  .dash-modal.q-card {
+    width: 100%;
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+  .dash-modal__body.q-card__section,
+  .dash-modal__body {
+    padding: 13px;
+  }
+  .dash-modal__foot.q-card__section,
+  .dash-modal__foot.q-card__actions,
+  .dash-modal__foot {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    padding: 12px 14px;
+  }
+  .dash-modal__foot .q-btn {
+    width: 100%;
+    margin: 0;
+  }
+  .dash-modal__grid,
+  .dash-modal__grid--3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dash-modal__span-2 {
+    grid-column: span 1;
+  }
+  // Label above value once the row has no width to place them side by side.
+  .dash-modal__row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+  .dash-modal__value {
+    justify-content: flex-start;
+    text-align: left;
+  }
+}
+
+// A maximized dialog on a phone is the full screen, so the card own radius
+// would round the corners of the viewport.
+.q-dialog__inner--maximized .dash-modal,
+.q-dialog__inner--maximized .dash-modal.q-card {
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 0;
+}
+
+// ============================================================================
+// DIALOG PLUGIN — the confirmations raised with `$q.dialog({ ... })`.
+// ----------------------------------------------------------------------------
+// About twenty of them: every "delete this department", "terminate these
+// employees", "revert these contributions". They are not components, so none of
+// the `dash-modal` classes above can be put on them — Quasar builds the markup.
+// Left alone they render its Material default: a 4px card, a 21px Roboto title,
+// and two flat uppercase theme-blue buttons, which is a different dialog from
+// the twenty-odd in this app that ARE components. This restyles the markup
+// Quasar emits so a confirmation looks like the rest of the product.
+//
+// Deliberately no navy header: the plugin has no slot for an icon tile, and a
+// title bar with nothing in it but a sentence is not the same object as a
+// dialog head. A confirmation is a question and two answers.
+// ============================================================================
+
+.q-dialog-plugin {
+  width: 380px;
+  max-width: 92vw;
+  border-radius: var(--dash-r-lg);
+  box-shadow: var(--dash-shadow-lg);
+  overflow: hidden;
+}
+
+.q-dialog-plugin .q-dialog__title {
+  padding: 16px 18px 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  color: var(--dash-ink);
+}
+
+.q-dialog-plugin .q-dialog__message {
+  padding: 6px 18px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dash-ink-2);
+  white-space: pre-line;
+}
+
+// A prompt or select dialog puts its control here.
+.q-dialog-plugin .q-dialog-plugin__form {
+  padding: 0 18px 14px;
+}
+.q-dialog-plugin .q-dialog-plugin__form .q-field__control {
+  min-height: 38px;
+  border-radius: var(--dash-r-md);
+}
+
+.q-dialog-plugin .q-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--dash-n-25);
+  border-top: 1px solid var(--dash-line);
+}
+
+.q-dialog-plugin .q-card__actions--horiz > .q-btn-item + .q-btn-item,
+.q-dialog-plugin .q-card__actions .q-btn + .q-btn {
+  margin-left: 0;
+}
+
+.q-dialog-plugin .q-card__actions .q-btn {
+  min-height: 36px;
+  padding: 0 15px;
+  border-radius: var(--dash-r-md);
+  box-shadow: none;
+}
+
+.q-dialog-plugin .q-card__actions .q-btn__content {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+// Cancel comes first out of Quasar and is the quiet one.
+.q-dialog-plugin .q-card__actions .q-btn:first-child {
+  border: 1px solid var(--dash-line-strong);
+  background: var(--dash-surface);
+  color: var(--dash-ink-2);
+}
+.q-dialog-plugin .q-card__actions .q-btn:first-child:hover {
+  background: var(--dash-n-50);
+  color: var(--dash-ink);
+}
+
+// OK comes last and is the filled one. Declared after the rule above so that a
+// dialog raised without `cancel: true` — where its single button is both the
+// first and the last child — still gets the solid treatment.
+.q-dialog-plugin .q-card__actions .q-btn:last-child {
+  padding: 0 16px;
+  border: 0;
+  background: var(--dash-brand);
+  color: #ffffff;
+  box-shadow: var(--dash-shadow-xs);
+}
+.q-dialog-plugin .q-card__actions .q-btn:last-child:hover {
+  background: var(--dash-n-800);
+}
+.q-dialog-plugin .q-card__actions .q-btn:last-child .q-btn__content {
+  font-weight: 600;
+}
+
+// A `color:` on one of these buttons compiles to a Quasar colour utility, and
+// those set their value with `!important` — `.bg-negative` on a filled button,
+// `.text-negative` on a flat one. Matching that is the only way to give a
+// confirmation the design system's colours instead of Quasar's stock theme
+// (#c10015 red, #f2c037 amber, #1976d2 blue), and it is the one place in this
+// file that needs `!important`. It is answering an `!important`, not winning a
+// specificity argument.
+//
+// Only the tone is honoured, never the weight: whatever colour is passed, the
+// OK button is the filled one and Cancel stays quiet. The pair only works if
+// exactly one of them is loud, and it is never the way out.
+.q-dialog-plugin .q-card__actions .q-btn:last-child.bg-negative,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.text-negative {
+  background: var(--dash-critical) !important;
+  color: #ffffff !important;
+}
+.q-dialog-plugin .q-card__actions .q-btn:last-child.bg-negative:hover,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.text-negative:hover {
+  background: #912018 !important;
+}
+
+.q-dialog-plugin .q-card__actions .q-btn:last-child.bg-positive,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.text-positive {
+  background: var(--dash-good) !important;
+  color: #ffffff !important;
+}
+.q-dialog-plugin .q-card__actions .q-btn:last-child.bg-positive:hover,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.text-positive:hover {
+  background: #05603a !important;
+}
+
+// Amber is unreadable as a filled button — white on #f2c037 fails contrast at
+// any size, which is what Quasar's `warning` gives you. A caution belongs in
+// the dialog's copy; the button that acts on it is the brand one.
+.q-dialog-plugin .q-card__actions .q-btn:last-child.bg-warning,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.text-warning,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.bg-primary,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.text-primary {
+  background: var(--dash-brand) !important;
+  color: #ffffff !important;
+}
+.q-dialog-plugin .q-card__actions .q-btn:last-child.bg-warning:hover,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.text-warning:hover,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.bg-primary:hover,
+.q-dialog-plugin .q-card__actions .q-btn:last-child.text-primary:hover {
+  background: var(--dash-n-800) !important;
+}
+
+// Cancel keeps the quiet treatment whatever colour it was given.
+.q-dialog-plugin .q-card__actions .q-btn:first-child:not(:last-child)[class*='text-'],
+.q-dialog-plugin .q-card__actions .q-btn:first-child:not(:last-child)[class*='bg-'] {
+  background: var(--dash-surface) !important;
+  color: var(--dash-ink-2) !important;
+}
+.q-dialog-plugin .q-card__actions .q-btn:first-child:not(:last-child)[class*='text-']:hover,
+.q-dialog-plugin .q-card__actions .q-btn:first-child:not(:last-child)[class*='bg-']:hover {
+  background: var(--dash-n-50) !important;
+  color: var(--dash-ink) !important;
+}
+
+@media (max-width: 768px) {
+  .q-dialog-plugin .q-card__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .q-dialog-plugin .q-card__actions .q-btn {
+    width: 100%;
+    margin: 0;
+  }
 }
 
 // ============================================================================

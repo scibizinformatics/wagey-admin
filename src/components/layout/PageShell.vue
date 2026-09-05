@@ -16,7 +16,7 @@ defineProps({
   fullHeight: { type: Boolean, default: false },
   flexColumn: { type: Boolean, default: false },
   // Drops the centred max-width cap. For data-dense pages whose wide tables
-  // would otherwise be cut off inside the 1400/1600px column.
+  // would otherwise be cut off inside the `--dash-page-max` column.
   fluid: { type: Boolean, default: false },
 })
 </script>
@@ -31,8 +31,12 @@ defineProps({
   height: 100vh;
   overflow: hidden;
 }
+/* The cap itself is `--dash-page-max` in css/dashboard.scss, which steps up at
+   1440 / 1920 / 2400px so a 4K screen is not mostly bare canvas. It is a token
+   rather than a literal here because pages occasionally need to align a fixed
+   element with the content column, and two copies of the number drift. */
 .page-shell-container {
-  max-width: 1400px;
+  max-width: var(--dash-page-max);
   margin: 0 auto;
   padding: 20px;
 }
@@ -46,13 +50,8 @@ defineProps({
   box-sizing: border-box;
 }
 
-@media (min-width: 1440px) {
-  .page-shell-container {
-    max-width: 1600px;
-  }
-}
-
-/* Declared last so it beats the width-capped rules above at every breakpoint. */
+/* Wins on specificity (two classes to one), so it holds at every step of the
+   width ladder without needing its own media queries. */
 .page-shell-container.fluid {
   max-width: none;
 }
