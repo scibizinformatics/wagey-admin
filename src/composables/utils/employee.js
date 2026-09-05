@@ -178,3 +178,83 @@ export function getAvatarColor(name) {
   }
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }
+
+/**
+ * Collapse a person's name to a comparison key: lowercased, trimmed, and with
+ * internal runs of whitespace reduced to one space. "  Jane   SMITH " and
+ * "Jane Smith" are the same person written twice.
+ */
+function nameKey(name) {
+  return String(name ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+}
+
+/**
+ * Index employee records by display name, for payloads that identify a person
+ * by name and nothing else.
+ *
+ * The audit trail's assignment history is the case this exists for: it carries
+ * `employee_name` with no id, so the only way to put a face beside it is to
+ * match the name against the employee list.
+ *
+ * A name shared by two employees maps to `null` rather than to whichever record
+ * was seen first. That is the whole reason this is a builder and not a `find`
+ * inside the component: on an audit screen, showing one colleague's photograph
+ * against another's actions is a worse failure than showing no photograph, and
+ * a first-match lookup makes exactly that mistake silently. Callers treat a
+ * `null` — and a miss — the same way, by falling back to initials.
+ *
+ * @param {Array} employees  raw employee records, as `useEmployees` returns them
+ * @returns {Map<string, object|null>}
+ */
+export function buildEmployeeNameIndex(employees) {
+  const index = new Map()
+  for (const employee of Array.isArray(employees) ? employees : []) {
+    const key = nameKey(getFullName(employee))
+    // `getFullName` answers 'N/A' for a record with no name at all; indexing
+    // that would make every unnamed employee the same person.
+    if (!key || key === 'n/a') continue
+    index.set(key, index.has(key) ? null : employee)
+  }
+  return index
+}
+
+/**
+ * Everything needed to draw one avatar for a named person: the photograph when
+ * the name resolves to exactly one employee who has one, and the initials and
+ * identity colour to fall back on when it does not.
+ *
+ * @param {Map<string, object|null>|null} index  from `buildEmployeeNameIndex`
+ * @param {string} name
+ */
+export function avatarFor(index, name) {
+  const match = index?.get(nameKey(name)) ?? null
+  return {
+    pictureUrl: match?.user?.picture_url || '',
+    initials: getInitials(name),
+    color: getAvatarColor(name),
+  }
+}
+
+/**
+ * Does this name belong to somebody in the indexed employee list?
+ *
+ * Membership, not identity — a name shared by two employees indexes to `null`
+ * (see `buildEmployeeNameIndex`), and that is still a "yes" here: we cannot say
+ * *which* colleague it is, but we can say the name is one of this company's.
+ * That distinction is why this asks the Map with `has` rather than reading the
+ * value out; `avatarFor` deliberately makes the opposite call, because drawing
+ * the wrong face is worse than drawing none.
+ *
+ * The audit trail uses this to keep another workspace's rows off the table: its
+ * payload names a person and carries no company, so the roster is the only
+ * thing that can say whether an entry belongs here.
+ *
+ * @param {Map<string, object|null>|null} index  from `buildEmployeeNameIndex`
+ * @param {string} name
+ */
+export function hasEmployeeName(index, name) {
+  return Boolean(index?.has(nameKey(name)))
+}
