@@ -456,6 +456,15 @@
   background: var(--dash-hover);
 }
 
+/* Rows the reader can open, matching `dash-qtable__row--clickable` on the
+   page-level tables. Only the cursor is declared here; the keyboard half of the
+   affordance is the paired `:focus-visible` rule in the FOCUS section at the
+   foot of this file, which has to draw its ring inside the row because this
+   table scrolls horizontally and would otherwise clip it away. */
+.dash-table__row--clickable {
+  cursor: pointer;
+}
+
 .dash-table__td {
   font-size: 13px;
   color: var(--dash-ink-2);
@@ -2146,4 +2155,22 @@
 .dash-focusable .q-field :focus-visible {
   border-radius: 0;
   box-shadow: none;
+}
+
+// A clickable panel row is the other exception, and for a mechanical reason:
+// `.dash-table` is an `overflow-x: auto` scroll container, which per the
+// overflow spec computes its `visible` cross axis to `auto` as well, so it
+// clips on both. The ring above is painted *outside* the border box, and a row
+// stretches to the container's full width — so every pixel of it lands in the
+// clipped region and a keyboard reader sees no focus at all. Drawn inside the
+// row instead, where nothing can clip it.
+//
+// The accent itself rather than the soft `--dash-accent-ring` halo: that colour
+// is 14% alpha and reads only against the 2px white spacer it normally sits
+// beside, which an inset edge has no room for. Square, because a full-bleed row
+// has no corners of its own to round.
+.dash-panel .dash-table__row--clickable:focus-visible {
+  border-radius: 0;
+  background: var(--dash-hover);
+  box-shadow: inset 0 0 0 2px var(--dash-accent);
 }
