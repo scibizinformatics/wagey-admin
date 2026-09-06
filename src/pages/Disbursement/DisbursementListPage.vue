@@ -52,6 +52,62 @@
             </template>
           </q-input>
 
+          <!-- Both narrow the same list and both carry an explicit "All ..." row
+               rather than a clear button, matching the payout-group filter on
+               Attendance. They only render once there is something to choose
+               between: a select holding one option is a label, not a control. -->
+          <q-select
+            v-if="groupSelectOptions.length > 2"
+            v-model="groupFilter"
+            :options="groupSelectOptions"
+            emit-value
+            map-options
+            dense
+            outlined
+            hide-bottom-space
+            :popup-content-class="'disb-popup'"
+            class="disb-filter dash-field"
+            aria-label="Filter by payout group"
+          >
+            <template #prepend>
+              <q-icon name="o_groups" size="16px" />
+            </template>
+          </q-select>
+
+          <q-select
+            v-if="cutoffSelectOptions.length > 2"
+            v-model="cutoffFilter"
+            :options="cutoffSelectOptions"
+            emit-value
+            map-options
+            dense
+            outlined
+            hide-bottom-space
+            :popup-content-class="'disb-popup'"
+            class="disb-filter disb-filter--cutoff dash-field"
+            aria-label="Filter by cutoff"
+          >
+            <template #prepend>
+              <q-icon name="o_event" size="16px" />
+            </template>
+          </q-select>
+
+          <!-- The deep-link narrowing that the cutoff select could *not* take
+               over, because neither the id nor the name matched a cutoff the
+               list actually holds. It stays visible because a list that
+               silently shows a subset reads as a list that is missing rows. -->
+          <button
+            v-if="cutoffFilterLabel"
+            type="button"
+            class="dash-chip dash-chip--info disb-cutoff-chip"
+            @click="clearCutoffFilter"
+          >
+            <span class="dash-chip__dot" />
+            {{ cutoffFilterLabel }}
+            <q-icon name="close" size="13px" class="disb-cutoff-chip__x" />
+            <q-tooltip>Show every open cutoff</q-tooltip>
+          </button>
+
           <span class="disb-toolbar__count">
             {{ filteredRuns.length }} {{ filteredRuns.length === 1 ? 'run' : 'runs' }}
           </span>
@@ -102,7 +158,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
@@ -116,6 +172,7 @@ import { useToast } from 'src/composables/useToast'
 import { todayIso } from 'src/composables/utils/calendarDate'
 
 const router = useRouter()
+const route = useRoute()
 const $q = useQuasar()
 
 const toast = useToast()
@@ -129,13 +186,102 @@ const rows = ref([])
 const dashboard = ref(null)
 const searchTerm = ref('')
 const page = ref(1)
+
+/**
+ * Narrows the list to one cutoff, set from `?cutoff_id=` / `?cutoff=` when the
+ * dashboard's "Previous cutoff is still open" alert sends the reader here.
+ *
+ * Both are kept because the two screens read cutoffs from different endpoints —
+ * the dashboard from `payroll-trend`, this page from `cutoff-instances` — and
+ * nothing guarantees they number them the same way. The id is tried first and
+ * the label is the fallback, so a mismatch degrades to a name match rather than
+ * to an empty table.
+ */
+const cutoffFilterId = ref('')
+const cutoffFilterLabel = ref('')
 const pageSize = ref(10)
 const pageSizeOptions = [10, 20, 50]
 
+/**
+ * Toolbar filters. `groupFilter` holds a payout-group name and `cutoffFilter` a
+ * cutoff key, both null for "all".
+ *
+ * The options are derived from the rows rather than fetched, because the list is
+ * already assembled from every open cutoff -- a second lookup could offer a
+ * cutoff or a group that has no run on this page, which is a filter that empties
+ * the table for no visible reason.
+ */
+const groupFilter = ref(null)
+const cutoffFilter = ref(null)
+
+// A cutoff is keyed by id where the row has one, since two cutoffs may share a
+// display name; the name is the fallback so a row without an id is still
+// selectable rather than silently unreachable.
+function cutoffKey(run) {
+  return run.cutoffId != null ? `id:${run.cutoffId}` : `name:${(run.cutoff || '').toLowerCase()}`
+}
+
+const groupSelectOptions = computed(() => {
+  const names = new Set()
+  for (const run of rows.value) if (run.group) names.add(run.group)
+  return [
+    { label: 'All payout groups', value: null },
+    ...[...names].sort((a, b) => a.localeCompare(b)).map((n) => ({ label: n, value: n })),
+  ]
+})
+
+// Insertion order, not alphabetical: the rows arrive in the order the cutoff
+// endpoint returned its cutoffs, which is chronological, and sorting names like
+// "Sept 1-15" as text would shuffle them.
+const cutoffSelectOptions = computed(() => {
+  const seen = new Map()
+  for (const run of rows.value) {
+    const key = cutoffKey(run)
+    if (!seen.has(key)) seen.set(key, { label: run.cutoff || 'Unnamed cutoff', value: key })
+  }
+  return [{ label: 'All cutoffs', value: null }, ...seen.values()]
+})
+
+const activeCutoffLabel = computed(() => {
+  if (cutoffFilter.value) {
+    return cutoffSelectOptions.value.find((o) => o.value === cutoffFilter.value)?.label || ''
+  }
+  return cutoffFilterLabel.value
+})
+
+const cutoffScopedRuns = computed(() => {
+  if (!cutoffFilterId.value && !cutoffFilterLabel.value) return rows.value
+
+  // The id is the exact key, so it wins whenever it matches anything at all.
+  if (cutoffFilterId.value) {
+    const byId = rows.value.filter((run) => String(run.cutoffId) === cutoffFilterId.value)
+    if (byId.length) return byId
+  }
+
+  if (!cutoffFilterLabel.value) return rows.value
+  const label = cutoffFilterLabel.value.toLowerCase()
+  const byLabel = rows.value.filter((run) => (run.cutoff || '').toLowerCase() === label)
+  // Neither key found the cutoff — the two endpoints disagree about both its id
+  // and its name. Showing everything is the honest answer; the chip stays up so
+  // the reader can see the narrowing was asked for and did not take.
+  return byLabel.length ? byLabel : rows.value
+})
+
+// Everything the toolbar narrowing leaves, before the search term. Kept apart
+// from `filteredRuns` because the subtitle counts the scope the reader chose,
+// not what they are part-way through typing.
+const narrowedRuns = computed(() => {
+  let out = cutoffScopedRuns.value
+  if (cutoffFilter.value) out = out.filter((run) => cutoffKey(run) === cutoffFilter.value)
+  if (groupFilter.value) out = out.filter((run) => run.group === groupFilter.value)
+  return out
+})
+
 const filteredRuns = computed(() => {
-  if (!searchTerm.value.trim()) return rows.value
+  const scoped = narrowedRuns.value
+  if (!searchTerm.value.trim()) return scoped
   const term = searchTerm.value.toLowerCase()
-  return rows.value.filter((run) => {
+  return scoped.filter((run) => {
     return (
       (run.group || '').toLowerCase().includes(term) ||
       (run.cutoff || '').toLowerCase().includes(term) ||
@@ -145,6 +291,12 @@ const filteredRuns = computed(() => {
   })
 })
 
+function clearCutoffFilter() {
+  cutoffFilterId.value = ''
+  cutoffFilterLabel.value = ''
+  page.value = 1
+}
+
 const totalPages = computed(
   () => Math.ceil((filteredRuns.value?.length ?? 0) / pageSize.value) || 1,
 )
@@ -153,9 +305,15 @@ const searchRef = ref(null)
 
 const headSummary = computed(() => {
   if (loading.value) return 'Loading payout groups…'
-  const n = rows.value.length
-  if (!n) return 'No payout groups in the open cutoffs'
-  return `${n} payout ${n === 1 ? 'group' : 'groups'} across open cutoffs`
+  // Counts what the narrowing actually leaves, not what was fetched — the
+  // subtitle sat above a filtered table claiming the full total otherwise.
+  const n = narrowedRuns.value.length
+  const parts = []
+  if (groupFilter.value) parts.push(groupFilter.value)
+  parts.push(activeCutoffLabel.value || 'the open cutoffs')
+  const scope = parts.join(' · ')
+  if (!n) return `No payout groups in ${scope}`
+  return `${n} payout ${n === 1 ? 'group' : 'groups'} in ${scope}`
 })
 
 /**
@@ -232,7 +390,39 @@ const paginatedRuns = computed(() => {
   return filteredRuns.value.slice(start, start + pageSize.value)
 })
 
+/**
+ * `?cutoff_id=` / `?cutoff=` opens the list already narrowed to one cutoff. The
+ * dashboard's "Previous cutoff is still open" alert links here that way, so its
+ * button lands on the groups it is complaining about rather than on the whole
+ * list of open cutoffs.
+ *
+ * Read before the rows arrive so the table renders narrowed once, rather than
+ * showing everything and then visibly dropping to a subset.
+ */
+function applyDeepLink() {
+  const linkedId = route.query.cutoff_id
+  const linkedLabel = route.query.cutoff
+  let applied = false
+
+  if (typeof linkedId === 'string' && linkedId.trim()) {
+    cutoffFilterId.value = linkedId.trim()
+    applied = true
+  }
+  if (typeof linkedLabel === 'string' && linkedLabel.trim()) {
+    cutoffFilterLabel.value = linkedLabel.trim()
+    applied = true
+  }
+
+  if (!applied) return
+
+  page.value = 1
+  // Consumed once. Left in the URL, a reload would re-apply a narrowing the
+  // reader had since dismissed, and the list would look permanently short.
+  router.replace({ query: {} })
+}
+
 onMounted(async () => {
+  applyDeepLink()
   try {
     const raw = await fetchCutoffInstances()
     const cutoffs = Array.isArray(raw) ? raw : raw?.results ?? []
@@ -248,8 +438,13 @@ onMounted(async () => {
       (c) => fetchPayoutGroupInstances(companyId.value, c.id).catch(() => null),
       10,
     )
-    rows.value = allGroups.flatMap((g) => g || []).map((item) => ({
+    // `fetchWithConcurrency` returns its results in input order, so the index
+    // still names the cutoff each batch of groups came from. The id is carried
+    // onto the row because the payload identifies a cutoff only by name, and a
+    // name is not something to filter an exact selection on.
+    rows.value = allGroups.flatMap((g, i) => (g || []).map((item) => ({
       id: item.id,
+      cutoffId: cutoffs[i]?.id ?? null,
       group: item.payout_group_name,
       cutoff: item.cutoff_instance_name,
       method: item.payout_method_name,
@@ -257,7 +452,7 @@ onMounted(async () => {
       netAmount: parseFloat(item.net_amount || 0),
       status: item.payout_status,
       statusDisplay: item.payout_status_display,
-    }))
+    })))
     loading.value = false
     notifyLoaded('Payout groups', rows.value.length, {
       noun: 'payout group',
@@ -310,7 +505,9 @@ function exportRuns() {
     doc.text(`Generated: ${new Date().toLocaleDateString('en-PH')}`, 14, 27)
 
     const headers = [['Group', 'Cutoff', 'Method', 'Employees', 'Net Amount', 'Status']]
-    const body = rows.value.map((run) => [
+    // The filtered set, not every row: the button is already disabled on it, and
+    // a PDF that ignores the toolbar would not be the list the reader exported.
+    const body = filteredRuns.value.map((run) => [
       run.group || '',
       run.cutoff || '',
       run.method || '',
@@ -381,12 +578,49 @@ function parseAmount(val) {
 // Both reset to page 1: narrowing the list while on page 3 would otherwise land
 // on a page that no longer exists. Search was previously reset by a `filterRuns`
 // handler on the input; a watcher covers it without the template wiring.
-watch([pageSize, searchTerm], () => {
+watch([pageSize, searchTerm, groupFilter, cutoffFilter], () => {
   page.value = 1
+})
+
+/**
+ * Hands a deep-linked cutoff over to the select as soon as the rows make it
+ * resolvable, so the narrowing shows up as a filter the reader can change rather
+ * than as a chip beside an untouched dropdown. The chip's own state is cleared
+ * once the select owns it; it stays only for a link that matched nothing.
+ */
+watch(rows, () => {
+  if (!cutoffFilterId.value && !cutoffFilterLabel.value) return
+  const wantedId = cutoffFilterId.value ? `id:${cutoffFilterId.value}` : null
+  const wantedLabel = cutoffFilterLabel.value.toLowerCase()
+  const match = cutoffSelectOptions.value.find(
+    (o) => o.value && (o.value === wantedId || o.label.toLowerCase() === wantedLabel),
+  )
+  if (!match) return
+  cutoffFilter.value = match.value
+  cutoffFilterId.value = ''
+  cutoffFilterLabel.value = ''
 })
 </script>
 
 <style scoped>
+/* A chip that is also the control for removing itself, so it needs the button
+   element's semantics without its chrome. */
+.disb-cutoff-chip {
+  border: 1px solid var(--dash-info-line);
+  cursor: pointer;
+  font-family: inherit;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.disb-cutoff-chip__x {
+  margin-left: 2px;
+  opacity: 0.65;
+}
+.disb-cutoff-chip:hover .disb-cutoff-chip__x {
+  opacity: 1;
+}
+
 /* ============================================================================
    DISBURSEMENT LIST
    ----------------------------------------------------------------------------
@@ -531,6 +765,39 @@ watch([pageSize, searchTerm], () => {
   color: var(--dash-ink-4);
 }
 
+/* Level with the search field rather than at Quasar's 56px default, so the
+   toolbar reads as one row of controls. */
+.disb-filter {
+  width: 178px;
+  flex-shrink: 0;
+}
+.disb-filter--cutoff {
+  width: 196px;
+}
+.disb-filter :deep(.q-field__control) {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
+}
+.disb-filter :deep(.q-field__native) {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  padding: 0;
+  min-height: 34px;
+}
+.disb-filter :deep(.q-field__marginal) {
+  height: 34px;
+  min-width: 0;
+  padding: 0;
+  color: var(--dash-ink-4);
+}
+.disb-filter :deep(.q-field__prepend) {
+  padding-right: 7px;
+}
+
 .disb-toolbar__count {
   margin-left: auto;
   font-size: 12.5px;
@@ -623,6 +890,11 @@ watch([pageSize, searchTerm], () => {
   .disb-search {
     flex: 1 1 100%;
     max-width: none;
+  }
+  .disb-filter,
+  .disb-filter--cutoff {
+    flex: 1 1 150px;
+    width: auto;
   }
   .disb-toolbar__count {
     display: none;
