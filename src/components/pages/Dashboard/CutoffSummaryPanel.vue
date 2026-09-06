@@ -15,7 +15,12 @@
       </li>
     </ul>
 
-    <template #footer>
+    <!-- Every figure above is settled somewhere else — a group is reviewed,
+         funded and released in Disbursement, not here — so the panel's one exit
+         is the cutoff it has just been counting. It is withheld rather than
+         disabled when no cutoff resolves: a button that cannot go anywhere is
+         worse than no button. -->
+    <template v-if="canOpen" #footer>
       <q-btn
         flat
         dense
@@ -23,8 +28,8 @@
         size="12px"
         class="rollup__link"
         icon-right="arrow_forward"
-        label="View employee-level issues"
-        @click="$emit('viewIssues')"
+        label="Open this cutoff"
+        @click="$emit('openCutoff')"
       />
     </template>
   </DashPanel>
@@ -53,9 +58,17 @@ const props = defineProps({
     }),
   },
   loading: { type: Boolean, default: false },
+  /**
+   * Whether there is a cutoff for the footer link to open. The tab knows; this
+   * panel is handed only the counts, so it cannot work it out for itself.
+   */
+  canOpen: { type: Boolean, default: false },
 })
 
-defineEmits(['viewIssues'])
+// Named to match `CutoffOverdueBanner`, which sends the reader to the same
+// screen for the same reason. One cutoff is overdue and the other is current,
+// but "open cutoff" is one action and keeps one name.
+defineEmits(['openCutoff'])
 
 const rows = computed(() => {
   const d = props.data ?? {}
