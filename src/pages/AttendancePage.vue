@@ -311,6 +311,7 @@ import { useAuthStore } from 'src/boot/auth'
 import { useCompany } from '@/composables/page/useCompany'
 import PageShell from '@/components/layout/PageShell.vue'
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { useEmployees } from '@/composables/page/useEmployees'
@@ -1773,8 +1774,56 @@ watch(
   },
 )
 
+// ─── Deep link ────────────────────────────────────────────────────────────────
+/**
+ * `/app/attendance?employee=<name>&date=<YYYY-MM-DD>` opens the page already
+ * narrowed to one person on one day. The dashboard's "Needs action today" queue
+ * uses it: a row there names an attendance problem, and fixing one means
+ * editing that person's punches, which only this page can do.
+ *
+ * The employee arrives as a display name rather than an id because the queue's
+ * endpoint sends no id — and this page's employee filter is its search box,
+ * which matches on name too, so the two agree on the same key. The term lands
+ * in the search box rather than in hidden state, so it shows up as a filter
+ * chip the reader can see and clear.
+ *
+ * Applied before the first fetch: the endpoint is keyed by year/month, so
+ * setting the date afterwards would mean fetching the current month and then
+ * immediately refetching the linked one.
+ */
+const route = useRoute()
+const router = useRouter()
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+function applyDeepLink() {
+  const linkedDate = route.query.date
+  const linkedEmployee = route.query.employee
+  let applied = false
+
+  if (typeof linkedDate === 'string' && ISO_DATE.test(linkedDate)) {
+    currentDate.value = linkedDate
+    filters.value.date_from = linkedDate
+    filters.value.date_to = linkedDate
+    applied = true
+  }
+
+  if (typeof linkedEmployee === 'string' && linkedEmployee.trim()) {
+    employeeSearch.value = linkedEmployee.trim()
+    applied = true
+  }
+
+  if (!applied) return
+
+  pagination.value.page = 1
+  // Consumed once. Left in the URL, a reload would silently re-apply a filter
+  // the reader had since cleared, and the page would look stuck.
+  router.replace({ query: {} })
+}
+
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(async () => {
+  applyDeepLink()
   try {
     await Promise.all([fetchSites(), fetchCostCenters(), fetchEmployeeDetails()])
     await fetchAttendanceData()
