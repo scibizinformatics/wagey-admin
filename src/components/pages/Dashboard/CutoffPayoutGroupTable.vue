@@ -2,6 +2,10 @@
   <div class="payout">
     <DashSkeleton v-if="loading" variant="table" :rows="6" :columns="6" />
 
+    <!-- The panel this sits in renders the empty state, off the same filter rule
+         (composables/utils/cutoffPayoutGroups.js), so this table is never
+         mounted with nothing in it. `hide-no-data` stays as the backstop that
+         keeps Quasar's own "No data available" strip from ever appearing. -->
     <q-table
       v-else
       :rows="rows"
@@ -60,25 +64,16 @@
           <CutoffStatusBadge :status="props.row.status" />
         </q-td>
       </template>
-
-      <template v-slot:no-data>
-        <div class="dash-empty">
-          <q-icon name="filter_alt_off" size="26px" :style="{ color: 'var(--dash-ink-3)' }" />
-          <p class="dash-empty__title">No payout groups match this view</p>
-          <p class="dash-empty__sub">Clear the stage filter or the "hide completed" toggle to see them all.</p>
-        </div>
-      </template>
     </q-table>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { filterCutoffPayoutGroups } from '@/composables/utils/cutoffPayoutGroups'
 import CutoffStatusBadge from '@/components/pages/Dashboard/CutoffStatusBadge.vue'
 import DashSkeleton from '@/components/pages/Dashboard/DashSkeleton.vue'
 import ProgressFraction from '@/components/pages/Dashboard/ProgressFraction.vue'
-
-defineEmits(['action', 'update:pagination'])
 
 const props = defineProps({
   groups: { type: Array, default: () => [] },
@@ -108,12 +103,12 @@ const columns = [
   { name: 'status', label: 'Status', field: 'status', align: 'left', sortable: true, classes: 'col-status', headerClasses: 'col-status' },
 ]
 
-const filteredRows = computed(() => {
-  let list = props.groups
-  if (props.hideCompleted) list = list.filter((g) => g.status !== 'complete')
-  if (props.statusFilter) list = list.filter((g) => g.status === props.statusFilter)
-  return list
-})
+const filteredRows = computed(() =>
+  filterCutoffPayoutGroups(props.groups, {
+    hideCompleted: props.hideCompleted,
+    statusFilter: props.statusFilter,
+  }),
+)
 
 const filteredCount = computed(() => filteredRows.value.length)
 
