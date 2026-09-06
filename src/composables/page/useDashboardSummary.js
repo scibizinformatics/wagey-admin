@@ -403,7 +403,61 @@ export function useDashboardSummary() {
     salaries_pending_release: 0,
   })
 
-  const previousCutoffIncomplete = ref(null)
+  /**
+   * Backs the alert at the top of the Current Cutoff tab: a prior cutoff that
+   * never finished disbursing.
+   *
+   * This used to be a stub — `fetchPreviousCutoffStatus()` slept 200ms and
+   * assigned a hardcoded "July 1-15, 2026 has 1 payout group", so the banner
+   * said the same thing for every company on every day, and its button had
+   * nothing real behind it to open. It is derived from the cutoffs the
+   * dashboard already holds instead, by the same rule `secondaryCutoffNotice`
+   * below applies: a payout group is outstanding until it is funded or
+   * complete. When nothing is outstanding the alert does not render at all,
+   * which is the behaviour the stub could never produce.
+   *
+   * `cutoff_id` is what makes it actionable — the Disbursement list narrows to
+   * a cutoff by id. The label travels alongside it because the two screens read
+   * cutoffs from different endpoints (`payroll-trend` here, `cutoff-instances`
+   * there) and this code cannot prove they number them the same way; the list
+   * falls back to matching on the label if the id finds nothing.
+   */
+  const previousCutoffIncomplete = computed(() => {
+    const prev = previousCutoff.value
+    if (!prev) return null
+    const incomplete = prev.payout_groups.filter(
+      (g) => g.status !== 'funded' && g.status !== 'complete',
+    )
+    if (!incomplete.length) return null
+    return {
+      cutoff_id: prev.id ?? null,
+      cutoff_range: prev.period_label || 'Previous cutoff',
+      groups_count: incomplete.length,
+    }
+  })
+
+  /**
+   * The cutoff the tab is currently showing, in the shape the Disbursement list
+   * accepts as a deep link.
+   *
+   * "Where this cutoff stands" counts work that is only actionable over there —
+   * a group still under review, a payslip nobody has acknowledged, a salary not
+   * yet released — so the panel's footer link has to name the cutoff it is
+   * counting rather than hand the reader every open one and let them find it.
+   *
+   * Null when no cutoff resolves at all, which is what lets the panel drop the
+   * link instead of offering a button that lands nowhere. Both keys travel for
+   * the same reason `previousCutoffIncomplete` sends both: the two screens read
+   * cutoffs from different endpoints and may not number them alike.
+   */
+  const currentCutoffLink = computed(() => {
+    const cutoff = resolveCutoff()
+    if (!cutoff) return null
+    return {
+      cutoff_id: cutoff.id ?? null,
+      cutoff_range: cutoff.period_label || 'Current cutoff',
+    }
+  })
 
   const cutoffStatusSummary = ref({})
 
@@ -592,14 +646,6 @@ export function useDashboardSummary() {
     }
   }
 
-  async function fetchPreviousCutoffStatus() {
-    await new Promise((r) => setTimeout(r, 200))
-    previousCutoffIncomplete.value = {
-      cutoff_range: 'July 1–15, 2026',
-      groups_count: 1,
-    }
-  }
-
   async function fetchCurrentCutoff(companyId) {
     if (!companyId) return
     currentCutoffLoading.value = true
@@ -612,7 +658,6 @@ export function useDashboardSummary() {
         fetchPayoutGroupDetails(companyId),
         fetchCutoffSummaryRollup(companyId),
         fetchCutoffStatusSummary(companyId),
-        fetchPreviousCutoffStatus(),
       ])
     } catch (err) {
       console.error('[useDashboardSummary] fetchCurrentCutoff failed:', err)
@@ -848,6 +893,7 @@ export function useDashboardSummary() {
     payoutGroupDetails,
     cutoffSummaryRollup,
     previousCutoffIncomplete,
+    currentCutoffLink,
     cutoffStatusSummary,
     hideCompleted,
     selectedCutoff,
@@ -857,7 +903,6 @@ export function useDashboardSummary() {
     fetchPayoutGroupDetails,
     fetchCutoffSummaryRollup,
     fetchCutoffStatusSummary,
-    fetchPreviousCutoffStatus,
     // today tab data
     priorityItems,
     workforceStatus,
