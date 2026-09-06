@@ -13,7 +13,14 @@
     skeleton="table"
     :skeleton-rows="ROWS_PER_PAGE"
   >
-    <DashTable :columns="columns" :rows="pagedItems" :min-width="560">
+    <DashTable
+      :columns="columns"
+      :rows="pagedItems"
+      :min-width="640"
+      row-clickable
+      :row-label="rowLabel"
+      @row-click="openAttendance"
+    >
       <template #cell-employee="{ row }">
         <span class="emp">
           <q-avatar size="24px" :style="{ background: avatarColor(row.employee) }" class="emp__avatar">
@@ -30,6 +37,13 @@
           <span class="dash-chip__dot" />
           {{ row.actionType }}
         </span>
+      </template>
+
+      <!-- The row is the control, so this is only the sign that it is one. It
+           rides in on hover rather than sitting there permanently, which would
+           put a column of arrows down a panel whose job is to be read. -->
+      <template #cell-go>
+        <q-icon name="chevron_right" size="16px" class="go" aria-hidden="true" />
       </template>
     </DashTable>
 
@@ -55,6 +69,7 @@
  * whether the day is clear without reading the rows.
  */
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
 import DashPager from '@/components/pages/Dashboard/DashPager.vue'
 import DashTable from '@/components/pages/Dashboard/DashTable.vue'
@@ -62,14 +77,61 @@ import DashTable from '@/components/pages/Dashboard/DashTable.vue'
 const props = defineProps({
   items: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
+  /**
+   * The day this queue was fetched for — the dashboard's date picker, not
+   * necessarily today. It travels with the row into Attendance so the page
+   * opens on the day the issue is about rather than on whatever day it is now.
+   */
+  date: { type: String, default: '' },
 })
+
+const router = useRouter()
+
+/**
+ * Wide enough for the longest impact label plus the chip's dot, padding and
+ * border. The set is fixed and short — "May Affect Payroll", "Attendance
+ * Incomplete", "Affects Staffing", "Unauthorized Work" — so this is a real
+ * measurement of a known worst case, not a guess at arbitrary content.
+ */
+const IMPACT_MIN_WIDTH = 208
 
 const columns = [
   { key: 'employee', label: 'Employee', flex: 1.3, strong: true },
   { key: 'site', label: 'Site', flex: 0.9 },
   { key: 'issue', label: 'Issue', flex: 1.4 },
-  { key: 'actionType', label: 'Impact', flex: 1 },
+  // The impact chip is `white-space: nowrap` inside a cell that hides its
+  // overflow, so a share of the spare space is not enough on its own — the
+  // column has to be able to hold the longest label ("Attendance Incomplete")
+  // whatever else is on the row, or the chip is quietly cut off mid-border.
+  { key: 'actionType', label: 'Impact', flex: 1, minWidth: IMPACT_MIN_WIDTH },
+  // Holds the hover chevron, and nothing else — as narrow as the glyph, so the
+  // affordance costs the four reading columns as little as possible.
+  { key: 'go', label: '', width: 16 },
 ]
+
+/**
+ * Open the row's employee on the Attendance page for the day in question.
+ *
+ * The queue is a list of attendance problems, and resolving one means editing
+ * that person's punches — which lives on Attendance, not here. The link is by
+ * employee *name*: this endpoint identifies people by display name only (it
+ * sends no id), and Attendance's own employee filter is its search box, which
+ * matches on name too, so the two meet where they already agree.
+ */
+function openAttendance(row) {
+  if (!row?.employee) return
+  router.push({
+    name: 'attendance',
+    query: {
+      employee: row.employee,
+      ...(props.date ? { date: props.date } : {}),
+    },
+  })
+}
+
+function rowLabel(row) {
+  return `Open ${row.employee}'s attendance — ${row.issue}`
+}
 
 // The queue routinely runs to dozens of rows — three per employee with an
 // incomplete day — which grew the panel far past everything beside it. It is
@@ -171,5 +233,19 @@ function avatarColor(name) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Revealed on hover or when the row itself takes keyboard focus, so a keyboard
+   reader gets the same sign a mouse reader does. Opacity rather than
+   `display`, so the column never changes width under the pointer. */
+.go {
+  color: var(--dash-ink-4);
+  opacity: 0;
+  transition: opacity var(--dash-fast) var(--dash-ease);
+}
+
+.dash-table__row:hover .go,
+.dash-table__row:focus-visible .go {
+  opacity: 1;
 }
 </style>
