@@ -127,6 +127,7 @@
         <TodayTab
           v-if="activeView === 'today'"
           :loading="currentCutoffLoading"
+          :date="todayDate"
           :priority-items="priorityItems"
           :attention-summary="needsAttention"
           :workforce-status="workforceStatus"
@@ -141,6 +142,7 @@
           :cutoff-summary-rollup="cutoffSummaryRollup"
           :cutoff-status-summary="cutoffStatusSummary"
           :previous-cutoff-incomplete="previousCutoffIncomplete"
+          :current-cutoff-link="currentCutoffLink"
           :hide-completed="hideCompleted"
         />
         <MonthlySummaryTab
@@ -236,6 +238,7 @@ const {
   cutoffSummaryRollup,
   cutoffStatusSummary,
   previousCutoffIncomplete,
+  currentCutoffLink,
   hideCompleted,
   selectedCutoff,
   cutoffOptions,
