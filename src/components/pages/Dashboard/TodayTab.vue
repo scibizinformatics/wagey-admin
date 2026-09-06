@@ -2,7 +2,12 @@
   <div class="today">
     <!-- Lead row: the queue you act on, with the open-item counters beside it. -->
     <div class="today__row today__row--lead">
-      <PriorityItemsPanel class="today__primary" :items="priorityItems" :loading="loading" />
+      <PriorityItemsPanel
+        class="today__primary"
+        :items="priorityItems"
+        :loading="loading"
+        :date="date"
+      />
       <AttentionSummaryPanel
         class="today__secondary"
         :attention-summary="attentionSummary"
@@ -37,6 +42,8 @@ import TodayGuidePanel from '@/components/pages/Dashboard/TodayGuidePanel.vue'
 
 defineProps({
   loading: { type: Boolean, default: false },
+  /** The day the tab's data was fetched for; the queue links into it. */
+  date: { type: String, default: '' },
   priorityItems: { type: Array, default: () => [] },
   attentionSummary: { type: Object, default: () => ({}) },
   workforceStatus: { type: Array, default: () => [] },
