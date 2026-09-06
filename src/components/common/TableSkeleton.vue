@@ -60,7 +60,17 @@ const props = defineProps({
   columns: { type: Array, required: true },
   /** How many placeholder rows to draw. */
   rows: { type: Number, default: 5 },
-  /** Match `dash-qtable--flush`: no top padding on the header strip. */
+  /**
+   * Match `dash-qtable--flush`: no top padding on the header strip.
+   *
+   * Pass it only when the live table's header really has none. It is currently
+   * unused, because every flush table in the app sits under a toolbar and puts
+   * the padding back with a rule of its own — so the six callers that carried
+   * `flush` to mirror the class were zeroing a header the real table did not
+   * zero, and their column labels sat on the toolbar's hairline until the fetch
+   * returned and then jumped down. Mirror the header's computed padding, not
+   * the class list.
+   */
   flush: { type: Boolean, default: false },
   /** Match `dash-qtable--compact`: the in-dialog density. */
   compact: { type: Boolean, default: false },

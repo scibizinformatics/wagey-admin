@@ -61,7 +61,7 @@
 
     <!-- Loading. Built from the live `otColumns`, so the placeholder shares
          the real table's columns, labels and alignment. -->
-    <TableSkeleton v-if="loading" :columns="otColumns" :rows="5" flush />
+    <TableSkeleton v-if="loading" :columns="otColumns" :rows="5" wrap-class="request-tskel" />
 
     <!-- Empty -->
     <div v-else-if="rows.length === 0" class="grid-empty">

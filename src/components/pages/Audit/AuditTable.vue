@@ -2,7 +2,7 @@
   <div class="aud-tbl">
     <!-- Built from the same column list the table renders, so the placeholder's
          column edges are the table's and nothing shifts on load. -->
-    <TableSkeleton v-if="loading" :columns="columns" :rows="8" flush :min-width="880" />
+    <TableSkeleton v-if="loading" :columns="columns" :rows="8" :min-width="880" />
 
     <div v-else-if="!rows.length" class="dash-empty">
       <span class="dash-featured-icon">

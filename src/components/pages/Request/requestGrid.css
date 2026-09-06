@@ -132,6 +132,19 @@
 .request-grid .grid-head-cell {
   padding-top: 14px;
 }
+
+/* The skeleton that stands in for these grids while they load has to repeat
+   that padding, or the column labels sit against the toolbar's hairline for
+   exactly as long as the fetch takes and then drop 14px when the real table
+   arrives. TableSkeleton's `flush` prop is what the placeholder used to carry —
+   it mirrors `dash-qtable--flush`, so it zeroed the top padding and never saw
+   the rule above that puts it back. The skeleton is given `request-tskel` and
+   no `flush` instead, which leaves it on the system's own 13px and nudges it to
+   the 14px these toolbars need. `:deep` because the <th> belongs to that child
+   component's scope, not this one's. */
+.request-tskel :deep(th) {
+  padding-top: 14px;
+}
 /* A bare `<th>` centres its text — that is the HTML default, and nothing in
    Quasar's table CSS overrides it. `<q-th>` only supplies an alignment class
    (`text-left` / `text-right`) when it is given `:props`, which the cash

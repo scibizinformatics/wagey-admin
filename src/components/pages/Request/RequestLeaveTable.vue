@@ -60,7 +60,7 @@
     </div>
     <!-- Loading. Built from the live `leaveColumns`, so the placeholder shares
          the real table's columns, labels and alignment. -->
-    <TableSkeleton v-if="loading" :columns="leaveColumns" :rows="5" flush />
+    <TableSkeleton v-if="loading" :columns="leaveColumns" :rows="5" wrap-class="request-tskel" />
 
     <!-- Empty -->
     <div v-else-if="rows.length === 0" class="grid-empty">
