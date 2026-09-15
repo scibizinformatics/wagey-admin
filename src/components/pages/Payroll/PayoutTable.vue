@@ -7,7 +7,6 @@
     row-key="id"
     flat
     hide-pagination
-    hide-no-data
     class="dash-qtable dash-qtable--flush payout-table"
   >
     <template #body="props">
@@ -63,8 +62,13 @@
       </q-tr>
     </template>
 
+    <!-- This slot was written but never reached: `hide-no-data` was set on the
+         table alongside it, and that prop suppresses the slot rather than only
+         Quasar's default message, so an empty cutoff drew a header strip over
+         nothing. The prop is gone; the loading guard is what keeps the empty
+         state from claiming there are no runs before the fetch has answered. -->
     <template #no-data>
-      <div class="dash-empty">
+      <div v-if="!loading" class="dash-empty">
         <span class="dash-featured-icon">
           <q-icon name="o_payments" size="20px" />
         </span>
@@ -194,6 +198,16 @@ function formatPeso(value) {
    zero, or the header jumps down mid-fetch. */
 .payout-table :deep(.q-table thead tr:not(.q-table__progress) th) {
   padding-top: 14px;
+}
+
+/* Quasar renders the empty state inside its bottom bar, which is built for a
+   pagination row: 48px min-height, side padding and a top hairline. The panel
+   brings its own spacing, so without this reset it sits inset and double-ruled
+   under the header. */
+.payout-table :deep(.q-table__bottom--nodata) {
+  min-height: 0;
+  padding: 0;
+  border-top: none;
 }
 
 /* ── Identity ── */
