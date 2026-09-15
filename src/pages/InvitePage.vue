@@ -135,7 +135,7 @@
 
     <InviteSuccessDialog
       v-model="showSuccessDialog"
-      :sent-to-email="sentToEmail"
+      :emails="sentEmails"
       @send-another="sendAnother"
     />
   </PageShell>
@@ -154,6 +154,7 @@ import InviteInviteModal from '@/components/pages/Invite/InviteInviteModal.vue'
 import InviteViewModal from '@/components/pages/Invite/InviteViewModal.vue'
 import InviteSuccessDialog from '@/components/pages/Invite/InviteSuccessDialog.vue'
 import { inviteState, roleLabel } from '@/components/pages/Invite/inviteStatus'
+import { normalizeEmail } from '@/components/pages/Invite/inviteEmails'
 import { useToast } from '@/composables/useToast'
 
 const $q = useQuasar()
@@ -167,7 +168,7 @@ const { company, companyId } = useCompany()
 const showInviteModal = ref(false)
 const showViewModal = ref(false)
 const showSuccessDialog = ref(false)
-const sentToEmail = ref('')
+const sentEmails = ref([])
 const searchTerm = ref('')
 const statusFilter = ref('all')
 const selectedInvitation = ref(null)
@@ -305,21 +306,50 @@ const sendAnother = () => {
   showInviteModal.value = true
 }
 
-const sendInvitation = async (formData) => {
+/**
+ * One call for one address or for a batch — the endpoint has always taken
+ * `emails: []`, so bulk is the same request with a longer array rather than N
+ * requests. That is why this is not the per-item loop the app's other bulk
+ * writes use: there are no per-item calls to settle here.
+ *
+ * It does mean the response says nothing about individual addresses, so the
+ * refreshed list is the only thing that can confirm a batch became N
+ * invitations. Anything missing from it is reported rather than folded into the
+ * success message, since a silent drop leaves somebody uninvited with the
+ * confirmation still reading as clean.
+ */
+const sendInvitation = async ({ emails, user_role }) => {
   try {
-    const payload = {
-      emails: [formData.email],
-      user_role: Number(formData.user_role),
+    // Taken before the send so the check below can tell an invitation this send
+    // created from one that was already on the list.
+    const before = new Set(invites.value.map((row) => normalizeEmail(row.email)))
+
+    await sendInvite({
+      emails,
+      user_role: Number(user_role),
       company_id: Number(companyId.value),
-    }
+    })
 
-    await sendInvite(payload)
-
-    sentToEmail.value = formData.email
+    sentEmails.value = [...emails]
     showInviteModal.value = false
     showSuccessDialog.value = true
 
     await loadInvitations()
+
+    // Only the addresses that were new to the list can be verified: a
+    // pre-existing invitation would show up either way, so counting it would
+    // hide a drop rather than reveal one.
+    const expected = emails.filter((email) => !before.has(normalizeEmail(email)))
+    if (expected.length > 1) {
+      const landed = new Set(invites.value.map((row) => normalizeEmail(row.email)))
+      const missing = expected.filter((email) => !landed.has(normalizeEmail(email)))
+      if (missing.length) {
+        toast.warning(
+          `${missing.length} of ${expected.length} addresses are not showing as invited yet: ${missing.join(', ')}`,
+          { timeout: 10000 },
+        )
+      }
+    }
   } catch (error) {
     toast.error(extractErrorMessage(error, 'Failed to send invitation'), { timeout: 10000 })
   }
