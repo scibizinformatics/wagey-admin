@@ -2,8 +2,48 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE } from 'src/composables/utils/http'
+import { BASE, extractErrorMessage } from 'src/composables/utils/http'
 import { useToast } from 'src/composables/useToast'
+
+export const SITE_OWNERSHIP_TYPES = ['owned', 'leased', 'partnership']
+
+/*
+ * `location_type` is the site's own nature, not an employee's arrangement: an
+ * on-site location is one people physically report to, and so the one the
+ * geofence, the radius and OTP are actually about. The API takes the bare slug.
+ */
+export const SITE_LOCATION_TYPES = [
+  { label: 'On site', value: 'on_site' },
+  { label: 'Off site', value: 'off_site' },
+]
+
+const MAX_LOGO_BYTES = 5 * 1024 * 1024
+
+function emptyForm(companyId = null) {
+  return {
+    id: null,
+    name: '',
+    brand_name: '',
+    location: '',
+    location_type: 'on_site',
+    latitude: '',
+    longitude: '',
+    radius_meters: 100,
+    phone_number: '',
+    ownership_type: 'owned',
+    is_active: true,
+    requires_otp: false,
+    company: companyId,
+    business_type: null,
+    // `logo` holds a freshly picked File; `logo_url` is whatever the server
+    // already has. They are kept apart so an edit that does not touch the logo
+    // sends no logo key at all, rather than posting a URL string back at a
+    // field that expects an upload.
+    logo: null,
+    logo_url: '',
+    logo_cleared: false,
+  }
+}
 
 export function useAdminSites() {
   const $q = useQuasar()
@@ -17,25 +57,7 @@ export function useAdminSites() {
   // ─── Dialog state ──────────────────────────────────────────────────────────
   const dialog = ref(false)
   const editing = ref(false)
-  const form = ref({
-    id: null,
-    name: '',
-    brand_name: '',
-    otp_secret: '',
-    location: '',
-    latitude: '',
-    longitude: '',
-    radius_meters: 100,
-    ownership_type: 'owned',
-    is_active: true,
-    requires_otp: false,
-    allow_manual_attendance: true,
-    allow_service_charge: true,
-    multiply_nd_by_holiday: false,
-    extended_shift_days: '',
-    company: null,
-    business_type: null,
-  })
+  const form = ref(emptyForm())
 
   // ─── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -53,7 +75,7 @@ export function useAdminSites() {
       return sites.value
     } catch (error) {
       console.error('Error fetching sites:', error)
-      toast.error(error.response?.data?.message || 'Failed to load sites')
+      toast.error(extractErrorMessage(error, 'Failed to load sites'))
     } finally {
       loading.value = false
     }
@@ -63,53 +85,107 @@ export function useAdminSites() {
 
   function openDialog() {
     editing.value = false
-    form.value = {
-      id: null,
-      name: '',
-      brand_name: '',
-      otp_secret: '',
-      location: '',
-      latitude: '',
-      longitude: '',
-      radius_meters: 100,
-      ownership_type: 'owned',
-      is_active: true,
-      requires_otp: false,
-      allow_manual_attendance: true,
-      allow_service_charge: true,
-      multiply_nd_by_holiday: false,
-      extended_shift_days: '',
-      company: companyId.value,
-      business_type: null,
-    }
+    form.value = emptyForm(companyId.value)
     dialog.value = true
   }
 
   function openEditDialog(site) {
     editing.value = true
     form.value = {
+      ...emptyForm(site.company ?? companyId.value),
       id: site.id,
       name: site.name ?? '',
       brand_name: site.brand_name ?? '',
-      otp_secret: site.otp_secret ?? '',
       location: site.location ?? '',
+      location_type: site.location_type ?? 'on_site',
       latitude: site.latitude ?? '',
       longitude: site.longitude ?? '',
       radius_meters: site.radius_meters ?? 100,
+      phone_number: site.phone_number ?? '',
       ownership_type: site.ownership_type ?? 'owned',
       is_active: site.is_active ?? true,
       requires_otp: site.requires_otp ?? false,
-      allow_manual_attendance: site.allow_manual_attendance ?? true,
-      allow_service_charge: site.allow_service_charge ?? true,
-      multiply_nd_by_holiday: site.multiply_nd_by_holiday ?? false,
-      extended_shift_days: site.extended_shift_days ?? '',
-      company: site.company ?? companyId.value,
       business_type: site.business_type ?? null,
+      logo_url: site.logo ?? '',
     }
     dialog.value = true
   }
 
+  /*
+   * Checked on pick rather than at save: an oversized or non-image file should
+   * be answered while the person is still looking at the picker, not after they
+   * have filled in the rest of the form.
+   */
+  function setLogo(file) {
+    if (!file) {
+      form.value.logo = null
+      return true
+    }
+    if (!file.type?.startsWith('image/')) {
+      toast.error('The logo must be an image file')
+      return false
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      toast.error('The logo must be smaller than 5MB')
+      return false
+    }
+    form.value.logo = file
+    form.value.logo_cleared = false
+    return true
+  }
+
+  function clearLogo() {
+    form.value.logo = null
+    form.value.logo_url = ''
+    form.value.logo_cleared = true
+  }
+
   // ─── Save ──────────────────────────────────────────────────────────────────
+
+  function buildPayload() {
+    // Latitude and longitude are DRF decimals: the field validates a
+    // fixed-point string, and a bare Number would send `14.6` for a value the
+    // map produced at seven places.
+    const fmt = (v, d = 5) => {
+      const n = Number(v)
+      return isNaN(n) ? '0.00000' : n.toFixed(d).padStart(d + 4, '0')
+    }
+
+    const payload = {
+      name: form.value.name.trim(),
+      brand_name: form.value.brand_name?.trim() || '',
+      location: form.value.location.trim(),
+      location_type: form.value.location_type || 'on_site',
+      latitude: fmt(form.value.latitude),
+      longitude: fmt(form.value.longitude),
+      radius_meters: parseInt(form.value.radius_meters) || 100,
+      phone_number: form.value.phone_number?.trim() || '',
+      ownership_type: form.value.ownership_type || 'owned',
+      is_active: Boolean(form.value.is_active),
+      requires_otp: Boolean(form.value.requires_otp),
+      company: companyId.value,
+    }
+    if (form.value.business_type) payload.business_type = form.value.business_type
+    return payload
+  }
+
+  /*
+   * JSON unless there is a file to carry. The logo is the only multipart field,
+   * and routing every save through FormData would turn `is_active` into the
+   * string "true" and hand the backend a booleanish text value instead.
+   */
+  function buildBody(payload) {
+    const file = form.value.logo instanceof File ? form.value.logo : null
+    if (!file) {
+      // An explicit clear is the one case where a logo key is still sent
+      // without a file behind it.
+      return form.value.logo_cleared ? { ...payload, logo: '' } : payload
+    }
+    const body = new FormData()
+    Object.entries(payload).forEach(([key, value]) => body.append(key, value))
+    body.append('logo', file)
+    return body
+  }
 
   async function saveSite() {
     if (!form.value.name.trim()) {
@@ -127,35 +203,13 @@ export function useAdminSites() {
 
     saving.value = true
     try {
-      const fmt = (v, d = 5) => {
-        const n = Number(v)
-        return isNaN(n) ? '0.00000' : n.toFixed(d).padStart(d + 4, '0')
-      }
-
-      const payload = {
-        name: form.value.name.trim(),
-        brand_name: form.value.brand_name?.trim() || '',
-        otp_secret: form.value.otp_secret?.trim() || '',
-        location: form.value.location.trim(),
-        latitude: fmt(form.value.latitude),
-        longitude: fmt(form.value.longitude),
-        radius_meters: parseInt(form.value.radius_meters) || 100,
-        ownership_type: form.value.ownership_type || 'owned',
-        is_active: Boolean(form.value.is_active),
-        requires_otp: Boolean(form.value.requires_otp),
-        allow_manual_attendance: Boolean(form.value.allow_manual_attendance),
-        allow_service_charge: Boolean(form.value.allow_service_charge),
-        multiply_nd_by_holiday: Boolean(form.value.multiply_nd_by_holiday),
-        extended_shift_days: form.value.extended_shift_days || '',
-        company: companyId.value,
-      }
-      if (form.value.business_type) payload.business_type = form.value.business_type
+      const body = buildBody(buildPayload())
 
       if (editing.value) {
-        await api.put(`${BASE}/organization/sites/${form.value.id}/`, payload)
+        await api.put(`${BASE}/organization/sites/${form.value.id}/`, body)
         toast.success('Site updated successfully')
       } else {
-        await api.post(`${BASE}/organization/sites/`, payload)
+        await api.post(`${BASE}/organization/sites/`, body)
         toast.success('Site created successfully')
       }
 
@@ -163,19 +217,7 @@ export function useAdminSites() {
       await fetchSites()
     } catch (error) {
       console.error('Error saving site:', error)
-      let errorMessage = 'Failed to save site'
-      if (error.response?.data) {
-        const d = error.response.data
-        if (typeof d === 'object') {
-          const first = Object.values(d)[0]
-          errorMessage = Array.isArray(first) ? first[0] : first
-        } else if (d.message) {
-          errorMessage = d.message
-        } else if (typeof d === 'string') {
-          errorMessage = d
-        }
-      }
-      toast.error(errorMessage, { timeout: 3000 })
+      toast.error(extractErrorMessage(error, 'Failed to save site'), { timeout: 3000 })
     } finally {
       saving.value = false
     }
@@ -197,7 +239,7 @@ export function useAdminSites() {
         await fetchSites()
       } catch (error) {
         console.error('Error deleting site:', error)
-        toast.error(error.response?.data?.message || 'Failed to delete site')
+        toast.error(extractErrorMessage(error, 'Failed to delete site'))
       }
     })
   }
@@ -212,6 +254,8 @@ export function useAdminSites() {
     fetchSites,
     openDialog,
     openEditDialog,
+    setLogo,
+    clearLogo,
     saveSite,
     deleteSite,
   }

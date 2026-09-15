@@ -45,9 +45,24 @@
           </template>
           <template v-slot:body="props">
             <q-tr class="table-body-row">
-              <q-td class="table-body-cell"
-                ><span class="item-name">{{ props.row.name }}</span></q-td
-              >
+              <!-- The logo is only worth a column inline with the name it
+                   belongs to; a site without one falls back to its initial
+                   rather than leaving a hole in the column. -->
+              <q-td class="table-body-cell">
+                <div class="site-name-cell">
+                  <span class="site-logo">
+                    <img
+                      v-if="props.row.logo"
+                      :src="props.row.logo"
+                      :alt="`${props.row.name} logo`"
+                    />
+                    <template v-else>{{
+                      (props.row.name || '?').charAt(0).toUpperCase()
+                    }}</template>
+                  </span>
+                  <span class="item-name">{{ props.row.name }}</span>
+                </div>
+              </q-td>
               <q-td class="table-body-cell">{{ props.row.location }}</q-td>
               <q-td class="table-body-cell">
                 <div
@@ -169,7 +184,7 @@
                 </q-input>
               </label>
             </div>
-            <div class="col-12">
+            <div class="col-6">
               <label class="dash-modal__field">
                 <span class="dash-modal__field-label">Brand Name</span>
                 <q-input
@@ -182,6 +197,69 @@
                   <template v-slot:prepend><q-icon name="label" size="18px" /></template>
                 </q-input>
               </label>
+            </div>
+            <div class="col-6">
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Phone Number</span>
+                <q-input
+                  v-model="siteForm.phone_number"
+                  outlined
+                  dense
+                  placeholder="e.g. +63 2 8123 4567"
+                  hide-bottom-space
+                  class="dash-field"
+                >
+                  <template v-slot:prepend><q-icon name="call" size="18px" /></template>
+                </q-input>
+              </label>
+            </div>
+            <!-- The logo is the one multipart field on this form: a picked file
+                 is previewed from an object URL, and an existing one is shown
+                 as the server sent it. -->
+            <div class="col-12">
+              <div class="dash-modal__field">
+                <span class="dash-modal__field-label">Logo</span>
+                <div class="logo-field">
+                  <div class="logo-preview" :class="{ 'logo-preview--empty': !logoPreview }">
+                    <img v-if="logoPreview" :src="logoPreview" alt="Site logo preview" />
+                    <q-icon v-else name="image" size="22px" />
+                  </div>
+                  <div class="logo-actions">
+                    <div class="logo-filename">{{ logoLabel }}</div>
+                    <div class="logo-buttons">
+                      <q-btn
+                        flat
+                        dense
+                        no-caps
+                        size="12px"
+                        class="logo-btn"
+                        :label="logoPreview ? 'Replace' : 'Upload image'"
+                        icon="upload"
+                        @click="logoInput?.click()"
+                      />
+                      <q-btn
+                        v-if="logoPreview"
+                        flat
+                        dense
+                        no-caps
+                        size="12px"
+                        class="logo-btn logo-btn--remove"
+                        label="Remove"
+                        icon="close"
+                        @click="onLogoRemove"
+                      />
+                    </div>
+                    <span class="logo-hint">PNG or JPG, up to 5MB</span>
+                  </div>
+                  <input
+                    ref="logoInput"
+                    type="file"
+                    accept="image/*"
+                    class="logo-input"
+                    @change="onLogoPick"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -220,6 +298,31 @@
                   <div ref="siteMapContainer" class="site-map-container" />
                 </div>
               </div>
+            </div>
+            <!-- Full width and hinted rather than paired off in a half column:
+                 it is the field that decides whether the radius above it means
+                 anything, so it should not read as one more small select. -->
+            <div class="col-12">
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Location Type</span>
+                <q-select
+                  v-model="siteForm.location_type"
+                  :options="locationTypeOptions"
+                  emit-value
+                  map-options
+                  outlined
+                  dense
+                  hide-bottom-space
+                  class="dash-field"
+                  popup-content-class="dash-popup dash-popup--modal"
+                >
+                  <template v-slot:prepend><q-icon name="place" size="18px" /></template>
+                </q-select>
+                <span class="dash-modal__field-hint"
+                  >On-site locations are the ones people report to, and the ones the pin and radius
+                  are checked against.</span
+                >
+              </label>
             </div>
             <div class="col-6">
               <label class="dash-modal__field">
@@ -272,59 +375,6 @@
                 <span class="toggle-hint">Enable OTP verification</span>
               </div>
             </div>
-            <div class="toggle-item">
-              <q-toggle
-                v-model="siteForm.allow_manual_attendance"
-                color="primary"
-                class="brand-toggle"
-              />
-              <div class="toggle-label-group">
-                <span class="toggle-label">Manual Attendance</span>
-                <span class="toggle-hint">Allow manual clock-in/out</span>
-              </div>
-            </div>
-            <div class="toggle-item">
-              <q-toggle
-                v-model="siteForm.allow_service_charge"
-                color="primary"
-                class="brand-toggle"
-              />
-              <div class="toggle-label-group">
-                <span class="toggle-label">Service Charge</span>
-                <span class="toggle-hint">Include service charge</span>
-              </div>
-            </div>
-            <div class="toggle-item">
-              <q-toggle
-                v-model="siteForm.multiply_nd_by_holiday"
-                color="primary"
-                class="brand-toggle"
-              />
-              <div class="toggle-label-group">
-                <span class="toggle-label">Multiply ND by Holiday</span>
-                <span class="toggle-hint">Apply holiday multiplier</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-section-label">Additional</div>
-          <div class="row q-mb-md">
-            <div class="col-12">
-              <label class="dash-modal__field">
-                <span class="dash-modal__field-label">Extended Shift Days</span>
-                <q-input
-                  v-model="siteForm.extended_shift_days"
-                  outlined
-                  dense
-                  placeholder="e.g. Mon,Tue,Wed"
-                  hide-bottom-space
-                  class="dash-field"
-                >
-                  <template v-slot:prepend><q-icon name="date_range" size="18px" /></template>
-                  <template v-slot:hint>Comma-separated days for extended shifts</template>
-                </q-input>
-              </label>
-            </div>
           </div>
         </q-card-section>
 
@@ -355,10 +405,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import SitePositionRequirementsDialog from './SitePositionRequirementsDialog.vue'
-import { useAdminSites } from '@/composables/admin/useAdminSites'
+import {
+  useAdminSites,
+  SITE_OWNERSHIP_TYPES,
+  SITE_LOCATION_TYPES,
+} from '@/composables/admin/useAdminSites'
 import { useAdminSitePositionRequirements } from '@/composables/admin/useAdminSitePositionRequirements'
 
 const props = defineProps({
@@ -375,11 +429,14 @@ const {
   fetchSites,
   openDialog: openSiteDialog,
   openEditDialog: editSite,
+  setLogo,
+  clearLogo,
   saveSite,
   deleteSite,
 } = useAdminSites()
 
-const ownershipOptions = ['owned', 'leased', 'partnership']
+const ownershipOptions = SITE_OWNERSHIP_TYPES
+const locationTypeOptions = SITE_LOCATION_TYPES
 
 const siteColumns = ref([
   { name: 'name', label: 'Site Name', field: 'name', align: 'left', sortable: true },
@@ -400,6 +457,48 @@ const filteredSites = computed(() => {
       (s.ownership_type || '').toLowerCase().includes(q),
   )
 })
+
+// ─── Logo picker ───────────────────────────────────────────────────────────
+/*
+ * A picked file is previewed from an object URL, which has to be revoked by
+ * hand — the dialog is opened and closed repeatedly over a session, and every
+ * unreleased URL holds its image in memory for the life of the document.
+ */
+const logoInput = ref(null)
+const pickedLogoUrl = ref('')
+
+const logoPreview = computed(() => pickedLogoUrl.value || siteForm.value.logo_url || '')
+
+const logoLabel = computed(() => {
+  if (siteForm.value.logo instanceof File) return siteForm.value.logo.name
+  if (siteForm.value.logo_url) return 'Current logo'
+  return 'No logo uploaded'
+})
+
+function releasePickedLogo() {
+  if (pickedLogoUrl.value) {
+    URL.revokeObjectURL(pickedLogoUrl.value)
+    pickedLogoUrl.value = ''
+  }
+}
+
+function onLogoPick(event) {
+  const file = event.target.files?.[0]
+  // Cleared either way: a rejected file must not stay in the input, or picking
+  // the same file again after fixing nothing would fire no change event.
+  event.target.value = ''
+  if (!file) return
+  if (!setLogo(file)) return
+  releasePickedLogo()
+  pickedLogoUrl.value = URL.createObjectURL(file)
+}
+
+function onLogoRemove() {
+  releasePickedLogo()
+  clearLogo()
+}
+
+onBeforeUnmount(releasePickedLogo)
 
 // ─── Leaflet Map Picker ────────────────────────────────────────────
 const showSiteMap = ref(false)
@@ -528,6 +627,7 @@ function onDialogOpen() {
 watch(siteDialog, (val) => {
   if (!val) {
     showSiteMap.value = false
+    releasePickedLogo()
     clearTimeout(locationDebounceTimer)
     mapSearchLoading.value = false
     if (leafletMap) {
@@ -602,6 +702,117 @@ onMounted(fetchSites)
    drifted from the same badge on every other panel. The shared definitions are
    the only ones now. */
 @import './AdminSettingsPanelShared.scss';
+
+/* ── Site name cell ───────────────────────────────────────────────────────── */
+.site-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.site-logo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  overflow: hidden;
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-n-50);
+  border: 1px solid var(--dash-line);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dash-ink-3);
+}
+
+.site-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Logo field ──────────────────────────────────────────────────────────────
+   A preview tile beside its own actions rather than a bare file input: the tile
+   is the only thing in the form that says what was actually picked, and the
+   native control's own label reads "No file chosen" in a typeface nothing else
+   in the dialog uses. */
+.logo-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+}
+
+.logo-preview {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  overflow: hidden;
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-n-50);
+  border: 1px solid var(--dash-line);
+}
+
+.logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.logo-preview--empty {
+  color: var(--dash-ink-4);
+}
+
+.logo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.logo-filename {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logo-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* Pulled back level with the filename above it: a flat QBtn carries its own
+     horizontal padding, so the label would otherwise sit indented. */
+  margin: 1px 0 1px -6px;
+}
+
+.logo-btn {
+  color: var(--dash-accent);
+  font-weight: 500;
+}
+
+.logo-btn--remove {
+  color: var(--dash-ink-3);
+}
+
+.logo-hint {
+  font-size: 11px;
+  color: var(--dash-ink-4);
+}
+
+.logo-input {
+  display: none;
+}
 
 /* ── Requirements column ─────────────────────────────────────────────────────
    Two readings of one figure — how many positions carry a target, and how many
