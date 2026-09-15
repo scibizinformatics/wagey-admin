@@ -62,6 +62,11 @@ const routes = [
         component: () => import('pages/ManningPage.vue'),
       },
       {
+        path: 'access-cards',
+        name: 'access-cards',
+        component: () => import('pages/AccessCardsPage.vue'),
+      },
+      {
         path: 'requests',
         name: 'requests',
         component: () => import('pages/RequestPage.vue'),

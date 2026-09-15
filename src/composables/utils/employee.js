@@ -239,6 +239,23 @@ export function avatarFor(index, name) {
 }
 
 /**
+ * The employee record a name resolves to, or null.
+ *
+ * The same lookup `avatarFor` makes, exposed for callers that need the record
+ * rather than a face — the access-cards page needs the *id*, because its payload
+ * names a card's holder and carries nothing to write back with. It makes the
+ * same call for the same reason: a name shared by two employees answers null
+ * (see `buildEmployeeNameIndex`), and assigning a card to the wrong colleague
+ * because their names match is worse than starting from an empty field.
+ *
+ * @param {Map<string, object|null>|null} index  from `buildEmployeeNameIndex`
+ * @param {string} name
+ */
+export function employeeByName(index, name) {
+  return index?.get(nameKey(name)) ?? null
+}
+
+/**
  * Does this name belong to somebody in the indexed employee list?
  *
  * Membership, not identity — a name shared by two employees indexes to `null`

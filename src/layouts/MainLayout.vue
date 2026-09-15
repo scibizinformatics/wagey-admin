@@ -414,6 +414,10 @@ const navGroups = [
       // Sits after Schedule deliberately: manning reads the day's assignments
       // and punches back, so it follows the two pages that create them.
       { label: 'Manning', icon: 'store', to: '/app/manning' },
+      // The NFC cards people tap to be counted present, so it belongs with the
+      // roster rather than under Administration: assigning one is a workforce
+      // task, done by whoever hands the card over.
+      { label: 'Access Cards', icon: 'contactless', to: '/app/access-cards' },
     ],
   },
   {
