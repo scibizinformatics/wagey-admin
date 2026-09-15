@@ -26,11 +26,7 @@
         {{ isFiltered ? 'No employees match these filters' : 'No employees yet' }}
       </p>
       <p class="dash-empty__sub">
-        {{
-          isFiltered
-            ? 'Nothing here fits the current search and filters.'
-            : 'Add your first employee to start tracking attendance and payroll.'
-        }}
+        {{ emptySubtitle }}
       </p>
       <q-btn
         v-if="isFiltered"
@@ -44,7 +40,7 @@
         @click="$emit('clear-filters')"
       />
       <q-btn
-        v-else
+        v-else-if="canAdd"
         unelevated
         no-caps
         dense
@@ -175,6 +171,7 @@
  *
  * Accessors are shared with EmployeeTable via composables/utils/employee.js.
  */
+import { computed } from 'vue'
 import EmployeeRowMenu from '@/components/pages/Employees/EmployeeRowMenu.vue'
 import {
   getFullName,
@@ -201,6 +198,17 @@ const props = defineProps({
   loadingBalanceIds: { type: Object, default: () => new Set() },
   /** Drives which empty state to show when there are no cards. */
   isFiltered: { type: Boolean, default: false },
+  /** False hides the empty state's add action, for when adding is turned off. */
+  canAdd: { type: Boolean, default: true },
+})
+
+// Mirrors EmployeeTable: the invitation to add the first employee only makes
+// sense while that action is actually offered.
+const emptySubtitle = computed(() => {
+  if (props.isFiltered) return 'Nothing here fits the current search and filters.'
+  return props.canAdd
+    ? 'Add your first employee to start tracking attendance and payroll.'
+    : 'No one has been added to this company yet.'
 })
 
 const emit = defineEmits([

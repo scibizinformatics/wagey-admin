@@ -19,7 +19,7 @@
             <q-checkbox
               :model-value="props.selected"
               :indeterminate="props.selected === 'some'"
-              size="sm"
+              size="xs"
               aria-label="Select all on this page"
               @update:model-value="
                 () => $emit('update:selected', selected.length > 0 ? [] : [...employees])
@@ -47,7 +47,7 @@
             <q-checkbox
               v-model="props.selected"
               :val="props.row"
-              size="sm"
+              size="xs"
               :aria-label="`Select ${getFullName(props.row)}`"
             />
           </q-td>
@@ -172,11 +172,7 @@
             {{ isFiltered ? 'No employees match these filters' : 'No employees yet' }}
           </p>
           <p class="dash-empty__sub">
-            {{
-              isFiltered
-                ? 'Nothing here fits the current search and filters.'
-                : 'Add your first employee to start tracking attendance and payroll.'
-            }}
+            {{ emptySubtitle }}
           </p>
           <q-btn
             v-if="isFiltered"
@@ -190,7 +186,7 @@
             @click="$emit('clear-filters')"
           />
           <q-btn
-            v-else
+            v-else-if="canAdd"
             unelevated
             no-caps
             dense
@@ -247,6 +243,17 @@ const props = defineProps({
   loadingBalanceIds: { type: Object, default: () => new Set() },
   /** Drives which empty state to show when there are no rows. */
   isFiltered: { type: Boolean, default: false },
+  /** False hides the empty state's add action, for when adding is turned off. */
+  canAdd: { type: Boolean, default: true },
+})
+
+// The genuinely-empty copy invites the first employee, so it can only say that
+// while adding is available; otherwise it would point at an action that isn't there.
+const emptySubtitle = computed(() => {
+  if (props.isFiltered) return 'Nothing here fits the current search and filters.'
+  return props.canAdd
+    ? 'Add your first employee to start tracking attendance and payroll.'
+    : 'No one has been added to this company yet.'
 })
 
 defineEmits([
@@ -273,11 +280,9 @@ const leaveColumnBudget = computed(() => {
   return 1
 })
 
-const visibleLeaveTypes = computed(() =>
-  props.leaveTypes
-    .filter((lt) => !lt.name?.toLowerCase().includes('unpaid'))
-    .slice(0, leaveColumnBudget.value),
-)
+// The list arrives already narrowed to paid types by the fetch, so the only
+// thing left to apply is the column budget.
+const visibleLeaveTypes = computed(() => props.leaveTypes.slice(0, leaveColumnBudget.value))
 
 const isLoadingContract = (employee) => props.loadingContractIds.has(employee.id)
 const isLoadingBalance = (employee) => props.loadingBalanceIds.has(employee.id)
@@ -348,6 +353,21 @@ const columns = computed(() => [
    `emp-table__row--inactive` here, `--lapsed` on invitations and `--off` on
    announcements, for the same two declarations. Only the two column modifiers
    below are this table's own. */
+/* Shorter than the shared `dash-qtable` header (13/11), because this table's
+   header carries a control rather than only labels and so runs taller than
+   every other one in the app. Still real top padding, not none: the strip sits
+   directly under the filter toolbar and the labels read as part of it when
+   they meet that border.
+
+   The padding was never the whole story, though — the select-all checkbox's
+   35px hit circle was the floor the whole row stood on, which is why both
+   checkboxes in this column are `xs` now. Trimming here without that moved the
+   header by nine pixels out of sixty. */
+.emp-table :deep(.emp-table__th) {
+  padding-top: 9px;
+  padding-bottom: 8px;
+}
+
 .emp-table :deep(.emp-table__th--num) {
   text-align: right !important;
 }
@@ -478,7 +498,7 @@ const columns = computed(() => [
     padding: 0 2px;
   }
   .emp-table :deep(.emp-table__th) {
-    padding: 12px 9px 10px !important;
+    padding: 8px 9px 7px !important;
   }
   .emp-table :deep(.emp-table__td) {
     padding: 10px 9px !important;

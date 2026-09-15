@@ -10,6 +10,7 @@
           </p>
         </div>
         <q-btn
+          v-if="canAddEmployee"
           unelevated
           no-caps
           icon="add"
@@ -165,7 +166,15 @@
             <span class="emp-applied__chip-text">{{ f.label }}</span>
             <q-icon name="close" size="13px" />
           </button>
-          <q-btn flat dense no-caps size="11px" label="Clear all" class="btn-quiet" @click="clearFilters" />
+          <q-btn
+            flat
+            dense
+            no-caps
+            size="11px"
+            label="Clear all"
+            class="btn-quiet"
+            @click="clearFilters"
+          />
         </div>
 
         <!-- Cards below 1024px, table above. The table needs ~1000px with three
@@ -178,10 +187,11 @@
           :loading="loading || resolvingGroups"
           :contracts="employeeContracts"
           :company-id="companyId"
-          :leave-types="cardLeaveTypes"
+          :leave-types="leaveTypes"
           :loading-contract-ids="loadingContractIds"
           :loading-balance-ids="loadingBalanceIds"
           :is-filtered="activeFilters.length > 0"
+          :can-add="canAddEmployee"
           @clear-filters="clearFilters"
           @add="openAddModal"
           @view="viewEmployee"
@@ -204,6 +214,7 @@
           :loading-contract-ids="loadingContractIds"
           :loading-balance-ids="loadingBalanceIds"
           :is-filtered="activeFilters.length > 0"
+          :can-add="canAddEmployee"
           @clear-filters="clearFilters"
           @add="openAddModal"
           @view="viewEmployee"
@@ -319,9 +330,10 @@
       v-model="showLeaveBalanceModal"
       :employee="selectedBalanceEmployee"
       :leave-type-options="leaveTypes"
+      :current-balances="selectedEmployeeLeaveBalances"
       :loading-leave-types="loadingLeaveTypes"
       :submitting="submittingLeave"
-      @submit="handleAddLeaveBalance"
+      @submit="handleLeaveBalanceSubmit"
       @cancel="showLeaveBalanceModal = false"
     />
 
@@ -444,7 +456,7 @@ const {
   loadingLeaveTypes,
   fetchLeaveTypes,
   fetchEmployeeBalances,
-  addLeaveBalance,
+  writeLeaveBalance,
   addCtoBalance,
   submittingLeave,
   submittingCto,
@@ -508,8 +520,15 @@ function onContractTypeChange(contractTypeId) {
   }
 
   // Populate multipliers from contract type
-  const mKeys = ['overtime_multiplier', 'special_holiday_multiplier', 'regular_holiday_multiplier',
-    'night_diff_multiplier', 'regular_holiday_ot_multiplier', 'special_holiday_ot_multiplier', 'undertime_multiplier']
+  const mKeys = [
+    'overtime_multiplier',
+    'special_holiday_multiplier',
+    'regular_holiday_multiplier',
+    'night_diff_multiplier',
+    'regular_holiday_ot_multiplier',
+    'special_holiday_ot_multiplier',
+    'undertime_multiplier',
+  ]
   for (const key of mKeys) {
     assignForm.value[key] = selectedType?.[key] ?? null
   }
@@ -566,13 +585,28 @@ watch(
       assignForm.value.eligibilities = eligibilityOptions.value.map((e) => e.id)
       assignForm.value.contributions = []
       assignForm.value.holiday_pay_types = []
-      assignForm.value.overtime_multiplier = companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null
-      assignForm.value.special_holiday_multiplier = companyMultipliers.value?.special_holiday_multiplier ?? defaultMultipliers.special_holiday ?? null
-      assignForm.value.regular_holiday_multiplier = companyMultipliers.value?.regular_holiday_multiplier ?? defaultMultipliers.regular_holiday ?? null
-      assignForm.value.night_diff_multiplier = companyMultipliers.value?.night_diff_multiplier ?? defaultMultipliers.night_diff ?? null
-      assignForm.value.regular_holiday_ot_multiplier = companyMultipliers.value?.regular_holiday_ot_multiplier ?? defaultMultipliers.regular_holiday_ot ?? null
-      assignForm.value.special_holiday_ot_multiplier = companyMultipliers.value?.special_holiday_ot_multiplier ?? defaultMultipliers.special_holiday_ot ?? null
-      assignForm.value.undertime_multiplier = companyMultipliers.value?.undertime_multiplier ?? defaultMultipliers.undertime ?? null
+      assignForm.value.overtime_multiplier =
+        companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null
+      assignForm.value.special_holiday_multiplier =
+        companyMultipliers.value?.special_holiday_multiplier ??
+        defaultMultipliers.special_holiday ??
+        null
+      assignForm.value.regular_holiday_multiplier =
+        companyMultipliers.value?.regular_holiday_multiplier ??
+        defaultMultipliers.regular_holiday ??
+        null
+      assignForm.value.night_diff_multiplier =
+        companyMultipliers.value?.night_diff_multiplier ?? defaultMultipliers.night_diff ?? null
+      assignForm.value.regular_holiday_ot_multiplier =
+        companyMultipliers.value?.regular_holiday_ot_multiplier ??
+        defaultMultipliers.regular_holiday_ot ??
+        null
+      assignForm.value.special_holiday_ot_multiplier =
+        companyMultipliers.value?.special_holiday_ot_multiplier ??
+        defaultMultipliers.special_holiday_ot ??
+        null
+      assignForm.value.undertime_multiplier =
+        companyMultipliers.value?.undertime_multiplier ?? defaultMultipliers.undertime ?? null
     }
   },
 )
@@ -593,6 +627,11 @@ watch(assignDialog, (open) => {
   }
 })
 
+// Adding employees is turned off for now: the header action and both empty-state
+// CTAs are gated on this one flag so the flow can be restored by flipping it,
+// rather than by re-deriving where the entry points were.
+const canAddEmployee = false
+
 // Modal states
 const showAddModal = ref(false)
 const showViewModal = ref(false)
@@ -611,6 +650,16 @@ const selectedPhotoUrl = ref('')
 const showLeaveBalanceModal = ref(false)
 const showCtoBalanceModal = ref(false)
 const selectedBalanceEmployee = ref(null)
+
+/**
+ * What the picked employee currently holds, so the balance modal can show a
+ * "10 → 5" before a set discards it. `_balance` is the row's lazily-loaded
+ * cache; an empty list simply means it has not landed yet, and the modal says
+ * less rather than something wrong.
+ */
+const selectedEmployeeLeaveBalances = computed(
+  () => selectedBalanceEmployee.value?._balance?.leaveBalances || [],
+)
 
 // Avatar
 const avatarFile = ref(null)
@@ -744,12 +793,6 @@ function clearFilters() {
   filterEmployees({ resetPage: true })
 }
 
-// The card view has room for every configured leave type, so it is not subject
-// to the table's column budget.
-const cardLeaveTypes = computed(() =>
-  leaveTypes.value.filter((lt) => !lt.name?.toLowerCase().includes('unpaid')),
-)
-
 const headcountSummary = computed(() => {
   const { total, active } = employeeStats.value
   if (!total) return 'No employees on record yet'
@@ -800,7 +843,10 @@ const fetchEmployees = async ({ silent = false } = {}) => {
     }
 
     // Fetch leave types and the first page of contract / balance data in background
-    await Promise.all([fetchLeaveTypes(companyId.value).catch(() => {}), fetchPageData()])
+    await Promise.all([
+      fetchLeaveTypes(companyId.value, { usesBalance: true }).catch(() => {}),
+      fetchPageData(),
+    ])
 
     // Re-resolve payout groups only if the filter that needs them is in use.
     if (payrollGroupFilter.value) {
@@ -1127,13 +1173,28 @@ async function handleOpenAssignDialog(employee) {
   if (!activeContract.value && assignForm.value.assignment_mode === 'custom') {
     assignForm.value.eligibilities = eligibilityOptions.value.map((e) => e.id)
     assignForm.value.contributions = contributions.value.map((c) => c.id)
-    assignForm.value.overtime_multiplier = companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null
-    assignForm.value.special_holiday_multiplier = companyMultipliers.value?.special_holiday_multiplier ?? defaultMultipliers.special_holiday ?? null
-    assignForm.value.regular_holiday_multiplier = companyMultipliers.value?.regular_holiday_multiplier ?? defaultMultipliers.regular_holiday ?? null
-    assignForm.value.night_diff_multiplier = companyMultipliers.value?.night_diff_multiplier ?? defaultMultipliers.night_diff ?? null
-    assignForm.value.regular_holiday_ot_multiplier = companyMultipliers.value?.regular_holiday_ot_multiplier ?? defaultMultipliers.regular_holiday_ot ?? null
-    assignForm.value.special_holiday_ot_multiplier = companyMultipliers.value?.special_holiday_ot_multiplier ?? defaultMultipliers.special_holiday_ot ?? null
-    assignForm.value.undertime_multiplier = companyMultipliers.value?.undertime_multiplier ?? defaultMultipliers.undertime ?? null
+    assignForm.value.overtime_multiplier =
+      companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null
+    assignForm.value.special_holiday_multiplier =
+      companyMultipliers.value?.special_holiday_multiplier ??
+      defaultMultipliers.special_holiday ??
+      null
+    assignForm.value.regular_holiday_multiplier =
+      companyMultipliers.value?.regular_holiday_multiplier ??
+      defaultMultipliers.regular_holiday ??
+      null
+    assignForm.value.night_diff_multiplier =
+      companyMultipliers.value?.night_diff_multiplier ?? defaultMultipliers.night_diff ?? null
+    assignForm.value.regular_holiday_ot_multiplier =
+      companyMultipliers.value?.regular_holiday_ot_multiplier ??
+      defaultMultipliers.regular_holiday_ot ??
+      null
+    assignForm.value.special_holiday_ot_multiplier =
+      companyMultipliers.value?.special_holiday_ot_multiplier ??
+      defaultMultipliers.special_holiday_ot ??
+      null
+    assignForm.value.undertime_multiplier =
+      companyMultipliers.value?.undertime_multiplier ?? defaultMultipliers.undertime ?? null
   }
 
   // Sync eligibility display when pre-filled from existing contract
@@ -1174,13 +1235,28 @@ async function handleBulkAssignDialog() {
     year: new Date().getFullYear(),
     month: new Date().getMonth() + 1,
     holiday_pay_types: [],
-    overtime_multiplier: companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null,
-    special_holiday_multiplier: companyMultipliers.value?.special_holiday_multiplier ?? defaultMultipliers.special_holiday ?? null,
-    regular_holiday_multiplier: companyMultipliers.value?.regular_holiday_multiplier ?? defaultMultipliers.regular_holiday ?? null,
-    night_diff_multiplier: companyMultipliers.value?.night_diff_multiplier ?? defaultMultipliers.night_diff ?? null,
-    regular_holiday_ot_multiplier: companyMultipliers.value?.regular_holiday_ot_multiplier ?? defaultMultipliers.regular_holiday_ot ?? null,
-    special_holiday_ot_multiplier: companyMultipliers.value?.special_holiday_ot_multiplier ?? defaultMultipliers.special_holiday_ot ?? null,
-    undertime_multiplier: companyMultipliers.value?.undertime_multiplier ?? defaultMultipliers.undertime ?? null,
+    overtime_multiplier:
+      companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null,
+    special_holiday_multiplier:
+      companyMultipliers.value?.special_holiday_multiplier ??
+      defaultMultipliers.special_holiday ??
+      null,
+    regular_holiday_multiplier:
+      companyMultipliers.value?.regular_holiday_multiplier ??
+      defaultMultipliers.regular_holiday ??
+      null,
+    night_diff_multiplier:
+      companyMultipliers.value?.night_diff_multiplier ?? defaultMultipliers.night_diff ?? null,
+    regular_holiday_ot_multiplier:
+      companyMultipliers.value?.regular_holiday_ot_multiplier ??
+      defaultMultipliers.regular_holiday_ot ??
+      null,
+    special_holiday_ot_multiplier:
+      companyMultipliers.value?.special_holiday_ot_multiplier ??
+      defaultMultipliers.special_holiday_ot ??
+      null,
+    undertime_multiplier:
+      companyMultipliers.value?.undertime_multiplier ?? defaultMultipliers.undertime ?? null,
     start_date: '',
     end_date: '',
   }
@@ -1367,7 +1443,9 @@ const restoreEmployee = async () => {
     }
     filterEmployees()
 
-    toast.success(`Employee ${getFullName(employeeToRestore.value)} has been restored successfully.`)
+    toast.success(
+      `Employee ${getFullName(employeeToRestore.value)} has been restored successfully.`,
+    )
     showRestoreDialog.value = false
     employeeToRestore.value = {}
     await refreshEmployees()
@@ -1416,9 +1494,7 @@ function onSearchInput() {
   searchTimer = setTimeout(() => filterEmployees({ resetPage: true }), 180)
 }
 
-const showSearchHint = computed(
-  () => !searchFocused.value && !searchTerm.value && !$q.screen.lt.md,
-)
+const showSearchHint = computed(() => !searchFocused.value && !searchTerm.value && !$q.screen.lt.md)
 
 // "/" focuses search, the convention in most tools with a list this long.
 // Ignored while the user is already typing somewhere, so it never swallows a
@@ -1627,10 +1703,22 @@ const cancelAdd = () => {
 
 const openLeaveBalanceModal = async (emp) => {
   selectedBalanceEmployee.value = emp
-  if (!leaveTypes.value.length) {
-    await fetchLeaveTypes(companyId.value)
-  }
   showLeaveBalanceModal.value = true
+  if (!leaveTypes.value.length) {
+    await fetchLeaveTypes(companyId.value, { usesBalance: true })
+  }
+  // The row's balances are loaded lazily for whatever is on screen, so a row
+  // opened before that pass landed has none — fetch them here too, since a set
+  // that cannot say what it is replacing is the one this modal must not do
+  // quietly. Failure is silent: the modal degrades to its wording-only hint.
+  if (emp && emp._balance === undefined) {
+    const balances = await fetchEmployeeBalances(companyId.value, emp.id)
+    if (balances && selectedBalanceEmployee.value?.id === emp.id) {
+      const index = employees.value.findIndex((e) => e.id === emp.id)
+      if (index !== -1) employees.value[index] = { ...employees.value[index], _balance: balances }
+      selectedBalanceEmployee.value = { ...selectedBalanceEmployee.value, _balance: balances }
+    }
+  }
 }
 
 const openCtoBalanceModal = (emp) => {
@@ -1638,10 +1726,25 @@ const openCtoBalanceModal = (emp) => {
   showCtoBalanceModal.value = true
 }
 
-const handleAddLeaveBalance = async (payload) => {
+/**
+ * Grant or correct a leave balance.
+ *
+ * The modal decides which of the two endpoints this is (`add` tops the balance
+ * up, `set` replaces it) and the company comes from the workspace switcher, not
+ * from the employee's own company list — a person can belong to more than one,
+ * and writing a balance into whichever happened to be first is how a grant
+ * lands in the wrong workspace.
+ */
+const handleLeaveBalanceSubmit = async ({ mode, payload }) => {
   try {
-    await addLeaveBalance(payload)
-    toast.success('Leave balance added successfully', { icon: 'check_circle' })
+    if (!companyId.value) {
+      toast.error('Select a company before granting leave', { icon: 'error' })
+      return
+    }
+    await writeLeaveBalance({ ...payload, company_id: parseInt(companyId.value, 10) }, mode)
+    toast.success(mode === 'set' ? 'Leave balance set' : 'Leave balance added', {
+      icon: 'check_circle',
+    })
     showLeaveBalanceModal.value = false
     // Refresh this row first so the grant shows immediately, then re-read the
     // whole list so the rest of the table is current too.
@@ -1658,7 +1761,10 @@ const handleAddLeaveBalance = async (payload) => {
     }
     await refreshEmployees()
   } catch (e) {
-    const msg = extractErrorMessage(e, 'Failed to add leave balance')
+    const msg = extractErrorMessage(
+      e,
+      mode === 'set' ? 'Failed to set leave balance' : 'Failed to add leave balance',
+    )
     toast.error(msg, { icon: 'error' })
   }
 }
@@ -1992,7 +2098,8 @@ watch(
   font-weight: 500;
   color: var(--dash-ink-2);
   cursor: pointer;
-  transition: border-color var(--dash-fast) var(--dash-ease),
+  transition:
+    border-color var(--dash-fast) var(--dash-ease),
     color var(--dash-fast) var(--dash-ease);
 }
 .emp-applied__chip:hover {
@@ -2001,7 +2108,9 @@ watch(
 }
 .emp-applied__chip:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 .emp-applied__chip-text {
@@ -2211,5 +2320,4 @@ watch(
   color: var(--dash-accent);
   font-weight: 600;
 }
-
 </style>
