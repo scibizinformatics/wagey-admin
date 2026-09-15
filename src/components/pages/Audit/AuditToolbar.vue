@@ -337,9 +337,14 @@ const rangeReadout = computed(() => {
   color: var(--dash-accent);
 }
 
+/* Sized to the calendar, not to the presets. Quasar fixes `.q-date` at a
+   290px width, so a menu any wider than that leaves a band of dead space down
+   the calendar's right edge — which is what the preset row, the widest thing
+   in here, used to do. The presets wrap onto a second line instead; they are
+   chips and read fine on two rows, whereas a stretched month grid does not. */
 .aud-range {
   padding: 10px;
-  min-width: 264px;
+  width: 310px;
 }
 
 .aud-range__title {
@@ -386,6 +391,11 @@ const rangeReadout = computed(() => {
   box-shadow: none;
   border: 1px solid var(--dash-line);
   border-radius: var(--dash-r-md);
+  /* Fills the menu whatever its width, so the two cannot drift apart again.
+     `min-width` has to be reset because Quasar's own 290px floor sits on this
+     same element and would otherwise overflow a narrower menu. */
+  width: 100%;
+  min-width: 0;
 }
 
 .aud-range__foot {
