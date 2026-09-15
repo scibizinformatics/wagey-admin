@@ -37,9 +37,9 @@
 
       <div class="as-body">
         <!-- ── Section rail ────────────────────────────────────────────────
-             Nine settings sections used to sit in one horizontal q-tabs strip
+             Ten settings sections used to sit in one horizontal q-tabs strip
              that scrolled: past the fourth tab, the rest were off-screen with
-             nothing to say so. A vertical rail shows all nine at once and has
+             nothing to say so. A vertical rail shows all ten at once and has
              room to group them, and it stays put while a long table scrolls. -->
         <nav class="as-rail" aria-label="Settings sections">
           <div v-for="group in sectionGroups" :key="group.title" class="as-rail__group">
@@ -60,7 +60,7 @@
         </nav>
 
         <section class="as-surface">
-          <!-- Below the rail's breakpoint the same nine sections become a
+          <!-- Below the rail's breakpoint the same ten sections become a
                wrapping strip. Wrapping, not scrolling: every section stays
                visible and reachable without a hidden overflow. -->
           <div class="as-strip" aria-label="Settings sections">
@@ -78,8 +78,8 @@
             </button>
           </div>
 
-          <!-- Phone. Nine pills wrap to five rows of labels before the table
-               starts, and dropping the labels leaves nine icons that do not
+          <!-- Phone. Ten pills wrap to five rows of labels before the table
+               starts, and dropping the labels leaves ten icons that do not
                all read on their own — a named picker is one row and unambiguous. -->
           <div class="as-picker">
             <q-select
@@ -127,9 +127,6 @@
             <q-tab-panel name="contract-types" class="q-pa-none">
               <AdminSettingsPanelContractTypes />
             </q-tab-panel>
-            <q-tab-panel name="roles" class="q-pa-none">
-              <AdminSettingsPanelRoles :search-query="searchQuery || ''" />
-            </q-tab-panel>
             <q-tab-panel name="shifts" class="q-pa-none">
               <AdminSettingsPanelShifts />
             </q-tab-panel>
@@ -138,6 +135,12 @@
             </q-tab-panel>
             <q-tab-panel name="payroll-groups" class="q-pa-none">
               <AdminSettingsPanelPayrollGroups :search-query="searchQuery || ''" />
+            </q-tab-panel>
+            <q-tab-panel name="leave-types" class="q-pa-none">
+              <AdminSettingsPanelLeaveTypes :search-query="searchQuery || ''" />
+            </q-tab-panel>
+            <q-tab-panel name="holiday-types" class="q-pa-none">
+              <AdminSettingsPanelHolidayTypes :search-query="searchQuery || ''" />
             </q-tab-panel>
           </q-tab-panels>
         </section>
@@ -152,7 +155,6 @@ import { computed, ref, watch } from 'vue'
 import { useCompany } from '@/composables/page/useCompany'
 
 import AdminSettingsPanelSites from '@/components/pages/AdminSettings/AdminSettingsPanelSites.vue'
-import AdminSettingsPanelRoles from '@/components/pages/AdminSettings/AdminSettingsPanelRoles.vue'
 import AdminSettingsPanelShifts from '@/components/pages/AdminSettings/AdminSettingsPanelShifts.vue'
 import AdminSettingsPanelDepartments from '@/components/pages/AdminSettings/AdminSettingsPanelDepartments.vue'
 import AdminSettingsPanelPositions from '@/components/pages/AdminSettings/AdminSettingsPanelPositions.vue'
@@ -160,6 +162,8 @@ import AdminSettingsPanelContractTypes from '@/components/pages/AdminSettings/Ad
 import AdminSettingsPanelCustomMultipliers from '@/components/pages/AdminSettings/AdminSettingsPanelCustomMultipliers.vue'
 import AdminSettingsPanelCostCenters from '@/components/pages/AdminSettings/AdminSettingsPanelCostCenters.vue'
 import AdminSettingsPanelPayrollGroups from '@/components/pages/AdminSettings/AdminSettingsPanelPayrollGroups.vue'
+import AdminSettingsPanelLeaveTypes from '@/components/pages/AdminSettings/AdminSettingsPanelLeaveTypes.vue'
+import AdminSettingsPanelHolidayTypes from '@/components/pages/AdminSettings/AdminSettingsPanelHolidayTypes.vue'
 
 const { company } = useCompany()
 
@@ -169,8 +173,8 @@ const searchQuery = ref('')
 const companyName = computed(() => company.value?.name || '')
 
 /**
- * The nine sections, grouped by what an admin is actually setting up. Nine
- * peers in one flat strip gave no hint that "Cost centers" sits nearer to
+ * The ten sections, grouped by what an admin is actually setting up. A flat
+ * strip of peers gave no hint that "Cost centers" sits nearer to
  * "Departments" than to "Custom multipliers"; the groups say so.
  *
  * `searchable` mirrors reality rather than intent: three panels never declared
@@ -221,13 +225,6 @@ const sectionGroups = [
         searchable: false,
         blurb: 'Contract templates and their pay rules',
       },
-      {
-        name: 'roles',
-        label: 'Permissions',
-        icon: 'o_admin_panel_settings',
-        searchable: true,
-        blurb: 'Roles and what each one can reach',
-      },
     ],
   },
   {
@@ -239,6 +236,20 @@ const sectionGroups = [
         icon: 'o_schedule',
         searchable: false,
         blurb: 'Shift types and weekly templates',
+      },
+      {
+        name: 'leave-types',
+        label: 'Leave types',
+        icon: 'o_event_busy',
+        searchable: true,
+        blurb: 'What can be filed, and how its credits are granted',
+      },
+      {
+        name: 'holiday-types',
+        label: 'Holiday types',
+        icon: 'o_celebration',
+        searchable: true,
+        blurb: 'Kinds of holiday, and the leave they apply',
       },
       {
         name: 'custom-multipliers',
