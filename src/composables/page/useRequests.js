@@ -70,8 +70,12 @@ export function useRequests() {
     loading.value = true
     const token = overtimeGuard.next()
     try {
+      // `company_id` is the name this endpoint filters on — `company`, which
+      // this call used to send, is accepted and ignored, and the response then
+      // holds every company the caller can see. See the same note in
+      // `RequestPage.vue`, where the bleed was visible on screen.
       const response = await api.get(`${BASE}/payroll/overtime-list/`, {
-        params: { company: companyId.value },
+        params: { company_id: companyId.value },
       })
       const rows = response.data.data ?? response.data ?? []
       // Superseded by a newer request: return the rows, publish nothing.

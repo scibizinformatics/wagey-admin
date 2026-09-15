@@ -784,7 +784,14 @@ const fetchOvertimeRequests = async () => {
     // employees are the only place the names exist. useEmployees caches per
     // company, so this is usually free; a failure here costs names, not the tab.
     const [res] = await Promise.all([
-      api.get('/payroll/overtime-list/', { params: { company: companyId } }),
+      // `company_id`, and only that name. The tab used to send `company`, which
+      // this endpoint accepts and silently ignores — it answered with every
+      // company the caller could see (156 rows on staging for any value at all,
+      // including a company id that does not exist), so an approver was reading
+      // and acting on other workspaces' overtime. `company_id` is the filter
+      // the backend actually reads. Don't re-add `company` as a belt-and-braces
+      // second parameter: it reads as though it were doing something.
+      api.get('/payroll/overtime-list/', { params: { company_id: companyId } }),
       fetchEmployees().catch(() => []),
     ])
     const data = Array.isArray(res.data) ? res.data : res.data.results || []
@@ -792,6 +799,11 @@ const fetchOvertimeRequests = async () => {
     // the tab counter all read the same names, hours and status wording.
     overtimeDirectory.value = buildEmployeeDirectory(employees.value)
     overtimeRequests.value = normalizeOvertimeRequests(data, overtimeDirectory.value)
+    // Stripped from a production bundle (`pure_funcs`). Kept because the only
+    // thing standing between this queue and another company's requests is that
+    // one query parameter, and a wrong count here is the first sign it stopped
+    // being honoured.
+    console.log(`[overtime] company ${companyId}: ${data.length} row(s)`)
     // Rows that vanished from the queue must not stay selected — a later bulk
     // approve would then patch ids that are no longer on screen.
     const live = new Set(overtimeRequests.value.filter((r) => r.actionable).map((r) => r.id))
