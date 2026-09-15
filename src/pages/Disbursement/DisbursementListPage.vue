@@ -13,22 +13,26 @@
           icon="o_file_download"
           label="Export PDF"
           class="btn-outline"
-          :disable="!filteredRuns.length"
+          :disable="!listRows.length"
           @click="exportRuns"
         />
       </header>
 
-      <!-- ── Pipeline summary ────────────────────────────────────────────────
+      <!-- ── Scope summary ───────────────────────────────────────────────────
            The cutoff read as a pipeline rather than seven equal readings: what
            still needs work, then what money is where. The old strip gave counts
-           and pesos the same weight in one grey band, so nothing led. -->
+           and pesos the same weight in one grey band, so nothing led.
+
+           The tiles follow the view. Left on the pipeline while the table showed
+           cash advances they would have been a row of figures about something
+           else, sitting directly above a table that disagreed with every one. -->
       <div class="disb-stats">
-        <div v-for="tile in statTiles" :key="tile.key" class="disb-stat">
+        <div v-for="tile in activeTiles" :key="tile.key" class="disb-stat">
           <div class="disb-stat__head">
             <span class="disb-stat__mark" :style="{ background: tile.mark }" />
             <span class="disb-stat__label">{{ tile.label }}</span>
           </div>
-          <span v-if="loadingDashboards" class="dash-shimmer disb-stat__skeleton" />
+          <span v-if="tilesLoading" class="dash-shimmer disb-stat__skeleton" />
           <span v-else class="disb-stat__value dash-num">{{ tile.value }}</span>
         </div>
       </div>
@@ -36,10 +40,31 @@
       <!-- ── Runs ────────────────────────────────────────────────────────── -->
       <section class="dash-panel disb-list">
         <div class="disb-toolbar">
+          <!-- What the table *is*, not what it narrows to — which is why it sits
+               ahead of the search box and the two filters, all three of which
+               apply to whichever view is showing. The same runs are listed
+               either way; only the columns change. -->
+          <q-select
+            v-model="view"
+            :options="VIEW_OPTIONS"
+            emit-value
+            map-options
+            dense
+            outlined
+            hide-bottom-space
+            :popup-content-class="'disb-popup'"
+            class="disb-view dash-field"
+            aria-label="Show payout groups or cash advances"
+          >
+            <template #prepend>
+              <q-icon :name="viewIcon" size="16px" />
+            </template>
+          </q-select>
+
           <q-input
             ref="searchRef"
             v-model="searchTerm"
-            placeholder="Search group, cutoff, method or status"
+            :placeholder="searchPlaceholder"
             dense
             outlined
             clearable
@@ -108,20 +133,54 @@
             <q-tooltip>Show every open cutoff</q-tooltip>
           </button>
 
+          <!-- Most runs in a cutoff have nobody borrowing, so a cash advance
+               table listing all of them is mostly zeroes. This hides them by
+               default — but as a control that is visible, pressed-looking and
+               switchable, rather than as a silent rule, since a list that shows
+               a subset without saying so reads as a list missing rows. -->
+          <button
+            v-if="isCashAdvance"
+            type="button"
+            class="dash-chip disb-only-chip"
+            :class="onlyWithAdvances ? 'dash-chip--info' : 'disb-only-chip--off'"
+            :aria-pressed="onlyWithAdvances"
+            @click="onlyWithAdvances = !onlyWithAdvances"
+          >
+            <span class="dash-chip__dot" />
+            Only groups with advances
+            <q-tooltip>
+              {{ onlyWithAdvances ? 'Show every run in scope' : 'Hide runs with no advances' }}
+            </q-tooltip>
+          </button>
+
           <span class="disb-toolbar__count">
-            {{ filteredRuns.length }} {{ filteredRuns.length === 1 ? 'run' : 'runs' }}
+            {{ listRows.length }} {{ listRows.length === 1 ? 'run' : 'runs' }}
           </span>
         </div>
 
         <div class="disb-table-wrap">
-          <PayoutTable :rows="paginatedRuns" :loading="loading" @view="openRun" />
+          <PayoutTable
+            v-if="!isCashAdvance"
+            :rows="paginatedRuns"
+            :loading="loading"
+            @view="openRun"
+          />
+          <CashAdvanceTable
+            v-else
+            :rows="paginatedRuns"
+            :loading="loading || loadingCashAdvance"
+            :sort="cashAdvanceSort"
+            :employee-index="employeeIndex"
+            @view="openRun"
+            @update:sort="cashAdvanceSort = $event"
+          />
         </div>
 
-        <footer v-if="filteredRuns.length > 0" class="disb-foot">
+        <footer v-if="listRows.length > 0" class="disb-foot">
           <div class="disb-foot__left">
             <span class="disb-foot__range dash-num">
-              {{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, filteredRuns.length) }}
-              of {{ filteredRuns.length }}
+              {{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, listRows.length) }}
+              of {{ listRows.length }}
             </span>
             <q-select
               v-model="pageSize"
@@ -164,12 +223,21 @@ import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import PageShell from 'src/components/layout/PageShell.vue'
 import PayoutTable from 'src/components/pages/Payroll/PayoutTable.vue'
+import CashAdvanceTable from 'src/components/pages/Payroll/CashAdvanceTable.vue'
 import { stepRouteForPgiStatus } from 'src/constants/pgiStatus'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useCompany } from 'src/composables/page/useCompany'
+import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
 import { todayIso } from 'src/composables/utils/calendarDate'
+import { buildEmployeeNameIndex } from 'src/composables/utils/employee'
+import { createRequestToken } from 'src/composables/utils/requestToken'
+import {
+  aggregateCashAdvance,
+  emptyCashAdvanceSummary,
+  summariseCashAdvance,
+} from 'src/composables/utils/cashAdvance'
 
 const router = useRouter()
 const route = useRoute()
@@ -177,7 +245,13 @@ const $q = useQuasar()
 
 const toast = useToast()
 const { companyId } = useCompany()
-const { fetchCutoffInstances, fetchDashboardSummary, fetchPayoutGroupInstances } = useDisbursementApi()
+const {
+  fetchCutoffInstances,
+  fetchDashboardSummary,
+  fetchEmployeeReviewSummary,
+  fetchPayoutGroupInstances,
+} = useDisbursementApi()
+const { employees, fetchEmployees } = useEmployees()
 const { notifyLoaded } = useLoadedToast()
 
 const loading = ref(true)
@@ -186,6 +260,64 @@ const rows = ref([])
 const dashboard = ref(null)
 const searchTerm = ref('')
 const page = ref(1)
+
+/**
+ * ── The two views ──────────────────────────────────────────────────────────
+ *
+ * The same list of runs, read two ways. "Payout groups" is what a run pays;
+ * "Cash advances" is what its employees borrowed against that pay, from
+ * `/payroll/admin/employee-review-summary/{pgi_id}/`.
+ *
+ * They are one list rather than two screens on purpose: a run's position in the
+ * five-step flow is the same fact in both, both carry the same progress rail,
+ * and the toolbar's search, group and cutoff filters narrow them identically —
+ * so switching views keeps the reader's place instead of restarting them.
+ */
+const VIEW_PAYOUT = 'payout_group'
+const VIEW_CASH_ADVANCE = 'cash_advance'
+
+const VIEW_OPTIONS = [
+  { label: 'Payout groups', value: VIEW_PAYOUT },
+  { label: 'Cash advances', value: VIEW_CASH_ADVANCE },
+]
+
+const view = ref(VIEW_PAYOUT)
+const isCashAdvance = computed(() => view.value === VIEW_CASH_ADVANCE)
+const viewIcon = computed(() => (isCashAdvance.value ? 'o_request_quote' : 'o_payments'))
+
+const searchPlaceholder = computed(() =>
+  isCashAdvance.value
+    ? 'Search group, cutoff or employee'
+    : 'Search group, cutoff, method or status',
+)
+
+/**
+ * Cash advance readings, one per run, keyed by payout group instance id.
+ *
+ * Fetched lazily: the endpoint answers about a single run, so filling this table
+ * costs one request per row, and most visits to this page never open the view.
+ * They are asked for once and then cached for the same five minutes as the
+ * payout-group and dashboard lists beside them.
+ */
+const cashAdvanceById = ref(new Map())
+const loadingCashAdvance = ref(false)
+const cashAdvanceLoaded = ref(false)
+const onlyWithAdvances = ref(true)
+const cashAdvanceSort = ref({ sortBy: 'requested', descending: true })
+const cashAdvanceGuard = createRequestToken()
+
+// Shared read-only stand-in for a run whose summary has not arrived, so the
+// table can render every row from the moment the view opens rather than
+// appearing one row at a time.
+const EMPTY_CASH_ADVANCE = emptyCashAdvanceSummary()
+
+/**
+ * Puts a face beside a name in the expanded rows. The summary payload names an
+ * employee and gives their id but carries no photograph, so the roster is the
+ * only thing that can supply one — the same construction the Audit trail uses,
+ * including its refusal to guess when a name belongs to two people.
+ */
+const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
 
 /**
  * Narrows the list to one cutoff, set from `?cutoff_id=` / `?cutoff=` when the
@@ -279,15 +411,88 @@ const narrowedRuns = computed(() => {
 
 const filteredRuns = computed(() => {
   const scoped = narrowedRuns.value
-  if (!searchTerm.value.trim()) return scoped
-  const term = searchTerm.value.toLowerCase()
+  // `clearable` on the search input writes null, not '', so this coerces before
+  // trimming rather than throwing on the clear button.
+  const term = (searchTerm.value || '').trim().toLowerCase()
+  if (!term) return scoped
   return scoped.filter((run) => {
-    return (
+    if (
       (run.group || '').toLowerCase().includes(term) ||
       (run.cutoff || '').toLowerCase().includes(term) ||
       (run.method || '').toLowerCase().includes(term) ||
       (run.status || '').toLowerCase().includes(term)
-    )
+    ) {
+      return true
+    }
+    // The cash advance view's rows are about people, so a name is a reasonable
+    // thing to type into a box that offers to search the list. Only there: in
+    // the payout-group view no employee is named on screen, and a search that
+    // matched invisible text would look like it had matched nothing.
+    if (!isCashAdvance.value) return false
+    const summary = cashAdvanceById.value.get(run.id)
+    return Boolean(summary?.advances.some((person) => person.name.toLowerCase().includes(term)))
+  })
+})
+
+/** Runs paired with their cash advance reading, in the toolbar's scope. */
+const cashAdvanceRows = computed(() =>
+  filteredRuns.value.map((run) => ({
+    ...run,
+    summary: cashAdvanceById.value.get(run.id) ?? EMPTY_CASH_ADVANCE,
+  })),
+)
+
+// Sort accessors keyed by the table's column names. Amounts and counts come off
+// the derived summary rather than the payload, so a column sorts by the same
+// number the cell prints — the payload sends its money as decimal strings, and
+// "900.00" sorts above "1500.00" as text.
+const CASH_ADVANCE_SORTS = {
+  group: (row) => (row.group || '').toLowerCase(),
+  advances: (row) => row.summary.advanceCount,
+  requested: (row) => row.summary.requested,
+  approved: (row) => row.summary.approved,
+  // A run with nothing requested has no share; -1 keeps it below 0% rather than
+  // scattering the un-askable rows through the middle of the order.
+  approval: (row) => row.summary.approvalPct ?? -1,
+}
+
+/**
+ * What the table renders, before the page slice: the payout-group rows as they
+ * are, or the cash advance rows narrowed and sorted.
+ *
+ * Both the toggle and the sort are applied to the whole scoped set here rather
+ * than inside the table, which only ever sees one page — a column header that
+ * re-ordered ten visible rows would be answering a much narrower question than
+ * it appears to.
+ */
+const listRows = computed(() => {
+  if (!isCashAdvance.value) return filteredRuns.value
+
+  // Nothing while the summaries are still arriving. Rendering the rows first
+  // would show every run as advance-free and then visibly collapse the table to
+  // a handful once the requests came back — the loading bar says "not yet"
+  // without first giving a wrong answer.
+  if (loadingCashAdvance.value && !cashAdvanceLoaded.value) return []
+
+  let out = cashAdvanceRows.value
+  // Guarded on `cashAdvanceLoaded` as well, so a sweep that failed outright
+  // leaves the runs listed with empty figures rather than hiding all of them
+  // behind a toggle the reader would have to find and switch off.
+  if (onlyWithAdvances.value && cashAdvanceLoaded.value) {
+    out = out.filter((row) => row.summary.advanceCount > 0)
+  }
+
+  const accessor = CASH_ADVANCE_SORTS[cashAdvanceSort.value?.sortBy]
+  if (!accessor) return out
+
+  const direction = cashAdvanceSort.value.descending ? -1 : 1
+  return [...out].sort((a, b) => {
+    const left = accessor(a)
+    const right = accessor(b)
+    if (typeof left === 'string' || typeof right === 'string') {
+      return String(left).localeCompare(String(right)) * direction
+    }
+    return (left - right) * direction
   })
 })
 
@@ -297,24 +502,54 @@ function clearCutoffFilter() {
   page.value = 1
 }
 
-const totalPages = computed(
-  () => Math.ceil((filteredRuns.value?.length ?? 0) / pageSize.value) || 1,
-)
+const totalPages = computed(() => Math.ceil((listRows.value?.length ?? 0) / pageSize.value) || 1)
 
 const searchRef = ref(null)
 
-const headSummary = computed(() => {
-  if (loading.value) return 'Loading payout groups…'
-  // Counts what the narrowing actually leaves, not what was fetched — the
-  // subtitle sat above a filtered table claiming the full total otherwise.
-  const n = narrowedRuns.value.length
+/** The scope the toolbar's two filters describe, named for the subtitle. */
+const scopeLabel = computed(() => {
   const parts = []
   if (groupFilter.value) parts.push(groupFilter.value)
   parts.push(activeCutoffLabel.value || 'the open cutoffs')
-  const scope = parts.join(' · ')
+  return parts.join(' · ')
+})
+
+const headSummary = computed(() => {
+  if (loading.value) return 'Loading payout groups…'
+  const scope = scopeLabel.value
+
+  // The cash advance view counts people, not runs: how many groups are in scope
+  // is the other view's answer, and repeating it here would say nothing about
+  // the table underneath.
+  if (isCashAdvance.value) {
+    if (loadingCashAdvance.value) return `Reading cash advances in ${scope}…`
+    const totals = aggregateCashAdvance(scopedCashAdvanceSummaries.value)
+    if (!totals.advanceCount) return `No cash advances in ${scope}`
+    const groups = totals.runsWithAdvances
+    return (
+      `${totals.advanceCount} cash ${totals.advanceCount === 1 ? 'advance' : 'advances'} across ` +
+      `${groups} payout ${groups === 1 ? 'group' : 'groups'} in ${scope}`
+    )
+  }
+
+  // Counts what the narrowing actually leaves, not what was fetched — the
+  // subtitle sat above a filtered table claiming the full total otherwise.
+  const n = narrowedRuns.value.length
   if (!n) return `No payout groups in ${scope}`
   return `${n} payout ${n === 1 ? 'group' : 'groups'} in ${scope}`
 })
+
+/**
+ * The cash advance readings for the runs the toolbar's filters leave — the
+ * scope both the subtitle and the summary tiles describe.
+ *
+ * Deliberately *before* the search term and the advances-only toggle, matching
+ * the payout-group view: the tiles above the table state the cutoff a reader
+ * chose, not what they are part-way through typing into the search box.
+ */
+const scopedCashAdvanceSummaries = computed(() =>
+  narrowedRuns.value.map((run) => cashAdvanceById.value.get(run.id)).filter(Boolean),
+)
 
 /**
  * The cutoff read as a pipeline: what still needs a person, then where the money
@@ -372,6 +607,64 @@ const statTiles = computed(() => {
   ]
 })
 
+/**
+ * The cash advance summary for the same cutoff scope: how much was asked for,
+ * how much has been approved, and what is left between the two.
+ *
+ * The last figure is labelled "Not approved" rather than "Outstanding" or
+ * "Pending" on purpose — the gap between requested and approved is partly
+ * decisions nobody has made yet and partly requests somebody deliberately
+ * approved in part, and the payload cannot tell the two apart. Naming it for
+ * what it is keeps the tile from asserting work that may not exist.
+ */
+const cashAdvanceTiles = computed(() => {
+  const t = aggregateCashAdvance(scopedCashAdvanceSummaries.value)
+  return [
+    {
+      key: 'ca-groups',
+      label: 'Groups with advances',
+      value: t.runsWithAdvances,
+      mark: 'var(--dash-cat-1)',
+    },
+    {
+      key: 'ca-employees',
+      label: 'Employees',
+      value: t.advanceCount,
+      mark: 'var(--dash-cat-2)',
+    },
+    {
+      key: 'ca-requested',
+      label: 'Requested',
+      value: `₱${parseAmount(t.requested)}`,
+      mark: 'var(--dash-info-mark)',
+    },
+    {
+      key: 'ca-approved',
+      label: 'Approved',
+      value: `₱${parseAmount(t.approved)}`,
+      mark: 'var(--dash-good-mark)',
+    },
+    {
+      key: 'ca-gap',
+      label: 'Not approved',
+      value: `₱${parseAmount(t.shortfall)}`,
+      mark: 'var(--dash-warn-mark)',
+    },
+    {
+      key: 'ca-share',
+      label: 'Approved share',
+      value: t.approvalPct == null ? '—' : `${Math.round(t.approvalPct)}%`,
+      mark: 'var(--dash-neutral-mark)',
+    },
+  ]
+})
+
+const activeTiles = computed(() => (isCashAdvance.value ? cashAdvanceTiles.value : statTiles.value))
+
+const tilesLoading = computed(() =>
+  isCashAdvance.value ? loadingCashAdvance.value : loadingDashboards.value,
+)
+
 // "/" focuses search, matching the other list pages.
 function onGlobalKey(e) {
   if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
@@ -385,9 +678,9 @@ onMounted(() => window.addEventListener('keydown', onGlobalKey))
 onUnmounted(() => window.removeEventListener('keydown', onGlobalKey))
 
 const paginatedRuns = computed(() => {
-  if (!filteredRuns.value) return []
+  if (!listRows.value) return []
   const start = (page.value - 1) * pageSize.value
-  return filteredRuns.value.slice(start, start + pageSize.value)
+  return listRows.value.slice(start, start + pageSize.value)
 })
 
 /**
@@ -495,37 +788,101 @@ function openRun(row) {
   })
 }
 
+/**
+ * Fills the cash advance view, one request per run.
+ *
+ * Lazy and once: the endpoint answers about a single payout group instance, so
+ * this is N requests for one table, and most visits never open the view. It is
+ * batched the same way the dashboard summaries are, and behind a request token,
+ * because a reader can switch views and workspaces faster than dozens of
+ * requests come back — without the guard an earlier sweep can land last and
+ * publish another cutoff's figures under the current one's rows.
+ *
+ * A run whose summary fails is kept with an empty reading rather than dropped:
+ * a list that quietly loses rows is worse than one that shows a run with no
+ * figures, since only the second is visible as a problem.
+ */
+async function loadCashAdvances() {
+  if (!rows.value.length) return
+  const token = cashAdvanceGuard.next()
+  loadingCashAdvance.value = true
+  try {
+    // The roster only feeds the expanded rows' photographs, so it is not worth
+    // blocking the figures on: it is started here and awaited after, and
+    // `useEmployees` caches per company and de-duplicates in-flight requests.
+    const roster = fetchEmployees().catch(() => null)
+
+    const summaries = await fetchWithConcurrency(
+      rows.value,
+      (run) => fetchEmployeeReviewSummary(run.id, { cache: true }).catch(() => null),
+      8,
+    )
+    await roster
+
+    if (!cashAdvanceGuard.isCurrent(token)) return
+
+    const next = new Map()
+    rows.value.forEach((run, i) => next.set(run.id, summariseCashAdvance(summaries[i])))
+    cashAdvanceById.value = next
+    cashAdvanceLoaded.value = true
+  } catch (err) {
+    console.error('[DisbursementListPage] cash advance summaries failed:', err)
+  } finally {
+    if (cashAdvanceGuard.isCurrent(token)) loadingCashAdvance.value = false
+  }
+}
+
 function exportRuns() {
   try {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+    const cashAdvance = isCashAdvance.value
 
     doc.setFontSize(16)
-    doc.text('Disbursement Runs', 14, 20)
+    doc.text(cashAdvance ? 'Cash Advances' : 'Disbursement Runs', 14, 20)
     doc.setFontSize(9)
     doc.text(`Generated: ${new Date().toLocaleDateString('en-PH')}`, 14, 27)
+    // The PDF is of the table on screen, so it has to say which table that was —
+    // otherwise a cash advance export and a payout export differ only by their
+    // column headings.
+    doc.text(scopeLabel.value, 14, 32)
 
-    const headers = [['Group', 'Cutoff', 'Method', 'Employees', 'Net Amount', 'Status']]
-    // The filtered set, not every row: the button is already disabled on it, and
-    // a PDF that ignores the toolbar would not be the list the reader exported.
-    const body = filteredRuns.value.map((run) => [
-      run.group || '',
-      run.cutoff || '',
-      run.method || '',
-      run.employees ?? 0,
-      `₱${(run.netAmount ?? 0).toLocaleString('en-PH')}`,
-      run.status || '',
-    ])
+    // The list as narrowed, not every row: the button is already disabled on it,
+    // and a PDF that ignored the toolbar would not be what the reader exported.
+    const headers = cashAdvance
+      ? [['Group', 'Cutoff', 'Employees', 'Requested', 'Approved', 'Not approved', 'Stage']]
+      : [['Group', 'Cutoff', 'Method', 'Employees', 'Net Amount', 'Status']]
+
+    const body = listRows.value.map((run) =>
+      cashAdvance
+        ? [
+            run.group || '',
+            run.cutoff || '',
+            `${run.summary.advanceCount} of ${run.summary.headcount}`,
+            `₱${parseAmount(run.summary.requested)}`,
+            `₱${parseAmount(run.summary.approved)}`,
+            `₱${parseAmount(run.summary.shortfall)}`,
+            run.status || '',
+          ]
+        : [
+            run.group || '',
+            run.cutoff || '',
+            run.method || '',
+            run.employees ?? 0,
+            `₱${(run.netAmount ?? 0).toLocaleString('en-PH')}`,
+            run.status || '',
+          ],
+    )
 
     doc.autoTable({
       head: headers,
       body,
-      startY: 32,
+      startY: 37,
       styles: { fontSize: 8, cellPadding: 3 },
       headStyles: { fillColor: [16, 35, 53], textColor: [255, 255, 255], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
     })
 
-    doc.save(`disbursement-runs-${todayIso()}.pdf`)
+    doc.save(`${cashAdvance ? 'cash-advances' : 'disbursement-runs'}-${todayIso()}.pdf`)
     toast.success('PDF exported successfully')
   } catch (err) {
     toast.error('Failed to export PDF')
@@ -578,8 +935,22 @@ function parseAmount(val) {
 // Both reset to page 1: narrowing the list while on page 3 would otherwise land
 // on a page that no longer exists. Search was previously reset by a `filterRuns`
 // handler on the input; a watcher covers it without the template wiring.
-watch([pageSize, searchTerm, groupFilter, cutoffFilter], () => {
+watch([pageSize, searchTerm, groupFilter, cutoffFilter, onlyWithAdvances, view], () => {
   page.value = 1
+})
+
+/**
+ * The cash advance figures are fetched the first time the view is opened, and
+ * again here if the rows had not arrived yet when it was — switching views
+ * during the initial load would otherwise leave the table permanently empty,
+ * since `loadCashAdvances` has nothing to ask about until the runs exist.
+ */
+watch(view, (next) => {
+  if (next === VIEW_CASH_ADVANCE && !cashAdvanceLoaded.value) loadCashAdvances()
+})
+
+watch(rows, () => {
+  if (isCashAdvance.value && !cashAdvanceLoaded.value) loadCashAdvances()
 })
 
 /**
@@ -765,6 +1136,65 @@ watch(rows, () => {
   color: var(--dash-ink-4);
 }
 
+/* The view switcher. Same 34px rung as the rest of the toolbar so the row still
+   reads as one band of controls, but on the page's surface with a stronger
+   border and weightier label: it decides what the table *is*, and sitting in
+   identical chrome beside two filters it read as a third filter. */
+.disb-view {
+  width: 176px;
+  flex-shrink: 0;
+}
+.disb-view :deep(.q-field__control) {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-n-25);
+}
+.disb-view :deep(.q-field__control:before) {
+  border-color: var(--dash-line-strong);
+}
+.disb-view :deep(.q-field__native) {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  padding: 0;
+  min-height: 34px;
+}
+.disb-view :deep(.q-field__marginal) {
+  height: 34px;
+  min-width: 0;
+  padding: 0;
+  color: var(--dash-ink-3);
+}
+.disb-view :deep(.q-field__prepend) {
+  padding-right: 7px;
+}
+
+/* A chip that is also its own toggle. Off, it keeps the chip's shape so the row
+   does not reflow when it is switched — only its tint goes. */
+.disb-only-chip {
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.disb-only-chip.dash-chip--info {
+  border-color: var(--dash-info-line);
+}
+.disb-only-chip--off {
+  background: transparent;
+  border-color: var(--dash-line);
+  color: var(--dash-ink-4);
+}
+.disb-only-chip--off .dash-chip__dot {
+  background: var(--dash-n-300);
+}
+.disb-only-chip--off:hover {
+  border-color: var(--dash-line-strong);
+  color: var(--dash-ink-2);
+}
+
 /* Level with the search field rather than at Quasar's 56px default, so the
    toolbar reads as one row of controls. */
 .disb-filter {
@@ -890,6 +1320,13 @@ watch(rows, () => {
   .disb-search {
     flex: 1 1 100%;
     max-width: none;
+  }
+  /* The switcher keeps its own line above the search box: it is the control that
+     decides what everything below it means, and wrapped into a row of filters it
+     stops reading as one. */
+  .disb-view {
+    flex: 1 1 100%;
+    width: auto;
   }
   .disb-filter,
   .disb-filter--cutoff {

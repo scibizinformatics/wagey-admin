@@ -100,9 +100,24 @@ export function useDisbursementApi() {
    * decision, not about raw attendance tallies. Rows carry `epi_id`, which is
    * the id `reviewToReady`, `releasePayslips` and `fetchEmployeePayrollItem`
    * all expect, so no id translation is needed at the call site.
+   *
+   * `cache: true` opts into the module cache above, which is off by default.
+   *
+   * The list page's cash advance view asks this endpoint once per run — dozens
+   * of requests for one table — and its figures sit beside the payout-group and
+   * dashboard lists, which are cached the same way and for the same five
+   * minutes. The Review step deliberately does not opt in: it is the screen that
+   * *changes* these rows, and a step that reads its own work back from a cache
+   * written before the change would show the review it just cleared as pending.
    */
-  async function fetchEmployeeReviewSummary(payoutGroupInstanceId) {
+  async function fetchEmployeeReviewSummary(payoutGroupInstanceId, { cache = false } = {}) {
+    const key = cacheKey('review-summary', payoutGroupInstanceId)
+    if (cache) {
+      const cached = getCached(key)
+      if (cached) return cached
+    }
     const { data } = await api.get(`${BASE}/payroll/admin/employee-review-summary/${payoutGroupInstanceId}/`)
+    if (cache) setCached(key, data)
     return data
   }
 
