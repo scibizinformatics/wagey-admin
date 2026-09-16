@@ -99,10 +99,10 @@
               </span>
             </label>
 
-            <!-- Only an annual grant has an anchor to count from; a monthly one
-                 runs every month regardless, so the field would be a control
-                 that changes nothing. -->
-            <label v-if="draft.grant_type === 'annual'" class="dash-modal__field">
+            <!-- Monthly and annual grants both return on a cycle, so both count
+                 from the anchor date the admin picks; event and none grants
+                 have nothing to count from. -->
+            <label v-if="grantsFromAnchor(draft.grant_type)" class="dash-modal__field">
               <span class="dash-modal__field-label">Granted from</span>
               <q-select
                 v-model="draft.grant_anchor"
@@ -211,9 +211,6 @@
                 </td>
                 <td>
                   <span class="ltp-grant">{{ policyGrantLabel(policy) }}</span>
-                  <span v-if="policy.grantType === 'annual'" class="ltp-grant-sub">
-                    from {{ grantAnchorLabel(policy.grantAnchor).toLowerCase() }}
-                  </span>
                 </td>
                 <td class="ltp-muted">{{ formatServiceLength(policy.serviceLengthRequired) }}</td>
                 <td class="ltp-num ltp-muted">{{ formatMaxBalance(policy.maxBalance) }}</td>
@@ -257,6 +254,7 @@ import {
   formatMaxBalance,
   formatServiceLength,
   grantAnchorLabel,
+  grantsFromAnchor,
   policyGrantLabel,
   policyScopeLabel,
   summarizePolicies,
@@ -334,11 +332,14 @@ const previewSentence = computed(() => {
 
   const amount = formatDays(draft.value.grant_amount)
   const days = amount === '1' ? 'day' : 'days'
+  const anchor = grantsFromAnchor(draft.value.grant_type)
+    ? ` from their ${grantAnchorLabel(draft.value.grant_anchor).toLowerCase()}`
+    : ''
   const cadence =
     draft.value.grant_type === 'monthly'
-      ? 'every month'
+      ? `every month${anchor}`
       : draft.value.grant_type === 'annual'
-        ? `once a year from their ${grantAnchorLabel(draft.value.grant_anchor).toLowerCase()}`
+        ? `once a year${anchor}`
         : 'whenever an admin grants it'
 
   const service = Number(draft.value.service_length_required) || 0
@@ -487,13 +488,6 @@ defineExpose({
   display: block;
   font-weight: 500;
   color: var(--dash-ink);
-}
-
-.ltp-grant-sub {
-  display: block;
-  margin-top: 1px;
-  font-size: 11.5px;
-  color: var(--dash-ink-4);
 }
 
 .ltp-muted {
