@@ -13,7 +13,7 @@
         <div class="dash-modal__head-main">
           <span class="dash-modal__head-icon"><q-icon name="date_range" size="20px" /></span>
           <div class="dash-modal__head-titles">
-            <div class="dash-modal__title">Review attendance</div>
+            <div class="dash-modal__title">{{ props.title }}</div>
             <div class="dash-modal__sub">{{ headerSummary }}</div>
           </div>
         </div>
@@ -196,6 +196,8 @@ const props = defineProps({
   // Latest selectable day. Attendance cannot exist in the future, so this
   // defaults to today; pass an empty string to allow any date.
   maxDate: { type: String, default: 'today' },
+  // Reused by the card-taps page; each page titles its own dialog.
+  title: { type: String, default: 'Review attendance' },
 })
 
 const emit = defineEmits(['update:modelValue', 'apply'])

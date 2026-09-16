@@ -418,6 +418,9 @@ const navGroups = [
       // roster rather than under Administration: assigning one is a workforce
       // task, done by whoever hands the card over.
       { label: 'Access Cards', icon: 'contactless', to: '/app/access-cards' },
+      // What those cards have actually done — the tap log behind the manning
+      // board's punches. Sits directly after the card roll it reads.
+      { label: 'Card Taps', icon: 'tap_and_play', to: '/app/card-taps' },
     ],
   },
   {
