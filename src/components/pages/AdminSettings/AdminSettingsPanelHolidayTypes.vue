@@ -501,10 +501,11 @@ function useSuggestedCode(code) {
 }
 
 async function submit() {
-  const draft =
-    !editing.value && includeFirstPolicy.value && policyDraft.value.leave_type != null
-      ? policyDraft.value
-      : null
+  // The draft is passed whenever the toggle is on, incomplete or not:
+  // `saveHolidayType` validates it and says what is missing. Dropping it here
+  // for a missing leave type is what used to report "Holiday type created"
+  // about a type with no source attached.
+  const draft = !editing.value && includeFirstPolicy.value ? policyDraft.value : null
   await saveHolidayType(draft)
 }
 
