@@ -123,6 +123,7 @@ export default defineConfig((ctx) => {
             '/access',
             '/admin',
             '/audit',
+            '/allowance',
           ],
           target: apiBaseUrl,
           changeOrigin: true,
