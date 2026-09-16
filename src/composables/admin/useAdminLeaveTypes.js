@@ -11,6 +11,7 @@ import {
   leaveTypeToForm,
   normalizeLeaveTypes,
   policyPayload,
+  validatePolicyDraft,
 } from 'src/composables/utils/leaveTypes'
 
 /**
@@ -118,7 +119,10 @@ export function useAdminLeaveTypes() {
 
   /**
    * @param {object|null} policyDraft a first policy to create alongside the
-   *   type, or null. Ignored when editing — see the header note.
+   *   type, or null. Ignored when editing — see the header note. It is
+   *   validated here rather than left to the server: the create body is
+   *   atomic, so a policy the endpoint rejects takes the leave type down with
+   *   it and the admin is left reading a 400 about a field they can see.
    */
   async function saveLeaveType(policyDraft = null) {
     if (!form.value.name?.trim()) {
@@ -128,6 +132,14 @@ export function useAdminLeaveTypes() {
     if (!companyId.value) {
       toast.error('Please select a company first')
       return false
+    }
+
+    if (!editing.value && policyDraft) {
+      const invalidPolicy = validatePolicyDraft(policyDraft)
+      if (invalidPolicy) {
+        toast.warning(invalidPolicy)
+        return false
+      }
     }
 
     saving.value = true
