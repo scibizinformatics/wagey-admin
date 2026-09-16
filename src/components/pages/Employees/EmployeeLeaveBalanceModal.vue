@@ -114,10 +114,11 @@
 /**
  * Grant or correct one employee's leave balance.
  *
- * The two endpoints behind this (`leave-balances/add/` and `.../set/`) both
- * take the same body and both answer with success, but one adds to the balance
- * and the other replaces it — so the mode is a visible choice here rather than
- * two separate menu entries that look alike from the table.
+ * The two endpoints behind this (`leave-balances/add/` and `.../set/`) answer
+ * with success, but one adds to the balance and the other replaces it — so the
+ * mode is a visible choice here rather than two separate menu entries that look
+ * alike from the table. They also read the number under different field names:
+ * `add` takes `days`, `set` takes `remaining` — the submit key is picked by mode.
  */
 import { ref, computed, watch } from 'vue'
 
@@ -212,7 +213,7 @@ const submit = () => {
     payload: {
       employee_ids: [emp.id],
       leave_type_id: form.value.leave_type_id,
-      days: String(form.value.days),
+      [form.value.mode === 'set' ? 'remaining' : 'days']: String(form.value.days),
     },
   })
 }
