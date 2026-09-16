@@ -202,6 +202,7 @@
           @view-photo="viewEmployeePhoto"
           @add-leave-balance="openLeaveBalanceModal"
           @add-cto-balance="openCtoBalanceModal"
+          @assign-allowance="openAllowanceModal"
         />
         <EmployeeTable
           v-else
@@ -225,6 +226,7 @@
           @view-photo="viewEmployeePhoto"
           @add-leave-balance="openLeaveBalanceModal"
           @add-cto-balance="openCtoBalanceModal"
+          @assign-allowance="openAllowanceModal"
         />
 
         <footer v-if="filteredEmployees.length > 0" class="emp-foot">
@@ -344,6 +346,11 @@
       @submit="handleAddCtoBalance"
       @cancel="showCtoBalanceModal = false"
     />
+
+    <EmployeeAllowanceModal
+      v-model="showAllowanceModal"
+      :employee="selectedAllowanceEmployee"
+    />
   </PageShell>
 </template>
 
@@ -375,6 +382,7 @@ import EmployeeAssignContractDialog from '@/components/pages/Employees/EmployeeA
 import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/AttendanceEmployeePhotoViewer.vue'
 import EmployeeLeaveBalanceModal from '@/components/pages/Employees/EmployeeLeaveBalanceModal.vue'
 import EmployeeCtoBalanceModal from '@/components/pages/Employees/EmployeeCtoBalanceModal.vue'
+import EmployeeAllowanceModal from '@/components/pages/Employees/EmployeeAllowanceModal.vue'
 
 import { useToast } from '@/composables/useToast'
 
@@ -650,6 +658,10 @@ const selectedPhotoUrl = ref('')
 const showLeaveBalanceModal = ref(false)
 const showCtoBalanceModal = ref(false)
 const selectedBalanceEmployee = ref(null)
+
+// Allowance modal
+const showAllowanceModal = ref(false)
+const selectedAllowanceEmployee = ref(null)
 
 /**
  * What the picked employee currently holds, so the balance modal can show a
@@ -1724,6 +1736,11 @@ const openLeaveBalanceModal = async (emp) => {
 const openCtoBalanceModal = (emp) => {
   selectedBalanceEmployee.value = emp
   showCtoBalanceModal.value = true
+}
+
+const openAllowanceModal = (emp) => {
+  selectedAllowanceEmployee.value = emp
+  showAllowanceModal.value = true
 }
 
 /**
