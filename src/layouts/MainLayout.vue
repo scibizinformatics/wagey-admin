@@ -425,6 +425,7 @@ const navGroups = [
     items: [
       { label: 'Disbursement', icon: 'paid', to: '/app/payroll' },
       { label: 'Deductions', icon: 'money_off', to: '/app/deductions' },
+      { label: 'Allowances', icon: 'card_giftcard', to: '/app/allowances' },
     ],
   },
   {
