@@ -114,6 +114,10 @@ export function useEmployeeBalances() {
    * has to choose, and the modal says which it is doing in its title, its hint
    * and its button.
    *
+   * The two serializers also read the number under different field names:
+   * `add` takes `days`, `set` takes `remaining`. The modal picks the key by
+   * mode; this function passes the payload through untouched.
+   *
    * @param {'add'|'set'} mode
    */
   const writeLeaveBalance = async (payload, mode = 'add') => {
