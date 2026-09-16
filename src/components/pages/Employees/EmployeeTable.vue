@@ -154,6 +154,7 @@
                 @restore="$emit('restore', props.row)"
                 @add-leave-balance="$emit('add-leave-balance', props.row)"
                 @add-cto-balance="$emit('add-cto-balance', props.row)"
+                @assign-allowance="$emit('assign-allowance', props.row)"
               />
             </q-btn>
           </q-td>
@@ -266,6 +267,7 @@ defineEmits([
   'view-photo',
   'add-leave-balance',
   'add-cto-balance',
+  'assign-allowance',
   'clear-filters',
   'add',
 ])
