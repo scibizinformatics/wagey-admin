@@ -41,6 +41,16 @@
           <q-item-section>Add CTO balance</q-item-section>
         </q-item>
 
+        <q-item
+          v-close-popup
+          clickable
+          class="row-menu__item"
+          @click="$emit('assign-allowance', employee)"
+        >
+          <q-item-section avatar><q-icon name="o_card_giftcard" size="17px" /></q-item-section>
+          <q-item-section>Assign allowance</q-item-section>
+        </q-item>
+
         <q-separator class="row-menu__sep" />
 
         <q-item
@@ -98,6 +108,7 @@ defineEmits([
   'restore',
   'add-leave-balance',
   'add-cto-balance',
+  'assign-allowance',
 ])
 
 const terminated = computed(() => getStatus(props.employee) === 'Terminated')
