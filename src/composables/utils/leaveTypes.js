@@ -43,7 +43,7 @@ export const GRANT_TYPES = [
   {
     value: 'monthly',
     label: 'Monthly',
-    hint: 'Credits are granted every month.',
+    hint: 'Credits are granted every month, from the anchor date.',
   },
   {
     value: 'annual',
@@ -127,6 +127,16 @@ export function formatServiceLength(months) {
 
 export function isOverlayGrantType(grantType) {
   return OVERLAY_GRANT_TYPES.includes(grantType)
+}
+
+/**
+ * Whether a grant repeats from an anchor date. Monthly credits are granted on
+ * the employee's own monthly cycle just as annual ones are on their yearly
+ * cycle, so both count from `date_joined` or `calendar_year`; event and none
+ * grants have nothing to count from.
+ */
+export function grantsFromAnchor(grantType) {
+  return grantType === 'monthly' || grantType === 'annual'
 }
 
 /**
@@ -245,14 +255,17 @@ export function policyScopeLabel(policy) {
   return names.join(', ')
 }
 
-/** How a policy's grant reads on one line: "Monthly · 1.5 days". */
+/** How a policy's grant reads on one line: "Monthly · 1.5 days from date joined". */
 export function policyGrantLabel(policy) {
   if (!policy) return '—'
   if (policy.grantType === 'none') return 'No grant'
   const amount = formatDays(policy.grantAmount)
   const days = amount === '1' ? 'day' : 'days'
   if (policy.grantType === 'event') return `Event · ${amount} ${days} by hand`
-  return `${grantTypeLabel(policy.grantType)} · ${amount} ${days}`
+  const anchor = grantsFromAnchor(policy.grantType)
+    ? ` from ${grantAnchorLabel(policy.grantAnchor).toLowerCase()}`
+    : ''
+  return `${grantTypeLabel(policy.grantType)} · ${amount} ${days}${anchor}`
 }
 
 /**
@@ -281,15 +294,6 @@ export function summarizePolicies(policies = []) {
     companyWide: rows.some((policy) => policy.companyWide),
     departmentsCovered: departmentIds.size,
   }
-}
-
-/** The second line of the policy column: "2 accruing · 1 by hand". */
-export function policySummaryDetail(summary) {
-  if (!summary?.hasAny) return ''
-  const parts = []
-  if (summary.accruing) parts.push(`${summary.accruing} accruing`)
-  if (summary.overlays) parts.push(`${summary.overlays} by hand`)
-  return parts.join(' · ')
 }
 
 /** An empty policy form, matching the endpoint's own defaults. */
