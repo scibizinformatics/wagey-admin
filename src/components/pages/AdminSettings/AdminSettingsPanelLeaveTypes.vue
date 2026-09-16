@@ -231,6 +231,10 @@
                       ><q-icon name="account_balance" size="18px"
                     /></template>
                   </q-select>
+                  <span class="dash-modal__field-hint">
+                    Who pays for the days taken — the employer, unless a government or insurance
+                    scheme carries them.
+                  </span>
                 </label>
               </div>
             </div>
@@ -354,7 +358,10 @@
                   </q-input>
                 </label>
 
-                <label v-if="policyDraft.grant_type === 'annual'" class="dash-modal__field">
+                <label
+                  v-if="grantsFromAnchor(policyDraft.grant_type)"
+                  class="dash-modal__field"
+                >
                   <span class="dash-modal__field-label">Granted from</span>
                   <q-select
                     v-model="policyDraft.grant_anchor"
@@ -467,8 +474,9 @@ import {
   GRANT_TYPES,
   defaultUsesBalance,
   emptyPolicyDraft,
+  grantsFromAnchor,
   leaveTypeAttributes,
-  policySummaryDetail,
+  policyGrantLabel,
   summarizePolicies,
 } from '@/composables/utils/leaveTypes'
 
@@ -584,7 +592,7 @@ function summaryFor(type) {
 }
 
 function detailFor(type) {
-  return policySummaryDetail(summaryFor(type))
+  return (type.policies || []).map(policyGrantLabel).join(' · ')
 }
 
 // ─── Add / edit dialog ──────────────────────────────────────────────────────
