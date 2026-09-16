@@ -11,6 +11,7 @@ import {
   holidayTypePayload,
   holidayTypeToForm,
   normalizeHolidayTypes,
+  validateHolidayPolicyDraft,
   validateHolidayTypeForm,
 } from 'src/composables/utils/holidayTypes'
 
@@ -122,6 +123,10 @@ export function useAdminHolidayTypes() {
    * @param {object|null} policyDraft a first leave source to create alongside
    *   the type, or null. Ignored when editing — the chain has its own endpoints
    *   by then, and sending it here would add a duplicate rather than edit one.
+   *   It is validated here rather than dropped or left to the server: the
+   *   create body is atomic, so a source the endpoint rejects takes the holiday
+   *   type down with it, and a source quietly discarded for being incomplete
+   *   leaves an admin believing a chain is in place that is actually empty.
    */
   async function saveHolidayType(policyDraft = null) {
     const invalid = validateHolidayTypeForm(form.value)
@@ -132,6 +137,16 @@ export function useAdminHolidayTypes() {
     if (!companyId.value) {
       toast.error('Please select a company first')
       return false
+    }
+
+    if (!editing.value && policyDraft) {
+      // No existing chain to collide with on create, so the default empty list
+      // is the right second argument.
+      const invalidPolicy = validateHolidayPolicyDraft(policyDraft)
+      if (invalidPolicy) {
+        toast.warning(invalidPolicy)
+        return false
+      }
     }
 
     saving.value = true
