@@ -110,6 +110,7 @@
               @restore="$emit('restore', emp)"
               @add-leave-balance="$emit('add-leave-balance', emp)"
               @add-cto-balance="$emit('add-cto-balance', emp)"
+              @assign-allowance="$emit('assign-allowance', emp)"
             />
           </q-btn>
         </div>
@@ -221,6 +222,7 @@ const emit = defineEmits([
   'view-photo',
   'add-leave-balance',
   'add-cto-balance',
+  'assign-allowance',
   'clear-filters',
   'add',
 ])
