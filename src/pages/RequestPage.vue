@@ -105,6 +105,8 @@
               :rows="filteredLeaveRequests"
               :loading="loading || resolvingGroups"
               :action-loading="actionLoading"
+              :submitting="leaveSubmitting"
+              :selected-ids="selectedLeaveIds"
               :status-filter="statusFilter"
               :search="searchTerm"
               :payroll-group-filter="leavePayrollGroupFilter"
@@ -112,9 +114,14 @@
               @update:status-filter="statusFilter = $event"
               @update:search="searchTerm = $event"
               @update:payroll-group-filter="leavePayrollGroupFilter = $event"
+              @toggle-selection="toggleLeaveSelection"
+              @toggle-select-all="toggleSelectAllLeave"
+              @clear-selection="clearLeaveSelection"
               @view-details="openLeaveDetails"
               @approve="approveRequest"
               @reject="rejectRequest"
+              @bulk-approve="bulkApproveLeave"
+              @bulk-reject="bulkRejectLeave"
             />
           </q-tab-panel>
 
@@ -279,6 +286,7 @@ import {
   normalizeSwapRequests,
 } from 'src/composables/utils/swapRequests'
 import { normalizeOvertimeRequests } from 'src/composables/utils/overtimeRequests'
+import { leaveRequestDurationLabel } from 'src/composables/utils/leaveRequests'
 import { useAdminPayrollGroups } from 'src/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from 'src/composables/page/useEmployeePayoutGroup'
 import { useToast } from 'src/composables/useToast'
@@ -451,6 +459,8 @@ const statusFilter = ref('all')
 const actionLoading = ref(null)
 const selectedLeaveRequest = ref(null)
 const showLeaveDetails = ref(false)
+const selectedLeaveIds = ref(new Set())
+const leaveSubmitting = ref(new Set())
 
 // ===== OVERTIME STATE =====
 // One flat queue for the whole company, the same shape the leave tab uses.
@@ -654,6 +664,12 @@ const actionableOvertimeIds = computed(() =>
   filteredOvertimeRequests.value.filter((r) => r.actionable).map((r) => r.id),
 )
 
+// Same rule for leave: only rows the filters have left visible and that are
+// still awaiting a decision can be picked up by the batch bar.
+const actionableLeaveIds = computed(() =>
+  filteredLeaveRequests.value.filter((r) => r.status === 'pending').map((r) => r.id),
+)
+
 // ===== CASH ADVANCE HELPERS =====
 const extractEmployeeName = (request) => {
   if (request.employee_name) return request.employee_name
@@ -740,18 +756,23 @@ const fetchLeaveRequests = async () => {
       status: item.status?.toLowerCase(),
       startDate: item.start_date,
       endDate: item.end_date,
-      duration:
-        item.total_days != null
-          ? `${item.total_days} day(s)`
-          : item.hours
-            ? `${item.hours}h`
-            : 'N/A',
+      // The accrued value, not the calendar-day count: a half-day request
+      // reports `total_days: 1` but `total_day_value: "0.50"`, and showing the
+      // former reads a half day as a full one. Stringify once, here, so the
+      // row and the details modal stay in step.
+      duration: leaveRequestDurationLabel(item),
       reason: item.reason,
       leavePicture: item.leave_picture || null,
       submittedDate: item.submitted_at,
       approvedByName: item.approved_by_name || '',
       approvedAt: item.approved_at || '',
     }))
+    // Rows that are no longer awaiting a decision must not stay selected — a
+    // later bulk approve would then patch ids that are no longer open.
+    const live = new Set(leaveList.value.filter((r) => r.status === 'pending').map((r) => r.id))
+    selectedLeaveIds.value = new Set(
+      Array.from(selectedLeaveIds.value).filter((id) => live.has(id)),
+    )
   } catch (e) {
     const errorMessage = extractErrorMessage(e, 'Failed to fetch leave requests.')
     toast.error(errorMessage, { icon: 'error' })
@@ -1146,10 +1167,9 @@ const bulkDecideOvertime = (status) => {
         caption: reason || undefined,
       })
     } else if (done.length) {
-      toast.success(
-        `${done.length} overtime request${done.length === 1 ? '' : 's'} ${spec.past}`,
-        { icon: spec.icon },
-      )
+      toast.success(`${done.length} overtime request${done.length === 1 ? '' : 's'} ${spec.past}`, {
+        icon: spec.icon,
+      })
     } else {
       toast.error(reason || `None of these requests could be ${spec.past}.`)
     }
@@ -1240,6 +1260,123 @@ const openLeaveDetails = (request) => {
   showLeaveDetails.value = true
 }
 
+const toggleLeaveSelection = (id) => {
+  const newSet = new Set(selectedLeaveIds.value)
+  if (newSet.has(id)) newSet.delete(id)
+  else newSet.add(id)
+  selectedLeaveIds.value = newSet
+}
+
+const toggleSelectAllLeave = () => {
+  const actionable = actionableLeaveIds.value
+  const allSelected =
+    actionable.length > 0 && actionable.every((id) => selectedLeaveIds.value.has(id))
+  selectedLeaveIds.value = allSelected ? new Set() : new Set(actionable)
+}
+
+const clearLeaveSelection = () => {
+  selectedLeaveIds.value = new Set()
+}
+
+/**
+ * Approve or reject every selected leave request, and say what actually
+ * happened.
+ *
+ * Same shape as `bulkDecideOvertime`: the endpoint decides one request at a
+ * time, so a bulk action is N calls and any one of them can be refused on its
+ * own. Each request gets its own try/catch, the outcome is counted, the queue
+ * is always re-read because the server has moved for whatever succeeded, and
+ * the closing toast distinguishes all / some / none. Unlike the single-row
+ * approve/reject above (which tolerate a healthy-looking 500), the bulk path
+ * treats an error as an error — a batch must not wipe a real failure's signal.
+ */
+const LEAVE_BULK_ACTIONS = {
+  approved: {
+    title: 'Bulk Approve',
+    prompt: (n) => `Approve ${n} leave request(s)?`,
+    ok: { label: 'Approve', color: 'positive', unelevated: true },
+    verb: 'approve',
+    past: 'approved',
+    icon: 'check_circle',
+  },
+  rejected: {
+    title: 'Bulk Reject',
+    prompt: (n) => `Reject ${n} leave request(s)?`,
+    ok: { label: 'Reject', color: 'negative', unelevated: true },
+    verb: 'reject',
+    past: 'rejected',
+    icon: 'cancel',
+  },
+}
+
+const bulkDecideLeave = (status) => {
+  const spec = LEAVE_BULK_ACTIONS[status]
+  const ids = Array.from(selectedLeaveIds.value)
+  if (!ids.length) return
+
+  $q.dialog({
+    title: spec.title,
+    message: spec.prompt(ids.length),
+    ok: spec.ok,
+    cancel: { label: 'Cancel', flat: true },
+  }).onOk(async () => {
+    leaveSubmitting.value = new Set(ids)
+    const done = []
+    let reason = ''
+
+    try {
+      for (const id of ids) {
+        try {
+          await api.patch(`/attendance/leave-approval/${id}/`, { status })
+          done.push(id)
+        } catch (e) {
+          if (e.response?.status === 500) {
+            // The leave-approval endpoint answers 500 even when the action
+            // lands — the single-row approve/reject above already treat this
+            // as success, so a batch must too, or every row in a successful
+            // run reports as failed.
+            done.push(id)
+            continue
+          }
+          // First refusal wins the caption: they are usually the same reason,
+          // and a toast is not the place for ten of them.
+          reason = reason || extractErrorMessage(e, `Could not ${spec.verb} this request`)
+          console.error(
+            `[Requests] bulk ${spec.verb} failed for leave ${id}:`,
+            e?.response?.data ?? e,
+          )
+        }
+      }
+    } finally {
+      leaveSubmitting.value = new Set()
+      clearLeaveSelection()
+    }
+
+    // Unconditional: the server state has moved for everything in `done`, so a
+    // partial run that left the table alone is exactly how approved rows kept
+    // showing as pending.
+    await fetchLeaveRequests().catch((e) =>
+      console.error('[Requests] refetch after bulk leave failed:', e),
+    )
+
+    const failed = ids.length - done.length
+    if (done.length && failed) {
+      toast.warning(`${done.length} ${spec.past}, ${failed} could not be.`, {
+        caption: reason || undefined,
+      })
+    } else if (done.length) {
+      toast.success(`${done.length} leave request${done.length === 1 ? '' : 's'} ${spec.past}`, {
+        icon: spec.icon,
+      })
+    } else {
+      toast.error(reason || `None of these requests could be ${spec.past}.`)
+    }
+  })
+}
+
+const bulkApproveLeave = () => bulkDecideLeave('approved')
+const bulkRejectLeave = () => bulkDecideLeave('rejected')
+
 // ===== API: CASH ADVANCE =====
 const fetchCaRequests = async () => {
   loading.value = true
@@ -1311,7 +1448,8 @@ const fetchCaCutoffRequests = async (logId) => {
     // failures with a code and no explanation, and the map is the only place
     // that wording exists.
     const message =
-      errorMessages[err.response?.status] || extractErrorMessage(err, 'Failed to fetch cutoff requests')
+      errorMessages[err.response?.status] ||
+      extractErrorMessage(err, 'Failed to fetch cutoff requests')
     toast.error(message, { timeout: 5000 })
   } finally {
     caCutoffLoading.value = false
@@ -1563,6 +1701,7 @@ watch(selectedCompany, () => {
   caCutoffRequests.value = []
   // Ids from the previous workspace mean nothing in the next one.
   clearOvertimeSelection()
+  clearLeaveSelection()
   overtimeRequests.value = []
   overtimeDirectory.value = null
   // Group ids belong to the company they were listed for, so the filters cannot
