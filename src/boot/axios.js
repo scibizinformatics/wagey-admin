@@ -210,21 +210,32 @@ api.interceptors.response.use(
       // One attempt per request. If the replay 401s too, the access token is not
       // what is wrong and retrying again would loop.
       req._retriedAfterRefresh = true
+      let refreshError = null
+      let access = null
       try {
-        const access = await requestRefresh()
+        access = await requestRefresh()
         if (access) {
           // Drop the stale header rather than overwrite it — the request
           // interceptor reads the fresh token from the store on the way out.
           dropAuthHeader(req)
           return api(req)
         }
-      } catch (refreshError) {
-        console.warn(
-          '[axios] token refresh failed:',
-          refreshError?.response?.status ?? refreshError?.message,
-        )
+      } catch (error) {
+        refreshError = error
       }
-      endSession(`401 from ${req.url}`)
+      // Only a genuine auth rejection ends the session: the refresh endpoint
+      // itself answering 401/403 (the token is truly dead), or there being no
+      // refresh token at all. A transient failure while refreshing — network
+      // down, backend restarting, 5xx, 429 — means the token is still valid,
+      // so keep the session and let this request fail like any other retryable
+      // error. Ending it there would log everyone out over a blip.
+      const status = refreshError?.response?.status
+      const authRejected = status === 401 || status === 403 || refreshError === null
+      if (authRejected) {
+        endSession(`401 from ${req.url}`)
+      } else {
+        console.warn('[axios] refresh failed, keeping session:', status ?? refreshError?.message)
+      }
     }
 
     return Promise.reject(error)
