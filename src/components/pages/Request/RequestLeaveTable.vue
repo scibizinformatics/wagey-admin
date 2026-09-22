@@ -69,95 +69,147 @@
       <div class="grid-empty-text">{{ emptyText }}</div>
     </div>
 
-    <!-- Grid -->
-    <div v-else class="grid-scroll dash-scroll-x">
-      <q-table
-        :rows="rows"
-        :columns="leaveColumns"
-        row-key="id"
-        flat
-        class="dash-qtable dash-qtable--flush request-grid leave-grid"
-        hide-pagination
-        :rows-per-page-options="[0]"
-      >
-        <template v-slot:header="props">
-          <q-tr class="grid-head-row" :props="props">
-            <q-th key="employeeName" :props="props" class="grid-head-cell">Employee</q-th>
-            <q-th key="type" :props="props" class="grid-head-cell">Type</q-th>
-            <q-th key="dates" :props="props" class="grid-head-cell">Period</q-th>
-            <q-th key="reason" :props="props" class="grid-head-cell">Reason</q-th>
-            <q-th key="status" :props="props" class="grid-head-cell">Status</q-th>
-            <q-th key="actions" :props="props" class="grid-head-cell grid-head-cell--right">
-              Actions
-            </q-th>
-          </q-tr>
-        </template>
+    <template v-else>
+      <!-- Selection is a state, not an outcome, so the band is informational
+           rather than the green "everything succeeded" bar of a finished action. -->
+      <div v-if="selectedIds.size > 0" class="bulk-actions-bar">
+        <span class="bulk-count">{{ selectedIds.size }} selected</span>
+        <q-btn
+          unelevated
+          dense
+          no-caps
+          icon="check"
+          color="positive"
+          label="Approve selected"
+          :loading="submitting.size > 0"
+          @click="$emit('bulk-approve')"
+        />
+        <q-btn
+          unelevated
+          dense
+          no-caps
+          icon="close"
+          color="negative"
+          label="Reject selected"
+          :loading="submitting.size > 0"
+          @click="$emit('bulk-reject')"
+        />
+        <q-btn flat dense no-caps label="Clear" @click="$emit('clear-selection')" />
+      </div>
 
-        <template v-slot:body="props">
-          <q-tr
-            class="dash-qtable__row grid-row"
-            :class="{ 'grid-row--waiting': props.row.status === 'pending' }"
-            :props="props"
-          >
-            <q-td key="employeeName" :props="props" class="grid-cell cell-employee">
-              <div class="identity">
-                <span class="identity-avatar">{{ getInitials(props.row.employeeName) }}</span>
-                <span class="identity-text">
-                  <span class="identity-name">{{ props.row.employeeName || 'Unknown' }}</span>
-                  <span class="identity-sub">{{ props.row.department || 'General' }}</span>
-                </span>
-              </div>
-            </q-td>
-
-            <q-td key="type" :props="props" class="grid-cell cell-type">
-              <span class="type-pill">{{ props.row.type }}</span>
-            </q-td>
-
-            <q-td key="dates" :props="props" class="grid-cell cell-period">
-              <div class="range">
-                <span>{{ formatDate(props.row.startDate) }}</span>
-                <span class="range-sep">&rarr;</span>
-                <span>{{ formatDate(props.row.endDate) }}</span>
-              </div>
-              <div class="range-meta">{{ props.row.duration }}</div>
-            </q-td>
-
-            <q-td key="reason" :props="props" class="grid-cell cell-reason">
-              <span class="note" :title="props.row.reason || ''">
-                {{ props.row.reason || '—' }}
-              </span>
-            </q-td>
-
-            <q-td key="status" :props="props" class="grid-cell cell-status">
-              <span :class="['status-pill', statusPillClass(props.row.status)]">
-                {{ capitalizeStatus(props.row.status) }}
-              </span>
-            </q-td>
-
-            <q-td key="actions" :props="props" class="grid-cell cell-actions">
-              <div class="grid-actions">
-                <q-btn
-                  flat
+      <!-- Grid -->
+      <div class="grid-scroll dash-scroll-x">
+        <q-table
+          :rows="rows"
+          :columns="leaveColumns"
+          row-key="id"
+          flat
+          class="dash-qtable dash-qtable--flush request-grid leave-grid"
+          hide-pagination
+          :rows-per-page-options="[0]"
+        >
+          <template v-slot:header="props">
+            <q-tr class="grid-head-row" :props="props">
+              <q-th key="select" :props="props" class="grid-head-cell cell-select">
+                <q-checkbox
+                  :model-value="allSelected"
+                  @update:model-value="$emit('toggle-select-all')"
+                  :disable="actionableCount === 0"
                   dense
-                  round
-                  icon="more_horiz"
-                  size="sm"
-                  class="grid-action"
-                  :loading="isBusy(props.row)"
-                  aria-label="Row actions"
-                  @click.stop
+                  size="xs"
                 >
-                  <RequestRowMenu
-                    :actions="rowActions(props.row)"
-                    @select="$emit($event, props.row)"
-                  />
-                </q-btn>
-              </div>
-            </q-td>
-          </q-tr>
-        </template>
-      </q-table>
-    </div>
+                  <q-tooltip v-if="actionableCount">
+                    {{ allSelected ? 'Clear selection' : selectAllHint }}
+                  </q-tooltip>
+                </q-checkbox>
+              </q-th>
+              <q-th key="employeeName" :props="props" class="grid-head-cell">Employee</q-th>
+              <q-th key="type" :props="props" class="grid-head-cell">Type</q-th>
+              <q-th key="dates" :props="props" class="grid-head-cell">Period</q-th>
+              <q-th key="reason" :props="props" class="grid-head-cell">Reason</q-th>
+              <q-th key="status" :props="props" class="grid-head-cell">Status</q-th>
+              <q-th key="actions" :props="props" class="grid-head-cell grid-head-cell--right">
+                Actions
+              </q-th>
+            </q-tr>
+          </template>
+
+          <template v-slot:body="props">
+            <q-tr
+              class="dash-qtable__row grid-row"
+              :class="{ 'grid-row--waiting': props.row.status === 'pending' }"
+              :props="props"
+            >
+              <q-td key="select" :props="props" class="grid-cell grid-cell--center cell-select">
+                <q-checkbox
+                  v-if="props.row.status === 'pending'"
+                  :model-value="selectedIds.has(props.row.id)"
+                  @update:model-value="$emit('toggle-selection', props.row.id)"
+                  dense
+                  size="xs"
+                />
+              </q-td>
+
+              <q-td key="employeeName" :props="props" class="grid-cell cell-employee">
+                <div class="identity">
+                  <span class="identity-avatar">{{ getInitials(props.row.employeeName) }}</span>
+                  <span class="identity-text">
+                    <span class="identity-name">{{ props.row.employeeName || 'Unknown' }}</span>
+                    <span class="identity-sub">{{ props.row.department || 'General' }}</span>
+                  </span>
+                </div>
+              </q-td>
+
+              <q-td key="type" :props="props" class="grid-cell cell-type">
+                <span class="type-pill">{{ props.row.type }}</span>
+              </q-td>
+
+              <q-td key="dates" :props="props" class="grid-cell cell-period">
+                <div class="range">
+                  <span>{{ formatDate(props.row.startDate) }}</span>
+                  <span class="range-sep">&rarr;</span>
+                  <span>{{ formatDate(props.row.endDate) }}</span>
+                </div>
+                <div class="range-meta">{{ props.row.duration }}</div>
+              </q-td>
+
+              <q-td key="reason" :props="props" class="grid-cell cell-reason">
+                <span class="note" :title="props.row.reason || ''">
+                  {{ props.row.reason || '—' }}
+                </span>
+              </q-td>
+
+              <q-td key="status" :props="props" class="grid-cell cell-status">
+                <span :class="['status-pill', statusPillClass(props.row.status)]">
+                  {{ capitalizeStatus(props.row.status) }}
+                </span>
+              </q-td>
+
+              <q-td key="actions" :props="props" class="grid-cell cell-actions">
+                <div class="grid-actions">
+                  <q-btn
+                    flat
+                    dense
+                    round
+                    icon="more_horiz"
+                    size="sm"
+                    class="grid-action"
+                    :loading="isBusy(props.row)"
+                    aria-label="Row actions"
+                    @click.stop
+                  >
+                    <RequestRowMenu
+                      :actions="rowActions(props.row)"
+                      @select="$emit($event, props.row)"
+                    />
+                  </q-btn>
+                </div>
+              </q-td>
+            </q-tr>
+          </template>
+        </q-table>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -170,6 +222,8 @@ const props = defineProps({
   rows: Array,
   loading: Boolean,
   actionLoading: String,
+  submitting: { type: Set, default: () => new Set() },
+  selectedIds: { type: Set, default: () => new Set() },
   statusFilter: String,
   search: String,
   // Null is "all groups"; ids arrive from the payroll-groups endpoint, which
@@ -181,9 +235,14 @@ defineEmits([
   'update:statusFilter',
   'update:search',
   'update:payrollGroupFilter',
+  'toggle-selection',
+  'toggle-select-all',
+  'clear-selection',
   'view-details',
   'approve',
   'reject',
+  'bulk-approve',
+  'bulk-reject',
 ])
 
 // Self-describing labels: the field is 34px tall, too short for a Quasar
@@ -201,6 +260,7 @@ const payrollGroupSelectOptions = computed(() => [
 ])
 
 const leaveColumns = [
+  { name: 'select', label: '', field: '', align: 'center' },
   { name: 'employeeName', label: 'Employee', field: 'employeeName', align: 'left' },
   { name: 'type', label: 'Type', field: 'type', align: 'left' },
   { name: 'dates', label: 'Period', field: 'startDate', align: 'left' },
@@ -224,9 +284,23 @@ const rowActions = (row) => {
 }
 
 // The spinner moved from the individual approve/reject buttons onto the trigger,
-// which is the only control still on the row once the menu has closed.
+// which is the only control still on the row once the menu has closed. Includes
+// the bulk path, whose loading rides the same `submitting` Set the batch bar
+// reads.
 const isBusy = (row) =>
-  props.actionLoading === `approve-${row.id}` || props.actionLoading === `reject-${row.id}`
+  props.actionLoading === `approve-${row.id}` ||
+  props.actionLoading === `reject-${row.id}` ||
+  props.submitting.has(row.id)
+
+const actionableCount = computed(() => props.rows.filter((row) => row.status === 'pending').length)
+
+const selectAllHint = computed(() => `Select all ${actionableCount.value} awaiting a decision`)
+
+const allSelected = computed(
+  () =>
+    actionableCount.value > 0 &&
+    props.rows.every((row) => row.status !== 'pending' || props.selectedIds.has(row.id)),
+)
 
 const isNarrowed = computed(
   () =>
@@ -289,6 +363,39 @@ const statusPillClass = (status) => {
 }
 .leave-grid {
   min-width: 780px;
+}
+/* Selection is a state, not an outcome — an informational band, rather than
+   the green "everything succeeded" bar a finished action would earn. */
+.bulk-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  /* Sits between the toolbar and the header row, so it keeps the toolbar's own
+     14px gutter rather than the wider page one. */
+  margin: 10px 14px;
+  background: var(--dash-info-bg);
+  border: 1px solid var(--dash-info-line);
+  border-radius: var(--dash-r-md);
+  flex-wrap: wrap;
+}
+.bulk-count {
+  margin-right: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dash-info);
+  font-variant-numeric: tabular-nums;
+}
+.bulk-actions-bar :deep(.q-btn) {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: var(--dash-r-sm);
+}
+.cell-select {
+  width: 44px;
 }
 .cell-employee {
   width: 220px;
