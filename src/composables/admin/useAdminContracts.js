@@ -250,8 +250,9 @@ export function useAdminContracts() {
     editing.value = true
     form.value = {
       id: contract.id,
-      employee_id: contract.employee_company || null,
-      company_id: contract.employee_company || companyId.value,
+      employee_id: contract.employee_company ?? contract.employee_id ?? null,
+      company_id:
+        contract.company_id ?? contract.companies?.[0]?.company_id ?? companyId.value,
       contract_type_id: contract.contract_type_id ?? null,
       site_id: null,
       pay_structure: {
