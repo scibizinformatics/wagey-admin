@@ -338,6 +338,8 @@ import {
   getLockedShiftRecordIds,
   isRecordComplete,
   rowMatchesEmployee,
+  attendanceDurationMs,
+  attendanceDurationLabel,
 } from '@/composables/utils/attendance'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
@@ -801,6 +803,15 @@ function sortValueFor(row, key) {
       return row.time_in || ''
     case 'time_out':
       return row.time_out || ''
+    // Total minutes, zero-padded so the string comparator orders durations
+    // numerically — "2h 9m" and "11h 30m" compare as text the wrong way round.
+    // Rows with no duration return '' and sink to the bottom like every other
+    // empty sort value.
+    case 'duration': {
+      const ms = attendanceDurationMs(row.time_in, row.time_out)
+      if (ms == null) return ''
+      return String(Math.floor(ms / 60000)).padStart(7, '0')
+    }
     default:
       return ''
   }
@@ -1300,7 +1311,13 @@ async function submitAttendance(record) {
       ...(record.selected_assignment_id != null && {
         assignment_id: Number(record.selected_assignment_id),
       }),
-      ...(timeOut && { time_out: timeOut.toISOString() }),
+      // Duration sits with the punches it describes and only exists once both
+      // are in — an open record has no answer. The overnight bump above has
+      // already put time_out after time_in, so this pair is never negative.
+      ...(timeOut && {
+        time_out: timeOut.toISOString(),
+        duration: attendanceDurationLabel(timeIn, timeOut),
+      }),
     }
 
     const result = await logAttendance(payload)
@@ -1417,6 +1434,10 @@ async function saveInlineEdit() {
       await updateAttendanceApi(record.id, {
         time_in: existingTimeIn,
         time_out: timeOutTimestamp,
+        ...(existingTimeIn &&
+          timeOutTimestamp && {
+            duration: attendanceDurationLabel(existingTimeIn, timeOutTimestamp),
+          }),
         source: record.source || 'admin',
       })
     } catch (error) {
@@ -1490,6 +1511,10 @@ async function updateAttendance(record) {
     await updateAttendanceApi(record.id, {
       time_in: timeInTimestamp,
       time_out: timeOutTimestamp,
+      ...(timeInTimestamp &&
+        timeOutTimestamp && {
+          duration: attendanceDurationLabel(timeInTimestamp, timeOutTimestamp),
+        }),
       time_in_source: record.time_in_source || record.source || 'admin',
       time_out_source: record.time_out_source || record.source || 'admin',
       source: record.source || 'admin',
@@ -2196,7 +2221,8 @@ onMounted(async () => {
 /* ============================================================================
    RESPONSIVE
    ----------------------------------------------------------------------------
-     >= 1280   table with employee / work type / shift / time in / time out
+     >= 1280   table with employee / work type / shift / time in / time out /
+                duration
      1024-1279 work type drops; shift stays — it is load-bearing, and the
                remaining columns still fit the content width without scrolling
      < 1024    AttendanceCardList replaces the table; no sideways scroll
