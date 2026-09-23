@@ -19,6 +19,17 @@
           </q-item-section>
         </q-item>
 
+        <q-item
+          v-if="hasContract"
+          v-close-popup
+          clickable
+          class="row-menu__item"
+          @click="$emit('edit-contract', employee)"
+        >
+          <q-item-section avatar><q-icon name="o_edit_note" size="17px" /></q-item-section>
+          <q-item-section>Edit contract</q-item-section>
+        </q-item>
+
         <q-separator class="row-menu__sep" />
 
         <q-item
@@ -104,6 +115,7 @@ defineEmits([
   'view',
   'edit',
   'assign',
+  'edit-contract',
   'terminate',
   'restore',
   'add-leave-balance',
