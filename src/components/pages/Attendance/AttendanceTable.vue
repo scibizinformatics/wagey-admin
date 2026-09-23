@@ -101,6 +101,12 @@
             />
           </q-td>
 
+          <q-td key="duration" :props="props" class="att-table__td">
+            <span class="duration dash-num" :class="{ 'duration--none': !hasDuration(props.row) }">
+              {{ durationOf(props.row) }}
+            </span>
+          </q-td>
+
           <q-td key="audit" :props="props" class="att-table__td att-table__td--audit">
             <button
               type="button"
@@ -161,11 +167,12 @@
  * Attendance records as a table, for laptop and desktop. AttendanceCardList
  * takes over below 1024px.
  *
- * Nine columns became five. Each punch's time, selfie and source are now one
- * cell (AttendancePunchCell) instead of three columns repeated twice, and work
- * type — the least load-bearing column — drops out as the viewport narrows. The
- * previous table was a fixed 700px minimum that shrank its own type to 10px on
- * tablet — both of which this replaces.
+ * Nine columns became six. Each punch's time, selfie and source are now one
+ * cell (AttendancePunchCell) instead of three columns repeated twice, duration
+ * is derived from the punch pair rather than stored, and work type — the least
+ * load-bearing column — drops out as the viewport narrows. The previous table
+ * was a fixed 700px minimum that shrank its own type to 10px on tablet — both
+ * of which this replaces.
  */
 import { computed } from 'vue'
 import { useQuasar } from 'quasar'
@@ -177,6 +184,8 @@ import {
   getAvatarColor,
   getShiftName,
   workTypeToneClass,
+  attendanceDurationLabel,
+  attendanceDurationMs,
 } from '@/composables/utils/attendance'
 
 const $q = useQuasar()
@@ -223,13 +232,16 @@ function onPaginationUpdate(value) {
 
 const keepGivenOrder = (rows) => rows
 
-// Employee, shift, time in and time out are the point of the page and always
-// show — the table only renders at 1024px and up, where all four fit without
-// sideways scroll. Work type is the one piece of context that gives way.
+// Employee, shift, time in, time out and duration are the point of the page and
+// always show — the table only renders at 1024px and up, where all five fit
+// without sideways scroll. Work type is the one piece of context that gives way.
 const showWorkType = computed(() => $q.screen.width >= 1280)
 
 const nameOf = (row) => getEmployeeName(row.employee, props.employees)
 const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
+
+const durationOf = (row) => attendanceDurationLabel(row.time_in, row.time_out)
+const hasDuration = (row) => attendanceDurationMs(row.time_in, row.time_out) != null
 
 const rowDate = (row) => row.date || row.attendance_date || row.log_date || ''
 
@@ -303,6 +315,14 @@ const columns = computed(() => {
       field: 'time_out',
       align: 'left',
       style: 'width: 164px',
+      sortable: true,
+    },
+    {
+      name: 'duration',
+      label: 'Duration',
+      field: (row) => attendanceDurationMs(row.time_in, row.time_out),
+      align: 'left',
+      style: 'width: 104px',
       sortable: true,
     },
     {
@@ -386,6 +406,21 @@ function auditTooltip(row) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Duration ── */
+.duration {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink-2);
+  white-space: nowrap;
+}
+
+/* A record with no clock-out has no duration to report; the em dash is the
+   answer, and tinting it like a value would read as a very short shift. */
+.duration--none {
+  font-weight: 400;
+  color: var(--dash-ink-4);
 }
 
 /* ── Audit ── */
