@@ -197,6 +197,7 @@
           @view="viewEmployee"
           @edit="editEmployee"
           @assign="handleOpenAssignDialog"
+          @edit-contract="handleOpenEditContract"
           @terminate="confirmTerminate"
           @restore="confirmRestore"
           @view-photo="viewEmployeePhoto"
@@ -221,6 +222,7 @@
           @view="viewEmployee"
           @edit="editEmployee"
           @assign="handleOpenAssignDialog"
+          @edit-contract="handleOpenEditContract"
           @terminate="confirmTerminate"
           @restore="confirmRestore"
           @view-photo="viewEmployeePhoto"
@@ -328,6 +330,28 @@
       @submit="handleAssignSubmit"
     />
 
+    <EmployeeEditContractDialog
+      v-model="editContractDialog"
+      :form="editContractForm"
+      :saving="savingContract"
+      :employee="selectedEditEmployee"
+      :positions="positions"
+      :departments="departments"
+      :payroll-group-options="payrollGroups"
+      :all-eligibility-options="eligibilityOptions"
+      :contribution-options="contributions"
+      :holiday-pay-type-options="holidayTypes"
+      @update:field="updateEditContractField"
+      @submit="handleEditContractSubmit"
+    />
+
+    <EmployeeUpdateContractConfirmDialog
+      v-model="showContractUpdateConfirm"
+      :employee="selectedEditEmployee"
+      :loading="savingContract"
+      @confirm="submitContractUpdate"
+    />
+
     <EmployeeLeaveBalanceModal
       v-model="showLeaveBalanceModal"
       :employee="selectedBalanceEmployee"
@@ -379,6 +403,8 @@ import EmployeeViewModal from '@/components/pages/Employees/EmployeeViewModal.vu
 import EmployeeTerminateDialog from '@/components/pages/Employees/EmployeeTerminateDialog.vue'
 import EmployeeRestoreDialog from '@/components/pages/Employees/EmployeeRestoreDialog.vue'
 import EmployeeAssignContractDialog from '@/components/pages/Employees/EmployeeAssignContractDialog.vue'
+import EmployeeEditContractDialog from '@/components/pages/Employees/EmployeeEditContractDialog.vue'
+import EmployeeUpdateContractConfirmDialog from '@/components/pages/Employees/EmployeeUpdateContractConfirmDialog.vue'
 import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/AttendanceEmployeePhotoViewer.vue'
 import EmployeeLeaveBalanceModal from '@/components/pages/Employees/EmployeeLeaveBalanceModal.vue'
 import EmployeeCtoBalanceModal from '@/components/pages/Employees/EmployeeCtoBalanceModal.vue'
@@ -434,6 +460,9 @@ const {
   openAssignDialog,
   assignContract,
   bulkAssignContract,
+  updateEmploymentContract,
+  parseEligibilities,
+  fetchEmployeeContractList,
   contractAssigned,
   resetContractAssigned,
   holidayTypes,
@@ -487,6 +516,14 @@ const payTypeAutoFilled = ref(false)
 const selectedEmployees = ref([])
 const bulkAssignEmployeeIds = ref([])
 const selectedAssignEmployee = ref(null)
+// Edit-contract state: the form is prefilled from the employee's active
+// contract and the PATCH is gated behind the "Save & Recalculate" warning.
+const editContractDialog = ref(false)
+const showContractUpdateConfirm = ref(false)
+const selectedEditEmployee = ref(null)
+const editingContractId = ref(null)
+const savingContract = ref(false)
+const editContractForm = ref(_emptyEditContractForm())
 // Pagination state
 const employeePage = ref(1)
 const employeePageSize = ref(20)
@@ -632,6 +669,14 @@ watch(assignDialog, (open) => {
       bulkAssignEmployeeIds.value = []
     }
     selectedAssignEmployee.value = null
+  }
+})
+
+watch(editContractDialog, (open) => {
+  if (!open) {
+    selectedEditEmployee.value = null
+    editingContractId.value = null
+    editContractForm.value = _emptyEditContractForm()
   }
 })
 
@@ -1153,6 +1198,205 @@ const saveEmployee = async (formData) => {
     await refreshEmployees()
   } catch (error) {
     toast.error(extractErrorMessage(error, 'Failed to update employee'))
+  }
+}
+
+function _emptyEditContractForm() {
+  return {
+    pay_type: null,
+    rate: '',
+    work_hours_per_week: null,
+    position: null,
+    department: null,
+    payroll_group: null,
+    eligibilities: [],
+    contributions: [],
+    holiday_pay_types: [],
+    overtime_multiplier: null,
+    special_holiday_multiplier: null,
+    regular_holiday_multiplier: null,
+    night_diff_multiplier: null,
+    regular_holiday_ot_multiplier: null,
+    special_holiday_ot_multiplier: null,
+    undertime_multiplier: null,
+  }
+}
+
+const updateEditContractField = ({ field, value }) => {
+  editContractForm.value[field] = value
+}
+
+/**
+ * Resolve the employee's active contract, using the page's lazy contract cache
+ * first and falling back to a live fetch. `null` means "resolved: no active
+ * contract" — that employee has nothing to edit.
+ */
+async function resolveActiveContractForEdit(employee) {
+  const companyContracts = employeeContracts.value[companyId.value]
+  let contract = companyContracts?.[employee.id]
+  if (contract === undefined) {
+    contract = await fetchActiveContract(employee.id)
+    if (contract) {
+      employeeContracts.value[companyId.value] = employeeContracts.value[companyId.value] ?? {}
+      employeeContracts.value[companyId.value][employee.id] = contract
+    }
+  }
+  return contract
+}
+
+/**
+ * The PATCH wants the employment contract's `id`, which the active-contract
+ * payload normally carries. If it does not, resolve it from the contracts-list
+ * endpoint, preferring a record that looks like the active one.
+ */
+async function resolveEditContractId(employee, contract) {
+  if (contract.id != null) return contract.id
+  const list = await fetchEmployeeContractList(employee.id)
+  const match = list.find((c) => c.rate === contract.rate) ?? list[0]
+  return match?.id ?? null
+}
+
+async function handleOpenEditContract(employee) {
+  if (!companyId.value) {
+    toast.warning('Please select a company first')
+    return
+  }
+
+  const contract = await resolveActiveContractForEdit(employee)
+  if (!contract) {
+    toast.warning(`${getFullName(employee)} has no active contract to edit`)
+    return
+  }
+
+  if (!positions.value.length) await fetchPositions()
+  if (!departments.value.length) await fetchDepartments()
+  if (!payrollGroups.value.length) await fetchPayrollGroups()
+  if (!eligibilityOptions.value.length) await fetchEligibilityOptions()
+  if (!contributions.value.length) await fetchContributions()
+  if (!holidayTypes.value.length) await fetchHolidayTypes()
+
+  const contractId = await resolveEditContractId(employee, contract)
+  if (contractId == null) {
+    toast.error('Could not resolve the contract id for this employee')
+    return
+  }
+
+  selectedEditEmployee.value = employee
+  editingContractId.value = contractId
+  editContractForm.value = {
+    pay_type: contract.pay_type ?? null,
+    rate: contract.rate ?? '',
+    work_hours_per_week: contract.work_hours_per_week ?? null,
+    position: contract.position ?? null,
+    department: contract.department ?? null,
+    payroll_group: contract.payroll_group_id ?? contract.payroll_group ?? null,
+    eligibilities: parseEligibilities(contract.eligibilities),
+    contributions: (contract.contributions ?? []).map((c) => c.id ?? c),
+    holiday_pay_types: contract.holiday_pay_types ?? [],
+    overtime_multiplier: contract.overtime_multiplier ?? null,
+    special_holiday_multiplier: contract.special_holiday_multiplier ?? null,
+    regular_holiday_multiplier: contract.regular_holiday_multiplier ?? null,
+    night_diff_multiplier: contract.night_diff_multiplier ?? null,
+    regular_holiday_ot_multiplier: contract.regular_holiday_ot_multiplier ?? null,
+    special_holiday_ot_multiplier: contract.special_holiday_ot_multiplier ?? null,
+    undertime_multiplier: contract.undertime_multiplier ?? null,
+  }
+  editContractDialog.value = true
+}
+
+function handleEditContractSubmit() {
+  const f = editContractForm.value
+  if (!f.pay_type) {
+    toast.error('Pay type is required')
+    return
+  }
+  const rateNum = parseFloat(f.rate)
+  if (isNaN(rateNum) || rateNum < 0) {
+    toast.error('Rate cannot be negative')
+    return
+  }
+  if (rateNum < 100) {
+    toast.error('Rate must be at least ₱100')
+    return
+  }
+  const hoursNum = f.work_hours_per_week ? Number(f.work_hours_per_week) : null
+  if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
+    toast.error('Work hours must be between 8 and 48')
+    return
+  }
+  if (!f.department) {
+    toast.error('Department is required')
+    return
+  }
+  const mKeys = [
+    'overtime_multiplier',
+    'special_holiday_multiplier',
+    'regular_holiday_multiplier',
+    'night_diff_multiplier',
+    'regular_holiday_ot_multiplier',
+    'special_holiday_ot_multiplier',
+    'undertime_multiplier',
+  ]
+  for (const key of mKeys) {
+    const val = f[key]
+    if (val !== null && val !== undefined && val !== '' && parseFloat(val) < 0) {
+      toast.error(`${key.replace(/_/g, ' ')} cannot be negative`)
+      return
+    }
+  }
+  showContractUpdateConfirm.value = true
+}
+
+async function submitContractUpdate() {
+  const employee = selectedEditEmployee.value
+  const contractId = editingContractId.value
+  const f = editContractForm.value
+  if (!employee || !contractId) {
+    toast.error('Could not resolve the contract to update')
+    showContractUpdateConfirm.value = false
+    return
+  }
+
+  const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v))
+  const payload = {
+    pay_type: f.pay_type,
+    rate: num(f.rate),
+    work_hours_per_week: num(f.work_hours_per_week),
+    payroll_group: f.payroll_group ?? null,
+    position: f.position ?? null,
+    department: f.department ?? null,
+    overtime_multiplier: num(f.overtime_multiplier),
+    special_holiday_multiplier: num(f.special_holiday_multiplier),
+    regular_holiday_multiplier: num(f.regular_holiday_multiplier),
+    night_diff_multiplier: num(f.night_diff_multiplier),
+    regular_holiday_ot_multiplier: num(f.regular_holiday_ot_multiplier),
+    special_holiday_ot_multiplier: num(f.special_holiday_ot_multiplier),
+    undertime_multiplier: num(f.undertime_multiplier),
+    eligibilities: f.eligibilities ?? [],
+    contributions: f.contributions ?? [],
+    holiday_pay_types: f.holiday_pay_types ?? [],
+  }
+
+  savingContract.value = true
+  const { ok, error } = await updateEmploymentContract(contractId, payload)
+  savingContract.value = false
+
+  if (ok) {
+    toast.success('Contract updated successfully')
+    showContractUpdateConfirm.value = false
+    editContractDialog.value = false
+    // Patch the cached active contract so the row's Contract chip reflects the
+    // new terms immediately, then let the list re-read the truth.
+    const cache = employeeContracts.value[companyId.value]
+    if (cache?.[employee.id]) {
+      cache[employee.id] = { ...cache[employee.id], ...payload }
+    }
+    selectedEditEmployee.value = null
+    editingContractId.value = null
+    await refreshEmployees()
+  } else {
+    showContractUpdateConfirm.value = false
+    toast.error(extractErrorMessage(error, 'Failed to update contract'))
   }
 }
 
