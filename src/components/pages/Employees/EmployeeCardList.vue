@@ -106,6 +106,7 @@
               @view="$emit('view', emp)"
               @edit="$emit('edit', emp)"
               @assign="$emit('assign', emp)"
+              @edit-contract="$emit('edit-contract', emp)"
               @terminate="$emit('terminate', emp)"
               @restore="$emit('restore', emp)"
               @add-leave-balance="$emit('add-leave-balance', emp)"
@@ -217,6 +218,7 @@ const emit = defineEmits([
   'view',
   'edit',
   'assign',
+  'edit-contract',
   'terminate',
   'restore',
   'view-photo',
