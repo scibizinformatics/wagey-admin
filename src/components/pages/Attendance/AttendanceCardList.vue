@@ -130,6 +130,18 @@
             @view-selfie="(url, title) => $emit('view-selfie', url, title)"
           />
         </div>
+
+        <!-- Derived from the punch pair, not stored — the same label the table's
+             Duration column shows, so the two views of one record agree. -->
+        <div class="punch-slot">
+          <span class="punch-slot__label">Duration</span>
+          <span
+            class="punch-slot__duration dash-num"
+            :class="{ 'punch-slot__duration--none': !hasDuration(row) }"
+          >
+            {{ durationOf(row) }}
+          </span>
+        </div>
       </div>
     </article>
   </div>
@@ -152,6 +164,8 @@ import {
   getAvatarColor,
   getShiftName,
   workTypeToneClass,
+  attendanceDurationLabel,
+  attendanceDurationMs,
 } from '@/composables/utils/attendance'
 
 const props = defineProps({
@@ -200,6 +214,8 @@ function auditToneClass(row) {
 
 const nameOf = (row) => getEmployeeName(row.employee, props.employees)
 const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
+const durationOf = (row) => attendanceDurationLabel(row.time_in, row.time_out)
+const hasDuration = (row) => attendanceDurationMs(row.time_in, row.time_out) != null
 </script>
 
 <style scoped>
@@ -347,9 +363,11 @@ const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
 }
 
 /* ── Punches ── */
+/* Three slots: time in, time out and the duration derived from them. At the
+   320px minimum card width each column keeps ~90px, which fits "8h 30m". */
 .card__punches {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px 12px;
   padding-top: 12px;
   border-top: 1px solid var(--dash-line-soft);
@@ -363,6 +381,19 @@ const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
   display: block;
   margin-bottom: 5px;
   font-size: 11.5px;
+  color: var(--dash-ink-4);
+}
+
+.punch-slot__duration {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink-2);
+  white-space: nowrap;
+}
+
+.punch-slot__duration--none {
+  font-weight: 400;
   color: var(--dash-ink-4);
 }
 
