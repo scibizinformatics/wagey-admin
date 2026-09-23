@@ -150,6 +150,7 @@
                 @view="$emit('view', props.row)"
                 @edit="$emit('edit', props.row)"
                 @assign="$emit('assign', props.row)"
+                @edit-contract="$emit('edit-contract', props.row)"
                 @terminate="$emit('terminate', props.row)"
                 @restore="$emit('restore', props.row)"
                 @add-leave-balance="$emit('add-leave-balance', props.row)"
@@ -262,6 +263,7 @@ defineEmits([
   'view',
   'edit',
   'assign',
+  'edit-contract',
   'terminate',
   'restore',
   'view-photo',
