@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
@@ -45,6 +45,13 @@ export function useAdminContracts() {
   const holidayTypes = ref([])
   const activeContract = ref(null)
   const isRenewing = computed(() => !!activeContract.value)
+
+  // Holiday types are fetched per company; drop the cache on a company switch so
+  // the callers' lazy `if (!holidayTypes.value.length)` guard re-fetches scoped
+  // data instead of reusing the previous company's list.
+  watch(companyId, () => {
+    holidayTypes.value = []
+  })
 
   function resetContractAssigned() {
     contractAssigned.value = null
@@ -160,9 +167,23 @@ export function useAdminContracts() {
   }
 
   async function fetchHolidayTypes() {
+    if (!companyId.value) {
+      holidayTypes.value = []
+      return []
+    }
+    const askedFor = String(companyId.value)
     try {
-      const response = await api.get(`${BASE}/attendance/holiday-types/`)
-      holidayTypes.value = response.data.data ?? response.data ?? []
+      const response = await api.get(`${BASE}/attendance/holiday-types/`, {
+        params: { company_id: companyId.value },
+      })
+      const rows = response.data.data ?? response.data ?? []
+      // A row that names another company means the filter did not take. Drop it
+      // rather than showing another workspace's holidays; a row that names no
+      // company at all is kept, since the payload is allowed to omit it.
+      holidayTypes.value = rows.filter((type) => {
+        const companyRef = type.companyId ?? type.company_id ?? type.company
+        return companyRef == null || String(companyRef) === askedFor
+      })
       return holidayTypes.value
     } catch (error) {
       console.error('Error fetching holiday types:', error)
@@ -209,6 +230,28 @@ export function useAdminContracts() {
         .filter((n) => !isNaN(n))
     }
     return []
+  }
+
+  /**
+   * Every contract an employee has ever held, from
+   * `GET /user/employee/contracts/{company}/{employee}/`. Used as a fallback
+   * when a caller needs a contract's `id` and the active-contract payload did
+   * not carry one. The single contract record can arrive either direct (has
+   * `pay_type`) or nested under a `contract` key.
+   */
+  async function fetchEmployeeContractList(employeeId) {
+    if (!companyId.value) return []
+    try {
+      const response = await api.get(
+        `${BASE}/user/employee/contracts/${companyId.value}/${employeeId}/`,
+      )
+      const raw = response.data?.data ?? response.data ?? []
+      if (!Array.isArray(raw)) return raw ? [raw] : []
+      return raw.map((c) => (c.pay_type ? c : c.contract || c)).filter(Boolean)
+    } catch (error) {
+      console.error('Error fetching employee contracts:', error)
+      return []
+    }
   }
 
   function matchContractTypeByMultipliers(multipliers) {
@@ -644,6 +687,25 @@ export function useAdminContracts() {
     return { successCount, failCount }
   }
 
+  // ─── Update Employment Contract ───────────────────────────────────────────
+  //
+  // A PATCH against an existing employment contract. Unlike the assign/renew
+  // flows (which POST whole new records), this edits the current record in
+  // place, and the backend recalculates salary/overtime/deductions within the
+  // current cutoff as a result — so callers gate it behind the "Save &
+  // Recalculate" confirmation. The employee page resolves `contractId` from the
+  // active-contract payload (`id`), falling back to the contracts-list endpoint
+  // when that field is absent.
+  async function updateEmploymentContract(contractId, payload) {
+    try {
+      await api.patch(`${BASE}/user/employment-contracts/${contractId}/update/`, payload)
+      return { ok: true }
+    } catch (error) {
+      console.error('Error updating employment contract:', error)
+      return { ok: false, error }
+    }
+  }
+
   // ─── Delete ────────────────────────────────────────────────────────────────
 
   async function deleteContract(contract) {
@@ -691,6 +753,9 @@ export function useAdminContracts() {
     openAssignDialog,
     assignContract,
     bulkAssignContract,
+    updateEmploymentContract,
+    parseEligibilities,
+    fetchEmployeeContractList,
     contractAssigned,
     resetContractAssigned,
     holidayTypes,
