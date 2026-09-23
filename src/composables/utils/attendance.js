@@ -251,6 +251,38 @@ export function isRecordComplete(row) {
 }
 
 /**
+ * Elapsed time between two punches in milliseconds, or null when the pair
+ * cannot say.
+ *
+ * A missing punch says nothing about duration, and a negative span means the
+ * stored pair is inconsistent — every write path bumps an overnight time_out
+ * to the next day before sending, so a payload only ever carries a pair that
+ * answers this positively.
+ */
+export function attendanceDurationMs(timeIn, timeOut) {
+  if (!timeIn || !timeOut) return null
+  const inMs = new Date(timeIn).getTime()
+  const outMs = new Date(timeOut).getTime()
+  if (isNaN(inMs) || isNaN(outMs)) return null
+  const diff = outMs - inMs
+  return diff < 0 ? null : diff
+}
+
+/**
+ * `"8h 30m"` for a pair of punches, `"—"` when there is no answer. Minutes are
+ * floored: whole minutes are all a reader acts on, and the seconds a terminal
+ * stamps would only make two rows on the same shift disagree on a digit that
+ * means nothing. The same label the Add dialog shows as Total Hours, so the
+ * two cannot disagree about the shift just saved.
+ */
+export function attendanceDurationLabel(timeIn, timeOut) {
+  const ms = attendanceDurationMs(timeIn, timeOut)
+  if (ms == null) return '—'
+  const minutes = Math.floor(ms / 60000)
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
+/**
  * Punches captured by a device rather than typed in by an admin. A shift's
  * device-captured record is the one that actually happened, so it outranks a
  * hand-entered duplicate when deciding which record owns the shift.
