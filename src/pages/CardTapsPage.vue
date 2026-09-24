@@ -119,6 +119,12 @@
           <span class="ctp-toolbar__count">
             {{ filteredTotal }} {{ filteredTotal === 1 ? 'record' : 'records' }}
           </span>
+          <span
+            v-if="dateRangeActive && filteredTotal > 0"
+            class="ctp-toolbar__hours"
+          >
+            · {{ reviewTotalHours }} total
+          </span>
         </div>
 
         <div v-if="activeFilters.length" class="ctp-applied">
@@ -230,7 +236,7 @@ import { useQuasar } from 'quasar'
 import { useCompany } from '@/composables/page/useCompany'
 import { useCardTaps } from '@/composables/page/useCardTaps'
 import { todayIso, shiftIso, longLabel } from '@/composables/utils/calendarDate'
-import { tapCount } from '@/composables/utils/cardTaps'
+import { tapCount, totalDurationLabel } from '@/composables/utils/cardTaps'
 import PageShell from '@/components/layout/PageShell.vue'
 import AttendanceDateRangePicker from '@/components/pages/Attendance/AttendanceDateRangePicker.vue'
 import CardTapsTable from '@/components/pages/CardTaps/CardTapsTable.vue'
@@ -317,6 +323,10 @@ const filteredRows = computed(() => {
 })
 
 const filteredTotal = computed(() => filteredRows.value.length)
+
+// Sum of the visible rows' durations, "Xh Ym" — shown only while a range review
+// is active so the span of hours means something.
+const reviewTotalHours = computed(() => totalDurationLabel(filteredRows.value))
 
 const totalPages = computed(() =>
   Math.max(1, Math.ceil(filteredTotal.value / pagination.value.rowsPerPage)),
@@ -761,6 +771,15 @@ watch(companyId, (id) => {
   white-space: nowrap;
 }
 
+/* Total hours beside the record count during a range review. */
+.ctp-toolbar__hours {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dash-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* ── Applied filters ── */
 .ctp-applied {
   display: flex;
@@ -918,7 +937,8 @@ watch(companyId, (id) => {
 }
 
 @media (max-width: 639px) {
-  .ctp-toolbar__count {
+  .ctp-toolbar__count,
+  .ctp-toolbar__hours {
     display: none;
   }
 }
