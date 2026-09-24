@@ -56,6 +56,27 @@ export function tapCount(row) {
   return row?.taps?.length ?? 0
 }
 
+/**
+ * Minutes in a pre-formatted duration string ("2h 9m 32s", "8h 30m", "45m").
+ * Seconds are floored — the toolbar total never reports a fraction of a minute
+ * the per-row labels don't either.
+ */
+export function durationToMinutes(value) {
+  if (!value) return 0
+  const str = String(value)
+  const h = Number((str.match(/(\d+(?:\.\d+)?)\s*h/) || [])[1] || 0)
+  const m = Number((str.match(/(\d+(?:\.\d+)?)\s*m/) || [])[1] || 0)
+  const s = Number((str.match(/(\d+(?:\.\d+)?)\s*s/) || [])[1] || 0)
+  return Math.floor(h * 60 + m + s / 60)
+}
+
+/** Total duration of a set of rows as "Xh Ym", minutes floored. */
+export function totalDurationLabel(rows) {
+  let minutes = 0
+  for (const row of rows || []) minutes += durationToMinutes(row?.duration)
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
 /** Every distinct employee name in a set of rows, in first-seen order. */
 export function employeeNamesFromRows(rows) {
   const out = []
