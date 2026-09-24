@@ -23,8 +23,23 @@
     >
       <template #cell-employee="{ row }">
         <span class="emp">
-          <q-avatar size="24px" :style="{ background: avatarColor(row.employee) }" class="emp__avatar">
-            <span class="emp__initials">{{ initials(row.employee) }}</span>
+          <!-- Same identity rule as every other staff table: the photograph
+               when the name resolves to exactly one employee who has one,
+               otherwise initials on that person's categorical colour. -->
+          <q-avatar
+            v-if="avatarOf(row).pictureUrl"
+            size="24px"
+            class="emp__avatar"
+          >
+            <img
+              :src="avatarOf(row).pictureUrl"
+              :alt="row.employee"
+              loading="lazy"
+              @error="onAvatarError(row)"
+            />
+          </q-avatar>
+          <q-avatar v-else size="24px" :style="{ background: avatarOf(row).color }" class="emp__avatar">
+            <span class="emp__initials">{{ avatarOf(row).initials }}</span>
           </q-avatar>
           <span class="emp__name">{{ row.employee }}</span>
         </span>
@@ -73,6 +88,7 @@ import { useRouter } from 'vue-router'
 import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
 import DashPager from '@/components/pages/Dashboard/DashPager.vue'
 import DashTable from '@/components/pages/Dashboard/DashTable.vue'
+import { avatarFor } from '@/composables/utils/employee'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -83,6 +99,12 @@ const props = defineProps({
    * opens on the day the issue is about rather than on whatever day it is now.
    */
   date: { type: String, default: '' },
+  /**
+   * Name-indexed employee roster, built by the page from `useEmployees`. The
+   * endpoint identifying a person by display name only, this is the one thing
+   * that can put a face against the row.
+   */
+  employeeIndex: { type: Object, default: null },
 })
 
 const router = useRouter()
@@ -172,34 +194,28 @@ function impactClass(impact) {
   return IMPACT_TONE[impact] ?? ''
 }
 
-function initials(name) {
-  if (!name) return '?'
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+/**
+ * The row's face: `{ pictureUrl, initials, color }` from the shared name-index
+ * lookup, with any photograph the browser has already refused dropped out so a
+ * dead image cannot render as the broken-image glyph on every refetch. Names
+ * that resolve to nobody — or to more than one person — keep the initials
+ * avatar, the same call `avatarFor` itself makes.
+ */
+const brokenPictureUrls = ref(new Set())
+
+function avatarOf(row) {
+  const avatar = avatarFor(props.employeeIndex, row.employee)
+  if (avatar.pictureUrl && brokenPictureUrls.value.has(avatar.pictureUrl)) {
+    return { ...avatar, pictureUrl: '' }
+  }
+  return avatar
 }
 
-// Avatars are identity, not data, so they draw from the categorical ramp by a
-// stable hash of the name — the same person keeps the same colour across loads.
-const AVATAR_COLORS = [
-  'var(--dash-cat-1)',
-  'var(--dash-cat-2)',
-  'var(--dash-cat-3)',
-  'var(--dash-cat-4)',
-  'var(--dash-cat-5)',
-  'var(--dash-cat-6)',
-]
-
-function avatarColor(name) {
-  if (!name) return AVATAR_COLORS[0]
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+function onAvatarError(row) {
+  const { pictureUrl } = avatarFor(props.employeeIndex, row.employee)
+  if (pictureUrl) {
+    brokenPictureUrls.value = new Set(brokenPictureUrls.value).add(pictureUrl)
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }
 </script>
 
