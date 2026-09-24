@@ -128,6 +128,7 @@
           v-if="activeView === 'today'"
           :loading="currentCutoffLoading"
           :date="todayDate"
+          :employee-index="employeeIndex"
           :priority-items="priorityItems"
           :attention-summary="needsAttention"
           :workforce-status="workforceStatus"
@@ -189,6 +190,7 @@ import { useCompany, resolvedCompanyId } from '@/composables/page/useCompany'
 import { todayIso } from '@/composables/utils/calendarDate'
 import { useNotifications } from 'src/composables/useNotifications'
 import { useDashboardSummary } from '@/composables/page/useDashboardSummary'
+import { buildEmployeeNameIndex } from '@/composables/utils/employee'
 
 import DashboardStatsRow from '@/components/pages/Dashboard/DashboardStatsRow.vue'
 import TodayTab from '@/components/pages/Dashboard/TodayTab.vue'
@@ -199,7 +201,15 @@ import AnnualSummaryTab from '@/components/pages/Dashboard/AnnualSummaryTab.vue'
 // ─── Composables ─────────────────────────────────────────────────────────────
 useCompany()
 
-const { fetchEmployees } = useEmployees()
+// The Today tab's queue identifies people by display name only, so the photo
+// lookup touches the same name-indexed roster the audit and access-cards pages
+// build — the only thing that can put a face against a bare name.
+const { employees, fetchEmployees } = useEmployees()
+
+// The Today tab's queue identifies people by display name only, so the photo
+// lookup touches the same name-indexed roster the audit and access-cards pages
+// build — the only thing that can put a face against a bare name.
+const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
 const { fetchAttendanceByDate } = useAttendance()
 const { fetchPayrollRunsSummary } = usePayroll()
 const { onDataUpdate } = useNotifications()
