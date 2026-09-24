@@ -7,6 +7,7 @@
         :items="priorityItems"
         :loading="loading"
         :date="date"
+        :employee-index="employeeIndex"
       />
       <AttentionSummaryPanel
         class="today__secondary"
@@ -44,6 +45,11 @@ defineProps({
   loading: { type: Boolean, default: false },
   /** The day the tab's data was fetched for; the queue links into it. */
   date: { type: String, default: '' },
+  /**
+   * Name-indexed employee roster, the only way to put a face against the queue's
+   * name-only rows. Built by the page that owns the employee list; forwards on.
+   */
+  employeeIndex: { type: Object, default: null },
   priorityItems: { type: Array, default: () => [] },
   attentionSummary: { type: Object, default: () => ({}) },
   workforceStatus: { type: Array, default: () => [] },
