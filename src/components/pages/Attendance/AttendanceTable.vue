@@ -1,11 +1,22 @@
 <template>
   <div class="att-table-wrap dash-scroll-x">
+    <!-- Built from the same `columns` the table renders, so the placeholder's
+         column edges are the table's and nothing shifts on load. -->
+    <TableSkeleton
+      v-if="loading"
+      :columns="columns"
+      :rows="8"
+      :min-width="attTableMinWidth"
+      wrap-class="dash-scroll-x att-tskel-wrap"
+      aria-label="Loading attendance"
+    />
+
     <q-table
+      v-else
       :rows="rows"
       :columns="columns"
       row-key="id"
       flat
-      :loading="loading"
       class="dash-qtable att-table"
       hide-pagination
       :rows-per-page-options="[0]"
@@ -131,7 +142,7 @@
       </template>
 
       <template v-slot:no-data>
-        <div v-if="!loading" class="dash-empty">
+        <div class="dash-empty">
           <span class="dash-featured-icon">
             <q-icon :name="isFiltered ? 'filter_alt_off' : 'o_schedule'" size="20px" />
           </span>
@@ -177,6 +188,7 @@
 import { computed } from 'vue'
 import { useQuasar } from 'quasar'
 import AttendancePunchCell from '@/components/pages/Attendance/AttendancePunchCell.vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import {
   getEmployeeName,
   getEmployeePhoto,
@@ -269,6 +281,7 @@ const columns = computed(() => {
           field: (row) => rowDate(row),
           align: 'left',
           style: 'min-width: 190px',
+          width: 190,
           sortable: true,
         }
       : {
@@ -277,6 +290,7 @@ const columns = computed(() => {
           field: (row) => nameOf(row),
           align: 'left',
           style: 'min-width: 190px',
+          width: 190,
           sortable: true,
         },
   ]
@@ -288,6 +302,7 @@ const columns = computed(() => {
       field: 'work_type',
       align: 'left',
       style: 'width: 118px',
+      width: 118,
       sortable: true,
     })
   }
@@ -298,6 +313,7 @@ const columns = computed(() => {
     field: (row) => getShiftName(row),
     align: 'left',
     style: 'width: 124px',
+    width: 124,
   })
 
   cols.push(
@@ -307,6 +323,7 @@ const columns = computed(() => {
       field: 'time_in',
       align: 'left',
       style: 'width: 164px',
+      width: 164,
       sortable: true,
     },
     {
@@ -315,6 +332,7 @@ const columns = computed(() => {
       field: 'time_out',
       align: 'left',
       style: 'width: 164px',
+      width: 164,
       sortable: true,
     },
     {
@@ -323,6 +341,7 @@ const columns = computed(() => {
       field: (row) => attendanceDurationMs(row.time_in, row.time_out),
       align: 'left',
       style: 'width: 104px',
+      width: 104,
       sortable: true,
     },
     {
@@ -331,12 +350,20 @@ const columns = computed(() => {
       field: 'id',
       align: 'center',
       style: 'width: 62px',
+      width: 62,
       headerClasses: 'att-table__th--audit',
     },
   )
 
   return cols
 })
+
+// The live table sizes itself to its content; the skeleton has none, so it
+// takes the summed column widths as its own min-width to reproduce the same
+// grid.
+const attTableMinWidth = computed(() =>
+  columns.value.reduce((total, col) => total + (col.width ?? 0), 0),
+)
 
 // ─── Audit ────────────────────────────────────────────────────────────────────
 function hasAuditFlags(row) {
@@ -551,5 +578,14 @@ function auditTooltip(row) {
   .att-table :deep(.att-table__td) {
     padding: 10px 9px !important;
   }
+}
+</style>
+
+<style>
+/* TableSkeleton's root is rendered by a child component, so this panel's scoped
+   styles can't reach it. The wrapper keeps the same side padding the live table
+   sits in, so the placeholder stays put when the data lands. */
+.att-tskel-wrap {
+  padding: 0 6px;
 }
 </style>
