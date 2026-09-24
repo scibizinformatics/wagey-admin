@@ -1,9 +1,5 @@
 <template>
-  <div class="grid-wrap" :class="{ 'is-loading': loading }">
-    <div v-if="loading" class="grid-loading">
-      <q-spinner size="34px" :style="{ color: 'var(--dash-accent)' }" />
-    </div>
-
+  <div class="grid-wrap">
     <div class="grid" :style="gridStyle" role="table" aria-label="Weekly schedule">
       <!-- ── Header: day name, date, and that day's totals ────────────────── -->
       <div class="grid__corner cell cell--head" role="columnheader">
@@ -24,7 +20,8 @@
         <!-- Per-day roll-up. A scheduler's first question is "is Thursday
              covered?", which a bare column of day names cannot answer. -->
         <div class="day-head__totals">
-          <span v-if="dayTotals[i].shifts">
+          <span v-if="loading" class="dash-shimmer day-head__sk-bar" />
+          <span v-else-if="dayTotals[i].shifts">
             {{ dayTotals[i].shifts }} {{ dayTotals[i].shifts === 1 ? 'shift' : 'shifts' }}
             <span class="day-head__hours dash-num">· {{ formatHours(dayTotals[i].hours) }}</span>
           </span>
@@ -33,6 +30,29 @@
       </div>
 
       <!-- ── Rows ─────────────────────────────────────────────────────────── -->
+      <!-- While the week loads, the header stays live — day names and dates are
+           known before the fetch — and shimmer rows mirror the real grid
+           (avatar + name in the employee column, chip-shaped bars in the day
+           cells) so nothing shifts when the data lands. -->
+      <template v-if="loading">
+        <template v-for="n in SKELETON_ROWS" :key="`sk-${n}`">
+          <div class="cell cell--who">
+            <span class="dash-shimmer who__sk-avatar" />
+            <div class="who__block">
+              <span class="dash-shimmer who__sk-name" />
+              <span class="dash-shimmer who__sk-total" />
+            </div>
+          </div>
+          <div
+            v-for="(_, dayIdx) in days"
+            :key="`sk-${n}-${dayIdx}`"
+            class="cell cell--day"
+          >
+            <span class="dash-shimmer day__sk-chip" :style="chipBarStyle(n, dayIdx)" />
+          </div>
+        </template>
+      </template>
+
       <template v-for="user in users" :key="user.id">
         <div class="cell cell--who" role="rowheader">
           <q-avatar v-if="avatarOf(user)" size="30px" class="who__avatar">
@@ -267,6 +287,20 @@ const emit = defineEmits([
   'clear-filters',
 ])
 
+// ─── Loading skeleton ───────────────────────────────────────────────────────
+// Shimmer rows mirror the live grid's chrome while `loading`. The row count is
+// fixed because no user rows exist to lay out against yet; the day cells are
+// filled with chip-shaped bars whose widths vary deterministically so the block
+// reads as shifts rather than as one uniform grid.
+const SKELETON_ROWS = 6
+const CHIP_RATIOS = [68, 54, 80, 60, 72, 46, 76]
+
+function chipBarStyle(row, col) {
+  return {
+    width: `${CHIP_RATIOS[(row * 3 + col) % CHIP_RATIOS.length]}%`,
+  }
+}
+
 // ─── Avatars ────────────────────────────────────────────────────────────────
 // A photo that 404s renders as an empty circle, and down a column of them that
 // reads as broken layout rather than as a missing picture. The first failure for
@@ -445,19 +479,6 @@ const isWeekend = (i) => {
   --who-w: 208px;
   --day-w: 132px;
 }
-.grid-wrap.is-loading {
-  min-height: 220px;
-}
-
-.grid-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.68);
-  z-index: 6;
-}
 
 .grid {
   display: grid;
@@ -550,6 +571,12 @@ const isWeekend = (i) => {
 .day-head__empty {
   color: var(--dash-n-400);
 }
+.day-head__sk-bar {
+  display: inline-block;
+  width: 56%;
+  height: 9px;
+  vertical-align: middle;
+}
 
 /* ── Employee column ── */
 .cell--who {
@@ -602,6 +629,34 @@ const isWeekend = (i) => {
 
 .who__spinner {
   flex-shrink: 0;
+}
+
+/* ── Loading skeleton ──
+   Shimmer rows reuse the real cell chrome (`--who-w`/`--day-w`, sticky employee
+   column, day-cell padding) so the placeholder swaps for data without shifting
+   a pixel. Bars are block so the width they carry actually applies. */
+.who__sk-avatar {
+  display: block;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+}
+.who__sk-name {
+  display: block;
+  width: 62%;
+  height: 12px;
+}
+.who__sk-total {
+  display: block;
+  width: 40%;
+  height: 9px;
+  margin-top: 4px;
+}
+.day__sk-chip {
+  display: block;
+  height: 44px;
+  max-width: 100%;
 }
 
 /* ── Day cells ── */
