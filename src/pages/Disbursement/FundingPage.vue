@@ -154,15 +154,40 @@
                so the chrome comes from the system and only the sticky header —
                which the other tables do not need — stays local. -->
           <div class="earners__scroll dash-qtable dash-qtable--flush">
+            <!-- First paint, when there is nothing to keep on screen. Built from
+                 the same `columns` the roster renders, so the placeholder shares
+                 its column edges, labels and alignment. This step is not paged,
+                 so the row count is a fixed guess at what fits the panel. -->
+            <TableSkeleton
+              v-if="loading"
+              :columns="earnerColumns"
+              :rows="8"
+              aria-label="Loading employees in this group"
+            />
+
+            <!-- Empty. `hide-no-data` was on the table alongside this markup, and
+                 it suppresses Quasar's no-data branch outright — so the state was
+                 never drawn and an empty result showed a bare header strip.
+                 Rendered here instead, and without the loading guard it no longer
+                 needs: this branch is only reached once the fetch has answered. -->
+            <div v-else-if="!allEarners.length" class="dash-empty">
+              <span class="dash-featured-icon">
+                <q-icon name="o_groups" size="20px" />
+              </span>
+              <p class="dash-empty__title">No employees in this group</p>
+              <p class="dash-empty__sub">
+                Employees appear once payslips are released in the earlier steps.
+              </p>
+            </div>
+
             <q-table
+              v-else
               :rows="allEarners"
               :columns="earnerColumns"
-              :loading="loading"
               :pagination="{ rowsPerPage: 0 }"
               row-key="id"
               flat
               hide-pagination
-              hide-no-data
             >
               <template #body-cell-net_pay="props">
                 <q-td :props="props" class="text-right earners__pay dash-num">
@@ -174,18 +199,6 @@
                 <q-td :props="props">
                   <StatusPill :status="props.row.payslip_status" />
                 </q-td>
-              </template>
-
-              <template #no-data>
-                <div v-if="!loading" class="dash-empty">
-                  <span class="dash-featured-icon">
-                    <q-icon name="o_groups" size="20px" />
-                  </span>
-                  <p class="dash-empty__title">No employees in this group</p>
-                  <p class="dash-empty__sub">
-                    Employees appear once payslips are released in the earlier steps.
-                  </p>
-                </div>
               </template>
             </q-table>
           </div>
@@ -200,6 +213,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StatusPill from 'src/components/common/StatusPill.vue'
+import TableSkeleton from 'src/components/common/TableSkeleton.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
@@ -560,7 +574,7 @@ async function submitFunding() {
 /* The same header strip the other four steps' tables get: `dash-qtable--flush`
    drops the top padding, which leaves the labels against the panel head above
    them. Matching it here keeps the five steps reading as one table. */
-.earners__scroll :deep(.q-table thead tr:not(.q-table__progress) th) {
+.earners__scroll :deep(.q-table thead tr th) {
   padding-top: 14px;
 }
 
@@ -570,9 +584,6 @@ async function submitFunding() {
 .earners__scroll :deep(.q-table tbody td:first-child) {
   color: var(--dash-ink);
   font-weight: 500;
-}
-.earners__scroll :deep(.q-table__progress) {
-  height: 0;
 }
 
 .earners__pay {
