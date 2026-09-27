@@ -352,6 +352,20 @@
       @confirm="submitContractUpdate"
     />
 
+    <EmployeeAssignPayrollConfirmDialog
+      v-model="showAssignConfirm"
+      :form="assignForm"
+      :employee="selectedAssignEmployee"
+      :is-renewing="isRenewing"
+      :employee-count="pendingAssignIds.length"
+      :contract-type-options="contractTypeOptions"
+      :positions="positions"
+      :departments="departments"
+      :payroll-group-options="payrollGroups"
+      :loading="assigning"
+      @confirm="confirmAssignSubmit"
+    />
+
     <EmployeeLeaveBalanceModal
       v-model="showLeaveBalanceModal"
       :employee="selectedBalanceEmployee"
@@ -405,6 +419,7 @@ import EmployeeRestoreDialog from '@/components/pages/Employees/EmployeeRestoreD
 import EmployeeAssignContractDialog from '@/components/pages/Employees/EmployeeAssignContractDialog.vue'
 import EmployeeEditContractDialog from '@/components/pages/Employees/EmployeeEditContractDialog.vue'
 import EmployeeUpdateContractConfirmDialog from '@/components/pages/Employees/EmployeeUpdateContractConfirmDialog.vue'
+import EmployeeAssignPayrollConfirmDialog from '@/components/pages/Employees/EmployeeAssignPayrollConfirmDialog.vue'
 import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/AttendanceEmployeePhotoViewer.vue'
 import EmployeeLeaveBalanceModal from '@/components/pages/Employees/EmployeeLeaveBalanceModal.vue'
 import EmployeeCtoBalanceModal from '@/components/pages/Employees/EmployeeCtoBalanceModal.vue'
@@ -516,6 +531,14 @@ const payTypeAutoFilled = ref(false)
 const selectedEmployees = ref([])
 const bulkAssignEmployeeIds = ref([])
 const selectedAssignEmployee = ref(null)
+// Assigning a payroll profile posts straight through and the terms it writes
+// become what payroll runs on, so the submit is gated behind a recap of the
+// details rather than landing on the first click. The ids are snapshotted
+// because the write clears the live selection out from under the confirm, and
+// the recap must still be able to say how many employees it is about — and the
+// handler must know which ids to send — after that happens.
+const showAssignConfirm = ref(false)
+const pendingAssignIds = ref([])
 // Edit-contract state: the form is prefilled from the employee's active
 // contract and the PATCH is gated behind the "Save & Recalculate" warning.
 const editContractDialog = ref(false)
@@ -669,6 +692,15 @@ watch(assignDialog, (open) => {
       bulkAssignEmployeeIds.value = []
     }
     selectedAssignEmployee.value = null
+  }
+})
+
+// Cleared on the confirmation's own close rather than the form's: the write
+// closes the form from underneath it, and a reset there would swap "N
+// employees" for a single-employee recap while the confirm is still on screen.
+watch(showAssignConfirm, (open) => {
+  if (!open) {
+    pendingAssignIds.value = []
   }
 })
 
@@ -1519,12 +1551,34 @@ async function handleBulkAssignDialog() {
   assignDialog.value = true
 }
 
-async function handleAssignSubmit() {
-  if (bulkAssignEmployeeIds.value.length > 0) {
-    const ids = [...bulkAssignEmployeeIds.value]
-    bulkAssignEmployeeIds.value = []
+/**
+ * The assign form's submit. Only opens the confirmation — the form has already
+ * validated by the time it emits, so the write waits for the second click.
+ */
+function handleAssignSubmit() {
+  pendingAssignIds.value = [...bulkAssignEmployeeIds.value]
+  showAssignConfirm.value = true
+}
+
+/**
+ * The confirmation's confirm, and the only path to the write. Closes itself on
+ * the way out either way: on success `assignContract` / `bulkAssignContract`
+ * close the form behind it, and on failure the form stays open for a fix with
+ * the recap one click away.
+ */
+async function confirmAssignSubmit() {
+  const ids = [...pendingAssignIds.value]
+  if (ids.length > 0) {
     const { successCount, failCount } = await bulkAssignContract(ids)
-    selectedEmployees.value = []
+    showAssignConfirm.value = false
+    // A validation failure inside the bulk write returns without closing the
+    // form, so the selection is only dropped once the dialog is really gone.
+    // Clearing it regardless would leave the user on a form that quietly became
+    // a single-employee assign, which is not what they chose.
+    if (!assignDialog.value) {
+      bulkAssignEmployeeIds.value = []
+      selectedEmployees.value = []
+    }
     if (successCount > 0) {
       toast.success(`Contract assigned to ${successCount} employee(s)`)
     }
@@ -1533,6 +1587,7 @@ async function handleAssignSubmit() {
     }
   } else {
     await assignContract()
+    showAssignConfirm.value = false
   }
 }
 
