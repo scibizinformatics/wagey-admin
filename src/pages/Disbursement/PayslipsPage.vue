@@ -70,14 +70,56 @@
           </div>
         </template>
 
+        <!-- First paint, when there is nothing to keep on screen. Built from the
+             same `columns` the table renders, so the placeholder shares its
+             column edges, labels and alignment. -->
+        <TableSkeleton
+          v-if="loading"
+          :columns="columns"
+          :rows="pageSize"
+          aria-label="Loading payslips"
+        />
+
+        <!-- Empty. `hide-no-data` was on the table alongside this markup, and it
+             suppresses Quasar's no-data branch outright — so the state was never
+             drawn and an empty result showed a bare header strip. Rendered here
+             instead, and without the loading guard it no longer needs: this branch
+             is only reached once the fetch has answered. A tab with nothing in it
+             is a normal state here, so it gets the panel empty state too. -->
+        <div v-else-if="!paginatedData.length" class="dash-empty">
+          <span class="dash-featured-icon">
+            <q-icon :name="isFiltered ? 'filter_alt_off' : 'o_receipt_long'" size="20px" />
+          </span>
+          <p class="dash-empty__title">
+            {{ isFiltered ? 'No payslips match this view' : 'No payslips yet' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              isFiltered
+                ? 'Try another tab, or clear the search.'
+                : 'Payslips appear here once they are released in the review step.'
+            }}
+          </p>
+          <q-btn
+            v-if="isFiltered"
+            outline
+            no-caps
+            dense
+            size="12px"
+            icon="filter_alt_off"
+            label="Show all"
+            class="btn-outline"
+            @click="clearFilters"
+          />
+        </div>
+
         <q-table
+          v-else
           :rows="paginatedData"
           :columns="columns"
-          :loading="loading"
           :pagination="{ rowsPerPage: 0 }"
           row-key="id"
           flat
-          hide-no-data
           hide-pagination
         >
           <template #body-cell-payslip_status="props">
@@ -117,35 +159,6 @@
               </span>
             </q-td>
           </template>
-
-          <template #no-data>
-            <div v-if="!loading" class="dash-empty">
-              <span class="dash-featured-icon">
-                <q-icon :name="isFiltered ? 'filter_alt_off' : 'o_receipt_long'" size="20px" />
-              </span>
-              <p class="dash-empty__title">
-                {{ isFiltered ? 'No payslips match this view' : 'No payslips yet' }}
-              </p>
-              <p class="dash-empty__sub">
-                {{
-                  isFiltered
-                    ? 'Try another tab, or clear the search.'
-                    : 'Payslips appear here once they are released in the review step.'
-                }}
-              </p>
-              <q-btn
-                v-if="isFiltered"
-                outline
-                no-caps
-                dense
-                size="12px"
-                icon="filter_alt_off"
-                label="Show all"
-                class="btn-outline"
-                @click="clearFilters"
-              />
-            </div>
-          </template>
         </q-table>
       </DisbursementTableCard>
     </DisbursementStepShell>
@@ -156,6 +169,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StatusPill from 'src/components/common/StatusPill.vue'
+import TableSkeleton from 'src/components/common/TableSkeleton.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
