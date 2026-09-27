@@ -67,14 +67,44 @@
           />
         </template>
 
+        <!-- First paint, when there is nothing to keep on screen. Built from the
+             same `columns` the table renders, so the placeholder shares its
+             column edges, labels and alignment. -->
+        <TableSkeleton
+          v-if="loading"
+          :columns="columns"
+          :rows="pageSize"
+          aria-label="Loading payment summary"
+        />
+
+        <!-- Empty. `hide-no-data` was on the table alongside this markup, and it
+             suppresses Quasar's no-data branch outright — so the state was never
+             drawn and an empty result showed a bare header strip. Rendered here
+             instead, and without the loading guard it no longer needs: this branch
+             is only reached once the fetch has answered. -->
+        <div v-else-if="!paginatedData.length" class="dash-empty">
+          <span class="dash-featured-icon">
+            <q-icon :name="searchTerm ? 'filter_alt_off' : 'o_receipt_long'" size="20px" />
+          </span>
+          <p class="dash-empty__title">
+            {{ searchTerm ? 'No employees match this search' : 'No payment records' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              searchTerm
+                ? 'Try a different name, method or status.'
+                : 'This group has no completed payments to show.'
+            }}
+          </p>
+        </div>
+
         <q-table
+          v-else
           :rows="paginatedData"
           :columns="columns"
-          :loading="loading"
           :pagination="{ rowsPerPage: 0 }"
           row-key="id"
           flat
-          hide-no-data
           hide-pagination
         >
           <template #body-cell-payment_method="props">
@@ -105,24 +135,6 @@
               <span v-else class="muted">—</span>
             </q-td>
           </template>
-
-          <template #no-data>
-            <div v-if="!loading" class="dash-empty">
-              <span class="dash-featured-icon">
-                <q-icon :name="searchTerm ? 'filter_alt_off' : 'o_receipt_long'" size="20px" />
-              </span>
-              <p class="dash-empty__title">
-                {{ searchTerm ? 'No employees match this search' : 'No payment records' }}
-              </p>
-              <p class="dash-empty__sub">
-                {{
-                  searchTerm
-                    ? 'Try a different name, method or status.'
-                    : 'This group has no completed payments to show.'
-                }}
-              </p>
-            </div>
-          </template>
         </q-table>
       </DisbursementTableCard>
     </DisbursementStepShell>
@@ -135,6 +147,7 @@ import { useRoute, useRouter } from 'vue-router'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import StatusPill from 'src/components/common/StatusPill.vue'
+import TableSkeleton from 'src/components/common/TableSkeleton.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
