@@ -73,6 +73,21 @@ export function shiftIso(iso, days) {
 }
 
 /**
+ * The first day of the month an ISO date falls in, as `YYYY-MM-DD`.
+ *
+ * Built from the local calendar fields rather than by string-slicing, so it is
+ * right in every timezone and for the 1st of a month alike. Callers that report
+ * "this month" need both ends, and this is the end that is not today.
+ * @param {string} iso
+ * @returns {string}
+ */
+export function monthStartIso(iso) {
+  const date = fromIso(iso)
+  if (isNaN(date.getTime())) return iso
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-01`
+}
+
+/**
  * `YYYY-MM-DD` → "Sep 2, 2026". Returns the input unchanged if it will not
  * parse, so a malformed value from an endpoint shows as itself rather than as
  * "Invalid Date".

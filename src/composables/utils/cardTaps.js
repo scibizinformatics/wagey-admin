@@ -70,11 +70,28 @@ export function durationToMinutes(value) {
   return Math.floor(h * 60 + m + s / 60)
 }
 
+/**
+ * A span of minutes as "Xh Ym".
+ *
+ * The one place this app turns minutes into a label, so the taps page's toolbar
+ * total and the access-cards page's per-card column cannot print the same number
+ * two ways. A zero-length span reads as "0h 0m" rather than blank: on a card,
+ * a holder who has not tapped this month is a reading, and an empty cell would
+ * be indistinguishable from one we could not read at all.
+ *
+ * @param {number} minutes
+ * @returns {string}
+ */
+export function hoursLabel(minutes) {
+  const total = Number.isFinite(minutes) && minutes > 0 ? Math.floor(minutes) : 0
+  return `${Math.floor(total / 60)}h ${total % 60}m`
+}
+
 /** Total duration of a set of rows as "Xh Ym", minutes floored. */
 export function totalDurationLabel(rows) {
   let minutes = 0
   for (const row of rows || []) minutes += durationToMinutes(row?.duration)
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  return hoursLabel(minutes)
 }
 
 /** Every distinct employee name in a set of rows, in first-seen order. */

@@ -27,9 +27,17 @@
  * the detail endpoint sends the second one. `cardStatus` reads the machine value
  * and keeps the server's own wording as the label when it has it, so a status
  * this app has not been taught still prints as itself instead of vanishing.
+ *
+ * And the fourth trap is not in this payload at all: **the card roll carries no
+ * hours.** How long a card's holder has actually been on the clock comes from
+ * the tap log, a different endpoint keyed by employee and day. Joining the two
+ * is `monthlyHoursByCard` below, and it joins on name because that is the only
+ * thing the two payloads share.
  */
 
 import { longLabel } from 'src/composables/utils/calendarDate'
+import { durationToMinutes } from 'src/composables/utils/cardTaps'
+import { employeeByName, hasEmployeeName, nameKey } from 'src/composables/utils/employee'
 
 /** Trimmed string, or ''. The payload uses null, '' and absent interchangeably. */
 function text(value) {
@@ -376,6 +384,86 @@ export function summarizeAccessCards(cards) {
     if (card.alert) tally.alerts += 1
   }
   return tally
+}
+
+// ─── Hours worked ─────────────────────────────────────────────────────────────
+
+/**
+ * How many hours each card's holder was on the clock this month, keyed by uid.
+ *
+ * This is the one reading on the cards page that does not come from the card
+ * payload, because the card payload has no hours in it at all. The span per
+ * employee-day lives in the tap log (`GET /audit/card-taps/{company_id}/`, read
+ * by `useCardTaps` and flattened by `flattenCardTaps`), and the two payloads are
+ * joined here — on **name**, which is the only thing they share. Neither end
+ * offers a shared id: the card names its holder and carries nothing else, and
+ * the tap log's `employee_id` is a uuid that the roster may key by number
+ * instead.
+ *
+ * A name is therefore only reported when it resolves to exactly one employee,
+ * which is the same bar `employeeByName` and `avatarFor` already set on this
+ * page. A name two colleagues share answers null on both sides, so the figure
+ * is withheld rather than showing one person's hours against the other's card.
+ * A name that is not on this company's roster at all is withheld for the same
+ * reason: there is no way to tell a departed employee's taps from another
+ * workspace's.
+ *
+ * The value is nullable on purpose, and the three states are not
+ * interchangeable:
+ *
+ * - `null`  — no reading. Unassigned card, unresolvable name, or the tap log
+ *             never loaded. The cell must not print a number for this: "we could
+ *             not find out" and "nobody worked a minute" look identical otherwise,
+ *             and the second of those is an accusation.
+ * - `0`     — a real reading. This card's holder is on the roster and has not
+ *             tapped this month.
+ * - `n > 0` — minutes worked inside `[from, to]`.
+ *
+ * `tapRows` is passed as `null` for that first case: a tap log that failed to
+ * load is not an empty log, and conflating them would report every card as
+ * unworked.
+ *
+ * @param {Array<object>} cards   normalised cards, the whole roll
+ * @param {Array<object>|null} tapRows  flattened tap rows, or null if not loaded
+ * @param {object} options
+ * @param {Map<string, object|null>} options.index  from `buildEmployeeNameIndex`
+ * @param {string} options.from   first day of the window, inclusive (ISO)
+ * @param {string} options.to     last day of the window, inclusive (ISO)
+ * @returns {Map<string, number|null>} minutes per card uid
+ */
+export function monthlyHoursByCard(cards, tapRows, { index, from, to } = {}) {
+  const minutesByName = new Map()
+
+  if (Array.isArray(tapRows)) {
+    for (const row of tapRows) {
+      // Both ends are ISO calendar days, so they order lexically — the same
+      // string comparison the date navigator on the taps page does.
+      if (from && row?.date < from) continue
+      if (to && row?.date > to) continue
+
+      const key = nameKey(row?.employee_name)
+      if (!key) continue
+      minutesByName.set(key, (minutesByName.get(key) ?? 0) + durationToMinutes(row?.duration))
+    }
+  }
+
+  const out = new Map()
+  for (const card of cards || []) {
+    out.set(card?.uid, cardHours(card, minutesByName, index, Array.isArray(tapRows)))
+  }
+  return out
+}
+
+/** One card's figure, or null when there is nothing honest to print. */
+function cardHours(card, minutesByName, index, logLoaded) {
+  if (!card?.assigned || !card?.employeeName) return null
+  // A tap log that never arrived withholds the figure from every card. Without
+  // this the first load would show a table full of "0h 0m" and then correct
+  // itself, which reads as a wrong answer rather than a pending one.
+  if (!logLoaded) return null
+  if (!hasEmployeeName(index, card.employeeName)) return null
+  if (!employeeByName(index, card.employeeName)) return null
+  return minutesByName.get(nameKey(card.employeeName)) ?? 0
 }
 
 /**

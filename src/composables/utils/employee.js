@@ -183,8 +183,16 @@ export function getAvatarColor(name) {
  * Collapse a person's name to a comparison key: lowercased, trimmed, and with
  * internal runs of whitespace reduced to one space. "  Jane   SMITH " and
  * "Jane Smith" are the same person written twice.
+ *
+ * Exported for the callers that key their *own* maps by name and then have to
+ * agree with `buildEmployeeNameIndex` about which rows are the same person — the
+ * access-cards page's per-card hours total is one. Without the same key, "Jane
+ * SMITH" in the roster and "jane smith" in a tap payload would total separately.
+ *
+ * @param {unknown} name
+ * @returns {string}
  */
-function nameKey(name) {
+export function nameKey(name) {
   return String(name ?? '')
     .trim()
     .replace(/\s+/g, ' ')
