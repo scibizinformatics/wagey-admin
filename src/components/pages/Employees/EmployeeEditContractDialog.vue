@@ -323,6 +323,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { PAY_TYPE_OPTIONS } from '@/composables/utils/contractTerms'
 
 const emit = defineEmits(['update:modelValue', 'update:field', 'submit'])
 
@@ -339,13 +340,7 @@ const props = defineProps({
   holidayPayTypeOptions: { type: Array, default: () => [] },
 })
 
-const payTypeSelectOptions = [
-  { label: 'Monthly', value: 'monthly' },
-  { label: 'Semi-Monthly', value: 'semi-monthly' },
-  { label: 'Weekly', value: 'weekly' },
-  { label: 'Daily', value: 'daily' },
-  { label: 'Hourly', value: 'hourly' },
-]
+const payTypeSelectOptions = PAY_TYPE_OPTIONS
 
 const employeeName = computed(() => {
   if (!props.employee) return ''
