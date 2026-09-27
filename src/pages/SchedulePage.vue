@@ -137,6 +137,15 @@
       @submit="handleReassignShift"
       @back-to-original="reassignData.shiftTemplateId = reassignData.originalTemplateId"
     />
+
+    <!-- Reassign Confirm — second step, sits on top of the reassign modal -->
+    <ScheduleReassignConfirmDialog
+      v-model="showReassignConfirm"
+      :reassign-data="reassignData"
+      :employee-name="getEmployeeName(reassignData.currentEmployee)"
+      :loading="isReassigning"
+      @confirm="commitReassign"
+    />
   </PageShell>
 </template>
 
@@ -154,11 +163,13 @@ import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
 import { getEmployeePhoto, describeShiftTemplate } from '@/composables/utils/schedule'
 import { extractErrorMessage } from '@/composables/utils/http'
+import { invalidateAttendanceCache } from '@/composables/page/useAttendance'
 import ScheduleFilters from '@/components/pages/Schedule/ScheduleFilters.vue'
 import ScheduleTable from '@/components/pages/Schedule/ScheduleTable.vue'
 import ScheduleAddModal from '@/components/pages/Schedule/ScheduleAddModal.vue'
 import ScheduleQuickAddModal from '@/components/pages/Schedule/ScheduleQuickAddModal.vue'
 import ScheduleReassignModal from '@/components/pages/Schedule/ScheduleReassignModal.vue'
+import ScheduleReassignConfirmDialog from '@/components/pages/Schedule/ScheduleReassignConfirmDialog.vue'
 import { useToast } from '@/composables/useToast'
 
 const $q = useQuasar()
@@ -232,6 +243,13 @@ const scheduleCache = ref({})
 const showAddModal = ref(false)
 const showQuickAddModal = ref(false)
 const showReassignModal = ref(false)
+// The reassign form opens, then this second dialog asks before anything is
+// written. `pendingReassign` holds what the warning described, frozen at the
+// moment of asking — the template select is still live underneath the dialog, so
+// the commit has to execute the change that was agreed to rather than whatever
+// is selected by the time the confirm button is pressed.
+const showReassignConfirm = ref(false)
+const pendingReassign = ref(null)
 const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
 const assigningDayOffId = ref(null)
@@ -1344,11 +1362,19 @@ async function settleInOrder(items, run) {
   return results
 }
 
-const handleReassignShift = async () => {
-  // A second submit while the first PATCH is still open writes the same
-  // reassign again. The submit button is disabled while `isReassigning` is
-  // set, but the form also submits on Enter from inside the template select.
-  if (isReassigning.value) return
+/**
+ * First step of a reassign: work out what would change, then ask.
+ *
+ * Nothing is written here. Reassigning a shift removes that day's attendance log
+ * with it, so the admin is asked to confirm a consequence they cannot undo —
+ * mirroring the contract-update confirm on EmployeesPage.
+ */
+const handleReassignShift = () => {
+  // A second submit while the first is still in flight writes the same reassign
+  // again, and a submit while the confirm dialog is open would arm it twice. The
+  // form also submits on Enter from inside the template select, which the
+  // disabled submit button does not stop.
+  if (isReassigning.value || showReassignConfirm.value) return
 
   const r = reassignData.value
   const templateId = parseInt(r.shiftTemplateId)
@@ -1384,14 +1410,35 @@ const handleReassignShift = async () => {
     return true
   })
 
+  const template = shiftTemplates.value.find((t) => t.id === templateId)
+  const resolvedCompanyId = template?.company?.id || template?.company_id || companyId.value
+
+  pendingReassign.value = {
+    templateId,
+    writes,
+    companyId: parseInt(resolvedCompanyId),
+    employeeId: r.currentEmployee,
+  }
+  showReassignConfirm.value = true
+}
+
+/**
+ * Second step: the confirmed reassign. Runs exactly what the warning described —
+ * the target template and the assignment ids were captured when it was asked.
+ */
+const commitReassign = async () => {
+  const pending = pendingReassign.value
+  if (!pending || isReassigning.value) return
+
+  const r = reassignData.value
+  const { templateId, writes, companyId: reassignCompanyId, employeeId } = pending
+
   isReassigning.value = true
   try {
-    const template = shiftTemplates.value.find((t) => t.id === templateId)
-    const resolvedCompanyId = template?.company?.id || template?.company_id || companyId.value
     const results = await settleInOrder(writes, (leg) =>
       reassignShiftApi({
-        employee_id: r.currentEmployee,
-        company_id: parseInt(resolvedCompanyId),
+        employee_id: employeeId,
+        company_id: reassignCompanyId,
         date: r.date,
         shift_template_id: templateId,
         assignment_id: leg.assignmentId,
@@ -1402,7 +1449,15 @@ const handleReassignShift = async () => {
 
     // Before the toasts, and regardless of the mix: whatever landed has to
     // reach the grid.
-    await refreshSingleEmployee(r.currentEmployee)
+    await refreshSingleEmployee(employeeId)
+
+    // The reassign took the attendance log for that day with it, but the month
+    // cache is keyed by company and would keep serving the old punch times until
+    // it expires — so the Attendance page would keep showing the log the confirm
+    // dialog just promised was gone. Keyed by `companyId.value` and not by the
+    // payload's `company_id`, which is resolved from the template and can differ
+    // in type, which would miss the prefix and purge nothing.
+    if (done) invalidateAttendanceCache(companyId.value)
 
     if (failed.length && !done) {
       toast.error(extractErrorMessage(failed[0].reason, 'Failed to reassign shift.'), {
@@ -1429,6 +1484,8 @@ const handleReassignShift = async () => {
     toast.error(extractErrorMessage(error, 'Failed to reassign shift.'), { timeout: 6000 })
   } finally {
     isReassigning.value = false
+    showReassignConfirm.value = false
+    pendingReassign.value = null
   }
 }
 
