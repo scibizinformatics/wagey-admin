@@ -2,7 +2,7 @@
   <div class="acc-tbl">
     <!-- Built from the same column list the table renders, so the placeholder's
          column edges are the table's and nothing shifts on load. -->
-    <TableSkeleton v-if="loading" :columns="columns" :rows="8" :min-width="820" />
+    <TableSkeleton v-if="loading" :columns="columns" :rows="8" :min-width="950" />
 
     <div v-else-if="!rows.length" class="dash-empty">
       <span class="dash-featured-icon">
@@ -47,6 +47,7 @@
             <q-th key="holder" :props="props">Assigned to</q-th>
             <q-th key="status" :props="props">Status</q-th>
             <q-th key="lastTap" :props="props">Last tap</q-th>
+            <q-th key="hours" :props="props">Total hours</q-th>
             <q-th key="actions" :props="props" class="num">&nbsp;</q-th>
           </q-tr>
         </template>
@@ -129,6 +130,24 @@
               <span v-else class="stamp__never">Never tapped</span>
             </q-td>
 
+            <!-- Two states that are not the same number. A holder who has not
+                 tapped this month reads "0h 0m", which is a measurement; a dash
+                 means the tap log never loaded, or the roster cannot say which
+                 colleague this name is, and that is not a measurement of anybody.
+
+                 The window is spelled out on the figure rather than in the header,
+                 which would have to wrap to carry it and so would make every
+                 other column's label sit in a taller strip. -->
+            <q-td key="hours" :props="props">
+              <span v-if="props.row.hoursMinutes !== null" class="hours dash-num">
+                {{ props.row.hoursLabel }}
+                <q-tooltip anchor="bottom middle" self="top middle">
+                  On the clock this month, from the card-taps log
+                </q-tooltip>
+              </span>
+              <span v-else class="hours__none">—</span>
+            </q-td>
+
             <q-td key="actions" :props="props" class="num">
               <q-btn
                 flat
@@ -156,12 +175,13 @@
 <script setup>
 /**
  * Desktop view of the access-card roll. Below 1024px the page swaps this for
- * AccessCardCardList — five columns inside a tablet's content width means a
+ * AccessCardCardList — six columns inside a tablet's content width means a
  * sideways scroll on every row.
  *
  * Rows arrive already normalised by `composables/utils/accessCards.js` and
- * already carrying their avatar from the page, so what a row displays is the
- * same value the page filtered, sorted and counted on.
+ * already carrying their avatar, their relative last-tap and this month's hours
+ * from the page, so what a row displays is the same value the page filtered,
+ * sorted and counted on.
  */
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { chipClass, formatUid } from 'src/composables/utils/accessCards'
@@ -182,6 +202,10 @@ const columns = [
   { name: 'holder', label: 'Assigned to', field: 'employeeName', align: 'left', minWidth: 200 },
   { name: 'status', label: 'Status', field: (row) => row.status.key, align: 'left', width: 150 },
   { name: 'lastTap', label: 'Last tap', field: 'lastTapMs', align: 'left', width: 160 },
+  // The hours column's field is the formatted label, not the minute count: it is
+  // never sorted, and a sort on a nullable number would put every card we could
+  // not read in the same block, which is not an ordering anybody asked for.
+  { name: 'hours', label: 'Total hours', field: 'hoursLabel', align: 'left', width: 130 },
   { name: 'actions', label: '', field: 'key', align: 'right', width: 110 },
 ]
 </script>
@@ -189,9 +213,9 @@ const columns = [
 <style scoped>
 .acc-grid {
   width: 100%;
-  /* Below this the five columns start folding words; the container scrolls
+  /* Below this the six columns start folding words; the container scrolls
      instead, with the always-drawn track `dash-scroll-x` supplies. */
-  min-width: 820px;
+  min-width: 950px;
 }
 
 /* ── Card UID ── */
@@ -295,6 +319,24 @@ const columns = [
 .stamp__never {
   font-size: 12.5px;
   font-style: italic;
+  color: var(--dash-ink-4);
+  white-space: nowrap;
+}
+
+/* ── Total hours ──
+   The same weight and ink as the taps page gives its toolbar total, so the two
+   read as one number in two places rather than two numbers. The digits are set
+   tabular by the `dash-num` class on the cell. */
+.hours {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dash-ink-2);
+  white-space: nowrap;
+}
+/* Dimmed rather than red: a dash is missing information, not a fault on the
+   card, and a warning tone here would blame a card for the roster's ambiguity. */
+.hours__none {
+  font-size: 12.5px;
   color: var(--dash-ink-4);
   white-space: nowrap;
 }

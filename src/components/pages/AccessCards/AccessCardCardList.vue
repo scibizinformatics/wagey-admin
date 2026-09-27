@@ -109,6 +109,16 @@
 
         <div class="acc-card__foot">
           <span class="acc-card__type">{{ row.cardType.toUpperCase() }}</span>
+          <!-- The same three states the table's column distinguishes: a real
+               figure, or a dash because the tap log did not load or the roster
+               cannot place the name. -->
+          <span
+            class="acc-card__hours dash-num"
+            :class="{ 'acc-card__hours--none': row.hoursMinutes === null }"
+          >
+            <template v-if="row.hoursMinutes !== null">{{ row.hoursLabel }} this month</template>
+            <template v-else>—</template>
+          </span>
           <span class="acc-card__when">
             <template v-if="row.lastTapDay">
               Last tap {{ row.lastTapDay }}
@@ -267,11 +277,25 @@ defineEmits(['view', 'assign', 'copy', 'clear-filters'])
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  /* Wraps rather than squeezing: on a narrow phone the hours and the last-tap
+     stamp are both worth reading in full, and neither should lose its tail. */
+  flex-wrap: wrap;
+  row-gap: 4px;
   font-size: 11.5px;
   color: var(--dash-ink-3);
 }
 .acc-card__type {
   letter-spacing: 0.04em;
+  color: var(--dash-ink-4);
+}
+.acc-card__hours {
+  flex: none;
+  font-weight: 600;
+  color: var(--dash-ink-2);
+  white-space: nowrap;
+}
+.acc-card__hours--none {
+  font-weight: 400;
   color: var(--dash-ink-4);
 }
 .acc-card__when {
