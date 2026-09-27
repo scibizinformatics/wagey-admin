@@ -256,11 +256,11 @@
  * ----------------------------------------------------------------------------
  * The NFC cards registered to this workspace, and who holds each one.
  *
- * One source — `GET /user/company/{company_id}/access-cards/` through
- * `useAccessCards` — and one write, the PATCH that sets a card's holder and its
- * status together. Every reading on screen is derived in
- * `composables/utils/accessCards.js`, so the table, the card list, the header
- * line and both dialogs cannot disagree about a card.
+ * One write, the PATCH that sets a card's holder and its status together, and
+ * one borrowed read: the tap log, wanted only for the per-card hours column,
+ * because the card payload carries no hours at all. Every reading on screen is
+ * derived in `composables/utils/accessCards.js`, so the table, the card list, the
+ * header line and both dialogs cannot disagree about a card.
  *
  * Filtering, sorting and paging all happen here, in that order, over the
  * complete roll. That order is the point: "least recently tapped" has to mean
@@ -274,6 +274,11 @@
  * A name shared by two employees resolves to nobody (see
  * `buildEmployeeNameIndex`), which leaves the assign dialog's employee field
  * empty rather than pre-filled with the wrong colleague.
+ *
+ * That same limit is what the hours column inherits. The tap log and the card
+ * roll are joined on name because it is the only thing they share, so a holder
+ * whose name is ambiguous gets a dash rather than one of the two colleagues'
+ * figures — see `monthlyHoursByCard`.
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar, copyToClipboard } from 'quasar'
@@ -283,6 +288,7 @@ import AccessCardCardList from '@/components/pages/AccessCards/AccessCardCardLis
 import AccessCardAssignDialog from '@/components/pages/AccessCards/AccessCardAssignDialog.vue'
 import AccessCardDetailDialog from '@/components/pages/AccessCards/AccessCardDetailDialog.vue'
 import { useAccessCards } from 'src/composables/page/useAccessCards'
+import { useCardTaps } from 'src/composables/page/useCardTaps'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { useToast } from 'src/composables/useToast'
@@ -295,8 +301,11 @@ import {
   STATUS_FILTERS,
   matchesAssignment,
   matchesSearch,
+  monthlyHoursByCard,
   tapAgo,
 } from 'src/composables/utils/accessCards'
+import { hoursLabel } from 'src/composables/utils/cardTaps'
+import { monthStartIso, todayIso } from 'src/composables/utils/calendarDate'
 import {
   avatarFor,
   buildEmployeeNameIndex,
@@ -326,6 +335,19 @@ const {
 } = useAccessCards()
 
 const { employees, fetchEmployees } = useEmployees()
+
+/**
+ * The tap log, read only for the per-card hours total — the card payload has no
+ * hours of its own. Its own `error` and `loading` are deliberately left unused:
+ * a tap log that will not load is a missing column, not a broken page, and
+ * putting its failure into this page's error banner would be alarming about a
+ * reading nobody was required.
+ */
+const { rows: tapRows, fetchCardTaps, reset: resetTaps } = useCardTaps()
+
+/** Whether the tap log actually arrived. `false` means "no reading", not "none
+ *  worked" — see `monthlyHoursByCard`, which withholds the figure either way. */
+const tapsLoaded = ref(false)
 
 const searchRef = ref(null)
 
@@ -434,19 +456,46 @@ const employeeOptions = computed(() =>
 )
 
 /**
+ * This calendar month's hours per card, keyed by uid.
+ *
+ * The window is the 1st of the current month through today, and it is computed
+ * here rather than held in a ref so it cannot go stale: a tab left open across
+ * a month boundary re-reads `todayIso()` on the next fetch instead of continuing
+ * to total September. Older history stays on the Card Taps page, which is where
+ * the full tap log lives.
+ */
+const hoursByCard = computed(() => {
+  const today = todayIso()
+  return monthlyHoursByCard(cards.value, tapsLoaded.value ? tapRows.value : null, {
+    index: employeeIndex.value,
+    from: monthStartIso(today),
+    to: today,
+  })
+})
+
+/**
  * The page slice with a face attached, which is what both renderers read.
  *
  * Decorated here rather than at normalisation time for the same reasons the
  * audit trail does it: the roll can render before the employee list has landed,
  * and only the rows actually on screen are touched. `lastTapAgo` is computed
  * here too, since it is relative to now rather than to anything in the payload.
+ *
+ * `hoursMinutes` stays nullable on purpose, so the two renderers can tell "0h 0m"
+ * from a figure we could not read; `hoursLabel` is the formatted form of the
+ * number, or '' when there is no reading to format.
  */
 const displayRows = computed(() =>
-  pagedRows.value.map((card) => ({
-    ...card,
-    avatar: card.assigned ? avatarFor(employeeIndex.value, card.employeeName) : null,
-    lastTapAgo: tapAgo(card.lastTapMs),
-  })),
+  pagedRows.value.map((card) => {
+    const hoursMinutes = hoursByCard.value.get(card.uid) ?? null
+    return {
+      ...card,
+      avatar: card.assigned ? avatarFor(employeeIndex.value, card.employeeName) : null,
+      lastTapAgo: tapAgo(card.lastTapMs),
+      hoursMinutes,
+      hoursLabel: hoursMinutes === null ? '' : hoursLabel(hoursMinutes),
+    }
+  }),
 )
 
 // ─── Header ───────────────────────────────────────────────────────────────────
@@ -638,8 +687,21 @@ async function loadEmployees() {
   }
 }
 
+/**
+ * The tap log, for the hours column.
+ *
+ * Never rejects and never raises a toast: `fetchCardTaps` swallows its own
+ * failures, so this only has to record whether an answer came back. The flag is
+ * what separates "this card's holder worked no hours" from "we could not read the
+ * tap log", and the page shows a dash for the second.
+ */
+async function loadTaps() {
+  await fetchCardTaps()
+  tapsLoaded.value = true
+}
+
 async function load() {
-  const [loaded] = await Promise.all([fetchCards(), loadEmployees()])
+  const [loaded] = await Promise.all([fetchCards(), loadEmployees(), loadTaps()])
   notifyLoaded('Access cards', loaded.length, { noun: 'card' })
 }
 
@@ -652,6 +714,11 @@ function refresh() {
 watch(companyId, (next, previous) => {
   if (next === previous) return
   reset()
+  // A tap log is per-employee and per-day, so the previous workspace's hours have
+  // to go with its cards — and the in-flight guard bumped here is what stops a
+  // slower response for the old company landing on the new one's table.
+  resetTaps()
+  tapsLoaded.value = false
   clearFilters()
   showDetail.value = false
   showAssign.value = false
