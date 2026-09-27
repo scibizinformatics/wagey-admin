@@ -1,246 +1,256 @@
 <template>
-  <q-table
-    :rows="rows"
-    :columns="columns"
-    :loading="loading"
-    :pagination="{ sortBy: sort.sortBy, descending: sort.descending, rowsPerPage: 0 }"
-    :sort-method="passThrough"
-    row-key="id"
-    flat
-    hide-pagination
-    class="dash-qtable dash-qtable--flush ca-table"
-    @update:pagination="onPagination"
-  >
-    <template #body="props">
-      <q-tr
-        :props="props"
-        class="dash-qtable__row ca-row"
-        :class="{ 'ca-row--open': isExpanded(props.row.id) }"
-        :tabindex="props.row.summary.advanceCount ? 0 : -1"
-        :aria-expanded="props.row.summary.advanceCount ? isExpanded(props.row.id) : undefined"
-        :aria-label="rowLabel(props.row)"
-        @click="toggle(props.row)"
-        @keydown.enter="toggle(props.row)"
-        @keydown.space.prevent="toggle(props.row)"
-      >
-        <!-- Same identity block as the payout-group table, so the two views of
-             the same list read as the same rows. The caret is the only addition:
-             a run with no advances has nothing to open, so it does not get one. -->
-        <q-td key="group" :props="props">
-          <div class="ca-id">
-            <q-icon
-              v-if="props.row.summary.advanceCount"
-              name="chevron_right"
-              size="17px"
-              class="ca-id__caret"
-              :class="{ 'ca-id__caret--open': isExpanded(props.row.id) }"
-            />
-            <span v-else class="ca-id__caret ca-id__caret--none" aria-hidden="true" />
-            <span class="ca-id__text">
-              <span class="ca-id__name">{{ props.row.group }}</span>
-              <span class="ca-id__cutoff">{{ props.row.cutoff || '—' }}</span>
-            </span>
-          </div>
-        </q-td>
+  <div class="ca-tbl">
+    <!-- First paint, when there is nothing to keep on screen. Built from the same
+         `columns` the table renders, so the placeholder shares its column edges,
+         labels and alignment. -->
+    <TableSkeleton
+      v-if="loading"
+      :columns="columns"
+      :rows="SKELETON_ROWS"
+      :min-width="908"
+      aria-label="Loading payout groups"
+    />
 
-        <!-- How many of the run's people asked for an advance, against how many
-             it pays. The count alone would not say whether three requests is the
-             whole group or a corner of it. -->
-        <q-td key="advances" :props="props" class="col-num">
-          <span v-if="props.row.summary.advanceCount" class="dash-num ca-count">
-            <span class="ca-count__n">{{ props.row.summary.advanceCount }}</span>
-            <span class="ca-count__of">of {{ props.row.summary.headcount }}</span>
-          </span>
-          <span v-else class="ca-none">{{ props.row.summary.loaded ? 'None' : '—' }}</span>
-        </q-td>
+    <!-- Emptiness is a normal state here, since "Only groups with advances" hides
+         every run in a quiet cutoff, so it gets the panel empty state the rest of
+         the app uses. It used to hang off Quasar's `#no-data` slot, which also
+         meant it could not be drawn without the table around it; as a sibling of
+         it, nothing is claimed before the summaries have arrived. -->
+    <div v-else-if="!rows.length" class="dash-empty">
+      <span class="dash-featured-icon">
+        <q-icon name="o_request_quote" size="20px" />
+      </span>
+      <p class="dash-empty__title">No cash advances</p>
+      <p class="dash-empty__sub">
+        Advances appear here once an employee in an open payout group requests one.
+      </p>
+    </div>
 
-        <q-td key="requested" :props="props" class="col-num">
-          <span class="dash-num" :class="{ 'ca-zero': !props.row.summary.requested }">
-            {{ formatCurrency(props.row.summary.requested) }}
-          </span>
-        </q-td>
-
-        <!-- Approved below requested is the row worth looking at — either a
-             decision nobody has made yet or one somebody made in part — so it is
-             toned rather than left as one more figure. The same call the Review
-             step's table makes on the same two numbers. -->
-        <q-td key="approved" :props="props" class="col-num">
-          <span
-            class="dash-num ca-approved"
-            :class="{
-              'ca-zero': !props.row.summary.approved && !props.row.summary.shortfall,
-              'ca-approved--short': props.row.summary.shortfall > 0,
-            }"
-          >
-            {{ formatCurrency(props.row.summary.approved) }}
-          </span>
-          <q-tooltip v-if="props.row.summary.shortfall > 0" :delay="300">
-            {{ formatCurrency(props.row.summary.shortfall) }} of
-            {{ formatCurrency(props.row.summary.requested) }} not approved
-          </q-tooltip>
-        </q-td>
-
-        <!-- The share of what was asked for that has been approved. A run with
-             nothing requested draws no track at all: an empty bar there would
-             read as "nothing approved", which is the one thing it is not. -->
-        <q-td key="approval" :props="props">
-          <span v-if="props.row.summary.approvalPct != null" class="dash-bar ca-bar">
-            <span class="dash-bar__track" :class="`dash-bar__track--${props.row.summary.tone}`">
-              <span
-                class="dash-bar__fill"
-                :class="`dash-bar__fill--${props.row.summary.tone}`"
-                :style="{
-                  width: approvalFillWidth(
-                    props.row.summary.approvalPct,
-                    props.row.summary.approved,
-                  ),
-                }"
+    <q-table
+      v-else
+      :rows="rows"
+      :columns="columns"
+      :pagination="{ sortBy: sort.sortBy, descending: sort.descending, rowsPerPage: 0 }"
+      :sort-method="passThrough"
+      row-key="id"
+      flat
+      hide-pagination
+      class="dash-qtable dash-qtable--flush ca-table"
+      @update:pagination="onPagination"
+    >
+      <template #body="props">
+        <q-tr
+          :props="props"
+          class="dash-qtable__row ca-row"
+          :class="{ 'ca-row--open': isExpanded(props.row.id) }"
+          :tabindex="props.row.summary.advanceCount ? 0 : -1"
+          :aria-expanded="props.row.summary.advanceCount ? isExpanded(props.row.id) : undefined"
+          :aria-label="rowLabel(props.row)"
+          @click="toggle(props.row)"
+          @keydown.enter="toggle(props.row)"
+          @keydown.space.prevent="toggle(props.row)"
+        >
+          <!-- Same identity block as the payout-group table, so the two views of
+               the same list read as the same rows. The caret is the only addition:
+               a run with no advances has nothing to open, so it does not get one. -->
+          <q-td key="group" :props="props">
+            <div class="ca-id">
+              <q-icon
+                v-if="props.row.summary.advanceCount"
+                name="chevron_right"
+                size="17px"
+                class="ca-id__caret"
+                :class="{ 'ca-id__caret--open': isExpanded(props.row.id) }"
               />
-            </span>
-            <span class="ca-bar__pct dash-num" :class="`is-${props.row.summary.tone}`">
-              {{ Math.round(props.row.summary.approvalPct) }}%
-            </span>
-            <q-tooltip :delay="300">
-              {{ formatCurrency(props.row.summary.approved) }} approved of
-              {{ formatCurrency(props.row.summary.requested) }} requested
-            </q-tooltip>
-          </span>
-          <span v-else class="ca-none">—</span>
-        </q-td>
-
-        <q-td key="progress" :props="props">
-          <PayoutProgressStepper
-            :group-id="props.row.id"
-            :pgi-status="props.row.status"
-            :group-name="props.row.group"
-            :cutoff-name="props.row.cutoff"
-          />
-        </q-td>
-
-        <!-- The row opens the advances; the run itself is a separate target.
-             In the payout-group view the whole row opens the run, and leaving
-             that on the row here would mean the caret and the row disagreed
-             about what a click does. -->
-        <q-td key="open" :props="props" class="col-open">
-          <q-btn
-            flat
-            round
-            dense
-            size="11px"
-            icon="chevron_right"
-            class="ca-open"
-            :aria-label="`Open ${props.row.group}`"
-            @click.stop="$emit('view', props.row)"
-          >
-            <q-tooltip :delay="300">Open run</q-tooltip>
-          </q-btn>
-        </q-td>
-      </q-tr>
-
-      <!-- ── The employees behind the totals ──────────────────────────────────
-           A panel inside one full-width cell, with its own three headings, not
-           extra rows borrowed from the table's column grid: the columns above
-           measure runs and these measure people, and a sub-row that lines up
-           under "Employees" and "Requested" while meaning something else is
-           exactly the drift that makes a table hard to read. -->
-      <q-tr
-        v-if="isExpanded(props.row.id)"
-        :key="`${props.row.id}-detail`"
-        :props="props"
-        no-hover
-        class="ca-detail-row"
-      >
-        <q-td colspan="100%" class="ca-detail-cell">
-          <div class="ca-detail">
-            <div class="ca-detail__head">
-              <span class="ca-detail__title">Cash advances in {{ props.row.group }}</span>
-              <span class="ca-detail__meta dash-num">
-                {{ props.row.summary.advanceCount }}
-                {{ props.row.summary.advanceCount === 1 ? 'employee' : 'employees' }}
-                <template v-if="props.row.summary.pendingCount">
-                  · {{ props.row.summary.pendingCount }} short of the request
-                </template>
+              <span v-else class="ca-id__caret ca-id__caret--none" aria-hidden="true" />
+              <span class="ca-id__text">
+                <span class="ca-id__name">{{ props.row.group }}</span>
+                <span class="ca-id__cutoff">{{ props.row.cutoff || '—' }}</span>
               </span>
             </div>
+          </q-td>
 
-            <div class="ca-detail__grid" role="table">
-              <div class="ca-detail__hrow" role="row">
-                <span role="columnheader">Employee</span>
-                <span role="columnheader" class="col-num">Requested</span>
-                <span role="columnheader" class="col-num">Approved</span>
-                <span role="columnheader">Review</span>
-              </div>
-              <div
-                v-for="person in props.row.summary.advances"
-                :key="person.epiId ?? person.employeeId ?? person.name"
-                class="ca-detail__row"
-                role="row"
-              >
-                <span class="who" role="cell">
-                  <q-avatar v-if="avatarOf(person.name).pictureUrl" size="26px" class="who__avatar">
-                    <img :src="avatarOf(person.name).pictureUrl" :alt="person.name" />
-                  </q-avatar>
-                  <q-avatar
-                    v-else
-                    size="26px"
-                    class="who__avatar"
-                    :style="{ background: avatarOf(person.name).color }"
-                  >
-                    <span class="who__initials">{{ avatarOf(person.name).initials || '?' }}</span>
-                  </q-avatar>
-                  <span class="who__text">
-                    <span class="who__name">{{ person.name }}</span>
-                    <span v-if="roleLine(person)" class="who__role">{{ roleLine(person) }}</span>
-                  </span>
-                </span>
+          <!-- How many of the run's people asked for an advance, against how many
+               it pays. The count alone would not say whether three requests is the
+               whole group or a corner of it. -->
+          <q-td key="advances" :props="props" class="col-num">
+            <span v-if="props.row.summary.advanceCount" class="dash-num ca-count">
+              <span class="ca-count__n">{{ props.row.summary.advanceCount }}</span>
+              <span class="ca-count__of">of {{ props.row.summary.headcount }}</span>
+            </span>
+            <span v-else class="ca-none">{{ props.row.summary.loaded ? 'None' : '—' }}</span>
+          </q-td>
 
-                <span class="dash-num col-num" role="cell">
-                  {{ formatCurrency(person.requested) }}
-                </span>
+          <q-td key="requested" :props="props" class="col-num">
+            <span class="dash-num" :class="{ 'ca-zero': !props.row.summary.requested }">
+              {{ formatCurrency(props.row.summary.requested) }}
+            </span>
+          </q-td>
 
+          <!-- Approved below requested is the row worth looking at — either a
+               decision nobody has made yet or one somebody made in part — so it is
+               toned rather than left as one more figure. The same call the Review
+               step's table makes on the same two numbers. -->
+          <q-td key="approved" :props="props" class="col-num">
+            <span
+              class="dash-num ca-approved"
+              :class="{
+                'ca-zero': !props.row.summary.approved && !props.row.summary.shortfall,
+                'ca-approved--short': props.row.summary.shortfall > 0,
+              }"
+            >
+              {{ formatCurrency(props.row.summary.approved) }}
+            </span>
+            <q-tooltip v-if="props.row.summary.shortfall > 0" :delay="300">
+              {{ formatCurrency(props.row.summary.shortfall) }} of
+              {{ formatCurrency(props.row.summary.requested) }} not approved
+            </q-tooltip>
+          </q-td>
+
+          <!-- The share of what was asked for that has been approved. A run with
+               nothing requested draws no track at all: an empty bar there would
+               read as "nothing approved", which is the one thing it is not. -->
+          <q-td key="approval" :props="props">
+            <span v-if="props.row.summary.approvalPct != null" class="dash-bar ca-bar">
+              <span class="dash-bar__track" :class="`dash-bar__track--${props.row.summary.tone}`">
                 <span
-                  class="dash-num col-num ca-approved"
-                  :class="{ 'ca-approved--short': person.shortfall > 0 }"
-                  role="cell"
-                >
-                  {{ formatCurrency(person.approved) }}
-                  <q-tooltip v-if="person.shortfall > 0" :delay="300">
-                    {{ formatCurrency(person.shortfall) }} short of the request
-                  </q-tooltip>
-                </span>
+                  class="dash-bar__fill"
+                  :class="`dash-bar__fill--${props.row.summary.tone}`"
+                  :style="{
+                    width: approvalFillWidth(
+                      props.row.summary.approvalPct,
+                      props.row.summary.approved,
+                    ),
+                  }"
+                />
+              </span>
+              <span class="ca-bar__pct dash-num" :class="`is-${props.row.summary.tone}`">
+                {{ Math.round(props.row.summary.approvalPct) }}%
+              </span>
+              <q-tooltip :delay="300">
+                {{ formatCurrency(props.row.summary.approved) }} approved of
+                {{ formatCurrency(props.row.summary.requested) }} requested
+              </q-tooltip>
+            </span>
+            <span v-else class="ca-none">—</span>
+          </q-td>
 
-                <span role="cell">
-                  <StatusPill :status="person.reviewStatus" />
+          <q-td key="progress" :props="props">
+            <PayoutProgressStepper
+              :group-id="props.row.id"
+              :pgi-status="props.row.status"
+              :group-name="props.row.group"
+              :cutoff-name="props.row.cutoff"
+            />
+          </q-td>
+
+          <!-- The row opens the advances; the run itself is a separate target.
+               In the payout-group view the whole row opens the run, and leaving
+               that on the row here would mean the caret and the row disagreed
+               about what a click does. -->
+          <q-td key="open" :props="props" class="col-open">
+            <q-btn
+              flat
+              round
+              dense
+              size="11px"
+              icon="chevron_right"
+              class="ca-open"
+              :aria-label="`Open ${props.row.group}`"
+              @click.stop="$emit('view', props.row)"
+            >
+              <q-tooltip :delay="300">Open run</q-tooltip>
+            </q-btn>
+          </q-td>
+        </q-tr>
+
+        <!-- ── The employees behind the totals ──────────────────────────────────
+             A panel inside one full-width cell, with its own three headings, not
+             extra rows borrowed from the table's column grid: the columns above
+             measure runs and these measure people, and a sub-row that lines up
+             under "Employees" and "Requested" while meaning something else is
+             exactly the drift that makes a table hard to read. -->
+        <q-tr
+          v-if="isExpanded(props.row.id)"
+          :key="`${props.row.id}-detail`"
+          :props="props"
+          no-hover
+          class="ca-detail-row"
+        >
+          <q-td colspan="100%" class="ca-detail-cell">
+            <div class="ca-detail">
+              <div class="ca-detail__head">
+                <span class="ca-detail__title">Cash advances in {{ props.row.group }}</span>
+                <span class="ca-detail__meta dash-num">
+                  {{ props.row.summary.advanceCount }}
+                  {{ props.row.summary.advanceCount === 1 ? 'employee' : 'employees' }}
+                  <template v-if="props.row.summary.pendingCount">
+                    · {{ props.row.summary.pendingCount }} short of the request
+                  </template>
                 </span>
+              </div>
+
+              <div class="ca-detail__grid" role="table">
+                <div class="ca-detail__hrow" role="row">
+                  <span role="columnheader">Employee</span>
+                  <span role="columnheader" class="col-num">Requested</span>
+                  <span role="columnheader" class="col-num">Approved</span>
+                  <span role="columnheader">Review</span>
+                </div>
+                <div
+                  v-for="person in props.row.summary.advances"
+                  :key="person.epiId ?? person.employeeId ?? person.name"
+                  class="ca-detail__row"
+                  role="row"
+                >
+                  <span class="who" role="cell">
+                    <q-avatar
+                      v-if="avatarOf(person.name).pictureUrl"
+                      size="26px"
+                      class="who__avatar"
+                    >
+                      <img :src="avatarOf(person.name).pictureUrl" :alt="person.name" />
+                    </q-avatar>
+                    <q-avatar
+                      v-else
+                      size="26px"
+                      class="who__avatar"
+                      :style="{ background: avatarOf(person.name).color }"
+                    >
+                      <span class="who__initials">{{ avatarOf(person.name).initials || '?' }}</span>
+                    </q-avatar>
+                    <span class="who__text">
+                      <span class="who__name">{{ person.name }}</span>
+                      <span v-if="roleLine(person)" class="who__role">{{ roleLine(person) }}</span>
+                    </span>
+                  </span>
+
+                  <span class="dash-num col-num" role="cell">
+                    {{ formatCurrency(person.requested) }}
+                  </span>
+
+                  <span
+                    class="dash-num col-num ca-approved"
+                    :class="{ 'ca-approved--short': person.shortfall > 0 }"
+                    role="cell"
+                  >
+                    {{ formatCurrency(person.approved) }}
+                    <q-tooltip v-if="person.shortfall > 0" :delay="300">
+                      {{ formatCurrency(person.shortfall) }} short of the request
+                    </q-tooltip>
+                  </span>
+
+                  <span role="cell">
+                    <StatusPill :status="person.reviewStatus" />
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        </q-td>
-      </q-tr>
-    </template>
-
-    <!-- `hide-no-data` is deliberately *not* set: it suppresses this slot
-         outright, so a table carrying it renders nothing at all when it is
-         empty — a header strip over blank space. Emptiness is a normal state
-         here, since "Only groups with advances" hides every run in a quiet
-         cutoff, so it gets the panel empty state the rest of the app uses.
-
-         Nothing is drawn while the summaries are still arriving, though: an
-         empty table mid-fetch is not yet an answer, and saying "no cash
-         advances" before the requests come back would be wrong for as long as
-         they take. -->
-    <template #no-data>
-      <div v-if="!loading" class="dash-empty">
-        <span class="dash-featured-icon">
-          <q-icon name="o_request_quote" size="20px" />
-        </span>
-        <p class="dash-empty__title">No cash advances</p>
-        <p class="dash-empty__sub">
-          Advances appear here once an employee in an open payout group requests one.
-        </p>
-      </div>
-    </template>
-  </q-table>
+          </q-td>
+        </q-tr>
+      </template>
+    </q-table>
+  </div>
 </template>
 
 <script setup>
@@ -263,6 +273,7 @@
  * calling it a sorted list.
  */
 import { ref } from 'vue'
+import TableSkeleton from 'src/components/common/TableSkeleton.vue'
 import PayoutProgressStepper from 'src/components/pages/Payroll/PayoutProgressStepper.vue'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import { formatCurrency } from 'src/composables/utils/format'
@@ -281,6 +292,14 @@ const props = defineProps({
 
 const emit = defineEmits(['view', 'update:sort'])
 
+/**
+ * How many placeholder rows the loading skeleton draws — the list page's default
+ * page size, so the placeholder is the height of the table that replaces it. The
+ * page owns its page size; this is only the guess made before the first fetch
+ * answers, and the card's footer is hidden until then anyway.
+ */
+const SKELETON_ROWS = 10
+
 const columns = [
   {
     name: 'group',
@@ -289,6 +308,10 @@ const columns = [
     align: 'left',
     sortable: true,
     style: 'min-width: 210px',
+    // Quasar reads only `style`, and ignores a width it does not know; the
+    // loading skeleton reads `minWidth`/`width`. Declaring both is what lets the
+    // placeholder line its column edges up with the table that replaces it.
+    minWidth: 210,
   },
   {
     name: 'advances',
@@ -297,6 +320,7 @@ const columns = [
     align: 'right',
     sortable: true,
     style: 'width: 108px',
+    width: 108,
     headerClasses: 'col-num',
   },
   {
@@ -306,6 +330,7 @@ const columns = [
     align: 'right',
     sortable: true,
     style: 'width: 126px',
+    width: 126,
     headerClasses: 'col-num',
   },
   {
@@ -315,6 +340,7 @@ const columns = [
     align: 'right',
     sortable: true,
     style: 'width: 126px',
+    width: 126,
     headerClasses: 'col-num',
   },
   {
@@ -324,6 +350,7 @@ const columns = [
     align: 'left',
     sortable: true,
     style: 'width: 138px',
+    width: 138,
   },
   {
     name: 'progress',
@@ -331,8 +358,9 @@ const columns = [
     field: 'status',
     align: 'left',
     style: 'width: 156px',
+    width: 156,
   },
-  { name: 'open', label: '', field: 'open', align: 'right', style: 'width: 44px' },
+  { name: 'open', label: '', field: 'open', align: 'right', style: 'width: 44px', width: 44 },
 ]
 
 /** Quasar has already been handed a sorted page; re-sorting it would undo that. */
@@ -390,20 +418,9 @@ function avatarOf(name) {
 /* `dash-qtable--flush` zeroes the header's top padding on the theory that the
    band above supplies it. Under the runs toolbar it does not, and the labels
    come up against its hairline. Matched to `PayoutTable`, so switching views
-   does not move the header strip. The progress row is excluded — it carries the
-   loading bar and must stay at zero, or the header jumps down mid-fetch. */
-.ca-table :deep(.q-table thead tr:not(.q-table__progress) th) {
+   does not move the header strip. */
+.ca-table :deep(.q-table thead tr th) {
   padding-top: 14px;
-}
-
-/* Quasar renders the empty state inside its bottom bar, which is built for a
-   pagination row: 48px min-height, side padding and a top hairline. The panel
-   brings its own spacing, so without this reset it sits inset and double-ruled
-   under the header. */
-.ca-table :deep(.q-table__bottom--nodata) {
-  min-height: 0;
-  padding: 0;
-  border-top: none;
 }
 
 /* ── Identity ── */
@@ -662,7 +679,7 @@ function avatarOf(name) {
 @media (max-width: 1279px) {
   /* Same selector shape as the header rule above, so this step still wins on
      order rather than losing the top padding back to zero. */
-  .ca-table :deep(.q-table thead tr:not(.q-table__progress) th) {
+  .ca-table :deep(.q-table thead tr th) {
     padding: 12px 9px 10px;
   }
   .ca-table :deep(.q-table tbody td) {
