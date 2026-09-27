@@ -80,14 +80,47 @@
           </q-btn>
         </template>
 
+        <!-- First paint only, when there is nothing to keep on screen: built from
+             the same `columns` the table renders, so the placeholder shares its
+             column edges, labels and alignment and nothing shifts when the rows
+             land. A refresh after an action keeps its rows and only runs the
+             table's progress bar, so it deliberately does not raise this. -->
+        <TableSkeleton
+          v-if="loading"
+          :columns="columns"
+          :rows="pageSize"
+          aria-label="Loading employees to review"
+        />
+
+        <!-- Empty. `hide-no-data` was on the table alongside this markup, and it
+             suppresses Quasar's no-data branch outright — so the state was never
+             drawn and an empty result showed a bare header strip. Rendered here
+             instead, and without the loading guard it no longer needs: this branch
+             is only reached once the fetch has answered. -->
+        <div v-else-if="!paginatedData.length" class="dash-empty">
+          <span class="dash-featured-icon">
+            <q-icon :name="searchTerm ? 'filter_alt_off' : 'o_fact_check'" size="20px" />
+          </span>
+          <p class="dash-empty__title">
+            {{ searchTerm ? 'No employees match this search' : 'Nothing to review' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              searchTerm
+                ? 'Try a different name.'
+                : 'This payout group has no employees to review.'
+            }}
+          </p>
+        </div>
+
         <q-table
+          v-else
           :rows="paginatedData"
           :columns="columns"
-          :loading="loading || refreshing"
+          :loading="refreshing"
           :pagination="{ rowsPerPage: 0 }"
           row-key="epi_id"
           flat
-          hide-no-data
           hide-pagination
         >
           <!-- Counts. Most rows are zero, so a zero is muted and only a real
@@ -290,24 +323,6 @@
               </q-btn>
             </q-td>
           </template>
-
-          <template #no-data>
-            <div v-if="!loading" class="dash-empty">
-              <span class="dash-featured-icon">
-                <q-icon :name="searchTerm ? 'filter_alt_off' : 'o_fact_check'" size="20px" />
-              </span>
-              <p class="dash-empty__title">
-                {{ searchTerm ? 'No employees match this search' : 'Nothing to review' }}
-              </p>
-              <p class="dash-empty__sub">
-                {{
-                  searchTerm
-                    ? 'Try a different name.'
-                    : 'This payout group has no employees to review.'
-                }}
-              </p>
-            </div>
-          </template>
         </q-table>
       </DisbursementTableCard>
     </DisbursementStepShell>
@@ -331,6 +346,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
+import TableSkeleton from 'src/components/common/TableSkeleton.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
