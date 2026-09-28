@@ -618,20 +618,6 @@ function onContractTypeChange(contractTypeId) {
 }
 
 watch(
-  () => assignForm.value.pay_type,
-  (newType) => {
-    if (newType === 'daily') {
-      assignForm.value.work_hours_per_week = 8
-    } else if (newType === 'monthly') {
-      assignForm.value.work_hours_per_week = 48
-    }
-    if (!assignForm.value.rate || assignForm.value.rate < 100) {
-      assignForm.value.rate = 100
-    }
-  },
-)
-
-watch(
   () => eligibilityOptions.value,
   (newEligs) => {
     if (newEligs.length && assignForm.value.eligibilities.length) {
@@ -1512,7 +1498,7 @@ async function handleBulkAssignDialog() {
     contract_type_id: null,
     assignment_mode: 'custom',
     pay_type: 'monthly',
-    rate: '',
+    rate: 100,
     work_hours_per_week: 48,
     position: null,
     department: null,
@@ -2112,6 +2098,21 @@ const handleAddCtoBalance = async (payload) => {
 
 const updateAssignField = ({ field, value }) => {
   assignForm.value[field] = value
+
+  // Pay type seeds the sensible starting hours — but only when a person picks
+  // it. This used to be a watcher on `pay_type`, which also fired while
+  // `openAssignDialog` was prefilling from the employee's active contract,
+  // overwriting a stored 40 with 48 and posting that back on renew.
+  if (field === 'pay_type') {
+    if (value === 'daily') {
+      assignForm.value.work_hours_per_week = 8
+    } else if (value === 'monthly') {
+      assignForm.value.work_hours_per_week = 48
+    }
+    if (!assignForm.value.rate || assignForm.value.rate < 100) {
+      assignForm.value.rate = 100
+    }
+  }
 }
 
 watch(sortBy, () => {
