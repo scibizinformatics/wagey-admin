@@ -153,7 +153,7 @@
         <!-- Cards below 1024px, table above. -->
         <CardTapsCardList
           v-if="$q.screen.lt.md"
-          :rows="pagedRows"
+          :rows="displayRows"
           :loading="loading"
           :is-filtered="activeFilters.length > 0"
           :single-employee="singleEmployee"
@@ -162,7 +162,7 @@
         />
         <CardTapsTable
           v-else
-          :rows="pagedRows"
+          :rows="displayRows"
           :loading="loading"
           :is-filtered="activeFilters.length > 0"
           :single-employee="singleEmployee"
@@ -235,6 +235,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useCompany } from '@/composables/page/useCompany'
 import { useCardTaps } from '@/composables/page/useCardTaps'
+import { useEmployees } from '@/composables/page/useEmployees'
+import { avatarFor, buildEmployeeNameIndex } from '@/composables/utils/employee'
 import { todayIso, shiftIso, longLabel } from '@/composables/utils/calendarDate'
 import { tapCount, totalDurationLabel } from '@/composables/utils/cardTaps'
 import PageShell from '@/components/layout/PageShell.vue'
@@ -247,6 +249,14 @@ const $q = useQuasar()
 
 const { companyId } = useCompany()
 const { rows, loading, error, fetchCardTaps, reset, clearError } = useCardTaps()
+
+// The taps payload names a person but carries no photograph, and its
+// `employee_id` is a uuid the roster may key by number instead (see
+// `composables/utils/accessCards.js`), so the faces come from the company
+// roster, matched by name — the same construction the Audit and Access Cards
+// pages use. `useEmployees` caches per company and de-duplicates in-flight
+// calls, so arriving here from the Employees page usually costs no request.
+const { employees, fetchEmployees } = useEmployees()
 
 // ─── Today ─────────────────────────────────────────────────────────────────────
 // A computed, not a constant: a tab left open overnight must not keep reporting
@@ -373,6 +383,32 @@ const pagedRows = computed(() => {
   const start = (pagination.value.page - 1) * pagination.value.rowsPerPage
   return sortedRows.value.slice(start, start + pagination.value.rowsPerPage)
 })
+
+// ─── Avatars ──────────────────────────────────────────────────────────────────
+/**
+ * Name to employee record, for putting a face against a taps row.
+ *
+ * A name shared by two employees maps to null — see
+ * `buildEmployeeNameIndex`. One colleague's photograph beside another's taps is
+ * worse than no photograph at all.
+ */
+const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
+
+/**
+ * The page slice with an avatar attached, which is what both renderers read.
+ *
+ * Decorating here rather than at normalisation time keeps the taps rows
+ * independent of the roster: they can render before the employee list has
+ * landed (initials first, photographs when they arrive), and only the rows
+ * actually on screen are touched. Both the table and the card list read the
+ * same decorated rows, so they cannot disagree about a face.
+ */
+const displayRows = computed(() =>
+  pagedRows.value.map((row) => ({
+    ...row,
+    avatar: avatarFor(employeeIndex.value, row.employee_name),
+  })),
+)
 
 // ─── Header + filters ─────────────────────────────────────────────────────────
 function longDayLabel(iso) {
@@ -528,6 +564,25 @@ function openTapDetail(row) {
 // ─── Error retry ──────────────────────────────────────────────────────────────
 function retry() {
   fetchCardTaps()
+  loadAvatars()
+}
+
+// ─── Avatars ─────────────────────────────────────────────────────────────────
+/**
+ * The company roster, wanted only for the faces.
+ *
+ * Deliberately quiet: it runs alongside the taps rather than before it, because
+ * a face is decoration and the taps are the page. It raises no "loaded" toast,
+ * and a failure is swallowed — the taps are complete and correct without
+ * photographs, so an error here would report a problem the reader has no reason
+ * to care about and cannot act on. The avatars simply stay as initials.
+ */
+async function loadAvatars() {
+  try {
+    await fetchEmployees()
+  } catch {
+    // Initials it is.
+  }
 }
 
 // ─── Pagination handlers ──────────────────────────────────────────────────────
@@ -552,7 +607,10 @@ function onSortChange({ sortBy, descending }) {
 // on screen, and the composable clears its rows on reset.
 watch(companyId, (id) => {
   reset()
-  if (id) fetchCardTaps()
+  if (id) {
+    fetchCardTaps()
+    loadAvatars()
+  }
 }, { immediate: true })
 </script>
 
