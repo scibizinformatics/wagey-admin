@@ -45,8 +45,20 @@
 
     <article v-for="row in rows" v-else :key="row.key" class="ct-card">
       <div class="ct-card__top">
-        <q-avatar size="36px" class="ct-card__avatar" :style="{ background: getAvatarColor(row.employee_name) }">
-          <span class="ct-card__initials">{{ getInitials(row.employee_name) }}</span>
+        <q-avatar
+          v-if="row.avatar?.pictureUrl"
+          size="38px"
+          class="ct-card__avatar"
+        >
+          <img :src="row.avatar.pictureUrl" :alt="row.employee_name" />
+        </q-avatar>
+        <q-avatar
+          v-else
+          size="38px"
+          class="ct-card__avatar"
+          :style="{ background: row.avatar?.color }"
+        >
+          <span class="ct-card__initials">{{ row.avatar?.initials || '?' }}</span>
         </q-avatar>
 
         <!-- Every card is the same person during a single-employee range, so the
@@ -93,7 +105,6 @@
  * The table answers 1024px up; a panel of cards keeps every reading at full size
  * without the sideways scroll a seven-column table would demand below that.
  */
-import { getInitials, getAvatarColor } from '@/composables/utils/attendance'
 import { tapCount } from '@/composables/utils/cardTaps'
 
 const props = defineProps({
