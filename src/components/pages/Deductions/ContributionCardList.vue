@@ -43,8 +43,12 @@
     <!-- Rows -->
     <article v-for="item in items" v-else :key="item.key" class="card">
       <div class="card__head">
+        <q-avatar v-if="item.avatar?.pictureUrl" size="34px" class="card__avatar">
+          <img :src="item.avatar.pictureUrl" :alt="item.title" />
+        </q-avatar>
+
         <q-avatar
-          v-if="item.avatar"
+          v-else-if="item.avatar"
           size="34px"
           class="card__avatar"
           :style="{ background: item.avatar.color }"
@@ -154,10 +158,13 @@ import { ref } from 'vue'
 
 defineProps({
   /**
-   * [{ key, title, subtitle?, avatar?: { initials, color }, chip?: { label, tone },
+   * [{ key, title, subtitle?, avatar?: { pictureUrl, initials, color },
+   *    chip?: { label, tone },
    *    rate?: { pct, tone }, metrics: [{ label, value, strong? }],
    *    details?: [{ name, due, deducted, undeducted }] }]
    * All figures arrive pre-formatted — the card does no number formatting.
+   * `avatar` is `avatarFor`'s result, so a card shows the same face the table
+   * does; without a pictureUrl it falls back to the initials and colour in it.
    */
   items: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
