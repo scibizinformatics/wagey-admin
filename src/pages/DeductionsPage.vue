@@ -212,10 +212,11 @@
             <template v-else>
               <EmployeeSummaryTable
                 v-if="!isNarrow"
-                :rows="filteredEmployees"
+                :rows="employeeRows"
                 :loading="busy"
                 :is-filtered="!!search"
                 :period-label="periodLabel"
+                :employee-index="employeeIndex"
                 @clear-filters="search = ''"
               />
               <ContributionCardList
@@ -271,8 +272,9 @@ import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useDeductions } from 'src/composables/page/useDeductions'
+import { useEmployees } from 'src/composables/page/useEmployees'
 import { formatCurrency } from 'src/composables/utils/format'
-import { getAvatarColor, getInitials } from 'src/composables/utils/attendance'
+import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
 import {
   balanceOf,
   collectedPct,
@@ -292,6 +294,7 @@ import ContributionCardList from '@/components/pages/Deductions/ContributionCard
 
 const $q = useQuasar()
 const { companyId } = useCompany()
+const { employees, fetchEmployees } = useEmployees()
 const {
   annualContributions,
   employeeContributions,
@@ -361,6 +364,34 @@ const filteredEmployees = computed(() => {
   if (!search.value.trim()) return employeeContributions.value
   return employeeContributions.value.filter((r) => matches(r.employee_name))
 })
+
+// ─── Avatars ──────────────────────────────────────────────────────────────────
+/**
+ * Name to employee record, for putting a face against a contributions row.
+ *
+ * The contributions endpoint names a person and carries no picture field, so the
+ * roster is the only place a photograph can come from. A name shared by two
+ * employees maps to null — see `buildEmployeeNameIndex`; one colleague's
+ * photograph beside another's contribution figures is worse than none at all.
+ */
+const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
+
+/**
+ * The employee rows with an avatar attached, which both renderers read.
+ *
+ * Decorating here rather than at fetch time keeps the contribution rows
+ * independent of the roster: they render before the employee list has landed
+ * (initials first, photographs when they arrive), and `filteredEmployees` stays
+ * the plain payload the summary tiles and tab counts are computed from. The
+ * table and the card list read the same decorated rows, so they cannot disagree
+ * about a face.
+ */
+const employeeRows = computed(() =>
+  filteredEmployees.value.map((row) => ({
+    ...row,
+    avatar: avatarFor(employeeIndex.value, row.employee_name),
+  })),
+)
 
 const filteredDepartments = computed(() => {
   if (!search.value.trim()) return departmentContributions.value
@@ -482,14 +513,11 @@ const annualCards = computed(() =>
 )
 
 const employeeCards = computed(() =>
-  filteredEmployees.value.map((row, i) => ({
+  employeeRows.value.map((row, i) => ({
     key: row.employee_id ?? row.employee ?? `${row.employee_name}-${i}`,
     title: row.employee_name,
     subtitle: `${num(row.no_of_payroll_deduction_cases).toLocaleString('en-PH')} deduction cases · ${periodLabel.value}`,
-    avatar: {
-      initials: getInitials(row.employee_name),
-      color: getAvatarColor(row.employee_name),
-    },
+    avatar: row.avatar,
     rate: rateFor(row),
     metrics: [
       {
@@ -561,9 +589,29 @@ async function fetchAll() {
       fetchAnnualContributions(id, period.year),
       fetchEmployeeContributions(id, period.year, period.month),
       fetchDepartmentContributions(id, period.year, period.month),
+      loadAvatars(),
     ])
   } finally {
     busy.value = false
+  }
+}
+
+/**
+ * The company roster, wanted only for the faces.
+ *
+ * Deliberately quiet: it runs alongside the contributions rather than before
+ * them, because a face is decoration and the figures are the page. It raises no
+ * "loaded" toast, and a failure is swallowed — the contribution totals are
+ * complete and correct without photographs, so an error here would report a
+ * problem the reader has no reason to care about and cannot act on. The avatars
+ * simply stay as initials. `useEmployees` caches per company for five minutes,
+ * so this is usually free if the roster has already been read this session.
+ */
+async function loadAvatars() {
+  try {
+    await fetchEmployees()
+  } catch {
+    // Initials it is.
   }
 }
 
