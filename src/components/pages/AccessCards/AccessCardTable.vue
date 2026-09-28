@@ -48,18 +48,16 @@
             <q-th key="status" :props="props">Status</q-th>
             <q-th key="lastTap" :props="props">Last tap</q-th>
             <q-th key="hours" :props="props">Total hours</q-th>
-            <q-th key="actions" :props="props" class="num">&nbsp;</q-th>
+            <q-th key="actions" :props="props" class="actions">&nbsp;</q-th>
           </q-tr>
         </template>
 
         <template v-slot:body="props">
-          <q-tr
-            :props="props"
-            class="dash-qtable__row dash-qtable__row--clickable"
-            tabindex="0"
-            @click="$emit('view', props.row)"
-            @keydown.enter.prevent="$emit('view', props.row)"
-          >
+          <!-- The row itself does nothing. Its two actions live in the row menu,
+               and the hover tint is deliberately absent so nothing about a row
+               claims to be clickable — see the `dash-qtable__row` note in
+               dashboard.scss. A card's record is two clicks now, not one. -->
+          <q-tr :props="props">
             <!-- The uid is the one thing on the row a person carries elsewhere —
                  into a door controller, into a ticket — so copying it is a click
                  rather than a select-and-drag across fourteen hex digits. What
@@ -69,7 +67,7 @@
                 type="button"
                 class="uid"
                 :aria-label="`Copy card UID ${props.row.uid}`"
-                @click.stop="$emit('copy', props.row)"
+                @click="$emit('copy', props.row)"
               >
                 <span class="uid__text dash-num">{{ formatUid(props.row.uid) }}</span>
                 <q-icon name="o_content_copy" size="13px" class="uid__icon" />
@@ -148,22 +146,22 @@
               <span v-else class="hours__none">—</span>
             </q-td>
 
-            <q-td key="actions" :props="props" class="num">
+            <q-td key="actions" :props="props" class="actions">
               <q-btn
                 flat
+                round
                 dense
-                no-caps
+                icon="more_horiz"
                 size="12px"
-                :icon="props.row.assigned ? 'o_swap_horiz' : 'o_person_add'"
-                :label="props.row.assigned ? 'Reassign' : 'Assign'"
-                class="row-action"
-                :aria-label="
-                  props.row.assigned
-                    ? `Reassign card ${props.row.uid}`
-                    : `Assign card ${props.row.uid}`
-                "
-                @click.stop="$emit('assign', props.row)"
-              />
+                class="row-btn"
+                :aria-label="`Actions for card ${props.row.uid}`"
+              >
+                <AccessCardRowMenu
+                  :card="props.row"
+                  @view="$emit('view', props.row)"
+                  @assign="$emit('assign', props.row)"
+                />
+              </q-btn>
             </q-td>
           </q-tr>
         </template>
@@ -184,6 +182,7 @@
  * sorted and counted on.
  */
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import AccessCardRowMenu from '@/components/pages/AccessCards/AccessCardRowMenu.vue'
 import { chipClass, formatUid } from 'src/composables/utils/accessCards'
 
 defineProps({
@@ -206,7 +205,10 @@ const columns = [
   // never sorted, and a sort on a nullable number would put every card we could
   // not read in the same block, which is not an ordering anybody asked for.
   { name: 'hours', label: 'Total hours', field: 'hoursLabel', align: 'left', width: 130 },
-  { name: 'actions', label: '', field: 'key', align: 'right', width: 110 },
+  // The row-menu column. `align` and `width` stay declared here because the
+  // `.actions` class in dashboard.scss carries the same intent globally; this is
+  // just the same statement at the table that owns it.
+  { name: 'actions', label: '', field: 'key', align: 'right', width: 52 },
 ]
 </script>
 
@@ -341,14 +343,15 @@ const columns = [
   white-space: nowrap;
 }
 
-/* ── Row action ── */
-.row-action {
-  color: var(--dash-ink-2);
-  font-weight: 500;
-  padding: 0 8px;
+/* ── Row action ──
+   The same treatment EmployeeTable gives its row menu, so the two are
+   recognisably the same control. Quiet at rest, ink on hover. */
+.row-btn {
+  color: var(--dash-ink-4);
 }
-.row-action:hover {
-  color: var(--dash-accent);
+.row-btn:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-100);
 }
 
 .acc-tbl__empty-btn {
