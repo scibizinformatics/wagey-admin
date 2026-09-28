@@ -4,7 +4,10 @@
       <div v-for="n in 5" :key="`sk-${n}`" class="acc-card acc-card--skeleton">
         <div class="acc-card__top">
           <span class="dash-shimmer acc-sk acc-sk--uid" />
-          <span class="dash-shimmer acc-sk acc-sk--chip" />
+          <div class="acc-card__top-right">
+            <span class="dash-shimmer acc-sk acc-sk--chip" />
+            <span class="dash-shimmer acc-sk acc-sk--menu" />
+          </div>
         </div>
         <span class="dash-shimmer acc-sk acc-sk--line" />
         <span class="dash-shimmer acc-sk acc-sk--foot" />
@@ -39,14 +42,10 @@
     </div>
 
     <div v-else class="acc-cards__list">
-      <article
-        v-for="row in rows"
-        :key="row.key"
-        class="acc-card"
-        tabindex="0"
-        @click="$emit('view', row)"
-        @keydown.enter.prevent="$emit('view', row)"
-      >
+      <!-- The card itself does nothing on click. Its two actions live in the
+           row menu, and there is no pointer cursor or hover to imply otherwise.
+           A card's record is two clicks now, not one. -->
+      <article v-for="row in rows" :key="row.key" class="acc-card">
         <!-- The uid leads: on a phone it is the line that identifies the card,
              and the person holding it is the answer to the question below. -->
         <div class="acc-card__top">
@@ -54,15 +53,33 @@
             type="button"
             class="uid"
             :aria-label="`Copy card UID ${row.uid}`"
-            @click.stop="$emit('copy', row)"
+            @click="$emit('copy', row)"
           >
             <span class="uid__text dash-num">{{ formatUid(row.uid) }}</span>
             <q-icon name="o_content_copy" size="13px" class="uid__icon" />
           </button>
-          <span class="dash-chip" :class="chipClass(row.status.tone)">
-            <span class="dash-chip__dot" />
-            {{ row.status.label }}
-          </span>
+          <div class="acc-card__top-right">
+            <span class="dash-chip" :class="chipClass(row.status.tone)">
+              <span class="dash-chip__dot" />
+              {{ row.status.label }}
+            </span>
+
+            <q-btn
+              flat
+              round
+              dense
+              icon="more_horiz"
+              size="12px"
+              class="acc-card__menu-btn"
+              :aria-label="`Actions for card ${row.uid}`"
+            >
+              <AccessCardRowMenu
+                :card="row"
+                @view="$emit('view', row)"
+                @assign="$emit('assign', row)"
+              />
+            </q-btn>
+          </div>
         </div>
 
         <div class="acc-card__holder">
@@ -84,17 +101,6 @@
             <q-icon name="o_person_off" size="15px" />
             Not yet assigned
           </span>
-
-          <q-btn
-            flat
-            dense
-            no-caps
-            size="12px"
-            :icon="row.assigned ? 'o_swap_horiz' : 'o_person_add'"
-            :label="row.assigned ? 'Reassign' : 'Assign'"
-            class="acc-card__action"
-            @click.stop="$emit('assign', row)"
-          />
         </div>
 
         <!-- The mismatch between status and holder, said in words. It is the
@@ -140,6 +146,7 @@
  * `composables/utils/accessCards.js` — which is the point of that module: the
  * two renderers cannot end up describing the same card differently.
  */
+import AccessCardRowMenu from '@/components/pages/AccessCards/AccessCardRowMenu.vue'
 import { chipClass, formatUid } from 'src/composables/utils/accessCards'
 
 defineProps({
@@ -167,11 +174,6 @@ defineEmits(['view', 'assign', 'copy', 'clear-filters'])
   border: 1px solid var(--dash-line);
   border-radius: var(--dash-r-lg);
   background: var(--dash-surface);
-  cursor: pointer;
-}
-.acc-card:focus-visible {
-  outline: 2px solid var(--dash-accent);
-  outline-offset: 2px;
 }
 
 /* ── Header row ── */
@@ -245,11 +247,22 @@ defineEmits(['view', 'assign', 'copy', 'clear-filters'])
   font-style: italic;
   color: var(--dash-ink-4);
 }
-.acc-card__action {
+/* The status chip and the row menu share the right end of the header row, so
+   the uid keeps the whole left edge to itself. Same pairing as EmployeeCardList. */
+.acc-card__top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
-  color: var(--dash-accent);
-  font-weight: 500;
-  padding: 0 6px;
+}
+
+/* Same treatment as EmployeeTable's row menu: quiet at rest, ink on hover. */
+.acc-card__menu-btn {
+  color: var(--dash-ink-4);
+}
+.acc-card__menu-btn:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-100);
 }
 
 /* ── Alert ── */
@@ -321,6 +334,14 @@ defineEmits(['view', 'assign', 'copy', 'clear-filters'])
 .acc-sk--chip {
   width: 72px;
   height: 18px;
+  flex: none;
+}
+/* Stands in for the round row-menu button, so the status chip lands where it
+   will once the rows are really there. */
+.acc-sk--menu {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   flex: none;
 }
 .acc-sk--line {
