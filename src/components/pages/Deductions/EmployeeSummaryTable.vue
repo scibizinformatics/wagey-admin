@@ -36,7 +36,19 @@
       </template>
 
       <template v-slot:body="props">
-        <q-tr :props="props" class="dash-qtable__row">
+        <!-- The whole row is the disclosure, not just the chevron: a reader
+             reaching for an employee's figures aims at the figures. Cursor and
+             focus ring come from `dash-qtable__row--clickable` in the design
+             system, so the two cannot drift apart. -->
+        <q-tr
+          :props="props"
+          class="dash-qtable__row dash-qtable__row--clickable"
+          tabindex="0"
+          :aria-label="rowLabel(props.row)"
+          :aria-expanded="isOpen(props.row)"
+          @click="toggle(props.row)"
+          @keydown="onRowKey($event, props.row)"
+        >
           <q-td auto-width class="cell-expand">
             <q-btn
               flat
@@ -47,18 +59,28 @@
               class="expander"
               :aria-label="isOpen(props.row) ? 'Hide breakdown' : 'Show breakdown'"
               :aria-expanded="isOpen(props.row)"
-              @click="toggle(props.row)"
+              @click.stop="toggle(props.row)"
             />
           </q-td>
 
           <q-td key="employee_name" :props="props">
             <div class="who">
+              <!-- A photograph when the name resolves to exactly one roster
+                   employee who has one, otherwise initials on that person's
+                   identity colour — the same construction as the Card taps,
+                   Audit and Access cards tables. The contributions endpoint
+                   carries no picture field, so the page decorates each row from
+                   the roster; see `avatarFor`. -->
+              <q-avatar v-if="avatarOf(props.row).pictureUrl" size="28px" class="who__avatar">
+                <img :src="avatarOf(props.row).pictureUrl" :alt="props.row.employee_name" />
+              </q-avatar>
               <q-avatar
+                v-else
                 size="28px"
                 class="who__avatar"
-                :style="{ background: getAvatarColor(props.row.employee_name) }"
+                :style="{ background: avatarOf(props.row).color }"
               >
-                <span class="who__initials">{{ getInitials(props.row.employee_name) }}</span>
+                <span class="who__initials">{{ avatarOf(props.row).initials }}</span>
               </q-avatar>
               <span class="who__name">{{ props.row.employee_name }}</span>
             </div>
@@ -208,11 +230,17 @@
  * Column staging matches the annual table: the combined employer+employee total
  * drops at 1440 and the deduction-case count at 1280; below 1024 the page swaps
  * in the card list.
+ *
+ * The row is the disclosure. It was the chevron alone, which meant the control
+ * announcing the breakdown was a 28px target in the far left of a table eight
+ * columns wide — the figures themselves were inert. Activating anywhere on the
+ * row now opens it, with Enter and Space on the keyboard; the chevron stays as
+ * the sign of what the row does.
  */
 import { computed, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { formatCurrency } from 'src/composables/utils/format'
-import { getAvatarColor, getInitials } from 'src/composables/utils/attendance'
+import { avatarFor } from 'src/composables/utils/employee'
 import {
   balanceOf,
   collectedPct,
@@ -230,6 +258,14 @@ const props = defineProps({
   isFiltered: { type: Boolean, default: false },
   /** e.g. "August 2026" — named in the expanded panel so the figures have a period. */
   periodLabel: { type: String, default: '' },
+  /**
+   * Name-indexed employee roster from `buildEmployeeNameIndex`, for the faces.
+   * The contributions endpoint names a person and carries no picture, so this is
+   * the one thing that can put a photograph against a row. Absent — because the
+   * roster is decoration and deliberately fails quietly — every avatar falls
+   * back to initials.
+   */
+  employeeIndex: { type: Object, default: null },
 })
 
 defineEmits(['clear-filters'])
@@ -327,10 +363,50 @@ function toggle(row) {
   openKey.value = isOpen(row) ? null : keyOf(row)
 }
 
-// A new period is a different set of figures, so an open panel from the previous
-// one should not stay open over the top of it.
+/**
+ * Enter and Space, the two keys that activate anything.
+ *
+ * Handled here rather than with `@keydown.enter.prevent` on the row, because
+ * that modifier would call preventDefault on every keypress the row sees and
+ * swallow it from the chevron button inside it — the one control in the row
+ * that is focusable on its own. The `currentTarget` check is the same guard:
+ * Space pressed on the chevron belongs to the chevron.
+ */
+function onRowKey(event, row) {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  if (event.target !== event.currentTarget) return
+  event.preventDefault()
+  toggle(row)
+}
+
+/**
+ * What activating a row does, for anyone not looking at it. Without this a
+ * screen reader reads the cells and says nothing about the disclosure, which
+ * is the entire reason the row is clickable.
+ */
+function rowLabel(row) {
+  const name = row.employee_name || 'this employee'
+  return isOpen(row)
+    ? `Hide the contribution breakdown for ${name}`
+    : `Show the contribution breakdown for ${name}`
+}
+
+function avatarOf(row) {
+  return avatarFor(props.employeeIndex, row.employee_name)
+}
+
+/**
+ * A new period is a different set of figures, so an open panel from the previous
+ * one should not stay open over the top of it.
+ *
+ * Watched on the set of employees rather than on `rows` itself. `rows` is a new
+ * array every time the page re-decorates it from the roster, so an identity
+ * watch would also close a panel the reader had just opened — the contributions
+ * and the roster resolve in parallel, and photographs arriving late is not a
+ * reason to throw away what they were reading.
+ */
 watch(
-  () => props.rows,
+  () => props.rows.map(keyOf).join('|'),
   () => {
     openKey.value = null
   },
@@ -401,7 +477,7 @@ function pctOf(row) {
 .who {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   min-width: 0;
 }
 
