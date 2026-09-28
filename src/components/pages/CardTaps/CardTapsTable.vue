@@ -37,12 +37,23 @@
           </q-td>
           <q-td v-else key="employee" :props="props" class="ct-table__td">
             <div class="ct-who">
+              <!-- A face when the name resolves to exactly one roster employee
+                   who has one, otherwise initials on their identity colour —
+                   the same construction as the Audit table. -->
               <q-avatar
-                size="32px"
+                v-if="props.row.avatar?.pictureUrl"
+                size="34px"
                 class="ct-who__avatar"
-                :style="{ background: getAvatarColor(props.row.employee_name) }"
               >
-                <span class="ct-who__initials">{{ getInitials(props.row.employee_name) }}</span>
+                <img :src="props.row.avatar.pictureUrl" :alt="props.row.employee_name" />
+              </q-avatar>
+              <q-avatar
+                v-else
+                size="34px"
+                class="ct-who__avatar"
+                :style="{ background: props.row.avatar?.color }"
+              >
+                <span class="ct-who__initials">{{ props.row.avatar?.initials || '?' }}</span>
               </q-avatar>
               <span class="ct-who__name">{{ props.row.employee_name }}</span>
             </div>
@@ -119,7 +130,6 @@
  * clicked, exactly as AttendanceTable does.
  */
 import { computed } from 'vue'
-import { getInitials, getAvatarColor } from '@/composables/utils/attendance'
 import { tapCount } from '@/composables/utils/cardTaps'
 
 const props = defineProps({
