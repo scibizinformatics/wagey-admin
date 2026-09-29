@@ -106,6 +106,7 @@
               :loading="loading || resolvingGroups"
               :action-loading="actionLoading"
               :submitting="leaveSubmitting"
+              :recommend-loading="recommendLoading"
               :selected-ids="selectedLeaveIds"
               :status-filter="statusFilter"
               :search="searchTerm"
@@ -120,6 +121,8 @@
               @view-details="openLeaveDetails"
               @approve="approveRequest"
               @reject="rejectRequest"
+              @recommend-rejection="openLeaveRecommendation"
+              @remove-recommendation="clearLeaveRecommendation"
               @bulk-approve="bulkApproveLeave"
               @bulk-reject="bulkRejectLeave"
             />
@@ -214,6 +217,12 @@
         @approve="approveRequest"
         @reject="rejectRequest"
       />
+      <RequestLeaveRecommendModal
+        v-model="showLeaveRecommendModal"
+        :request="selectedRecommendRequest"
+        :submitting="recommendSubmitting"
+        @submit="submitLeaveRecommendation"
+      />
 
       <RequestCaApprovalModal
         v-model="caApprovalModal"
@@ -272,6 +281,7 @@ import RequestLeaveTable from 'src/components/pages/Request/RequestLeaveTable.vu
 import RequestOvertimeTable from 'src/components/pages/Request/RequestOvertimeTable.vue'
 import RequestCashAdvanceTable from 'src/components/pages/Request/RequestCashAdvanceTable.vue'
 import RequestLeaveDetailModal from 'src/components/pages/Request/RequestLeaveDetailModal.vue'
+import RequestLeaveRecommendModal from 'src/components/pages/Request/RequestLeaveRecommendModal.vue'
 import RequestCaApprovalModal from 'src/components/pages/Request/RequestCaApprovalModal.vue'
 import RequestCaViewModal from 'src/components/pages/Request/RequestCaViewModal.vue'
 import RequestOvertimeDetailModal from 'src/components/pages/Request/RequestOvertimeDetailModal.vue'
@@ -286,7 +296,11 @@ import {
   normalizeSwapRequests,
 } from 'src/composables/utils/swapRequests'
 import { normalizeOvertimeRequests } from 'src/composables/utils/overtimeRequests'
-import { leaveRequestDurationLabel } from 'src/composables/utils/leaveRequests'
+import {
+  bulkLeaveOutcome,
+  bulkLeaveOutcomeToast,
+  leaveRequestDurationLabel,
+} from 'src/composables/utils/leaveRequests'
 import { useAdminPayrollGroups } from 'src/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from 'src/composables/page/useEmployeePayoutGroup'
 import { useToast } from 'src/composables/useToast'
@@ -461,6 +475,17 @@ const selectedLeaveRequest = ref(null)
 const showLeaveDetails = ref(false)
 const selectedLeaveIds = ref(new Set())
 const leaveSubmitting = ref(new Set())
+// The rejection recommendation is its own record of the request, separate from
+// `selectedLeaveRequest` (which the details dialog owns) so opening this dialog
+// cannot disturb one that is already on screen, and separate again from the
+// selection so recommending a request is not something a pending batch can
+// accidentally sweep in.
+const selectedRecommendRequest = ref(null)
+const showLeaveRecommendModal = ref(false)
+const recommendSubmitting = ref(false)
+// Per-row, in the same `verb-id` shape `actionLoading` uses, so the table's
+// `isBusy` can tell which request is mid-write.
+const recommendLoading = ref(null)
 
 // ===== OVERTIME STATE =====
 // One flat queue for the whole company, the same shape the leave tab uses.
@@ -762,6 +787,14 @@ const fetchLeaveRequests = async () => {
       // row and the details modal stay in step.
       duration: leaveRequestDurationLabel(item),
       reason: item.reason,
+      // The list echoes both recommendation fields, so the row marker and the
+      // menu's recommend/remove wording are read from the server rather than
+      // guessed at locally. Compared as a strict boolean because the serializer
+      // may send a truthy non-boolean, and a string "false" would otherwise
+      // render every row as flagged.
+      recommendedForRejection:
+        item.is_recommended_for_rejection === true && item.status?.toLowerCase() === 'pending',
+      rejectionNote: item.rejection_recommendation_note || '',
       leavePicture: item.leave_picture || null,
       submittedDate: item.submitted_at,
       approvedByName: item.approved_by_name || '',
@@ -1004,6 +1037,14 @@ const submitOvertimeAdvance = async (payload) => {
 const openApplyLeaveModal = async () => {
   applyLeaveEmployeeOptions.value = []
   applyLeaveTypes.value = []
+  // The apply endpoint is company-scoped, so a request built without a company
+  // is a request that cannot be scoped. Refusing to open the dialog is better
+  // than opening one whose submit can only fail.
+  const companyId = selectedCompany.value
+  if (!companyId) {
+    toast.error('Select a company before assigning leave', { icon: 'error' })
+    return
+  }
   try {
     await fetchEmployees({ force: true })
     applyLeaveEmployeeOptions.value = employees.value.map((e) => ({
@@ -1013,14 +1054,11 @@ const openApplyLeaveModal = async () => {
         `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
         'Unknown',
     }))
-    const companyId = selectedCompany.value
-    if (companyId) {
-      const res = await api.get('/attendance/leave-types/', {
-        params: { company: companyId },
-      })
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || res.data?.results || []
-      applyLeaveTypes.value = data
-    }
+    const res = await api.get('/attendance/leave-types/', {
+      params: { company: companyId },
+    })
+    const data = Array.isArray(res.data) ? res.data : res.data?.data || res.data?.results || []
+    applyLeaveTypes.value = data
   } catch {
     /* silent */
   }
@@ -1055,11 +1093,23 @@ const filterApplyLeaveEmployees = (val) => {
 }
 
 const submitApplyLeave = async (payload) => {
+  // Re-resolved here rather than captured when the dialog opened: the company
+  // can be switched while the dialog is up, and a request booked against the
+  // company that was selected when it opened is a request in the wrong ledger.
+  const companyId = selectedCompany.value
+  if (!companyId) {
+    toast.error('Select a company before assigning leave', { icon: 'error' })
+    return
+  }
   applyLeaveSubmitting.value = true
   try {
+    // `days` replaces the start/end/hours the endpoint used to take, and
+    // carries each date's half-day flag. No `status` is sent: the server's
+    // default decides whether the request waits for review, and forcing it
+    // here made an admin-assigned leave skip the queue the same screen is for.
     await api.post('/attendance/leave/apply-for-employee/', {
+      company_id: companyId,
       ...payload,
-      status: 'approved',
     })
     toast.success('Leave assigned successfully', { icon: 'check_circle' })
     showApplyLeaveModal.value = false
@@ -1255,6 +1305,94 @@ const rejectRequest = async (request) => {
   }
 }
 
+// ===== LEAVE: REJECTION RECOMMENDATION =====
+//
+// Advisory, not a decision. It writes `is_recommended_for_rejection` and a note
+// against the request and leaves `status` at `pending`, so a recommended
+// request is still approvable and still appears in the pending queue. That is
+// why it has its own endpoint rather than a status on `leave-approval`: the two
+// are not the same act, and conflating them would let one be mistaken for the
+// other.
+
+/**
+ * Flag a request as recommended for rejection, optionally with a note.
+ *
+ * Refetched rather than patched into `leaveList` because the flag is server
+ * state that a reviewer of this queue reads back through two surfaces — the row
+ * marker and the menu's own wording — and a local write that disagreed with the
+ * server for even one render is how a request ends up flagged on screen and
+ * unflagged on the ledger.
+ */
+const submitLeaveRecommendation = async (note) => {
+  const request = selectedRecommendRequest.value
+  if (!request) return
+  recommendSubmitting.value = true
+  recommendLoading.value = `recommend-${request.id}`
+  try {
+    await api.patch(`/attendance/leave-recommendation/${request.id}/`, {
+      is_recommended_for_rejection: true,
+      rejection_recommendation_note: (note || '').trim(),
+    })
+    showLeaveRecommendModal.value = false
+    selectedRecommendRequest.value = null
+    toast.success('Rejection recommended', { icon: 'o_flag' })
+    await fetchLeaveRequests()
+  } catch (e) {
+    const errorMessage = extractErrorMessage(e, 'Failed to recommend rejection')
+    toast.error(errorMessage, { icon: 'error' })
+  } finally {
+    recommendSubmitting.value = false
+    recommendLoading.value = null
+  }
+}
+
+/**
+ * Withdraw a recommendation.
+ *
+ * Confirmed rather than immediate, and the note is cleared with the flag: a
+ * note that outlives the recommendation it justified is an accusation left
+ * standing against a request nobody is now recommending against.
+ *
+ * No dialog here even though setting one does — there is nothing to type, and
+ * an empty textarea in front of a confirm button is a second click for no
+ * reason.
+ */
+const clearLeaveRecommendation = (request) => {
+  if (!request) return
+  $q.dialog({
+    title: 'Remove rejection recommendation?',
+    message:
+      'The request stays pending. The note explaining the recommendation is removed with it.',
+    ok: { label: 'Remove', color: 'negative', unelevated: true },
+    cancel: { label: 'Cancel', flat: true },
+  }).onOk(async () => {
+    recommendLoading.value = `unrecommend-${request.id}`
+    try {
+      await api.patch(`/attendance/leave-recommendation/${request.id}/`, {
+        is_recommended_for_rejection: false,
+        rejection_recommendation_note: '',
+      })
+      toast.success('Rejection recommendation removed')
+      await fetchLeaveRequests()
+    } catch (e) {
+      const errorMessage = extractErrorMessage(e, 'Failed to remove the recommendation')
+      toast.error(errorMessage, { icon: 'error' })
+    } finally {
+      recommendLoading.value = null
+    }
+  })
+}
+
+const openLeaveRecommendation = (request) => {
+  selectedRecommendRequest.value = request
+  // The row may be in the pending batch, and that batch's buttons are disabled
+  // while a bulk decision is unavailable. Selecting stays available so a
+  // reviewer can still narrow the queue, so this is where a stale selection is
+  // cleared instead — not by making selection itself unavailable.
+  clearLeaveSelection()
+  showLeaveRecommendModal.value = true
+}
+
 const openLeaveDetails = (request) => {
   selectedLeaveRequest.value = request
   showLeaveDetails.value = true
@@ -1279,16 +1417,22 @@ const clearLeaveSelection = () => {
 }
 
 /**
- * Approve or reject every selected leave request, and say what actually
- * happened.
+ * Approve or reject every selected leave request in one call, and say what
+ * actually happened.
  *
- * Same shape as `bulkDecideOvertime`: the endpoint decides one request at a
- * time, so a bulk action is N calls and any one of them can be refused on its
- * own. Each request gets its own try/catch, the outcome is counted, the queue
- * is always re-read because the server has moved for whatever succeeded, and
- * the closing toast distinguishes all / some / none. Unlike the single-row
- * approve/reject above (which tolerate a healthy-looking 500), the bulk path
- * treats an error as an error — a batch must not wipe a real failure's signal.
+ * This used to loop the single-row endpoint once per selected request, with a
+ * try/catch each and the outcome counted by hand. It no longer can: the batch
+ * endpoint decides the whole run itself and — this is the part the old loop
+ * could not express — it refuses to action a request carrying a rejection
+ * recommendation, reporting it as `skipped_recommended` rather than as a
+ * failure. That makes three outcomes, and `bulkLeaveOutcome` reads all three.
+ *
+ * The per-row `status === 500` tolerance the loop needed is gone. That leniency
+ * existed because `/attendance/leave-approval/{id}/` is *known* to answer 500
+ * on a write that lands; carrying it here would mask a genuine failure of an
+ * endpoint whose contract is a 200 with a summary. A 500 that still carries a
+ * summary is honoured anyway, because that body is the outcome — the tolerance
+ * is now evidence-based rather than status-code-based.
  */
 const LEAVE_BULK_ACTIONS = {
   approved: {
@@ -1309,68 +1453,98 @@ const LEAVE_BULK_ACTIONS = {
   },
 }
 
+/**
+ * How many of the selected requests the server will skip.
+ *
+ * Counted from the rows already on screen rather than learned afterwards: the
+ * list payload carries the flag, so the confirm dialog can say which of the
+ * chosen requests carry a recommendation before the reviewer commits, instead of
+ * leaving them to read the same fact for the first time in the closing toast.
+ */
+const recommendedSelectedCount = () => {
+  const selected = selectedLeaveIds.value
+  return filteredLeaveRequests.value.filter(
+    (row) => selected.has(row.id) && row.recommendedForRejection,
+  ).length
+}
+
 const bulkDecideLeave = (status) => {
   const spec = LEAVE_BULK_ACTIONS[status]
   const ids = Array.from(selectedLeaveIds.value)
   if (!ids.length) return
 
+  const recommended = recommendedSelectedCount()
+  const prompt = recommended
+    ? `${spec.prompt(ids.length)} ${recommended} of these are recommended for rejection and will be skipped.`
+    : spec.prompt(ids.length)
+
   $q.dialog({
     title: spec.title,
-    message: spec.prompt(ids.length),
+    message: prompt,
     ok: spec.ok,
     cancel: { label: 'Cancel', flat: true },
   }).onOk(async () => {
     leaveSubmitting.value = new Set(ids)
-    const done = []
-    let reason = ''
+
+    let outcome = null
+    let failure = null
 
     try {
-      for (const id of ids) {
-        try {
-          await api.patch(`/attendance/leave-approval/${id}/`, { status })
-          done.push(id)
-        } catch (e) {
-          if (e.response?.status === 500) {
-            // The leave-approval endpoint answers 500 even when the action
-            // lands — the single-row approve/reject above already treat this
-            // as success, so a batch must too, or every row in a successful
-            // run reports as failed.
-            done.push(id)
-            continue
-          }
-          // First refusal wins the caption: they are usually the same reason,
-          // and a toast is not the place for ten of them.
-          reason = reason || extractErrorMessage(e, `Could not ${spec.verb} this request`)
-          console.error(
-            `[Requests] bulk ${spec.verb} failed for leave ${id}:`,
-            e?.response?.data ?? e,
-          )
-        }
+      const res = await api.patch('/attendance/leave-approval/bulk/', {
+        leave_ids: ids,
+        status,
+      })
+      const read = bulkLeaveOutcome(res.data)
+      if (read.readable) {
+        outcome = read
+      } else {
+        failure = new Error('The bulk leave response carried no summary')
+      }
+    } catch (e) {
+      // A 500 that still carries a summary is that summary: the body is a
+      // truthful account of what the server did, and discarding it in favour of
+      // the status code would report a completed batch as a dead one. A bodyless
+      // 500 — or any other status — is a real failure.
+      const recovered = e?.response ? bulkLeaveOutcome(e.response.data) : null
+      if (recovered?.readable) {
+        outcome = recovered
+      } else {
+        failure = e
       }
     } finally {
+      // The Set is what every affected row's spinner reads, so it is filled for
+      // the whole run rather than per id — one call, one span of "busy".
       leaveSubmitting.value = new Set()
       clearLeaveSelection()
     }
 
-    // Unconditional: the server state has moved for everything in `done`, so a
-    // partial run that left the table alone is exactly how approved rows kept
-    // showing as pending.
+    // Unconditional, and before the toast: the server has moved for everything
+    // in `updated`, so a partial run that left the table alone is exactly how
+    // approved rows kept showing as pending.
     await fetchLeaveRequests().catch((e) =>
       console.error('[Requests] refetch after bulk leave failed:', e),
     )
 
-    const failed = ids.length - done.length
-    if (done.length && failed) {
-      toast.warning(`${done.length} ${spec.past}, ${failed} could not be.`, {
-        caption: reason || undefined,
+    if (!outcome) {
+      toast.error(extractErrorMessage(failure, `Failed to ${spec.verb} these leave requests`), {
+        icon: 'error',
       })
-    } else if (done.length) {
-      toast.success(`${done.length} leave request${done.length === 1 ? '' : 's'} ${spec.past}`, {
-        icon: spec.icon,
-      })
-    } else {
-      toast.error(reason || `None of these requests could be ${spec.past}.`)
+      return
     }
+
+    const accounted = outcome.updated + outcome.skipped + outcome.failed
+    if (accounted !== ids.length) {
+      console.warn(
+        `[Requests] bulk ${spec.verb} for leave accounted for ${accounted} of ${ids.length} sent:`,
+        outcome,
+      )
+    }
+
+    const notice = bulkLeaveOutcomeToast(outcome, ids.length, spec.past)
+    toast[notice.type](notice.message, {
+      ...(notice.caption ? { caption: notice.caption } : {}),
+      ...(notice.type === 'success' ? { icon: spec.icon } : {}),
+    })
   })
 }
 
