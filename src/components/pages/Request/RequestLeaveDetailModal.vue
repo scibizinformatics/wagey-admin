@@ -69,6 +69,23 @@
             <div class="dash-modal__section-title">Reason</div>
             <div class="dash-modal__note">{{ request.reason }}</div>
           </div>
+          <!--
+            A recommendation against the request rather than an answer about it,
+            so it sits below the status it qualifies and says plainly that the
+            request is still open. A reviewer who finds this without that line
+            could reasonably read it as the request having already been rejected.
+          -->
+          <div v-if="request.recommendedForRejection" class="dash-modal__section">
+            <div class="dash-modal__section-title">Rejection recommendation</div>
+            <div class="dash-chip dash-chip--warn">Rejection recommended</div>
+            <div v-if="request.rejectionNote" class="dash-modal__note">
+              {{ request.rejectionNote }}
+            </div>
+            <div class="dash-modal__meta">
+              A recommendation only. The request is still pending and can still be approved.
+            </div>
+          </div>
+
           <div v-if="request.message" class="dash-modal__section">
             <div class="dash-modal__section-title">Additional message</div>
             <div class="dash-modal__note">{{ request.message }}</div>
