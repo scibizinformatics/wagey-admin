@@ -180,9 +180,25 @@
               </q-td>
 
               <q-td key="status" :props="props" class="grid-cell cell-status">
-                <span :class="['status-pill', statusPillClass(props.row.status)]">
-                  {{ capitalizeStatus(props.row.status) }}
-                </span>
+                <!--
+                  The pill answers with the request's status; the recommendation
+                  is a warn-toned annotation about the answer, kept on one line so
+                  neither badge has to read as the other. On a pending row the
+                  pill is already amber, so the flag keeps its icon — that is
+                  what marks it as advice rather than a second status.
+                -->
+                <div class="status-inline">
+                  <span :class="['status-pill', statusPillClass(props.row.status)]">
+                    {{ capitalizeStatus(props.row.status) }}
+                  </span>
+                  <div
+                    v-if="props.row.recommendedForRejection"
+                    class="dash-chip dash-chip--warn reject-flag"
+                  >
+                    <q-icon name="o_flag" size="13px" />
+                    Rejection recommended
+                  </div>
+                </div>
               </q-td>
 
               <q-td key="actions" :props="props" class="grid-cell cell-actions">
@@ -230,6 +246,11 @@ const props = defineProps({
   // numbers them, but a string id would compare just as well.
   payrollGroupFilter: { type: [Number, String], default: null },
   payrollGroupOptions: { type: Array, default: () => [] },
+  // Which row a rejection recommendation is in flight for, so the row's spinner
+  // covers it. Separate from `actionLoading` because a recommendation is a
+  // different endpoint from approve/reject, and one of the two can be busy while
+  // the other is not — a single slot would blank the wrong spinner.
+  recommendLoading: String,
 })
 defineEmits([
   'update:statusFilter',
@@ -241,6 +262,8 @@ defineEmits([
   'view-details',
   'approve',
   'reject',
+  'recommend-rejection',
+  'remove-recommendation',
   'bulk-approve',
   'bulk-reject',
 ])
@@ -279,6 +302,26 @@ const rowActions = (row) => {
       { key: 'approve', label: 'Approve', icon: 'o_check_circle', tone: 'good' },
       { key: 'reject', label: 'Reject', icon: 'o_cancel', tone: 'danger' },
     )
+    // Advisory, and it is the only item here that describes state rather than
+    // performing an act, so it reads as "Recommended for rejection" — a noun
+    // phrase, not a verb that looks like a third way to decide the request. The
+    // wording is what keeps it from being read as a synonym for Reject, since
+    // both are in this menu and the request can still be approved afterwards.
+    actions.push(
+      row.recommendedForRejection
+        ? {
+            key: 'remove-recommendation',
+            label: 'Remove rejection recommendation',
+            icon: 'o_flag',
+            tone: 'danger',
+          }
+        : {
+            key: 'recommend-rejection',
+            label: 'Recommend rejection',
+            icon: 'o_flag',
+            tone: 'danger',
+          },
+    )
   }
   return actions
 }
@@ -290,6 +333,8 @@ const rowActions = (row) => {
 const isBusy = (row) =>
   props.actionLoading === `approve-${row.id}` ||
   props.actionLoading === `reject-${row.id}` ||
+  props.recommendLoading === `recommend-${row.id}` ||
+  props.recommendLoading === `unrecommend-${row.id}` ||
   props.submitting.has(row.id)
 
 const actionableCount = computed(() => props.rows.filter((row) => row.status === 'pending').length)
@@ -406,8 +451,49 @@ const statusPillClass = (status) => {
 .cell-period {
   width: 190px;
 }
-.cell-status {
+/* The one leave column without an explicit width used to be Reason, so the
+   table handed it every leftover pixel and a wide empty run sat between the
+   ellipsized note and the Status column. Fixed it like the rest — the note
+   still truncates with the full text on hover. */
+.cell-reason {
   width: 130px;
+}
+/* "Rejection recommended" sits beside the status pill on one line, so the
+   column carries a pill's worth of room plus the flag's: about 218px of
+   content, then the 8px gutters below. The reason column pays for it. */
+.cell-status {
+  width: 228px;
+}
+/* The shared `dash-qtable` gives every cell 12px sides; this cell's content is
+   the flag chip, so it gets a narrower gutter and the chip the full width. The
+   `.q-table` in the chain raises the specificity past `dash-qtable .q-table td`,
+   so this override holds without `!important`. */
+.dash-qtable .q-table .cell-status {
+  padding-right: 8px;
+  padding-left: 8px;
+}
+/* The Reason column pays for the status column's width with its gutters too —
+   same 8px sides, so the two columns read as one unit and the flag keeps the
+   room the status override bought it. */
+.dash-qtable .q-table .cell-reason {
+  padding-right: 8px;
+  padding-left: 8px;
+}
+/* One line, pill left then flag right, both centred on the row's middle so
+   neither badge claims to be the other. Both stay at natural width — a chip
+   that shrank would clip its label, so the column (not the row) absorbs any
+   overflow. */
+.status-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* A recommendation is an annotation on the request, not a second status — its
+   own `dash-chip--warn` supplies the colour, and it keeps its base nowrap so
+   the pair stays on one line. */
+.reject-flag {
+  font-size: 11px;
+  flex-shrink: 0;
 }
 /* One 30px menu trigger, so the column only has to clear its own header
    label. It used to be sized for up to three side-by-side buttons. */
