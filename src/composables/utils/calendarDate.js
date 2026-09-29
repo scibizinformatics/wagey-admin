@@ -73,6 +73,39 @@ export function shiftIso(iso, days) {
 }
 
 /**
+ * Every calendar day from one ISO date to another, inclusive of both ends.
+ *
+ * Built by stepping `shiftIso` rather than by looping `date.setDate` on a Date,
+ * for the reason `fromIso` exists: a range assembled from UTC parsing reports
+ * one day short at the start in negative-offset timezones, which for a leave
+ * request means silently sending a day the admin did not ask for.
+ *
+ * `maxDays` is a guard, not a truncation. A span past it returns `null` — which
+ * is a different answer from the `[]` of a reversed or absent range, so the
+ * caller can say "that range is too long" instead of quietly submitting a
+ * shortened request.
+ *
+ * @param {string} startIso - inclusive, `YYYY-MM-DD`
+ * @param {string} endIso - inclusive, `YYYY-MM-DD`
+ * @param {number} maxDays - longest span accepted before `null`
+ * @returns {string[]|null} ascending ISO dates, `[]` when the range is empty or
+ *   reversed, `null` when it is longer than `maxDays`
+ */
+export function isoRange(startIso, endIso, maxDays = 60) {
+  if (!startIso || !endIso) return []
+  if (isNaN(fromIso(startIso).getTime()) || isNaN(fromIso(endIso).getTime())) return []
+
+  const days = []
+  let cursor = startIso
+  while (cursor <= endIso) {
+    days.push(cursor)
+    if (days.length > maxDays) return null
+    cursor = shiftIso(cursor, 1)
+  }
+  return days
+}
+
+/**
  * The first day of the month an ISO date falls in, as `YYYY-MM-DD`.
  *
  * Built from the local calendar fields rather than by string-slicing, so it is
