@@ -82,3 +82,112 @@
   color: var(--dash-warn);
   font-weight: 500;
 }
+
+/* ===== Apply-leave day list =====
+   The endpoint books a leave request as a `days` array, so the apply dialog
+   shows the entries that array will carry and lets each one be a half day. A
+   start/end pair plus a single switch could not express a request that mixes
+   the two, which is the ordinary case.
+
+   Only RequestApplyLeaveModal uses these, but the file is `scoped` per
+   component, so the names cost nothing to keep next to the rest of the
+   request-page chrome. */
+.day-list {
+  display: flex;
+  flex-direction: column;
+  /* Long enough for a fortnight to read without scrolling, short enough that a
+     sixty-day request does not push the footer off the card. */
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-surface);
+}
+.day-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--dash-line-soft);
+}
+.day-list__row:last-child {
+  border-bottom: none;
+}
+.day-list__date {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dash-ink);
+  min-width: 0;
+}
+/* The raw ISO date, kept quiet beside the readable one. Two spellings of the
+   same day is not redundancy when one of them is the exact string the payload
+   carries and the other is a rendering of it. */
+.day-list__iso {
+  font-size: 12px;
+  color: var(--dash-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.day-list__date-icon {
+  color: var(--dash-ink-4);
+  align-self: center;
+}
+.day-list__toggle {
+  flex: 0 0 auto;
+}
+/* The Full/Half control is a segmented switch, so it is built like the
+   request page's own view toggle — a hairline rail with a raised selected
+   segment — rather than a bare `q-btn-toggle` in Quasar's default primary fill,
+   which would put the loudest colour on screen in a form where the selection is
+   one of several facts. */
+.day-list__toggle :deep(.q-btn) {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: var(--dash-r-sm);
+  background: transparent !important;
+  color: var(--dash-ink-3) !important;
+  box-shadow: none;
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
+}
+.day-list__toggle :deep(.q-btn:hover:not(.q-btn--active)) {
+  background: rgba(255, 255, 255, 0.6) !important;
+  color: var(--dash-ink-2) !important;
+}
+.day-list__toggle :deep(.q-btn--active) {
+  background: var(--dash-surface) !important;
+  border-color: var(--dash-line);
+  color: var(--dash-ink) !important;
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
+}
+.day-list__empty {
+  padding: 14px 12px;
+  border: 1px dashed var(--dash-line);
+  border-radius: var(--dash-r-sm);
+  background: var(--dash-n-25);
+  color: var(--dash-ink-3);
+  font-size: 13px;
+  text-align: center;
+}
+.day-list__total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.day-list__total-label {
+  color: var(--dash-ink-3);
+}
+.day-list__total-value {
+  color: var(--dash-ink);
+  font-weight: 600;
+}
