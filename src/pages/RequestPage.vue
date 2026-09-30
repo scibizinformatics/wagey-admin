@@ -103,6 +103,7 @@
           <q-tab-panel name="leave" class="tab-panel-content">
             <RequestLeaveTable
               :rows="filteredLeaveRequests"
+              :employee-index="employeeIndex"
               :loading="loading || resolvingGroups"
               :action-loading="actionLoading"
               :submitting="leaveSubmitting"
@@ -131,6 +132,7 @@
           <q-tab-panel name="overtime" class="tab-panel-content">
             <RequestOvertimeTable
               :rows="filteredOvertimeRequests"
+              :employee-index="employeeIndex"
               :loading="overtimeLoading || resolvingGroups"
               :submitting="overtimeSubmitting"
               :selected-ids="selectedOvertimeIds"
@@ -159,6 +161,7 @@
               <RequestCashAdvanceTable
                 v-if="caViewMode === 'all'"
                 :rows="filteredCaRequests"
+                :employee-index="employeeIndex"
                 :loading="loading || resolvingGroups"
                 :ca-filter-status="caFilterStatus"
                 :ca-status-options="caStatusOptions"
@@ -176,6 +179,7 @@
               <RequestCashAdvanceCutoff
                 v-else
                 :logs="caDisbursementLogs"
+                :employee-index="employeeIndex"
                 :loading="loading"
                 :expanded-log-id="selectedCaDisbursementLog"
                 :cutoff-requests="caCutoffRequests"
@@ -192,6 +196,7 @@
           <q-tab-panel name="swap" class="tab-panel-content">
             <RequestSwapTable
               :rows="filteredSwapRequests"
+              :employee-index="employeeIndex"
               :loading="swapLoading"
               :sortBy="swapSortBy"
               :processingId="swapActionLoading"
@@ -210,9 +215,21 @@
       </section>
 
       <!-- Modals -->
+      <!-- The gate every individual decision below passes through. It stacks over
+           the leave, swap and cash-advance dialogs because Quasar appends a
+           dialog's portal node to <body> when it is first *shown*, not when the
+           component mounts — so declaration order here is irrelevant, and opening
+           it second is what puts it on top. -->
+      <RequestDecisionConfirmDialog
+        v-model="showDecisionConfirm"
+        :confirm="decisionConfirm"
+        :loading="decisionSubmitting"
+        @confirm="confirmDecision"
+      />
       <RequestLeaveDetailModal
         v-model="showLeaveDetails"
         :request="selectedLeaveRequest"
+        :employee-index="employeeIndex"
         :action-loading="actionLoading"
         @approve="approveRequest"
         @reject="rejectRequest"
@@ -233,7 +250,7 @@
         @submit="submitCaApproval"
       />
 
-      <RequestCaViewModal v-model="caViewDialog" :request="selectedCaRequest" />
+      <RequestCaViewModal v-model="caViewDialog" :request="selectedCaRequest" :employee-index="employeeIndex" />
 
       <RequestOvertimeDetailModal v-model="showOvertimeDetail" :request="selectedOvertimeRow" />
 
@@ -250,6 +267,7 @@
       <RequestSwapViewModal
         v-model="showSwapViewDialog"
         :request="selectedSwapRequest"
+        :employee-index="employeeIndex"
         @approve="approveSwapRequest"
         @reject="rejectSwapRequest"
       />
@@ -269,13 +287,12 @@
 <script setup>
 import PageShell from '@/components/layout/PageShell.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useAuthStore } from 'src/boot/auth'
-import { getApproverName } from 'src/composables/utils/employee'
+import { buildEmployeeNameIndex, getApproverName } from 'src/composables/utils/employee'
 import RequestStatsCards from 'src/components/pages/Request/RequestStatsCards.vue'
 import RequestLeaveTable from 'src/components/pages/Request/RequestLeaveTable.vue'
 import RequestOvertimeTable from 'src/components/pages/Request/RequestOvertimeTable.vue'
@@ -284,6 +301,8 @@ import RequestLeaveDetailModal from 'src/components/pages/Request/RequestLeaveDe
 import RequestLeaveRecommendModal from 'src/components/pages/Request/RequestLeaveRecommendModal.vue'
 import RequestCaApprovalModal from 'src/components/pages/Request/RequestCaApprovalModal.vue'
 import RequestCaViewModal from 'src/components/pages/Request/RequestCaViewModal.vue'
+import RequestDecisionConfirmDialog from 'src/components/pages/Request/RequestDecisionConfirmDialog.vue'
+import { buildBulkDecisionConfirm, buildDecisionConfirm, buildRecommendationConfirm } from 'src/components/pages/Request/decisionConfirm'
 import RequestOvertimeDetailModal from 'src/components/pages/Request/RequestOvertimeDetailModal.vue'
 import OvertimeAdvanceModal from 'src/components/pages/Request/OvertimeAdvanceModal.vue'
 import RequestCashAdvanceCutoff from 'src/components/pages/Request/RequestCashAdvanceCutoff.vue'
@@ -305,10 +324,13 @@ import { useAdminPayrollGroups } from 'src/composables/admin/useAdminPayrollGrou
 import { useEmployeePayoutGroup } from 'src/composables/page/useEmployeePayoutGroup'
 import { useToast } from 'src/composables/useToast'
 
-const $q = useQuasar()
 const toast = useToast()
 
 const { employees, fetchEmployees } = useEmployees()
+// Name to employee record, for the picture URL in every request table's avatar.
+// A name shared by two employees resolves to null, so no photo is shown rather
+// than the wrong one — mirroring Card taps, Audit, and the Deductions roster.
+const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
 // Aliased to `selectedCompany`: several functions in this file declare their own
 // local `companyId` from it, and an outer binding by that name would read as the
 // one being shadowed. It is a *computed* over the Pinia company store, so it
@@ -535,6 +557,90 @@ const swapActionLoading = ref(null)
 const swapDirectory = ref(null)
 const selectedSwapRequest = ref(null)
 const showSwapViewDialog = ref(false)
+
+// ===== DECISION CONFIRMATION =====
+// Every individual approve/reject on this page writes on one click, from a row
+// menu and from inside the detail dialogs alike, and none of the four queues has
+// a reopen action — so the click that opens a row must not also be the click that
+// pays somebody. `decisionConfirm` is the object the dialog renders; it is built
+// on open rather than held, so it can never describe a row that has since been
+// refetched into a different state.
+//
+// `decisionAction` is the one key `confirmDecision` switches on, and it names the
+// writer directly. The bulk and recommendation keys carry their queue in the name
+// rather than in a separate flag, so there is no way to reach a writer with a
+// queue that does not match it.
+const decisionConfirm = ref(null)
+const decisionAction = ref(null)
+const decisionStatus = ref(null)
+// A single row for a single decision; `{ ids, rows }` for a batch, because both
+// batch writers need the rows themselves and not just the count.
+const decisionRow = ref(null)
+const showDecisionConfirm = ref(false)
+// Deliberately not `actionLoading` / `overtimeSubmitting` / `swapActionLoading`:
+// those are what the row and the detail dialog read, and setting them the moment
+// the confirm opens would put a spinner on a button the approver is not looking
+// at, behind a dialog they have not answered yet.
+const decisionSubmitting = ref(false)
+
+/** Open a confirmation already built, for one of the seven actions. */
+const openConfirmation = (action, built, subject, status = null) => {
+  if (!built) {
+    console.error(`[Requests] no confirmation for action "${action}"`)
+    return
+  }
+  decisionAction.value = action
+  decisionStatus.value = status
+  decisionRow.value = subject
+  decisionConfirm.value = built
+  showDecisionConfirm.value = true
+}
+
+/**
+ * Open the confirmation for one individual decision.
+ *
+ * `context` carries the values the dialog has to be told rather than read off
+ * the row — today only the overtime hours, which resolve through the page's edit
+ * map so the dialog can promise the figure the write will use rather than the
+ * one the row displays.
+ */
+const openDecisionConfirm = (queue, status, request, context) => {
+  openConfirmation(queue, buildDecisionConfirm({ queue, status, row: request, context }), request, status)
+}
+
+/**
+ * Run whatever the approver just confirmed.
+ *
+ * The dialog closes in a `finally` rather than only on success: every writer
+ * reports its own outcome through a toast and swallows the error, so nothing
+ * here can tell the two apart — and holding the dialog open over a failed write
+ * would bury the toast explaining why.
+ */
+const confirmDecision = async () => {
+  const action = decisionAction.value
+  const status = decisionStatus.value
+  const subject = decisionRow.value
+  if (!action) return
+
+  decisionSubmitting.value = true
+  try {
+    if (action === 'leave') await commitLeaveDecision(subject, status)
+    else if (action === 'overtime') await commitOvertimeDecision(subject, status)
+    else if (action === 'swap') await commitSwapDecision(subject, status)
+    else if (action === 'cashAdvance') await commitCaApproval()
+    else if (action === 'bulkLeave') await commitBulkLeave(status, subject)
+    else if (action === 'bulkOvertime') await commitBulkOvertime(status, subject)
+    else if (action === 'leaveRecommendation') await commitClearLeaveRecommendation(subject)
+    else console.error(`[Requests] no writer for action "${action}"`)
+  } finally {
+    decisionSubmitting.value = false
+    showDecisionConfirm.value = false
+    decisionConfirm.value = null
+    decisionAction.value = null
+    decisionStatus.value = null
+    decisionRow.value = null
+  }
+}
 
 // ===== COMPUTED STATS =====
 const leaveStats = computed(() => ({
@@ -894,47 +1000,39 @@ const openOvertimeDetail = (row) => {
   showOvertimeDetail.value = true
 }
 
-const approveOvertimeSingle = async (row) => {
+// One writer for both single-row verbs: the two differed only in the status they
+// sent and the toast they raised.
+const commitOvertimeDecision = async (row, status) => {
+  const approved = status === 'approved'
   overtimeSubmitting.value.add(row.id)
   try {
     await api.patch(`/payroll/overtime-approve/${row.id}/`, {
       approved_hours: resolveApprovedHours(row),
       category: row.category ?? 0,
       reason: '',
-      status: 'approved',
+      status,
     })
-    toast.success('Overtime approved successfully', { icon: 'check_circle' })
+    // A rejection is a refusal, not a success: leave and swap have always said
+    // so, and these two only disagreed because they were written at different
+    // times.
+    if (approved) toast.success('Overtime approved successfully', { icon: 'check_circle' })
+    else toast.warning('Overtime rejected', { icon: 'cancel' })
     clearOvertimeSelection()
     await fetchOvertimeRequests()
   } catch (e) {
-    console.log('Overtime approve error:', JSON.stringify(e.response?.data, null, 2))
-    const msg = extractErrorMessage(e, 'Failed to approve overtime')
+    console.log('Overtime decide error:', JSON.stringify(e.response?.data, null, 2))
+    const verb = approved ? 'approve' : 'reject'
+    const msg = extractErrorMessage(e, `Failed to ${verb} overtime`)
     toast.error(msg, { icon: 'error' })
   } finally {
     overtimeSubmitting.value.delete(row.id)
   }
 }
 
-const rejectOvertimeSingle = async (row) => {
-  overtimeSubmitting.value.add(row.id)
-  try {
-    await api.patch(`/payroll/overtime-approve/${row.id}/`, {
-      approved_hours: resolveApprovedHours(row),
-      category: row.category ?? 0,
-      reason: '',
-      status: 'rejected',
-    })
-    toast.success('Overtime rejected', { icon: 'cancel' })
-    clearOvertimeSelection()
-    await fetchOvertimeRequests()
-  } catch (e) {
-    console.log('Overtime reject error:', JSON.stringify(e.response?.data, null, 2))
-    const msg = extractErrorMessage(e, 'Failed to reject overtime')
-    toast.error(msg, { icon: 'error' })
-  } finally {
-    overtimeSubmitting.value.delete(row.id)
-  }
-}
+const approveOvertimeSingle = (row) =>
+  openDecisionConfirm('overtime', 'approved', row, { hours: resolveApprovedHours(row) })
+const rejectOvertimeSingle = (row) =>
+  openDecisionConfirm('overtime', 'rejected', row, { hours: resolveApprovedHours(row) })
 
 const toggleOvertimeSelection = (id) => {
   const newSet = new Set(selectedOvertimeIds.value)
@@ -1146,84 +1244,115 @@ const submitApplyLeave = async (payload) => {
  */
 const OVERTIME_BULK_ACTIONS = {
   approved: {
-    title: 'Bulk Approve',
-    prompt: (n) => `Approve ${n} overtime request(s)?`,
-    ok: { label: 'Approve', color: 'positive', unelevated: true },
     verb: 'approve',
     past: 'approved',
     icon: 'check_circle',
   },
   rejected: {
-    title: 'Bulk Reject',
-    prompt: (n) => `Reject ${n} overtime request(s)?`,
-    ok: { label: 'Reject', color: 'negative', unelevated: true },
     verb: 'reject',
     past: 'rejected',
     icon: 'cancel',
   },
 }
 
+/**
+ * Open the confirmation for the selected overtime rows.
+ *
+ * The dialog reports how many hours the batch will settle rather than how many
+ * rows it covers, because the approver can edit each row's hours before approving
+ * and the number that matters to payroll is the total. Summing through
+ * `resolveApprovedHours` is what makes that honest: it reads the same edit map
+ * the write sends, so an inline edit made moments earlier is in the figure shown.
+ */
 const bulkDecideOvertime = (status) => {
   const spec = OVERTIME_BULK_ACTIONS[status]
-  const ids = Array.from(selectedOvertimeIds.value)
-  if (!ids.length) return
+  if (!spec) return
+  const rows = overtimeRequests.value.filter((r) => selectedOvertimeIds.value.has(r.id))
+  if (!rows.length) return
 
-  $q.dialog({
-    title: spec.title,
-    message: spec.prompt(ids.length),
-    ok: spec.ok,
-    cancel: { label: 'Cancel', flat: true },
-  }).onOk(async () => {
-    overtimeSubmitting.value = new Set(ids)
-    const done = []
-    let reason = ''
+  const hours = rows.reduce((sum, row) => sum + Number(resolveApprovedHours(row) || 0), 0)
+  openConfirmation(
+    'bulkOvertime',
+    buildBulkDecisionConfirm({
+      queue: 'overtime',
+      status,
+      actionable: rows.length,
+      selected: rows.length,
+      employees: new Set(rows.map((r) => r.employeeName).filter(Boolean)).size,
+      // Rejected hours are not paid, so a total would be a number about
+      // something that will not happen.
+      hours: status === 'approved' ? hours : null,
+    }),
+    { ids: rows.map((r) => r.id), rows },
+    status,
+  )
+}
 
-    try {
-      for (const id of ids) {
-        const row = overtimeRequests.value.find((r) => r.id === id)
-        try {
-          await api.patch(`/payroll/overtime-approve/${id}/`, {
-            approved_hours: resolveApprovedHours(row),
-            category: row?.category ?? 0,
-            reason: '',
-            status,
-          })
-          done.push(id)
-        } catch (e) {
-          // First refusal wins the caption: they are usually the same reason,
-          // and a toast is not the place for ten of them.
-          reason = reason || extractErrorMessage(e, `Could not ${spec.verb} this request`)
-          console.error(
-            `[Requests] bulk ${spec.verb} failed for overtime ${id}:`,
-            e?.response?.data ?? e,
-          )
-        }
+/**
+ * Write the batch the approver confirmed, one row at a time.
+ *
+ * The endpoint takes a single id, so this is a loop and cannot become one
+ * request. Each row is decided on its own merits — a `try/catch` inside the loop,
+ * never around it — and the run continues past a refusal so one bad row cannot
+ * strand the rest. `rows` arrives on the subject rather than being looked up by
+ * id, because the hours in the confirmed dialog were read from these same objects
+ * and re-resolving against a refetched queue could promise a different total.
+ */
+const commitBulkOvertime = async (status, subject) => {
+  const spec = OVERTIME_BULK_ACTIONS[status]
+  if (!spec) return
+  const { ids, rows } = subject || {}
+  if (!ids?.length) return
+
+  overtimeSubmitting.value = new Set(ids)
+  const done = []
+  let reason = ''
+
+  try {
+    for (const id of ids) {
+      const row = rows.find((r) => r.id === id)
+      try {
+        await api.patch(`/payroll/overtime-approve/${id}/`, {
+          approved_hours: resolveApprovedHours(row),
+          category: row?.category ?? 0,
+          reason: '',
+          status,
+        })
+        done.push(id)
+      } catch (e) {
+        // First refusal wins the caption: they are usually the same reason,
+        // and a toast is not the place for ten of them.
+        reason = reason || extractErrorMessage(e, `Could not ${spec.verb} this request`)
+        console.error(
+          `[Requests] bulk ${spec.verb} failed for overtime ${id}:`,
+          e?.response?.data ?? e,
+        )
       }
-    } finally {
-      overtimeSubmitting.value = new Set()
-      clearOvertimeSelection()
     }
+  } finally {
+    overtimeSubmitting.value = new Set()
+    clearOvertimeSelection()
+  }
 
-    // Unconditional: the server state has moved for everything in `done`, so a
-    // partial run that left the table alone is exactly how approved rows kept
-    // showing as pending.
-    await fetchOvertimeRequests().catch((e) =>
-      console.error('[Requests] refetch after bulk overtime failed:', e),
-    )
+  // Unconditional: the server state has moved for everything in `done`, so a
+  // partial run that left the table alone is exactly how approved rows kept
+  // showing as pending.
+  await fetchOvertimeRequests().catch((e) =>
+    console.error('[Requests] refetch after bulk overtime failed:', e),
+  )
 
-    const failed = ids.length - done.length
-    if (done.length && failed) {
-      toast.warning(`${done.length} ${spec.past}, ${failed} could not be.`, {
-        caption: reason || undefined,
-      })
-    } else if (done.length) {
-      toast.success(`${done.length} overtime request${done.length === 1 ? '' : 's'} ${spec.past}`, {
-        icon: spec.icon,
-      })
-    } else {
-      toast.error(reason || `None of these requests could be ${spec.past}.`)
-    }
-  })
+  const failed = ids.length - done.length
+  if (done.length && failed) {
+    toast.warning(`${done.length} ${spec.past}, ${failed} could not be.`, {
+      caption: reason || undefined,
+    })
+  } else if (done.length) {
+    toast.success(`${done.length} overtime request${done.length === 1 ? '' : 's'} ${spec.past}`, {
+      icon: spec.icon,
+    })
+  } else {
+    toast.error(reason || `None of these requests could be ${spec.past}.`)
+  }
 }
 
 const bulkApproveOvertime = () => bulkDecideOvertime('approved')
@@ -1259,51 +1388,38 @@ const filteredOvertimeRequests = computed(() => {
 })
 
 // ===== LEAVE: APPROVE / REJECT =====
-const approveRequest = async (request) => {
-  try {
-    actionLoading.value = `approve-${request.id}`
-    await api.patch(`/attendance/leave-approval/${request.id}/`, { status: 'approved' })
+// One writer for both single-row verbs. The 500 tolerance is the single-row
+// endpoint's own habit — it answers a write that landed — and is kept exactly
+// as it was: the row is patched in place and reported as decided, because the
+// bulk endpoint that dropped this leniency is a different code path.
+const commitLeaveDecision = async (request, status) => {
+  const approved = status === 'approved'
+  const settle = () => {
     const index = leaveList.value.findIndex((r) => r.id === request.id)
-    if (index !== -1) leaveList.value[index].status = 'approved'
-    toast.success('Leave request approved successfully', { icon: 'check_circle' })
+    if (index !== -1) leaveList.value[index].status = status
+    if (approved) toast.success('Leave request approved successfully', { icon: 'check_circle' })
+    else toast.warning('Leave request rejected', { icon: 'cancel' })
     if (showLeaveDetails.value) showLeaveDetails.value = false
+  }
+  try {
+    actionLoading.value = `${approved ? 'approve' : 'reject'}-${request.id}`
+    await api.patch(`/attendance/leave-approval/${request.id}/`, { status })
+    settle()
   } catch (e) {
     if (e.response?.status === 500) {
-      const index = leaveList.value.findIndex((r) => r.id === request.id)
-      if (index !== -1) leaveList.value[index].status = 'approved'
-      toast.success('Leave request approved successfully', { icon: 'check_circle' })
-      if (showLeaveDetails.value) showLeaveDetails.value = false
+      settle()
       return
     }
-    const errorMessage = extractErrorMessage(e, 'Failed to approve request.')
+    const verb = approved ? 'approve' : 'reject'
+    const errorMessage = extractErrorMessage(e, `Failed to ${verb} request.`)
     toast.error(errorMessage, { icon: 'error' })
   } finally {
     actionLoading.value = null
   }
 }
 
-const rejectRequest = async (request) => {
-  try {
-    actionLoading.value = `reject-${request.id}`
-    await api.patch(`/attendance/leave-approval/${request.id}/`, { status: 'rejected' })
-    const index = leaveList.value.findIndex((r) => r.id === request.id)
-    if (index !== -1) leaveList.value[index].status = 'rejected'
-    toast.warning('Leave request rejected', { icon: 'cancel' })
-    if (showLeaveDetails.value) showLeaveDetails.value = false
-  } catch (e) {
-    if (e.response?.status === 500) {
-      const index = leaveList.value.findIndex((r) => r.id === request.id)
-      if (index !== -1) leaveList.value[index].status = 'rejected'
-      toast.warning('Leave request rejected', { icon: 'cancel' })
-      if (showLeaveDetails.value) showLeaveDetails.value = false
-      return
-    }
-    const errorMessage = extractErrorMessage(e, 'Failed to reject request.')
-    toast.error(errorMessage, { icon: 'error' })
-  } finally {
-    actionLoading.value = null
-  }
-}
+const approveRequest = (request) => openDecisionConfirm('leave', 'approved', request)
+const rejectRequest = (request) => openDecisionConfirm('leave', 'rejected', request)
 
 // ===== LEAVE: REJECTION RECOMMENDATION =====
 //
@@ -1347,40 +1463,39 @@ const submitLeaveRecommendation = async (note) => {
 }
 
 /**
- * Withdraw a recommendation.
+ * Open the confirmation for withdrawing a recommendation.
  *
- * Confirmed rather than immediate, and the note is cleared with the flag: a
- * note that outlives the recommendation it justified is an accusation left
- * standing against a request nobody is now recommending against.
+ * Not a queue decision, but the same irreversible click: the note is cleared with
+ * the flag, so a note that outlives the recommendation it justified is an
+ * accusation left standing against a request nobody is now recommending against.
  *
- * No dialog here even though setting one does — there is nothing to type, and
- * an empty textarea in front of a confirm button is a second click for no
- * reason.
+ * The dialog quotes the note back, because it was somebody's considered opinion
+ * and the approver is about to delete it. Unlike the four decisions this one is
+ * genuinely reversible — the request stays pending and a recommendation can be
+ * written again — so `decisionConfirm.js` gives it its own note rather than the
+ * page-wide "cannot be undone" warning.
  */
 const clearLeaveRecommendation = (request) => {
   if (!request) return
-  $q.dialog({
-    title: 'Remove rejection recommendation?',
-    message:
-      'The request stays pending. The note explaining the recommendation is removed with it.',
-    ok: { label: 'Remove', color: 'negative', unelevated: true },
-    cancel: { label: 'Cancel', flat: true },
-  }).onOk(async () => {
-    recommendLoading.value = `unrecommend-${request.id}`
-    try {
-      await api.patch(`/attendance/leave-recommendation/${request.id}/`, {
-        is_recommended_for_rejection: false,
-        rejection_recommendation_note: '',
-      })
-      toast.success('Rejection recommendation removed')
-      await fetchLeaveRequests()
-    } catch (e) {
-      const errorMessage = extractErrorMessage(e, 'Failed to remove the recommendation')
-      toast.error(errorMessage, { icon: 'error' })
-    } finally {
-      recommendLoading.value = null
-    }
-  })
+  openConfirmation('leaveRecommendation', buildRecommendationConfirm({ request }), request)
+}
+
+const commitClearLeaveRecommendation = async (request) => {
+  if (!request) return
+  recommendLoading.value = `unrecommend-${request.id}`
+  try {
+    await api.patch(`/attendance/leave-recommendation/${request.id}/`, {
+      is_recommended_for_rejection: false,
+      rejection_recommendation_note: '',
+    })
+    toast.success('Rejection recommendation removed', { icon: 'o_flag' })
+    await fetchLeaveRequests()
+  } catch (e) {
+    const errorMessage = extractErrorMessage(e, 'Failed to remove the recommendation')
+    toast.error(errorMessage, { icon: 'error' })
+  } finally {
+    recommendLoading.value = null
+  }
 }
 
 const openLeaveRecommendation = (request) => {
@@ -1436,17 +1551,11 @@ const clearLeaveSelection = () => {
  */
 const LEAVE_BULK_ACTIONS = {
   approved: {
-    title: 'Bulk Approve',
-    prompt: (n) => `Approve ${n} leave request(s)?`,
-    ok: { label: 'Approve', color: 'positive', unelevated: true },
     verb: 'approve',
     past: 'approved',
     icon: 'check_circle',
   },
   rejected: {
-    title: 'Bulk Reject',
-    prompt: (n) => `Reject ${n} leave request(s)?`,
-    ok: { label: 'Reject', color: 'negative', unelevated: true },
     verb: 'reject',
     past: 'rejected',
     icon: 'cancel',
@@ -1454,97 +1563,136 @@ const LEAVE_BULK_ACTIONS = {
 }
 
 /**
- * How many of the selected requests the server will skip.
+ * Open the confirmation for the selected leave rows.
  *
- * Counted from the rows already on screen rather than learned afterwards: the
- * list payload carries the flag, so the confirm dialog can say which of the
- * chosen requests carry a recommendation before the reviewer commits, instead of
- * leaving them to read the same fact for the first time in the closing toast.
+ * The subtlety here is that the count in the headline is *not* the selection.
+ * A request carrying a rejection recommendation is skipped by the endpoint for
+ * either verb — the reviewer cannot act on somebody else's recommendation
+ * through a bulk click — so the dialog is headlined with the number the server
+ * will actually move, and states the difference as a fact. Headlining the
+ * selection instead is how "Approve 12 leave requests?" can come back as
+ * "9 approved, 3 were already recommended for rejection".
+ *
+ * The skip count is read off the rows already on screen rather than learned
+ * afterwards: the list payload carries the flag, so the reviewer is told before
+ * they commit rather than reading the same fact for the first time in the
+ * closing toast.
+ *
+ * When every selection is flagged there is no batch left to write, so this
+ * reports that and stops rather than opening "Approve 0 leave requests?" and
+ * making the reviewer click through a dialog that can only decline. The bulk
+ * toolbar's buttons are left enabled: disabling them per selection would need the
+ * count to travel down into the table for a state that is one click to recover
+ * from, and the swap dialog already answers the same guard with a toast.
  */
-const recommendedSelectedCount = () => {
-  const selected = selectedLeaveIds.value
-  return filteredLeaveRequests.value.filter(
-    (row) => selected.has(row.id) && row.recommendedForRejection,
-  ).length
-}
-
 const bulkDecideLeave = (status) => {
   const spec = LEAVE_BULK_ACTIONS[status]
-  const ids = Array.from(selectedLeaveIds.value)
-  if (!ids.length) return
+  if (!spec) return
+  const rows = filteredLeaveRequests.value.filter((row) => selectedLeaveIds.value.has(row.id))
+  if (!rows.length) return
 
-  const recommended = recommendedSelectedCount()
-  const prompt = recommended
-    ? `${spec.prompt(ids.length)} ${recommended} of these are recommended for rejection and will be skipped.`
-    : spec.prompt(ids.length)
+  const recommended = rows.filter((row) => row.recommendedForRejection).length
+  const actionable = rows.length - recommended
 
-  $q.dialog({
-    title: spec.title,
-    message: prompt,
-    ok: spec.ok,
-    cancel: { label: 'Cancel', flat: true },
-  }).onOk(async () => {
-    leaveSubmitting.value = new Set(ids)
-
-    let outcome = null
-    let failure = null
-
-    try {
-      const res = await api.patch('/attendance/leave-approval/bulk/', {
-        leave_ids: ids,
-        status,
-      })
-      const read = bulkLeaveOutcome(res.data)
-      if (read.readable) {
-        outcome = read
-      } else {
-        failure = new Error('The bulk leave response carried no summary')
-      }
-    } catch (e) {
-      // A 500 that still carries a summary is that summary: the body is a
-      // truthful account of what the server did, and discarding it in favour of
-      // the status code would report a completed batch as a dead one. A bodyless
-      // 500 — or any other status — is a real failure.
-      const recovered = e?.response ? bulkLeaveOutcome(e.response.data) : null
-      if (recovered?.readable) {
-        outcome = recovered
-      } else {
-        failure = e
-      }
-    } finally {
-      // The Set is what every affected row's spinner reads, so it is filled for
-      // the whole run rather than per id — one call, one span of "busy".
-      leaveSubmitting.value = new Set()
-      clearLeaveSelection()
-    }
-
-    // Unconditional, and before the toast: the server has moved for everything
-    // in `updated`, so a partial run that left the table alone is exactly how
-    // approved rows kept showing as pending.
-    await fetchLeaveRequests().catch((e) =>
-      console.error('[Requests] refetch after bulk leave failed:', e),
+  if (!actionable) {
+    toast.warning(
+      `Nothing to ${spec.verb} — all ${rows.length} selected ${
+        rows.length === 1 ? 'request is' : 'requests are'
+      } recommended for rejection`,
+      { icon: 'o_flag', caption: 'Clear the recommendation first, or decide them one by one.' },
     )
+    return
+  }
 
-    if (!outcome) {
-      toast.error(extractErrorMessage(failure, `Failed to ${spec.verb} these leave requests`), {
-        icon: 'error',
-      })
-      return
-    }
+  openConfirmation(
+    'bulkLeave',
+    buildBulkDecisionConfirm({
+      queue: 'leave',
+      status,
+      actionable,
+      selected: rows.length,
+      employees: new Set(rows.map((r) => r.employeeName).filter(Boolean)).size,
+      recommended,
+    }),
+    { ids: rows.map((r) => r.id), rows },
+    status,
+  )
+}
 
-    const accounted = outcome.updated + outcome.skipped + outcome.failed
-    if (accounted !== ids.length) {
-      console.warn(
-        `[Requests] bulk ${spec.verb} for leave accounted for ${accounted} of ${ids.length} sent:`,
-        outcome,
-      )
-    }
+/**
+ * Write the batch the approver confirmed.
+ *
+ * The body is the one the dialog used to run, unchanged: the endpoint answers
+ * with a summary that accounts for every id it received — including the ones it
+ * skipped — so a single request carries the whole outcome, and a status code
+ * alone cannot tell a partial run from a dead one.
+ */
+const commitBulkLeave = async (status, subject) => {
+  const spec = LEAVE_BULK_ACTIONS[status]
+  if (!spec) return
+  const { ids } = subject || {}
+  if (!ids?.length) return
 
-    const notice = bulkLeaveOutcomeToast(outcome, ids.length, spec.past)
-    toast[notice.type](notice.message, {
-      ...(notice.caption ? { caption: notice.caption } : {}),
-      ...(notice.type === 'success' ? { icon: spec.icon } : {}),
+  leaveSubmitting.value = new Set(ids)
+
+  let outcome = null
+  let failure = null
+
+  try {
+    const res = await api.patch('/attendance/leave-approval/bulk/', {
+      leave_ids: ids,
+      status,
     })
+    const read = bulkLeaveOutcome(res.data)
+    if (read.readable) {
+      outcome = read
+    } else {
+      failure = new Error('The bulk leave response carried no summary')
+    }
+  } catch (e) {
+    // A 500 that still carries a summary is that summary: the body is a
+    // truthful account of what the server did, and discarding it in favour of
+    // the status code would report a completed batch as a dead one. A bodyless
+    // 500 — or any other status — is a real failure.
+    const recovered = e?.response ? bulkLeaveOutcome(e.response.data) : null
+    if (recovered?.readable) {
+      outcome = recovered
+    } else {
+      failure = e
+    }
+  } finally {
+    // The Set is what every affected row's spinner reads, so it is filled for
+    // the whole run rather than per id — one call, one span of "busy".
+    leaveSubmitting.value = new Set()
+    clearLeaveSelection()
+  }
+
+  // Unconditional, and before the toast: the server has moved for everything
+  // in `updated`, so a partial run that left the table alone is exactly how
+  // approved rows kept showing as pending.
+  await fetchLeaveRequests().catch((e) =>
+    console.error('[Requests] refetch after bulk leave failed:', e),
+  )
+
+  if (!outcome) {
+    toast.error(extractErrorMessage(failure, `Failed to ${spec.verb} these leave requests`), {
+      icon: 'error',
+    })
+    return
+  }
+
+  const accounted = outcome.updated + outcome.skipped + outcome.failed
+  if (accounted !== ids.length) {
+    console.warn(
+      `[Requests] bulk ${spec.verb} for leave accounted for ${accounted} of ${ids.length} sent:`,
+      outcome,
+    )
+  }
+
+  const notice = bulkLeaveOutcomeToast(outcome, ids.length, spec.past)
+  toast[notice.type](notice.message, {
+    ...(notice.caption ? { caption: notice.caption } : {}),
+    ...(notice.type === 'success' ? { icon: spec.icon } : {}),
   })
 }
 
@@ -1630,7 +1778,9 @@ const fetchCaCutoffRequests = async (logId) => {
   }
 }
 
-const submitCaApproval = async () => {
+// The write behind `RequestCaApprovalModal`'s submit. The modal's own status
+// select is the decision; this only records it.
+const commitCaApproval = async () => {
   try {
     caSubmitting.value = true
     const requestId = selectedCaRequest.value.id
@@ -1665,6 +1815,25 @@ const submitCaApproval = async () => {
   } finally {
     caSubmitting.value = false
   }
+}
+
+/**
+ * The cash-advance gate.
+ *
+ * Unlike the other three queues this one is a form: the approver picks a status
+ * and can write remarks before submitting, so the confirmation reports that
+ * choice rather than the row's current one. Reading `caApprovalData` here — not
+ * `row.status`, which is still `pending` — is what keeps the dialog from
+ * promising the opposite of what the write will send.
+ *
+ * A status the select cannot produce opens nothing, rather than a dialog that
+ * names a decision nobody made.
+ */
+const submitCaApproval = () => {
+  const status = caApprovalData.value.status
+  if (status !== 'approved' && status !== 'rejected') return
+  const row = { ...selectedCaRequest.value, remarks: caApprovalData.value.remarks }
+  openDecisionConfirm('cashAdvance', status, row)
 }
 
 const openCaApprovalModal = (row) => {
@@ -1723,63 +1892,54 @@ const fetchSwapRequests = async () => {
   }
 }
 
-const approveSwapRequest = async (request) => {
-  if (!request.to_employee_approved) {
-    toast.warning('Employee has not yet approved the swap', { icon: 'warning' })
-    return
-  }
-  swapActionLoading.value = `approve-${request.id}`
+// One writer for both single-row verbs, as on the leave and overtime queues.
+const commitSwapDecision = async (request, status) => {
+  const approved = status === 'approved'
+  swapActionLoading.value = `${approved ? 'approve' : 'reject'}-${request.id}`
   try {
     await api.patch(`/organization/swap-requests/${request.id}/`, {
-      status: 'approved',
+      status,
       remarks: '',
     })
     const index = swapRequests.value.findIndex((r) => r.id === request.id)
     if (index !== -1) {
       swapRequests.value[index] = normalizeSwapRequest(
-        { ...swapRequests.value[index], status: 'approved' },
+        { ...swapRequests.value[index], status },
         swapDirectory.value,
       )
     }
-    toast.success('Swap request approved successfully', { icon: 'check_circle' })
+    if (approved) toast.success('Swap request approved successfully', { icon: 'check_circle' })
+    else toast.warning('Swap request rejected', { icon: 'cancel' })
     if (showSwapViewDialog.value) showSwapViewDialog.value = false
     await fetchSwapRequests()
   } catch (e) {
-    const errorMessage = extractErrorMessage(e, 'Failed to approve swap request.')
+    const verb = approved ? 'approve' : 'reject'
+    const errorMessage = extractErrorMessage(e, `Failed to ${verb} swap request.`)
     toast.error(errorMessage, { icon: 'error' })
   } finally {
     swapActionLoading.value = null
   }
 }
 
-const rejectSwapRequest = async (request) => {
+/**
+ * The swap gate, and the only place the other-employee check lives.
+ *
+ * It has to be here rather than in the writer: left there, the approver would
+ * confirm a swap and only then be told the employee they are trading with has
+ * not agreed to it. The row menu and `RequestSwapViewModal` already disable the
+ * action for this case — this is the backstop for anything that reaches the
+ * handler another way.
+ */
+const openSwapDecision = (request, status) => {
   if (!request.to_employee_approved) {
     toast.warning('Employee has not yet approved the swap', { icon: 'warning' })
     return
   }
-  swapActionLoading.value = `reject-${request.id}`
-  try {
-    await api.patch(`/organization/swap-requests/${request.id}/`, {
-      status: 'rejected',
-      remarks: '',
-    })
-    const index = swapRequests.value.findIndex((r) => r.id === request.id)
-    if (index !== -1) {
-      swapRequests.value[index] = normalizeSwapRequest(
-        { ...swapRequests.value[index], status: 'rejected' },
-        swapDirectory.value,
-      )
-    }
-    toast.warning('Swap request rejected', { icon: 'cancel' })
-    if (showSwapViewDialog.value) showSwapViewDialog.value = false
-    await fetchSwapRequests()
-  } catch (e) {
-    const errorMessage = extractErrorMessage(e, 'Failed to reject swap request.')
-    toast.error(errorMessage, { icon: 'error' })
-  } finally {
-    swapActionLoading.value = null
-  }
+  openDecisionConfirm('swap', status, request)
 }
+
+const approveSwapRequest = (request) => openSwapDecision(request, 'approved')
+const rejectSwapRequest = (request) => openSwapDecision(request, 'rejected')
 
 const viewSwapRequest = (request) => {
   selectedSwapRequest.value = request
