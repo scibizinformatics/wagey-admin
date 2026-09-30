@@ -162,7 +162,28 @@
 
               <q-td key="employeeName" :props="props" class="grid-cell ot-cell-employee">
                 <div class="identity">
-                  <span class="identity-avatar">{{ getInitials(props.row.employeeName) }}</span>
+                  <!-- A face when the name resolves to exactly one roster employee
+                       who has one, otherwise the person's initials on their
+                       identity colour — the same construction as the Card taps,
+                       Audit and Deductions tables. -->
+                  <q-avatar
+                    v-if="avatarOf(props.row.employeeName).pictureUrl"
+                    size="30px"
+                    class="identity-avatar"
+                  >
+                    <img
+                      :src="avatarOf(props.row.employeeName).pictureUrl"
+                      :alt="props.row.employeeName || 'Employee'"
+                    />
+                  </q-avatar>
+                  <q-avatar
+                    v-else
+                    size="30px"
+                    class="identity-avatar"
+                    :style="{ background: avatarOf(props.row.employeeName).color }"
+                  >
+                    <span class="identity-initials">{{ avatarOf(props.row.employeeName).initials }}</span>
+                  </q-avatar>
                   <span class="identity-text">
                     <span class="identity-name">{{ props.row.employeeName }}</span>
                     <!-- Rendered only when the backend stamped the request. An
@@ -251,6 +272,7 @@
 import { computed } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import RequestRowMenu from './RequestRowMenu.vue'
+import { avatarFor } from '@/composables/utils/employee'
 import {
   formatOvertimeHours,
   overtimeStatusPillClass,
@@ -259,6 +281,10 @@ import {
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   loading: Boolean,
+  // Name → employee record, to put a face on each row; built once per page and
+  // shared by every tab. A name held by two employees resolves to null, so a
+  // row draws initials rather than the wrong photo. See `avatarFor`.
+  employeeIndex: { type: Object, default: null },
   submitting: { type: Set, default: () => new Set() },
   selectedIds: { type: Set, default: () => new Set() },
   editableHours: { type: Object, default: () => ({}) },
@@ -361,15 +387,7 @@ const emptyText = computed(() => {
   return `Try ${list} to see every request in this queue.`
 })
 
-const getInitials = (name) => {
-  if (!name || name === 'Unknown') return '?'
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
+const avatarOf = (name) => avatarFor(props.employeeIndex, name)
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
   const date = new Date(dateString)
