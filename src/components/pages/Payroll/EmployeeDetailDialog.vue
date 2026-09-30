@@ -4,7 +4,14 @@
       <q-card-section class="dash-modal__head">
         <div class="dash-modal__head-main">
           <q-avatar size="38px" class="dash-modal__head-icon">
-            <q-icon name="receipt_long" size="22px" />
+            <!-- A face when the name resolves to exactly one roster employee
+                 who has one, otherwise initials — matching the row this dialog
+                 opened from. -->
+            <template v-if="data && avatarOf(data.full_name).pictureUrl">
+              <img :src="avatarOf(data.full_name).pictureUrl" :alt="data.full_name" />
+            </template>
+            <q-icon v-else-if="!data" name="receipt_long" size="22px" />
+            <span v-else>{{ avatarOf(data.full_name).initials }}</span>
           </q-avatar>
           <div class="dash-modal__head-titles">
             <div class="dash-modal__title">Attendance details</div>
@@ -96,13 +103,20 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
+import { avatarFor } from 'src/composables/utils/employee'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   employeeId: { type: [Number, String], default: null },
+  // Name → employee record, to put a face in the header; built once per page and
+  // shared by every tab. A name held by two employees resolves to null, so the
+  // avatar draws initials rather than the wrong photo. See `avatarFor`.
+  employeeIndex: { type: Object, default: null },
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+const avatarOf = (name) => avatarFor(props.employeeIndex, name)
 
 const { fetchEmployeePayrollItem } = useDisbursementApi()
 
