@@ -107,6 +107,37 @@
           flat
           hide-pagination
         >
+          <template #body-cell-employee="props">
+            <q-td :props="props">
+              <div class="identity">
+                <!-- A face when the name resolves to exactly one roster employee
+                     who has one, otherwise the person's initials on their
+                     identity colour. -->
+                <q-avatar
+                  v-if="avatarOf(props.row.employee).pictureUrl"
+                  size="30px"
+                  class="identity-avatar"
+                >
+                  <img
+                    :src="avatarOf(props.row.employee).pictureUrl"
+                    :alt="props.row.employee || 'Employee'"
+                  />
+                </q-avatar>
+                <q-avatar
+                  v-else
+                  size="30px"
+                  class="identity-avatar"
+                  :style="{ background: avatarOf(props.row.employee).color }"
+                >
+                  <span class="identity-initials">{{
+                    avatarOf(props.row.employee).initials
+                  }}</span>
+                </q-avatar>
+                <span class="identity-name">{{ props.row.employee }}</span>
+              </div>
+            </q-td>
+          </template>
+
           <template #body-cell-payment_method="props">
             <q-td :props="props">
               <span class="method">
@@ -154,6 +185,8 @@ import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRo
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
+import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
+import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 
 const route = useRoute()
@@ -162,6 +195,16 @@ const groupId = route.params.id
 const { identity, resolveQuietly } = usePayoutGroupIdentity()
 const { fetchPayoutGroupCompletion, fetchPayoutSummaryByEmployee } = useDisbursementApi()
 const { notifyLoaded } = useLoadedToast()
+
+// Puts a face beside each name. The completion payload names an employee but
+// carries no photograph, so the roster is the only thing that can supply one —
+// the same construction as the Request tables and the disbursement list's
+// cash-advance view, including its refusal to guess on duplicate names.
+// (Destructured as `rosterEmployees`: this page already has a table of its own
+// called `employees`.)
+const { employees: rosterEmployees, fetchEmployees } = useEmployees()
+const employeeIndex = computed(() => buildEmployeeNameIndex(rosterEmployees.value))
+const avatarOf = (name) => avatarFor(employeeIndex.value, name)
 
 const loading = ref(true)
 const completion = ref(null)
@@ -342,6 +385,7 @@ onMounted(async () => {
   // them and a refresh can arrive with a stale status, so the run is resolved by
   // its id either way.
   resolveQuietly(groupId)
+  fetchEmployees().catch(() => null)
   try {
     const [comp, emp] = await Promise.all([
       fetchPayoutGroupCompletion(groupId),
@@ -464,6 +508,35 @@ onMounted(async () => {
 
 .muted {
   color: var(--dash-ink-4);
+}
+
+/* The employee cell: a 30px face (or the person's initials on their identity
+   colour) beside the name. Same construction as the Request tables. */
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.identity-avatar {
+  flex-shrink: 0;
+  border: 1px solid var(--dash-line);
+}
+.identity-avatar :deep(img) {
+  object-fit: cover;
+}
+.identity-initials {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+}
+.identity-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 640px) {
