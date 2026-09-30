@@ -8,7 +8,16 @@
       <q-card-section class="dash-modal__head">
         <div class="dash-modal__head-main">
           <q-avatar size="38px" class="dash-modal__head-icon">
-            {{ request ? getInitials(request.requested_by_name) : '?' }}
+            <!-- A face when the name resolves to exactly one roster employee
+                 who has one, otherwise initials on the identity colour —
+                 matching the row this modal opened from. -->
+            <template v-if="avatarOf(request?.requested_by_name).pictureUrl">
+              <img
+                :src="avatarOf(request?.requested_by_name).pictureUrl"
+                :alt="request?.requested_by_name || 'Employee'"
+              />
+            </template>
+            <span v-else>{{ avatarOf(request?.requested_by_name).initials }}</span>
           </q-avatar>
           <div class="dash-modal__head-titles">
             <div class="dash-modal__title">
@@ -163,26 +172,24 @@
 
 <script setup>
 import { EM_DASH } from 'src/composables/utils/swapRequests'
+import { avatarFor } from 'src/composables/utils/employee'
 
-defineProps({
+const props = defineProps({
   modelValue: Boolean,
   request: Object,
+  // Name → employee record, to put a face in the header; built once per page and
+  // shared by every tab. A name held by two employees resolves to null, so the
+  // avatar draws initials rather than the wrong photo. See `avatarFor`.
+  employeeIndex: { type: Object, default: null },
 })
 defineEmits(['update:modelValue', 'approve', 'reject'])
+
+const avatarOf = (name) => avatarFor(props.employeeIndex, name)
 
 // Dates, names, shift and site labels and the status wording arrive already
 // resolved on the request (composables/utils/swapRequests.js), so this dialog
 // and the grid behind it can never phrase the same request differently.
 
-const getInitials = (name) => {
-  if (!name) return '?'
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2)
-}
 // The badge palette in requestModal.css is keyed by these class names; the tone
 // on the request is the shared vocabulary that maps onto them.
 const BADGE_CLASSES = {
