@@ -13,7 +13,7 @@
         >
           <span class="wg-toast__glyph">
             <span v-if="toast.type === 'loading'" class="wg-toast__spinner" />
-            <i v-else class="material-icons-outlined">{{ toast.icon || GLYPHS[toast.type] }}</i>
+            <q-icon v-else :name="glyphName(toast.icon || GLYPHS[toast.type])" size="17px" />
           </span>
 
           <div class="wg-toast__body">
@@ -81,6 +81,14 @@ const GLYPHS = {
   loading: 'sync',
 }
 
+// Toast icons are written two ways: raw ligature names (`check_circle`, liked
+// by the old raw `<i>` renderer) and Quasar's `o_`-prefixed names (`o_flag`,
+// like `q-icon`). `q-icon` understands both, but renders the pair differently —
+// `check_circle` draws the filled glyph, `o_flag` the outlined one — so every
+// name is routed onto the outlined set to keep each toast's icon on the same
+// style it had before.
+const glyphName = (name) => (name && !name.startsWith('o_') ? `o_${name}` : name)
+
 function runAction(toast, action) {
   if (typeof action.handler === 'function') action.handler()
   if (action.dismiss) dismiss(toast.id)
@@ -133,11 +141,6 @@ function runAction(toast, action) {
   justify-content: center;
   margin-top: 1px;
 }
-.wg-toast__glyph .material-icons-outlined {
-  font-size: 17px;
-  line-height: 1;
-}
-
 .wg-toast__body {
   flex: 1 1 auto;
   min-width: 0;
