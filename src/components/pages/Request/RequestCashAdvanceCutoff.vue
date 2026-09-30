@@ -175,9 +175,31 @@
                   >
                     <q-td key="employeeName" :props="props" class="grid-cell cut-cell-employee">
                       <div class="identity">
-                        <span class="identity-avatar">{{
-                          getInitials(props.row.employee_name)
-                        }}</span>
+                        <!-- A face when the name resolves to exactly one roster
+                             employee who has one, otherwise the person's
+                             initials on their identity colour — the same
+                             construction as the Card taps, Audit and Deductions
+                             tables. -->
+                        <q-avatar
+                          v-if="avatarOf(props.row.employee_name).pictureUrl"
+                          size="30px"
+                          class="identity-avatar"
+                        >
+                          <img
+                            :src="avatarOf(props.row.employee_name).pictureUrl"
+                            :alt="props.row.employee_name || 'Employee'"
+                          />
+                        </q-avatar>
+                        <q-avatar
+                          v-else
+                          size="30px"
+                          class="identity-avatar"
+                          :style="{ background: avatarOf(props.row.employee_name).color }"
+                        >
+                          <span class="identity-initials">{{
+                            avatarOf(props.row.employee_name).initials
+                          }}</span>
+                        </q-avatar>
                         <span class="identity-text">
                           <span class="identity-name">{{ props.row.employee_name }}</span>
                         </span>
@@ -244,11 +266,15 @@
 <script setup>
 import { computed, ref } from 'vue'
 import RequestRowMenu from './RequestRowMenu.vue'
-import { getApproverName as approverName } from 'src/composables/utils/employee'
+import { avatarFor, getApproverName as approverName } from 'src/composables/utils/employee'
 
 const props = defineProps({
   logs: { type: Array, default: () => [] },
   loading: Boolean,
+  // Name → employee record, to put a face on each row; built once per page and
+  // shared by every tab. A name held by two employees resolves to null, so a
+  // row draws initials rather than the wrong photo. See `avatarFor`.
+  employeeIndex: { type: Object, default: null },
   expandedLogId: [Number, String, null],
   cutoffRequests: { type: Array, default: () => [] },
   cutoffLoading: Boolean,
@@ -304,15 +330,7 @@ const filteredCutoffRequests = computed(() => {
 
 const isNarrowed = computed(() => statusFilter.value !== 'all' || !!(props.search || '').trim())
 
-const getInitials = (name) => {
-  if (!name || name === 'N/A') return '?'
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
+const avatarOf = (name) => avatarFor(props.employeeIndex, name)
 
 const capitalize = (str) => {
   if (!str) return '-'
