@@ -115,6 +115,31 @@
             </q-tooltip>
           </q-select>
 
+          <!-- Widens the month rather than narrowing it, so it is a button that
+               carries state instead of a select: there is nothing to choose
+               between, only whether the records left behind by a shift change
+               are in the list. Not disabled during a date range — it is a plain
+               query param, needing none of the per-employee contract lookups
+               that make the payout-group select unusable over a span. -->
+          <q-btn
+            outline
+            no-caps
+            dense
+            size="12px"
+            icon="o_link_off"
+            label="Unassigned"
+            class="att-unassigned-btn"
+            :class="{ 'att-unassigned-btn--on': includeUnassigned }"
+            :aria-pressed="includeUnassigned"
+            @click="includeUnassigned = !includeUnassigned"
+          >
+            <q-tooltip>
+              {{ includeUnassigned
+                ? 'Hiding records left behind by a shift change'
+                : 'Show records left behind by a shift change' }}
+            </q-tooltip>
+          </q-btn>
+
           <!-- Opens the range picker. Separate from the day navigator: that walks
                one day at a time, this reviews a span for a single employee. -->
           <q-btn
@@ -451,6 +476,16 @@ const {
 } = useEmployeePayoutGroup()
 
 const payrollGroupFilter = ref(null)
+
+// ─── Unassigned attendance ─────────────────────────────────────────────────────
+// Punches an admin's shift change left detached from the assignment they are
+// filed against — the person was moved to a different shift and the earlier
+// record no longer sits under any shift on the schedule. The endpoint omits
+// them unless asked, so this is a query param rather than a client-side filter:
+// the backend decides which rows qualify, and there is no field in the payload
+// that marks them. Those rows show a '—' in the shift column, which is already
+// how a record with no assignment reads.
+const includeUnassigned = ref(false)
 
 const payrollGroupOptions = computed(() =>
   payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
@@ -922,12 +957,20 @@ const activeFilters = computed(() => {
     const group = payrollGroupOptions.value.find((g) => g.value === payrollGroupFilter.value)
     out.push({ key: 'payrollGroup', label: group?.label ?? 'Payout group' })
   }
+  // Not a narrowing filter like the rest of this list — it widens it. It still
+  // gets a chip: the footer count speaks for whatever set is loaded, so a
+  // widened set nobody disclosed would read as the normal number of records.
+  if (includeUnassigned.value) {
+    out.push({ key: 'includeUnassigned', label: 'Unassigned included' })
+  }
   return out
 })
 
 function clearFilter(key) {
   if (key === 'search') employeeSearch.value = ''
   if (key === 'payrollGroup') payrollGroupFilter.value = null
+  // The watcher on includeUnassigned refetches, so there is nothing to call here.
+  if (key === 'includeUnassigned') includeUnassigned.value = false
   // Dropping the span leaves range mode entirely; dropping just the employee
   // widens the same span to everyone, which needs no refetch — the months are
   // already loaded and filteredAttendanceRows re-runs on its own.
@@ -1053,8 +1096,14 @@ async function fetchAttendanceData(params = {}) {
     // *month*: the rows for the selected day would arrive scattered across
     // pages, and asking for page 2 could return a page holding none of them.
     // Both modes therefore fetch the month and paginate locally.
+    // Absent rather than `false` when off: `paramsKey` drops undefined/null/''
+    // (useAttendance.js), so the off state keys and caches exactly as it does
+    // today and flipping the toggle never throws away a month already in hand.
+    const unassignedParams = includeUnassigned.value ? { include_unassigned: true } : {}
+
     const extraParams = {
       ...(filters.value.cost_center ? { cost_center: filters.value.cost_center } : {}),
+      ...unassignedParams,
       ...params,
     }
 
@@ -1070,8 +1119,12 @@ async function fetchAttendanceData(params = {}) {
       // it touched, which is the bulk of what makes a range slow. `loadMonth`
       // works out for itself whether the endpoint honours it and stops sending
       // it if not, so the rows are still narrowed client-side below either way.
+      // The unassigned flag goes up here too, unlike the payout-group filter:
+      // it is a plain query param and costs nothing extra, so a range can show
+      // the same records a single day does.
       const rangeParams = {
         ...(filters.value.cost_center ? { cost_center: filters.value.cost_center } : {}),
+        ...unassignedParams,
         ...(dateRangeEmployee.value ? { employee: dateRangeEmployee.value } : {}),
         ...params,
       }
@@ -1569,13 +1622,14 @@ function closeAddDialog() {
 }
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
-// Clears the search and payout-group filters too, not just the date — this backs
-// both the toolbar's "Clear all" and the empty state's "Clear filters", and
-// leaving either one set would make those actions look broken.
+// Clears the search, payout-group and unassigned filters too, not just the date —
+// this backs both the toolbar's "Clear all" and the empty state's "Clear
+// filters", and leaving any of them set would make those actions look broken.
 function clearAllFilters() {
   filters.value = { date_from: today, date_to: today, cost_center: '' }
   employeeSearch.value = ''
   payrollGroupFilter.value = null
+  includeUnassigned.value = false
   dateRangeActive.value = false
   dateRangeEmployee.value = null
   currentDate.value = today
@@ -1766,6 +1820,14 @@ watch(attendanceData, async () => {
   if (!payrollGroupFilter.value) return
   const ids = attendanceData.value.map((row) => rosterIdFor(row.employee)).filter(Boolean)
   await ensurePayoutGroups(ids)
+})
+
+// The unassigned flag is server-side, so a change means a refetch rather than a
+// recompute — the rows are not in the payload until they are asked for. The page
+// resets because the row count changes under the reader's feet.
+watch(includeUnassigned, () => {
+  pagination.value.page = 1
+  fetchAttendanceData()
 })
 
 // Searching is a whole-roster action, so it takes precedence over a range that
@@ -2035,15 +2097,16 @@ onMounted(async () => {
   padding-right: 7px;
 }
 
-/* ── Date range ── */
-/* Sized and edged to sit level with the search and payout-group fields rather
-   than reading as a floating action. */
-.att-range-btn {
+/* ── Unassigned ── */
+/* Shares the date-range button's geometry rather than inventing a second set of
+   toolbar metrics: both are state-carrying buttons, so they should be the same
+   object at rest and differ only in colour when on. */
+.att-range-btn,
+.att-unassigned-btn {
   height: 34px;
   padding: 0 11px;
   border-radius: 8px;
   color: var(--dash-ink-2);
-  max-width: 290px;
   font-weight: 500;
   transition:
     background var(--dash-fast, 0.15s) var(--dash-ease, ease),
@@ -2051,7 +2114,12 @@ onMounted(async () => {
     color var(--dash-fast, 0.15s) var(--dash-ease, ease);
 }
 
-.att-range-btn :deep(.q-btn__content) {
+.att-range-btn {
+  max-width: 290px;
+}
+
+.att-range-btn :deep(.q-btn__content),
+.att-unassigned-btn :deep(.q-btn__content) {
   flex-wrap: nowrap;
   gap: 6px;
 }
@@ -2065,24 +2133,32 @@ onMounted(async () => {
 /* Quasar paints `outline` as a pseudo-element border; recolour that rather than
    adding a second border on top of it. */
 .att-range-btn :deep(.q-btn__content + span),
-.att-range-btn::before {
+.att-range-btn::before,
+.att-unassigned-btn :deep(.q-btn__content + span),
+.att-unassigned-btn::before {
   border-color: var(--dash-line-strong);
 }
 
-.att-range-btn:hover::before {
+.att-range-btn:hover::before,
+.att-unassigned-btn:hover::before {
   border-color: var(--dash-n-400);
 }
 
 /* An applied range puts the employee and span in the label, so mark the button
-   as carrying state rather than sitting idle. */
-.att-range-btn--on {
+   as carrying state rather than sitting idle. The unassigned button is off
+   entirely until pressed, and on means the list is wider than it was, so it
+   reads the same way: accented, and marked as pressed for a screen reader. */
+.att-range-btn--on,
+.att-unassigned-btn--on {
   background: var(--dash-accent-bg);
   color: var(--dash-accent);
   font-weight: 600;
 }
 
 .att-range-btn--on::before,
-.att-range-btn--on:hover::before {
+.att-range-btn--on:hover::before,
+.att-unassigned-btn--on::before,
+.att-unassigned-btn--on:hover::before {
   border-color: var(--dash-accent);
 }
 
