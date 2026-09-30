@@ -8,7 +8,16 @@
       <q-card-section class="dash-modal__head">
         <div class="dash-modal__head-main">
           <q-avatar size="38px" class="dash-modal__head-icon">
-            {{ request ? getInitials(request.employee_name) : '?' }}
+            <!-- A face when the name resolves to exactly one roster employee
+                 who has one, otherwise initials on the identity colour —
+                 matching the row this modal opened from. -->
+            <template v-if="avatarOf(request?.employee_name).pictureUrl">
+              <img
+                :src="avatarOf(request?.employee_name).pictureUrl"
+                :alt="request?.employee_name || 'Employee'"
+              />
+            </template>
+            <span v-else>{{ avatarOf(request?.employee_name).initials }}</span>
           </q-avatar>
           <div class="dash-modal__head-titles">
             <div class="dash-modal__title">
@@ -102,23 +111,19 @@
 </template>
 
 <script setup>
-import { getApproverName as approverName } from 'src/composables/utils/employee'
+import { avatarFor, getApproverName as approverName } from 'src/composables/utils/employee'
 
-defineProps({
+const props = defineProps({
   modelValue: Boolean,
   request: Object,
+  // Name → employee record, to put a face in the header; built once per page and
+  // shared by every tab. A name held by two employees resolves to null, so the
+  // avatar draws initials rather than the wrong photo. See `avatarFor`.
+  employeeIndex: { type: Object, default: null },
 })
 defineEmits(['update:modelValue'])
 
-const getInitials = (name) => {
-  if (!name || name === 'N/A') return '?'
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
+const avatarOf = (name) => avatarFor(props.employeeIndex, name)
 const capitalizeStatus = (status) => {
   if (!status) return 'N/A'
   return status.charAt(0).toUpperCase() + status.slice(1)
