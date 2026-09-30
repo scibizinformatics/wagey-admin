@@ -11,7 +11,14 @@
            screen says whose contributions these are. -->
       <q-card-section class="dash-modal__head">
         <span class="dash-modal__head-icon">
-          <q-icon name="o_account_balance" size="19px" />
+          <!-- A face when the name resolves to exactly one roster employee who
+               has one, otherwise initials — matching the row this dialog opened
+               from. The tile stays an icon only while no name has arrived. -->
+          <template v-if="avatarOf(employeeName).pictureUrl">
+            <img :src="avatarOf(employeeName).pictureUrl" :alt="employeeName || 'Employee'" />
+          </template>
+          <q-icon v-else-if="!employeeName" name="o_account_balance" size="19px" />
+          <span v-else>{{ avatarOf(employeeName).initials }}</span>
         </span>
 
         <div class="dash-modal__head-titles">
@@ -217,6 +224,7 @@ import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { formatCurrency } from 'src/composables/utils/format'
+import { avatarFor } from 'src/composables/utils/employee'
 import { useToast } from 'src/composables/useToast'
 
 const $q = useQuasar()
@@ -230,7 +238,13 @@ const props = defineProps({
   /** Employee payroll item id. */
   epiId: { type: [Number, String], default: null },
   employeeName: { type: String, default: '' },
+  // Name → employee record, to put a face in the header; built once per page and
+  // shared by every tab. A name held by two employees resolves to null, so the
+  // avatar draws initials rather than the wrong photo. See `avatarFor`.
+  employeeIndex: { type: Object, default: null },
 })
+
+const avatarOf = (name) => avatarFor(props.employeeIndex, name)
 
 // `deducted` tells the parent its review figures are stale — reverting moves the
 // same figures, so it reuses the event rather than adding a second one the parent
