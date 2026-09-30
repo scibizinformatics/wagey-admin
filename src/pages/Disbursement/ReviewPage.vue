@@ -123,6 +123,37 @@
           flat
           hide-pagination
         >
+          <!-- The employee is the row's subject, so its cell leads with a face:
+               a photograph when the name resolves to exactly one roster employee
+               who has one, otherwise the person's initials on their identity
+               colour — the same construction as the Request tables and the
+               disbursement list's cash-advance view. -->
+          <template #body-cell-employee="props">
+            <q-td :props="props">
+              <div class="identity">
+                <q-avatar
+                  v-if="avatarOf(props.row.employee).pictureUrl"
+                  size="30px"
+                  class="identity-avatar"
+                >
+                  <img
+                    :src="avatarOf(props.row.employee).pictureUrl"
+                    :alt="props.row.employee || 'Employee'"
+                  />
+                </q-avatar>
+                <q-avatar
+                  v-else
+                  size="30px"
+                  class="identity-avatar"
+                  :style="{ background: avatarOf(props.row.employee).color }"
+                >
+                  <span class="identity-initials">{{ avatarOf(props.row.employee).initials }}</span>
+                </q-avatar>
+                <span class="identity-name">{{ props.row.employee }}</span>
+              </div>
+            </q-td>
+          </template>
+
           <!-- Counts. Most rows are zero, so a zero is muted and only a real
                figure carries full ink — the exceptions are what this step is
                looking for. -->
@@ -327,7 +358,11 @@
       </DisbursementTableCard>
     </DisbursementStepShell>
 
-    <EmployeeDetailDialog v-model="detailDialogOpen" :employee-id="selectedEmployeeId" />
+    <EmployeeDetailDialog
+      v-model="detailDialogOpen"
+      :employee-id="selectedEmployeeId"
+      :employee-index="employeeIndex"
+    />
 
     <!-- Deducting a contribution moves the row's contribution figures and can
          move its status, so the table refetches when the dialog reports one. -->
@@ -336,6 +371,7 @@
       :pgi-id="groupId"
       :epi-id="selectedEpiId"
       :employee-name="selectedEmployeeName"
+      :employee-index="employeeIndex"
       @deducted="refreshAfterDeduct"
     />
   </PageShell>
@@ -357,6 +393,8 @@ import { useDisbursementApi } from 'src/composables/disbursement/useDisbursement
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { PGI_STATUS_MAP } from 'src/constants/pgiStatus'
 import { formatCurrency } from 'src/composables/utils/format'
+import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
+import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
 
@@ -377,6 +415,14 @@ const {
   invalidateCache,
 } = useDisbursementApi()
 const { notifyLoaded } = useLoadedToast()
+const { employees, fetchEmployees } = useEmployees()
+
+// Puts a face beside each name. The review payload names an employee but
+// carries no photograph, so the roster is the only thing that can supply one —
+// the same construction as the disbursement list's cash-advance view, including
+// its refusal to guess when a name belongs to two people.
+const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
+const avatarOf = (name) => avatarFor(employeeIndex.value, name)
 const toast = useToast()
 
 // The shell shows the run's identity and status. pgi_status arrives as a query
@@ -778,6 +824,7 @@ onMounted(async () => {
   resolveQuietly(groupId).then((run) => {
     if (run?.status && pgiStatus.value === openedWith) pgiStatus.value = run.status
   })
+  fetchEmployees().catch(() => null)
   try {
     await load()
     notifyLoaded('Payroll review', reviewData.value.length, {
@@ -1239,6 +1286,35 @@ async function releaseEmployee(row) {
   font-size: 11px;
   line-height: 1.3;
   color: var(--dash-ink-4);
+}
+
+/* The employee cell: a 30px face (or the person's initials on their identity
+   colour) beside the name. Same construction as the Request tables. */
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.identity-avatar {
+  flex-shrink: 0;
+  border: 1px solid var(--dash-line);
+}
+.identity-avatar :deep(img) {
+  object-fit: cover;
+}
+.identity-initials {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+}
+.identity-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
 
