@@ -152,7 +152,28 @@
 
               <q-td key="employeeName" :props="props" class="grid-cell cell-employee">
                 <div class="identity">
-                  <span class="identity-avatar">{{ getInitials(props.row.employeeName) }}</span>
+                  <!-- A face when the name resolves to exactly one roster employee
+                       who has one, otherwise the person's initials on their
+                       identity colour — the same construction as the Card taps,
+                       Audit and Deductions tables. -->
+                  <q-avatar
+                    v-if="avatarOf(props.row.employeeName).pictureUrl"
+                    size="30px"
+                    class="identity-avatar"
+                  >
+                    <img
+                      :src="avatarOf(props.row.employeeName).pictureUrl"
+                      :alt="props.row.employeeName || 'Employee'"
+                    />
+                  </q-avatar>
+                  <q-avatar
+                    v-else
+                    size="30px"
+                    class="identity-avatar"
+                    :style="{ background: avatarOf(props.row.employeeName).color }"
+                  >
+                    <span class="identity-initials">{{ avatarOf(props.row.employeeName).initials }}</span>
+                  </q-avatar>
                   <span class="identity-text">
                     <span class="identity-name">{{ props.row.employeeName || 'Unknown' }}</span>
                     <span class="identity-sub">{{ props.row.department || 'General' }}</span>
@@ -233,10 +254,15 @@
 import { computed } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import RequestRowMenu from './RequestRowMenu.vue'
+import { avatarFor } from '@/composables/utils/employee'
 
 const props = defineProps({
   rows: Array,
   loading: Boolean,
+  // Name → employee record, to put a face on each row; built once per page and
+  // shared by every tab. A name held by two employees resolves to null, so a
+  // row draws initials rather than the wrong photo. See `avatarFor`.
+  employeeIndex: { type: Object, default: null },
   actionLoading: String,
   submitting: { type: Set, default: () => new Set() },
   selectedIds: { type: Set, default: () => new Set() },
@@ -373,15 +399,7 @@ const emptyText = computed(() => {
   return `Try ${list} to see every request in this queue.`
 })
 
-const getInitials = (name) => {
-  if (!name || name === 'N/A') return '?'
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
+const avatarOf = (name) => avatarFor(props.employeeIndex, name)
 const capitalizeStatus = (status) => {
   if (!status) return 'Unknown'
   return status.charAt(0).toUpperCase() + status.slice(1)
@@ -494,6 +512,16 @@ const statusPillClass = (status) => {
 .reject-flag {
   font-size: 11px;
   flex-shrink: 0;
+}
+/* Material outlined glyphs carry internal whitespace below the painted shape,
+   so the flag sits high inside its own box and `align-items` on the chip cannot
+   centre the drawn icon against the label. `line-height: 1` kills the icon
+   font's own line box and `translateY` lifts the glyph onto the text line. */
+.reject-flag .q-icon {
+  flex: none;
+  align-self: center;
+  line-height: 1;
+  transform: translateY(-1px);
 }
 /* One 30px menu trigger, so the column only has to clear its own header
    label. It used to be sized for up to three side-by-side buttons. */
