@@ -80,9 +80,30 @@
             >
               <q-td class="grid-cell cell-requester">
                 <div class="identity">
-                  <span class="identity-avatar">{{
-                    getInitials(props.row.requested_by_name)
-                  }}</span>
+                  <!-- A face when the name resolves to exactly one roster employee
+                       who has one, otherwise the person's initials on their
+                       identity colour — the same construction as the Card taps,
+                       Audit and Deductions tables. -->
+                  <q-avatar
+                    v-if="avatarOf(props.row.requested_by_name).pictureUrl"
+                    size="30px"
+                    class="identity-avatar"
+                  >
+                    <img
+                      :src="avatarOf(props.row.requested_by_name).pictureUrl"
+                      :alt="props.row.requested_by_name || 'Employee'"
+                    />
+                  </q-avatar>
+                  <q-avatar
+                    v-else
+                    size="30px"
+                    class="identity-avatar"
+                    :style="{ background: avatarOf(props.row.requested_by_name).color }"
+                  >
+                    <span class="identity-initials">{{
+                      avatarOf(props.row.requested_by_name).initials
+                    }}</span>
+                  </q-avatar>
                   <span class="identity-text">
                     <span class="identity-name">{{
                       props.row.requested_by_name || 'Unknown employee'
@@ -94,11 +115,58 @@
 
               <q-td class="grid-cell cell-employees">
                 <div class="swap-pair">
-                  <span class="swap-from">{{ props.row.from_employee_name || EM_DASH }}</span>
+                  <!-- The swap's two participants carry the same name→photo
+                       resolution as the requester, so both faces show whoever
+                       really trades. -->
+                  <span class="swap-person">
+                    <q-avatar
+                      v-if="avatarOf(props.row.from_employee_name).pictureUrl"
+                      size="22px"
+                      class="identity-avatar"
+                    >
+                      <img
+                        :src="avatarOf(props.row.from_employee_name).pictureUrl"
+                        :alt="props.row.from_employee_name || EMPLOYEE_ALT"
+                      />
+                    </q-avatar>
+                    <q-avatar
+                      v-else
+                      size="22px"
+                      class="identity-avatar"
+                      :style="{ background: avatarOf(props.row.from_employee_name).color }"
+                    >
+                      <span class="identity-initials">{{
+                        avatarOf(props.row.from_employee_name).initials
+                      }}</span>
+                    </q-avatar>
+                    <span class="swap-name swap-from">{{ props.row.from_employee_name || EM_DASH }}</span>
+                  </span>
                   <span class="swap-arrow">
                     <q-icon name="south" size="12px" />
                   </span>
-                  <span class="swap-to">{{ props.row.to_employee_name || EM_DASH }}</span>
+                  <span class="swap-person">
+                    <q-avatar
+                      v-if="avatarOf(props.row.to_employee_name).pictureUrl"
+                      size="22px"
+                      class="identity-avatar"
+                    >
+                      <img
+                        :src="avatarOf(props.row.to_employee_name).pictureUrl"
+                        :alt="props.row.to_employee_name || EMPLOYEE_ALT"
+                      />
+                    </q-avatar>
+                    <q-avatar
+                      v-else
+                      size="22px"
+                      class="identity-avatar"
+                      :style="{ background: avatarOf(props.row.to_employee_name).color }"
+                    >
+                      <span class="identity-initials">{{
+                        avatarOf(props.row.to_employee_name).initials
+                      }}</span>
+                    </q-avatar>
+                    <span class="swap-name swap-to">{{ props.row.to_employee_name || EM_DASH }}</span>
+                  </span>
                 </div>
               </q-td>
 
@@ -180,11 +248,18 @@
 
 <script setup>
 import { EM_DASH } from 'src/composables/utils/swapRequests'
+import { avatarFor } from 'src/composables/utils/employee'
 import RequestRowMenu from './RequestRowMenu.vue'
+
+const EMPLOYEE_ALT = 'Employee'
 
 const props = defineProps({
   rows: Array,
   loading: Boolean,
+  // Name → employee record, to put a face on each row; built once per page and
+  // shared by every tab. A name held by two employees resolves to null, so a
+  // row draws initials rather than the wrong photo. See `avatarFor`.
+  employeeIndex: { type: Object, default: null },
   sortBy: String,
   processingId: [String, Number],
   pagination: Object,
@@ -213,15 +288,7 @@ const columns = [
   { name: 'actions', label: 'Actions', field: 'actions', align: 'right' },
 ]
 
-const getInitials = (name) => {
-  if (!name) return '?'
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2)
-}
+const avatarOf = (name) => avatarFor(props.employeeIndex, name)
 // Dates, names, shift labels and status wording are resolved once in
 // composables/utils/swapRequests.js and arrive on the row as *_label fields, so
 // the grid never has to interpret a raw payload value itself.
@@ -300,29 +367,38 @@ const isBusy = (row) =>
 .swap-pair {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
   min-width: 0;
+}
+.swap-person {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.swap-person .identity-avatar {
+  border: none;
+}
+.swap-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .swap-from {
   font-size: 13px;
   font-weight: 600;
   color: var(--dash-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .swap-arrow {
   display: flex;
   align-items: center;
+  padding-left: 14px;
   color: var(--dash-n-300);
   line-height: 1;
 }
 .swap-to {
   font-size: 12px;
   color: var(--dash-ink-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .grid-pagination :deep(.q-btn) {
