@@ -14,7 +14,7 @@ npm install            # postinstall runs `quasar prepare`
 npm run dev            # quasar dev — hot reload + API proxy (normal entry point)
 npm run lint           # eslint over ./src*/**/*.{js,cjs,mjs,vue}
 npx eslint src/pages/AttendancePage.vue   # lint a single file
-npm run format         # prettier --write
+npm run format         # prettier --write over the whole repo — avoid, see warning below
 npm run build          # quasar build -> dist/spa
 npm run serve:prod     # build then serve dist/spa via server.js (PORT, default 8000)
 npm run start          # webpack serve — NOT production serving, despite README
@@ -28,6 +28,11 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 - ESLint 9 flat config is `eslint.config.js`. The legacy root `.eslintrc.js` is ignored (lint passes
   `-c ./eslint.config.js`) — editing it changes nothing.
 - No test framework exists. Verify changes with `npm run lint` (and a dev-server check if UI).
+- **Prettier is repo-wide dirty — do not run `npm run format` for a focused change.** 124 files under
+  `src/` already fail `npx prettier --check`, and there is no `.prettierignore`, so the glob also
+  reaches vendored files. One formatted change would rewrite the repo and bury your diff. Format only
+  what you touched (`npx prettier --write <file>`); pre-existing failures elsewhere are not yours.
+  `AGENTS.md` is itself one of the unformatted files, so leave its wrapping alone.
 
 ## Env / build-time config
 
@@ -45,6 +50,8 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   **must not throw** — a throw there stops the app from booting with no UI left to log out.
 - Boot order is load-bearing (`quasar.config.js`): pinia -> auth -> axios -> toast -> errorHandler
   -> suppressExtensionErrors -> dialogA11y. Pinia before auth, auth before axios's interceptors.
+- `quasar.config.js` `extras` includes `material-icons-outlined`, which backs the `o_*` icon prefix.
+  Dropping it blanks every outlined icon with no build error — the nav rail goes blank first.
 - Adding a route to `src/router/routes.js` does **not** add a sidebar entry. The nav groups in
   `MainLayout.vue` are a hand-maintained array. Every route component is lazy `() => import(...)`
   except `AdminSettingsPage`, which is statically imported.
@@ -82,11 +89,15 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 - Feature derivations live in `composables/utils/*.js` (or a feature-local module, e.g.
   `components/pages/Announcement/announcementStatus.js`) so table, card list and tiles cannot
   disagree. Extend the module, don't compute in the component.
+- Dev proxy: add new API prefixes to the **shared** `context` array in `quasar.config.js`. It is one
+  array on purpose — a second proxy context re-triggers the `MaxListenersExceededWarning` that the
+  comment in that file documents.
 
 ## UI conventions
 
 - **Toasts: no `$q.notify` call sites remain.** Use `import { useToast } from 'src/composables/useToast'`
-  and `toast.success/.error/.warning/.info/.loading(...)`. Do not add `$q.notify` back.
+  and `toast.success/.error/.warning/.info/.loading(...)`. `src/boot/toast.js` deliberately keeps
+  `$q.notify` callable as a compatibility shim; that is not permission to add new ones.
 - Calendar dates: use `composables/utils/calendarDate.js` (`todayIso()`, `toIso`, `fromIso`,
   `shiftIso`) — not `toISOString().slice(0,10)` and not `new Date('2026-09-02')` parsing.
 - localStorage: use `composables/utils/storage.js` (`readStoredJson`/`writeStored`) so the literal
@@ -94,7 +105,13 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 - Design system is `src/css/dashboard.scss` (global via `app.scss`): `--dash-*` tokens, `dash-modal`
   dialog chrome, `dash-qtable` tables, `PageShell.vue`. Reach for the tokens, not the legacy SCSS
   `$primary`/`$gray-*`. Do **not** build dialogs as HTML strings (`$q.dialog({ html: true })`) —
-  use a component.
+  use a component. Plain `$q.dialog` is still fine for a simple confirm/alert and survives in exactly
+  three places: `AttendancePage.vue:1326`, `AttendancePage.vue:1409`, `EmployeesPage.vue:1587`. Do
+  not strip those as violations of this rule.
+- Employee photos for tables/cards: build the index **once** with `buildEmployeeNameIndex()` and pass
+  it down as an `employeeIndex` prop; read it with `avatarFor()` / `employeeByName()` from
+  `composables/utils/employee.js`. A name shared by two employees maps to `null` **on purpose**, so
+  the wrong photo is never shown — fall back to `getInitials()`.
 - Charts: `echarts` + `vue-echarts` only. PDF export: `jspdf` + `jspdf-autotable`.
 - Production build strips `console.log/debug/trace` but **keeps** `console.warn`/`console.error`
   (the app ships no error reporting). Use `.warn`/`.error` for anything a person should still see.
@@ -119,6 +136,24 @@ These are live and not covered by the long-form doc — treat them as current, n
 - **Half-day leave** — `/attendance/leave-list/` reports a half day as `total_days: 1` with
   `total_day_value: "0.50"`; render the *value*, not the count, via `leaveRequestDurationLabel` in
   `composables/utils/leaveRequests.js` (it keeps the `total_days`/`hours`/`N/A` fallbacks).
+- **Request decisions go through a confirm gate.** `RequestPage.vue`'s `commit*Decision` writers are
+  reachable only from `confirmDecision` (the dialog's `@confirm`); the user-facing wording lives in
+  `components/pages/Request/decisionConfirm.js`. Adding an approve/reject means a `commit*` writer, a
+  `confirmDecision` case, and a builder in that module. Money in this repo is **₱**, not ₦.
+- **Attendance filtering is opt-in, and partly probed.** `include_unassigned=true`
+  (`AttendancePage.vue`) pulls in records orphaned by shift reassignment. The month endpoint carries
+  year/month in the path, and the `employee` param is *probed*, not assumed — `useAttendance.js`
+  latches `employeeFilterSupported = false` once the backend rejects it.
+
+## Traps
+
+- `.opencode/plans/*.md` are **historical, not specs** — they read like current plans but are not.
+  `disbursement-redesign-plan.md` documents the already-shipped migration, and
+  `payroll-redesign-plan.md` targets `PayrollPage.vue`, which has been deleted.
+- Git prints `LF will be replaced by CRLF` on every add (`core.autocrlf=true` against
+  `end_of_line=lf` in `.editorconfig`). That is expected noise; don't "fix" it.
+- Dead code and plans are the main source of false leads here. When a name in a comment, plan, or
+  old doc doesn't resolve, grep for importers before assuming it exists.
 
 ## Out of scope unless asked
 
