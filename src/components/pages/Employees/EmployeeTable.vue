@@ -214,6 +214,10 @@
  * a 1024px laptop once the navigation rail is subtracted — so the table showed a
  * horizontal scrollbar and hid columns behind a gesture. Dropping to one leave
  * column at that width, plus folding Role into the identity cell, makes it fit.
+ *
+ * How many columns fit is only half of it. Which types get those columns is
+ * decided by use rather than by the endpoint's ordering — see
+ * `visibleLeaveTypes` below.
  */
 import { computed } from 'vue'
 import { useQuasar } from 'quasar'
@@ -228,6 +232,7 @@ import {
   hasContract,
   getLeaveBalanceForType,
   getCtoBalance,
+  rankLeaveTypesByUse,
   getAvatarColor,
   isTerminated,
 } from '@/composables/utils/employee'
@@ -284,9 +289,18 @@ const leaveColumnBudget = computed(() => {
   return 1
 })
 
-// The list arrives already narrowed to paid types by the fetch, so the only
-// thing left to apply is the column budget.
-const visibleLeaveTypes = computed(() => props.leaveTypes.slice(0, leaveColumnBudget.value))
+// Ranked before the budget is applied, so the columns that survive the budget
+// are the ones this page of employees actually holds balances against. Slicing
+// `leaveTypes` in arrival order left that to the endpoint's ordering, so a
+// leave type in use could be the one pushed off the table while an unused one
+// kept its column. The budget is still the budget — the count is unchanged, and
+// anything it drops is still on the card list and in the employee's detail
+// modal. Ranking is per page because balances are fetched for the visible rows
+// only (`EmployeesPage.vue`'s `runPageDataFetch`), so employees on other pages
+// have no `_balance` to count yet.
+const visibleLeaveTypes = computed(() =>
+  rankLeaveTypesByUse(props.leaveTypes, props.employees).slice(0, leaveColumnBudget.value)
+)
 
 const isLoadingContract = (employee) => props.loadingContractIds.has(employee.id)
 const isLoadingBalance = (employee) => props.loadingBalanceIds.has(employee.id)
