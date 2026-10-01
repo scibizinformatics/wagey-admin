@@ -158,6 +158,52 @@ export function getCtoBalance(employee) {
 }
 
 /**
+ * Leave types ordered by how much `employees` actually uses them.
+ *
+ * The Employees table can only afford a few leave columns at a given width, and
+ * slicing `leaveTypes` in arrival order meant the columns that survived were
+ * whichever the endpoint happened to list first — not the ones anybody holds a
+ * balance against. Ranking first lets the width budget spend itself on real
+ * data. The budget itself is untouched, and the card list still shows every
+ * type, so nothing becomes unreachable.
+ *
+ * Tiers, most used first:
+ *   2 — at least one employee holds a balance above zero
+ *   1 — at least one employee has a ledger row that reads zero
+ *   0 — nobody has a ledger row for this type
+ *
+ * Each tier is read through `getLeaveBalanceForType`, the same function that
+ * renders the cell, so "has a ledger row" and "reads zero" are never decided
+ * twice by two readings of the payload. CTO is deliberately not consulted: it
+ * suffixes its value (`'7h'`), so it is not the bare figure these tiers compare.
+ *
+ * Ties fall back to the incoming order, so a company with no balances anywhere
+ * ranks exactly as it did before this existed.
+ *
+ * @param {Array<{id: number|string}>} leaveTypes
+ * @param {Array<object>} employees - the rows actually on screen
+ * @returns {Array} the same type objects, ordered
+ */
+export function rankLeaveTypesByUse(leaveTypes, employees) {
+  if (!Array.isArray(leaveTypes) || !leaveTypes.length) return []
+
+  const rows = Array.isArray(employees) ? employees : []
+
+  return leaveTypes
+    .map((type, index) => ({
+      type,
+      index,
+      tier: rows.reduce((worst, emp) => {
+        const value = getLeaveBalanceForType(emp, type.id)
+        if (value === EM_DASH) return worst
+        return Math.max(worst, Number(value) > 0 ? 2 : 1)
+      }, 0),
+    }))
+    .sort((a, b) => b.tier - a.tier || a.index - b.index)
+    .map((entry) => entry.type)
+}
+
+/**
  * Identity colour for an avatar, from the design system's categorical ramp.
  * Hashed off the name so a person keeps the same colour across reloads.
  */
