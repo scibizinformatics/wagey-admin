@@ -105,7 +105,7 @@
  * The table answers 1024px up; a panel of cards keeps every reading at full size
  * without the sideways scroll a seven-column table would demand below that.
  */
-import { tapCount } from '@/composables/utils/cardTaps'
+import { durationDecimalHoursLabelOf, tapCount } from '@/composables/utils/cardTaps'
 
 const props = defineProps({
   rows: { type: Array, default: () => [] },
@@ -139,7 +139,10 @@ function timeLabel(tap) {
 }
 
 function durationLabel(row) {
-  return row?.duration || '—'
+  // Decimal only, matching the table's Duration cell. The server's own
+  // "2h 9m 32s" rides along there as a hover, and this component is for the
+  // touch widths where there is no hover to offer it in.
+  return durationDecimalHoursLabelOf(row)
 }
 </script>
 
