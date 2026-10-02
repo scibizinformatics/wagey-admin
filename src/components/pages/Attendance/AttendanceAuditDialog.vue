@@ -199,6 +199,7 @@
 import { computed, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { getInitials } from '@/composables/utils/attendance'
+import { clockTimeOptions } from '@/composables/utils/timezone'
 import { useAuditLogs } from 'src/composables/page/useAuditLogs'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { extractErrorMessage } from '@/composables/utils/http'
@@ -215,7 +216,15 @@ const props = defineProps({
   // IANA zone for the record's employee, so stamps read in their local time
   // rather than the admin's.
   timezone: { type: String, default: '' },
+  // The company's `time_format` — '12h' | '24h'. Defaulted so a stamp is right
+  // before the page's settings request answers.
+  timeFormat: { type: String, default: '12h' },
 })
+
+// `h23` rather than `h24` on the 24-hour side: both render 18:00 the same way,
+// but h24 prints midnight as 24:00, which is the one clock reading that looks
+// like a bug to anyone who has not been taught the convention.
+const clockOptions = computed(() => clockTimeOptions(props.timeFormat))
 
 const emit = defineEmits(['update:modelValue', 'acknowledged'])
 
@@ -238,7 +247,7 @@ function stamp(iso) {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: true,
+    ...clockOptions.value,
   })
 }
 
