@@ -115,6 +115,28 @@
             </q-tooltip>
           </q-select>
 
+          <!-- Which records need looking at. A plain query param on the month
+               endpoint, so unlike the payout-group select it works over a date
+               range too. "Any issue" is flagged OR suspicious — the label says
+               "any" rather than "all" because `issue=all` means either flag set,
+               not no filter at all. -->
+          <q-select
+            v-model="issueFilter"
+            :options="ATTENDANCE_ISSUE_FILTERS"
+            emit-value
+            map-options
+            dense
+            outlined
+            hide-bottom-space
+            :popup-content-class="'att-popup'"
+            class="att-filter dash-field"
+            aria-label="Filter by issue"
+          >
+            <template v-slot:prepend>
+              <q-icon name="o_report" size="16px" />
+            </template>
+          </q-select>
+
           <!-- Widens the month rather than narrowing it, so it is a button that
                carries state instead of a select: there is nothing to choose
                between, only whether the records left behind by a shift change
@@ -134,9 +156,11 @@
             @click="includeUnassigned = !includeUnassigned"
           >
             <q-tooltip>
-              {{ includeUnassigned
-                ? 'Hiding records left behind by a shift change'
-                : 'Show records left behind by a shift change' }}
+              {{
+                includeUnassigned
+                  ? 'Hiding records left behind by a shift change'
+                  : 'Show records left behind by a shift change'
+              }}
             </q-tooltip>
           </q-btn>
 
@@ -192,6 +216,7 @@
           :employees="employees"
           :is-filtered="activeFilters.length > 0"
           :single-employee="reviewingSingleEmployee"
+          :time-format="timeFormat"
           @view-selfie="viewSelfie"
           @view-photo="viewEmployeePhoto"
           @edit-time="openInlineEdit"
@@ -207,6 +232,7 @@
           :single-employee="reviewingSingleEmployee"
           :sort-by="sort.by"
           :descending="sort.desc"
+          :time-format="timeFormat"
           @update:sort="onSortChange"
           @view-selfie="viewSelfie"
           @view-photo="viewEmployeePhoto"
@@ -296,6 +322,7 @@
       :employee-name="auditEmployeeName"
       :photo="auditPhoto"
       :timezone="auditTimezone"
+      :time-format="timeFormat"
       @acknowledged="onAuditAcknowledged"
     />
 
@@ -340,7 +367,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { useEmployees } from '@/composables/page/useEmployees'
-import { toUTC, formatInTimezone } from '@/composables/utils/timezone'
+import { toUTC, formatInTimezone, clockTimeOptions } from '@/composables/utils/timezone'
 import { useOrganization } from '@/composables/page/useOrganization'
 import AttendanceTable from '@/components/pages/Attendance/AttendanceTable.vue'
 import AttendanceCardList from '@/components/pages/Attendance/AttendanceCardList.vue'
@@ -363,9 +390,15 @@ import {
   getLockedShiftRecordIds,
   isRecordComplete,
   rowMatchesEmployee,
-  attendanceDurationMs,
-  attendanceDurationLabel,
+  attendanceDurationOf,
+  attendanceLeaveLabel,
+  reportLeaveTypeCoverage,
+  matchesIssueFilter,
+  ATTENDANCE_ISSUE_FILTERS,
 } from '@/composables/utils/attendance'
+import { buildLeaveTypeIndex } from '@/composables/utils/leaveTypes'
+import { useAdminLeaveTypes } from '@/composables/admin/useAdminLeaveTypes'
+import { useAdminLaborRuleSettings } from '@/composables/admin/useAdminLaborRuleSettings'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
 import { useLoadedToast } from '@/composables/useLoadedToast'
@@ -396,6 +429,50 @@ const {
   fetchSites: fetchSitesApi,
   fetchCostCenters: fetchCostCentersApi,
 } = useOrganization()
+
+// ─── Leave types ──────────────────────────────────────────────────────────────
+//
+// A leave day arrives as a record with no punches, so what tells it apart from
+// somebody who forgot to clock in is which leave type it is. The list comes from
+// the company-scoped route — the only reader of it in the app, used from here
+// rather than duplicated — narrowed to the types that keep a balance, which is
+// the set a row can be labelled from.
+//
+// Deliberately outside `filtersInFlight` below: that counter is what makes the
+// dropdowns read as loaded, and a failed lookup must not hold them. Nor is it
+// wired to the table's spinner — the chip fills itself in when the list lands,
+// because a leave label is context on a row, not the row itself.
+const { leaveTypes, fetchLeaveTypes: fetchLeaveTypesApi } = useAdminLeaveTypes()
+
+const leaveTypeIndex = computed(() => buildLeaveTypeIndex(leaveTypes.value))
+
+// One coverage report per company. It is the diagnostic a manual read of the
+// attendance payload would otherwise have to supply: which field names the leave
+// type, and whether the ids it names are ones this list holds.
+let leaveCoverageReported = false
+
+function reportLeaveCoverage() {
+  if (leaveCoverageReported) return
+  // Both halves have to be in hand — a report over an empty half would claim the
+  // payload names no leave type when the records simply had not arrived yet.
+  if (!leaveTypes.value.length || !attendanceData.value.length) return
+  leaveCoverageReported = true
+  reportLeaveTypeCoverage(attendanceData.value, leaveTypeIndex.value, leaveTypes.value.length)
+}
+
+async function fetchLeaveTypes() {
+  await fetchLeaveTypesApi({ usesBalance: true })
+  reportLeaveCoverage()
+}
+
+// ─── Time format ───────────────────────────────────────────────────────────────
+//
+// Whether an admin reads "6:00 PM" or "18:00" is a company setting, not a
+// preference of this browser, so it is read from the labor-rule endpoint and
+// applied to every clock time on the page. It is fetched alongside the leave
+// types rather than inside them: the setting answers for the whole company, so
+// one request covers the table, the cards and the audit stamps.
+const { timeFormat, fetchLaborRuleSettings } = useAdminLaborRuleSettings()
 
 // ─── Local UI state ───────────────────────────────────────────────────────────
 // Counted, not a flag. Sites and employees are fetched together on mount and
@@ -486,6 +563,15 @@ const payrollGroupFilter = ref(null)
 // that marks them. Those rows show a '—' in the shift column, which is already
 // how a record with no assignment reads.
 const includeUnassigned = ref(false)
+
+// ─── Issue filter ──────────────────────────────────────────────────────────────
+// Which records need a human to look at them. Server-side, like the unassigned
+// flag above: the endpoint narrows on `flagged` / `is_suspicious`, and a record
+// with neither set is not something this page can compute as needing attention
+// any more cheaply than the backend can. The rows are narrowed again locally in
+// filteredAttendanceRows, because an unknown query param is ignored rather than
+// rejected and a backend that ignored this one would answer in full.
+const issueFilter = ref(null)
 
 const payrollGroupOptions = computed(() =>
   payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
@@ -781,6 +867,14 @@ const filteredAttendanceRows = computed(() => {
       (row) => String(rowPayoutGroupId(row) ?? '') === String(payrollGroupFilter.value),
     )
   }
+
+  // The endpoint has already applied this one; doing it again costs a boolean per
+  // row and is what makes the filter honest against a backend that ignores it,
+  // which an unknown query param invites. A subset of what came back either way,
+  // so the server's own totals are unaffected.
+  if (issueFilter.value) {
+    data = data.filter((row) => matchesIssueFilter(row, issueFilter.value))
+  }
   return data
 })
 
@@ -840,10 +934,11 @@ function sortValueFor(row, key) {
       return row.time_out || ''
     // Total minutes, zero-padded so the string comparator orders durations
     // numerically — "2h 9m" and "11h 30m" compare as text the wrong way round.
-    // Rows with no duration return '' and sink to the bottom like every other
-    // empty sort value.
+    // Read through the same resolver the cell uses, so the column cannot sort by
+    // one duration and display another. Rows with no duration return '' and sink
+    // to the bottom like every other empty sort value.
     case 'duration': {
-      const ms = attendanceDurationMs(row.time_in, row.time_out)
+      const ms = attendanceDurationOf(row)
       if (ms == null) return ''
       return String(Math.floor(ms / 60000)).padStart(7, '0')
     }
@@ -898,12 +993,17 @@ const visibleRows = computed(() => {
 
 const pagedRows = computed(() => {
   const locked = lockedShiftRecordIds.value
+  const leaveIndex = leaveTypeIndex.value
 
   return visibleRows.value.map((row) => {
     const isLocked = locked.has(row.id)
     return {
       ...row,
       _timezone: getTimezoneForEmployee(row.employee) || '',
+      // Null on a row that is not a leave day, and equally on one whose leave
+      // type the list cannot name — the two views fall back to work_type for
+      // both, which is honest, since neither has a label to print.
+      _leaveType: attendanceLeaveLabel(row, leaveIndex),
       _shiftLocked: isLocked,
       _shiftLockedReason: isLocked ? shiftLockReason(row) : '',
     }
@@ -957,6 +1057,13 @@ const activeFilters = computed(() => {
     const group = payrollGroupOptions.value.find((g) => g.value === payrollGroupFilter.value)
     out.push({ key: 'payrollGroup', label: group?.label ?? 'Payout group' })
   }
+  if (issueFilter.value) {
+    // Labelled from the option list rather than the raw value, so the chip reads
+    // the way the select did — and so "issue=all" never surfaces as a chip
+    // claiming it means "everything".
+    const option = ATTENDANCE_ISSUE_FILTERS.find((f) => f.value === issueFilter.value)
+    out.push({ key: 'issue', label: option?.label ?? 'Issues' })
+  }
   // Not a narrowing filter like the rest of this list — it widens it. It still
   // gets a chip: the footer count speaks for whatever set is loaded, so a
   // widened set nobody disclosed would read as the normal number of records.
@@ -969,8 +1076,10 @@ const activeFilters = computed(() => {
 function clearFilter(key) {
   if (key === 'search') employeeSearch.value = ''
   if (key === 'payrollGroup') payrollGroupFilter.value = null
-  // The watcher on includeUnassigned refetches, so there is nothing to call here.
+  // The watchers on includeUnassigned and issueFilter refetch, so there is
+  // nothing to call here.
   if (key === 'includeUnassigned') includeUnassigned.value = false
+  if (key === 'issue') issueFilter.value = null
   // Dropping the span leaves range mode entirely; dropping just the employee
   // widens the same span to everyone, which needs no refetch — the months are
   // already loaded and filteredAttendanceRows re-runs on its own.
@@ -1100,10 +1209,16 @@ async function fetchAttendanceData(params = {}) {
     // (useAttendance.js), so the off state keys and caches exactly as it does
     // today and flipping the toggle never throws away a month already in hand.
     const unassignedParams = includeUnassigned.value ? { include_unassigned: true } : {}
+    // Same reasoning, and the same absence: 'all' is a real request for either
+    // flag, so it goes up, but an unused filter sends nothing at all rather than
+    // `issue=` — paramsKey drops only undefined/null/'' , and a changed key would
+    // mean the unfiltered month no longer shares its cache entry.
+    const issueParams = issueFilter.value ? { issue: issueFilter.value } : {}
 
     const extraParams = {
       ...(filters.value.cost_center ? { cost_center: filters.value.cost_center } : {}),
       ...unassignedParams,
+      ...issueParams,
       ...params,
     }
 
@@ -1119,12 +1234,13 @@ async function fetchAttendanceData(params = {}) {
       // it touched, which is the bulk of what makes a range slow. `loadMonth`
       // works out for itself whether the endpoint honours it and stops sending
       // it if not, so the rows are still narrowed client-side below either way.
-      // The unassigned flag goes up here too, unlike the payout-group filter:
-      // it is a plain query param and costs nothing extra, so a range can show
-      // the same records a single day does.
+      // The unassigned flag and the issue filter go up here too, unlike the
+      // payout-group filter: they are plain query params and cost nothing extra,
+      // so a range shows exactly the records a single day does.
       const rangeParams = {
         ...(filters.value.cost_center ? { cost_center: filters.value.cost_center } : {}),
         ...unassignedParams,
+        ...issueParams,
         ...(dateRangeEmployee.value ? { employee: dateRangeEmployee.value } : {}),
         ...params,
       }
@@ -1166,6 +1282,7 @@ async function fetchAttendanceData(params = {}) {
         showErrorNotification('No attendance records found for this range.')
       }
       notifyLoaded('Attendance', inRange.length)
+      reportLeaveCoverage()
       return
     }
 
@@ -1203,6 +1320,7 @@ async function fetchAttendanceData(params = {}) {
       showErrorNotification('No attendance records found for this date.')
     }
     notifyLoaded('Attendance', dateFilteredCount)
+    reportLeaveCoverage()
   } catch (error) {
     if (!isCurrent()) return
     showErrorNotification(extractErrorMessage(error, 'Failed to load attendance data'))
@@ -1364,12 +1482,14 @@ async function submitAttendance(record) {
       ...(record.selected_assignment_id != null && {
         assignment_id: Number(record.selected_assignment_id),
       }),
-      // Duration sits with the punches it describes and only exists once both
-      // are in — an open record has no answer. The overnight bump above has
-      // already put time_out after time_in, so this pair is never negative.
+      // No `duration` is sent: it is the server's figure, computed from the
+      // punches it stores and net of the unpaid break. Sending our own left the
+      // field holding whatever this page guessed — and a formatted "8h 30m"
+      // string where the serializer expects a number — so every record an admin
+      // touched stopped agreeing with its own hours. The refetch below reads
+      // back what the server worked out.
       ...(timeOut && {
         time_out: timeOut.toISOString(),
-        duration: attendanceDurationLabel(timeIn, timeOut),
       }),
     }
 
@@ -1487,10 +1607,6 @@ async function saveInlineEdit() {
       await updateAttendanceApi(record.id, {
         time_in: existingTimeIn,
         time_out: timeOutTimestamp,
-        ...(existingTimeIn &&
-          timeOutTimestamp && {
-            duration: attendanceDurationLabel(existingTimeIn, timeOutTimestamp),
-          }),
         source: record.source || 'admin',
       })
     } catch (error) {
@@ -1564,10 +1680,6 @@ async function updateAttendance(record) {
     await updateAttendanceApi(record.id, {
       time_in: timeInTimestamp,
       time_out: timeOutTimestamp,
-      ...(timeInTimestamp &&
-        timeOutTimestamp && {
-          duration: attendanceDurationLabel(timeInTimestamp, timeOutTimestamp),
-        }),
       time_in_source: record.time_in_source || record.source || 'admin',
       time_out_source: record.time_out_source || record.source || 'admin',
       source: record.source || 'admin',
@@ -1630,6 +1742,7 @@ function clearAllFilters() {
   employeeSearch.value = ''
   payrollGroupFilter.value = null
   includeUnassigned.value = false
+  issueFilter.value = null
   dateRangeActive.value = false
   dateRangeEmployee.value = null
   currentDate.value = today
@@ -1756,11 +1869,27 @@ async function onAuditAcknowledged(recordId) {
   if (fresh) auditRecord.value = { ...auditRecord.value, ...fresh }
 }
 
+/**
+ * A punch as a `type="time"` input's value.
+ *
+ * Deliberately 24h whatever the company's `time_format` says. The input parses
+ * and emits 24h `HH:mm`, and `toUTC()` reads it back the same way, so printing
+ * 12h here would put "06:00" in a field holding 6:00 PM — the admin would save
+ * the wrong punch by opening the editor. `time_format` governs what is *shown*,
+ * never what is edited.
+ */
 function formatTimeForInput(dateTimeString, timezone) {
   if (!dateTimeString) return ''
   return formatInTimezone(dateTimeString, timezone, '24h')
 }
 
+/**
+ * A shift's own start/end time, printed the company's way.
+ *
+ * Unlike a punch this is wall-clock local to the shift — `HH:mm` with no offset
+ * and nothing to convert — so it is built by placing those numbers on a fixed
+ * date rather than going through the timezone formatter, which would move them.
+ */
 function formatScheduleTime(timeString) {
   if (!timeString) return '-'
   try {
@@ -1769,12 +1898,16 @@ function formatScheduleTime(timeString) {
       return new Date(1970, 0, 1, hours, minutes).toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
-        hour12: true,
+        ...clockTimeOptions(timeFormat.value),
       })
     }
     const date = new Date(timeString)
     if (isNaN(date.getTime())) return timeString
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      ...clockTimeOptions(timeFormat.value),
+    })
   } catch {
     return timeString
   }
@@ -1794,13 +1927,25 @@ function showWarningNotification(message) {
 }
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────
-// Payout groups feed the toolbar select, so the list loads with the page. Gated
-// on companyId because fetchPayrollGroups returns an empty list without one, and
-// does so silently.
+// Payout groups feed the toolbar select, leave types label the rows and the
+// labor-rule settings decide how every clock time is printed, so all three load
+// with the page. Gated on companyId because each fetch returns empty — or the
+// 12h default — without one, and does so silently.
 watch(
   companyId,
   (id) => {
-    if (id) fetchPayrollGroups()
+    // The report belongs to one workspace: another company's rows answer a
+    // different question, and the composable has already dropped this one's types.
+    leaveCoverageReported = false
+    if (id) {
+      fetchPayrollGroups()
+      fetchLeaveTypes()
+      // Fired alongside the other two rather than awaited in front of them: this
+      // is one small request, issued on the immediate watcher run — so it is on
+      // the wire before the page's first attendance fetch — and holding up the
+      // roster to settle a display preference would be the wrong trade.
+      fetchLaborRuleSettings()
+    }
   },
   { immediate: true },
 )
@@ -1822,10 +1967,12 @@ watch(attendanceData, async () => {
   await ensurePayoutGroups(ids)
 })
 
-// The unassigned flag is server-side, so a change means a refetch rather than a
-// recompute — the rows are not in the payload until they are asked for. The page
-// resets because the row count changes under the reader's feet.
-watch(includeUnassigned, () => {
+// Both server-side, so a change means a refetch rather than a recompute — the
+// rows are not in the payload until they are asked for. The page resets because
+// the row count changes under the reader's feet. One watcher for both, so a
+// `clearAllFilters` that resets them together issues a single fetch rather than
+// one per ref.
+watch([includeUnassigned, issueFilter], () => {
   pagination.value.page = 1
   fetchAttendanceData()
 })
