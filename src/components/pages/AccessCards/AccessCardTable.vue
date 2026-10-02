@@ -137,7 +137,7 @@
                  which would have to wrap to carry it and so would make every
                  other column's label sit in a taller strip. -->
             <q-td key="hours" :props="props">
-              <span v-if="props.row.hoursMinutes !== null" class="hours dash-num">
+              <span v-if="props.row.hoursSeconds !== null" class="hours dash-num">
                 {{ props.row.hoursLabel }}
                 <q-tooltip anchor="bottom middle" self="top middle">
                   On the clock this month, from the card-taps log
