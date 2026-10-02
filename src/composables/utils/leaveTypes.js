@@ -218,6 +218,31 @@ export function normalizeLeaveTypes(raw) {
 }
 
 /**
+ * An id-keyed lookup over already-normalized types, for the record that carries
+ * a bare id and the list that carries the name — an attendance row naming its
+ * leave type, most often.
+ *
+ * Keys are stringified because the two sides disagree: the list arrives with
+ * numeric ids and the record referencing one may hold it as a string.
+ */
+export function buildLeaveTypeIndex(types) {
+  const index = new Map()
+  for (const type of Array.isArray(types) ? types : []) {
+    if (type?.id == null) continue
+    index.set(String(type.id), type)
+  }
+  return index
+}
+
+/** The type an id names in an index from `buildLeaveTypeIndex`, or null. */
+export function leaveTypeFromIndex(index, id) {
+  // Checked rather than assumed: this is the one function here a caller could
+  // hand a plain list to by mistake, and `.get` on an array throws mid-render.
+  if (id == null || typeof index?.get !== 'function') return null
+  return index.get(String(id)) ?? null
+}
+
+/**
  * The chips the table prints for one type.
  *
  * Paid/unpaid is always shown because it is the fact people open the table for.
