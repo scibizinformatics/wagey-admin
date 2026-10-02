@@ -15,11 +15,16 @@
  *   first. They are split and never reformatted — the same rule as the access
  *   card `last_tap`.
  * - `duration` is pre-formatted ("2h 9m 32s") — display, not data. Comparing
- *   spans means comparing the numeric tap fields, not this string.
+ *   spans means comparing the numeric tap fields, not this string. It is read as
+ *   text, never reformatted: the seconds in it are parsed for the decimal
+ *   columns, but the string itself is what the hover shows, so what the server
+ *   said stays on screen somewhere.
  * - `first_tap` / `last_tap` are the oldest and newest taps of the day, so the
  *   difference between them *is* the session span even though the payload also
  *   carries `duration` separately.
  */
+
+import { decimalHoursLabel } from 'src/composables/utils/format'
 
 /**
  * One employee-day row per (employee, day) pair in the payload.
@@ -57,41 +62,65 @@ export function tapCount(row) {
 }
 
 /**
- * Minutes in a pre-formatted duration string ("2h 9m 32s", "8h 30m", "45m").
- * Seconds are floored — the toolbar total never reports a fraction of a minute
- * the per-row labels don't either.
+ * Seconds in a pre-formatted duration string ("2h 9m 32s", "8h 30m", "45m").
+ *
+ * Seconds are the unit this module keeps durations in, and nothing is rounded
+ * on the way in. A reader is entitled to the hundredth of an hour the column
+ * prints, and a hundredth of an hour is 36 seconds — so a duration floored to
+ * whole minutes is already most of a rounding step out of date before it is
+ * formatted. "2h 9m 32s" is 2.1589 hours and has to print `2.16`; floored to 129
+ * minutes it prints `2.15`, and every row is quietly low by the same fraction.
+ *
+ * An absent or unparseable string is 0, matching how a blank `duration` has
+ * always counted in the totals — but `durationDecimalHoursOf` reports it as null
+ * so a cell can still show that there was no figure rather than print zero.
  */
-export function durationToMinutes(value) {
+export function durationToSeconds(value) {
   if (!value) return 0
   const str = String(value)
   const h = Number((str.match(/(\d+(?:\.\d+)?)\s*h/) || [])[1] || 0)
   const m = Number((str.match(/(\d+(?:\.\d+)?)\s*m/) || [])[1] || 0)
   const s = Number((str.match(/(\d+(?:\.\d+)?)\s*s/) || [])[1] || 0)
-  return Math.floor(h * 60 + m + s / 60)
+  return h * 3600 + m * 60 + s
 }
 
 /**
- * A span of minutes as "Xh Ym".
+ * A duration string as decimal hours, or null when the payload carried none.
  *
- * The one place this app turns minutes into a label, so the taps page's toolbar
- * total and the access-cards page's per-card column cannot print the same number
- * two ways. A zero-length span reads as "0h 0m" rather than blank: on a card,
- * a holder who has not tapped this month is a reading, and an empty cell would
- * be indistinguishable from one we could not read at all.
- *
- * @param {number} minutes
- * @returns {string}
+ * Null is kept distinct from 0 on purpose: `''` means the server sent no figure,
+ * and "no duration recorded" must not print as "0.00 hours worked".
  */
-export function hoursLabel(minutes) {
-  const total = Number.isFinite(minutes) && minutes > 0 ? Math.floor(minutes) : 0
-  return `${Math.floor(total / 60)}h ${total % 60}m`
+export function durationDecimalHoursOf(value) {
+  if (!value) return null
+  return durationToSeconds(value) / 3600
 }
 
-/** Total duration of a set of rows as "Xh Ym", minutes floored. */
+/**
+ * `"2.16"` for one row — two decimals, or `"—"` when the payload has no figure.
+ *
+ * Every surface that quotes a tap row's duration goes through here, so the table,
+ * the card list, the detail dialog and the toolbar total cannot print the same
+ * span three ways.
+ */
+export function durationDecimalHoursLabelOf(row) {
+  const hours = durationDecimalHoursOf(row?.duration)
+  if (hours == null) return '—'
+  return decimalHoursLabel(hours)
+}
+
+/**
+ * Total duration of a set of rows as decimal hours.
+ *
+ * Seconds are added up and rounded once, at the end. Adding the per-row decimals
+ * instead would round once per day and drift: three one-minute days are 0.05
+ * hours, but three printed `0.02`s come to `0.06` — the reader is told the week
+ * was longer than it was. Rows with no figure still count as zero, which is what
+ * a blank `duration` has always done in this total.
+ */
 export function totalDurationLabel(rows) {
-  let minutes = 0
-  for (const row of rows || []) minutes += durationToMinutes(row?.duration)
-  return hoursLabel(minutes)
+  let seconds = 0
+  for (const row of rows || []) seconds += durationToSeconds(row?.duration)
+  return decimalHoursLabel(seconds / 3600)
 }
 
 /** Every distinct employee name in a set of rows, in first-seen order. */
