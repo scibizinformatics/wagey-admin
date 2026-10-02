@@ -28,6 +28,11 @@ import {
  * request from the reactive `companyId`, and the rows are cleared when it
  * changes — ids from the previous workspace mean nothing in the next one.
  *
+ * `uses_balance` is optional and off unless a caller asks for it, so this panel
+ * and the write flows below see every type; the attendance page passes
+ * `{ usesBalance: true }` and gets the types that keep a credit ledger, which is
+ * the subset it can name a leave day from.
+ *
  * Create takes the type and, optionally, its policies in the same atomic body
  * (`policies: [...]`); if any policy is invalid nothing is saved, which is why
  * the create dialog can offer a first policy inline. **Update deliberately
@@ -64,7 +69,16 @@ export function useAdminLeaveTypes() {
 
   // ─── Fetch ─────────────────────────────────────────────────────────────────
 
-  async function fetchLeaveTypes() {
+  /**
+   * Leave types for the active company.
+   *
+   * @param {object}  [options]
+   * @param {boolean|null} [options.usesBalance] `true` for only the types that
+   *   keep a credit ledger, `false` for only those that do not, and null (the
+   *   default) for no filter at all — which is what the settings panels and the
+   *   post-write refetch want, since both edit types the filter would hide.
+   */
+  async function fetchLeaveTypes({ usesBalance = null } = {}) {
     if (!companyId.value) {
       leaveTypes.value = []
       return []
@@ -72,9 +86,26 @@ export function useAdminLeaveTypes() {
     const token = listGuard.next()
     loading.value = true
     try {
-      const response = await api.get(`/attendance/leave-types/company/${companyId.value}/`)
+      // Absent rather than sent-as-null when unset, so the request this panel
+      // has always made is unchanged and `?uses_balance` exists only for the
+      // callers that mean it — the attendance page, which asks for the types
+      // that keep a ledger so it can name a leave day.
+      const params = usesBalance == null ? undefined : { uses_balance: usesBalance }
+      const response = await api.get(`/attendance/leave-types/company/${companyId.value}/`, {
+        params,
+      })
       if (!listGuard.isCurrent(token)) return leaveTypes.value
-      leaveTypes.value = normalizeLeaveTypes(response.data)
+      const normalized = normalizeLeaveTypes(response.data)
+      // Narrowed here as well as asked for upstream. An unrecognised query param
+      // is ignored rather than rejected, so a backend without the filter answers
+      // with every type and the caller's set silently widens — which for the
+      // attendance page means labelling a row from a type it was told not to
+      // draw on. `normalizeLeaveType` applies the documented `is_paid || is_cto`
+      // default, so this compares against a real value rather than a missing one.
+      leaveTypes.value =
+        usesBalance == null
+          ? normalized
+          : normalized.filter((type) => type.usesBalance === usesBalance)
       return leaveTypes.value
     } catch (error) {
       console.error('Error fetching leave types:', error)
