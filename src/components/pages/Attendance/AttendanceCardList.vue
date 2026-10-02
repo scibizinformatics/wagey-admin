@@ -137,9 +137,11 @@
         </div>
 
         <!-- The worked hours the backend recorded, and the same figure the table's
-             Duration column shows, so the two views of one record agree. -->
+             Worked Hours column shows, so the two views of one record agree.
+             Decimal only: the table carries the h/m reading on hover, and a
+             hover is not a thing on the touch widths this component is for. -->
         <div class="punch-slot">
-          <span class="punch-slot__label">Duration</span>
+          <span class="punch-slot__label">Worked Hours</span>
           <span
             class="punch-slot__duration dash-num"
             :class="{ 'punch-slot__duration--none': !hasDuration(row) }"
@@ -169,8 +171,8 @@ import {
   getAvatarColor,
   getShiftName,
   workTypeToneClass,
-  attendanceDurationLabelOf,
   attendanceDurationOf,
+  attendanceDecimalHoursLabelOf,
 } from '@/composables/utils/attendance'
 
 const props = defineProps({
@@ -221,7 +223,7 @@ function auditToneClass(row) {
 
 const nameOf = (row) => getEmployeeName(row.employee, props.employees)
 const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
-const durationOf = (row) => attendanceDurationLabelOf(row)
+const durationOf = (row) => attendanceDecimalHoursLabelOf(row)
 const hasDuration = (row) => attendanceDurationOf(row) != null
 </script>
 
