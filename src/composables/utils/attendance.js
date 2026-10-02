@@ -7,6 +7,7 @@
  * object depending on the endpoint, so every consumer needs the same unwrapping.
  */
 import { formatInTimezone } from '@/composables/utils/timezone'
+import { leaveTypeFromIndex } from '@/composables/utils/leaveTypes'
 
 export function getEmployeeId(employee) {
   if (!employee) return null
@@ -190,13 +191,68 @@ export function workTypeToneClass(workType) {
   }
 }
 
+// ── Issue filter ─────────────────────────────────────────────────────────────
+//
+// The endpoint takes `?issue=flagged|suspicious|all`, so the list is narrowed
+// server-side. `matchesIssueFilter` is the same narrowing expressed locally, and
+// both are needed: a backend that ignores an unknown query param answers with the
+// whole month, and the reader would be looking at every record under a chip that
+// claims "Flagged only" — nothing on screen contradicts the claim.
+//
+// `all` is either flag, *not* "no filter". Hence four options rather than three,
+// and the first one's value is `null`, which is what keeps the parameter off the
+// request entirely when the filter is unused — sending `issue=` would key the
+// month cache differently and throw away a month already in hand.
+//
+// `auto_closed` is deliberately absent: it is not part of what the endpoint's
+// `issue` means, so a record the audit dot marks for that reason alone falls out
+// of "Any issue". The dot's own rule is wider, and cannot be reconciled here — a
+// server-narrowed set cannot be widened after the fact.
+export const ATTENDANCE_ISSUE_FILTERS = [
+  { label: 'All records', value: null },
+  { label: 'Any issue', value: 'all' },
+  { label: 'Flagged only', value: 'flagged' },
+  { label: 'Suspicious only', value: 'suspicious' },
+]
+
+/**
+ * @param {object} row  An attendance record.
+ * @param {'flagged'|'suspicious'|'all'|null} issue
+ * @returns {boolean}
+ */
+export function matchesIssueFilter(row, issue) {
+  switch (issue) {
+    case 'flagged':
+      return Boolean(row?.flagged)
+    case 'suspicious':
+      return Boolean(row?.is_suspicious)
+    case 'all':
+      return Boolean(row?.flagged || row?.is_suspicious)
+    default:
+      return true
+  }
+}
+
 export function getShiftName(row) {
   return row?.employee_assignment?.schedule?.shift_type?.name || '—'
 }
 
-export function formatTime(dateTimeString, timezone) {
+/**
+ * A punch, printed in the employee's timezone and in the company's clock style.
+ *
+ * `format` is the company's `time_format` ('12h' | '24h'); it defaults to 12h so
+ * every caller that has not been threaded with the setting keeps today's
+ * behaviour. It is a *display* argument only — nothing parses a value this
+ * function produces, and `formatTimeForInput` in the attendance page stays 24h
+ * because it fills a `type="time"` input.
+ *
+ * @param {string|null} dateTimeString
+ * @param {string} [timezone] IANA zone for the record's employee.
+ * @param {'12h'|'24h'} [format]
+ */
+export function formatTime(dateTimeString, timezone, format = '12h') {
   if (!dateTimeString) return null
-  return formatInTimezone(dateTimeString, timezone || undefined) || null
+  return formatInTimezone(dateTimeString, timezone || undefined, format) || null
 }
 
 /**
@@ -254,6 +310,11 @@ export function isRecordComplete(row) {
  * Elapsed time between two punches in milliseconds, or null when the pair
  * cannot say.
  *
+ * This is the raw wall clock between the two punches — it does **not** know
+ * about the unpaid break the backend takes off, so it reads an hour longer than
+ * the hours actually worked. `attendanceDurationMs` is what the API's own
+ * `duration` is reconciled against, not what the reader is shown.
+ *
  * A missing punch says nothing about duration, and a negative span means the
  * stored pair is inconsistent — every write path bumps an overnight time_out
  * to the next day before sending, so a payload only ever carries a pair that
@@ -272,14 +333,143 @@ export function attendanceDurationMs(timeIn, timeOut) {
  * `"8h 30m"` for a pair of punches, `"—"` when there is no answer. Minutes are
  * floored: whole minutes are all a reader acts on, and the seconds a terminal
  * stamps would only make two rows on the same shift disagree on a digit that
- * means nothing. The same label the Add dialog shows as Total Hours, so the
- * two cannot disagree about the shift just saved.
+ * means nothing.
+ *
+ * Elapsed, not worked — see `attendanceDurationLabelOf` for the figure the
+ * attendance views show.
  */
 export function attendanceDurationLabel(timeIn, timeOut) {
   const ms = attendanceDurationMs(timeIn, timeOut)
   if (ms == null) return '—'
-  const minutes = Math.floor(ms / 60000)
+  return formatMinutes(Math.floor(ms / 60000))
+}
+
+/** Minutes to `"8h 30m"`. Shared so every renderer of a duration reads alike. */
+function formatMinutes(minutes) {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
+// ── Backend duration ─────────────────────────────────────────────────────────
+// The attendance endpoint returns a numeric `duration` per record, already net
+// of the unpaid break — it is the figure payroll is built from, and the one the
+// reader is reconciling their own hours against.
+//
+// The unit is stated nowhere in the payload or its docs, so it is pinned here
+// and nowhere else. `hours` is this product's convention for a plain numeric
+// duration — shift templates carry `total_hours`, contracts carry
+// `work_hours_per_week` — and a completed record reports `8` for an eight-hour
+// net shift. If that ever changes, flip this one constant: the span checks
+// below mean a wrong pin degrades to elapsed time and a console warning, never
+// to a wrong number in the column.
+const DURATION_UNIT = 'hours'
+
+const MS_PER_UNIT = { seconds: 1000, minutes: 60000, hours: 3600000 }
+const MS_PER_DURATION_UNIT = MS_PER_UNIT[DURATION_UNIT] || MS_PER_UNIT.hours
+
+/**
+ * How much of its own shift a record's worked time must account for.
+ *
+ * The upper bound (worked ≤ elapsed) is not enough on its own: a figure read in
+ * the wrong unit comes out *small*, and passes it — which is how a correct
+ * eight-hour net shift rendered as `0h 8m`, a plausible-looking wrong number
+ * with nothing to notice it by. A break is not 80% of a day, so a record whose
+ * worked time is under a fifth of its elapsed span is a misread figure, not a
+ * very short shift. Deliberately generous: this has to catch orders-of-magnitude
+ * errors, not adjudicate a genuine split shift with a long unpaid gap.
+ */
+const MIN_NET_FRACTION_OF_ELAPSED = 0.2
+
+/** Below this span the fraction says nothing — a 5-minute clock-in/clock-out
+ *  is 100% of itself, and must not be second-guessed. */
+const MIN_ELAPSED_FOR_FRACTION_MS = 30 * 60 * 1000
+
+/** Warned once per reason, so a wrong unit is noticed rather than read as truth. */
+const warnedAboutDuration = new Set()
+
+function warnAboutDuration(row, raw, reason) {
+  if (warnedAboutDuration.has(reason)) return
+  warnedAboutDuration.add(reason)
+  console.warn(
+    `[attendance] Backend duration unusable (${reason}); showing elapsed time instead.`,
+    { id: row?.id, duration: raw },
+  )
+}
+
+/**
+ * The API's own `duration` for one record, in milliseconds, or null when the
+ * row cannot answer.
+ *
+ * Four things make a stored figure untrustworthy, and each falls back to null
+ * rather than to a number nobody can defend:
+ *
+ *   - absent, null, blank, non-numeric or negative — nothing was computed;
+ *   - a `0` on a record that is still open — an open record has no worked time
+ *     to report, and zero is what an uncomputed field carries;
+ *   - more time than the punches actually span — stale, or the wrong unit;
+ *   - a fraction of that span too small to be a shorter shift — the wrong unit.
+ *
+ * `0` on a *completed* record is kept: two punches seconds apart is a real
+ * answer, and flattening it to "unknown" would hide a short shift.
+ */
+export function attendanceNetDurationMs(row) {
+  const raw = row?.duration
+  if (raw == null || raw === '') return null
+
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0) {
+    warnAboutDuration(row, raw, `not a usable figure (${typeof raw})`)
+    return null
+  }
+
+  if (value === 0 && !isRecordComplete(row)) return null
+
+  const ms = value * MS_PER_DURATION_UNIT
+  const elapsedMs = attendanceDurationMs(row?.time_in, row?.time_out)
+
+  if (elapsedMs != null) {
+    if (ms > elapsedMs) {
+      warnAboutDuration(row, raw, 'more time than the punches span')
+      return null
+    }
+    // A stored `0` is exempt: it is the one figure too small to be a unit
+    // misread, because no misreading of a non-zero value lands on exactly zero.
+    // Without this the floor below would quietly undo the rule above and report a
+    // completed record's genuine zero as a full elapsed shift.
+    if (
+      value > 0 &&
+      elapsedMs >= MIN_ELAPSED_FOR_FRACTION_MS &&
+      ms < elapsedMs * MIN_NET_FRACTION_OF_ELAPSED
+    ) {
+      warnAboutDuration(
+        row,
+        raw,
+        `too small a fraction of the punches span (${Math.round((ms / elapsedMs) * 100)}%)`,
+      )
+      return null
+    }
+  }
+
+  return ms
+}
+
+/**
+ * Worked time for one record in milliseconds — the backend figure when it can
+ * be trusted, the elapsed punch pair when it cannot.
+ *
+ * Every duration on the attendance page reads through here, so the table, the
+ * card list and the sort order cannot disagree about the same record.
+ */
+export function attendanceDurationOf(row) {
+  const netMs = attendanceNetDurationMs(row)
+  if (netMs != null) return netMs
+  return attendanceDurationMs(row?.time_in, row?.time_out)
+}
+
+/** `"7h 30m"` for one record — worked time, or `"—"` when there is no answer. */
+export function attendanceDurationLabelOf(row) {
+  const ms = attendanceDurationOf(row)
+  if (ms == null) return '—'
+  return formatMinutes(Math.floor(ms / 60000))
 }
 
 /**
@@ -369,4 +559,134 @@ export function getLockedShiftRecordIds(rows = []) {
   }
 
   return locked
+}
+
+// ── Leave types ──────────────────────────────────────────────────────────────
+//
+// A record can be a leave day, and then there are no punches to read — the row is
+// otherwise indistinguishable from somebody who never clocked in. Naming the
+// leave type is what tells those two apart, and the name lives in the leave-types
+// list, keyed by whatever the record carries.
+//
+// Nothing in the attendance payload contract says which field that is, and this
+// file already absorbs that class of disagreement (`getShiftName`,
+// `getAssignmentId`), so every spelling is read rather than one being picked and
+// quietly missing on the others. Two shapes recur: a reference sitting directly on
+// the record, and one hanging off the schedule entry the record is filed against
+// — the same `employee_assignment.schedule` chain the shift name reads.
+
+/** A leave reference in whichever shape it arrives, or null when absent. */
+function leaveRefFrom(value) {
+  if (value == null || value === '') return null
+  if (typeof value === 'object') {
+    const id = value.id ?? value.leave_type_id ?? null
+    const name = value.name || value.leave_type_name || ''
+    // An object carrying neither says nothing, and taking it as an answer would
+    // mask the reference sitting further along the chain.
+    if (id == null && !name) return null
+    return { id, name }
+  }
+  return { id: value, name: '' }
+}
+
+/**
+ * The leave type a record refers to, as `{ id, name }` with either half possibly
+ * null, or null when the record is not a leave day.
+ */
+export function attendanceLeaveRef(row) {
+  if (!row) return null
+  const schedule = row.employee_assignment?.schedule
+  // A name the payload already carries costs no lookup, and is the only answer
+  // available when the reference is an id the list does not hold.
+  const name = row.leave_type_name || schedule?.leave_type_name || ''
+
+  const ref =
+    leaveRefFrom(row.leave_type) ||
+    leaveRefFrom(schedule?.leave_type) ||
+    leaveRefFrom(row.leave_type_id)
+
+  if (ref) return { id: ref.id, name: name || ref.name }
+  return name ? { id: null, name } : null
+}
+
+/**
+ * The leave type's name for one record, or null.
+ *
+ * A name the row carries beats a lookup, since it is what the backend said about
+ * that row rather than about the type. A record that resolves to nothing is null
+ * rather than a stand-in label: "not a leave day" and "a leave day whose type is
+ * missing from the list" are different problems, and flattening them hides the
+ * second. `SchedulePage.vue` can fall back to the words "On leave" because it is
+ * walking a schedule it already knows is a leave — here the question is open.
+ *
+ * @param {object} row   an attendance record
+ * @param {Map}   index  from `buildLeaveTypeIndex`
+ */
+export function attendanceLeaveLabel(row, index) {
+  const ref = attendanceLeaveRef(row)
+  if (!ref) return null
+  if (ref.name) return ref.name
+  return leaveTypeFromIndex(index, ref.id)?.name || null
+}
+
+/** Warned once per reason, so a payload problem is noticed, not repeated. */
+const warnedAboutLeave = new Set()
+
+/**
+ * What the loaded records could say about their leave types, reported once.
+ *
+ * This is what a manual read of the payload would otherwise have to supply. A
+ * record that names a leave type the list does not hold is one problem; a record
+ * with no punches and no leave type is the other, and neither is papered over
+ * with a name nobody can defend.
+ *
+ * A record carrying no reference is only worth reporting when something on the
+ * page could plausibly *be* a leave day — an empty punch pair, which is
+ * otherwise indistinguishable from somebody who forgot to clock in. Most days
+ * hold no leave at all, and warning about those would make the warning noise.
+ *
+ * @param {Array}  rows        the loaded records
+ * @param {Map}    index       from `buildLeaveTypeIndex`
+ * @param {number} typesLoaded how many types the list resolved to
+ */
+export function reportLeaveTypeCoverage(rows, index, typesLoaded) {
+  if (!typesLoaded) return
+
+  let referenced = 0
+  let unlabelled = 0
+  const unresolved = new Set()
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const ref = attendanceLeaveRef(row)
+    if (!ref) {
+      if (!row?.time_in && !row?.time_out) unlabelled += 1
+      continue
+    }
+    referenced += 1
+    if (!attendanceLeaveLabel(row, index) && ref.id != null) unresolved.add(ref.id)
+  }
+
+  if (unresolved.size) {
+    const sample = [...unresolved].slice(0, 5).join(', ')
+    warnAboutLeave(
+      'unresolved',
+      `${unresolved.size} leave type id(s) are not in the ${typesLoaded}-type list: ${sample}. ` +
+        'Expected for a leave type that keeps no balance; a gap if the id is one you have never seen.',
+    )
+  }
+
+  if (referenced === 0 && unlabelled > 0) {
+    warnAboutLeave(
+      'no-reference',
+      `${unlabelled} record(s) carry no punches and name no leave type, so a leave day cannot ` +
+        'be told apart from a missed clock-in here. Looked at leave_type, leave_type_id and ' +
+        'leave_type_name, on the record and under employee_assignment.schedule.',
+    )
+  }
+}
+
+function warnAboutLeave(reason, message) {
+  if (warnedAboutLeave.has(reason)) return
+  warnedAboutLeave.add(reason)
+  console.warn(`[attendance] ${message}`)
 }
