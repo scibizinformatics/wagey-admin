@@ -70,12 +70,15 @@
           </q-td>
 
           <q-td v-if="showWorkType" key="work_type" :props="props" class="att-table__td">
+            <!-- The leave type leads when the row is a leave day: it is what says
+                 why there are no punches here. Work type is the fallback, and the
+                 tone stays that of the record's own work type either way. -->
             <span
-              v-if="props.row.work_type"
+              v-if="props.row._leaveType || props.row.work_type"
               class="dash-chip work-type"
               :class="workTypeToneClass(props.row.work_type)"
             >
-              {{ props.row.work_type }}
+              {{ props.row._leaveType || props.row.work_type }}
             </span>
             <span v-else class="muted">—</span>
           </q-td>
@@ -89,6 +92,7 @@
               kind="in"
               :time="props.row.time_in"
               :timezone="props.row._timezone"
+              :time-format="timeFormat"
               :selfie="props.row.time_in_selfie"
               :source="props.row.time_in_source || props.row.source"
               :locked="props.row._shiftLocked"
@@ -103,6 +107,7 @@
               kind="out"
               :time="props.row.time_out"
               :timezone="props.row._timezone"
+              :time-format="timeFormat"
               :selfie="props.row.time_out_selfie"
               :source="props.row.time_out_source || props.row.source"
               :locked="props.row._shiftLocked"
@@ -180,10 +185,10 @@
  *
  * Nine columns became six. Each punch's time, selfie and source are now one
  * cell (AttendancePunchCell) instead of three columns repeated twice, duration
- * is derived from the punch pair rather than stored, and work type — the least
- * load-bearing column — drops out as the viewport narrows. The previous table
- * was a fixed 700px minimum that shrank its own type to 10px on tablet — both
- * of which this replaces.
+ * reads the backend's worked hours (see `attendanceDurationOf`), and work type —
+ * the least load-bearing column, though it is also where a leave day is named —
+ * drops out as the viewport narrows. The previous table was a fixed 700px minimum
+ * that shrank its own type to 10px on tablet — both of which this replaces.
  */
 import { computed } from 'vue'
 import { useQuasar } from 'quasar'
@@ -196,8 +201,8 @@ import {
   getAvatarColor,
   getShiftName,
   workTypeToneClass,
-  attendanceDurationLabel,
-  attendanceDurationMs,
+  attendanceDurationLabelOf,
+  attendanceDurationOf,
 } from '@/composables/utils/attendance'
 
 const $q = useQuasar()
@@ -213,6 +218,10 @@ const props = defineProps({
   // Sort lives on the page, not here — see below.
   sortBy: { type: String, default: '' },
   descending: { type: Boolean, default: false },
+  // The company's `time_format`, threaded to each punch cell. Defaulted rather
+  // than required so the component still renders correctly before the page's
+  // settings request answers.
+  timeFormat: { type: String, default: '12h' },
 })
 
 const emit = defineEmits([
@@ -246,14 +255,16 @@ const keepGivenOrder = (rows) => rows
 
 // Employee, shift, time in, time out and duration are the point of the page and
 // always show — the table only renders at 1024px and up, where all five fit
-// without sideways scroll. Work type is the one piece of context that gives way.
+// without sideways scroll. Work type is the one piece of context that gives way,
+// and it is also the cell that names a leave day, so a laptop below 1280px reads
+// a leave row as an empty pair of punches.
 const showWorkType = computed(() => $q.screen.width >= 1280)
 
 const nameOf = (row) => getEmployeeName(row.employee, props.employees)
 const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
 
-const durationOf = (row) => attendanceDurationLabel(row.time_in, row.time_out)
-const hasDuration = (row) => attendanceDurationMs(row.time_in, row.time_out) != null
+const durationOf = (row) => attendanceDurationLabelOf(row)
+const hasDuration = (row) => attendanceDurationOf(row) != null
 
 const rowDate = (row) => row.date || row.attendance_date || row.log_date || ''
 
@@ -338,7 +349,7 @@ const columns = computed(() => {
     {
       name: 'duration',
       label: 'Duration',
-      field: (row) => attendanceDurationMs(row.time_in, row.time_out),
+      field: (row) => attendanceDurationOf(row),
       align: 'left',
       style: 'width: 104px',
       width: 104,
