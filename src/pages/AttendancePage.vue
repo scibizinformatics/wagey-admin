@@ -932,15 +932,16 @@ function sortValueFor(row, key) {
       return row.time_in || ''
     case 'time_out':
       return row.time_out || ''
-    // Total minutes, zero-padded so the string comparator orders durations
-    // numerically — "2h 9m" and "11h 30m" compare as text the wrong way round.
-    // Read through the same resolver the cell uses, so the column cannot sort by
-    // one duration and display another. Rows with no duration return '' and sink
-    // to the bottom like every other empty sort value.
+    // Milliseconds, zero-padded so the string comparator orders durations
+    // numerically — 2h09m and 11h30m compare as text the wrong way round. Read
+    // through the same resolver the cell uses, so the column cannot sort by one
+    // duration and display another, and left unrounded so two records that print
+    // the same two decimals still order by the shift behind them. Rows with no
+    // duration return '' and sink to the bottom like every other empty sort value.
     case 'duration': {
       const ms = attendanceDurationOf(row)
       if (ms == null) return ''
-      return String(Math.floor(ms / 60000)).padStart(7, '0')
+      return String(ms).padStart(12, '0')
     }
     default:
       return ''
@@ -2445,9 +2446,9 @@ onMounted(async () => {
    RESPONSIVE
    ----------------------------------------------------------------------------
      >= 1280   table with employee / work type / shift / time in / time out /
-                duration
+                worked hours
      1024-1279 work type drops; shift stays — it is load-bearing, and the
-               remaining columns still fit the content width without scrolling
+                remaining columns still fit the content width without scrolling
      < 1024    AttendanceCardList replaces the table; no sideways scroll
      < 640     day navigator and filters go full width, footer stacks
 
