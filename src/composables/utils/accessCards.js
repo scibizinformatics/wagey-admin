@@ -36,7 +36,7 @@
  */
 
 import { longLabel } from 'src/composables/utils/calendarDate'
-import { durationToMinutes } from 'src/composables/utils/cardTaps'
+import { durationToSeconds } from 'src/composables/utils/cardTaps'
 import { employeeByName, hasEmployeeName, nameKey } from 'src/composables/utils/employee'
 
 /** Trimmed string, or ''. The payload uses null, '' and absent interchangeably. */
@@ -417,7 +417,13 @@ export function summarizeAccessCards(cards) {
  *             and the second of those is an accusation.
  * - `0`     — a real reading. This card's holder is on the roster and has not
  *             tapped this month.
- * - `n > 0` — minutes worked inside `[from, to]`.
+ * - `n > 0` — seconds worked inside `[from, to]`.
+ *
+ * Seconds rather than hours on purpose. A month of days is a long sum, and each
+ * day's duration arrives as a string the server formatted to the second; hours
+ * would make the caller divide and round, and a sum of rounded days is not the
+ * rounded sum of them. Keeping the integer as the unit means the page formats
+ * exactly once, at the end.
  *
  * `tapRows` is passed as `null` for that first case: a tap log that failed to
  * load is not an empty log, and conflating them would report every card as
@@ -429,10 +435,10 @@ export function summarizeAccessCards(cards) {
  * @param {Map<string, object|null>} options.index  from `buildEmployeeNameIndex`
  * @param {string} options.from   first day of the window, inclusive (ISO)
  * @param {string} options.to     last day of the window, inclusive (ISO)
- * @returns {Map<string, number|null>} minutes per card uid
+ * @returns {Map<string, number|null>} seconds per card uid
  */
 export function monthlyHoursByCard(cards, tapRows, { index, from, to } = {}) {
-  const minutesByName = new Map()
+  const secondsByName = new Map()
 
   if (Array.isArray(tapRows)) {
     for (const row of tapRows) {
@@ -443,27 +449,27 @@ export function monthlyHoursByCard(cards, tapRows, { index, from, to } = {}) {
 
       const key = nameKey(row?.employee_name)
       if (!key) continue
-      minutesByName.set(key, (minutesByName.get(key) ?? 0) + durationToMinutes(row?.duration))
+      secondsByName.set(key, (secondsByName.get(key) ?? 0) + durationToSeconds(row?.duration))
     }
   }
 
   const out = new Map()
   for (const card of cards || []) {
-    out.set(card?.uid, cardHours(card, minutesByName, index, Array.isArray(tapRows)))
+    out.set(card?.uid, cardHours(card, secondsByName, index, Array.isArray(tapRows)))
   }
   return out
 }
 
-/** One card's figure, or null when there is nothing honest to print. */
-function cardHours(card, minutesByName, index, logLoaded) {
+/** One card's figure in seconds, or null when there is nothing honest to print. */
+function cardHours(card, secondsByName, index, logLoaded) {
   if (!card?.assigned || !card?.employeeName) return null
   // A tap log that never arrived withholds the figure from every card. Without
-  // this the first load would show a table full of "0h 0m" and then correct
+  // this the first load would show a table full of "0.00" and then correct
   // itself, which reads as a wrong answer rather than a pending one.
   if (!logLoaded) return null
   if (!hasEmployeeName(index, card.employeeName)) return null
   if (!employeeByName(index, card.employeeName)) return null
-  return minutesByName.get(nameKey(card.employeeName)) ?? 0
+  return secondsByName.get(nameKey(card.employeeName)) ?? 0
 }
 
 /**
