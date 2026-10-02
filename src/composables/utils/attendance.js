@@ -8,6 +8,7 @@
  */
 import { formatInTimezone } from '@/composables/utils/timezone'
 import { leaveTypeFromIndex } from '@/composables/utils/leaveTypes'
+import { decimalHoursLabel } from '@/composables/utils/format'
 
 export function getEmployeeId(employee) {
   if (!employee) return null
@@ -403,8 +404,8 @@ function warnAboutDuration(row, raw, reason) {
  * rather than to a number nobody can defend:
  *
  *   - absent, null, blank, non-numeric or negative — nothing was computed;
- *   - a `0` on a record that is still open — an open record has no worked time
- *     to report, and zero is what an uncomputed field carries;
+ *   - a record with no finished pair of punches — an open shift has no worked
+ *     time to report, whatever the stored column claims;
  *   - more time than the punches actually span — stale, or the wrong unit;
  *   - a fraction of that span too small to be a shorter shift — the wrong unit.
  *
@@ -421,7 +422,12 @@ export function attendanceNetDurationMs(row) {
     return null
   }
 
-  if (value === 0 && !isRecordComplete(row)) return null
+  // One finished pair is the test everywhere on this page — it is what decides
+  // whether a shift has been worked at all, and whether a second record is a
+  // duplicate. A stored figure does not get to say otherwise: an open record
+  // reporting eight worked hours would print eight hours for a shift nobody has
+  // clocked out of, and that is not a figure anybody can act on.
+  if (!isRecordComplete(row)) return null
 
   const ms = value * MS_PER_DURATION_UNIT
   const elapsedMs = attendanceDurationMs(row?.time_in, row?.time_out)
@@ -465,11 +471,63 @@ export function attendanceDurationOf(row) {
   return attendanceDurationMs(row?.time_in, row?.time_out)
 }
 
-/** `"7h 30m"` for one record — worked time, or `"—"` when there is no answer. */
-export function attendanceDurationLabelOf(row) {
+/**
+ * Worked time in whole minutes — the minute reading of a record.
+ *
+ * Minutes are the unit a break and a shift are argued in, so this is what the
+ * hover tooltip shows beside the decimal cell. Rounded rather than floored: the
+ * terminal stamps seconds, and a shift worked to 4h51m40s is a 4h52m shift.
+ */
+export function attendanceWorkedMinutesOf(row) {
   const ms = attendanceDurationOf(row)
-  if (ms == null) return '—'
-  return formatMinutes(Math.floor(ms / 60000))
+  if (ms == null) return null
+  return Math.round(ms / MS_PER_UNIT.minutes)
+}
+
+/**
+ * Worked hours as a decimal, or null when the row cannot answer.
+ *
+ * Off the exact milliseconds, deliberately *not* off `attendanceWorkedMinutesOf`.
+ * Rounding to a minute and then dividing by 60 rounds twice, and the second
+ * rounding is the one the reader can catch: 4h51m31s is 4.8586 hours, which is
+ * `4.86`, but via 292 whole minutes it prints `4.87` — a minute and a half
+ * overstated, and a figure payroll would not agree with.
+ *
+ * Decimal because that is the unit this product keeps durations in — shift
+ * templates store `total_hours` and `break_hours` as decimals — and because the
+ * backend's own `duration` arrives in exactly this form, so the column shows the
+ * figure payroll is computed from rather than a re-derived approximation of it.
+ */
+export function attendanceDecimalHoursOf(row) {
+  const ms = attendanceDurationOf(row)
+  if (ms == null) return null
+  return ms / MS_PER_UNIT.hours
+}
+
+/**
+ * `"4.85"` — two decimals, always.
+ *
+ * Fixed rather than trimmed so the column aligns: `4.50` and `4.85` are the same
+ * width under `dash-num`'s tabular figures, and payroll reads these column-wise.
+ * The trailing zero is the format, not noise.
+ */
+export function attendanceDecimalHoursLabelOf(row) {
+  const hours = attendanceDecimalHoursOf(row)
+  if (hours == null) return '—'
+  return decimalHoursLabel(hours)
+}
+
+/**
+ * `"4h 51m"` — the same duration read in whole minutes.
+ *
+ * The hover companion to the decimal cell, and correct to the minute rather than
+ * to two places: both are roundings of one exact figure, so neither contradicts
+ * the other, they simply answer at different resolutions.
+ */
+export function attendanceDurationLabelOf(row) {
+  const minutes = attendanceWorkedMinutesOf(row)
+  if (minutes == null) return '—'
+  return formatMinutes(minutes)
 }
 
 /**
