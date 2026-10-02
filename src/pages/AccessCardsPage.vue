@@ -304,7 +304,7 @@ import {
   monthlyHoursByCard,
   tapAgo,
 } from 'src/composables/utils/accessCards'
-import { hoursLabel } from 'src/composables/utils/cardTaps'
+import { decimalHoursLabel } from 'src/composables/utils/format'
 import { monthStartIso, todayIso } from 'src/composables/utils/calendarDate'
 import {
   avatarFor,
@@ -338,15 +338,21 @@ const { employees, fetchEmployees } = useEmployees()
 
 /**
  * The tap log, read only for the per-card hours total — the card payload has no
- * hours of its own. Its own `error` and `loading` are deliberately left unused:
- * a tap log that will not load is a missing column, not a broken page, and
- * putting its failure into this page's error banner would be alarming about a
- * reading nobody was required.
+ * hours of its own.
+ *
+ * `error` is read for exactly one thing: telling a log that never arrived from a
+ * log that arrived empty, which the hours column has to get right (see
+ * `loadTaps`). It is never surfaced — a tap log that will not load is a missing
+ * column, not a broken page, and putting its failure into this page's error
+ * banner would be alarming about a reading nobody was required. `loading` stays
+ * unused: while the log is in flight the column shows a dash either way, so
+ * nothing would render differently for it.
  */
-const { rows: tapRows, fetchCardTaps, reset: resetTaps } = useCardTaps()
+const { rows: tapRows, error: tapsError, fetchCardTaps, reset: resetTaps } = useCardTaps()
 
-/** Whether the tap log actually arrived. `false` means "no reading", not "none
- *  worked" — see `monthlyHoursByCard`, which withholds the figure either way. */
+/** Whether the tap log actually *answered*. `false` means "no reading" — still in
+ *  flight, or a fetch that failed — never "none worked"; see
+ *  `monthlyHoursByCard`, which withholds the figure either way. */
 const tapsLoaded = ref(false)
 
 const searchRef = ref(null)
@@ -481,19 +487,19 @@ const hoursByCard = computed(() => {
  * and only the rows actually on screen are touched. `lastTapAgo` is computed
  * here too, since it is relative to now rather than to anything in the payload.
  *
- * `hoursMinutes` stays nullable on purpose, so the two renderers can tell "0h 0m"
- * from a figure we could not read; `hoursLabel` is the formatted form of the
- * number, or '' when there is no reading to format.
+ * `hoursSeconds` stays nullable on purpose, so the two renderers can tell "0.00"
+ * from a figure we could not read; `hoursLabel` is the formatted decimal, or ''
+ * when there is no reading to format.
  */
 const displayRows = computed(() =>
   pagedRows.value.map((card) => {
-    const hoursMinutes = hoursByCard.value.get(card.uid) ?? null
+    const hoursSeconds = hoursByCard.value.get(card.uid) ?? null
     return {
       ...card,
       avatar: card.assigned ? avatarFor(employeeIndex.value, card.employeeName) : null,
       lastTapAgo: tapAgo(card.lastTapMs),
-      hoursMinutes,
-      hoursLabel: hoursMinutes === null ? '' : hoursLabel(hoursMinutes),
+      hoursSeconds,
+      hoursLabel: hoursSeconds === null ? '' : decimalHoursLabel(hoursSeconds / 3600),
     }
   }),
 )
@@ -691,13 +697,22 @@ async function loadEmployees() {
  * The tap log, for the hours column.
  *
  * Never rejects and never raises a toast: `fetchCardTaps` swallows its own
- * failures, so this only has to record whether an answer came back. The flag is
- * what separates "this card's holder worked no hours" from "we could not read the
- * tap log", and the page shows a dash for the second.
+ * failures, so all this has to do is record whether an answer came back. The
+ * flag is what separates "this card's holder worked no hours" from "we could not
+ * read the tap log", and the page shows a dash for the second — which is why the
+ * flag has to mean *answered*, not *called*.
+ *
+ * It used to be set unconditionally, and that made a failed fetch report 0.00 on
+ * every card: `fetchCardTaps` returns `[]` on failure exactly as it does on
+ * success, so an absent log looked like an empty one, and `monthlyHoursByCard`
+ * read that as a real zero. A company whose tap endpoint was down would have been
+ * told, in a column of settled figures, that nobody had worked a minute this
+ * month. `error` is the only thing that tells the two apart, and it is cleared
+ * when a fetch starts, so a successful call leaves it empty.
  */
 async function loadTaps() {
   await fetchCardTaps()
-  tapsLoaded.value = true
+  tapsLoaded.value = !tapsError.value
 }
 
 async function load() {
