@@ -118,8 +118,14 @@
           </q-td>
 
           <q-td key="duration" :props="props" class="att-table__td">
+            <!-- Directly inside the cell rather than wrapped around the value:
+                 Quasar anchors a tooltip to its parent element, so this way the
+                 whole cell is the hit area and not just the 40px of digits. -->
+            <q-tooltip v-if="hasDuration(props.row)" :delay="300">
+              {{ hoursTooltipOf(props.row) }}
+            </q-tooltip>
             <span class="duration dash-num" :class="{ 'duration--none': !hasDuration(props.row) }">
-              {{ durationOf(props.row) }}
+              {{ decimalOf(props.row) }}
             </span>
           </q-td>
 
@@ -184,9 +190,10 @@
  * takes over below 1024px.
  *
  * Nine columns became six. Each punch's time, selfie and source are now one
- * cell (AttendancePunchCell) instead of three columns repeated twice, duration
- * reads the backend's worked hours (see `attendanceDurationOf`), and work type —
- * the least load-bearing column, though it is also where a leave day is named —
+ * cell (AttendancePunchCell) instead of three columns repeated twice, worked
+ * hours read the backend's figure (see `attendanceDurationOf`) and print as
+ * decimal hours with the h/m reading on hover, and work type — the least
+ * load-bearing column, though it is also where a leave day is named —
  * drops out as the viewport narrows. The previous table was a fixed 700px minimum
  * that shrank its own type to 10px on tablet — both of which this replaces.
  */
@@ -202,6 +209,8 @@ import {
   getShiftName,
   workTypeToneClass,
   attendanceDurationLabelOf,
+  attendanceDecimalHoursLabelOf,
+  attendanceDecimalHoursOf,
   attendanceDurationOf,
 } from '@/composables/utils/attendance'
 
@@ -263,7 +272,8 @@ const showWorkType = computed(() => $q.screen.width >= 1280)
 const nameOf = (row) => getEmployeeName(row.employee, props.employees)
 const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
 
-const durationOf = (row) => attendanceDurationLabelOf(row)
+const decimalOf = (row) => attendanceDecimalHoursLabelOf(row)
+const hoursTooltipOf = (row) => attendanceDurationLabelOf(row)
 const hasDuration = (row) => attendanceDurationOf(row) != null
 
 const rowDate = (row) => row.date || row.attendance_date || row.log_date || ''
@@ -348,8 +358,8 @@ const columns = computed(() => {
     },
     {
       name: 'duration',
-      label: 'Duration',
-      field: (row) => attendanceDurationOf(row),
+      label: 'Worked Hours',
+      field: (row) => attendanceDecimalHoursOf(row),
       align: 'left',
       style: 'width: 104px',
       width: 104,
