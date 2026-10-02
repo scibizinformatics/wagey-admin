@@ -72,12 +72,15 @@
           </p>
         </div>
 
+        <!-- The leave type leads when the row is a leave day — it is what says why
+             there are no punches here — and work type is the fallback. Mirrors the
+             table's Work type cell. -->
         <span
-          v-if="row.work_type"
+          v-if="row._leaveType || row.work_type"
           class="dash-chip card__work-type"
           :class="workTypeToneClass(row.work_type)"
         >
-          {{ row.work_type }}
+          {{ row._leaveType || row.work_type }}
         </span>
 
         <!-- Audit trail, mirroring the table's Audit column -->
@@ -107,6 +110,7 @@
             kind="in"
             :time="row.time_in"
             :timezone="row._timezone"
+            :time-format="timeFormat"
             :selfie="row.time_in_selfie"
             :source="row.time_in_source || row.source"
             :locked="row._shiftLocked"
@@ -122,6 +126,7 @@
             kind="out"
             :time="row.time_out"
             :timezone="row._timezone"
+            :time-format="timeFormat"
             :selfie="row.time_out_selfie"
             :source="row.time_out_source || row.source"
             :locked="row._shiftLocked"
@@ -131,7 +136,7 @@
           />
         </div>
 
-        <!-- Derived from the punch pair, not stored — the same label the table's
+        <!-- The worked hours the backend recorded, and the same figure the table's
              Duration column shows, so the two views of one record agree. -->
         <div class="punch-slot">
           <span class="punch-slot__label">Duration</span>
@@ -164,8 +169,8 @@ import {
   getAvatarColor,
   getShiftName,
   workTypeToneClass,
-  attendanceDurationLabel,
-  attendanceDurationMs,
+  attendanceDurationLabelOf,
+  attendanceDurationOf,
 } from '@/composables/utils/attendance'
 
 const props = defineProps({
@@ -175,6 +180,8 @@ const props = defineProps({
   isFiltered: { type: Boolean, default: false },
   // Set while the list is narrowed to one employee over a date range.
   singleEmployee: { type: Boolean, default: false },
+  // The company's `time_format`, threaded to each punch cell.
+  timeFormat: { type: String, default: '12h' },
 })
 
 // Pinned to local midnight — a bare YYYY-MM-DD parses as UTC and can shift a day
@@ -214,8 +221,8 @@ function auditToneClass(row) {
 
 const nameOf = (row) => getEmployeeName(row.employee, props.employees)
 const photoOf = (row) => getEmployeePhoto(row.employee, props.employees)
-const durationOf = (row) => attendanceDurationLabel(row.time_in, row.time_out)
-const hasDuration = (row) => attendanceDurationMs(row.time_in, row.time_out) != null
+const durationOf = (row) => attendanceDurationLabelOf(row)
+const hasDuration = (row) => attendanceDurationOf(row) != null
 </script>
 
 <style scoped>
