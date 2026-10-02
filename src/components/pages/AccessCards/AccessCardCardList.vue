@@ -120,9 +120,9 @@
                cannot place the name. -->
           <span
             class="acc-card__hours dash-num"
-            :class="{ 'acc-card__hours--none': row.hoursMinutes === null }"
+            :class="{ 'acc-card__hours--none': row.hoursSeconds === null }"
           >
-            <template v-if="row.hoursMinutes !== null">{{ row.hoursLabel }} this month</template>
+            <template v-if="row.hoursSeconds !== null">{{ row.hoursLabel }} this month</template>
             <template v-else>—</template>
           </span>
           <span class="acc-card__when">
