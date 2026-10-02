@@ -204,7 +204,7 @@
           <div v-if="record.time_in && record.time_out" class="working-hours-compact bg-green-1">
             <q-icon name="schedule" color="positive" size="sm" />
             <div class="working-hours-text">
-              <span class="text-caption text-grey-7">Total Hours</span>
+              <span class="text-caption text-grey-7">Elapsed</span>
               <span class="text-h6 text-positive text-weight-bold">{{ workingHours }}</span>
             </div>
           </div>
@@ -239,6 +239,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
+import { attendanceDurationLabel } from '@/composables/utils/attendance'
 
 const $q = useQuasar()
 
@@ -292,14 +293,38 @@ const timeOutDate = computed(() => {
   })
 })
 
+/**
+ * Elapsed time between the two times being typed, as a preview.
+ *
+ * Not the worked hours the record will end up with: the break is the server's
+ * to take off, and there is no way to know it from here. Hence "Elapsed" — the
+ * figure is honestly labelled rather than quietly an hour optimistic.
+ */
 const workingHours = computed(() => {
-  if (!props.record.time_in || !props.record.time_out) return '0h 0m'
-  const [inHours, inMinutes] = props.record.time_in.split(':').map(Number)
-  const [outHours, outMinutes] = props.record.time_out.split(':').map(Number)
-  let diff = outHours * 60 + outMinutes - (inHours * 60 + inMinutes)
-  if (diff < 0) diff += 24 * 60
-  return `${Math.floor(diff / 60)}h ${diff % 60}m`
+  const inDate = clockToLocalDate(props.record.time_in)
+  const outDate = clockToLocalDate(props.record.time_out)
+  if (!inDate || !outDate) return '—'
+
+  // A clock time earlier than the one in is the next day — the same bump every
+  // write path applies before it sends an overnight time_out, so the preview
+  // agrees with the record that gets saved rather than reading "—".
+  if (outDate < inDate) outDate.setDate(outDate.getDate() + 1)
+
+  return attendanceDurationLabel(inDate.toISOString(), outDate.toISOString())
 })
+
+/**
+ * The dialog holds wall-clock `HH:mm` (and `HH:mm:ss` overnight) strings, which
+ * `new Date()` reads as UTC midnight and then back-shifts west of Greenwich.
+ * Pinning them to a local day keeps a 23:00 → 07:00 shift reading as eight
+ * hours in the timezone the admin is actually looking at.
+ */
+function clockToLocalDate(clock) {
+  if (!clock) return null
+  const [h, m, s] = clock.split(':').map(Number)
+  const date = new Date(2000, 0, 1, h || 0, m || 0, s || 0)
+  return isNaN(date.getTime()) ? null : date
+}
 
 function updateField(field, value) {
   emit('update:record', { ...props.record, [field]: value })
