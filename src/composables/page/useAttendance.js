@@ -223,8 +223,14 @@ export function useAttendance() {
    * Fetch attendance records for a given year/month, optionally filtered by a specific date.
    * @param {string} year
    * @param {string} month
-   * @param {object}  [params] - Extra query params (date, cost_center, page, limit …)
+   * @param {object}  [params] - Extra query params (date, cost_center, issue, page, limit …)
    * @param {string}  [params.date] - Optional date filter e.g. '2026-03-27'
+   * @param {string}  [params.issue] - Narrow to records needing attention: 'flagged'
+   *   (flagged=True), 'suspicious' (is_suspicious=True) or 'all' (either). Omit it
+   *   for every record — note 'all' means either flag, not "unfiltered", so an
+   *   absent value is what asks for the whole month. Each value keys its own cache
+   *   entry; callers narrow the rows locally as well (`matchesIssueFilter`), since a
+   *   backend that ignores an unknown param would otherwise answer in full.
    * @param {object}  [options]
    * @param {boolean} [options.force]  - Skip the cache and re-read from the server.
    * @param {boolean} [options.commit] - Publish the rows to `attendanceData`.
@@ -246,7 +252,9 @@ export function useAttendance() {
   /**
    * Fetch attendance records for a specific date. Faster than fetching a full month.
    * @param {string}  date - YYYY-MM-DD e.g. '2026-03-27'
-   * @param {object}  [params] - Extra query params (cost_center, page, limit …)
+   * @param {object}  [params] - Extra query params (cost_center, issue, page, limit …)
+   * @param {string}  [params.issue] - 'flagged' | 'suspicious' | 'all'; see
+   *   `fetchAttendance` for what each means.
    * @param {object}  [options]
    * @param {boolean} [options.force] - Skip the cache and re-read from the server.
    */
