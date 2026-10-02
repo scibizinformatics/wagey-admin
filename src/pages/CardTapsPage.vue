@@ -305,9 +305,9 @@ const pageSizeOptions = [10, 25, 50]
 // one page of rows, so sorting there would reorder 25 records out of 56 and
 // leave the rest stranded on page 2.
 //
-// Sorted keys are the ones that compare cleanly: dates and counts. The payload's
-// tap-time and duration strings ("08:10:23 AM", "2h 9m 32s") do not sort
-// lexicographically, so those columns deliberately stay unsorted.
+// Sorted keys are the ones that compare cleanly: dates and counts. Duration is
+// printed as decimal hours but is still built from the payload's string, so it
+// stays unsorted rather than have the column disagree with its own label.
 const sort = ref({ by: '', desc: false })
 
 // ─── Filter application ────────────────────────────────────────────────────────
@@ -334,8 +334,8 @@ const filteredRows = computed(() => {
 
 const filteredTotal = computed(() => filteredRows.value.length)
 
-// Sum of the visible rows' durations, "Xh Ym" — shown only while a range review
-// is active so the span of hours means something.
+// Sum of the visible rows' durations in decimal hours — shown only while a range
+// review is active so the span of hours means something.
 const reviewTotalHours = computed(() => totalDurationLabel(filteredRows.value))
 
 const totalPages = computed(() =>
