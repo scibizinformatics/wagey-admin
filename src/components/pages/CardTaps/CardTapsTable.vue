@@ -69,6 +69,19 @@
 
           <q-td key="duration" :props="props" class="ct-table__td">
             <span class="ct-time dash-num">{{ durationLabel(props.row) }}</span>
+            <!-- The server's own "2h 9m 32s", verbatim. Two decimals of an hour
+                 is 36 seconds, so the cell rounds away the very detail this
+                 hover exists to show — and it is the reading the server
+                 actually sent, which is worth having somewhere on screen. No
+                 hover on a touch screen, so the card list below cannot offer
+                 this; that is the one place the seconds are out of reach.
+
+                 Directly inside the cell rather than wrapped around the value:
+                 Quasar anchors a tooltip to its parent element, so this way the
+                 whole cell is the hit area and not just the digits. -->
+            <q-tooltip v-if="props.row?.duration" :delay="300">
+              {{ props.row.duration }}
+            </q-tooltip>
           </q-td>
 
           <q-td key="tap_count" :props="props" class="ct-table__td">
@@ -130,7 +143,7 @@
  * clicked, exactly as AttendanceTable does.
  */
 import { computed } from 'vue'
-import { tapCount } from '@/composables/utils/cardTaps'
+import { durationDecimalHoursLabelOf, tapCount } from '@/composables/utils/cardTaps'
 
 const props = defineProps({
   rows: { type: Array, default: () => [] },
@@ -189,7 +202,7 @@ function timeLabel(tap) {
 }
 
 function durationLabel(row) {
-  return row?.duration || '—'
+  return durationDecimalHoursLabelOf(row)
 }
 
 const columns = computed(() => {
