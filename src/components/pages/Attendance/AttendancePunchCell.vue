@@ -79,6 +79,8 @@ import { formatTime, formatSource, sourceToneClass } from '@/composables/utils/a
 const props = defineProps({
   time: { type: String, default: null },
   timezone: { type: String, default: '' },
+  /** The company's `time_format` — '12h' | '24h'. See useAdminLaborRuleSettings. */
+  timeFormat: { type: String, default: '12h' },
   selfie: { type: String, default: '' },
   source: { type: String, default: '' },
   /** 'in' | 'out' — only affects the placeholder glyph and the label. */
@@ -99,7 +101,7 @@ const props = defineProps({
 defineEmits(['edit', 'view-selfie'])
 
 const label = computed(() => (props.kind === 'in' ? 'Time in' : 'Time out'))
-const formatted = computed(() => formatTime(props.time, props.timezone))
+const formatted = computed(() => formatTime(props.time, props.timezone, props.timeFormat))
 </script>
 
 <style scoped>
