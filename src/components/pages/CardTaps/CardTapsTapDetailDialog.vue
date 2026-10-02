@@ -63,7 +63,7 @@
  */
 import { computed } from 'vue'
 import { longLabel } from 'src/composables/utils/calendarDate'
-import { tapCount } from 'src/composables/utils/cardTaps'
+import { durationDecimalHoursLabelOf, tapCount } from 'src/composables/utils/cardTaps'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -75,7 +75,7 @@ defineEmits(['update:modelValue'])
 
 const dayLabel = computed(() => longLabel(props.row?.date) || '—')
 
-const durationLabel = computed(() => props.row?.duration || '—')
+const durationLabel = computed(() => durationDecimalHoursLabelOf(props.row))
 
 function timeLabel(tap) {
   return tap || '—'
