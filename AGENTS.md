@@ -144,6 +144,23 @@ These are live and not covered by the long-form doc — treat them as current, n
   (`AttendancePage.vue`) pulls in records orphaned by shift reassignment. The month endpoint carries
   year/month in the path, and the `employee` param is *probed*, not assumed — `useAttendance.js`
   latches `employeeFilterSupported = false` once the backend rejects it.
+- **Access cards have two writes, not one.** `/app/access-cards` — `pages/AccessCardsPage.vue`,
+  `useAccessCards.js`, `composables/utils/accessCards.js`. The holder is
+  `PATCH /user/access-cards/{uid}/employee-assign/` (`{ employee_id, status }`); whether the card
+  works is a separate `PATCH /user/access-cards/{uid}/status/` (`{ status }`). Both routes are keyed
+  by **uid alone**, so both inherit the `foreign` guard from the detail payload. The status endpoint
+  takes **only** `active` / `inactive` / `lost` / `revoked` — that set is `WRITABLE_STATUSES`, and
+  `stolen` / `damaged` / `expired` exist in `STATUSES` for *display only*, never as a choice.
+  `assignCard` still sends a status (the card's current one) because `employee-assign` carries the
+  field; that is deliberate, so a reassignment cannot switch a card on.
+- **Card-status changes go through a confirm gate.** `AccessCardsPage.vue`'s `commitStatusChange` is
+  reachable only from `AccessCardStatusConfirmDialog`'s `@confirm`; wording is in
+  `components/pages/AccessCards/statusConfirm.js`. `statusActionsFor(card)` in
+  `composables/utils/accessCards.js` is the single source of the verbs — the row menu
+  (`AccessCardRowMenu.vue`) and the detail dialog's Card status group both render from it, so they
+  cannot offer different sets. Adding a status means a `WRITABLE_STATUSES` entry, not a new control.
+  `STATUS_FILTERS` is still only All/Active/Inactive, so a lost or revoked card is reachable only via
+  search or the "Needs attention" filter.
 
 ## Traps
 

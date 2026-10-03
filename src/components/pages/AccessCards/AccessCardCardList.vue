@@ -77,6 +77,7 @@
                 :card="row"
                 @view="$emit('view', row)"
                 @assign="$emit('assign', row)"
+                @status="(card, status) => $emit('status', card, status)"
               />
             </q-btn>
           </div>
@@ -155,7 +156,7 @@ defineProps({
   isFiltered: { type: Boolean, default: false },
 })
 
-defineEmits(['view', 'assign', 'copy', 'clear-filters'])
+defineEmits(['view', 'assign', 'copy', 'clear-filters', 'status'])
 </script>
 
 <style scoped>

@@ -149,6 +149,31 @@
             </div>
           </div>
         </div>
+
+        <!-- Whether this card still opens a door, and the ways to change that.
+             The same verbs the row menu offers, from `statusActionsFor`, so the
+             two cannot drift; nothing here writes, it emits and the page asks
+             first. The chip above is already on screen in the hero, so this group
+             is the actions and not a second reading of the status. -->
+        <div v-if="statusActions.length" class="dash-modal__group">
+          <p class="dash-modal__group-label">Card status</p>
+          <div class="acc-statuses">
+            <q-btn
+              v-for="action in statusActions"
+              :key="action.key"
+              outline
+              no-caps
+              size="12px"
+              :icon="action.icon"
+              :label="action.actionLabel"
+              class="acc-status-btn"
+              @click="$emit('status', shown, action.key)"
+            />
+          </div>
+          <span class="dash-modal__field-hint">
+            Changing this decides what every reader does with this card. You will be asked to confirm.
+          </span>
+        </div>
       </q-card-section>
 
       <q-card-actions class="dash-modal__foot">
@@ -176,11 +201,21 @@
  * when the request is quick, and the two payloads agree on every field they
  * share.
  *
- * The page owns the fetch, as every other dialog in the app does; this one only
- * renders what it is handed.
+ * That agreement is also why the status verbs are read off `shown` rather than
+ * off `detail`: the list row already knows the status, so the Card status group
+ * is complete on the first frame and does not visibly grow when the fuller
+ * payload replaces it underneath.
+ *
+ * The page owns the fetch and every write, as every other dialog in the app
+ * does; this one only renders what it is handed and emits what was clicked.
  */
 import { computed } from 'vue'
-import { chipClass, formatStamp, formatUid } from 'src/composables/utils/accessCards'
+import {
+  chipClass,
+  formatStamp,
+  formatUid,
+  statusActionsFor,
+} from 'src/composables/utils/accessCards'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -194,16 +229,21 @@ const props = defineProps({
   error: { type: String, default: '' },
 })
 
-defineEmits(['update:modelValue', 'assign', 'copy', 'retry'])
+defineEmits(['update:modelValue', 'assign', 'copy', 'retry', 'status'])
 
 const shown = computed(() => props.detail || props.row)
+
+/** The verbs this card can be put through — empty when it belongs to another
+ *  workspace, which is also why the group disappears there rather than offering
+ *  buttons that would fail. */
+const statusActions = computed(() => statusActionsFor(shown.value))
 
 const hasLifecycle = computed(() =>
   Boolean(
     props.detail?.issuedAt ||
-    props.detail?.activatedAt ||
-    props.detail?.deactivatedAt ||
-    props.detail?.expiresAt,
+      props.detail?.activatedAt ||
+      props.detail?.deactivatedAt ||
+      props.detail?.expiresAt,
   ),
 )
 </script>
@@ -337,6 +377,25 @@ const hasLifecycle = computed(() =>
   font-size: 12px;
   color: var(--dash-ink-3);
   line-height: 1.45;
+}
+
+/* ── Status verbs ── */
+/* Wrapped rather than laid in a row: four buttons is one too many for a modal
+   footer, and a wrap reads as a set of equal options where a footer row would
+   read as a primary action with three others competing. */
+.acc-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+.acc-status-btn {
+  border-radius: var(--dash-r-sm);
+  color: var(--dash-ink-2);
+}
+.acc-status-btn:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-50);
 }
 
 /* ── Fact rows ── */

@@ -62,7 +62,9 @@
         </label>
 
         <!-- Where the card stands now, so the change about to be made reads as a
-             change rather than as a form filled from nothing. -->
+             change rather than as a form filled from nothing. The status row
+             in here is context, not a control: it is what the request will
+             carry over unchanged. -->
         <div v-if="card" class="acc-now">
           <div v-if="!uidLocked" class="acc-now__row">
             <span class="acc-now__label">Card</span>
@@ -98,9 +100,9 @@
           </span>
         </div>
 
-        <!-- Until a card is in hand there is nothing to assign it to, so the two
-             fields below are held closed rather than offered and then rejected
-             on submit. -->
+        <!-- Until a card is in hand there is nothing to assign it to, so the field
+             below is held closed rather than offered and then rejected on
+             submit. -->
         <div v-if="!card && !uidLocked" class="acc-hint">
           <q-icon name="o_search" size="16px" />
           <span>
@@ -166,44 +168,10 @@
               </template>
             </q-select>
             <span class="dash-modal__field-hint">
-              Whoever holds this card. Taps recorded by a reader are credited to them.
+              Whoever holds this card. Taps recorded by a reader are credited to them. This does not
+              change whether the card works — that is a separate action below.
             </span>
           </label>
-
-          <label class="dash-modal__field">
-            <span class="dash-modal__field-label">Status</span>
-            <q-select
-              v-model="status"
-              :options="STATUS_CHOICES"
-              option-value="value"
-              option-label="label"
-              emit-value
-              map-options
-              outlined
-              dense
-              options-dense
-              hide-bottom-space
-              :disable="card.foreign"
-              class="dash-field"
-              popup-content-class="dash-popup dash-popup--modal"
-            >
-              <template v-slot:prepend>
-                <q-icon :name="status === 'active' ? 'o_lock_open' : 'o_lock'" size="18px" />
-              </template>
-            </q-select>
-            <span class="dash-modal__field-hint">{{ statusHint }}</span>
-          </label>
-
-          <!-- Said out loud because the endpoint's shape is not obvious from the
-               form: this one request carries both fields, so leaving the status
-               alone still writes the value shown above it. -->
-          <p class="acc-note">
-            <q-icon name="o_info" size="15px" />
-            <span>
-              The holder and the status are saved together in one change. Whatever is selected above
-              is what the card will have when you save.
-            </span>
-          </p>
         </template>
       </q-card-section>
 
@@ -224,7 +192,7 @@
 
 <script setup>
 /**
- * Who holds one NFC card, and whether it works.
+ * Who holds one NFC card.
  *
  * Two ways in, one dialog. A row's Assign button opens it with the card already
  * fixed; the toolbar's button opens it with a UID field, for a card you are
@@ -233,12 +201,20 @@
  * at the same PATCH: splitting them would be two forms to keep in step for one
  * request.
  *
- * Both halves of that request travel together — see `useAccessCards`'s module
- * header — so this always sends the employee and the status, seeding the status
- * from the card's current value. That is why there is no separate "activate"
- * control anywhere on the page: activating a card and handing it to somebody
- * are the same write, and two controls for one request would let a reader make
- * half a change.
+ * **This is the holder, and only the holder.** Whether the card still opens a
+ * door used to be a second select here, saved in the same request. It is not any
+ * more: `PATCH /user/access-cards/{uid}/status/` is its own endpoint with its own
+ * four values, and it asks its own confirmation — see the detail dialog's Card
+ * status group and `AccessCardStatusConfirmDialog`. Two selects in one form could
+ * only mean one write, so putting a status beside a holder would have quietly
+ * tied "switch this card off" to a reassignment somebody had every intention of
+ * making to somebody else.
+ *
+ * The status still travels on the request, because `employee-assign` carries the
+ * field, and this dialog has nothing to put in it — so the page sends the card's
+ * *current* status and a reassignment leaves the working state exactly as it
+ * found it. The status chip in the "Currently" block above is on screen for that
+ * reason: it is context for a holder change, not a control.
  *
  * The UID path deliberately will not submit until a lookup has answered. The
  * API has no route that creates a card — one registers itself the first time it
@@ -274,14 +250,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'lookup', 'save'])
 
-const STATUS_CHOICES = [
-  { label: 'Active — accepted at readers', value: 'active' },
-  { label: 'Inactive — refused at readers', value: 'inactive' },
-]
-
 const uid = ref('')
 const employeeId = ref(null)
-const status = ref('active')
 
 /** What the API is keyed on, whatever separators were typed. */
 const cleanUid = computed(() => normalizeUidInput(uid.value))
@@ -299,12 +269,6 @@ const subtitle = computed(() => {
 const submitLabel = computed(() => (props.card?.assigned ? 'Save changes' : 'Assign card'))
 
 const canSubmit = computed(() => Boolean(props.card) && !props.card.foreign && !!employeeId.value)
-
-const statusHint = computed(() =>
-  status.value === 'active'
-    ? 'The card opens what its holder is allowed to open.'
-    : 'The card stays on record and on this list, but a reader turns it away.',
-)
 
 /**
  * The list the dropdown shows, narrowed by what has been typed.
@@ -338,14 +302,10 @@ function requestLookup() {
   emit('lookup', cleanUid.value)
 }
 
-/** Seed the employee and status from whichever card is in hand. */
+/** Seed the employee from whichever card is in hand. Only the holder: the status
+ *  is no longer a field here, so there is nothing else to seed. */
 function seedFromCard() {
   employeeId.value = props.currentEmployeeId ?? null
-  // An unassigned card is almost always being handed out to be used, so the
-  // default is the state that makes that true. An assigned one keeps whatever
-  // it already has, since this dialog is then a reassignment, not a decision
-  // about access.
-  status.value = props.card?.assigned ? props.card.status.key : 'active'
 }
 
 /**
@@ -362,7 +322,7 @@ function resetForm() {
 }
 
 // A lookup landing is the UID path's equivalent of opening: it is the moment a
-// card first exists for this form, so the two fields below it are seeded then.
+// card first exists for this form, so the field below it is seeded then.
 watch(
   () => props.card?.uid,
   (next, previous) => {
@@ -372,11 +332,7 @@ watch(
 
 function submit() {
   if (!canSubmit.value) return
-  emit('save', {
-    uid: props.card.uid,
-    employeeId: employeeId.value,
-    status: status.value,
-  })
+  emit('save', { uid: props.card.uid, employeeId: employeeId.value })
 }
 </script>
 
@@ -469,21 +425,5 @@ function submit() {
   font-size: 10.5px;
   font-weight: 600;
   color: #fff;
-}
-
-/* ── Note ── */
-.acc-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--dash-ink-3);
-}
-.acc-note .q-icon {
-  flex: none;
-  margin-top: 1px;
-  color: var(--dash-ink-4);
 }
 </style>

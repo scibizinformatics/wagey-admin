@@ -160,6 +160,7 @@
                   :card="props.row"
                   @view="$emit('view', props.row)"
                   @assign="$emit('assign', props.row)"
+                  @status="(card, status) => $emit('status', card, status)"
                 />
               </q-btn>
             </q-td>
@@ -180,6 +181,10 @@
  * already carrying their avatar, their relative last-tap and this month's hours
  * from the page, so what a row displays is the same value the page filtered,
  * sorted and counted on.
+ *
+ * Nothing here writes. The row menu's verbs are re-emitted upward rather than
+ * acted on, so the one place that answers "are you sure?" is the page, for both
+ * this renderer and the card list below 1024px.
  */
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import AccessCardRowMenu from '@/components/pages/AccessCards/AccessCardRowMenu.vue'
@@ -191,7 +196,7 @@ defineProps({
   isFiltered: { type: Boolean, default: false },
 })
 
-defineEmits(['view', 'assign', 'copy', 'clear-filters'])
+defineEmits(['view', 'assign', 'copy', 'clear-filters', 'status'])
 
 // Sorting is the page's job, over the whole roll, so no column declares
 // `sortable` — a header click here would only reorder the rows on screen and

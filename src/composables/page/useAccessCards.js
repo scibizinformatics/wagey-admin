@@ -3,6 +3,7 @@ import { api } from 'src/boot/axios'
 import { useCompany } from 'src/composables/page/useCompany'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import {
+  isWritableStatus,
   normalizeAccessCard,
   normalizeAccessCards,
   summarizeAccessCards,
@@ -13,28 +14,33 @@ import {
  *
  *   GET   /user/company/{company_id}/access-cards/      the roll of cards
  *   GET   /user/access-cards/{uid}/                     one card, in full
- *   PATCH /user/access-cards/{uid}/employee-assign/     who holds it, and whether it works
+ *   PATCH /user/access-cards/{uid}/employee-assign/     who holds it
+ *   PATCH /user/access-cards/{uid}/status/              whether it works
  *
  * Every reading is derived in `composables/utils/accessCards.js` and nothing is
  * computed in the components, so the table, the card list, the summary line and
- * the two dialogs cannot disagree about the same card.
+ * the three dialogs cannot disagree about the same card.
  *
  * Two things about this API shape the composable.
  *
- * Only the list is company-scoped — it takes the company in the path. The detail
- * and assign routes are keyed by **uid alone**, with no company anywhere, so a
- * uid from one workspace is writable while another is selected. The page never
- * offers a uid it did not read from this company's list, and this re-resolves
- * the company on every request rather than capturing it at setup, so a workspace
- * switch that lands mid-flight cannot leave a stale id behind. The detail
- * payload does carry a `company`, and a mismatch there is surfaced rather than
- * quietly rendered.
+ * Only the list is company-scoped — it takes the company in the path. The detail,
+ * assign and status routes are keyed by **uid alone**, with no company anywhere,
+ * so a uid from one workspace is writable while another is selected. The page
+ * never offers a uid it did not read from this company's list, and this
+ * re-resolves the company on every request rather than capturing it at setup, so
+ * a workspace switch that lands mid-flight cannot leave a stale id behind. The
+ * detail payload does carry a `company`, and a mismatch there is surfaced rather
+ * than quietly rendered.
  *
- * And a write is a PATCH that takes **both** the employee and the status
- * together, so "activate this card" and "give this card to somebody" are the
- * same request. That is why the assign dialog always sends both fields, holding
- * the current employee when only the status is being changed — sending a partial
- * body would be asking the server to infer the half we left out.
+ * And **holder and status are two writes, not one**. `employee-assign` carries
+ * both fields, but `status` is a separate endpoint of its own with its own
+ * vocabulary — `WRITABLE_STATUSES`, four values, no `stolen` or `expired` — so a
+ * card's status is never inferred from the holder change. That is why
+ * `assignCard` still sends a status: the endpoint wants both keys, and sending
+ * the card's *current* status is what makes a reassignment leave the status
+ * exactly as it found it. `setCardStatus` is the only writer of a status the
+ * reader chose, and it is the only one guarded against the four the endpoint
+ * accepts.
  */
 
 /** Ids cross the wire as numbers in some payloads and strings in others. */
@@ -43,12 +49,22 @@ function sameId(a, b) {
   return String(a) === String(b)
 }
 
+/** Trimmed string, or ''. Mirrors `accessCards.js`'s own helper rather than
+ *  importing it, which is not exported: this file needs it for one guard. */
+function text(value) {
+  if (value == null) return ''
+  return typeof value === 'string' ? value.trim() : String(value).trim()
+}
+
 export function useAccessCards() {
   const { companyId } = useCompany()
 
   const cards = ref([])
   const loading = ref(false)
   const saving = ref(false)
+  /** The status write, tracked apart from `saving` — the two can be on screen
+   *  together, and a spinner on the wrong one reports the wrong request. */
+  const settingStatus = ref(false)
   const error = ref('')
 
   /** The company the rows on screen were actually fetched for. */
@@ -140,11 +156,13 @@ export function useAccessCards() {
   }
 
   /**
-   * Assign a card to an employee, and set whether it works.
+   * Assign a card to an employee.
    *
-   * Both halves travel together because that is the endpoint's shape — see the
-   * module header. The caller passes the employee it wants the card to end up
-   * with, including when the only thing changing is the status.
+   * `status` is not a decision this function makes and must not be allowed to
+   * look like one — the caller passes the card's current status so that handing
+   * a card to somebody leaves its working state untouched, which is the whole
+   * point of splitting status out into its own endpoint. Passing something else
+   * here would quietly re-enable a card that had been revoked.
    *
    * @param {string} uid
    * @param {{employeeId: string, status: string}} payload
@@ -162,6 +180,37 @@ export function useAccessCards() {
     }
   }
 
+  /**
+   * Put a card into one of the four states the status endpoint accepts.
+   *
+   * Guarded rather than trusted: `WRITABLE_STATUSES` is the endpoint's
+   * vocabulary, and `stolen` / `damaged` / `expired` can all arrive on a card
+   * from a payload this app never chose. A guard on a form select protects
+   * against a person; this protects against a stale value reappearing in one.
+   * The reject is local and immediate, so it cannot half-apply.
+   *
+   * Its own `settingStatus` flag rather than `saving`, because the confirm dialog
+   * and the assign form can both be on screen and a spinner on the wrong one
+   * would report the wrong write in flight.
+   *
+   * @param {string} uid
+   * @param {string} status one of `WRITABLE_STATUSES`
+   */
+  async function setCardStatus(uid, status) {
+    if (!isWritableStatus(status)) {
+      throw new Error(`"${text(status) || 'empty'}" is not a status this card can be put into.`)
+    }
+    settingStatus.value = true
+    try {
+      const response = await api.patch(`/user/access-cards/${encodeURIComponent(uid)}/status/`, {
+        status: text(status).toLowerCase(),
+      })
+      return response.data
+    } finally {
+      settingStatus.value = false
+    }
+  }
+
   function clearError() {
     error.value = ''
   }
@@ -175,6 +224,7 @@ export function useAccessCards() {
     servedCompanyId.value = null
     error.value = ''
     loading.value = false
+    settingStatus.value = false
   }
 
   return {
@@ -183,12 +233,14 @@ export function useAccessCards() {
     summary,
     loading,
     saving,
+    settingStatus,
     error,
     servedCompanyId,
     // methods
     fetchCards,
     fetchCard,
     assignCard,
+    setCardStatus,
     clearError,
     reset,
   }

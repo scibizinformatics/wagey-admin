@@ -84,6 +84,15 @@ export function assignedNameOf(value) {
 
 // ─── Status ──────────────────────────────────────────────────────────────────
 
+/**
+ * Every status this app can *print*, keyed by the server's own value.
+ *
+ * `stolen`, `damaged` and `expired` are here and only here: the backend has been
+ * seen to send them, so a row carrying one must render its wording rather than
+ * falling through to "Unknown" — but nothing in this app can put a card into any
+ * of them, so they are never offered as a choice. The write-side list is
+ * `WRITABLE_STATUSES` below, and the two are deliberately not the same set.
+ */
 const STATUSES = {
   active: { key: 'active', label: 'Active', tone: 'good' },
   // Grey rather than red: an inactive card is switched off, not broken. The red
@@ -94,6 +103,114 @@ const STATUSES = {
   damaged: { key: 'damaged', label: 'Damaged', tone: 'warn' },
   expired: { key: 'expired', label: 'Expired', tone: 'neutral' },
   revoked: { key: 'revoked', label: 'Revoked', tone: 'neutral' },
+}
+
+/**
+ * The four statuses `PATCH /user/access-cards/{uid}/status/` accepts, and
+ * everything the UI needs to offer them.
+ *
+ * This is the *write* vocabulary, keyed to one endpoint, which is why it does not
+ * simply reuse `STATUSES`: that map is what a payload may arrive as, and three of
+ * its values are not choices this app gets to make. `PATCH` here rather than
+ * `POST` because the row already exists and we are naming its next state.
+ *
+ * `tone` is the confirm dialog's own scale, not `STATUSES[].tone` — `dashboard.scss`
+ * ships `--good`, `--warn` and `--danger` on the dialog head, and no `critical`,
+ * so a card-level tone could not be handed straight to it.
+ *
+ * `doneLabel` is the past tense, so the toast after a write reads as the verb did
+ * what it said — "Card marked lost", not "Card marked lostd". Deriving it here
+ * rather than in the page means no caller has to know that English adds a suffix
+ * to three of these four and not the fourth.
+ *
+ * Order is deliberate: active first, so the verbs read as "put it back" before
+ * "take it away" in the row menu.
+ */
+export const WRITABLE_STATUSES = {
+  active: {
+    key: 'active',
+    label: 'Active',
+    actionLabel: 'Reactivate',
+    doneLabel: 'reactivated',
+    icon: 'o_lock_open',
+    tone: 'good',
+    buttonClass: 'dash-modal__approve',
+    sentence: 'works at readers again.',
+  },
+  inactive: {
+    key: 'inactive',
+    label: 'Inactive',
+    actionLabel: 'Deactivate',
+    doneLabel: 'deactivated',
+    icon: 'o_lock',
+    tone: 'warn',
+    buttonClass: 'dash-modal__danger',
+    sentence: 'is switched off. A reader will turn it away.',
+  },
+  lost: {
+    key: 'lost',
+    label: 'Lost',
+    actionLabel: 'Mark lost',
+    doneLabel: 'marked lost',
+    icon: 'o_help_outline',
+    tone: 'danger',
+    buttonClass: 'dash-modal__danger',
+    sentence: 'is recorded as lost and a reader will turn it away.',
+  },
+  revoked: {
+    key: 'revoked',
+    label: 'Revoked',
+    actionLabel: 'Revoke',
+    doneLabel: 'revoked',
+    icon: 'o_block',
+    tone: 'danger',
+    buttonClass: 'dash-modal__danger',
+    sentence: 'is revoked and a reader will turn it away.',
+  },
+}
+
+/**
+ * The status verbs a given card can be put through right now.
+ *
+ * Every writable status except the one it already holds, so a card that is
+ * already active is never offered "Reactivate" and a revoked card is never
+ * offered "Revoke" again. The row menu and the detail dialog both render from
+ * this, which is the only reason they cannot offer a reader two different sets of
+ * ways to change the same card.
+ *
+ * Empty for a card belonging to another workspace: the status route is keyed by
+ * uid alone, exactly like the assign route, so the same guard that keeps the
+ * assign form closed keeps these from being offered at all.
+ *
+ * @param {object} card a normalised card
+ * @returns {Array<{key: string, label: string, actionLabel: string, icon: string}>}
+ */
+export function statusActionsFor(card) {
+  if (!card || card.foreign) return []
+  const current = card.status?.key
+  return Object.values(WRITABLE_STATUSES)
+    .filter((status) => status.key !== current)
+    .map(({ key, label, actionLabel, icon }) => ({ key, label, actionLabel, icon }))
+}
+
+/**
+ * True when `/status/` will take this value. The write endpoint is offered no
+ * other option, so a status arriving from a payload this app did not choose
+ * (`stolen`, `damaged`, `expired`, anything newer) cannot be sent back by
+ * accident from a stale form.
+ */
+export function isWritableStatus(key) {
+  return Object.hasOwn(WRITABLE_STATUSES, text(key).toLowerCase())
+}
+
+/**
+ * The printed label for a status key, for a sentence or a toast. Falls back to
+ * the caller's own text rather than to a blank, so an unknown value is named
+ * instead of silently dropped.
+ */
+export function statusLabel(key, fallback = '') {
+  const normalized = text(key).toLowerCase()
+  return STATUSES[normalized]?.label || fallback || normalized || 'Unknown'
 }
 
 /**
@@ -237,10 +354,19 @@ export function formatStamp(value) {
  *
  *  - **Active, unassigned**: a live credential belonging to nobody. If it goes
  *    missing there is no name to ask about it.
- *  - **Assigned, inactive**: somebody is carrying a card that will not open the
- *    door, and will report it as broken rather than as switched off.
+ *  - **Assigned, anything but active**: somebody is carrying a card that will not
+ *    open the door, and will report it as broken rather than as switched off.
  *
- * Anything else — active and held, inactive and free — is a settled state and
+ * The second case is tested against *any* non-active status, not against
+ * `inactive` specifically. That was the only state this page could put a card
+ * into, so it was the only one worth naming; now that lost and revoked are
+ * writable — and given that `stolen`, `damaged` and `expired` can arrive from the
+ * server at any time — a narrowed test would let a revoked card reach the table
+ * looking settled, which is the one reading this function exists to prevent. The
+ * label is built from the card's own status so the row never says "inactive"
+ * about something that is not.
+ *
+ * Anything else — active and held, or inactive and free — is a settled state and
  * returns null.
  *
  * @returns {{key: string, label: string, tone: string, detail: string}|null}
@@ -253,13 +379,18 @@ export function cardAlert(card) {
       key: 'loose',
       label: 'Active, unassigned',
       tone: 'warn',
-      detail: 'This card works but belongs to nobody. Assign it, or set it inactive.',
+      detail:
+        'This card works but belongs to nobody. Assign it, deactivate it, or revoke it.',
     }
   }
-  if (!active && card.assigned && card.status?.key === 'inactive') {
+  if (!active && card.assigned) {
     return {
       key: 'dormant',
-      label: 'Assigned, inactive',
+      // The card's own `status.label` is the fallback, not a guessed word:
+      // `cardStatus` has already resolved this to the server's wording, and
+      // naming a card "inactive" because this app did not recognise its status
+      // would be the same lie in a smaller font.
+      label: `Assigned, ${statusLabel(card.status?.key, card.status?.label).toLowerCase()}`,
       tone: 'warn',
       detail: `${card.employeeName} is holding a card a reader will not accept.`,
     }

@@ -73,7 +73,7 @@
         <span class="acc-note__text">
           {{ summary.alerts }}
           {{ summary.alerts === 1 ? 'card needs' : 'cards need' }} attention — a live card with no
-          holder, or somebody carrying an inactive one.
+          holder, or somebody carrying one a reader will refuse.
         </span>
         <span class="acc-note__cta">Show them</span>
       </button>
@@ -171,6 +171,7 @@
           @view="openDetail"
           @assign="openAssign"
           @copy="copyUid"
+          @status="requestStatusChange"
           @clear-filters="clearFilters"
         />
         <AccessCardTable
@@ -181,6 +182,7 @@
           @view="openDetail"
           @assign="openAssign"
           @copy="copyUid"
+          @status="requestStatusChange"
           @clear-filters="clearFilters"
         />
 
@@ -232,6 +234,7 @@
       @assign="openAssign"
       @copy="copyUid"
       @retry="loadDetail"
+      @status="requestStatusChange"
     />
 
     <AccessCardAssignDialog
@@ -247,6 +250,15 @@
       @lookup="lookupUid"
       @save="saveAssignment"
     />
+
+    <!-- Sits above whichever opened it — the table's row menu or the detail
+         dialog — and is the only thing in this feature that writes a status. -->
+    <AccessCardStatusConfirmDialog
+      v-model="showStatusConfirm"
+      :confirm="statusConfirm"
+      :loading="settingStatus"
+      @confirm="commitStatusChange"
+    />
   </PageShell>
 </template>
 
@@ -256,11 +268,19 @@
  * ----------------------------------------------------------------------------
  * The NFC cards registered to this workspace, and who holds each one.
  *
- * One write, the PATCH that sets a card's holder and its status together, and
- * one borrowed read: the tap log, wanted only for the per-card hours column,
- * because the card payload carries no hours at all. Every reading on screen is
- * derived in `composables/utils/accessCards.js`, so the table, the card list, the
- * header line and both dialogs cannot disagree about a card.
+ * **Two writes, and they are deliberately separate.** One PATCH sets a card's
+ * holder (`employee-assign`); another sets whether the card works at all
+ * (`/status/`, four values). They used to be a single form, which meant
+ * "switch this card off" rode along with a reassignment — or, worse, a status a
+ * reader had chosen for one card arrived in the body of a request about a
+ * different card's holder. Now the status has its own verb list
+ * (`statusActionsFor`), its own confirmation (`AccessCardStatusConfirmDialog`,
+ * worded in `statusConfirm.js`) and its own guarded writer (`setCardStatus`).
+ *
+ * The third read is borrowed: the tap log, wanted only for the per-card hours
+ * column, because the card payload carries no hours at all. Every reading on
+ * screen is derived in `composables/utils/accessCards.js`, so the table, the card
+ * list, the header line and all three dialogs cannot disagree about a card.
  *
  * Filtering, sorting and paging all happen here, in that order, over the
  * complete roll. That order is the point: "least recently tapped" has to mean
@@ -287,6 +307,8 @@ import AccessCardTable from '@/components/pages/AccessCards/AccessCardTable.vue'
 import AccessCardCardList from '@/components/pages/AccessCards/AccessCardCardList.vue'
 import AccessCardAssignDialog from '@/components/pages/AccessCards/AccessCardAssignDialog.vue'
 import AccessCardDetailDialog from '@/components/pages/AccessCards/AccessCardDetailDialog.vue'
+import AccessCardStatusConfirmDialog from '@/components/pages/AccessCards/AccessCardStatusConfirmDialog.vue'
+import { buildStatusConfirm } from '@/components/pages/AccessCards/statusConfirm'
 import { useAccessCards } from 'src/composables/page/useAccessCards'
 import { useCardTaps } from 'src/composables/page/useCardTaps'
 import { useCompany } from 'src/composables/page/useCompany'
@@ -302,7 +324,9 @@ import {
   matchesAssignment,
   matchesSearch,
   monthlyHoursByCard,
+  statusLabel,
   tapAgo,
+  WRITABLE_STATUSES,
 } from 'src/composables/utils/accessCards'
 import { decimalHoursLabel } from 'src/composables/utils/format'
 import { monthStartIso, todayIso } from 'src/composables/utils/calendarDate'
@@ -330,6 +354,8 @@ const {
   fetchCards,
   fetchCard,
   assignCard,
+  setCardStatus,
+  settingStatus,
   clearError,
   reset,
 } = useAccessCards()
@@ -635,19 +661,47 @@ async function lookupUid(uid) {
   }
 }
 
-async function saveAssignment({ uid, employeeId, status }) {
+/**
+ * Hand a card to somebody.
+ *
+ * The status is passed but not chosen: `employee-assign` carries the field, and
+ * the card's *current* status is the only value that leaves the working state
+ * untouched — which is the whole reason status has its own endpoint now. It used
+ * to be a form select seeded to the card's status, so this is exactly the request
+ * the dialog used to send when only the holder changed.
+ *
+ * It does differ in one case, deliberately. The old dialog defaulted an
+ * *unassigned* card to `active`, so handing a revoked card to somebody quietly
+ * re-enabled it; now a card that is not active stays that way until somebody says
+ * so with a status verb.
+ */
+async function saveAssignment({ uid, employeeId }) {
   const card = selectedCard.value
   if (!card) return
   const wasAssigned = card.assigned
+
+  // The status this write carries over. Verbatim, so a reassignment cannot
+  // change whether the card works — including a `stolen` or `expired` this app
+  // cannot write itself, because substituting something writable there would
+  // quietly resurrect a card somebody had already reported. The one exception is
+  // a payload that named no status at all: there is nothing to preserve, and a
+  // card being handed to somebody is being handed to be used, which is the
+  // `active` the old dialog's select defaulted to.
+  const assignStatus =
+    card.status?.key && card.status.key !== 'unknown' ? card.status.key : 'active'
+
   try {
-    await assignCard(uid, { employeeId, status })
+    await assignCard(uid, { employeeId, status: assignStatus })
     showAssign.value = false
     const name = employeeOptions.value.find((option) => option.value === employeeId)?.label
     toast.success(
       wasAssigned
         ? `Card reassigned${name ? ` to ${name}` : ''}`
         : `Card assigned${name ? ` to ${name}` : ''}`,
-      { caption: `${uid} · ${status === 'active' ? 'Active' : 'Inactive'}`, timeout: 3000 },
+      {
+        caption: `${uid} · ${statusLabel(assignStatus)}`,
+        timeout: 3000,
+      },
     )
   } catch (err) {
     toast.error(extractErrorMessage(err, 'Failed to assign the card'), { timeout: 8000 })
@@ -655,6 +709,88 @@ async function saveAssignment({ uid, employeeId, status }) {
     // Unconditional: a write that failed may still have landed, and the list is
     // the only thing that can say what the card now holds.
     await fetchCards()
+  }
+}
+
+// ─── Card status ──────────────────────────────────────────────────────────────
+
+/**
+ * The confirmation waiting to be confirmed, and the write frozen inside it.
+ *
+ * `pendingStatus` is snapshotted at the moment the confirm opens rather than read
+ * off the row when Confirm is pressed. The row underneath is live — a refresh,
+ * a filter change or the detail payload landing can all replace it while the
+ * dialog is open, and a confirm that re-read its subject would then describe a
+ * card other than the one it revokes.
+ */
+const showStatusConfirm = ref(false)
+const statusConfirm = ref(null)
+const pendingStatus = ref(null)
+
+/**
+ * First step of a status change: work out what it would do, then ask. Nothing is
+ * written here — mirroring the contract-update confirm on Employees and the
+ * shift reassign confirm on Schedule, for the same reason: these verbs decide
+ * what a physical door does with a card somebody is carrying.
+ */
+function requestStatusChange(card, status) {
+  // A second submit while the first is still in flight would write the same
+  // status again, and a click on a row menu while the confirm is open would
+  // leave `pendingStatus` describing a card the dialog is not showing.
+  if (settingStatus.value || showStatusConfirm.value) return
+
+  const confirm = buildStatusConfirm(card, status)
+  if (!confirm) {
+    // The card changed state under a menu that was open when it did not — the
+    // verb is no longer one this card can take. Nothing is lost, so this is a
+    // console note rather than a toast somebody has to dismiss.
+    console.warn(`[Access cards] no status confirmation for "${status}"`)
+    return
+  }
+
+  pendingStatus.value = { uid: card.uid, status }
+  statusConfirm.value = confirm
+  showStatusConfirm.value = true
+}
+
+/**
+ * The confirmed status change.
+ *
+ * Reads only `pendingStatus`, never the row, so it writes exactly what the
+ * confirmation described. The refetch is unconditional and happens after the
+ * toast, for the assign write's reason: a write that reported failure may still
+ * have landed, and the list is the only thing that can say what the card is now.
+ */
+async function commitStatusChange() {
+  const pending = pendingStatus.value
+  if (!pending || settingStatus.value) return
+
+  // Held in locals because the `finally` below clears the ref the confirm reads,
+  // and the refetch at the end of it needs to know which card it was about.
+  const { uid, status } = pending
+  // The verb's own past tense, so the toast reads as the thing that happened
+  // rather than as the field that was written.
+  const done = WRITABLE_STATUSES[status]?.doneLabel || status
+  const label = statusLabel(status)
+
+  try {
+    await setCardStatus(uid, status)
+    toast.success(`Card ${done}`, { caption: uid, timeout: 3000 })
+  } catch (err) {
+    toast.error(extractErrorMessage(err, `Failed to change this card to ${label.toLowerCase()}`), {
+      timeout: 8000,
+    })
+  } finally {
+    showStatusConfirm.value = false
+    statusConfirm.value = null
+    pendingStatus.value = null
+    await fetchCards()
+    // The detail dialog keeps its own normalised copy of the card rather than
+    // pointing at the list row, so the refetch above does not reach it — a card
+    // revoked from inside that dialog would still be showing a green "Active"
+    // chip behind the toast that said otherwise. Re-read it when that is the
+    // dialog that is open on this card.
+    if (showDetail.value && selectedCard.value?.uid === uid) await loadDetail()
   }
 }
 
@@ -737,6 +873,12 @@ watch(companyId, (next, previous) => {
   clearFilters()
   showDetail.value = false
   showAssign.value = false
+  // A confirmation frozen against a card from the workspace being left is the one
+  // dialog that must not survive the switch: Confirm would write a uid belonging
+  // to somebody else. `reset()` above drops the write flag with the cards.
+  showStatusConfirm.value = false
+  statusConfirm.value = null
+  pendingStatus.value = null
   selectedCard.value = null
   detailCard.value = null
   if (next) load()
