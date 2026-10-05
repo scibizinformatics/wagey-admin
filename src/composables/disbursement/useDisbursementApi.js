@@ -1,5 +1,6 @@
 import { api } from 'boot/axios'
 import { BASE } from 'src/composables/utils/http'
+import { useCompany } from 'src/composables/page/useCompany'
 
 // ── Simple module-level cache for list-page data ──
 const cache = new Map()
@@ -43,10 +44,16 @@ function invalidateCache(fn) {
 }
 
 export function useDisbursementApi() {
+  // The endpoint takes no company argument — it reads the workspace off the
+  // session — so the cache key has to carry it. It used to be the bare string
+  // 'cutoffs', one global entry: after a workspace switch the next reader was
+  // served the *previous* company's cutoffs for up to five minutes, and a filter
+  // built from them matched nothing at all.
+  const { companyId } = useCompany()
 
   // ── Cutoff Instances ──
   async function fetchCutoffInstances() {
-    const key = cacheKey('cutoffs')
+    const key = cacheKey('cutoffs', companyId.value ?? '')
     const cached = getCached(key)
     if (cached) return cached
     const { data } = await api.get(`${BASE}/payroll/admin/cutoff-instances/`)
