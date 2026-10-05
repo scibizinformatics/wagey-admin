@@ -54,6 +54,30 @@
           <q-icon name="o_groups" size="16px" />
         </template>
       </q-select>
+      <!-- Payroll cutoff, from the cutoff instances' own date windows. Overlaps
+           rather than contains, so a leave request running across a cutoff
+           boundary is listed under both cutoffs rather than neither. Hidden when
+           the endpoint answered with nothing we can place, for the same reason as
+           the group select above: a control that can only ever return an empty
+           queue is worse than no control. -->
+      <q-select
+        v-if="cutoffOptions.length > 1"
+        :model-value="cutoffFilter"
+        @update:model-value="$emit('update:cutoffFilter', $event)"
+        :options="cutoffOptions"
+        emit-value
+        map-options
+        dense
+        outlined
+        hide-bottom-space
+        popup-content-class="dash-popup"
+        class="grid-filter grid-filter--wide dash-field"
+        aria-label="Filter by cutoff"
+      >
+        <template v-slot:prepend>
+          <q-icon name="o_calendar_today" size="16px" />
+        </template>
+      </q-select>
       <div class="grid-footer-info">
         <strong>{{ rows.length }}</strong> {{ rows.length === 1 ? 'request' : 'requests' }}
       </div>
@@ -272,6 +296,16 @@ const props = defineProps({
   // numbers them, but a string id would compare just as well.
   payrollGroupFilter: { type: [Number, String], default: null },
   payrollGroupOptions: { type: Array, default: () => [] },
+  // Which payroll cutoff to narrow to, as the key `leaveCutoffs.js` builds:
+  // `id:<id>` where the instance carries an id, `name:<name>@<first day>` when it
+  // does not — the window qualifies the name, because every cutoff in a year can
+  // share the name "Semi-monthly". Null is "all cutoffs", which is also why the
+  // empty-options case can never be selected: the select is not rendered at all
+  // without a real option to choose.
+  cutoffFilter: { type: String, default: null },
+  // Already prefixed with its "All cutoffs" entry by `buildLeaveCutoffOptions`,
+  // so this component adds nothing to the list it is handed.
+  cutoffOptions: { type: Array, default: () => [] },
   // Which row a rejection recommendation is in flight for, so the row's spinner
   // covers it. Separate from `actionLoading` because a recommendation is a
   // different endpoint from approve/reject, and one of the two can be busy while
@@ -282,6 +316,7 @@ defineEmits([
   'update:statusFilter',
   'update:search',
   'update:payrollGroupFilter',
+  'update:cutoffFilter',
   'toggle-selection',
   'toggle-select-all',
   'clear-selection',
@@ -377,15 +412,17 @@ const isNarrowed = computed(
   () =>
     (!!props.statusFilter && props.statusFilter !== 'all') ||
     !!(props.search || '').trim() ||
-    props.payrollGroupFilter !== null,
+    props.payrollGroupFilter !== null ||
+    props.cutoffFilter !== null,
 )
 
 const emptyTitle = computed(() =>
   isNarrowed.value ? 'No requests match your filters' : 'No leave requests',
 )
 // Names only the controls actually in use: the payout-group select is hidden for
-// a company with no groups set up, so a fixed sentence listing all three would
-// point at a field that isn't on screen.
+// a company with no groups set up, and the cutoff select for one with no cutoff
+// we can place, so a fixed sentence listing all four would point at a field that
+// isn't on screen.
 const emptyText = computed(() => {
   if (!isNarrowed.value) return 'Leave requests submitted by employees land here for review.'
   const parts = []
@@ -394,6 +431,7 @@ const emptyText = computed(() => {
     parts.push('switching back to All statuses')
   }
   if (props.payrollGroupFilter !== null) parts.push('switching back to All payout groups')
+  if (props.cutoffFilter !== null) parts.push('switching back to All cutoffs')
   const list =
     parts.length > 1 ? `${parts.slice(0, -1).join(', ')} or ${parts[parts.length - 1]}` : parts[0]
   return `Try ${list} to see every request in this queue.`
