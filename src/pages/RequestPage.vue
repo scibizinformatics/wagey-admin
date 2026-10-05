@@ -113,9 +113,12 @@
               :search="searchTerm"
               :payroll-group-filter="leavePayrollGroupFilter"
               :payroll-group-options="payrollGroupOptions"
+              :cutoff-filter="leaveCutoffFilter"
+              :cutoff-options="leaveCutoffOptions"
               @update:status-filter="statusFilter = $event"
               @update:search="searchTerm = $event"
               @update:payroll-group-filter="leavePayrollGroupFilter = $event"
+              @update:cutoff-filter="leaveCutoffFilter = $event"
               @toggle-selection="toggleLeaveSelection"
               @toggle-select-all="toggleSelectAllLeave"
               @clear-selection="clearLeaveSelection"
@@ -320,6 +323,14 @@ import {
   bulkLeaveOutcomeToast,
   leaveRequestDurationLabel,
 } from 'src/composables/utils/leaveRequests'
+import {
+  buildLeaveCutoffOptions,
+  findLeaveCutoff,
+  leavePeriodOverlapsCutoff,
+  normalizeLeaveCutoffs,
+} from 'src/composables/utils/leaveCutoffs'
+import { createRequestToken } from 'src/composables/utils/requestToken'
+import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useAdminPayrollGroups } from 'src/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from 'src/composables/page/useEmployeePayoutGroup'
 import { useToast } from 'src/composables/useToast'
@@ -508,6 +519,56 @@ const recommendSubmitting = ref(false)
 // Per-row, in the same `verb-id` shape `actionLoading` uses, so the table's
 // `isBusy` can tell which request is mid-write.
 const recommendLoading = ref(null)
+
+// ===== LEAVE CUTOFF FILTER =====
+// Narrows the leave queue to the payroll cutoff a reviewer is working, the way the
+// payout-group select beside it narrows to a group. Joined from the cutoff
+// instances' date windows rather than from the rows, because `/attendance/leave-list/`
+// carries a span and no cutoff — see `composables/utils/leaveCutoffs.js` for the
+// overlap rule and for why an unplaceable cutoff is dropped rather than offered.
+//
+// Loaded with the page rather than on first use, the opposite of the group filter:
+// there is no per-employee contract resolution to wait for, and a filter that is
+// only reachable by first failing to be useful is not worth the round trip saved.
+const leaveCutoffs = ref([])
+const leaveCutoffFilter = ref(null)
+const { fetchCutoffInstances } = useDisbursementApi()
+
+// Guards a workspace switch landing mid-fetch: the request was issued for the
+// company the reader was on, and its answer must not be published over the
+// company they moved to.
+const leaveCutoffGuard = createRequestToken()
+
+const leaveCutoffOptions = computed(() => buildLeaveCutoffOptions(leaveCutoffs.value))
+
+const fetchLeaveCutoffs = async () => {
+  const company = selectedCompany.value
+  if (!company) {
+    leaveCutoffs.value = []
+    return
+  }
+  const token = leaveCutoffGuard.next()
+  try {
+    const { cutoffs, undated } = normalizeLeaveCutoffs(await fetchCutoffInstances())
+    if (!leaveCutoffGuard.isCurrent(token)) return
+    leaveCutoffs.value = cutoffs
+    // Said once, not per option: a cutoff we cannot place is a payload this code
+    // does not fully understand, and a reviewer needs to know the dropdown is
+    // shorter than the payroll run rather than assume it is complete.
+    if (undated) {
+      console.warn(
+        `[requests] ${undated} cutoff(s) carried no readable date window and cannot be filtered by`,
+      )
+    }
+  } catch (error) {
+    if (!leaveCutoffGuard.isCurrent(token)) return
+    leaveCutoffs.value = []
+    // The select hides itself on an empty list, so this degrades to the queue
+    // working exactly as it did before — no toast for a filter that was only
+    // ever a convenience.
+    console.error('[requests] failed to load cutoff instances', error)
+  }
+}
 
 // ===== OVERTIME STATE =====
 // One flat queue for the whole company, the same shape the leave tab uses.
@@ -735,6 +796,16 @@ const filteredLeaveRequests = computed(() => {
     filtered = filtered.filter((r) =>
       matchesPayrollGroup(leaveRowEmployeeRefs(r), leavePayrollGroupFilter.value),
     )
+  }
+  // Last, and for the same reason: a row whose span cannot be placed in a cutoff
+  // is excluded while a cutoff is selected rather than folded in. Overlap, not
+  // containment, so a request straddling two cutoffs is listed under both.
+  if (leaveCutoffFilter.value) {
+    const cutoff = findLeaveCutoff(leaveCutoffs.value, leaveCutoffFilter.value)
+    if (cutoff) filtered = filtered.filter((r) => leavePeriodOverlapsCutoff(r, cutoff))
+    // A key that no longer resolves — the list reloaded and that cutoff is gone —
+    // shows the whole queue rather than an empty one. An empty table reads as
+    // "nothing to review", which is the more dangerous of the two wrong answers.
   }
   return filtered
 })
@@ -2004,6 +2075,15 @@ watch(
   selectedCompany,
   (id) => {
     if (id) fetchPayrollGroups()
+    // Same gate for the cutoff filter, which has no resolution step to wait on
+    // and so can simply be fetched. Clearing first matters more than usual here:
+    // the previous workspace's options must not sit on screen for the length of a
+    // round trip, and a key from them would select nothing.
+    if (id) fetchLeaveCutoffs()
+    else {
+      leaveCutoffs.value = []
+      leaveCutoffFilter.value = null
+    }
   },
   { immediate: true },
 )
@@ -2043,6 +2123,8 @@ watch(selectedCompany, () => {
   leavePayrollGroupFilter.value = null
   overtimePayrollGroupFilter.value = null
   caPayrollGroupFilter.value = null
+  leaveCutoffFilter.value = null
+  leaveCutoffs.value = []
   fetchLeaveRequests()
   fetchOvertimeRequests()
   fetchOvertimeCategories()
