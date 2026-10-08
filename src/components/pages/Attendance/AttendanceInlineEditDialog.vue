@@ -29,21 +29,23 @@
       </q-card-section>
 
       <q-card-section class="dash-modal__body">
-        <label class="dash-modal__field">
+        <!--
+          A `div`, not a `label`: a 24h field renders as two selects (hour and
+          minute), and a label may only wrap one control — with two, a click on
+          the label text activates the *first* one, so clicking the minute sent
+          focus back to the hour. The label span above is what names the field.
+        -->
+        <div class="dash-modal__field">
           <span class="dash-modal__field-label">
             {{ field === 'time_in' ? 'New time in' : 'New time out' }}
           </span>
-          <q-input
+          <AttendanceTimeField
             :model-value="value"
-            type="time"
-            outlined
-            dense
+            :time-format="timeFormat"
             autofocus
-            hide-bottom-space
-            class="dash-field"
             @update:model-value="$emit('update:value', $event)"
           />
-        </label>
+        </div>
       </q-card-section>
 
       <q-card-actions class="dash-modal__foot">
@@ -69,6 +71,8 @@
 </template>
 
 <script setup>
+import AttendanceTimeField from '@/components/pages/Attendance/AttendanceTimeField.vue'
+
 defineProps({
   modelValue: { type: Boolean, default: false },
   field: { type: String, default: '' },
@@ -76,6 +80,9 @@ defineProps({
   date: { type: String, default: '' },
   value: { type: String, default: '' },
   saving: { type: Boolean, default: false },
+  // The company's `time_format` — '12h' | '24h'. Decides how the punch prints;
+  // `value` stays 24h `HH:mm` either way.
+  timeFormat: { type: String, default: '12h' },
 })
 
 defineEmits(['update:modelValue', 'update:value', 'save'])
