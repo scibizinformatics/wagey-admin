@@ -4,6 +4,45 @@ export function formatCurrency(val) {
 }
 
 /**
+ * An instant as a readable date and time — `"Jul 1, 2026, 3:00 PM"`.
+ *
+ * The tables were printing the raw ISO string, so a claim landed in the cell as
+ * `2026-07-01T15:00:00Z` — the field's own storage format, in a column whose
+ * neighbours are words.
+ *
+ * This is deliberately the same shape as `formatStamp` in `utils/accessCards.js`,
+ * which was written for the same problem and would render this identically. It
+ * lives here instead because this is the app's generic formatter module and the
+ * behaviour is not about cards; the access-cards module can adopt this and drop
+ * its own without anything changing on screen. Its callers do not move between
+ * two implementations, they move to one.
+ *
+ * Printed in the reader's own timezone rather than a company's: a claim is
+ * stamped by the person making it, and the column says when *they* said it. A
+ * value that cannot be parsed is returned as-is — a legible odd value beats a
+ * blank, and the caller can decide that blank would be better.
+ *
+ * @param {string|number|Date|null|undefined} value
+ * @returns {string}
+ */
+export function formatDateTime(value) {
+  if (value === null || value === undefined || value === '') return ''
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  try {
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  } catch {
+    return String(value)
+  }
+}
+
+/**
  * Hours as a fixed two-decimal string — `"4.85"`, `"0.00"`.
  *
  * The one place the app decides what a decimal hour looks like, shared by the
