@@ -311,6 +311,7 @@
       :recorded-assignments="alreadyRecordedAssignments"
       :completed-assignments="alreadyCompletedAssignments"
       :completed-record-count="completedRecordCount"
+      :time-format="timeFormat"
       @submit="submitAttendance"
       @fetch-schedule="fetchEmployeeSchedule"
     />
@@ -338,6 +339,7 @@
       v-model:value="inlineEdit.value"
       :field="inlineEdit.field"
       :employee-name="inlineEdit.employeeName"
+      :time-format="timeFormat"
       :date="inlineEdit.date"
       :saving="inlineEdit.saving"
       @save="saveInlineEdit"
@@ -350,6 +352,7 @@
       :cost-center-options="costCenterOptions"
       :options-loading="filtersLoading"
       :saving="updating"
+      :time-format="timeFormat"
       @submit="updateAttendance"
     />
   </PageShell>
@@ -367,7 +370,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { useEmployees } from '@/composables/page/useEmployees'
-import { toUTC, formatInTimezone, clockTimeOptions } from '@/composables/utils/timezone'
+import {
+  toUTC,
+  formatInTimezone,
+  formatClockTime,
+  clockTimeOptions,
+  nowClock,
+} from '@/composables/utils/timezone'
 import { useOrganization } from '@/composables/page/useOrganization'
 import AttendanceTable from '@/components/pages/Attendance/AttendanceTable.vue'
 import AttendanceCardList from '@/components/pages/Attendance/AttendanceCardList.vue'
@@ -1707,7 +1716,12 @@ function openAddDialog() {
     employee: '',
     cost_center_id: '',
     date: currentDate.value || today,
-    time_in: '',
+    // The minute the dialog was opened at, not a fixed hour — the old HR system
+    // opened on "now" and an admin clocking in at 06:40 should not have to back
+    // out of a default three hours away. Only Time In: it is the punch being
+    // recorded, and defaulting Time Out to the same instant would file a
+    // zero-hour shift the moment the admin hit Save.
+    time_in: nowClock(),
     time_out: '',
     source: 'admin',
     selected_assignment_id: null,
@@ -1871,13 +1885,13 @@ async function onAuditAcknowledged(recordId) {
 }
 
 /**
- * A punch as a `type="time"` input's value.
+ * A punch as the value `QTime` works in.
  *
- * Deliberately 24h whatever the company's `time_format` says. The input parses
- * and emits 24h `HH:mm`, and `toUTC()` reads it back the same way, so printing
- * 12h here would put "06:00" in a field holding 6:00 PM — the admin would save
- * the wrong punch by opening the editor. `time_format` governs what is *shown*,
- * never what is edited.
+ * Deliberately 24h whatever the company's `time_format` says. `AttendanceTimeField`
+ * emits 24h `HH:mm` and `toUTC()` reads it back the same way, so printing 12h
+ * here would put "06:00" in a field holding 6:00 PM — the admin would save the
+ * wrong punch by opening the editor. `time_format` governs what is *shown*, and
+ * the field shows it; it never governs what is parsed.
  */
 function formatTimeForInput(dateTimeString, timezone) {
   if (!dateTimeString) return ''
@@ -1888,20 +1902,14 @@ function formatTimeForInput(dateTimeString, timezone) {
  * A shift's own start/end time, printed the company's way.
  *
  * Unlike a punch this is wall-clock local to the shift — `HH:mm` with no offset
- * and nothing to convert — so it is built by placing those numbers on a fixed
- * date rather than going through the timezone formatter, which would move them.
+ * and nothing to convert — so `formatClockTime` builds it by placing those
+ * numbers on a fixed date rather than going through the timezone formatter,
+ * which would move them.
  */
 function formatScheduleTime(timeString) {
-  if (!timeString) return '-'
+  const clock = formatClockTime(timeString, timeFormat.value)
+  if (clock) return clock
   try {
-    if (/^(\d{1,2}):(\d{2})(:\d{2})?$/.test(timeString)) {
-      const [hours, minutes] = timeString.split(':').map(Number)
-      return new Date(1970, 0, 1, hours, minutes).toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        ...clockTimeOptions(timeFormat.value),
-      })
-    }
     const date = new Date(timeString)
     if (isNaN(date.getTime())) return timeString
     return date.toLocaleTimeString('en-US', {
