@@ -293,6 +293,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { api } from 'src/boot/axios'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { useEmployees } from 'src/composables/page/useEmployees'
+import { invalidateEmployeeBalances } from 'src/composables/page/useEmployeeBalances'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useAuthStore } from 'src/boot/auth'
 import { buildEmployeeNameIndex, getApproverName } from 'src/composables/utils/employee'
@@ -1468,6 +1469,9 @@ const commitLeaveDecision = async (request, status) => {
   const settle = () => {
     const index = leaveList.value.findIndex((r) => r.id === request.id)
     if (index !== -1) leaveList.value[index].status = status
+    // Only an approval spends the balance. A rejection leaves the ledger exactly
+    // where it was, so announcing one would only buy a refetch.
+    if (approved) invalidateEmployeeBalances()
     if (approved) toast.success('Leave request approved successfully', { icon: 'check_circle' })
     else toast.warning('Leave request rejected', { icon: 'cancel' })
     if (showLeaveDetails.value) showLeaveDetails.value = false
@@ -1744,6 +1748,13 @@ const commitBulkLeave = async (status, subject) => {
   await fetchLeaveRequests().catch((e) =>
     console.error('[Requests] refetch after bulk leave failed:', e),
   )
+
+  // Announced from the requested status rather than from `outcome.updated`,
+  // because a batch that answers 500 with a summary still moved whatever it got
+  // through, and a batch that moved nothing costs one wasted refetch. This page
+  // and the Employees page are never mounted together, so the counter is what
+  // carries the news forward to whoever renders balances next.
+  if (status === 'approved') invalidateEmployeeBalances()
 
   if (!outcome) {
     toast.error(extractErrorMessage(failure, `Failed to ${spec.verb} these leave requests`), {
