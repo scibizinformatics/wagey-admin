@@ -171,6 +171,46 @@ export function useDisbursementApi() {
     return data
   }
 
+  /**
+   * Every manual addition and deduction on one employee payroll item.
+   *
+   * Distinct from `fetchEpiContributions` on purpose: contributions are what the
+   * law requires, adjustments are what a person decided — a bonus, a loan
+   * repayment, a correction. Different kinds of money, and they are read apart so
+   * the dialog that shows both is merging them deliberately rather than because
+   * one endpoint happened to return both.
+   *
+   * Answers the item's own totals as well as the rows, so a client never has to
+   * sum its way to `total_deductions` and disagree with the server about it.
+   */
+  async function fetchEpiAdjustments(epiId) {
+    const { data } = await api.get(`${BASE}/payroll/admin/epi-adjustments/${epiId}/`)
+    return data
+  }
+
+  /**
+   * Records one manual addition or deduction against an employee payroll item.
+   *
+   * Returns the server's response; callers should refetch, since applying moves
+   * `net_pay` and both manual totals.
+   */
+  async function applyAdjustment(payload) {
+    const { data } = await api.post(`${BASE}/payroll/admin/apply-adjustment/`, payload)
+    return data
+  }
+
+  /**
+   * Undoes one applied adjustment. Takes the adjustment's own id rather than the
+   * payroll item's, because several can be open on one item and a revert is
+   * always about one of them.
+   */
+  async function revertAdjustment(adjustmentId) {
+    const { data } = await api.post(`${BASE}/payroll/admin/revert-adjustment/`, {
+      adjustment_id: adjustmentId,
+    })
+    return data
+  }
+
   async function fetchEmployeePayrollItem(id) {
     const { data } = await api.get(`${BASE}/payroll/admin/employee-payroll-item/${id}/`)
     return data
@@ -292,6 +332,9 @@ export function useDisbursementApi() {
     fetchEpiContributions,
     deductContributions,
     revertContributions,
+    fetchEpiAdjustments,
+    applyAdjustment,
+    revertAdjustment,
     fetchEmployeePayrollItem,
     fetchPayslipOverview,
     fetchEmployeePayslips,
