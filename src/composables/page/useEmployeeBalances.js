@@ -2,6 +2,33 @@ import { ref } from 'vue'
 import { api } from 'src/boot/axios'
 import { normalizeLeaveType } from 'src/composables/utils/leaveTypes'
 
+/**
+ * A module-level counter bumped by anything in the app that can move a balance.
+ *
+ * Balances are read-only here — this composable never derives one, and the two
+ * writes that exist (`leave-balances/add`, `.../set`) are explicit grants a person
+ * asked for. What it cannot know is that some *other* screen just approved leave,
+ * which is the backend's business and not this composable's. So a screen that
+ * renders balances watches this instead of trying to guess when they went stale.
+ *
+ * Module-level rather than returned from the factory on purpose: the pages that
+ * render balances and the pages that change them are different route components
+ * that are never mounted at the same time (there is no keep-alive), so the
+ * signal has to outlive whichever component happened to raise it.
+ */
+const balancesRevision = ref(0)
+
+/**
+ * Announce that balances may have moved, so mounted readers re-read them.
+ *
+ * Called by writers, never by readers. Cheap and idempotent — it carries no
+ * payload, only "go look again" — so over-reporting costs a refetch while
+ * under-reporting costs a stale figure on screen.
+ */
+export function invalidateEmployeeBalances() {
+  balancesRevision.value++
+}
+
 export function useEmployeeBalances() {
   const leaveTypes = ref([])
   const loadingLeaveTypes = ref(false)
@@ -154,6 +181,11 @@ export function useEmployeeBalances() {
     loadingBalances,
     submittingLeave,
     submittingCto,
+    /**
+     * Watch this to re-read balances whenever something else in the app changes
+     * one. Shared across every caller — see the module-level note above.
+     */
+    balancesRevision,
     fetchLeaveTypes,
     fetchEmployeeBalances,
     writeLeaveBalance,
