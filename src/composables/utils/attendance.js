@@ -245,7 +245,8 @@ export function getShiftName(row) {
  * every caller that has not been threaded with the setting keeps today's
  * behaviour. It is a *display* argument only — nothing parses a value this
  * function produces, and `formatTimeForInput` in the attendance page stays 24h
- * because it fills a `type="time"` input.
+ * because it fills the punch field `AttendanceTimeField` edits, which holds 24h
+ * whatever the company prints.
  *
  * @param {string|null} dateTimeString
  * @param {string} [timezone] IANA zone for the record's employee.
