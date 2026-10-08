@@ -147,44 +147,36 @@
           </q-banner>
 
           <div class="dash-modal__grid">
-            <label class="dash-modal__field">
+            <!--
+              `div`, not `label`: a 24h field is two selects (hour and minute), and
+              a label may only wrap one control — with two, clicking the label text
+              activates the first one and pulls focus off the minute. The span above
+              is what names the field.
+            -->
+            <div class="dash-modal__field">
               <span class="dash-modal__field-label"
                 >Time In<span class="dash-modal__req">*</span></span
               >
-              <q-input
-                outlined
-                dense
+              <AttendanceTimeField
                 :model-value="record.time_in"
-                @update:model-value="updateField('time_in', $event)"
-                type="time"
-                class="dash-field form-field"
+                :time-format="timeFormat"
                 :disable="!!addBlockReason"
                 :rules="addBlockReason ? [] : [(val) => !!val || 'Required']"
-                hide-bottom-space
-              >
-                <template v-slot:prepend>
-                  <q-icon :name="addBlockReason ? 'lock' : 'login'" size="xs" />
-                </template>
-              </q-input>
-            </label>
+                :prepend-icon="addBlockReason ? 'lock' : 'login'"
+                @update:model-value="updateField('time_in', $event)"
+              />
+            </div>
 
-            <label class="dash-modal__field">
+            <div class="dash-modal__field">
               <span class="dash-modal__field-label">Time Out</span>
-              <q-input
-                outlined
-                dense
+              <AttendanceTimeField
                 :model-value="record.time_out"
-                @update:model-value="updateField('time_out', $event)"
-                type="time"
-                class="dash-field form-field"
+                :time-format="timeFormat"
                 :disable="!!addBlockReason"
-                hide-bottom-space
-              >
-                <template v-slot:prepend>
-                  <q-icon :name="addBlockReason ? 'lock' : 'logout'" size="xs" />
-                </template>
-              </q-input>
-            </label>
+                :prepend-icon="addBlockReason ? 'lock' : 'logout'"
+                @update:model-value="updateField('time_out', $event)"
+              />
+            </div>
           </div>
 
           <q-banner
@@ -239,6 +231,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
+import AttendanceTimeField from '@/components/pages/Attendance/AttendanceTimeField.vue'
 import { attendanceDurationLabel } from '@/composables/utils/attendance'
 
 const $q = useQuasar()
@@ -260,6 +253,9 @@ const props = defineProps({
   // out. A count rather than ids, so the dialog can still refuse a duplicate day
   // when nothing carries an assignment id to match shift-by-shift.
   completedRecordCount: { type: Number, default: 0 },
+  // The company's `time_format` — '12h' | '24h'. Decides how the punch fields
+  // print; `record.time_in` / `time_out` stay 24h `HH:mm` either way.
+  timeFormat: { type: String, default: '12h' },
 })
 
 const emit = defineEmits(['update:modelValue', 'update:record', 'submit', 'fetch-schedule'])
