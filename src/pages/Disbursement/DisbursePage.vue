@@ -28,18 +28,22 @@
           <span class="action-note dash-num">
             {{ summary?.released ?? 0 }} released · {{ summary?.pending_claim ?? 0 }} pending
           </span>
+          <!-- Bulk releases non-cash only. Cash is released per employee from the
+               row actions, so this button never moves that money. -->
           <q-btn
             unelevated
             no-caps
             dense
             icon="o_send"
-            label="Disburse all"
+            label="Disburse non-cash"
             class="btn-primary"
             :loading="disbursing"
-            :disable="!disbursements.length || disbursing"
-            @click="confirmDisburseAll"
+            :disable="!bulkRows.length || disbursing"
+            @click="requestDisburseAll"
           >
-            <q-tooltip v-if="!disbursements.length">Nothing to disburse yet</q-tooltip>
+            <q-tooltip v-if="!bulkRows.length">
+              {{ cashRows.length ? 'Nothing but cash — release each one from its row' : 'Nothing to disburse yet' }}
+            </q-tooltip>
           </q-btn>
         </template>
 
@@ -153,8 +157,51 @@
               <span v-else class="muted">—</span>
             </q-td>
           </template>
+
+          <!-- The claim arrived as an ISO instant and printed as one, in a column
+               whose neighbours are words. -->
+          <template #body-cell-claimed_on="props">
+            <q-td :props="props">
+              <span v-if="formatDateTime(props.row.claimed_on)" class="claimed dash-num">
+                {{ formatDateTime(props.row.claimed_on) }}
+              </span>
+              <span v-else class="muted">—</span>
+            </q-td>
+          </template>
+
+          <!-- Cash only. A cash payout is handed over to one person, so it is
+               released one person at a time; bank and the rest go out in the
+               batch above. Rows with nothing to do show nothing rather than a
+               disabled control. -->
+          <template #body-cell-actions="props">
+            <q-td :props="props" class="cell-actions">
+              <q-btn
+                v-if="isCash(props.row) && !isSettled(props.row)"
+                flat
+                round
+                dense
+                icon="more_horiz"
+                size="12px"
+                class="row-btn"
+                :disable="disbursing"
+                aria-label="Row actions"
+                @click.stop
+              >
+                <RowMenu :actions="disburseActions" @select="requestDisburseOne(props.row)" />
+              </q-btn>
+            </q-td>
+          </template>
         </q-table>
       </DisbursementTableCard>
+
+    <!-- The gate in front of pay actually moving. One dialog for both routes;
+         wording comes from `disburseConfirm.js`. -->
+    <ConfirmDialog
+      v-model="showConfirm"
+      :confirm="confirm"
+      :loading="disbursing"
+      @confirm="onConfirm"
+    />
     </DisbursementStepShell>
   </PageShell>
 </template>
@@ -162,22 +209,25 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import TableSkeleton from 'src/components/common/TableSkeleton.vue'
+import ConfirmDialog from 'src/components/common/ConfirmDialog.vue'
+import RowMenu from 'src/components/common/RowMenu.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
+import { buildDisburseAllConfirm, buildDisburseOneConfirm } from 'src/components/pages/Payroll/disburseConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
+import { extractErrorMessage } from 'src/composables/utils/http'
+import { formatDateTime } from 'src/composables/utils/format'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
 
 const route = useRoute()
-const $q = useQuasar()
 
 const toast = useToast()
 const groupId = route.params.id
@@ -212,6 +262,7 @@ const columns = [
   { name: 'claimed_on', label: 'Claimed', field: 'claimed_on', align: 'left' },
   { name: 'proof_of_payment', label: 'Proof', field: 'proof_of_payment', align: 'left' },
   { name: 'reference_no', label: 'Reference', field: 'reference_no', align: 'left' },
+  { name: 'actions', label: '', field: 'actions', align: 'right' },
 ]
 
 // Narrowing the list while on a later page would strand the reader.
@@ -340,27 +391,87 @@ onMounted(async () => {
   }
 })
 
-// Disbursing releases real money for every employee at once and cannot be
-// undone from this screen, so it confirms first — it used to fire on one click.
-function confirmDisburseAll() {
-  $q.dialog({
-    title: 'Disburse all?',
-    message: `This releases pay for ${disbursements.value.length} employee${
-      disbursements.value.length === 1 ? '' : 's'
-    } in this group. It cannot be undone here.`,
-    cancel: { label: 'Cancel', flat: true, noCaps: true },
-    ok: { label: 'Disburse all', unelevated: true, color: 'primary', noCaps: true },
-    persistent: true,
-  }).onOk(() => disburseAll())
+/**
+ * Whether a row is paid in cash.
+ *
+ * One test, used by both the row action and the batch, because "which rows are
+ * cash" is the single fact the two must agree on — a row the batch releases and
+ * the row button also offers is money moved twice. Substring rather than
+ * equality because the endpoint has spelled this both `Cash` and `cash` across
+ * runs, and `Cash Advance` is still cash.
+ */
+function isCash(row) {
+  return String(row?.payout_method || '').toLowerCase().includes('cash')
 }
 
-async function disburseAll() {
-  disbursing.value = true
+/**
+ * Whether a row still has pay owed against it.
+ *
+ * ASSUMPTION, flagged: this reads `claim_status`, on the basis that a release
+ * moves it off `Pending`. Release and *claim* are different events, so if the
+ * status only moves when the employee actually collects the cash, this would
+ * hide the button on rows that were released but not yet claimed. The alternative
+ * — no gate — offers a second release of the same pay, which is worse. If the
+ * backend has a real per-row released flag, this is the one line to swap.
+ */
+function isSettled(row) {
+  return String(row?.claim_status || '').toLowerCase() !== 'pending'
+}
+
+/** Everything the batch is allowed to move. */
+const bulkRows = computed(() => disbursements.value.filter((row) => !isCash(row)))
+const cashRows = computed(() => disbursements.value.filter(isCash))
+
+// One action, and it is the same on every cash row, so it is declared once
+// rather than rebuilt per render. The gate that decides whether the menu exists
+// at all lives in the template — an action that does not apply is absent, not a
+// greyed-out item.
+const disburseActions = [
+  { key: 'disburse', label: 'Disburse', icon: 'o_payments' },
+]
+
+// The confirmation gate. `pending` is snapshotted rather than re-read on confirm,
+// so the dialog describes the release that was asked about even though the table
+// behind it is live and a refetch can replace those rows at any moment.
+const showConfirm = ref(false)
+const confirm = ref(null)
+const pendingAction = ref(null)
+const pendingRows = ref([])
+
+function requestDisburseAll() {
+  const rows = bulkRows.value
+  if (!rows.length || disbursing.value || showConfirm.value) return
+  pendingRows.value = rows
+  confirm.value = buildDisburseAllConfirm(rows, cashRows.value.length, groupName.value)
+  pendingAction.value = 'all'
+  showConfirm.value = true
+}
+
+function requestDisburseOne(row) {
+  if (!row?.epi_id || disbursing.value || showConfirm.value) return
+  pendingRows.value = [row]
+  confirm.value = buildDisburseOneConfirm(row, groupName.value)
+  pendingAction.value = 'one'
+  showConfirm.value = true
+}
+
+function onConfirm() {
+  if (pendingAction.value === 'all') disburse(pendingRows.value, 'Released pay for everyone paid by bank or another method.')
+  else if (pendingAction.value === 'one') disburse(pendingRows.value, 'Pay released.')
+}
+
+// Cancelling must clear the snapshot as surely as confirming does: a stale
+// `pendingRows` left behind is a release the next dialog's Confirm could fire.
+watch(showConfirm, (open) => {
+  if (open) return
+  confirm.value = null
+  pendingAction.value = null
+  pendingRows.value = []
+})
+
+/** Re-reads the run. Both writes move the same summary and the same rows. */
+async function refresh() {
   try {
-    const epiIds = disbursements.value.map((e) => e.epi_id)
-    await disbursePgi(groupId, epiIds)
-    stepperKey.value++
-    toast.success('Disbursement successful!')
     const [summ, data] = await Promise.all([
       fetchPayoutGroupInstanceSummary(groupId),
       fetchDisbursementEmployees(groupId),
@@ -368,7 +479,34 @@ async function disburseAll() {
     summary.value = summ
     disbursements.value = data || []
   } catch (err) {
-    console.error('[DisbursePage] disburseAll ✖ error:', err)
+    console.error('[DisbursePage] refresh ✖ error:', err)
+  }
+}
+
+/**
+ * The confirmed release.
+ *
+ * The write and the refetch are deliberately separate: folding them into one
+ * `try` meant a read that failed after a successful write reported the write as
+ * failed, leaving the reader believing pay had not been released when it had.
+ */
+async function disburse(rows, successMessage) {
+  const epiIds = rows.map((row) => row.epi_id).filter((id) => id != null)
+  if (!epiIds.length) return
+
+  disbursing.value = true
+  try {
+    try {
+      await disbursePgi(groupId, epiIds)
+    } catch (err) {
+      console.error('[DisbursePage] disburse ✖ error:', err)
+      toast.error(extractErrorMessage(err, 'Failed to release this pay. Nothing was changed.'))
+      return
+    }
+
+    stepperKey.value++
+    await refresh()
+    toast.success(successMessage)
   } finally {
     disbursing.value = false
   }
@@ -417,6 +555,27 @@ async function disburseAll() {
 }
 
 /* ── Cells ── */
+.cell-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* The row's kebab: quiet at rest, the same treatment `EmployeeTable.vue` gives
+   its row menu, so the two tables read as one language. */
+.row-btn {
+  color: var(--dash-ink-4);
+}
+.row-btn:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-100);
+}
+
+.claimed {
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+  white-space: nowrap;
+}
+
 .method {
   display: inline-flex;
   align-items: center;
