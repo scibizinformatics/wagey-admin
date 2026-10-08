@@ -512,6 +512,7 @@ const {
   addCtoBalance,
   submittingLeave,
   submittingCto,
+  balancesRevision,
 } = useEmployeeBalances()
 
 const selectedEligibilityObjectsData = ref([])
@@ -2144,6 +2145,29 @@ const visibleEmployeeKey = computed(() => paginatedEmployees.value.map((emp) => 
 
 watch(visibleEmployeeKey, (key) => {
   if (key) fetchPageData()
+})
+
+/**
+ * Re-read balances when something else in the app says they moved.
+ *
+ * An approval made on the Request page spends an employee's leave, and that page
+ * has no way to reach a row on this one — they are separate routes and this app
+ * has no keep-alive, so the approver and the reader of this table are never
+ * mounted together. The shared `balancesRevision` counter is how the news
+ * crosses that gap: the writer bumps it, and whoever renders balances next
+ * refetches.
+ *
+ * Only the rows on screen are dropped, then handed back to `fetchPageData`, which
+ * is the same lazy path a page change or a search already takes. A full
+ * `fetchEmployees` would work too, but it throws away the contract cache and
+ * re-applies the reader's filters, and none of that is stale here — only the
+ * balances are.
+ */
+watch(balancesRevision, () => {
+  paginatedEmployees.value.forEach((emp) => {
+    emp._balance = undefined
+  })
+  fetchPageData()
 })
 
 // Runs once on mount (`immediate: true`) and again on every workspace switch, so
