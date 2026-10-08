@@ -5,7 +5,8 @@ dashboard for the Wagey payroll/HR product. Talks to a Django REST backend
 (`staging.wageyapp.com` by default). Built with `@quasar/app-webpack` (**Webpack, not Vite**).
 
 This file is the fast bootstrap. `CLAUDE.md` holds the long-form architecture narrative — read it
-before deep work, but note it **predates the newest features** (see "Newer than CLAUDE.md" below).
+before deep work, but note it **predates the newest features** and still says "Vite" in six places
+(see "Newer than CLAUDE.md" below).
 
 ## Commands
 
@@ -25,14 +26,22 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 - **Lint is a build gate.** `quasar.config.js` sets `eslint: { warnings: true, errors: true }`, so
   `eslint-webpack-plugin` runs inside both `npm run dev` and `npm run build`; a lint *error* fails
   the build and shows in the dev overlay. `npm run lint` just gets the result faster.
-- ESLint 9 flat config is `eslint.config.js`. The legacy root `.eslintrc.js` is ignored (lint passes
-  `-c ./eslint.config.js`) — editing it changes nothing.
+- ESLint 9 flat config is `eslint.config.js` (Quasar recommended + `vue/flat/essential` + prettier
+  skip-formatting). The legacy root `.eslintrc.js` is ignored (lint passes `-c ./eslint.config.js`)
+  — editing it changes nothing.
 - No test framework exists. Verify changes with `npm run lint` (and a dev-server check if UI).
-- **Prettier is repo-wide dirty — do not run `npm run format` for a focused change.** 124 files under
-  `src/` already fail `npx prettier --check`, and there is no `.prettierignore`, so the glob also
-  reaches vendored files. One formatted change would rewrite the repo and bury your diff. Format only
-  what you touched (`npx prettier --write <file>`); pre-existing failures elsewhere are not yours.
-  `AGENTS.md` is itself one of the unformatted files, so leave its wrapping alone.
+- **Prettier is repo-wide dirty — do not run `npm run format` for a focused change.** `npm run format`
+  is `prettier --write "**/*.{js,vue,scss,html,md,json}" --ignore-path .gitignore`, and that same glob
+  with `--list-different` reports **~140 unformatted files, 125 of them under `src/`**, plus the
+  lockfile, `package.json`, `quasar.config.js`, `index.html`, `README.md`, `eslint.config.js`,
+  `jsconfig.json`, `CLAUDE.md`, `AGENTS.md` and `.opencode/plans/*`. `--ignore-path .gitignore` keeps
+  `node_modules`/`dist`/`venv` out, but every other tracked file is in scope and rewriting
+  `package-lock.json` is not something a focused diff can undo. Format only what you touched
+  (`npx prettier --write <file>`); pre-existing failures elsewhere are not yours. Repo style is
+  `semi: false`, `singleQuote: true`, `printWidth: 100`.
+- Conventional commits throughout: `feat(scope):`, `fix(scope):`, `refactor(scope):`, `docs(plan):`.
+  There is **no CI, no husky, no lint-staged and no PR template** — lint is the only gate, and it
+  fires only when you run `npm run lint`, `npm run dev` or `npm run build`.
 
 ## Env / build-time config
 
@@ -40,58 +49,117 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   at **build time** via `webpack.DefinePlugin`, read from real `process.env.*` on the build machine.
   Editing `.env` (or `.env.example`) changes nothing — set real env vars, or edit the fallback in
   `quasar.config.js`. `.env.example` is the committed reference; `.env` is git-ignored.
+- Only three places read those defines: `boot/axios.js:8` (`baseURL`), `utils/http.js:26` (the
+  **deprecated** `BASE` re-export — import `api` instead), and `composables/useWebSocket.js:5`.
+- In **dev** `baseURL` is `''` and every request goes through the proxy; the absolute base is
+  production-only.
 
 ## Architecture essentials
 
-- Hash-mode router (`vueRouterMode: 'hash'`). `@/*` -> `src/*`; bare `boot/`, `pages/`, `layouts/`,
-  `components/`, `stores/` also resolve, and both `src/...` and bare styles appear in the codebase.
+- Hash-mode router (`vueRouterMode: 'hash'`). `@/*` -> `src/*` (webpack alias + `jsconfig.json`); bare
+  `boot/`, `pages/`, `layouts/`, `components/`, `stores/` also resolve, and both `src/...` and bare
+  specifiers appear in the codebase. Follow whatever the surrounding file already uses.
 - **Auth store lives in `src/boot/auth.js`, not `src/stores/`.** Import as
   `import { useAuthStore } from 'src/boot/auth'`. Its `state()` runs during boot before mount and
   **must not throw** — a throw there stops the app from booting with no UI left to log out.
 - Boot order is load-bearing (`quasar.config.js`): pinia -> auth -> axios -> toast -> errorHandler
-  -> suppressExtensionErrors -> dialogA11y. Pinia before auth, auth before axios's interceptors.
+  -> suppressExtensionErrors -> dialogA11y. Pinia before auth, auth before axios's interceptors;
+  toast before errorHandler, which raises a toast of its own.
 - `quasar.config.js` `extras` includes `material-icons-outlined`, which backs the `o_*` icon prefix.
   Dropping it blanks every outlined icon with no build error — the nav rail goes blank first.
 - Adding a route to `src/router/routes.js` does **not** add a sidebar entry. The nav groups in
-  `MainLayout.vue` are a hand-maintained array. Every route component is lazy `() => import(...)`
-  except `AdminSettingsPage`, which is statically imported.
-- Superseded/dead modules remain on disk: grep for importers (`grep -rl ComponentName src`) before
-  treating a file as current. Known dead: nine `components/pages/Dashboard/*.vue` panels,
-  `composables/disbursement/stubData.js`, `composables/payroll/usePayoutData.js`,
-  `composables/page/useSwapRequests.js`, `constants/payoutSteps.js`, `composables/admin/index.js`,
-  `pages/IndexPage.vue`, `src/index.template.html`. `src/services/` is empty — leave it empty.
+  `src/layouts/MainLayout.vue:403` are a hand-maintained array. Every route *page* component is lazy
+  `() => import(...)` except `AdminSettingsPage`, which is static and therefore lands in the initial
+  bundle; both layouts, `AuthLayout` and `MainLayout`, are eager too.
+- The live SPA template is the **root `index.html`**, not `src/index.template.html` — v4 of
+  `@quasar/app-webpack` resolves `appDir/index.html`, and only the root file carries the SPA alias
+  redirect script. Editing `src/index.template.html` is a silent no-op.
+- Superseded/dead modules remain on disk, and plans name files that no longer exist — this is the main
+  source of false leads here. Grep for importers (`git grep -l ComponentName src`) before treating a
+  name as current. Confirmed unreferenced: `components/pages/Dashboard/{AnnouncementsPanel,
+  NeedsYourAttentionPanel, NotificationsPanel, PayrollReadinessPanel, PayrollStatusPanel,
+  PendingSwapsPanel, QuickActionsBar, RecentActivityPanel, SiteStatusPanel}.vue`,
+  `composables/disbursement/stubData.js`, `composables/payroll/usePayoutData.js` (the whole
+  `composables/payroll/` dir is this one dead file), `composables/page/useSwapRequests.js` (the live
+  path is `composables/utils/swapRequests.js`), `constants/payoutSteps.js` (live stepper source is
+  `constants/pgiStatus.js`), `composables/admin/index.js` (barrel with no importers, and already out
+  of sync with the directory), `pages/IndexPage.vue`, `src/index.template.html`. `src/services/` is
+  empty — leave it empty.
 
 ## Networking / auth
 
-- Always `import { api } from 'boot/axios'`. The request interceptor attaches the bearer token and
-  CSRF header; it is the **only** thing that authenticates a request. Never read the token from
-  `localStorage`/`sessionStorage` — use `useAuthStore().token`.
-- 401 is recoverable: the interceptor refreshes once (shared across a parallel wave) and replays;
-  only a failed refresh ends the session, and that teardown must do a real page reload.
+- Always `import { api } from 'boot/axios'`. The request interceptor attaches the bearer token and the
+  Django `X-CSRFToken` header, and it **refuses to send at all** when the store holds no token
+  (rejecting locally with `code: 'ERR_NO_SESSION'`) unless the path is in `PUBLIC_PATHS` or the caller
+  passed its own `Authorization`. Never read the token from `localStorage`/`sessionStorage` — use
+  `useAuthStore().token`. The only hand-built `Authorization` headers left are the three login-flow
+  lookups in `composables/page/useAuth.js` (a login-response argument, before the store holds one),
+  and the interceptor's `readAuthHeader` check exists to let them through — don't "fix" them.
+- 401 is recoverable: the interceptor refreshes once (shared across a parallel wave, so concurrent
+  401s can't spend a rotating refresh token twice) and replays; only a failed refresh ends the
+  session, and that teardown must do a real page reload (a `location.href` to `/#/login` from
+  `/#/app/...` is a same-document hash navigation that never reloads). Anything ending a session must
+  clear the **store**, not just storage.
 - Scope every request by the active company via `useCompany().companyId` (a **computed**, not a
-  snapshot). Re-resolve per request; verify the response's company matches before publishing.
-- Errors: `extractErrorMessage(error, fallback)` from `composables/utils/http.js` — no hand-rolled
-  `data.detail || ...` chains. Where a status is genuinely an answer (e.g. 404 = "nothing yet"),
-  pass `expectedStatuses: [404]` to keep the error log quiet.
+  snapshot). Re-resolve per request; verify the response's company matches before publishing. The
+  standalone `resolvedCompanyId()` is the localStorage fallback — don't hand-roll another one.
+- Errors: `extractErrorMessage(error, fallback)` from `composables/utils/http.js:43` — no hand-rolled
+  `data.detail || ...` chains. Where a status is genuinely an answer (e.g. 404 = "nothing yet"), pass
+  `expectedStatuses: [404]` in the request config to keep the error log quiet; that key is read by
+  `boot/axios.js:194`, not by `http.js`, and it only silences the log — the promise still rejects.
+  Two sites hand-roll on purpose, each commented: `ReviewPage.vue`'s `serverMessage` (must return
+  `''`) and `EmployeesPage.vue`'s `addEmployeeErrorMessage` (prints every field error).
+- Paths are leading-slash absolutes (`/organization/...`) everywhere except three call sites in
+  `composables/useNotifications.js`, which resolve correctly by accident and cannot be matched by a
+  proxy `context` string. Write the slash.
+- **Dev proxy: `quasar.config.js` has three entries, and the split is deliberate.** (1) The general
+  array holds every plain HTTP top-level prefix — `/api`, `/user`, `/organization`,
+  `/communication`, `/attendance`, `/cash_advance`, `/contracts`, `/access`, `/admin`, `/audit`,
+  `/allowance`. Add a **new top-level prefix to that array**; do not add a fourth proxy object —
+  http-proxy-middleware registers a `close` listener per entry, and one-per-prefix put twelve
+  listeners on one emitter, past Node's default of ten, so `npm run dev` opened with a spurious
+  `MaxListenersExceededWarning`. (2) `/payroll/*` is a **narrow enumerated allowlist**, separate so
+  refreshing the bare `/app/payroll` SPA route isn't forwarded to Django — a new `/payroll/<subpath>`
+  endpoint **must be added to that list explicitly** or it 404s in dev and works in prod.
+  (3) `/ws/notifications` is separate only for `ws: true`.
+- Two paths are in neither the general array nor the payroll allowlist, so they fail **in dev only**:
+  `/payroll/employee/*` (`composables/disbursement/useDisbursementApi.js:236-253`) and
+  `/employee/payslips/` (`composables/page/usePayroll.js:410`). All of those functions are exported
+  with no caller and are shadowed by the `/payroll/admin/employee-payslips/` versions the pages
+  actually use (`PayslipsPage.vue`, `FundingPage.vue`) — which is why nothing has noticed.
+- Deep links are consumed **once, before the first fetch**: `applyDeepLink()` in `AttendancePage.vue`
+  and `Disbursement/DisbursementListPage.vue` runs ahead of it, the value must land in a control the
+  reader can see and clear, and the page then `router.replace({ query: {} })` — left in the URL, a
+  reload re-applies a narrowing the reader had cleared. The payroll step pages are the opposite: the
+  query is **carried**, not consumed (`PayoutGroupStepperHeader.vue`'s `carriedQuery`), because no
+  step endpoint returns the run's name/cutoff/status.
 
 ## Data-fetching conventions
 
 - Pinia is only for small persisted global state (`stores/company.js`, `boot/auth.js`). Feature data
   lives in `composables/page/*.js`, exposing refs + async fns directly, often with a
-  `companyId`-keyed module cache + TTL + `invalidateCache()` (see `useEmployees.js`).
+  `companyId`-keyed module cache + TTL + `invalidateCache()` (see `useEmployees.js`). Key every
+  module-level cache by company — a bare string key served the previous workspace's data after a
+  switch (this bit the disbursement cutoff cache at `useDisbursementApi.js:56`).
 - Guard stale responses: take a token from `createRequestToken()` and check `isCurrent(token)`
-  before committing (attendance/schedule/deductions/requests). `usePayroll.js` uses a per-key
-  `AbortController` where cancelling is worth it.
+  before committing — one guard per published ref, in every fetcher that writes into shared state
+  (12 composables plus `RequestPage.vue` and `DisbursementListPage.vue`). `usePayroll.js` uses a
+  per-key `AbortController` instead; prefer that when cancelling is worth it, the token when the
+  response is cheap or shared through a cache (cancelling a shared request strands a second caller).
 - Bulk writes decide one record at a time: use `Promise.allSettled` (or per-item try/catch), count
-  outcomes, **always refetch**, and emit three distinct messages (all / some / none). Never one
+  outcomes, **always refetch**, and emit one message per outcome the endpoint can return. Never one
   `try/catch` around a loop, and never bare `Promise.all` for writes (it is fine for parallel reads).
-  Reference: `Disbursement/ReviewPage.vue`, `RequestPage.vue`'s `bulkDecideOvertime`.
+  Reference: `Disbursement/ReviewPage.vue`, `RequestPage.vue`'s `bulkDecideOvertime`. The bulk-leave
+  decision is the four-case one: `bulkLeaveOutcome` in `composables/utils/leaveRequests.js:123`
+  counts `updated` / `skipped` / `failed` and `bulkLeaveOutcomeToast:165` adds the all-skipped
+  message — `skipped` is not `failed` and the reviewer acts on them differently.
 - Feature derivations live in `composables/utils/*.js` (or a feature-local module, e.g.
   `components/pages/Announcement/announcementStatus.js`) so table, card list and tiles cannot
-  disagree. Extend the module, don't compute in the component.
-- Dev proxy: add new API prefixes to the **shared** `context` array in `quasar.config.js`. It is one
-  array on purpose — a second proxy context re-triggers the `MaxListenersExceededWarning` that the
-  comment in that file documents.
+  disagree. Extend the module, don't compute in the component. `manning.js` is the fullest worked
+  example; `utils/` also splits into generic formatters (`format`, `locale`, `timezone`,
+  `calendarDate`, `statusColors`) versus per-feature derivation modules — don't blur the two.
+- `composables/payroll/` and `composables/disbursement/` are different: the disbursement subtree is
+  live and every `pages/Disbursement/*.vue` page calls `useDisbursementApi.js` unconditionally.
 
 ## UI conventions
 
@@ -99,83 +167,126 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   and `toast.success/.error/.warning/.info/.loading(...)`. `src/boot/toast.js` deliberately keeps
   `$q.notify` callable as a compatibility shim; that is not permission to add new ones.
 - Calendar dates: use `composables/utils/calendarDate.js` (`todayIso()`, `toIso`, `fromIso`,
-  `shiftIso`) — not `toISOString().slice(0,10)` and not `new Date('2026-09-02')` parsing.
-- localStorage: use `composables/utils/storage.js` (`readStoredJson`/`writeStored`) so the literal
-  string `"undefined"` cannot throw.
-- Design system is `src/css/dashboard.scss` (global via `app.scss`): `--dash-*` tokens, `dash-modal`
-  dialog chrome, `dash-qtable` tables, `PageShell.vue`. Reach for the tokens, not the legacy SCSS
-  `$primary`/`$gray-*`. Do **not** build dialogs as HTML strings (`$q.dialog({ html: true })`) —
-  use a component. Plain `$q.dialog` is still fine for a simple confirm/alert and survives in exactly
-  three places: `AttendancePage.vue:1326`, `AttendancePage.vue:1409`, `EmployeesPage.vue:1587`. Do
-  not strip those as violations of this rule.
+  `shiftIso`, `longLabel`) — not `toISOString().slice(0,10)` and not `new Date('2026-09-02')` parsing.
+  Call `todayIso()` per use; caching it in a `ref` leaves an overnight tab reporting yesterday.
+- localStorage: use `composables/utils/storage.js` (`readStoredJson`/`readStoredObject`/`writeStored`)
+  so the literal string `"undefined"` cannot throw. Four `JSON.parse` sites are hand-rolled on
+  purpose (their catch branch carries meaning): `useCompany.js`, `stores/company.js`,
+  `useWebSocket.js`, `MainLayout.vue`.
+- Design system is `src/css/dashboard.scss` (global via `app.scss`'s last-line `@import './dashboard'`)
+  — it, not `app.scss`, is the live design system: `--dash-*` tokens, `dash-modal` dialog chrome,
+  `dash-qtable` tables, `PageShell.vue`. Reach for the tokens, not the legacy SCSS `$primary`/`$gray-*`
+  (no component uses them). Dialog fields are `__field` + `__field-label` above the control, never a
+  Quasar floating label, and widths are written twice compounded with `.q-card` because Quasar caps a
+  dialog card with a two-class selector. Do **not** build dialogs as HTML strings
+  (`$q.dialog({ html: true })`) — no call site uses it; use a component. Plain `$q.dialog` is fine for
+  a simple confirm/alert and is the norm rather than an exception (~20 sites, mostly delete-confirms
+  in `composables/admin/`). Don't strip them as violations, and don't treat them as precedent for a
+  dialog with real content.
+- **There are two `formatCurrency`s.** `utils/format.js` hardcodes **₱** and is the app's formatter
+  (24 files use the peso sign; there is no `₦` anywhere). `utils/locale.js` takes a `countryCode` and
+  is used only by `stores/company.js`. Money is **₱**, not ₦.
 - Employee photos for tables/cards: build the index **once** with `buildEmployeeNameIndex()` and pass
   it down as an `employeeIndex` prop; read it with `avatarFor()` / `employeeByName()` from
-  `composables/utils/employee.js`. A name shared by two employees maps to `null` **on purpose**, so
-  the wrong photo is never shown — fall back to `getInitials()`.
-- Charts: `echarts` + `vue-echarts` only. PDF export: `jspdf` + `jspdf-autotable`.
+  `composables/utils/employee.js`. A name shared by two employees maps to `null` **on purpose**, so the
+  wrong photo is never shown — fall back to `getInitials()`. Names, not ids, are the join key on
+  several endpoints (`employee` on a card is a display string, and an unassigned card sends the
+  literal `"Not yet assigned"`, so `if (card.employee)` is true for every row).
 - Production build strips `console.log/debug/trace` but **keeps** `console.warn`/`console.error`
-  (the app ships no error reporting). Use `.warn`/`.error` for anything a person should still see.
+  (`pure_funcs` in `uglifyOptions`, prod only) — the app ships no error reporting, so those are the
+  only diagnostic trail. Use `.warn`/`.error` for anything a person should still see.
 
 ## Naming / structure drift
 
 - `pages/Disbursement/*` is reached at `/app/payroll`, but its components live under
-  `components/pages/Payroll/`. `DeductionsPage.vue` renders a page titled **Contributions**
-  (helpers in `composables/utils/contributions.js`). Search both names.
-- Page-specific components: `components/pages/<PageName>/`. Shared: `components/common/`
-  (`StatusPill.vue`, `TableSkeleton.vue`, `AppToast.vue`) and `components/layout/PageShell.vue`.
+  `components/pages/Payroll/`. `DeductionsPage.vue` renders a page titled **Contributions** (helpers in
+  `composables/utils/contributions.js`). Search both names. Page-specific components go in
+  `components/pages/<PageName>/`; shared ones in `components/common/` and `components/layout/PageShell.vue`.
 
 ## Newer than CLAUDE.md
 
 These are live and not covered by the long-form doc — treat them as current, not dead:
 
-- **Card taps** `/app/card-taps` — `pages/CardTapsPage.vue`, `useCardTaps.js`,
-  `composables/utils/cardTaps.js` (`GET /audit/card-taps/{company_id}/`).
-- **Allowances** `/app/allowances` — `pages/AllowancesPage.vue`, `useAllowances.js`,
-  `useEmployeeAllowances.js`, `composables/utils/allowances.js` (`/allowance/...`).
-- The dev proxy's shared `context` array now also includes `/allowance`.
+- **Card taps** `/app/card-taps` (`GET /audit/card-taps/{company_id}/`) and **allowances**
+  `/app/allowances` (`/allowance/...`) — `CardTapsPage.vue`/`useCardTaps.js`/`utils/cardTaps.js`,
+  `AllowancesPage.vue`/`useAllowances.js`/`useEmployeeAllowances.js`/`utils/allowances.js`.
 - **Half-day leave** — `/attendance/leave-list/` reports a half day as `total_days: 1` with
   `total_day_value: "0.50"`; render the *value*, not the count, via `leaveRequestDurationLabel` in
-  `composables/utils/leaveRequests.js` (it keeps the `total_days`/`hours`/`N/A` fallbacks).
+  `utils/leaveRequests.js` (it keeps the `total_days`/`hours`/`N/A` fallbacks). The write side of the
+  same rule is `leaveDayValue` / `leaveDayValueLabel`.
 - **Request decisions go through a confirm gate.** `RequestPage.vue`'s `commit*Decision` writers are
-  reachable only from `confirmDecision` (the dialog's `@confirm`); the user-facing wording lives in
+  reachable only from `confirmDecision` (the dialog's `@confirm`); the wording lives in
   `components/pages/Request/decisionConfirm.js`. Adding an approve/reject means a `commit*` writer, a
-  `confirmDecision` case, and a builder in that module. Money in this repo is **₱**, not ₦.
-- **Attendance filtering is opt-in, and partly probed.** `include_unassigned=true`
-  (`AttendancePage.vue`) pulls in records orphaned by shift reassignment. The month endpoint carries
-  year/month in the path, and the `employee` param is *probed*, not assumed — `useAttendance.js`
-  latches `employeeFilterSupported = false` once the backend rejects it.
-- **Access cards have two writes, not one.** `/app/access-cards` — `pages/AccessCardsPage.vue`,
-  `useAccessCards.js`, `composables/utils/accessCards.js`. The holder is
-  `PATCH /user/access-cards/{uid}/employee-assign/` (`{ employee_id, status }`); whether the card
-  works is a separate `PATCH /user/access-cards/{uid}/status/` (`{ status }`). Both routes are keyed
-  by **uid alone**, so both inherit the `foreign` guard from the detail payload. The status endpoint
-  takes **only** `active` / `inactive` / `lost` / `revoked` — that set is `WRITABLE_STATUSES`, and
-  `stolen` / `damaged` / `expired` exist in `STATUSES` for *display only*, never as a choice.
-  `assignCard` still sends a status (the card's current one) because `employee-assign` carries the
-  field; that is deliberate, so a reassignment cannot switch a card on.
-- **Card-status changes go through a confirm gate.** `AccessCardsPage.vue`'s `commitStatusChange` is
-  reachable only from `AccessCardStatusConfirmDialog`'s `@confirm`; wording is in
-  `components/pages/AccessCards/statusConfirm.js`. `statusActionsFor(card)` in
-  `composables/utils/accessCards.js` is the single source of the verbs — the row menu
-  (`AccessCardRowMenu.vue`) and the detail dialog's Card status group both render from it, so they
-  cannot offer different sets. Adding a status means a `WRITABLE_STATUSES` entry, not a new control.
+  `confirmDecision` case, and a builder in that module.
+- **Attendance filtering is opt-in, and partly probed.** `include_unassigned=true` pulls in records
+  orphaned by shift reassignment. The month endpoint carries year/month in the path, and the `employee`
+  param is *probed*, not assumed — `useAttendance.js` latches `employeeFilterSupported = false` once the
+  backend rejects it.
+- **Access cards have two writes, not one, and a confirm gate.** `/app/access-cards` —
+  `AccessCardsPage.vue`, `useAccessCards.js`, `utils/accessCards.js`. The holder is
+  `PATCH /user/access-cards/{uid}/employee-assign/` (`{ employee_id, status }`); whether the card works is
+  a separate `PATCH /user/access-cards/{uid}/status/` (`{ status }`). Both are keyed by **uid alone**, so
+  both inherit the `foreign` guard from the detail payload. The status endpoint takes **only** `active` /
+  `inactive` / `lost` / `revoked` — that set is `WRITABLE_STATUSES`, and `stolen` / `damaged` / `expired`
+  are in `STATUSES` for *display only*, never as a choice. `assignCard` still sends the card's current
+  status because `employee-assign` carries the field; deliberate, so a reassignment cannot switch a card on.
+  `commitStatusChange` is reachable only from `AccessCardStatusConfirmDialog`'s `@confirm` (wording in
+  `components/pages/AccessCards/statusConfirm.js`), and `statusActionsFor(card)` is the single source of
+  the verbs — the row menu and the detail dialog's Card status group both render from it, so they cannot
+  offer different sets. Adding a status means a `WRITABLE_STATUSES` entry, not a new control.
   `STATUS_FILTERS` is still only All/Active/Inactive, so a lost or revoked card is reachable only via
   search or the "Needs attention" filter.
+- **Leave is narrowed to a payroll cutoff, derived client-side.** `utils/leaveCutoffs.js` is the single
+  source; `/attendance/leave-list/` returns a span and **no cutoff** and accepts no query param, so the
+  narrowing is computed or not at all. Three rules: **overlap, not containment** — a span straddling two
+  cutoffs lists under both, because containment hides it from both; **alias every undocumented field**
+  (`NAME_FIELDS:78`, `START_FIELDS:89`, `END_FIELDS:90` accept 7/5/5 spellings); and the key prefers `id`,
+  falling back to `name:<lower>@<startIso>` so a year of "Semi-monthly" can't collapse into one option. The
+  cutoff cache (`useDisbursementApi.js:56`) is keyed by company. A failed fetch degrades silently to
+  the un-narrowed queue.
+- **Decimal hours are one decision with three consumers.** `decimalHoursLabel` (`utils/format.js:38`) is
+  the **only** place the app rounds a decimal hour; attendance, card taps and the access-cards monthly
+  total all quote it, so don't reimplement it. It rounds on the scaled integer, not via `toFixed` — a
+  hundredth of an hour is 36 seconds, so exact ties arrive every 36 seconds and `toFixed` prints `1.02`
+  for a genuine `1.025`. Attendance works in **exact milliseconds, backend-first** (`attendance.js:366`
+  pins the undocumented unit in one `DURATION_UNIT` constant; `attendanceDurationOf:469` prefers the
+  backend's figure over a re-derivation; the `h/m` label is the hover companion to that same number, not
+  a contradiction). Card taps and access cards work in **seconds** (`durationToSeconds`, `cardTaps.js:78`).
+  **Sum in the base unit and round once at the end** (three one-minute days are `0.05`, not `0.06`), and
+  **`null` is not `0`** anywhere — "we could not read this" must never print `0.00`. The server's raw
+  duration string is read for seconds but shown verbatim on hover.
+- **`time_format` is a display setting, never a storage format.** `admin/useAdminLaborRuleSettings.js` →
+  `GET /payroll/admin/company-labor-rule-settings/{id}/` → `{ time_format }`, read through
+  `data.data ?? data` because this API's envelope isn't uniform (a wrapped payload read as a bare one
+  looks like "no setting" — 12h, silently wrong). `expectedStatuses: [404]` makes "no settings row" a
+  configuration state, and a `formatCache` keyed by company. `AttendanceTimeField.vue` prints 12h or 24h
+  but **stores `HH:mm` under both branches** — nothing on the write path knows the component exists,
+  which is why the native 12h branch can pass its value straight through. The 24h branch is a `QSelect`
+  of hourly `HH:mm` options, not `<input type="time">`: no browser will draw 24h on request. Its list is
+  the hours **plus the current value when that isn't one of them** — Time In defaults to the current
+  minute (`nowClock()` in `timezone.js`, read per open in `openAddDialog()`), so a `18:35` default has to
+  be selectable or the field renders blank over a punch the parent is holding. Relatedly,
+  `formatClockTime` / `parseClockTime` (`timezone.js:75,121`) are **wall-clock**, not instants: never
+  route a bare shift time through `formatInTimezone`, which takes an instant and turns 08:00 into 16:00
+  west of Greenwich. `parseClockTime` accepts `6:00 PM` / `0600` / `18:00` whatever the company format.
+- **Manning** (`useManning.js`, `GET /organization/sites/manning/{company_id}/`) and **the audit trail**
+  (`useAuditLogs.js` for the cross-module write log, `useAssignmentHistory.js` for
+  `GET /audit/assignment/history/`) are the newest composables and carry their traps in their header
+  comments — read those before trusting a field.
 
 ## Traps
 
 - `.opencode/plans/*.md` are **historical, not specs** — they read like current plans but are not.
-  `disbursement-redesign-plan.md` documents the already-shipped migration, and
-  `payroll-redesign-plan.md` targets `PayrollPage.vue`, which has been deleted.
+  `disbursement-redesign-plan.md` documents the already-shipped migration, `payroll-redesign-plan.md`
+  targets a deleted `PayrollPage.vue`, and `attendance-decimal-hours.md` /
+  `attendance-duration-unit-fix.md` describe duration work that has since landed. Read them for the
+  reasoning; never as a to-do list.
 - Git prints `LF will be replaced by CRLF` on every add (`core.autocrlf=true` against
-  `end_of_line=lf` in `.editorconfig`). That is expected noise; don't "fix" it.
-- Dead code and plans are the main source of false leads here. When a name in a comment, plan, or
-  old doc doesn't resolve, grep for importers before assuming it exists.
+  `end_of_line=lf` in `.editorconfig`). Expected noise; don't "fix" it.
 
 ## Out of scope unless asked
 
-- Deployment via Fabric (`fabfile.py`, needs root `venv`/`requirements.txt`) and Docker
-  (`server.js`, `docker-compose.prod.yml`) — touch only for deploy tasks. Root `nginx.conf` is not
-  referenced by the Docker build.
+- Deployment via Fabric (`fabfile.py`, needs root `venv`/`requirements.txt`) and Docker (`server.js`,
+  `docker-compose.prod.yml`) — touch only for deploy tasks. Root `nginx.conf` is referenced by neither.
 - `ssr`, `pwa`, `cordova`, `capacitor`, `electron`, `bex` targets are configured but unused; the app
   ships as a plain web SPA in `dist/spa`.
