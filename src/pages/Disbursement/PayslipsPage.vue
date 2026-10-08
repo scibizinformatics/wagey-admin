@@ -159,39 +159,59 @@
             </q-td>
           </template>
 
+          <!-- The reason and the photograph, which the payslip row does not
+               carry: they come from the per-payslip issues endpoint, fetched for
+               the rows on screen. See `fetchVisibleIssues`. -->
+          <template #body-cell-dispute="props">
+            <q-td :props="props">
+              <PayslipDisputeCell
+                :issues="issuesFor(props.row)"
+                :loading="isLoadingIssues(props.row)"
+                :status="props.row.dispute_status"
+                :employee="props.row.employee"
+                @view-attachment="viewAttachment"
+              />
+            </q-td>
+          </template>
+
           <template #body-cell-actions="props">
             <q-td :props="props" class="text-right">
               <!-- Only a disputed payslip can be acted on here. Other rows show
-                   nothing rather than a dash, so the column reads as "actions
-                   where there are any". -->
-              <span v-if="isDisputed(props.row)" class="row-actions">
-                <q-btn
-                  outline
-                  dense
-                  no-caps
-                  size="11px"
-                  icon="o_check"
-                  label="Resolve"
-                  class="btn-outline btn-outline--good"
-                  :disable="processing"
-                  @click="resolve(props.row)"
+                   nothing rather than a disabled control, and the two decisions
+                   live behind one kebab rather than two outline buttons — a run
+                   with twenty disputes used to end in a wall of them. -->
+              <q-btn
+                v-if="isDisputed(props.row)"
+                flat
+                round
+                dense
+                icon="more_horiz"
+                size="12px"
+                class="row-btn"
+                :disable="processing"
+                aria-label="Row actions"
+                @click.stop
+              >
+                <PayslipRowMenu
+                  @resolve="resolve(props.row)"
+                  @reject="reject(props.row)"
                 />
-                <q-btn
-                  outline
-                  dense
-                  no-caps
-                  size="11px"
-                  icon="o_close"
-                  label="Reject"
-                  class="btn-outline btn-outline--danger"
-                  :disable="processing"
-                  @click="reject(props.row)"
-                />
-              </span>
+              </q-btn>
             </q-td>
           </template>
         </q-table>
       </DisbursementTableCard>
+
+      <!-- The employee's own attachment, at full size. The attendance selfie
+           viewer, reused: same shape of thing, one image opened from a table
+           thumbnail. -->
+      <AttendanceSelfieViewer
+        v-model="showAttachmentViewer"
+        :image-url="attachment.url"
+        :title="attachment.title"
+        :subtitle="attachment.subtitle"
+        :image-alt="attachment.alt"
+      />
     </DisbursementStepShell>
   </PageShell>
 </template>
@@ -205,6 +225,10 @@ import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
+import PayslipRowMenu from 'src/components/pages/Payroll/PayslipRowMenu.vue'
+import PayslipDisputeCell from 'src/components/pages/Payroll/PayslipDisputeCell.vue'
+import AttendanceSelfieViewer from 'src/components/pages/Attendance/AttendanceSelfieViewer.vue'
+import { createRequestToken } from 'src/composables/utils/requestToken'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
@@ -241,13 +265,38 @@ const page = ref(1)
 const pageSize = ref(10)
 const pageSizeOptions = [10, 20, 50]
 
+/**
+ * The dispute reason and attachment, which the payslip row does not carry.
+ *
+ * `epi_id -> issues[]`. Fetched from
+ * `GET /payroll/admin/employee-payslips/{epi_id}/issues/`, one call per payslip,
+ * so it is deliberately *not* fetched for the whole run: only for the rows
+ * currently on screen, and cached here so paging back and forth costs nothing.
+ *
+ * A run can hold hundreds of employees and every one of them would otherwise be
+ * a request on every page load, for a column that is empty on all but a handful
+ * of rows.
+ */
+const issueMap = ref(new Map())
+const issuesLoading = ref(new Set())
+const issuesGuard = createRequestToken()
+
+// Keys cleared while their own request was still in flight. Deliberately not
+// reactive: it is read and written only inside a merge, synchronously.
+const superseded = new Set()
+
+// The lightbox. Held as one object rather than three refs because they are set
+// together and always mean the same thing.
+const showAttachmentViewer = ref(false)
+const attachment = ref({ url: '', title: '', subtitle: '', alt: '' })
+
 const columns = [
   { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
   { name: 'position_name', label: 'Position', field: 'position_name', align: 'left', sortable: true },
   { name: 'net_pay', label: 'Net pay', field: 'net_pay', align: 'right', sortable: true, format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}` },
   { name: 'payslip_status', label: 'Status', field: 'payslip_status', align: 'left', sortable: true },
   { name: 'acknowledged_on', label: 'Acknowledged', field: 'acknowledged_on', align: 'left' },
-  { name: 'dispute_status', label: 'Dispute', field: 'dispute_status', align: 'left' },
+  { name: 'dispute', label: 'Dispute', field: 'dispute_status', align: 'left' },
   { name: 'actions', label: '', field: 'actions', align: 'right' },
 ]
 
@@ -373,6 +422,124 @@ const paginatedData = computed(() => {
   return filteredData.value.slice(start, start + pageSize.value)
 })
 
+// ─── Dispute reasons and attachments ─────────────────────────────────────────
+
+function issueKey(row) {
+  return row?.epi_id == null ? '' : String(row.epi_id)
+}
+
+function issuesFor(row) {
+  const key = issueKey(row)
+  return key ? issueMap.value.get(key) || [] : []
+}
+
+function isLoadingIssues(row) {
+  const key = issueKey(row)
+  return !!key && issuesLoading.value.has(key)
+}
+
+/**
+ * Read the issues for whichever payslips are on screen and not already known.
+ *
+ * `allSettled` because these are independent reads and one failing payslip must
+ * not cost the other nine their reasons; the ones that answered are still shown
+ * and the ones that did not are logged. `Promise.all` would throw away the whole
+ * page's worth of answers for a single 500.
+ *
+ * Guarded rather than trusted: paging or switching tabs faster than the endpoint
+ * answers would otherwise let the slower earlier batch paint over the page the
+ * reader is actually on.
+ */
+async function fetchVisibleIssues() {
+  const wanted = []
+  const seen = new Set()
+  for (const row of paginatedData.value) {
+    const key = issueKey(row)
+    // Already answered, or already being asked — `processIssue` refreshes the
+    // rows and so trips the watcher at the same time it asks for its own row,
+    // and without this the same payslip would be requested twice.
+    if (!key || seen.has(key) || issueMap.value.has(key) || issuesLoading.value.has(key)) {
+      continue
+    }
+    seen.add(key)
+    wanted.push(key)
+  }
+  // Before the token is taken, deliberately: a call with nothing left to ask is
+  // not a new question, and must not supersede a batch still in flight.
+  if (!wanted.length) return
+
+  const token = issuesGuard.next()
+  issuesLoading.value = new Set([...issuesLoading.value, ...wanted])
+
+  const results = await Promise.allSettled(
+    wanted.map((key) =>
+      fetchPayslipIssues(key).finally(() => {
+        const stillLoading = new Set(issuesLoading.value)
+        stillLoading.delete(key)
+        issuesLoading.value = stillLoading
+      }),
+    ),
+  )
+
+  // A newer page has moved on; its answers are the ones that matter.
+  if (!issuesGuard.isCurrent(token)) return
+
+  const merged = new Map(issueMap.value)
+  const retry = []
+  results.forEach((result, index) => {
+    const key = wanted[index]
+    // The answer was already on its way when a decision invalidated this payslip,
+    // so it describes the state before the decision. Dropped, and asked again
+    // below rather than shown.
+    if (superseded.delete(key)) {
+      retry.push(key)
+      return
+    }
+    if (result.status === 'fulfilled') {
+      merged.set(key, Array.isArray(result.value) ? result.value : [])
+      return
+    }
+    // Left out of the map on purpose: nothing was learned, so a later visit
+    // should ask again rather than pin this payslip to "no dispute".
+    console.error(`[PayslipsPage] issues fetch ✖ epi_id=${key}`, result.reason)
+  })
+  issueMap.value = merged
+
+  // Nothing is loading for these any more, so they are eligible again.
+  if (retry.length) fetchVisibleIssues()
+}
+
+function invalidateIssues(row) {
+  const key = issueKey(row)
+  if (!key) return
+  // If a request for this payslip is already on its way, its answer describes
+  // the state before the decision and must not be written back over the clear.
+  if (issuesLoading.value.has(key)) superseded.add(key)
+  const next = new Map(issueMap.value)
+  next.delete(key)
+  issueMap.value = next
+}
+
+function viewAttachment(payload) {
+  const url = payload?.url || ''
+  if (!url) return
+  const name = payload.title || 'this payslip'
+  attachment.value = {
+    url,
+    title: payload.title || 'Dispute attachment',
+    subtitle: payload.subtitle || 'Sent with the dispute',
+    alt: `Dispute attachment for ${name}`,
+  }
+  showAttachmentViewer.value = true
+}
+
+// Fires on the initial load too, since `payslips` is assigned inside `onMounted`.
+// Watching the inputs rather than `paginatedData` itself keeps this to one call
+// per real change instead of one per re-render of the slice.
+watch([payslips, activeTab, searchTerm, page, pageSize], () => {
+  fetchVisibleIssues()
+})
+
 onMounted(async () => {
   // The list page hands the run's name, cutoff and status over in the query, and
   // no step endpoint returns any of them — but a deep link arrives with none of
@@ -453,6 +620,13 @@ async function processIssue(row, action) {
       console.error('[PayslipsPage] refresh after processIssue ✖', refreshError)
     }
 
+    // The rows have moved, so this payslip's cached issues are stale in two
+    // ways: what is still open has changed, and which payslips are on screen may
+    // have changed with the refresh. Dropped rather than merged, so the dispute
+    // column cannot keep printing a reason that has just been resolved.
+    invalidateIssues(row)
+    fetchVisibleIssues()
+
     if (settled && failures.length) {
       toast.warning(`${settled} of ${issueIds.length} issues ${action}d.`, {
         caption: extractErrorMessage(
@@ -514,23 +688,14 @@ async function reject(row) {
   color: var(--dash-ink-2);
 }
 
-/* Row-level resolve / reject sit inside a cell, so they are smaller than the
-   toolbar's actions. */
-.row-actions {
-  display: inline-flex;
-  gap: 6px;
-  justify-content: flex-end;
+/* The row's kebab. Quiet at rest, the same treatment `EmployeeTable.vue` gives
+   its row menu, so the two tables read as one language. */
+.row-btn {
+  color: var(--dash-ink-4);
 }
-.row-actions .btn-outline {
-  height: 28px;
-  padding: 0 9px;
-  font-size: 12px;
-}
-.btn-outline--good {
-  color: var(--dash-good);
-}
-.btn-outline--danger {
-  color: var(--dash-critical);
+.row-btn:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-100);
 }
 
 .action-note {
