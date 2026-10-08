@@ -12,9 +12,9 @@ import { createRequestToken } from 'src/composables/utils/requestToken'
  *
  * `time_format` is a display preference, not a policy: it decides how clock
  * times are *printed* and nothing else. It is deliberately kept out of the value
- * any time is parsed from — `type="time"` inputs and `toUTC()` still speak 24h
- * `HH:mm`, because a `time_format` of 12h must not turn 6:00 PM into an input
- * value of 06:00 and save the wrong punch.
+ * any time is parsed from — `AttendanceTimeField` and `toUTC()` still speak 24h
+ * `HH:mm`, because a `time_format` of 12h must not turn 6:00 PM into a value of
+ * 06:00 and save the wrong punch. The field prints 12h and stores 24h.
  *
  * A company with no settings row answers 404. That is a configuration state, not
  * a failure, so it resolves to the default quietly (the request is marked
