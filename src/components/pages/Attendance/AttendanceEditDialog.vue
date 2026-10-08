@@ -48,31 +48,36 @@
             </label>
 
             <div class="dash-modal__grid">
-              <label class="dash-modal__field">
-                <span class="dash-modal__field-label">Time in</span>
-                <q-input
+              <div class="dash-modal__field">
+                <span class="dash-modal__field-label"
+                  >Time In<span class="dash-modal__req">*</span></span
+                >
+                <!--
+                  Which widget this renders is decided inside
+                  `AttendanceTimeField`, on the company's `time_format`: a 12h
+                  company keeps the native input, a 24h company gets the shared
+                  `TimeField` (hour and minute as separate dropdowns). This
+                  dialog does not branch on the format itself, so the two dialogs
+                  can never drift apart on what a time field looks like.
+                -->
+                <AttendanceTimeField
                   :model-value="record.time_in"
-                  type="time"
-                  outlined
-                  dense
-                  hide-bottom-space
-                  class="dash-field"
+                  :time-format="timeFormat"
+                  :rules="[(val) => !!val || 'Required']"
+                  prepend-icon="login"
                   @update:model-value="updateField('time_in', $event)"
                 />
-              </label>
+              </div>
 
-              <label class="dash-modal__field">
-                <span class="dash-modal__field-label">Time out</span>
-                <q-input
+              <div class="dash-modal__field">
+                <span class="dash-modal__field-label">Time Out</span>
+                <AttendanceTimeField
                   :model-value="record.time_out"
-                  type="time"
-                  outlined
-                  dense
-                  hide-bottom-space
-                  class="dash-field"
+                  :time-format="timeFormat"
+                  prepend-icon="logout"
                   @update:model-value="updateField('time_out', $event)"
                 />
-              </label>
+              </div>
             </div>
 
             <label class="dash-modal__field">
@@ -134,12 +139,17 @@
 </template>
 
 <script setup>
+import AttendanceTimeField from '@/components/pages/Attendance/AttendanceTimeField.vue'
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   record: { type: Object, default: null },
   costCenterOptions: { type: Array, default: () => [] },
   optionsLoading: { type: Boolean, default: false },
   saving: { type: Boolean, default: false },
+  // The company's `time_format` — '12h' | '24h'. Decides how the punch fields
+  // print; `record.time_in` / `time_out` stay 24h `HH:mm` either way.
+  timeFormat: { type: String, default: '12h' },
 })
 
 const emit = defineEmits(['update:modelValue', 'update:record', 'submit'])
