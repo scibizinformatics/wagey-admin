@@ -17,7 +17,7 @@
           icon-right="o_arrow_forward"
           label="Continue to disbursement"
           class="btn-primary"
-          @click="goToDisburse"
+          @click="requestContinue"
         />
       </template>
 
@@ -108,6 +108,21 @@
                 >
                   <template #prepend><span class="peso">₱</span></template>
                 </q-input>
+                <!-- What the figure means against the gap, said before it is
+                     saved rather than only afterwards. Short and over both warn —
+                     neither is refused, because funding in instalments is
+                     normal — but both are worth a second look. -->
+                <span
+                  v-if="amountHint"
+                  :class="['field__hint', `field__hint--${amountHint.tone}`]"
+                  role="status"
+                >
+                  <q-icon
+                    :name="amountHint.tone === 'good' ? 'o_check_circle' : 'o_error'"
+                    size="13px"
+                  />
+                  {{ amountHint.text }}
+                </span>
               </label>
 
               <label class="field field--full">
@@ -134,8 +149,8 @@
               label="Add funds"
               class="btn-primary"
               :loading="submitting"
-              :disable="!form.amount || submitting"
-              @click="submitFunding"
+              :disable="!canSubmit"
+              @click="requestFunding"
             />
           </footer>
         </section>
@@ -231,27 +246,63 @@
                   <StatusPill :status="props.row.payslip_status" />
                 </q-td>
               </template>
+
+              <!-- The way into how this net pay was arrived at. Same affordance as
+                   the attendance table's audit button: an icon in its own column
+                   that says what opening it will show. -->
+              <template #body-cell-breakdown="props">
+                <q-td :props="props" class="cell-breakdown">
+                  <button
+                    type="button"
+                    class="breakdown-btn"
+                    :aria-label="`View salary breakdown for ${props.row.employee}`"
+                    @click="requestBreakdown(props.row)"
+                  >
+                    <q-icon name="o_visibility" size="16px" />
+                    <q-tooltip>View salary breakdown</q-tooltip>
+                  </button>
+                </q-td>
+              </template>
             </q-table>
           </div>
         </section>
       </div>
 
     </DisbursementStepShell>
+
+    <!-- What one employee was paid and what came off it. Read-only: this step
+         writes funding entries, never payroll. -->
+    <SalaryBreakdownDialog
+      v-model="showBreakdown"
+      :employee-id="selectedEpiId"
+      :employee-name="selectedEmployeeName"
+      :net-pay="selectedNetPay"
+      :employee-index="employeeIndex"
+    />
+
+    <!-- The gate in front of money leaving the company: one dialog for both
+         questions this step asks, wording built in `fundingConfirm.js`. -->
+    <ConfirmDialog v-model="showConfirm" :confirm="confirm" :loading="submitting" @confirm="onConfirm" />
   </PageShell>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import TableSkeleton from 'src/components/common/TableSkeleton.vue'
+import ConfirmDialog from 'src/components/common/ConfirmDialog.vue'
+import SalaryBreakdownDialog from 'src/components/pages/Payroll/SalaryBreakdownDialog.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
+import { buildFundingConfirm, buildDisburseConfirm } from 'src/components/pages/Payroll/fundingConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
 import { useEmployees } from 'src/composables/page/useEmployees'
+import { extractErrorMessage } from 'src/composables/utils/http'
+import { formatCurrency } from 'src/composables/utils/format'
 import { useAuthStore } from 'src/boot/auth'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
@@ -279,6 +330,39 @@ const stepperKey = ref(0)
   const submitting = ref(false)
   const amounts = ref(null)
   const allEarners = ref([])
+
+/**
+ * The confirmation gate.
+ *
+ * One dialog serves both questions this step asks, distinguished by
+ * `pendingAction`; `pendingFunding` is the snapshot the funding write reads, so
+ * the dialog and the write can never describe different entries.
+ */
+const showConfirm = ref(false)
+const confirm = ref(null)
+const pendingAction = ref(null)
+const pendingFunding = ref(null)
+
+/**
+ * The salary breakdown, opened from the earners table.
+ *
+ * Snapshotted from the row rather than read off it on render: the table is
+ * refetched after every funding entry, so a dialog left open across a write
+ * would otherwise re-point itself at whatever row took that id next.
+ */
+const showBreakdown = ref(false)
+const selectedEpiId = ref(null)
+const selectedEmployeeName = ref('')
+const selectedNetPay = ref(null)
+
+function requestBreakdown(row) {
+  // The id the endpoint keys on. A row without one is a payslip this step cannot
+  // break down — the button stays, and the dialog explains rather than hanging.
+  selectedEpiId.value = row?.epi_id ?? null
+  selectedEmployeeName.value = row?.employee || ''
+  selectedNetPay.value = row?.net_pay ?? null
+  showBreakdown.value = true
+}
 
 const form = ref({
   funding_source: null,
@@ -337,6 +421,73 @@ const remainingToFund = computed(() => {
 
 const gapToneClass = computed(() => (remainingToFund.value > 0 ? '' : 'gap--settled'))
 
+/**
+ * The amount as a number, and the comparisons the step is actually about.
+ *
+ * Funding a group in instalments is legitimate, so a short amount is a decision
+ * to confirm rather than a mistake to refuse. What cannot be recorded is a
+ * non-positive figure — a negative entry would move the gap the wrong way and
+ * quietly make the group look funded.
+ *
+ * `amounts` is the gate on every comparison: until the amounts call has
+ * answered, the gap is zero, and treating that as "already fully funded" would
+ * tell a reader their figure overfunds a group nobody has measured yet.
+ */
+const amountNumber = computed(() => {
+  const parsed = Number(form.value.amount)
+  return Number.isFinite(parsed) ? parsed : 0
+})
+
+const hasAmounts = computed(() => !loading.value && !!amounts.value)
+
+const shortfall = computed(() => Math.max(0, remainingToFund.value - amountNumber.value))
+const overage = computed(() => Math.max(0, amountNumber.value - remainingToFund.value))
+
+const canSubmit = computed(
+  () => !submitting.value && hasAmounts.value && amountNumber.value > 0,
+)
+
+/**
+ * What the entered figure means, in one line under the field.
+ *
+ * The same three outcomes `buildFundingConfirm` reads, so the warning the admin
+ * sees while typing is the one the dialog then repeats with numbers attached —
+ * not a validation message that vanishes the moment they look away.
+ */
+const amountHint = computed(() => {
+  if (!hasAmounts.value) return null
+  const entered = amountNumber.value
+  // Nothing typed is not an error — the button being disabled already says so,
+  // and shouting at a reader who has only just been handed a cleared form (after
+  // a save, or on first paint) reads as the page failing.
+  if (entered <= 0) {
+    return String(form.value.amount ?? '').trim()
+      ? { tone: 'error', text: 'Enter an amount greater than zero.' }
+      : null
+  }
+
+  const remaining = remainingToFund.value
+  if (remaining <= 0) {
+    return {
+      tone: 'warn',
+      text: 'This group is already fully funded. This entry would overfund it.',
+    }
+  }
+  if (shortfall.value > 0) {
+    return {
+      tone: 'warn',
+      text: `${formatCurrency(shortfall.value)} short of the ${formatCurrency(remaining)} still required. You can record a partial amount.`,
+    }
+  }
+  if (overage.value > 0) {
+    return {
+      tone: 'warn',
+      text: `${formatCurrency(overage.value)} more than the ${formatCurrency(remaining)} still required — this overfunds the group.`,
+    }
+  }
+  return { tone: 'good', text: 'This covers the group in full.' }
+})
+
 const statTiles = computed(() => [
   {
     key: 'gross',
@@ -374,20 +525,123 @@ function fillRemaining() {
   form.value.amount = String(remainingToFund.value)
 }
 
-function goToDisburse() {
-  router.push(`/app/payroll/disburse/${groupId}`)
+/**
+ * First step of a funding entry: work out what it would do, then ask.
+ *
+ * Nothing is written here. The entry is snapshotted rather than re-read on
+ * confirm, so the dialog describes the figure that was asked about even if the
+ * amounts refetch moves the gap while it is open.
+ */
+function requestFunding() {
+  // A second submit while the first is still in flight would record the same
+  // entry twice, and a click behind an open dialog would leave the snapshot
+  // describing a form the reader has since changed.
+  if (submitting.value || showConfirm.value) return
+
+  if (!hasAmounts.value) {
+    toast.warning('Wait for the funding figures to load.')
+    return
+  }
+  if (amountNumber.value <= 0) {
+    toast.warning('Enter an amount greater than zero.')
+    return
+  }
+
+  const snapshot = {
+    funding_source: form.value.funding_source,
+    amount: amountNumber.value,
+    reference_no: form.value.reference_no,
+    notes: form.value.notes,
+  }
+
+  pendingFunding.value = snapshot
+  confirm.value = buildFundingConfirm({
+    amount: snapshot.amount,
+    source: snapshot.funding_source,
+    reference: snapshot.reference_no,
+    remainingBefore: remainingToFund.value,
+    groupName: groupName.value,
+  })
+  pendingAction.value = 'fund'
+  showConfirm.value = true
 }
+
+/**
+ * First step of leaving for disbursement.
+ *
+ * A fully funded group is not asked about — a confirmation with nothing to warn
+ * about is a click that teaches people to click through the ones that matter.
+ */
+function requestContinue() {
+  if (remainingToFund.value > 0) {
+    confirm.value = buildDisburseConfirm({
+      remaining: remainingToFund.value,
+      groupName: groupName.value,
+      employees: allEarners.value.length,
+    })
+    pendingAction.value = 'disburse'
+    pendingFunding.value = null
+    showConfirm.value = true
+    return
+  }
+  commitContinue()
+}
+
+function commitContinue() {
+  router.push({ path: `/app/payroll/disburse/${groupId}`, query: route.query })
+}
+
+/** The one button in the dialog, dispatching on what was asked. */
+function onConfirm() {
+  if (pendingAction.value === 'fund') commitFunding()
+  else if (pendingAction.value === 'disburse') commitContinue()
+}
+
+// Cancelling must clear the snapshot as surely as confirming does: a stale
+// `pendingFunding` left behind is a write the next dialog's Confirm could fire.
+watch(showConfirm, (open) => {
+  if (open) return
+  confirm.value = null
+  pendingAction.value = null
+  pendingFunding.value = null
+})
 
   const earnerColumns = [
     { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
     { name: 'position_name', label: 'Position', field: 'position_name', align: 'left' },
     { name: 'net_pay', label: 'Net pay', field: 'net_pay', align: 'right', sortable: true },
     { name: 'payslip_status', label: 'Status', field: 'payslip_status', align: 'left', sortable: true },
+    { name: 'breakdown', label: '', field: 'breakdown', align: 'right' },
   ]
 
 function parseAmount(val) {
   return parseFloat(val || 0).toLocaleString('en-PH')
 }
+
+  /**
+ * Re-read the run. Shared by the first paint and by every write, because a
+   * funding entry moves the gap, the stat tiles and the roster's sort together —
+ * and because a write that reported failure may still have landed, so the refetch
+ * has to run whatever happened.
+ *
+ * Reports rather than throws: the caller decides whether a failed read is worth
+ * a message, and a caller that only wanted the numbers has nothing to do about
+ * an error.
+ */
+  async function refreshRun() {
+    try {
+      const [amt, earners] = await Promise.all([
+        fetchPayoutGroupInstanceAmounts(groupId),
+        fetchEmployeePayslips(groupId),
+      ])
+      amounts.value = amt
+      allEarners.value = (earners || []).sort((a, b) => parseFloat(b.net_pay || 0) - parseFloat(a.net_pay || 0))
+      return true
+    } catch (err) {
+      console.error('[FundingPage] fetch failed:', err)
+      return false
+    }
+  }
 
   onMounted(async () => {
     // The list page hands the run's name, cutoff and status over in the query, and
@@ -396,48 +650,51 @@ function parseAmount(val) {
     // its id either way.
     resolveQuietly(groupId)
     fetchEmployees().catch(() => null)
-    try {
-      const [amt, earners] = await Promise.all([
-        fetchPayoutGroupInstanceAmounts(groupId),
-        fetchEmployeePayslips(groupId),
-      ])
-      amounts.value = amt
-      allEarners.value = (earners || []).sort((a, b) => parseFloat(b.net_pay || 0) - parseFloat(a.net_pay || 0))
+    if (await refreshRun()) {
       notifyLoaded('Funding', allEarners.value.length, {
         noun: 'employee',
         nounPlural: 'employees',
       })
-    } catch (err) {
-      console.error('[FundingPage] fetch failed:', err)
-    } finally {
-      loading.value = false
     }
+    loading.value = false
   })
 
-async function submitFunding() {
-  if (!form.value.amount) return
+/**
+ * The confirmed funding entry.
+ *
+ * Reads only `pendingFunding`, never the form, so it writes exactly what the
+ * confirmation described.
+ *
+ * The write and the refetch are deliberately separate. Folding them into one
+ * `try` meant a read that failed after a successful write reported the write as
+ * failed and left the reader believing their entry had not been recorded.
+ */
+async function commitFunding() {
+  const entry = pendingFunding.value
+  if (!entry || submitting.value) return
+
   submitting.value = true
   const employeeUuid = authStore.user?.employee_uuid
   try {
-    await createPgiFunding(groupId, {
-      funding_source: form.value.funding_source,
-      amount: String(Number(form.value.amount)),
-      reference_no: form.value.reference_no || '',
-      prepared_by_employee_id: employeeUuid,
-      custodian_employee_id: employeeUuid,
-      notes: form.value.notes || '',
-    })
+    try {
+      await createPgiFunding(groupId, {
+        funding_source: entry.funding_source,
+        amount: String(entry.amount),
+        reference_no: entry.reference_no || '',
+        prepared_by_employee_id: employeeUuid,
+        custodian_employee_id: employeeUuid,
+        notes: entry.notes || '',
+      })
+    } catch (err) {
+      console.error('[FundingPage] submitFunding error:', err)
+      toast.error(extractErrorMessage(err, 'Failed to record this funding entry.'))
+      return
+    }
+
     stepperKey.value++
-    toast.success('Funding added successfully!')
-      const [amt, earners] = await Promise.all([
-        fetchPayoutGroupInstanceAmounts(groupId),
-        fetchEmployeePayslips(groupId),
-      ])
-      amounts.value = amt
-      allEarners.value = (earners || []).sort((a, b) => parseFloat(b.net_pay || 0) - parseFloat(a.net_pay || 0))
+    await refreshRun()
     form.value = { funding_source: null, amount: '', reference_no: '', notes: '' }
-  } catch (err) {
-    console.error('[FundingPage] submitFunding error:', err)
+    toast.success('Funding added successfully!')
   } finally {
     submitting.value = false
   }
@@ -585,6 +842,32 @@ async function submitFunding() {
   font-variant-numeric: tabular-nums;
 }
 
+/* The amount's own reading of itself, under the field. Amber rather than red
+   for a short or over figure: both are allowed — funding in instalments is
+   normal — so this is a caution, not a refusal. Only an amount that cannot be
+   recorded at all gets the error colour. */
+.field__hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dash-ink-4);
+}
+.field__hint .q-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.field__hint--warn {
+  color: var(--dash-warn-mark);
+}
+.field__hint--error {
+  color: var(--dash-critical-mark);
+}
+.field__hint--good {
+  color: var(--dash-good);
+}
+
 .peso {
   font-size: 14px;
   font-weight: 600;
@@ -594,6 +877,43 @@ async function submitFunding() {
 .form__foot {
   display: flex;
   justify-content: flex-end;
+}
+
+/* The breakdown button: the same 28px bordered square as the attendance table's
+   audit button, untinted — unlike that one, a salary has no "flagged" state, and
+   every row here offers the same action. */
+.cell-breakdown {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.breakdown-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--dash-line);
+  border-radius: 7px;
+  background: var(--dash-surface);
+  color: var(--dash-ink-3);
+  cursor: pointer;
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    border-color var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
+}
+.breakdown-btn:hover {
+  background: var(--dash-n-50);
+  border-color: var(--dash-n-300);
+  color: var(--dash-ink);
+}
+.breakdown-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 /* ── Earners ── */
