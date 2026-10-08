@@ -67,6 +67,25 @@
                 </dd>
               </div>
             </dl>
+
+            <!-- The manual figures sit on their own line, below a rule, rather
+                 than being folded into Total or Deducted: those two mean
+                 "required by law", and a reader who cannot tell which is which
+                 will either distrust the number or trust it wrongly. -->
+            <dl v-if="adjustments.hasAny" class="contrib-summary__figures contrib-summary__figures--manual">
+              <div>
+                <dt>Manual additions</dt>
+                <dd class="dash-num">{{ moneyOrDash(adjustments.manualAdditions) }}</dd>
+              </div>
+              <div>
+                <dt>Manual deductions</dt>
+                <dd class="dash-num contrib-pending">{{ moneyOrDash(adjustments.manualDeductions) }}</dd>
+              </div>
+              <div>
+                <dt>Net pay</dt>
+                <dd class="dash-num">{{ moneyOrDash(adjustments.netPay) }}</dd>
+              </div>
+            </dl>
           </div>
 
           <!-- ── Contributions ────────────────────────────────────────────
@@ -153,6 +172,105 @@
               </p>
             </div>
           </div>
+
+          <!-- ── Manual adjustments ───────────────────────────────────────
+               Kept apart from the contributions above rather than mixed into
+               them. They are different kinds of money — what the law requires
+               versus what a person decided — with different rules (an adjustment
+               is reverted on its own row), and a list that merged them would make
+               the totals unreadable. -->
+          <div class="contrib-section">
+            <div class="contrib-section__head">
+              <p class="contrib-section__label">
+                Manual adjustments
+                <span v-if="adjustments.rows.length" class="dash-num"
+                  >({{ adjustments.rows.length }})</span
+                >
+              </p>
+              <q-btn
+                flat
+                dense
+                no-caps
+                size="12px"
+                icon="o_add"
+                label="Add adjustment"
+                class="contrib-add"
+                :disable="busy"
+                @click="showAdjustForm = true"
+              />
+            </div>
+
+            <!-- Only this section reports its own failure. An adjustments error
+                 must not blank the statutory contributions, which are the dialog's
+                 actual reason to exist. -->
+            <div v-if="adjustmentsError" class="contrib-note">
+              <q-icon name="o_error_outline" size="15px" />
+              <span>Could not load manual adjustments.</span>
+              <q-btn flat dense no-caps label="Retry" class="contrib-retry" @click="loadAdjustments" />
+            </div>
+
+            <ul v-else-if="adjustments.rows.length" class="contrib-list">
+              <li
+                v-for="row in adjustments.rows"
+                :key="row.id"
+                class="contrib-row"
+                :class="{ 'contrib-row--reverted': !row.applied }"
+              >
+                <span class="contrib-row__pick">
+                  <q-icon
+                    :name="row.applied ? row.typeIcon : 'o_undo'"
+                    size="17px"
+                    :class="row.applied ? `adj-mark--${row.typeTone}` : 'contrib-row__reverted-mark'"
+                  />
+                </span>
+
+                <span class="contrib-row__body">
+                  <span class="contrib-row__name">
+                    {{ row.description || row.category || row.typeLabel }}
+                  </span>
+                  <span class="contrib-row__meta">
+                    <template v-if="row.applied">
+                      {{ row.typeLabel }}<template v-if="row.category"> · {{ row.category }}</template>
+                      <template v-if="row.appliedBy"> · {{ row.appliedBy }}</template>
+                      <template v-if="row.appliedAt"> · {{ formatDateTime(row.appliedAt) }}</template>
+                    </template>
+                    <template v-else>
+                      Reverted<template v-if="row.revertedBy"> by {{ row.revertedBy }}</template
+                      ><template v-if="row.revertedAt"> · {{ formatDateTime(row.revertedAt) }}</template>
+                    </template>
+                  </span>
+                </span>
+
+                <span class="contrib-row__amount dash-num">
+                  {{ signedAmount(row) }}
+                  <q-btn
+                    v-if="row.applied"
+                    flat
+                    round
+                    dense
+                    size="10px"
+                    icon="o_undo"
+                    class="adj-revert"
+                    :disable="busy || revertingId === row.id"
+                    :aria-label="`Revert ${row.description || row.typeLabel}`"
+                    @click="revertAdjustmentRow(row)"
+                  >
+                    <q-tooltip>Revert this adjustment</q-tooltip>
+                  </q-btn>
+                </span>
+              </li>
+            </ul>
+
+            <div v-else class="contrib-empty">
+              <span class="dash-featured-icon">
+                <q-icon name="o_tune" size="18px" />
+              </span>
+              <p class="contrib-empty__title">No manual adjustments</p>
+              <p class="contrib-empty__sub">
+                Nothing has been added to or taken off this payslip by hand.
+              </p>
+            </div>
+          </div>
         </template>
       </q-card-section>
 
@@ -207,6 +325,16 @@
         </q-btn>
       </q-card-actions>
     </q-card>
+
+    <!-- Its own dialog rather than an inline form: four fields with their own
+         validation and busy state, inside a list that is itself being selected
+         from. -->
+    <AdjustmentFormDialog
+      v-model="showAdjustForm"
+      :employee-name="employeeName"
+      :loading="applying"
+      @submit="applyAdjustment"
+    />
   </q-dialog>
 </template>
 
@@ -222,14 +350,24 @@
 import { ref, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
+import AdjustmentFormDialog from 'src/components/pages/Payroll/AdjustmentFormDialog.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
-import { formatCurrency } from 'src/composables/utils/format'
+import { formatCurrency, formatDateTime } from 'src/composables/utils/format'
+import { normalizeAdjustments, signedAmount } from 'src/composables/utils/payrollAdjustments'
+import { extractErrorMessage } from 'src/composables/utils/http'
 import { avatarFor } from 'src/composables/utils/employee'
 import { useToast } from 'src/composables/useToast'
 
 const $q = useQuasar()
 const toast = useToast()
-const { fetchEpiContributions, deductContributions, revertContributions } = useDisbursementApi()
+const {
+  fetchEpiContributions,
+  deductContributions,
+  revertContributions,
+  fetchEpiAdjustments,
+  applyAdjustment: applyAdjustmentRequest,
+  revertAdjustment: revertAdjustmentRequest,
+} = useDisbursementApi()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -275,7 +413,28 @@ const reverting = ref(false)
 const data = ref(null)
 const selected = ref([])
 
-const busy = computed(() => deducting.value || reverting.value)
+/**
+ * Manual adjustments, loaded beside the contributions but held apart from them.
+ *
+ * Separate state and a separate failure: the statutory contributions are the
+ * dialog's reason to exist, so an adjustments error must not blank them, and the
+ * two totals are different things that must not be summed into one number here.
+ */
+const adjustmentsData = ref(null)
+const adjustmentsError = ref(false)
+const showAdjustForm = ref(false)
+const applying = ref(false)
+/** The one adjustment currently being reverted, so only its button spins. */
+const revertingId = ref(null)
+
+const adjustments = computed(() => normalizeAdjustments(adjustmentsData.value))
+
+const busy = computed(() => deducting.value || reverting.value || applying.value || revertingId.value !== null)
+
+/** An unreadable figure is a dash; a zero would claim the endpoint said zero. */
+function moneyOrDash(value) {
+  return value === null || value === undefined ? '—' : formatCurrency(value)
+}
 
 /** Decimal strings ("200.00") arrive from the API; sum them as numbers. */
 function amount(val) {
@@ -387,11 +546,114 @@ async function load() {
   } finally {
     loading.value = false
   }
+  // After the contributions, not beside them: the section renders inside this
+  // dialog's body, and an error above should not open a dialog with nothing in it.
+  // Awaited, because every write toasts the resulting net pay and reads it from
+  // here — fired without awaiting, a contribution change would report the figure
+  // that was on screen before the change.
+  await loadAdjustments()
+}
+
+/**
+ * The second line of a success toast: what the entry was for, and what it left.
+ *
+ * The net-pay clause is dropped rather than faked when the adjustments request
+ * failed — a caption reading "Net pay now ₱0.00" would be a worse lie than a
+ * caption that simply omits it.
+ *
+ * @param {...string} parts the entry's own description(s)
+ * @returns {string} the caption, or '' when there is nothing to say
+ */
+function netPayCaption(...parts) {
+  const detail = parts.filter((part) => !!part)
+  const net = adjustments.value.netPay
+  if (net !== null && net !== undefined) detail.push(`Net pay now ${formatCurrency(net)}`)
+  return detail.join(' · ')
+}
+
+/**
+ * Adjustments on their own, with their own failure.
+ *
+ * Never throws. A worker reading this dialog to find a pending contribution must
+ * still find it when the adjustments endpoint is down, and the section can say
+ * so on its own.
+ */
+async function loadAdjustments() {
+  if (!props.epiId) return
+  adjustmentsError.value = false
+  try {
+    adjustmentsData.value = await fetchEpiAdjustments(props.epiId)
+  } catch (err) {
+    console.error('[EmployeeContributionsDialog] adjustments fetch failed:', err)
+    adjustmentsError.value = true
+    adjustmentsData.value = null
+  }
+}
+
+/**
+ * Records one manual adjustment.
+ *
+ * Refetched rather than appended to: applying moves `net_pay` and both manual
+ * totals, and the server owns whether a row counts as in force.
+ */
+async function applyAdjustment(body) {
+  if (applying.value || !props.epiId) return
+  applying.value = true
+  // The amount as sent, held here: the form clears itself on close, and the
+  // toast must name the figure that was written rather than re-derive it.
+  const written = Number(body.amount)
+  try {
+    await applyAdjustmentRequest({ epi_id: props.epiId, ...body })
+    showAdjustForm.value = false
+    await loadAdjustments()
+    emit('deducted')
+    toast.success(
+      `${body.type === 'addition' ? 'Added' : 'Deducted'} ${formatCurrency(written)}`,
+      { icon: 'check_circle', caption: netPayCaption(body.description), timeout: 3500 },
+    )
+  } catch (err) {
+    console.error('[EmployeeContributionsDialog] applyAdjustment ✖ error:', err)
+    toast.error(extractErrorMessage(err, 'Failed to record this adjustment.'), { timeout: 5000 })
+  } finally {
+    applying.value = false
+  }
+}
+
+/**
+ * Reverts one adjustment.
+ *
+ * No confirmation, deliberately: an adjustment is a single line this person just
+ * recorded, reverting is how it is undone rather than an irreversible act, and
+ * the row's new state plus the toast say plainly what happened. The parent is
+ * refetched so the review table's figures follow, same as deducting.
+ */
+async function revertAdjustmentRow(row) {
+  if (!row?.id || busy.value) return
+  revertingId.value = row.id
+  try {
+    await revertAdjustmentRequest(row.id)
+    await loadAdjustments()
+    emit('deducted')
+    // The row's amount, held before the refetch: `row` is the pre-revert state
+    // and the refreshed list will have dropped it to the reverted copy.
+    toast.success(
+      `Reverted ${row.amount === null ? 'the adjustment' : formatCurrency(row.amount)}`,
+      { icon: 'undo', caption: netPayCaption(row.description), timeout: 3500 },
+    )
+  } catch (err) {
+    console.error('[EmployeeContributionsDialog] revertAdjustment ✖ error:', err)
+    toast.error(extractErrorMessage(err, 'Failed to revert this adjustment.'), { timeout: 5000 })
+  } finally {
+    revertingId.value = null
+  }
 }
 
 async function deduct() {
   if (!selected.value.length || busy.value) return
   const count = selected.value.length
+  // Held before the refetch, which clears `selected` — read afterwards it would
+  // be 0, and the toast would claim nothing was deducted.
+  const written = selectedAmount.value
   deducting.value = true
   try {
     await deductContributions(props.epiId, [...selected.value])
@@ -399,9 +661,10 @@ async function deduct() {
     // can move the item's overall status, neither of which is knowable here.
     await load()
     emit('deducted')
-    toast.success(`Deducted ${count} contribution${count > 1 ? 's' : ''}.`, {
+    toast.success(`Deducted ${formatCurrency(written)}`, {
       icon: 'check_circle',
-      timeout: 2500,
+      caption: netPayCaption(`${count} contribution${count > 1 ? 's' : ''}`),
+      timeout: 3500,
     })
   } catch (err) {
     console.error('[EmployeeContributionsDialog] deduct ✖ error:', err)
@@ -439,6 +702,8 @@ function confirmRevert() {
 async function revert(rows) {
   const ids = rows.map((row) => row.id)
   const count = ids.length
+  // As with deducting: `load()` below empties the list these rows came from.
+  const written = rows.reduce((sum, row) => sum + amount(row.amount), 0)
   reverting.value = true
   try {
     await revertContributions(props.epiId, ids)
@@ -446,9 +711,10 @@ async function revert(rows) {
     // `deducted_from` and the item's overall contribution status.
     await load()
     emit('deducted')
-    toast.success(`Reverted ${count} contribution${count > 1 ? 's' : ''}.`, {
+    toast.success(`Reverted ${formatCurrency(written)}`, {
       icon: 'undo',
-      timeout: 2500,
+      caption: netPayCaption(`${count} contribution${count > 1 ? 's' : ''}`),
+      timeout: 3500,
     })
   } catch (err) {
     console.error('[EmployeeContributionsDialog] revert error:', err)
@@ -466,6 +732,9 @@ watch(
     if (open) load()
     else {
       data.value = null
+      adjustmentsData.value = null
+      adjustmentsError.value = false
+      showAdjustForm.value = false
       selected.value = []
       error.value = false
     }
@@ -644,6 +913,74 @@ watch(
   font-size: 13px;
   font-weight: 600;
   color: var(--dash-ink);
+}
+
+/* The manual figures read as a second block under the statutory ones, so nobody
+   scans them as part of the same total. */
+.contrib-summary__figures--manual {
+  margin-top: 2px;
+  padding-top: 11px;
+}
+
+.contrib-section + .contrib-section {
+  margin-top: 18px;
+}
+
+.contrib-add {
+  color: var(--dash-accent);
+  font-weight: 600;
+}
+
+/* A failure confined to the adjustments section. It never replaces the
+   contributions above it. */
+.contrib-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--dash-critical-line);
+  border-radius: var(--dash-r-md);
+  background: var(--dash-critical-bg);
+  font-size: 12.5px;
+  color: var(--dash-critical);
+}
+
+/* A reverted adjustment stays in the list — it is why a figure is not on this
+   payslip — but it is greyed, and its sign is dropped so it reads as spent rather
+   than as money still moving. */
+.contrib-row--reverted {
+  background: var(--dash-n-25);
+}
+.contrib-row--reverted .contrib-row__name,
+.contrib-row--reverted .contrib-row__amount {
+  color: var(--dash-ink-4);
+  text-decoration: line-through;
+  text-decoration-color: var(--dash-n-300);
+}
+.contrib-row__reverted-mark {
+  color: var(--dash-ink-4);
+}
+
+.adj-mark--good {
+  color: var(--dash-good-mark);
+}
+.adj-mark--danger {
+  color: var(--dash-critical-mark);
+}
+
+.adj-revert {
+  margin-left: 4px;
+  color: var(--dash-ink-4);
+}
+.adj-revert:hover {
+  color: var(--dash-warn);
+  background: var(--dash-warn-bg);
+}
+.adj-revert:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 .contrib-empty {
