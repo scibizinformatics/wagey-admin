@@ -318,7 +318,10 @@ import {
   normalizeSwapRequest,
   normalizeSwapRequests,
 } from 'src/composables/utils/swapRequests'
-import { normalizeOvertimeRequests } from 'src/composables/utils/overtimeRequests'
+import {
+  normalizeOvertimeRequests,
+  findCtoCategoryId,
+} from 'src/composables/utils/overtimeRequests'
 import {
   bulkLeaveOutcome,
   bulkLeaveOutcomeToast,
@@ -589,6 +592,11 @@ const overtimeEditableHours = ref({})
 const selectedOvertimeIds = ref(new Set())
 const showOvertimeDetail = ref(false)
 const selectedOvertimeRow = ref(null)
+// The category an uncategorised overtime request is filed under when a decision
+// is written. Null when the company has no CTO category, which leaves the old
+// `0` fallback in place rather than inventing an id. `overtimeCategories` is
+// already filtered to the active ones, so this reads only those.
+const ctoCategoryId = computed(() => findCtoCategoryId(overtimeCategories.value))
 
 // ===== CASH ADVANCE STATE =====
 const caRequests = ref([])
@@ -999,10 +1007,25 @@ const fetchOvertimeCategories = async () => {
     const res = await api.get('/payroll/overtime-categories/', {
       params: companyId ? { company: companyId } : {},
     })
-    const data = Array.isArray(res.data) ? res.data : res.data.results || []
-    overtimeCategories.value = data.filter((c) => c.is_active)
-  } catch {
-    /* non-critical, fail silently */
+    // `data.data` first: this endpoint answers `{ data: [...] }`, which the old
+    // `res.data.results` read did not unwrap — so the whole list was dropped and
+    // the advance dialog's Category dropdown opened onto nothing. `?? res.data`
+    // keeps a bare array working, and the isArray guard keeps an unexpected
+    // payload from reaching `.filter`.
+    const data = res.data?.data ?? res.data?.results ?? res.data
+    // `!== false`, not truthy: a category that carries no flag at all is active,
+    // not absent. The truthy test dropped every row when the field was missing.
+    const rows = (Array.isArray(data) ? data : []).filter((c) => c.is_active !== false)
+    overtimeCategories.value = rows
+    if (!rows.length) {
+      // Distinguishes "this company has no categories configured" from "we
+      // failed to read the payload". `console.warn` survives the production build.
+      console.warn('[requests] overtime categories resolved empty; payload was', res.data)
+    }
+  } catch (e) {
+    // Was an empty `catch`: a 404/500 left the dropdown silently blank, which is
+    // why this was so hard to see from the UI.
+    console.error('[requests] failed to fetch overtime categories', e)
   }
 }
 
@@ -1080,7 +1103,10 @@ const commitOvertimeDecision = async (row, status) => {
   try {
     await api.patch(`/payroll/overtime-approve/${row.id}/`, {
       approved_hours: resolveApprovedHours(row),
-      category: row.category ?? 0,
+      // `||`, not `??`: the backend's "no category" sentinel is `0`, which `??`
+      // would pass straight through, so a row the API labelled `category: 0`
+      // would never be filed as CTO.
+      category: row.category || ctoCategoryId.value || 0,
       reason: '',
       status,
     })
@@ -1386,7 +1412,9 @@ const commitBulkOvertime = async (status, subject) => {
       try {
         await api.patch(`/payroll/overtime-approve/${id}/`, {
           approved_hours: resolveApprovedHours(row),
-          category: row?.category ?? 0,
+          // Same rule as the single-row writer above: `0` and `null` both mean
+          // "uncategorised", and both become the CTO category.
+          category: row?.category || ctoCategoryId.value || 0,
           reason: '',
           status,
         })
