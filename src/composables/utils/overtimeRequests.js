@@ -30,6 +30,54 @@ export { buildEmployeeDirectory }
 export const EM_DASH = '—'
 
 /**
+ * The category an overtime row carries when the backend recorded none. A row
+ * with no category is a CTO conversion in this workspace, so it reads as the
+ * acronym and explains itself on hover — the same wording the table's
+ * `cto-badge` and the detail modal's "Converted to CTO" row already use.
+ */
+export const CTO_CATEGORY_LABEL = 'CTO'
+export const CTO_CATEGORY_TOOLTIP = 'Compensatory Time Off'
+
+/**
+ * True when a row's *displayed* category is the CTO acronym. Matched on the
+ * label rather than on `category` so the fallback and a real backend category
+ * named "CTO" are both covered, and so a row whose category already spells the
+ * words out gets no hover.
+ */
+export function isCtoCategory(name) {
+  const label = String(name ?? '')
+    .trim()
+    .toUpperCase()
+  return label === CTO_CATEGORY_LABEL
+}
+
+/**
+ * True when a row reads as CTO in the Category column: it was converted to CTO,
+ * or it carries no category at all. An uncategorised row's fallback label is the
+ * acronym, so it is flagged the same way rather than left as a bare pill.
+ */
+export function isCtoRow(row) {
+  return Boolean(row?.convertedToCto) || isCtoCategory(row?.categoryName)
+}
+
+/**
+ * The id of the company's CTO overtime category, or null when none is
+ * configured. A category qualifies when its name contains "CTO" — the acronym,
+ * as "Overtime Converted to CTO" spells it — or spells the words out.
+ * Case-insensitive; the first match wins.
+ */
+export function findCtoCategoryId(categories) {
+  if (!Array.isArray(categories)) return null
+  const match = categories.find((c) => {
+    const name = String(c?.name ?? '')
+      .trim()
+      .toLowerCase()
+    return name.includes('cto') || name === 'compensatory time off'
+  })
+  return match?.id ?? null
+}
+
+/**
  * States that still await a decision. A row in any of these is selectable, gets
  * the waiting row tint, and shows its hours as an editable field — an approver
  * may settle on fewer hours than were claimed.
@@ -139,7 +187,7 @@ export function normalizeOvertimeRequest(item, directory = null) {
       personName(item.employee_company, directory) ||
       'Unknown',
     category: item.category ?? null,
-    categoryName: item.category_name || 'Uncategorised',
+    categoryName: item.category_name || CTO_CATEGORY_LABEL,
     date: item.date || '',
     // The claim is what the row is about; qualified hours stand in only when the
     // claim itself was never recorded.
