@@ -216,6 +216,21 @@ export function useDisbursementApi() {
     return data
   }
 
+  /**
+   * One employee's money for a run: the per-day earnings behind the net pay the
+   * Funding step lists them at.
+   *
+   * A sibling of `fetchEmployeePayrollItem`, not a replacement — that one is what
+   * `EmployeeDetailDialog` reads for the attendance half of the same record, and
+   * it stays as it is. This route additionally carries `daily_earnings` (hours,
+   * rates, gross, overtime, night differential, undertime and net per day), which
+   * is the evidence for a net pay figure rather than a component list.
+   */
+  async function fetchEmployeePayrollItemEarnings(id) {
+    const { data } = await api.get(`${BASE}/payroll/admin/employee-payroll-item/${id}/earnings/`)
+    return data
+  }
+
   // ── Payslips (Step 2) ──
   async function fetchPayslipOverview(payoutGroupInstanceId) {
     const { data } = await api.get(`${BASE}/payroll/admin/payslip-overview/${payoutGroupInstanceId}/`)
@@ -336,6 +351,7 @@ export function useDisbursementApi() {
     applyAdjustment,
     revertAdjustment,
     fetchEmployeePayrollItem,
+    fetchEmployeePayrollItemEarnings,
     fetchPayslipOverview,
     fetchEmployeePayslips,
     fetchPayoutGroupInstanceAmounts,
