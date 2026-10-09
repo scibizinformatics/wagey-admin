@@ -48,7 +48,12 @@
               </div>
               <div class="dash-modal__row">
                 <span class="dash-modal__label">Category:</span>
-                <span class="dash-modal__value">{{ request?.categoryName }}</span>
+                <span class="dash-modal__value">
+                  {{ request?.categoryName }}
+                  <q-tooltip v-if="isCtoCategory(request?.categoryName)">{{
+                    CTO_CATEGORY_TOOLTIP
+                  }}</q-tooltip>
+                </span>
               </div>
               <div class="dash-modal__row">
                 <span class="dash-modal__label">Status:</span>
@@ -106,7 +111,12 @@
 <script setup>
 // Wording and hour formatting come from the shared overtime module, so this
 // modal and the queue behind it cannot disagree about the same request.
-import { formatOvertimeHours, overtimeStatusLabel } from 'src/composables/utils/overtimeRequests'
+import {
+  formatOvertimeHours,
+  overtimeStatusLabel,
+  CTO_CATEGORY_TOOLTIP,
+  isCtoCategory,
+} from 'src/composables/utils/overtimeRequests'
 
 defineProps({
   modelValue: Boolean,
