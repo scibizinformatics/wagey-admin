@@ -78,7 +78,15 @@
                 dense
                 hide-bottom-space
                 popup-content-class="dash-popup dash-popup--modal"
-              />
+              >
+                <!-- An empty menu reads as a broken control. This says which of
+                     the two it is: the company has no overtime categories set up. -->
+                <template #no-option>
+                  <q-item>
+                    <q-item-section class="text-grey-6"> No categories found </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
             </label>
             <label class="dash-modal__field">
               <span class="dash-modal__field-label"
