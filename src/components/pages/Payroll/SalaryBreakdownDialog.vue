@@ -33,15 +33,24 @@
       </q-card-section>
 
       <q-card-section v-else class="dash-modal__body">
-        <!-- The three figures the funding decision is made on. -->
-        <div class="detail-grid-cards">
+        <!-- The money, and what it is made of. Leads because "why this salary"
+             is answered by the days and their figures, not by the total. -->
+        <div v-if="bd.hasFigures" class="detail-grid-cards">
           <div class="detail-card">
             <div class="detail-card-label">Gross pay</div>
-            <div class="detail-card-value">{{ money(bd.gross) }}</div>
+            <div class="detail-card-value">{{ money(bd.totals.gross) }}</div>
           </div>
           <div class="detail-card">
-            <div class="detail-card-label">Deductions</div>
-            <div class="detail-card-value amount-red">{{ money(bd.totalDeducted) }}</div>
+            <div class="detail-card-label">Overtime</div>
+            <div class="detail-card-value amount-green">{{ money(bd.totals.ot) }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-card-label">Night differential</div>
+            <div class="detail-card-value amount-green">{{ money(bd.totals.nd) }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-card-label">Undertime</div>
+            <div class="detail-card-value amount-red">{{ money(bd.totals.undertime) }}</div>
           </div>
           <div class="detail-card detail-card--net">
             <div class="detail-card-label">Net pay</div>
@@ -49,25 +58,18 @@
           </div>
         </div>
 
-        <!-- The endpoint returned no money at all. Said plainly rather than
-             showing three zeros, which is a different claim entirely. -->
+        <!-- The endpoint returned no per-day earnings. Said plainly rather than
+             showing a column of em dashes, which is a different claim. -->
         <div v-if="!bd.hasFigures" class="brk__empty">
-          This endpoint returned no salary components for this employee.
-          <span v-if="bd.unrecognised.length">
-            It did return {{ bd.unrecognised.length }} other
-            {{ bd.unrecognised.length === 1 ? 'figure' : 'figures' }}, listed below.
-          </span>
+          This employee has no daily earnings recorded for this run.
         </div>
 
         <template v-else>
-          <!-- The evidence for the earnings below: what each day paid. Placed
-               first, because "why this salary" is answered by the days, not by
-               the components they add up to. -->
           <div v-if="bd.hasDays">
             <div class="dash-modal__section-title">Daily earnings</div>
             <div class="modal-table-wrap">
               <q-table
-                :rows="bd.days"
+                :rows="bd.daily"
                 :columns="dayColumns"
                 row-key="key"
                 flat
@@ -80,49 +82,65 @@
                 <template #body-cell-date="props">
                   <q-td :props="props">
                     <span class="day__date">{{ props.row.date || '—' }}</span>
-                    <!-- The day's reason rides under it rather than taking a
-                         column of its own: most days have none, and a column
-                         empty on every row is worse than an absent one. -->
-                    <span v-if="props.row.note" class="day__note">{{ props.row.note }}</span>
-                  </q-td>
-                </template>
-
-                <template #body-cell-amount="props">
-                  <q-td :props="props" class="text-right day__amount dash-num">
-                    {{ money(props.row.amount) }}
                   </q-td>
                 </template>
               </q-table>
             </div>
-            <div v-if="bd.daysTotal !== null" class="brk__subtotal">
+            <!-- The days' own sum, against the net the row was listed at. -->
+            <div class="brk__subtotal">
               <span class="dash-modal__label">Days total</span>
-              <span class="dash-modal__value dash-num">{{ formatCurrency(bd.daysTotal) }}</span>
-            </div>
-
-            <!-- The days carry no peso figure, so say what they do carry. Without
-                 this the table above just shows em dashes and the only way to
-                 learn the endpoint's real shape is devtools — which is exactly
-                 the round trip that produced this dialog in the first place. -->
-            <div v-if="bd.dayFields.length" class="brk__probe">
-              <span class="brk__probe-label">
-                No per-day amount was found. These are the fields a day carries:
-              </span>
-              <span class="brk__extra">
-                <span v-for="field in bd.dayFields" :key="field.key" class="brk__extra-item">
-                  <span class="brk__extra-label">{{ field.label }}</span>
-                  <span class="brk__extra-value dash-num">{{ field.value }}</span>
-                </span>
-              </span>
+              <span class="dash-modal__value dash-num">{{ money(bd.totals.net) }}</span>
             </div>
           </div>
 
-          <div v-if="bd.earnings.length">
-            <div class="dash-modal__section-title">Earnings</div>
+          <!-- The attendance half, which the same response carries. Secondary
+               because it is context for the figures above, not an explanation of
+               them; the per-day attendance table lives in EmployeeDetailDialog,
+               so drawing it here too would make the two siblings the same
+               dialog. -->
+          <template v-if="bd.summary">
+            <div class="dash-modal__section-title">Attendance summary</div>
+            <div class="detail-grid-cards">
+              <div class="detail-card">
+                <div class="detail-card-label">Days worked</div>
+                <div class="detail-card-value">{{ bd.summary.days_worked ?? 0 }}</div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-card-label">Absent days</div>
+                <div class="detail-card-value amount-red">
+                  {{ bd.summary.absent_days ?? 0 }}
+                </div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-card-label">Undertime</div>
+                <div class="detail-card-value amount-amber">
+                  {{ bd.summary.total_undertime || '0h 0m' }}
+                </div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-card-label">Late</div>
+                <div class="detail-card-value">{{ bd.summary.late ?? 0 }}</div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-card-label">Overtime</div>
+                <div class="detail-card-value amount-green">
+                  {{ bd.summary.total_overtime || '0h 0m' }}
+                </div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-card-label">Leaves</div>
+                <div class="detail-card-value">{{ bd.summary.leaves?.length ?? 0 }}</div>
+              </div>
+            </div>
+          </template>
+
+          <template v-if="bd.issues.length">
+            <div class="dash-modal__section-title">Issues</div>
             <div class="modal-table-wrap">
               <q-table
-                :rows="bd.earnings"
-                :columns="lineColumns"
-                row-key="label"
+                :rows="bd.issues"
+                :columns="issueColumns"
+                row-key="index"
                 flat
                 dense
                 hide-pagination
@@ -130,67 +148,15 @@
                 class="dash-qtable dash-qtable--compact detail-table"
               />
             </div>
-          </div>
-
-          <div v-if="bd.deductions.length">
-            <div class="dash-modal__section-title">Deductions</div>
-            <div class="modal-table-wrap">
-              <q-table
-                :rows="bd.deductions"
-                :columns="lineColumns"
-                row-key="label"
-                flat
-                dense
-                hide-pagination
-                hide-no-data
-                class="dash-qtable dash-qtable--compact detail-table"
-              />
-            </div>
-          </div>
+          </template>
         </template>
 
-        <!-- Does the arithmetic hold, and does it agree with the figure this row
-             was listed at? A payroll a person is about to be paid from should be
-             able to say yes to both; when it cannot, that is the answer. -->
+        <!-- Do the days come to the figure this row was listed at? A payroll a
+             person is about to be paid from should be able to say yes; when it
+             cannot, that is the answer. -->
         <div v-if="message" :class="['brk__check', `brk__check--${messageTone}`]">
-          <q-icon :name="messageTone === 'good' ? 'o_check_circle' : 'o_error'" size="15px" />
+          <q-icon :name="messageTone === 'good' ? 'o_check_circle' : 'o_warning'" size="15px" />
           <span>{{ message }}</span>
-        </div>
-
-        <!-- TEMPORARY. What the endpoint actually sent, so a wrong guess about
-             its field names is visible instead of inferred. Remove once the real
-             names are mapped into `salaryBreakdown.js`. -->
-        <details class="brk__raw">
-          <summary>Raw response</summary>
-
-          <div v-if="bd.debug.shape.length" class="brk__raw-section">
-            <div class="dash-modal__section-title">Top-level keys</div>
-            <div class="brk__raw-table">
-              <span v-for="row in bd.debug.shape" :key="row.key" class="brk__raw-row">
-                <span class="brk__raw-key">{{ row.label }}</span>
-                <span class="brk__raw-type">{{ row.type }}</span>
-                <span class="brk__raw-value">{{ row.value }}</span>
-              </span>
-            </div>
-          </div>
-
-          <div v-if="bd.debug.sampleJson" class="brk__raw-section">
-            <div class="dash-modal__section-title">First day row</div>
-            <pre class="brk__raw-pre">{{ bd.debug.sampleJson }}</pre>
-          </div>
-        </details>
-
-        <!-- Everything the normaliser did not claim. Present because the field
-             names this reads are unconfirmed aliases: if the breakdown above is
-             short, this is where the real keys are. -->
-        <div v-if="bd.unrecognised.length">
-          <div class="dash-modal__section-title">Other figures returned</div>
-          <div class="brk__extra">
-            <span v-for="row in bd.unrecognised" :key="row.key" class="brk__extra-item">
-              <span class="brk__extra-label">{{ row.label }}</span>
-              <span class="brk__extra-value dash-num">{{ formatCurrency(row.amount) }}</span>
-            </span>
-          </div>
         </div>
       </q-card-section>
 
@@ -209,26 +175,25 @@
 
 <script setup>
 /**
- * What one employee was actually paid for this run, and what came off it.
+ * What one employee was actually paid for this run, day by day.
  *
  * The Funding step lists net pay per employee, which is the figure a decision is
  * made on and the one figure that explains nothing. This is the way into how that
- * number was arrived at — the earnings that made it up and the deductions taken
- * off it.
+ * number was arrived at — the hours, rates and money each day contributed.
  *
- * It is a sibling of `EmployeeDetailDialog`, not a replacement: that dialog shows
- * the attendance half of the same endpoint (days worked, undertime, the daily
- * rows), which is a different question. Both read
- * `GET /payroll/admin/employee-payroll-item/{epi_id}/` and neither writes.
+ * Reads `GET /payroll/admin/employee-payroll-item/{epi_id}/earnings/`, which
+ * carries the per-day earnings alongside the attendance summary and issues. It is
+ * a sibling of `EmployeeDetailDialog`, not a replacement: that dialog is where the
+ * per-day *attendance* table lives, and neither writes.
  *
  * The field names come from `salaryBreakdown.js`, which is where the response
- * shape is handled — including the parts it does not recognise. Fetched on open
- * rather than on mount, because the dialog stays mounted while it is closed and
- * the figures must belong to the row that opened it.
+ * shape is handled. Fetched on open rather than on mount, because the dialog stays
+ * mounted while it is closed and the figures must belong to the row that opened it.
  */
 import { ref, computed, watch } from 'vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { buildSalaryBreakdown, formatCurrency } from 'src/components/pages/Payroll/salaryBreakdown'
+import { decimalHoursLabel } from 'src/composables/utils/format'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { avatarFor } from 'src/composables/utils/employee'
 
@@ -250,22 +215,24 @@ const emit = defineEmits(['update:modelValue'])
 
 const avatarOf = (n) => avatarFor(props.employeeIndex, n)
 
-const { fetchEmployeePayrollItem } = useDisbursementApi()
+const { fetchEmployeePayrollItemEarnings } = useDisbursementApi()
 
 const internalShow = ref(false)
 const loading = ref(false)
 const error = ref('')
 const data = ref(null)
 
-const bd = computed(() =>
-  buildSalaryBreakdown(data.value, { fallbackNet: props.netPay }),
-)
+const bd = computed(() => buildSalaryBreakdown(data.value, { fallbackNet: props.netPay }))
 
 // The row's name stands in until the payload supplies its own, so the header is
 // never blank while loading.
 const name = computed(() => bd.value.name || props.employeeName)
 
-const subtitle = computed(() => bd.value.position || props.employeeName)
+// The period this run settles, then the employee's position if the endpoint
+// carries one. Neither is on every response, so the row's own name is the floor —
+// the header is never blank, and never reads name-over-name when a cutoff is
+// available.
+const subtitle = computed(() => bd.value.cutoff || bd.value.position || props.employeeName)
 
 /** `null` prints as an em dash, never as `₱0.00`. */
 function money(value) {
@@ -273,54 +240,85 @@ function money(value) {
 }
 
 /**
- * The one sentence that says whether the arithmetic holds.
+ * Hours, to two decimals — the precision `decimalHoursLabel` exists to settle.
  *
- * Three answers, and none of them is "looks fine": the parts can fail to add up
- * to the net, or the net can disagree with the figure the table listed this row
- * at, and both are worth saying out loud before somebody funds against them.
+ * Quoted from that one place rather than reimplemented, because a hundredth of an
+ * hour is 36 seconds and the exact ties it produces are frequent enough that a
+ * second rounding rule would disagree with attendance, card taps and the access
+ * cards' monthly totals on the same person's run.
+ */
+function hours(value) {
+  return value === null || value === undefined ? '—' : decimalHoursLabel(value)
+}
+
+/**
+ * The one sentence that says whether the days add up to the net pay shown.
+ *
+ * A day's money summing to a different net than the row was listed at is worth
+ * saying out loud before somebody funds against it. When there is nothing to
+ * compare — the endpoint sent no per-day net — there is no claim to make, so the
+ * line stays empty rather than asserting a check that did not happen.
  */
 const message = computed(() => {
-  if (!bd.value.hasFigures) return ''
-  const { gross, totalDeducted, net, drift, netMatches } = bd.value
-
-  if (gross === null || totalDeducted === null || net === null) {
-    return netMatches === false
-      ? 'This item nets a different figure from the one this row was listed at.'
-      : ''
-  }
+  if (!bd.value.hasFigures || !bd.value.netMatches) return ''
+  const { drift } = bd.value
+  if (drift === null) return ''
   if (Math.abs(drift) >= 0.005) {
-    return `These figures do not add up — they are ${formatCurrency(Math.abs(drift))} ${drift > 0 ? 'short of' : 'over'} the net pay shown.`
+    return `These days come to ${formatCurrency(Math.abs(drift))} ${drift > 0 ? 'over' : 'under'} the net pay shown.`
   }
-  if (netMatches === false) {
-    return 'These figures add up, but to a different net than the one this row was listed at.'
-  }
-  return 'Earnings less deductions come to the net pay shown.'
+  return 'These days come to the net pay shown.'
 })
 
 const messageTone = computed(() => {
-  const { gross, totalDeducted, net, drift, netMatches } = bd.value
-  if (gross === null || totalDeducted === null || net === null) {
-    return netMatches === false ? 'bad' : 'good'
-  }
-  if (Math.abs(drift) >= 0.005) return 'bad'
-  return netMatches === false ? 'warn' : 'good'
+  const { drift } = bd.value
+  if (drift === null) return 'good'
+  return Math.abs(drift) >= 0.005 ? 'bad' : 'good'
 })
 
-const lineColumns = [
-  { name: 'label', label: 'Component', field: 'label', align: 'left' },
-  {
-    name: 'amount',
-    label: 'Amount',
-    field: 'amount',
-    align: 'right',
-    format: (v) => formatCurrency(v),
-  },
-]
+/**
+ * A money column.
+ *
+ * `format` rather than a `body-cell-*` slot: Quasar names that slot after each
+ * column individually, so five money columns would need five near-identical
+ * templates that could drift out of step with each other. One formatter keeps the
+ * em-dash-for-`null` rule in a single place.
+ */
+const moneyColumn = (name, label) => ({
+  name,
+  label,
+  field: name,
+  align: 'right',
+  classes: 'day__amount',
+  format: money,
+})
 
 const dayColumns = [
   { name: 'date', label: 'Day', field: 'date', align: 'left' },
-  { name: 'hours', label: 'Hours', field: 'hours', align: 'left' },
-  { name: 'amount', label: 'Amount', field: 'amount', align: 'right' },
+  {
+    name: 'hours',
+    label: 'Hours',
+    field: 'hours',
+    align: 'right',
+    classes: 'day__amount',
+    format: hours,
+  },
+  moneyColumn('gross', 'Gross'),
+  moneyColumn('ot', 'OT'),
+  moneyColumn('nd', 'Night diff'),
+  moneyColumn('undertime', 'Undertime'),
+  moneyColumn('net', 'Net'),
+]
+
+const issueColumns = [
+  { name: 'type', label: 'Type', field: 'type', align: 'left' },
+  {
+    name: 'description',
+    label: 'Description',
+    field: 'description',
+    align: 'left',
+    format: (v) => v || '-',
+  },
+  { name: 'date', label: 'Date', field: 'date', align: 'left' },
 ]
 
 watch(
@@ -333,7 +331,7 @@ watch(
     error.value = ''
     data.value = null
     try {
-      data.value = await fetchEmployeePayrollItem(props.employeeId)
+      data.value = await fetchEmployeePayrollItemEarnings(props.employeeId)
     } catch (err) {
       console.error('[SalaryBreakdownDialog] fetch failed:', err)
       error.value = extractErrorMessage(err, 'Could not load this employee’s salary breakdown.')
@@ -407,6 +405,9 @@ watch(internalShow, (open) => {
 .amount-red {
   color: var(--dash-critical);
 }
+.amount-amber {
+  color: var(--dash-warn);
+}
 
 /* Header strip, row rhythm and dividers come from `dash-qtable--compact`. */
 .modal-table-wrap {
@@ -435,97 +436,14 @@ watch(internalShow, (open) => {
   color: var(--dash-ink-2);
 }
 
-/* A day with a reason: the reason is smaller and quieter, not a second row of
-   type competing with the date. */
 .day__date {
   display: block;
   font-weight: 500;
   color: var(--dash-ink);
 }
-.day__note {
-  display: block;
-  margin-top: 1px;
-  font-size: 11.5px;
-  color: var(--dash-ink-4);
-}
 .day__amount {
   font-weight: 600;
   color: var(--dash-ink-2);
-}
-
-/* The probe line under the days table: quiet, but explicitly a diagnosis rather
-   than part of the payroll. */
-.brk__probe {
-  display: block;
-  margin-top: 6px;
-}
-.brk__probe-label {
-  display: block;
-  font-size: 11.5px;
-  color: var(--dash-ink-4);
-}
-
-/* TEMPORARY diagnostic — see the `details` block above. */
-.brk__raw {
-  margin-top: 6px;
-}
-.brk__raw > summary {
-  cursor: pointer;
-  font-size: 11.5px;
-  color: var(--dash-ink-4);
-  user-select: none;
-}
-.brk__raw > summary:hover {
-  color: var(--dash-ink-3);
-}
-.brk__raw-section {
-  margin-top: 8px;
-}
-.brk__raw-table {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  max-height: 240px;
-  overflow: auto;
-  padding: 8px 10px;
-  border: 1px solid var(--dash-line);
-  border-radius: var(--dash-r-md);
-  background: var(--dash-n-25);
-}
-.brk__raw-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
-  font-size: 11.5px;
-}
-.brk__raw-key {
-  color: var(--dash-ink-2);
-  font-weight: 500;
-}
-.brk__raw-type {
-  color: var(--dash-ink-4);
-}
-.brk__raw-value {
-  color: var(--dash-ink-3);
-  font-variant-numeric: tabular-nums;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.brk__raw-pre {
-  max-height: 260px;
-  overflow: auto;
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--dash-line);
-  border-radius: var(--dash-r-md);
-  background: var(--dash-n-25);
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--dash-ink-2);
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .brk__empty {
@@ -550,38 +468,9 @@ watch(internalShow, (open) => {
   background: var(--dash-good-bg);
   color: var(--dash-good);
 }
-.brk__check--warn {
-  background: var(--dash-warn-bg);
-  color: var(--dash-warn);
-}
 .brk__check--bad {
   background: var(--dash-critical-bg);
   color: var(--dash-critical);
-}
-
-/* The figures the normaliser did not claim: a quiet wrap list rather than
-   another table, because these are diagnostic, not part of the breakdown. */
-.brk__extra {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.brk__extra-item {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 4px 9px;
-  border: 1px solid var(--dash-line);
-  border-radius: var(--dash-r-sm);
-  background: var(--dash-n-25);
-  font-size: 12px;
-}
-.brk__extra-label {
-  color: var(--dash-ink-3);
-}
-.brk__extra-value {
-  font-weight: 600;
-  color: var(--dash-ink-2);
 }
 
 @media (max-width: 1023px) {
