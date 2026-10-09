@@ -197,7 +197,11 @@
               </q-td>
 
               <q-td key="category" :props="props" class="grid-cell ot-cell-category">
-                <span class="type-pill">{{ props.row.categoryName }}</span>
+                <span v-if="isCtoRow(props.row)" class="cto-badge">
+                  CTO
+                  <q-tooltip>{{ CTO_CATEGORY_TOOLTIP }}</q-tooltip>
+                </span>
+                <span v-else class="type-pill">{{ props.row.categoryName }}</span>
               </q-td>
 
               <q-td key="date" :props="props" class="grid-cell ot-cell-date">
@@ -207,25 +211,19 @@
               <!-- An open request is still negotiable, so its hours are a field
                    an approver can settle; a decided one is a fact, so it is text. -->
               <q-td key="hours" :props="props" class="grid-cell ot-cell-hours">
-                <div class="hours-cell-content">
-                  <q-input
-                    v-if="props.row.actionable"
-                    :model-value="editableHours[props.row.id] ?? props.row.hours"
-                    @update:model-value="$emit('update:editable-hours', props.row.id, $event)"
-                    @click.stop
-                    dense
-                    outlined
-                    type="number"
-                    step="0.01"
-                    class="hours-input"
-                    :aria-label="'Approved hours for ' + props.row.employeeName"
-                  />
-                  <span v-else class="amount">{{ formatHours(props.row.hours) }}</span>
-                  <span v-if="props.row.convertedToCto" class="cto-badge">
-                    CTO
-                    <q-tooltip>Converted to compensatory time off</q-tooltip>
-                  </span>
-                </div>
+                <q-input
+                  v-if="props.row.actionable"
+                  :model-value="editableHours[props.row.id] ?? props.row.hours"
+                  @update:model-value="$emit('update:editable-hours', props.row.id, $event)"
+                  @click.stop
+                  dense
+                  outlined
+                  type="number"
+                  step="0.01"
+                  class="hours-input"
+                  :aria-label="'Approved hours for ' + props.row.employeeName"
+                />
+                <span v-else class="amount">{{ formatHours(props.row.hours) }}</span>
               </q-td>
 
               <q-td key="reason" :props="props" class="grid-cell ot-cell-reason">
@@ -276,6 +274,8 @@ import { avatarFor } from '@/composables/utils/employee'
 import {
   formatOvertimeHours,
   overtimeStatusPillClass,
+  CTO_CATEGORY_TOOLTIP,
+  isCtoRow,
 } from 'src/composables/utils/overtimeRequests'
 
 const props = defineProps({
@@ -471,11 +471,12 @@ const statusPillClass = overtimeStatusPillClass
   width: 76px;
 }
 /* An acronym, so it keeps its capitals — but not the extra tracking and 700
-   weight that turned it into a shout inside a 13px cell. */
+   weight that turned it into a shout inside a 13px cell. It stands alone in the
+   category cell now, so it carries no offset from whatever sits beside it, and
+   it is the only category that is an acronym, so only it explains itself. */
 .cto-badge {
   display: inline-flex;
   align-items: center;
-  margin-left: 6px;
   padding: 1px 5px;
   border-radius: var(--dash-r-xs);
   background: var(--dash-info-bg);
@@ -484,6 +485,7 @@ const statusPillClass = overtimeStatusPillClass
   font-size: 10.5px;
   font-weight: 600;
   line-height: 15px;
+  cursor: help;
 }
 .hours-input {
   max-width: 84px;
@@ -501,11 +503,6 @@ const statusPillClass = overtimeStatusPillClass
   color: var(--dash-ink);
   text-align: center;
   font-variant-numeric: tabular-nums;
-}
-.hours-cell-content {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 @media (max-width: 1024px) {
