@@ -62,11 +62,24 @@ export function useDisbursementApi() {
   }
 
   // ── List Page ──
+  //
+  // `expectedStatuses: [404]` on both calls below, because both are only ever
+  // invoked while enumerating the company's cutoffs. `cutoff-instances` returns
+  // some that fall outside the company's cutoff type, and the payout-group and
+  // dashboard routes reject those with 404 "Cutoff instance does not match this
+  // company's cutoff type". That is an answer — this cutoff has no runs for this
+  // company — and not a failure: `DisbursementListPage` and `usePayoutGroupIdentity`
+  // already treat a rejected cutoff as "nothing here" and swallow it with a
+  // catch, so without this the console filled with an error both callers had
+  // already handled. The promise still rejects, so that handling is unchanged.
   async function fetchDashboardSummary(companyId, cutoffInstanceId) {
     const key = cacheKey('dashboard', companyId, cutoffInstanceId)
     const cached = getCached(key)
     if (cached) return cached
-    const { data } = await api.get(`${BASE}/payroll/admin/payout-group-dashboard/${companyId}/${cutoffInstanceId}/`)
+    const { data } = await api.get(
+      `${BASE}/payroll/admin/payout-group-dashboard/${companyId}/${cutoffInstanceId}/`,
+      { expectedStatuses: [404] },
+    )
     setCached(key, data)
     return data
   }
@@ -75,7 +88,10 @@ export function useDisbursementApi() {
     const key = cacheKey('pgi', companyId, cutoffInstanceId)
     const cached = getCached(key)
     if (cached) return cached
-    const { data } = await api.get(`${BASE}/payroll/admin/payout-group-instances/${companyId}/${cutoffInstanceId}/`)
+    const { data } = await api.get(
+      `${BASE}/payroll/admin/payout-group-instances/${companyId}/${cutoffInstanceId}/`,
+      { expectedStatuses: [404] },
+    )
     setCached(key, data)
     return data
   }
