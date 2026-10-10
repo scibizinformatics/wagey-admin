@@ -176,8 +176,8 @@
             <TableSkeleton
               v-if="loading"
               :columns="earnerColumns"
-              :rows="8"
               aria-label="Loading employees in this group"
+              wrap-class="dash-page-body"
             />
 
             <!-- Empty. `hide-no-data` was on the table alongside this markup, and
@@ -185,7 +185,7 @@
                  never drawn and an empty result showed a bare header strip.
                  Rendered here instead, and without the loading guard it no longer
                  needs: this branch is only reached once the fetch has answered. -->
-            <div v-else-if="!allEarners.length" class="dash-empty">
+            <div v-else-if="!allEarners.length" class="dash-empty dash-page-body">
               <span class="dash-featured-icon">
                 <q-icon name="o_groups" size="20px" />
               </span>
@@ -267,7 +267,6 @@
           </div>
         </section>
       </div>
-
     </DisbursementStepShell>
 
     <!-- What one employee was paid and what came off it. Read-only: this step
@@ -282,7 +281,12 @@
 
     <!-- The gate in front of money leaving the company: one dialog for both
          questions this step asks, wording built in `fundingConfirm.js`. -->
-    <ConfirmDialog v-model="showConfirm" :confirm="confirm" :loading="submitting" @confirm="onConfirm" />
+    <ConfirmDialog
+      v-model="showConfirm"
+      :confirm="confirm"
+      :loading="submitting"
+      @confirm="onConfirm"
+    />
   </PageShell>
 </template>
 
@@ -296,7 +300,10 @@ import SalaryBreakdownDialog from 'src/components/pages/Payroll/SalaryBreakdownD
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
-import { buildFundingConfirm, buildDisburseConfirm } from 'src/components/pages/Payroll/fundingConfirm'
+import {
+  buildFundingConfirm,
+  buildDisburseConfirm,
+} from 'src/components/pages/Payroll/fundingConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
@@ -315,21 +322,22 @@ const authStore = useAuthStore()
 const groupId = route.params.id
 const { identity, resolveQuietly } = usePayoutGroupIdentity()
 const stepperKey = ref(0)
-  const { fetchPayoutGroupInstanceAmounts, fetchEmployeePayslips, createPgiFunding } = useDisbursementApi()
-  const { notifyLoaded } = useLoadedToast()
-  const { employees, fetchEmployees } = useEmployees()
+const { fetchPayoutGroupInstanceAmounts, fetchEmployeePayslips, createPgiFunding } =
+  useDisbursementApi()
+const { notifyLoaded } = useLoadedToast()
+const { employees, fetchEmployees } = useEmployees()
 
-  // Puts a face beside each name. The payslip payload names an employee but
-  // carries no photograph, so the roster is the only thing that can supply one —
-  // the same construction as the Request tables and the disbursement list's
-  // cash-advance view, including its refusal to guess on duplicate names.
-  const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
-  const avatarOf = (name) => avatarFor(employeeIndex.value, name)
+// Puts a face beside each name. The payslip payload names an employee but
+// carries no photograph, so the roster is the only thing that can supply one —
+// the same construction as the Request tables and the disbursement list's
+// cash-advance view, including its refusal to guess on duplicate names.
+const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
+const avatarOf = (name) => avatarFor(employeeIndex.value, name)
 
-  const loading = ref(true)
-  const submitting = ref(false)
-  const amounts = ref(null)
-  const allEarners = ref([])
+const loading = ref(true)
+const submitting = ref(false)
+const amounts = ref(null)
+const allEarners = ref([])
 
 /**
  * The confirmation gate.
@@ -410,7 +418,10 @@ const subtitle = computed(() => {
  */
 const fundedSoFar = computed(() =>
   parseFloat(
-    amounts.value?.total_funded ?? amounts.value?.funded_amount ?? amounts.value?.total_funding ?? 0,
+    amounts.value?.total_funded ??
+      amounts.value?.funded_amount ??
+      amounts.value?.total_funding ??
+      0,
   ),
 )
 
@@ -443,9 +454,7 @@ const hasAmounts = computed(() => !loading.value && !!amounts.value)
 const shortfall = computed(() => Math.max(0, remainingToFund.value - amountNumber.value))
 const overage = computed(() => Math.max(0, amountNumber.value - remainingToFund.value))
 
-const canSubmit = computed(
-  () => !submitting.value && hasAmounts.value && amountNumber.value > 0,
-)
+const canSubmit = computed(() => !submitting.value && hasAmounts.value && amountNumber.value > 0)
 
 /**
  * What the entered figure means, in one line under the field.
@@ -606,21 +615,27 @@ watch(showConfirm, (open) => {
   pendingFunding.value = null
 })
 
-  const earnerColumns = [
-    { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
-    { name: 'position_name', label: 'Position', field: 'position_name', align: 'left' },
-    { name: 'net_pay', label: 'Net pay', field: 'net_pay', align: 'right', sortable: true },
-    { name: 'payslip_status', label: 'Status', field: 'payslip_status', align: 'left', sortable: true },
-    { name: 'breakdown', label: '', field: 'breakdown', align: 'right' },
-  ]
+const earnerColumns = [
+  { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
+  { name: 'position_name', label: 'Position', field: 'position_name', align: 'left' },
+  { name: 'net_pay', label: 'Net pay', field: 'net_pay', align: 'right', sortable: true },
+  {
+    name: 'payslip_status',
+    label: 'Status',
+    field: 'payslip_status',
+    align: 'left',
+    sortable: true,
+  },
+  { name: 'breakdown', label: '', field: 'breakdown', align: 'right' },
+]
 
 function parseAmount(val) {
   return parseFloat(val || 0).toLocaleString('en-PH')
 }
 
-  /**
+/**
  * Re-read the run. Shared by the first paint and by every write, because a
-   * funding entry moves the gap, the stat tiles and the roster's sort together —
+ * funding entry moves the gap, the stat tiles and the roster's sort together —
  * and because a write that reported failure may still have landed, so the refetch
  * has to run whatever happened.
  *
@@ -628,36 +643,38 @@ function parseAmount(val) {
  * a message, and a caller that only wanted the numbers has nothing to do about
  * an error.
  */
-  async function refreshRun() {
-    try {
-      const [amt, earners] = await Promise.all([
-        fetchPayoutGroupInstanceAmounts(groupId),
-        fetchEmployeePayslips(groupId),
-      ])
-      amounts.value = amt
-      allEarners.value = (earners || []).sort((a, b) => parseFloat(b.net_pay || 0) - parseFloat(a.net_pay || 0))
-      return true
-    } catch (err) {
-      console.error('[FundingPage] fetch failed:', err)
-      return false
-    }
+async function refreshRun() {
+  try {
+    const [amt, earners] = await Promise.all([
+      fetchPayoutGroupInstanceAmounts(groupId),
+      fetchEmployeePayslips(groupId),
+    ])
+    amounts.value = amt
+    allEarners.value = (earners || []).sort(
+      (a, b) => parseFloat(b.net_pay || 0) - parseFloat(a.net_pay || 0),
+    )
+    return true
+  } catch (err) {
+    console.error('[FundingPage] fetch failed:', err)
+    return false
   }
+}
 
-  onMounted(async () => {
-    // The list page hands the run's name, cutoff and status over in the query, and
-    // no step endpoint returns any of them — but a deep link arrives with none of
-    // them and a refresh can arrive with a stale status, so the run is resolved by
-    // its id either way.
-    resolveQuietly(groupId)
-    fetchEmployees().catch(() => null)
-    if (await refreshRun()) {
-      notifyLoaded('Funding', allEarners.value.length, {
-        noun: 'employee',
-        nounPlural: 'employees',
-      })
-    }
-    loading.value = false
-  })
+onMounted(async () => {
+  // The list page hands the run's name, cutoff and status over in the query, and
+  // no step endpoint returns any of them — but a deep link arrives with none of
+  // them and a refresh can arrive with a stale status, so the run is resolved by
+  // its id either way.
+  resolveQuietly(groupId)
+  fetchEmployees().catch(() => null)
+  if (await refreshRun()) {
+    notifyLoaded('Funding', allEarners.value.length, {
+      noun: 'employee',
+      nounPlural: 'employees',
+    })
+  }
+  loading.value = false
+})
 
 /**
  * The confirmed funding entry.
