@@ -1,5 +1,5 @@
 <template>
-  <div class="acc-cards">
+  <div class="acc-cards dash-page-body">
     <div v-if="loading" class="acc-cards__list">
       <div v-for="n in 5" :key="`sk-${n}`" class="acc-card acc-card--skeleton">
         <div class="acc-card__top">
