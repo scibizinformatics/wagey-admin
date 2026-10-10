@@ -20,7 +20,22 @@
       <!-- Built from the live `positionColumns`, so the placeholder shares the
            real table's columns, labels and alignment. -->
       <template v-if="loadingPositions">
-        <TableSkeleton :columns="positionColumns" :rows="5" />
+        <TableSkeleton :columns="positionColumns" />
+      </template>
+      <template v-else-if="!filteredPositions.length">
+        <div class="dash-empty">
+          <span class="dash-featured-icon"><q-icon name="o_badge" size="20px" /></span>
+          <p class="dash-empty__title">
+            {{ searchQuery ? 'No positions match' : 'No positions yet' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              searchQuery
+                ? `Nothing here is called “${searchQuery}”.`
+                : 'Positions describe the job somebody is paid for.'
+            }}
+          </p>
+        </div>
       </template>
       <template v-else>
         <q-table
