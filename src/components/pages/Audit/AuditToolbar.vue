@@ -1,9 +1,30 @@
 <template>
   <div class="aud-toolbar">
+    <!-- Which trail is being shown. First in the row because it is a mode switch
+         rather than a filter: it decides what the controls after it filter. The
+         two options come from the same descriptor that supplies the table's
+         columns, so a source can never be listed here without a vocabulary. -->
+    <q-select
+      :model-value="sourceKey"
+      :options="AUDIT_SOURCE_KEYS"
+      emit-value
+      map-options
+      dense
+      outlined
+      hide-bottom-space
+      class="aud-source dash-field"
+      aria-label="Choose which audit trail to show"
+      @update:model-value="(value) => emit('update:source', value)"
+    >
+      <template v-slot:prepend>
+        <q-icon name="o_switch_account" size="16px" />
+      </template>
+    </q-select>
+
     <q-input
       ref="searchRef"
       :model-value="search"
-      placeholder="Search employee, editor or shift"
+      :placeholder="source.searchPlaceholder"
       dense
       outlined
       clearable
@@ -19,7 +40,7 @@
 
     <q-select
       :model-value="kind"
-      :options="CHANGE_FILTERS"
+      :options="source.kindFilters"
       emit-value
       map-options
       dense
@@ -55,7 +76,7 @@
            menu the same click opens. -->
       <q-menu anchor="bottom left" self="top left" class="aud-range-menu">
         <div class="aud-range">
-          <p class="aud-range__title">Date of the shift that changed</p>
+          <p class="aud-range__title">{{ source.rangeTitle }}</p>
           <div class="aud-range__presets">
             <button
               v-for="preset in PRESETS"
@@ -97,7 +118,7 @@
 
     <q-select
       :model-value="sort"
-      :options="SORT_OPTIONS"
+      :options="source.sortOptions"
       emit-value
       map-options
       dense
@@ -134,34 +155,51 @@
 
 <script setup>
 /**
- * Audit trail toolbar: which changes, over which shift dates, in what order.
+ * Audit trail toolbar: which trail, which changes, over which dates, in what order.
  *
  * Every control here narrows or reorders the *whole* trail the page holds, not
  * the page slice on screen — the page applies them before it cuts a page out,
  * so "Oldest first" means the oldest change there is and not the oldest of the
  * fifty currently rendered.
  *
- * The date span filters on `shift_date`, the day whose roster changed, and says
- * so on the control. It deliberately does not filter on `updated_at`: that
- * stamp arrives pre-formatted in the server's timezone and is only ever parsed
- * well enough to sort by, which is not a good enough basis for including or
- * excluding a row.
+ * Everything that differs between the two sources — the search placeholder, the
+ * kind filter's options, the sort options, the date span's title — is read off
+ * the `source` descriptor rather than hardcoded here. That is what stops this
+ * toolbar describing contract changes with the words for shifts.
+ *
+ * The date span filters on the day the change concerns, and says so on the
+ * control. It deliberately does not filter on `updated_at`: that stamp arrives
+ * pre-formatted in the server's timezone and is only ever parsed well enough to
+ * sort by, which is not a good enough basis for including or excluding a row.
  */
 import { computed, ref } from 'vue'
-import { CHANGE_FILTERS, SORT_OPTIONS } from 'src/composables/utils/assignmentHistory'
+import { AUDIT_SOURCE_KEYS, auditSource } from 'src/composables/utils/auditSources'
 import { longLabel, shiftIso, todayIso } from 'src/composables/utils/calendarDate'
 
 const props = defineProps({
   search: { type: String, default: '' },
   kind: { type: String, default: 'all' },
   sort: { type: String, default: 'newest' },
+  /** Which trail is showing. The switch, not a filter — see the template. */
+  sourceKey: { type: String, default: 'shifts' },
   /** `{ from, to }` as ISO days, either side null for "open". */
   range: { type: Object, default: () => ({ from: null, to: null }) },
   count: { type: Number, default: 0 },
   loading: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update:search', 'update:kind', 'update:sort', 'update:range', 'refresh'])
+const emit = defineEmits([
+  'update:search',
+  'update:kind',
+  'update:sort',
+  'update:range',
+  'update:source',
+  'refresh',
+])
+
+/** The descriptor behind `sourceKey`. Falls back rather than throwing, so an
+ *  unknown key degrades to the default trail instead of a blank toolbar. */
+const source = computed(() => auditSource(props.sourceKey))
 
 const searchRef = ref(null)
 
@@ -254,7 +292,9 @@ const rangeLabel = computed(() => {
 
 const rangeReadout = computed(() => {
   const { from, to } = props.range || {}
-  if (!from && !to) return 'Every shift date'
+  // "Every date" rather than "Every shift date": the span is over the day the
+  // change concerns, and on the contract tab that is not a shift.
+  if (!from && !to) return 'Every date'
   if (from && to) return from === to ? longLabel(from) : `${longLabel(from)} – ${longLabel(to)}`
   return from ? `${longLabel(from)} onwards` : `Up to ${longLabel(to)}`
 })
@@ -293,6 +333,31 @@ const rangeReadout = computed(() => {
 }
 
 /* ── Selects ── */
+/* The source switch is the widest control in the row, because its labels are
+   full phrases ("Shift changes") rather than the short nouns the filters use. It
+   leads the toolbar so the width it needs is spent where the eye lands first. */
+.aud-source {
+  width: 190px;
+  flex-shrink: 0;
+}
+.aud-source :deep(.q-field__control) {
+  height: 34px;
+  min-height: 34px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-surface);
+}
+.aud-source :deep(.q-field__native) {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  min-height: 34px;
+  padding: 0;
+}
+.aud-source :deep(.q-field__marginal) {
+  height: 34px;
+  color: var(--dash-ink-4);
+}
+
 .aud-filter {
   width: 165px;
   flex-shrink: 0;
