@@ -93,13 +93,26 @@
 /* Scroll affordance inlined rather than adding `dash-scroll-x` to nine panels'
    markup: this container class is already shared by all of them. Values match
    the design system's `.dash-scroll-x` — see src/css/dashboard.scss for why the
-   track is always drawn below 1440. */
+   track is always drawn below 1440.
+
+   No `min-height` here on purpose: a panel with six rows should end where its
+   six rows end. See the PAGE BODY MARKER block in src/css/dashboard.scss for why
+   the floor lives on the empty state rather than on the region. */
 .modern-table-container {
   position: relative;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: var(--dash-line-strong) transparent;
+}
+
+/* The empty state takes the content floor, so a panel with nothing in it fills
+   rather than collapsing to a strip. Panels are not marked `.dash-page-body`,
+   so this is the Admin Settings counterpart of the `.dash-page-body .dash-empty`
+   rule in src/css/dashboard.scss — and it exists separately because the app has
+   two empty-state vocabularies. */
+.modern-table-container > .dash-empty {
+  min-height: var(--dash-body-min);
 }
 
 .modern-table-container::-webkit-scrollbar {
