@@ -69,6 +69,7 @@
           :search="search"
           :kind="kindFilter"
           :sort="sortBy"
+          :source-key="sourceKey"
           :range="dateRange"
           :count="filteredRows.length"
           :loading="loading"
@@ -76,16 +77,20 @@
           @update:kind="onFilterChange('kind', $event)"
           @update:sort="sortBy = $event"
           @update:range="onFilterChange('range', $event)"
+          @update:source="onSourceChange"
           @refresh="refresh"
         />
 
         <!-- Cards below 1024px, table above — the same threshold Attendance,
-             Manning and Contributions use. -->
+             Manning and Contributions use. Both renderers take the same source
+             descriptor, so a contract change cannot read as a shift one on a
+             phone while reading correctly on a desktop. -->
         <AuditCardList
           v-if="$q.screen.lt.md"
           :rows="displayRows"
           :loading="loading"
           :is-filtered="isFiltered"
+          :source="source"
           @clear-filters="clearFilters"
         />
         <AuditTable
@@ -93,6 +98,7 @@
           :rows="displayRows"
           :loading="loading"
           :is-filtered="isFiltered"
+          :source="source"
           @clear-filters="clearFilters"
         />
 
@@ -140,34 +146,45 @@
 /**
  * AUDIT TRAIL
  * ----------------------------------------------------------------------------
- * Who moved whose shift, from what to what, and when it was recorded.
+ * Who moved whose shift, or changed whose contract, from what to what, and when.
  *
- * One source — `GET /audit/assignment/history/` through `useAssignmentHistory`,
- * which walks the server's pages and hands back the whole trail. Everything on
- * screen is derived from that: there is no second endpoint to reconcile.
+ * Two sources behind one dropdown: shift assignments
+ * (`GET /audit/assignment/history/`) and contracts
+ * (`GET /audit/contracts/history/`). Both answer with the same six fields today,
+ * so the columns do not change — what changes is the vocabulary, and that comes
+ * from one descriptor (`composables/utils/auditSources.js`) read by the toolbar,
+ * the table and the card list alike. Nothing here switches a boolean through a
+ * component; the page holds a source *key* and looks the descriptor up.
  *
- * Filtering, sorting and paging all happen here, in that order, over the
- * complete set. That order is the point. Sorting the fifty rows already
- * rendered would answer a different question than the control claims to —
- * "oldest first" has to mean the oldest change there is, not the oldest of the
- * page you happen to be on — so the slice is always taken last, from an
- * already-sorted, already-filtered list.
+ * Only the selected source is fetched, on demand. The other one is created but
+ * never called until it is picked, so opening the page costs the same single
+ * request it always did — the dropdown does not mean two trails on the wire.
  *
- * The trail is scoped to the workspace in the header switcher. The endpoint
- * itself answers company-wide, so `useAssignmentHistory` narrows the rows
- * against that company's employee list before publishing them — see its module
- * header. A company change drops the rows *and* the filters before refetching:
- * a person's name or a shift name from the previous workspace means nothing in
- * the next one, and a filter left set would show an empty table with no visible
- * reason why.
+ * Filtering, sorting and paging all happen here, in that order, over the complete
+ * set. That order is the point. Sorting the fifty rows already rendered would
+ * answer a different question than the control claims to — "oldest first" has to
+ * mean the oldest change there is, not the oldest of the page you happen to be on
+ * — so the slice is always taken last, from an already-sorted, already-filtered
+ * list. Both sources page the server identically for the same reason; see
+ * `composables/utils/historySource.js`.
+ *
+ * The trail is scoped to the workspace in the header switcher. The endpoints
+ * themselves answer company-wide, so each narrows the rows against that company's
+ * employee list before publishing them — see that module's header. A company
+ * change drops the rows *and* the filters before refetching: a person's name or a
+ * shift name from the previous workspace means nothing in the next one, and a
+ * filter left set would show an empty table with no visible reason why.
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useAssignmentHistory } from 'src/composables/page/useAssignmentHistory'
+import { useContractHistory } from 'src/composables/page/useContractHistory'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { matchesSearch, SORTS } from 'src/composables/utils/assignmentHistory'
+import { matchesContractSearch, CONTRACT_SORTS } from 'src/composables/utils/contractHistory'
+import { auditSource, AUDIT_SOURCE_KEYS } from 'src/composables/utils/auditSources'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
 import PageShell from '@/components/layout/PageShell.vue'
 import AuditToolbar from '@/components/pages/Audit/AuditToolbar.vue'
@@ -178,17 +195,42 @@ const $q = useQuasar()
 const { companyId } = useCompany()
 const { notifyLoaded } = useLoadedToast()
 
-const {
-  rows,
-  loading,
-  error,
-  totalCount,
-  truncated,
-  companyScoped,
-  fetchHistory,
-  clearError,
-  reset,
-} = useAssignmentHistory()
+// ─── Source ───────────────────────────────────────────────────────────────────
+/**
+ * Which trail is on screen, as a key rather than an object.
+ *
+ * The key is what a URL or a test would carry; the descriptor is looked up from
+ * it. Holding the object instead would let a component mutate the shared
+ * descriptor, and there is only meant to be one of each.
+ */
+const sourceKey = ref('shifts')
+
+/** The descriptor for the selected source — the toolbar's and the table's source. */
+const source = computed(() => auditSource(sourceKey.value))
+
+// Both are created up front but only one is ever fetched. Creating the other is
+// free; calling it would double the requests on load.
+const shifts = useAssignmentHistory()
+const contracts = useContractHistory()
+
+/** The composable matching the selected source. */
+const active = computed(() => (sourceKey.value === 'contracts' ? contracts : shifts))
+
+const rows = computed(() => active.value.rows.value)
+const loading = computed(() => active.value.loading.value)
+const error = computed(() => active.value.error.value)
+const totalCount = computed(() => active.value.totalCount.value)
+const truncated = computed(() => active.value.truncated.value)
+const companyScoped = computed(() => active.value.companyScoped.value)
+const fetchHistory = (...args) => active.value.fetchHistory(...args)
+const clearError = () => active.value.clearError()
+
+/** Per-source search and sort, so neither leaks across the switch. */
+const SEARCHES = { shifts: matchesSearch, contracts: matchesContractSearch }
+const SORTERS = { shifts: SORTS, contracts: CONTRACT_SORTS }
+
+const matchesFor = computed(() => SEARCHES[sourceKey.value] || matchesSearch)
+const sortersFor = computed(() => SORTERS[sourceKey.value] || SORTS)
 
 // Read here for the avatars: the trail names a person but carries no photograph
 // and no id, so the faces come from the employee list. The composable reads the
@@ -215,27 +257,59 @@ const filteredRows = computed(() => {
   const term = search.value.trim().toLowerCase()
   const { from, to } = dateRange.value
   const kind = kindFilter.value
+  const matches = matchesFor.value
+  const sorters = sortersFor.value
 
   const narrowed = rows.value.filter((row) => {
     if (kind !== 'all' && row.change.key !== kind) return false
     // ISO days compare correctly as strings, so no date is constructed here —
-    // which also means a row with no shift_date is excluded from a date filter
+    // which also means a row with no date is excluded from a date filter
     // rather than silently treated as the epoch.
-    if (from && (!row.shiftDate || row.shiftDate < from)) return false
-    if (to && (!row.shiftDate || row.shiftDate > to)) return false
-    return matchesSearch(row, term)
+    if (from && (!row.dateValue || row.dateValue < from)) return false
+    if (to && (!row.dateValue || row.dateValue > to)) return false
+    return matches(row, term)
   })
 
   // Sorted after filtering and before the page slice below. `filter` already
   // returned a new array, so this sorts a copy and never mutates the rows the
   // composable published.
-  return narrowed.sort(SORTS[sortBy.value] ?? SORTS.newest)
+  return narrowed.sort(sorters[sortBy.value] ?? sorters.newest)
 })
 
 function clearFilters() {
   search.value = ''
   kindFilter.value = 'all'
   dateRange.value = { from: null, to: null }
+}
+
+/**
+ * Switch trails.
+ *
+ * Three things have to happen together, and each is for its own reason:
+ *
+ *   - the trail being left is reset, so its rows cannot still be on screen while
+ *     the new one loads, and so its request cannot land afterwards;
+ *   - the filters are cleared, because a filter value is only meaningful within
+ *     its own source. `kind: 'removed'` means "Unassigned" on shifts and
+ *     "Removed" on contracts, and a "Last 7 days" span that was narrowing shift
+ *     edits silently re-narrows contract ones. Keeping either set would show an
+ *     empty table with no visible reason why;
+ *   - the sort returns to the default, since a comparator keyed on one source's
+ *     notion of a date is not necessarily the right one for the other.
+ *
+ * The new trail is then fetched. It is not prefetched on mount — see the module
+ * header — so this is the first request that source has made.
+ */
+function onSourceChange(next) {
+  const key = AUDIT_SOURCE_KEYS.some((option) => option.value === next) ? next : 'shifts'
+  if (key === sourceKey.value) return
+
+  active.value.reset()
+  sourceKey.value = key
+  clearFilters()
+  sortBy.value = 'newest'
+  page.value = 1
+  load()
 }
 
 // ─── Paging ───────────────────────────────────────────────────────────────────
@@ -303,14 +377,15 @@ watch(totalPages, (max) => {
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 const headerSummary = computed(() => {
-  if (loading.value && !rows.value.length) return 'Loading shift assignment changes…'
-  if (!rows.value.length) return 'Shift assignment changes'
+  const label = source.value.label
+  if (loading.value && !rows.value.length) return `Loading ${label.toLowerCase()}…`
+  if (!rows.value.length) return label
   const count = totalCount.value ?? rows.value.length
   const total = count.toLocaleString()
-  const noun = count === 1 ? 'change' : 'changes'
+  const noun = count === 1 ? source.value.singular : source.value.plural
   // "loaded" rather than "recorded" once the cap was hit: the trail holds more
   // than this, and the header is the one line that states the size of it.
-  return `${total} shift assignment ${noun} ${truncated.value ? 'loaded' : 'recorded'}`
+  return `${total} ${noun} ${truncated.value ? 'loaded' : 'recorded'}`
 })
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -338,8 +413,14 @@ async function loadAvatars() {
 }
 
 async function load() {
+  // `source` is read after the await, not captured before it: a switch during the
+  // fetch would otherwise announce the trail just left as the one that arrived,
+  // under the previous source's noun.
   const [loaded] = await Promise.all([fetchHistory(), loadAvatars()])
-  notifyLoaded('Audit trail', loaded.length, { noun: 'change' })
+  notifyLoaded('Audit trail', loaded.length, {
+    noun: source.value.singular,
+    nounPlural: source.value.plural,
+  })
 }
 
 function refresh() {
@@ -348,9 +429,12 @@ function refresh() {
 }
 
 // ─── Company scoping ──────────────────────────────────────────────────────────
+// Both trails are reset, not just the one on screen: the other is holding rows
+// for the previous company, and switching back to it must not show them.
 watch(companyId, (next, previous) => {
   if (next === previous) return
-  reset()
+  shifts.reset()
+  contracts.reset()
   clearFilters()
   page.value = 1
   if (next) load()
