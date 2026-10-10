@@ -1,5 +1,5 @@
 <template>
-  <div class="payout-tbl">
+  <div class="payout-tbl dash-page-body">
     <!-- First paint, when there is nothing to keep on screen. Built from the
          same `columns` the table renders, so the placeholder shares its column
          edges, labels and alignment. -->
@@ -283,7 +283,8 @@ function formatPeso(value) {
 
 .run__chevron {
   color: var(--dash-n-300);
-  transition: color var(--dash-fast) var(--dash-ease),
+  transition:
+    color var(--dash-fast) var(--dash-ease),
     transform var(--dash-fast) var(--dash-ease);
 }
 .payout-table :deep(.run:hover) .run__chevron {
