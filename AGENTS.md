@@ -5,8 +5,7 @@ dashboard for the Wagey payroll/HR product. Talks to a Django REST backend
 (`staging.wageyapp.com` by default). Built with `@quasar/app-webpack` (**Webpack, not Vite**).
 
 This file is the fast bootstrap. `CLAUDE.md` holds the long-form architecture narrative — read it
-before deep work, but note it **predates the newest features** and still says "Vite" in six places
-(see "Newer than CLAUDE.md" below).
+before deep work, but note it **predates the newest features** (see "Newer than CLAUDE.md" below).
 
 ## Commands
 
@@ -24,7 +23,7 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 ```
 
 - **Lint is a build gate.** `quasar.config.js` sets `eslint: { warnings: true, errors: true }`, so
-  `eslint-webpack-plugin` runs inside both `npm run dev` and `npm run build`; a lint *error* fails
+  `eslint-webpack-plugin` runs inside both `npm run dev` and `npm run build`; a lint _error_ fails
   the build and shows in the dev overlay. `npm run lint` just gets the result faster.
 - ESLint 9 flat config is `eslint.config.js` (Quasar recommended + `vue/flat/essential` + prettier
   skip-formatting). The legacy root `.eslintrc.js` is ignored (lint passes `-c ./eslint.config.js`)
@@ -32,7 +31,7 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 - No test framework exists. Verify changes with `npm run lint` (and a dev-server check if UI).
 - **Prettier is repo-wide dirty — do not run `npm run format` for a focused change.** `npm run format`
   is `prettier --write "**/*.{js,vue,scss,html,md,json}" --ignore-path .gitignore`, and that same glob
-  with `--list-different` reports **~140 unformatted files, 125 of them under `src/`**, plus the
+  with `--list-different` reports **~154 unformatted files, 131 of them under `src/`**, plus the
   lockfile, `package.json`, `quasar.config.js`, `index.html`, `README.md`, `eslint.config.js`,
   `jsconfig.json`, `CLAUDE.md`, `AGENTS.md` and `.opencode/plans/*`. `--ignore-path .gitignore` keeps
   `node_modules`/`dist`/`venv` out, but every other tracked file is in scope and rewriting
@@ -49,8 +48,8 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   at **build time** via `webpack.DefinePlugin`, read from real `process.env.*` on the build machine.
   Editing `.env` (or `.env.example`) changes nothing — set real env vars, or edit the fallback in
   `quasar.config.js`. `.env.example` is the committed reference; `.env` is git-ignored.
-- Only three places read those defines: `boot/axios.js:8` (`baseURL`), `utils/http.js:26` (the
-  **deprecated** `BASE` re-export — import `api` instead), and `composables/useWebSocket.js:5`.
+- Only three places read those defines: `baseURL` in `boot/axios.js`, the **deprecated** `BASE`
+  re-export in `composables/utils/http.js` (import `api` instead), and `composables/useWebSocket.js`.
 - In **dev** `baseURL` is `''` and every request goes through the proxy; the absolute base is
   production-only.
 
@@ -68,7 +67,7 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 - `quasar.config.js` `extras` includes `material-icons-outlined`, which backs the `o_*` icon prefix.
   Dropping it blanks every outlined icon with no build error — the nav rail goes blank first.
 - Adding a route to `src/router/routes.js` does **not** add a sidebar entry. The nav groups in
-  `src/layouts/MainLayout.vue:403` are a hand-maintained array. Every route *page* component is lazy
+  `src/layouts/MainLayout.vue:403` are a hand-maintained array. Every route _page_ component is lazy
   `() => import(...)` except `AdminSettingsPage`, which is static and therefore lands in the initial
   bundle; both layouts, `AuthLayout` and `MainLayout`, are eager too.
 - The live SPA template is the **root `index.html`**, not `src/index.template.html` — v4 of
@@ -76,9 +75,9 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   redirect script. Editing `src/index.template.html` is a silent no-op.
 - Superseded/dead modules remain on disk, and plans name files that no longer exist — this is the main
   source of false leads here. Grep for importers (`git grep -l ComponentName src`) before treating a
-  name as current. Confirmed unreferenced: `components/pages/Dashboard/{AnnouncementsPanel,
-  NeedsYourAttentionPanel, NotificationsPanel, PayrollReadinessPanel, PayrollStatusPanel,
-  PendingSwapsPanel, QuickActionsBar, RecentActivityPanel, SiteStatusPanel}.vue`,
+  name as current. Confirmed unreferenced: the nine `components/pages/Dashboard/*Panel.vue` +
+  `QuickActionsBar.vue` files from the old dashboard (Announcements, NeedsYourAttention, Notifications,
+  PayrollReadiness, PayrollStatus, PendingSwaps, RecentActivity, SiteStatus),
   `composables/disbursement/stubData.js`, `composables/payroll/usePayoutData.js` (the whole
   `composables/payroll/` dir is this one dead file), `composables/page/useSwapRequests.js` (the live
   path is `composables/utils/swapRequests.js`), `constants/payoutSteps.js` (live stepper source is
@@ -103,12 +102,15 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 - Scope every request by the active company via `useCompany().companyId` (a **computed**, not a
   snapshot). Re-resolve per request; verify the response's company matches before publishing. The
   standalone `resolvedCompanyId()` is the localStorage fallback — don't hand-roll another one.
-- Errors: `extractErrorMessage(error, fallback)` from `composables/utils/http.js:43` — no hand-rolled
-  `data.detail || ...` chains. Where a status is genuinely an answer (e.g. 404 = "nothing yet"), pass
-  `expectedStatuses: [404]` in the request config to keep the error log quiet; that key is read by
-  `boot/axios.js:194`, not by `http.js`, and it only silences the log — the promise still rejects.
-  Two sites hand-roll on purpose, each commented: `ReviewPage.vue`'s `serverMessage` (must return
-  `''`) and `EmployeesPage.vue`'s `addEmployeeErrorMessage` (prints every field error).
+- Errors: `extractErrorMessage(error, fallback)` from `composables/utils/http.js` — no hand-rolled
+  `data.detail || ...` chains. Where a status is genuinely an answer, pass `expectedStatuses: [404]`
+  in the request config to keep the error log quiet; that key is read by the response interceptor in
+  `boot/axios.js`, not by `http.js`, and it only silences the log — the promise still rejects, so the
+  caller's own handling is unchanged. It is not only "no settings row": the payout-group dashboard
+  and instance endpoints use it too, because a cutoff outside the company's cutoff type answers 404
+  "no runs here", which both callers already treat as nothing. Two sites hand-roll on purpose, each
+  commented: `ReviewPage.vue`'s `serverMessage` (must return `''`) and `EmployeesPage.vue`'s
+  `addEmployeeErrorMessage` (prints every field error).
 - Paths are leading-slash absolutes (`/organization/...`) everywhere except three call sites in
   `composables/useNotifications.js`, which resolve correctly by accident and cannot be matched by a
   proxy `context` string. Write the slash.
@@ -123,8 +125,9 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   endpoint **must be added to that list explicitly** or it 404s in dev and works in prod.
   (3) `/ws/notifications` is separate only for `ws: true`.
 - Two paths are in neither the general array nor the payroll allowlist, so they fail **in dev only**:
-  `/payroll/employee/*` (`composables/disbursement/useDisbursementApi.js:236-253`) and
-  `/employee/payslips/` (`composables/page/usePayroll.js:410`). All of those functions are exported
+  `/payroll/employee/payslips/*` (the `fetchEmployeePayslipDetail` / `acknowledgePayslip` /
+  `reportIssue` / `confirmMoneyReceived` block in `composables/disbursement/useDisbursementApi.js`)
+  and `/employee/payslips/` (`composables/page/usePayroll.js`). All of those functions are exported
   with no caller and are shadowed by the `/payroll/admin/employee-payslips/` versions the pages
   actually use (`PayslipsPage.vue`, `FundingPage.vue`) — which is why nothing has noticed.
 - Deep links are consumed **once, before the first fetch**: `applyDeepLink()` in `AttendancePage.vue`
@@ -140,18 +143,19 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   lives in `composables/page/*.js`, exposing refs + async fns directly, often with a
   `companyId`-keyed module cache + TTL + `invalidateCache()` (see `useEmployees.js`). Key every
   module-level cache by company — a bare string key served the previous workspace's data after a
-  switch (this bit the disbursement cutoff cache at `useDisbursementApi.js:56`).
+  switch (this bit the disbursement cutoff cache in `useDisbursementApi.js`).
 - Guard stale responses: take a token from `createRequestToken()` and check `isCurrent(token)`
   before committing — one guard per published ref, in every fetcher that writes into shared state
-  (12 composables plus `RequestPage.vue` and `DisbursementListPage.vue`). `usePayroll.js` uses a
-  per-key `AbortController` instead; prefer that when cancelling is worth it, the token when the
-  response is cheap or shared through a cache (cancelling a shared request strands a second caller).
+  (12 composables plus `RequestPage.vue`, `DisbursementListPage.vue` and `PayslipsPage.vue`).
+  `usePayroll.js` uses a per-key `AbortController` instead; prefer that when cancelling is worth it,
+  the token when the response is cheap or shared through a cache (cancelling a shared request strands
+  a second caller).
 - Bulk writes decide one record at a time: use `Promise.allSettled` (or per-item try/catch), count
   outcomes, **always refetch**, and emit one message per outcome the endpoint can return. Never one
   `try/catch` around a loop, and never bare `Promise.all` for writes (it is fine for parallel reads).
   Reference: `Disbursement/ReviewPage.vue`, `RequestPage.vue`'s `bulkDecideOvertime`. The bulk-leave
-  decision is the four-case one: `bulkLeaveOutcome` in `composables/utils/leaveRequests.js:123`
-  counts `updated` / `skipped` / `failed` and `bulkLeaveOutcomeToast:165` adds the all-skipped
+  decision is the four-case one: `bulkLeaveOutcome` in `composables/utils/leaveRequests.js` counts
+  `updated` / `skipped` / `failed` and `bulkLeaveOutcomeToast` beside it adds the all-skipped
   message — `skipped` is not `failed` and the reviewer acts on them differently.
 - Feature derivations live in `composables/utils/*.js` (or a feature-local module, e.g.
   `components/pages/Announcement/announcementStatus.js`) so table, card list and tiles cannot
@@ -183,9 +187,10 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   a simple confirm/alert and is the norm rather than an exception (~20 sites, mostly delete-confirms
   in `composables/admin/`). Don't strip them as violations, and don't treat them as precedent for a
   dialog with real content.
-- **There are two `formatCurrency`s.** `utils/format.js` hardcodes **₱** and is the app's formatter
-  (24 files use the peso sign; there is no `₦` anywhere). `utils/locale.js` takes a `countryCode` and
-  is used only by `stores/company.js`. Money is **₱**, not ₦.
+- **There are two `formatCurrency`s.** `composables/utils/format.js` hardcodes **₱** and is the app's
+  formatter (15 files import it; 30 files contain the peso sign; there is no `₦` anywhere).
+  `composables/utils/locale.js` takes a `countryCode` and is used only by `stores/company.js`.
+  Money is **₱**, not ₦.
 - Employee photos for tables/cards: build the index **once** with `buildEmployeeNameIndex()` and pass
   it down as an `employeeIndex` prop; read it with `avatarFor()` / `employeeByName()` from
   `composables/utils/employee.js`. A name shared by two employees maps to `null` **on purpose**, so the
@@ -211,16 +216,23 @@ These are live and not covered by the long-form doc — treat them as current, n
   `/app/allowances` (`/allowance/...`) — `CardTapsPage.vue`/`useCardTaps.js`/`utils/cardTaps.js`,
   `AllowancesPage.vue`/`useAllowances.js`/`useEmployeeAllowances.js`/`utils/allowances.js`.
 - **Half-day leave** — `/attendance/leave-list/` reports a half day as `total_days: 1` with
-  `total_day_value: "0.50"`; render the *value*, not the count, via `leaveRequestDurationLabel` in
+  `total_day_value: "0.50"`; render the _value_, not the count, via `leaveRequestDurationLabel` in
   `utils/leaveRequests.js` (it keeps the `total_days`/`hours`/`N/A` fallbacks). The write side of the
   same rule is `leaveDayValue` / `leaveDayValueLabel`.
-- **Request decisions go through a confirm gate.** `RequestPage.vue`'s `commit*Decision` writers are
-  reachable only from `confirmDecision` (the dialog's `@confirm`); the wording lives in
-  `components/pages/Request/decisionConfirm.js`. Adding an approve/reject means a `commit*` writer, a
-  `confirmDecision` case, and a builder in that module.
+- **Irreversible actions go through a confirm gate, and there are four of them.** `RequestPage.vue`'s
+  `commit*Decision` writers are reachable only from `confirmDecision` (the dialog's `@confirm`);
+  `AccessCardsPage.vue`'s `commitStatusChange` only from `AccessCardStatusConfirmDialog`. Each has a
+  **wording module** returning a plain confirm object — `Request/decisionConfirm.js`,
+  `AccessCards/statusConfirm.js`, `Payroll/fundingConfirm.js`, `Payroll/disburseConfirm.js` — and all
+  four render through the shared `components/common/ConfirmDialog.vue`, which has **no slot and no
+  branch**: every word comes from the object — `title` / `name` / `sub` / `icon` / `tone` /
+  `actionLabel` / `buttonClass` / `facts` / `sentence` / `note`. Adding a gate means a `commit*`
+  writer plus a builder in the wording module, never a new dialog. Funding distinguishes **short /
+  settled / over** (a short amount is a legitimate instalment, not an error), and disbursement states
+  how many cash payouts the bulk release _excludes_ — "Disburse all" otherwise reads as "everything".
 - **Attendance filtering is opt-in, and partly probed.** `include_unassigned=true` pulls in records
   orphaned by shift reassignment. The month endpoint carries year/month in the path, and the `employee`
-  param is *probed*, not assumed — `useAttendance.js` latches `employeeFilterSupported = false` once the
+  param is _probed_, not assumed — `useAttendance.js` latches `employeeFilterSupported = false` once the
   backend rejects it.
 - **Access cards have two writes, not one, and a confirm gate.** `/app/access-cards` —
   `AccessCardsPage.vue`, `useAccessCards.js`, `utils/accessCards.js`. The holder is
@@ -228,7 +240,7 @@ These are live and not covered by the long-form doc — treat them as current, n
   a separate `PATCH /user/access-cards/{uid}/status/` (`{ status }`). Both are keyed by **uid alone**, so
   both inherit the `foreign` guard from the detail payload. The status endpoint takes **only** `active` /
   `inactive` / `lost` / `revoked` — that set is `WRITABLE_STATUSES`, and `stolen` / `damaged` / `expired`
-  are in `STATUSES` for *display only*, never as a choice. `assignCard` still sends the card's current
+  are in `STATUSES` for _display only_, never as a choice. `assignCard` still sends the card's current
   status because `employee-assign` carries the field; deliberate, so a reassignment cannot switch a card on.
   `commitStatusChange` is reachable only from `AccessCardStatusConfirmDialog`'s `@confirm` (wording in
   `components/pages/AccessCards/statusConfirm.js`), and `statusActionsFor(card)` is the single source of
@@ -240,18 +252,18 @@ These are live and not covered by the long-form doc — treat them as current, n
   source; `/attendance/leave-list/` returns a span and **no cutoff** and accepts no query param, so the
   narrowing is computed or not at all. Three rules: **overlap, not containment** — a span straddling two
   cutoffs lists under both, because containment hides it from both; **alias every undocumented field**
-  (`NAME_FIELDS:78`, `START_FIELDS:89`, `END_FIELDS:90` accept 7/5/5 spellings); and the key prefers `id`,
+  (`NAME_FIELDS` / `START_FIELDS` / `END_FIELDS` accept 7/5/5 spellings); and the key prefers `id`,
   falling back to `name:<lower>@<startIso>` so a year of "Semi-monthly" can't collapse into one option. The
-  cutoff cache (`useDisbursementApi.js:56`) is keyed by company. A failed fetch degrades silently to
-  the un-narrowed queue.
-- **Decimal hours are one decision with three consumers.** `decimalHoursLabel` (`utils/format.js:38`) is
-  the **only** place the app rounds a decimal hour; attendance, card taps and the access-cards monthly
-  total all quote it, so don't reimplement it. It rounds on the scaled integer, not via `toFixed` — a
-  hundredth of an hour is 36 seconds, so exact ties arrive every 36 seconds and `toFixed` prints `1.02`
-  for a genuine `1.025`. Attendance works in **exact milliseconds, backend-first** (`attendance.js:366`
-  pins the undocumented unit in one `DURATION_UNIT` constant; `attendanceDurationOf:469` prefers the
-  backend's figure over a re-derivation; the `h/m` label is the hover companion to that same number, not
-  a contradiction). Card taps and access cards work in **seconds** (`durationToSeconds`, `cardTaps.js:78`).
+  cutoff cache is keyed by company. A failed fetch degrades silently to the un-narrowed queue.
+- **Decimal hours are one decision with three consumers.** `decimalHoursLabel` in
+  `composables/utils/format.js` is the **only** place the app rounds a decimal hour; attendance, card
+  taps and the access-cards monthly total all quote it, so don't reimplement it. It rounds on the
+  scaled integer, not via `toFixed` — a hundredth of an hour is 36 seconds, so exact ties arrive every
+  36 seconds and `toFixed` prints `1.02` for a genuine `1.025`. Attendance works in **exact
+  milliseconds, backend-first** (`DURATION_UNIT` in `composables/utils/attendance.js` pins the
+  undocumented unit in one constant; `attendanceDurationOf` prefers the backend's figure over a
+  re-derivation; the `h/m` label is the hover companion to that same number, not a contradiction).
+  Card taps and access cards work in **seconds** (`durationToSeconds` in `utils/cardTaps.js`).
   **Sum in the base unit and round once at the end** (three one-minute days are `0.05`, not `0.06`), and
   **`null` is not `0`** anywhere — "we could not read this" must never print `0.00`. The server's raw
   duration string is read for seconds but shown verbatim on hover.
@@ -261,14 +273,52 @@ These are live and not covered by the long-form doc — treat them as current, n
   looks like "no setting" — 12h, silently wrong). `expectedStatuses: [404]` makes "no settings row" a
   configuration state, and a `formatCache` keyed by company. `AttendanceTimeField.vue` prints 12h or 24h
   but **stores `HH:mm` under both branches** — nothing on the write path knows the component exists,
-  which is why the native 12h branch can pass its value straight through. The 24h branch is a `QSelect`
-  of hourly `HH:mm` options, not `<input type="time">`: no browser will draw 24h on request. Its list is
-  the hours **plus the current value when that isn't one of them** — Time In defaults to the current
-  minute (`nowClock()` in `timezone.js`, read per open in `openAddDialog()`), so a `18:35` default has to
-  be selectable or the field renders blank over a punch the parent is holding. Relatedly,
-  `formatClockTime` / `parseClockTime` (`timezone.js:75,121`) are **wall-clock**, not instants: never
-  route a bare shift time through `formatInTimezone`, which takes an instant and turns 08:00 into 16:00
-  west of Greenwich. `parseClockTime` accepts `6:00 PM` / `0600` / `18:00` whatever the company format.
+  which is why the native 12h branch can pass its value straight through. The 24h branch delegates to
+  `components/common/TimeField.vue`, **not** `<input type="time">`: no browser will draw 24h on request.
+  `TimeField` is **two** typeable dropdowns (hour `00–23`, minute `00–59`), not one list of whole
+  `HH:mm` strings — a single list means the minute can only change by picking a whole different time.
+  Time In defaults to the current minute (`nowClock()` in `timezone.js`, read per open in
+  `openAddDialog()`), which is exactly why both halves must be editable rather than pick-only.
+  Relatedly, `formatClockTime` / `parseClockTime` in `composables/utils/timezone.js` are **wall-clock**,
+  not instants: never route a bare shift time through `formatInTimezone`, which takes an instant and
+  turns 08:00 into 16:00 west of Greenwich. `parseClockTime` accepts `6:00 PM` / `0600` / `18:00`
+  whatever the company format.
+- **Overtime rows with no category are filed as CTO.** `RequestPage.vue` writes
+  `category: row.category || ctoCategoryId.value || 0` on both the single and bulk writers — `||`, not
+  `??`, because the backend's "no category" sentinel is literally `0`, which `??` would pass straight
+  through. `findCtoCategoryId()` in `utils/overtimeRequests.js` matches the company's category by name
+  ("cto" substring or "compensatory time off") and returns `null` when none is configured, leaving the
+  `0` fallback in place rather than inventing an id. Reading `/payroll/overtime-categories/` needs
+  `res.data?.data ?? res.data?.results ?? res.data` (it answers `{data: [...]}`) and an
+  `is_active !== false` test, not a truthy one — a category carrying no flag at all is active, and the
+  truthy test dropped every row.
+- **Balances are invalidated by a module-level counter.** `invalidateEmployeeBalances()` /
+  `balancesRevision` in `composables/page/useEmployeeBalances.js`: writers raise it, mounted readers
+  `watch` it. It is module-level (not returned from the factory) because the pages that change balances
+  and the pages that render them are different route components, never mounted at once — there is no
+  keep-alive, so the signal has to outlive whichever one raised it. Cheap and idempotent: over-reporting
+  costs a refetch, under-reporting costs a stale figure. Same read, different transport, as the
+  `companyId`-keyed caches. Its leave-type lookup filters on `uses_balance`, not `is_paid`.
+- **Manual payroll adjustments: totals are the server's, never a re-sum.** `utils/payrollAdjustments.js`
+  reads `manual_additions` / `manual_deductions` / `total_deductions` / `net_pay` straight off the
+  payload and only _labels_ the rows. A client that re-added the rows would eventually disagree with the
+  server about whether a reverted row counts, and that disagreement is a wrong number on a payroll.
+  Rows are not reordered either — the endpoint already sends them newest first. `reverted` is the only
+  documented end state, so `isApplied` treats anything unrecognised as **applied**: quietly hiding
+  money that was actually taken off is the worse mistake.
+- **Salary breakdown: one endpoint, two vocabularies.** `GET /payroll/admin/employee-payroll-item/{id}/earnings/`
+  answers the day list as `entries` with `hours` / `gross` / `ut` / `ut_amount` / `net`, while its own
+  documented schema calls the same fields `daily_earnings` / `total_hours` / `gross_pay` /
+  `undertime_amount` / `net_pay`. Both are in circulation, so `components/pages/Payroll/salaryBreakdown.js`
+  reads each figure under both names via `amountFrom` — reading only the documented names rendered a
+  populated response as a dialog claiming no earnings at all. A third shape means extending
+  `amountFrom`, **not** reintroducing a sweep. Money goes through `toAmount` (decimal strings in,
+  `null` for unreadable); `null` never prints `₱0.00`.
+- **A disputed payslip needs a second fetch.** The row's own `dispute_status` is only a fallback shown
+  when nothing better exists (`PayslipDisputeCell.vue`); the reason text and the attachment come from a
+  separate endpoint, which is why that cell has its own loading skeleton. `PayslipRowMenu.vue` renders
+  only on a disputed row at all (`isDisputed` in `PayslipsPage.vue`), because the actions it offers are
+  dispute actions.
 - **Manning** (`useManning.js`, `GET /organization/sites/manning/{company_id}/`) and **the audit trail**
   (`useAuditLogs.js` for the cross-module write log, `useAssignmentHistory.js` for
   `GET /audit/assignment/history/`) are the newest composables and carry their traps in their header
