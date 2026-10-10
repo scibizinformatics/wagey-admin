@@ -20,7 +20,22 @@
       <!-- Built from the live `departmentColumns`, so the placeholder shares the
            real table's columns, labels and alignment. -->
       <template v-if="loadingDepartments">
-        <TableSkeleton :columns="departmentColumns" :rows="5" />
+        <TableSkeleton :columns="departmentColumns" />
+      </template>
+      <template v-else-if="!filteredDepartments.length">
+        <div class="dash-empty">
+          <span class="dash-featured-icon"><q-icon name="o_account_tree" size="20px" /></span>
+          <p class="dash-empty__title">
+            {{ searchQuery ? 'No departments match' : 'No departments yet' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              searchQuery
+                ? `Nothing here is called “${searchQuery}”.`
+                : 'Departments group the roster and hold their own rules.'
+            }}
+          </p>
+        </div>
       </template>
       <template v-else>
         <q-table
