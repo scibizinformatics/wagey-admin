@@ -1,9 +1,9 @@
 <template>
-  <div class="inv-tbl">
+  <div class="inv-tbl dash-page-body">
     <!-- Loading. Built from `visibleColumns`, the same list the table below
          renders, so the placeholder's columns are the table's columns — at every
          width, including the one where "Sent" is dropped. -->
-    <TableSkeleton v-if="loading" :columns="visibleColumns" :rows="6" />
+    <TableSkeleton v-if="loading" :columns="visibleColumns" />
 
     <!-- Empty -->
     <div v-else-if="!rows.length" class="dash-empty">
