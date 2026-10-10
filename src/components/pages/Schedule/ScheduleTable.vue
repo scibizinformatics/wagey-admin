@@ -1,6 +1,12 @@
 <template>
-  <div class="grid-wrap">
-    <div class="grid" :style="gridStyle" role="table" aria-label="Weekly schedule">
+  <div class="grid-wrap dash-page-body">
+    <div
+      class="grid"
+      :class="{ 'grid--empty': !users.length && !loading }"
+      :style="gridStyle"
+      role="table"
+      aria-label="Weekly schedule"
+    >
       <!-- ── Header: day name, date, and that day's totals ────────────────── -->
       <div class="grid__corner cell cell--head" role="columnheader">
         <span class="grid__corner-label">Employee</span>
@@ -292,7 +298,12 @@ const emit = defineEmits([
 // fixed because no user rows exist to lay out against yet; the day cells are
 // filled with chip-shaped bars whose widths vary deterministically so the block
 // reads as shifts rather than as one uniform grid.
-const SKELETON_ROWS = 6
+// Eight is sized against the content floor (`--dash-body-min`, 580px) that the
+// empty state takes: a header row of ~75px plus eight ~65px rows (from `.cell--day`'s
+// `min-height: 64px` plus its rule) is ~595px, so the placeholder and the empty
+// state come out about the same height and the page barely moves between them.
+// Six rows reached only ~465px and the grid looked unfinished while it worked.
+const SKELETON_ROWS = 8
 const CHIP_RATIOS = [68, 54, 80, 60, 72, 46, 76]
 
 function chipBarStyle(row, col) {
@@ -483,6 +494,24 @@ const isWeekend = (i) => {
 .grid {
   display: grid;
   min-width: min-content;
+  /* Pack rows at the top; never let surplus height go to them.
+     `align-content` defaults to `stretch`, which hands leftover height to every
+     auto-sized row. That is invisible while the grid is sized by its content, but
+     it bit once when the wrapper was given a fixed height and the rows inflated —
+     the header row grew and dragged the vertically-centred "Employee" corner label
+     into the middle of the screen. Held explicitly so that a future height on this
+     grid cannot do it again. */
+  align-content: start;
+}
+
+/* The empty state is the one thing here that takes a floor, and it takes it from
+   the shared `.dash-page-body .dash-empty` rule in src/css/dashboard.scss rather
+   than from anything local — a week with no employees should fill the page, and a
+   week with three people should be three rows tall. Nothing local is needed.
+   `auto auto` rather than a `1fr`: there is no leftover height to divide up once
+   the grid is sized by its content again. */
+.grid--empty {
+  grid-template-rows: auto auto;
 }
 
 /* ── Cells ── */
@@ -882,6 +911,11 @@ const isWeekend = (i) => {
 /* ── Empty ── */
 .grid__empty {
   grid-column: 1 / -1;
+  /* A flex container so the `.dash-empty` inside it fills the row and centres.
+     `.dash-empty` already carries `flex: 1` and `justify-content: center` from
+     the design system, so it needs only a flex parent to stretch into — without
+     this it stayed at its own 140px rather than taking the content floor. */
+  display: flex;
 }
 
 .empty-btn {
