@@ -1,5 +1,5 @@
 <template>
-  <div class="aud-cards">
+  <div class="aud-cards dash-page-body">
     <div v-if="loading" class="aud-cards__list">
       <div v-for="n in 5" :key="`sk-${n}`" class="aud-card aud-card--skeleton">
         <div class="aud-card__top">
@@ -17,14 +17,10 @@
         <q-icon :name="isFiltered ? 'filter_alt_off' : 'o_history'" size="20px" />
       </span>
       <p class="dash-empty__title">
-        {{ isFiltered ? 'Nothing matches this filter' : 'No shift changes recorded' }}
+        {{ isFiltered ? 'Nothing matches this filter' : source.emptyTitle }}
       </p>
       <p class="dash-empty__sub">
-        {{
-          isFiltered
-            ? 'No change matches what you typed, the kind you picked, or the dates you chose.'
-            : 'Once somebody assigns or moves a shift, the change appears here with who made it and when.'
-        }}
+        {{ isFiltered ? FILTERED_SUB : source.emptySub }}
       </p>
       <q-btn
         v-if="isFiltered"
@@ -66,16 +62,16 @@
         <!-- The move leads the card body: on a phone it is the one line worth
              reading first, and the two people are context for it. -->
         <div class="aud-card__move">
-          <span v-if="row.previousShift" class="move__from">{{ row.previousShift }}</span>
+          <span v-if="row.previousValue" class="move__from">{{ row.previousValue }}</span>
           <q-icon
-            v-if="row.previousShift && row.newShift"
+            v-if="row.previousValue && row.newValue"
             name="arrow_right_alt"
             size="16px"
             class="move__arrow"
           />
-          <span v-if="row.newShift" class="move__to">{{ row.newShift }}</span>
-          <span v-else class="move__none">no shift</span>
-          <span class="aud-card__on">on {{ row.shiftDateLabel || '—' }}</span>
+          <span v-if="row.newValue" class="move__to">{{ row.newValue }}</span>
+          <span v-else class="move__none">{{ moveNoneLabel }}</span>
+          <span class="aud-card__on">on {{ row.dateLabel || '—' }}</span>
         </div>
 
         <div class="aud-card__foot">
@@ -92,21 +88,37 @@
 
 <script setup>
 /**
- * Tablet and phone view of the shift-assignment trail, swapped in below 1024px.
+ * Tablet and phone view of an audit trail, swapped in below 1024px.
  *
  * Reads the same normalised rows as AuditTable, from
- * `composables/utils/assignmentHistory.js` — which is the point of that module:
- * the two renderers cannot end up describing the same change differently.
+ * `composables/utils/auditRows.js` — which is the point of that module: the two
+ * renderers cannot end up describing the same change differently.
+ *
+ * Takes the same `source` descriptor the table does, so a contract change reads
+ * as a contract change on a phone exactly as it does on a desktop. The wording
+ * that is genuinely shared between sources — the empty state under an active
+ * filter — is written once here rather than imported from the table, because the
+ * two files are siblings rather than parent and child.
  */
-import { chipClass } from 'src/composables/utils/assignmentHistory'
+import { computed } from 'vue'
+import { chipClass } from 'src/composables/utils/auditRows'
 
-defineProps({
+const props = defineProps({
   rows: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   isFiltered: { type: Boolean, default: false },
+  /** A descriptor from `auditSources.js`. */
+  source: { type: Object, required: true },
 })
 
 defineEmits(['clear-filters'])
+
+/** The move cell's "nothing here" wording, per source — see `auditSources.js`. */
+const moveNoneLabel = computed(() => props.source.moveNoneLabel)
+
+/** Describes what the reader did, and none of it is source-specific. */
+const FILTERED_SUB =
+  'No change matches what you typed, the kind you picked, or the dates you chose.'
 </script>
 
 <style scoped>
