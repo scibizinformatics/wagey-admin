@@ -20,7 +20,24 @@
       <!-- Built from the live `costCenterColumns`, so the placeholder shares the
            real table's columns, labels and alignment. -->
       <template v-if="loadingCostCenters">
-        <TableSkeleton :columns="costCenterColumns" :rows="5" />
+        <TableSkeleton :columns="costCenterColumns" />
+      </template>
+      <template v-else-if="!filteredCostCenters.length">
+        <div class="dash-empty">
+          <span class="dash-featured-icon"
+            ><q-icon name="o_account_balance_wallet" size="20px"
+          /></span>
+          <p class="dash-empty__title">
+            {{ searchQuery ? 'No cost centers match' : 'No cost centers yet' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              searchQuery
+                ? `Nothing here is called “${searchQuery}”.`
+                : 'Cost centres carry what each part of the business costs.'
+            }}
+          </p>
+        </div>
       </template>
       <template v-else>
         <q-table
