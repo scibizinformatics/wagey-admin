@@ -1,5 +1,5 @@
 <template>
-  <div class="ct-table-wrap dash-scroll-x">
+  <div class="ct-table-wrap dash-scroll-x dash-page-body">
     <q-table
       :rows="rows"
       :columns="columns"
@@ -40,11 +40,7 @@
               <!-- A face when the name resolves to exactly one roster employee
                    who has one, otherwise initials on their identity colour —
                    the same construction as the Audit table. -->
-              <q-avatar
-                v-if="props.row.avatar?.pictureUrl"
-                size="34px"
-                class="ct-who__avatar"
-              >
+              <q-avatar v-if="props.row.avatar?.pictureUrl" size="34px" class="ct-who__avatar">
                 <img :src="props.row.avatar.pictureUrl" :alt="props.row.employee_name" />
               </q-avatar>
               <q-avatar
