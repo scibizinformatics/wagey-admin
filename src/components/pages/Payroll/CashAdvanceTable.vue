@@ -1,5 +1,5 @@
 <template>
-  <div class="ca-tbl">
+  <div class="ca-tbl dash-page-body">
     <!-- First paint, when there is nothing to keep on screen. Built from the same
          `columns` the table renders, so the placeholder shares its column edges,
          labels and alignment. -->
@@ -435,7 +435,9 @@ function avatarOf(name) {
   flex-shrink: 0;
   width: 17px;
   color: var(--dash-n-300);
-  transition: transform var(--dash-fast) var(--dash-ease), color var(--dash-fast) var(--dash-ease);
+  transition:
+    transform var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
 }
 .ca-id__caret--open {
   transform: rotate(90deg);
