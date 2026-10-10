@@ -48,7 +48,16 @@
             <!-- Built from the live `recurringColumns`, so the placeholder shares the
                  real table's columns, labels and alignment. -->
             <template v-if="loadingShiftTypeTemplates">
-              <TableSkeleton :columns="recurringColumns" :rows="5" />
+              <TableSkeleton :columns="recurringColumns" />
+            </template>
+            <template v-else-if="!shiftTypeTemplates.length">
+              <div class="dash-empty">
+                <span class="dash-featured-icon"><q-icon name="o_schedule" size="20px" /></span>
+                <p class="dash-empty__title">No shift templates yet</p>
+                <p class="dash-empty__sub">
+                  Shift templates are the named hours people are assigned against.
+                </p>
+              </div>
             </template>
             <template v-else>
               <q-table
@@ -152,7 +161,7 @@
             <!-- Built from the live `weeklyTemplateColumns`, so the placeholder shares the
                  real table's columns, labels and alignment. -->
             <template v-if="loadingWeeklyTemplates">
-              <TableSkeleton :columns="weeklyTemplateColumns" :rows="5" />
+              <TableSkeleton :columns="weeklyTemplateColumns" />
             </template>
             <template v-else>
               <q-table
@@ -245,7 +254,7 @@
           </div>
           <div class="modern-table-container">
             <template v-if="loadingShiftTemplates24h">
-              <TableSkeleton :columns="template24hColumns" :rows="5" />
+              <TableSkeleton :columns="template24hColumns" />
             </template>
             <template v-else>
               <q-table
