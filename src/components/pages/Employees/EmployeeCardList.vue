@@ -1,5 +1,5 @@
 <template>
-  <div class="cards">
+  <div class="cards dash-page-body">
     <!-- Loading: card-shaped placeholders, so the list does not jump when data
          lands the way a spinner-to-content swap does. -->
     <template v-if="loading">
@@ -234,9 +234,7 @@ function isSelected(emp) {
 }
 
 function toggle(emp, checked) {
-  const next = checked
-    ? [...props.selected, emp]
-    : props.selected.filter((e) => e.id !== emp.id)
+  const next = checked ? [...props.selected, emp] : props.selected.filter((e) => e.id !== emp.id)
   emit('update:selected', next)
 }
 
@@ -261,7 +259,8 @@ const isLoadingBalance = (emp) => props.loadingBalanceIds.has(emp.id)
   background: var(--dash-surface);
   border: 1px solid var(--dash-line);
   border-radius: var(--dash-r-lg);
-  transition: border-color var(--dash-fast) var(--dash-ease),
+  transition:
+    border-color var(--dash-fast) var(--dash-ease),
     box-shadow var(--dash-fast) var(--dash-ease);
 }
 .card--selected {
@@ -332,7 +331,9 @@ const isLoadingBalance = (emp) => props.loadingBalanceIds.has(emp.id)
 .card__name:focus-visible {
   outline: none;
   border-radius: var(--dash-r-xs);
-  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 .card__email {
