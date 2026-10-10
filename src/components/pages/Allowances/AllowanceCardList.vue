@@ -1,5 +1,5 @@
 <template>
-  <div class="all-cards">
+  <div class="all-cards dash-page-body">
     <template v-if="loading">
       <div v-for="n in 4" :key="`sk-${n}`" class="all-card all-card--skeleton">
         <span class="dash-shimmer" style="width: 45%; height: 14px" />
@@ -33,12 +33,7 @@
       />
     </div>
 
-    <article
-      v-for="allowance in allowances"
-      v-else
-      :key="allowance.id"
-      class="all-card"
-    >
+    <article v-for="allowance in allowances" v-else :key="allowance.id" class="all-card">
       <div class="all-card__top">
         <div class="all-card__identity">
           <div class="all-card__name">{{ allowance.name }}</div>
