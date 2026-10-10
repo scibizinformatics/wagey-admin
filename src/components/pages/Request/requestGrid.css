@@ -384,6 +384,15 @@
   padding: 44px 24px;
   text-align: center;
 }
+
+/* Same content floor the rest of the app's list pages carry, so the Request tabs
+   do not show their empty state pinned to the top of a tall panel. `.grid-empty`
+   is the Requests' own vocabulary rather than `.dash-empty`, so it needs its own
+   rule — see the one in src/css/dashboard.scss for why the floor lives on the
+   empty state instead of the region. */
+.dash-page-body .grid-empty {
+  min-height: var(--dash-body-min);
+}
 .grid-empty-icon {
   display: flex;
   align-items: center;
