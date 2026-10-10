@@ -20,7 +20,22 @@
       <!-- Built from the live `siteColumns`, so the placeholder shares the
            real table's columns, labels and alignment. -->
       <template v-if="loadingSites">
-        <TableSkeleton :columns="siteColumns" :rows="5" />
+        <TableSkeleton :columns="siteColumns" />
+      </template>
+      <template v-else-if="!filteredSites.length">
+        <div class="dash-empty">
+          <span class="dash-featured-icon"><q-icon name="o_store" size="20px" /></span>
+          <p class="dash-empty__title">
+            {{ searchQuery ? 'No sites match' : 'No sites yet' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              searchQuery
+                ? `Nothing here is called “${searchQuery}”.`
+                : 'Sites are where people are assigned to work.'
+            }}
+          </p>
+        </div>
       </template>
       <template v-else>
         <q-table
