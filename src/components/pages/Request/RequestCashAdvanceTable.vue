@@ -1,5 +1,5 @@
 <template>
-  <div class="table-section">
+  <div class="table-section dash-page-body">
     <div class="grid-toolbar grid-toolbar--sub">
       <q-input
         :model-value="search"
@@ -60,7 +60,7 @@
     </div>
     <!-- Loading. Built from the live `caColumns`, so the placeholder shares
          the real table's columns, labels and alignment. -->
-    <TableSkeleton v-if="loading" :columns="caColumns" :rows="5" wrap-class="request-tskel" />
+    <TableSkeleton v-if="loading" :columns="caColumns" wrap-class="request-tskel" />
 
     <!-- Empty -->
     <div v-else-if="rows.length === 0" class="grid-empty">
@@ -117,7 +117,9 @@
                   class="identity-avatar"
                   :style="{ background: avatarOf(props.row.employee_name).color }"
                 >
-                  <span class="identity-initials">{{ avatarOf(props.row.employee_name).initials }}</span>
+                  <span class="identity-initials">{{
+                    avatarOf(props.row.employee_name).initials
+                  }}</span>
                 </q-avatar>
                 <span class="identity-text">
                   <span class="identity-name">{{ props.row.employee_name }}</span>
