@@ -1,5 +1,5 @@
 <template>
-  <div class="cards">
+  <div class="cards dash-page-body">
     <template v-if="loading">
       <div v-for="n in 6" :key="`sk-${n}`" class="ct-card">
         <div class="ct-card__top">
@@ -45,11 +45,7 @@
 
     <article v-for="row in rows" v-else :key="row.key" class="ct-card">
       <div class="ct-card__top">
-        <q-avatar
-          v-if="row.avatar?.pictureUrl"
-          size="38px"
-          class="ct-card__avatar"
-        >
+        <q-avatar v-if="row.avatar?.pictureUrl" size="38px" class="ct-card__avatar">
           <img :src="row.avatar.pictureUrl" :alt="row.employee_name" />
         </q-avatar>
         <q-avatar
