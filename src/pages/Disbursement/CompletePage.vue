@@ -25,7 +25,9 @@
         </div>
         <div class="done__total">
           <span class="done__total-label">Net payroll</span>
-          <span class="done__total-value dash-num">₱{{ parseAmount(completion?.net_payroll_amount) }}</span>
+          <span class="done__total-value dash-num"
+            >₱{{ parseAmount(completion?.net_payroll_amount) }}</span
+          >
         </div>
       </div>
 
@@ -75,6 +77,7 @@
           :columns="columns"
           :rows="pageSize"
           aria-label="Loading payment summary"
+          wrap-class="dash-page-body"
         />
 
         <!-- Empty. `hide-no-data` was on the table alongside this markup, and it
@@ -82,7 +85,7 @@
              drawn and an empty result showed a bare header strip. Rendered here
              instead, and without the loading guard it no longer needs: this branch
              is only reached once the fetch has answered. -->
-        <div v-else-if="!paginatedData.length" class="dash-empty">
+        <div v-else-if="!paginatedData.length" class="dash-empty dash-page-body">
           <span class="dash-featured-icon">
             <q-icon :name="searchTerm ? 'filter_alt_off' : 'o_receipt_long'" size="20px" />
           </span>
@@ -129,9 +132,7 @@
                   class="identity-avatar"
                   :style="{ background: avatarOf(props.row.employee).color }"
                 >
-                  <span class="identity-initials">{{
-                    avatarOf(props.row.employee).initials
-                  }}</span>
+                  <span class="identity-initials">{{ avatarOf(props.row.employee).initials }}</span>
                 </q-avatar>
                 <span class="identity-name">{{ props.row.employee }}</span>
               </div>
@@ -149,7 +150,9 @@
 
           <template #body-cell-reference_no="props">
             <q-td :props="props">
-              <span v-if="props.row.reference_no" class="dash-num">{{ props.row.reference_no }}</span>
+              <span v-if="props.row.reference_no" class="dash-num">{{
+                props.row.reference_no
+              }}</span>
               <span v-else class="muted">—</span>
             </q-td>
           </template>
@@ -219,7 +222,14 @@ const columns = [
   { name: 'position', label: 'Position', field: 'position', align: 'left', sortable: true },
   { name: 'payment_method', label: 'Method', field: 'payment_method', align: 'left' },
   { name: 'reference_no', label: 'Reference', field: 'reference_no', align: 'left' },
-  { name: 'net_pay', label: 'Net pay', field: 'net_pay', align: 'right', sortable: true, format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}` },
+  {
+    name: 'net_pay',
+    label: 'Net pay',
+    field: 'net_pay',
+    align: 'right',
+    sortable: true,
+    format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}`,
+  },
   { name: 'status', label: 'Status', field: 'status', align: 'left', sortable: true },
   { name: 'released_on', label: 'Released', field: 'released_on', align: 'left' },
   { name: 'received_by', label: 'Received by', field: 'received_by', align: 'left' },
@@ -368,7 +378,6 @@ const filteredData = computed(() => {
   })
 })
 
-
 const paginatedData = computed(() => {
   if (!filteredData.value) return []
   const start = (page.value - 1) * pageSize.value
@@ -403,10 +412,6 @@ onMounted(async () => {
     loading.value = false
   }
 })
-
-
-
-
 </script>
 
 <style scoped>
