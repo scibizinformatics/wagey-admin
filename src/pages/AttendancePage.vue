@@ -299,6 +299,17 @@
     />
 
     <!-- Add Attendance Dialog -->
+    <!-- The "No shift on this day" notice, raised from the add and edit guards below.
+         One button and nothing to decide, so it is an alert rather than a confirm,
+         but it wears the same chrome as every other dialog here. Non-null is what
+         shows it; OK clears it. -->
+    <ConfirmDialog
+      :model-value="Boolean(shiftNotice)"
+      :confirm="shiftNotice"
+      @update:model-value="shiftNotice = null"
+      @confirm="shiftNotice = null"
+    />
+
     <AttendanceAddDialog
       v-model="showAddDialog"
       v-model:record="newRecord"
@@ -364,6 +375,8 @@ import { BASE, extractErrorMessage } from 'src/composables/utils/http'
 import { sortShiftsByStart } from 'src/composables/utils/schedule'
 import { useAuthStore } from 'src/boot/auth'
 import { useCompany } from '@/composables/page/useCompany'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { buildNotice } from 'src/composables/utils/confirmWording'
 import PageShell from '@/components/layout/PageShell.vue'
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -496,6 +509,13 @@ const showDatePicker = ref(false)
 const showAuditDialog = ref(false)
 const showEditDialog = ref(false)
 const showAddDialog = ref(false)
+
+/**
+ * The "No shift on this day" notice. Holds the whole confirm object rather than
+ * a boolean, so it is the value that decides whether the dialog renders — there
+ * is no separate `open` flag to fall out of step with it.
+ */
+const shiftNotice = ref(null)
 const showSelfieDialog = ref(false)
 const selectedSelfie = ref('')
 const selfieDialogTitle = ref('')
@@ -1451,12 +1471,14 @@ async function submitAttendance(record) {
     (!employeeSchedule.value || employeeSchedule.value.length === 0) &&
     !loadingSchedule.value
   ) {
-    await $q.dialog({
+    // Nothing to decide — the punch cannot be added until a shift exists — so this
+    // is an alert with one button rather than a confirm. It carries the shared
+    // chrome so it does not read as a different dialog from every other notice
+    // on this page. See `ConfirmDialog` at the end of the template.
+    shiftNotice.value = buildNotice({
       title: 'No shift on this day',
       message:
         'Attendance is recorded against a scheduled shift, so this employee needs one for this date before a punch can be added.',
-      persistent: true,
-      ok: { label: 'OK', color: 'primary' },
     })
     return
   }
@@ -1536,12 +1558,10 @@ async function openInlineEdit(row, field) {
 
   const employeeId = getEmployeeId(row.employee)
   if (!(await hasScheduleForEmployeeDate(employeeId, row.date))) {
-    await $q.dialog({
+    shiftNotice.value = buildNotice({
       title: 'No shift on this day',
       message:
         'Attendance is recorded against a scheduled shift, so this employee needs one for this date before a punch can be edited.',
-      persistent: true,
-      ok: { label: 'OK', color: 'primary' },
     })
     return
   }
