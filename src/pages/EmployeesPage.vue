@@ -303,6 +303,16 @@
       @confirm="terminateEmployee"
     />
 
+    <!-- Bulk terminate. Same chrome as the single-employee dialog above, worded
+         for the batch; `bulkTerminateConfirm` being null is what closes it. -->
+    <ConfirmDialog
+      :model-value="Boolean(bulkTerminateConfirm)"
+      :confirm="bulkTerminateConfirm"
+      :loading="bulkTerminating"
+      @update:model-value="bulkTerminateConfirm = null"
+      @confirm="commitBulkTerminate"
+    />
+
     <EmployeeRestoreDialog
       v-model="showRestoreDialog"
       :employee="employeeToRestore"
@@ -385,10 +395,7 @@
       @cancel="showCtoBalanceModal = false"
     />
 
-    <EmployeeAllowanceModal
-      v-model="showAllowanceModal"
-      :employee="selectedAllowanceEmployee"
-    />
+    <EmployeeAllowanceModal v-model="showAllowanceModal" :employee="selectedAllowanceEmployee" />
   </PageShell>
 </template>
 
@@ -414,6 +421,8 @@ import EmployeeCardList from '@/components/pages/Employees/EmployeeCardList.vue'
 import EmployeeAddModal from '@/components/pages/Employees/EmployeeAddModal.vue'
 import EmployeeEditModal from '@/components/pages/Employees/EmployeeEditModal.vue'
 import EmployeeViewModal from '@/components/pages/Employees/EmployeeViewModal.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { buildTerminateConfirm } from 'src/composables/utils/confirmWording'
 import EmployeeTerminateDialog from '@/components/pages/Employees/EmployeeTerminateDialog.vue'
 import EmployeeRestoreDialog from '@/components/pages/Employees/EmployeeRestoreDialog.vue'
 import EmployeeAssignContractDialog from '@/components/pages/Employees/EmployeeAssignContractDialog.vue'
@@ -1578,21 +1587,39 @@ async function confirmAssignSubmit() {
   }
 }
 
-async function handleBulkTerminateDialog() {
+/**
+ * Bulk terminate — the gate, then the write.
+ *
+ * Ask first, commit second. `bulkTerminateConfirm` holds the wording built by
+ * `buildTerminateConfirm` and is non-null only while the dialog is up, so the
+ * `ConfirmDialog` below renders nothing at all otherwise. The write lives in
+ * `commitBulkTerminate` rather than inline because the dialog's `loading` has to
+ * cover it: while a batch is in flight the action button is held down and the
+ * dialog cannot be dismissed, which is what stops a second click writing the
+ * same terminations twice.
+ */
+const bulkTerminateConfirm = ref(null)
+const bulkTerminating = ref(false)
+
+function handleBulkTerminateDialog() {
   const active = selectedActiveEmployees.value
   if (active.length === 0) {
     toast.warning('No active employees selected')
     return
   }
 
-  $q.dialog({
-    title: `Terminate ${active.length} employee${active.length > 1 ? 's' : ''}?`,
-    message:
-      'These employees will be marked as Terminated and lose system access. This can be reversed.',
-    cancel: { label: 'Cancel', flat: true },
-    persistent: true,
-    ok: { label: 'Terminate', color: 'negative', unelevated: true },
-  }).onOk(async () => {
+  bulkTerminateConfirm.value = buildTerminateConfirm({ count: active.length })
+}
+
+async function commitBulkTerminate() {
+  const active = selectedActiveEmployees.value
+  if (!active.length) {
+    bulkTerminateConfirm.value = null
+    return
+  }
+
+  bulkTerminating.value = true
+  try {
     const ids = active.map((e) => e.id)
     const { successCount, failCount } = await bulkTerminateEmployees(ids)
     selectedEmployees.value = []
@@ -1602,7 +1629,10 @@ async function handleBulkTerminateDialog() {
     if (failCount > 0) {
       toast.warning(`${failCount} termination(s) failed`)
     }
-  })
+  } finally {
+    bulkTerminating.value = false
+    bulkTerminateConfirm.value = null
+  }
 }
 
 async function bulkTerminateEmployees(employeeIds) {
