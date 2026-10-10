@@ -1,6 +1,6 @@
 <template>
-  <div v-if="loading" class="all-table-wrap">
-    <TableSkeleton :columns="columns" :rows="5" />
+  <div v-if="loading" class="all-table-wrap dash-page-body">
+    <TableSkeleton :columns="columns" />
   </div>
 
   <div v-else-if="!allowances.length" class="dash-empty">
@@ -30,7 +30,7 @@
     />
   </div>
 
-  <div v-else class="all-table-wrap">
+  <div v-else class="all-table-wrap dash-page-body">
     <q-table
       :rows="allowances"
       :columns="columns"
@@ -55,7 +55,14 @@
             </span>
           </q-td>
           <q-td key="actions" :props="props" class="all-table__td actions">
-            <q-btn flat round dense icon="more_horiz" class="all-table__menu" aria-label="Row actions">
+            <q-btn
+              flat
+              round
+              dense
+              icon="more_horiz"
+              class="all-table__menu"
+              aria-label="Row actions"
+            >
               <q-menu anchor="bottom right" self="top right" class="dash-popup">
                 <q-list dense style="min-width: 150px">
                   <q-item clickable v-close-popup @click="$emit('edit', props.row)">
