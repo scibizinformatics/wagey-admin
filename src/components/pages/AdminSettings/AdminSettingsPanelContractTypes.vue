@@ -45,11 +45,19 @@
       <template v-if="loadingContractTypes">
         <TableSkeleton
           :columns="skeletonColumns"
-          :rows="5"
           :min-width="tableMinWidth"
           wrap-class="dash-scroll-x"
           aria-label="Loading contract types"
         />
+      </template>
+      <template v-else-if="!contractTypeDefinitions.length">
+        <div class="dash-empty">
+          <span class="dash-featured-icon"><q-icon name="o_description" size="20px" /></span>
+          <p class="dash-empty__title">No contract types yet</p>
+          <p class="dash-empty__sub">
+            Contract types carry the terms a contract is built from — pay type, hours and rates.
+          </p>
+        </div>
       </template>
       <template v-else>
         <q-table
