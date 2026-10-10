@@ -1,8 +1,8 @@
 <template>
-  <div class="acc-tbl">
+  <div class="acc-tbl dash-page-body">
     <!-- Built from the same column list the table renders, so the placeholder's
          column edges are the table's and nothing shifts on load. -->
-    <TableSkeleton v-if="loading" :columns="columns" :rows="8" :min-width="950" />
+    <TableSkeleton v-if="loading" :columns="columns" :min-width="950" />
 
     <div v-else-if="!rows.length" class="dash-empty">
       <span class="dash-featured-icon">
