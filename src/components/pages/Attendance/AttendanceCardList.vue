@@ -1,5 +1,5 @@
 <template>
-  <div class="cards">
+  <div class="cards dash-page-body">
     <template v-if="loading">
       <div v-for="n in 6" :key="`sk-${n}`" class="card">
         <div class="card__top">
