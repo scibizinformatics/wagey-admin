@@ -2,13 +2,12 @@
   <TableSkeleton
     v-if="loading && !rows.length"
     :columns="columns"
-    :rows="7"
     :min-width="minWidth"
-    wrap-class="man-table-wrap"
+    wrap-class="man-table-wrap dash-page-body"
     aria-label="Loading site manning"
   />
 
-  <div v-else class="man-table-wrap dash-scroll-x">
+  <div v-else class="man-table-wrap dash-scroll-x dash-page-body">
     <q-table
       v-model:pagination="pagination"
       :rows="rows"
