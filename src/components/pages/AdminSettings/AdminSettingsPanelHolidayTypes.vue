@@ -20,7 +20,7 @@
       <!-- Built from the live `columns`, so the placeholder shares the real
            table's columns, labels and alignment. -->
       <template v-if="loading">
-        <TableSkeleton :columns="columns" :rows="5" />
+        <TableSkeleton :columns="columns" />
       </template>
       <template v-else-if="!filteredHolidayTypes.length">
         <div class="dash-empty ht-empty">
