@@ -73,8 +73,7 @@
             <q-tooltip v-else-if="unreviewedIds.length">
               Releases the {{ releasableIds.length }} reviewed employee{{
                 releasableIds.length === 1 ? '' : 's'
-              }};
-              the {{ unreviewedIds.length }} still unreviewed
+              }}; the {{ unreviewedIds.length }} still unreviewed
               {{ unreviewedIds.length === 1 ? 'is' : 'are' }} left out
             </q-tooltip>
           </q-btn>
@@ -90,6 +89,7 @@
           :columns="columns"
           :rows="pageSize"
           aria-label="Loading employees to review"
+          wrap-class="dash-page-body"
         />
 
         <!-- Empty. `hide-no-data` was on the table alongside this markup, and it
@@ -97,7 +97,7 @@
              drawn and an empty result showed a bare header strip. Rendered here
              instead, and without the loading guard it no longer needs: this branch
              is only reached once the fetch has answered. -->
-        <div v-else-if="!paginatedData.length" class="dash-empty">
+        <div v-else-if="!paginatedData.length" class="dash-empty dash-page-body">
           <span class="dash-featured-icon">
             <q-icon :name="searchTerm ? 'filter_alt_off' : 'o_fact_check'" size="20px" />
           </span>
@@ -106,9 +106,7 @@
           </p>
           <p class="dash-empty__sub">
             {{
-              searchTerm
-                ? 'Try a different name.'
-                : 'This payout group has no employees to review.'
+              searchTerm ? 'Try a different name.' : 'This payout group has no employees to review.'
             }}
           </p>
         </div>
@@ -230,7 +228,10 @@
 
           <template #body-cell-requested_cash_advance="props">
             <q-td :props="props">
-              <span class="dash-num" :class="{ 'num-zero': !amount(props.row.requested_cash_advance) }">
+              <span
+                class="dash-num"
+                :class="{ 'num-zero': !amount(props.row.requested_cash_advance) }"
+              >
                 {{ formatCurrency(props.row.requested_cash_advance) }}
               </span>
             </q-td>
@@ -243,7 +244,8 @@
               <span
                 class="dash-num"
                 :class="{
-                  'num-zero': !amount(props.row.approved_cash_advance) && !isCashAdvanceShort(props.row),
+                  'num-zero':
+                    !amount(props.row.approved_cash_advance) && !isCashAdvanceShort(props.row),
                   'num-warn': isCashAdvanceShort(props.row),
                 }"
               >
@@ -345,8 +347,15 @@
                       <q-item-section>Contributions</q-item-section>
                     </q-item>
 
-                    <q-item v-close-popup clickable class="disb-menu__item" @click="viewEmployee(props.row)">
-                      <q-item-section avatar><q-icon name="o_visibility" size="17px" /></q-item-section>
+                    <q-item
+                      v-close-popup
+                      clickable
+                      class="disb-menu__item"
+                      @click="viewEmployee(props.row)"
+                    >
+                      <q-item-section avatar
+                        ><q-icon name="o_visibility" size="17px"
+                      /></q-item-section>
                       <q-item-section>View details</q-item-section>
                     </q-item>
                   </q-list>
@@ -1034,10 +1043,9 @@ async function reviewAll() {
     const blocked = epiIds.length - reviewed.length
     if (reviewed.length) markRowsReviewed(reviewed)
     if (reviewed.length && blocked) {
-      toast.warning(
-        `${reviewed.length} reviewed, ${blocked} could not be.`,
-        { caption: reason || undefined },
-      )
+      toast.warning(`${reviewed.length} reviewed, ${blocked} could not be.`, {
+        caption: reason || undefined,
+      })
     } else if (reviewed.length) {
       toast.success(`${reviewed.length} employee${reviewed.length === 1 ? '' : 's'} reviewed.`)
     } else {
@@ -1162,7 +1170,6 @@ async function releaseEmployee(row) {
   color: var(--dash-ink-4);
   box-shadow: none;
 }
-
 
 /* Sits immediately left of the toolbar action, so the button's precondition is
    readable beside the button rather than only in a disabled tooltip. Hidden on
