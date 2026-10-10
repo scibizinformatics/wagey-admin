@@ -1,22 +1,18 @@
 <template>
-  <div class="aud-tbl">
+  <div class="aud-tbl dash-page-body">
     <!-- Built from the same column list the table renders, so the placeholder's
          column edges are the table's and nothing shifts on load. -->
-    <TableSkeleton v-if="loading" :columns="columns" :rows="8" :min-width="880" />
+    <TableSkeleton v-if="loading" :columns="columns" :min-width="AUDIT_TABLE_MIN_WIDTH" />
 
     <div v-else-if="!rows.length" class="dash-empty">
       <span class="dash-featured-icon">
         <q-icon :name="isFiltered ? 'filter_alt_off' : 'o_history'" size="20px" />
       </span>
       <p class="dash-empty__title">
-        {{ isFiltered ? 'Nothing matches this filter' : 'No shift changes recorded' }}
+        {{ isFiltered ? 'Nothing matches this filter' : source.emptyTitle }}
       </p>
       <p class="dash-empty__sub">
-        {{
-          isFiltered
-            ? 'No change matches what you typed, the kind you picked, or the dates you chose.'
-            : 'Once somebody assigns or moves a shift, the change appears here with who made it and when.'
-        }}
+        {{ isFiltered ? FILTERED_SUB : source.emptySub }}
       </p>
       <q-btn
         v-if="isFiltered"
@@ -43,12 +39,12 @@
       >
         <template v-slot:header="props">
           <q-tr :props="props">
-            <q-th key="employee" :props="props">Employee</q-th>
-            <q-th key="change" :props="props">Change</q-th>
-            <q-th key="shift" :props="props">Shift</q-th>
-            <q-th key="shiftDate" :props="props" class="date">Shift date</q-th>
-            <q-th key="updater" :props="props">Changed by</q-th>
-            <q-th key="updatedAt" :props="props" class="date">Recorded</q-th>
+            <q-th key="employee" :props="props">{{ headings.employee }}</q-th>
+            <q-th key="change" :props="props">{{ headings.change }}</q-th>
+            <q-th key="move" :props="props">{{ headings.move }}</q-th>
+            <q-th key="shiftDate" :props="props" class="date">{{ headings.shiftDate }}</q-th>
+            <q-th key="updater" :props="props">{{ headings.updater }}</q-th>
+            <q-th key="updatedAt" :props="props" class="date">{{ headings.updatedAt }}</q-th>
           </q-tr>
         </template>
 
@@ -81,27 +77,27 @@
               </span>
             </q-td>
 
-            <!-- Both shift names in one cell rather than a "From" column that
-                 is empty on every first assignment. The move is the fact; the
-                 two names on their own are not. -->
-            <q-td key="shift" :props="props">
+            <!-- Both values in one cell rather than a "From" column that is empty on
+                 every first entry. The move is the fact; the two names on their
+                 own are not. -->
+            <q-td key="move" :props="props">
               <span class="move">
-                <span v-if="props.row.previousShift" class="move__from">
-                  {{ props.row.previousShift }}
+                <span v-if="props.row.previousValue" class="move__from">
+                  {{ props.row.previousValue }}
                 </span>
                 <q-icon
-                  v-if="props.row.previousShift && props.row.newShift"
+                  v-if="props.row.previousValue && props.row.newValue"
                   name="arrow_right_alt"
                   size="16px"
                   class="move__arrow"
                 />
-                <span v-if="props.row.newShift" class="move__to">{{ props.row.newShift }}</span>
-                <span v-else class="move__none">no shift</span>
+                <span v-if="props.row.newValue" class="move__to">{{ props.row.newValue }}</span>
+                <span v-else class="move__none">{{ moveNoneLabel }}</span>
               </span>
             </q-td>
 
             <q-td key="shiftDate" :props="props" class="date">
-              {{ props.row.shiftDateLabel || '—' }}
+              {{ props.row.dateLabel || '—' }}
             </q-td>
 
             <q-td key="updater" :props="props">
@@ -123,37 +119,64 @@
 
 <script setup>
 /**
- * Desktop view of the shift-assignment trail. Below 1024px the page swaps this
- * for AuditCardList — six columns inside a tablet's content width means a
- * sideways scroll on every row.
+ * Desktop view of an audit trail. Below 1024px the page swaps this for
+ * AuditCardList — six columns inside a tablet's content width means a sideways
+ * scroll on every row.
  *
- * Rows arrive already normalised by `composables/utils/assignmentHistory.js`,
- * which is also what the card list reads, so the two cannot disagree about what
- * a change was. Nothing here is clickable: a trail entry is a statement of what
- * happened, and there is no record behind it to open.
+ * Rows arrive already normalised by `composables/utils/auditRows.js`, which is
+ * also what the card list reads, so the two cannot disagree about what a change
+ * was. Nothing here is clickable: a trail entry is a statement of what happened,
+ * and there is no record behind it to open.
+ *
+ * The `source` prop is a descriptor from `composables/utils/auditSources.js`, and
+ * it supplies the column labels, the empty state and the "nothing here" wording.
+ * Nothing in this template names a source: the row keys it reads are neutral, so
+ * switching sources switches the words without touching the markup.
  */
+import { computed } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
-import { chipClass } from 'src/composables/utils/assignmentHistory'
+import { chipClass } from 'src/composables/utils/auditRows'
+import { AUDIT_TABLE_MIN_WIDTH } from 'src/composables/utils/auditSources'
 
-defineProps({
+const props = defineProps({
   rows: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   isFiltered: { type: Boolean, default: false },
+  /** A descriptor from `auditSources.js`. */
+  source: { type: Object, required: true },
 })
 
 defineEmits(['clear-filters'])
 
 // Sorting is the page's job, over the whole trail, so no column declares
 // `sortable` — a header click here would only reorder the page slice on screen
-// and quietly answer a narrower question than it appears to.
-const columns = [
-  { name: 'employee', label: 'Employee', field: 'employeeName', align: 'left', minWidth: 190 },
-  { name: 'change', label: 'Change', field: (row) => row.change.key, align: 'left', width: 130 },
-  { name: 'shift', label: 'Shift', field: 'newShift', align: 'left', minWidth: 190 },
-  { name: 'shiftDate', label: 'Shift date', field: 'shiftDate', align: 'left', width: 120 },
-  { name: 'updater', label: 'Changed by', field: 'updaterName', align: 'left', minWidth: 150 },
-  { name: 'updatedAt', label: 'Recorded', field: 'updatedAtMs', align: 'left', width: 130 },
-]
+// and quietly answer a narrower question than it appears to. The columns come
+// from the descriptor so their labels follow the selected source.
+const columns = computed(() => props.source.columns)
+
+/** The cell beside the arrow, when a value was removed rather than changed. */
+const moveNoneLabel = computed(() => props.source.moveNoneLabel)
+
+/**
+ * Header labels keyed by column name.
+ *
+ * Looked up rather than read by index: the body cells below are hand-written and
+ * keyed by name, so a column reordered in the descriptor would otherwise put
+ * "Contract" over a date column with no error anywhere.
+ */
+const headings = computed(() =>
+  Object.fromEntries(props.source.columns.map((column) => [column.name, column.label])),
+)
+
+/**
+ * The empty state under an active filter.
+ *
+ * One sentence for both sources: it describes what the reader did — typed, chose
+ * a kind, picked dates — and none of those three controls mean anything specific
+ * to shifts or contracts.
+ */
+const FILTERED_SUB =
+  'No change matches what you typed, the kind you picked, or the dates you chose.'
 </script>
 
 <style scoped>
