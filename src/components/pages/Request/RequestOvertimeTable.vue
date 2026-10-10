@@ -1,5 +1,5 @@
 <template>
-  <div class="table-section">
+  <div class="table-section dash-page-body">
     <div class="grid-toolbar grid-toolbar--sub">
       <q-input
         :model-value="search"
@@ -61,7 +61,7 @@
 
     <!-- Loading. Built from the live `otColumns`, so the placeholder shares
          the real table's columns, labels and alignment. -->
-    <TableSkeleton v-if="loading" :columns="otColumns" :rows="5" wrap-class="request-tskel" />
+    <TableSkeleton v-if="loading" :columns="otColumns" wrap-class="request-tskel" />
 
     <!-- Empty -->
     <div v-else-if="rows.length === 0" class="grid-empty">
@@ -182,7 +182,9 @@
                     class="identity-avatar"
                     :style="{ background: avatarOf(props.row.employeeName).color }"
                   >
-                    <span class="identity-initials">{{ avatarOf(props.row.employeeName).initials }}</span>
+                    <span class="identity-initials">{{
+                      avatarOf(props.row.employeeName).initials
+                    }}</span>
                   </q-avatar>
                   <span class="identity-text">
                     <span class="identity-name">{{ props.row.employeeName }}</span>
