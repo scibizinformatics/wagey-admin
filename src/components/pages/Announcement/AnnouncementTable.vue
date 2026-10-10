@@ -1,9 +1,9 @@
 <template>
-  <div class="ann-tbl">
+  <div class="ann-tbl dash-page-body">
     <!-- Loading. Built from `visibleColumns`, the same list the table below
          renders, so the placeholder's columns are the table's columns at every
          width — including the one where "Type" is dropped. -->
-    <TableSkeleton v-if="loading" :columns="visibleColumns" :rows="5" />
+    <TableSkeleton v-if="loading" :columns="visibleColumns" />
 
     <!-- Empty -->
     <div v-else-if="!rows.length" class="dash-empty">
