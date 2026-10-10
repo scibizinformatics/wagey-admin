@@ -1,5 +1,5 @@
 <template>
-  <div class="ann-cards">
+  <div class="ann-cards dash-page-body">
     <!-- Loading -->
     <template v-if="loading">
       <div v-for="n in 4" :key="`sk-${n}`" class="ann-card ann-card--sk">
