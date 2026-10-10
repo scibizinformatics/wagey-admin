@@ -1,5 +1,5 @@
 <template>
-  <div class="tsk" :aria-label="`Loading ${label}`" role="status">
+  <div class="tsk" :class="wrapClass" :aria-label="`Loading ${label}`" role="status">
     <div class="tsk__head">
       <span v-for="c in cols" :key="`h-${c}`" class="dash-shimmer tsk__cell tsk__cell--head" />
     </div>
@@ -29,9 +29,24 @@
  * also re-roll on every re-render).
  */
 defineProps({
-  rows: { type: Number, default: 6 },
+  /**
+   * Placeholder rows to draw. Sixteen brings the block to roughly the content
+   * floor (`--dash-body-min`, 580px) these panels carry — see the note on the
+   * same prop in `components/common/TableSkeleton.vue`, which this mirrors so
+   * the two skeletons cannot drift apart.
+   */
+  rows: { type: Number, default: 16 },
   cols: { type: Number, default: 6 },
   label: { type: String, default: 'data' },
+  /**
+   * Extra class for the wrapper, applied the way `TableSkeleton.vue` does it.
+   *
+   * This skeleton is a sibling of the table it stands in for rather than a
+   * child of it, so there is no shared root to put a layout class on — the two
+   * branches each carry what they need, and this is how the skeleton branch gets
+   * it.
+   */
+  wrapClass: { type: [String, Array, Object], default: '' },
 })
 
 const WIDTHS = ['82%', '58%', '70%', '46%', '64%', '76%', '52%']
