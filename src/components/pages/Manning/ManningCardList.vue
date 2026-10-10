@@ -1,5 +1,5 @@
 <template>
-  <div class="man-cards">
+  <div class="man-cards dash-page-body">
     <template v-if="loading && !rows.length">
       <div v-for="n in 4" :key="`sk-${n}`" class="man-card man-card--sk">
         <span class="dash-shimmer" style="width: 40%; height: 13px" />
