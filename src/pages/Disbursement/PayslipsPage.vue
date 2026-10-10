@@ -78,6 +78,7 @@
           :columns="columns"
           :rows="pageSize"
           aria-label="Loading payslips"
+          wrap-class="dash-page-body"
         />
 
         <!-- Empty. `hide-no-data` was on the table alongside this markup, and it
@@ -86,7 +87,7 @@
              instead, and without the loading guard it no longer needs: this branch
              is only reached once the fetch has answered. A tab with nothing in it
              is a normal state here, so it gets the panel empty state too. -->
-        <div v-else-if="!paginatedData.length" class="dash-empty">
+        <div v-else-if="!paginatedData.length" class="dash-empty dash-page-body">
           <span class="dash-featured-icon">
             <q-icon :name="isFiltered ? 'filter_alt_off' : 'o_receipt_long'" size="20px" />
           </span>
@@ -144,9 +145,7 @@
                   class="identity-avatar"
                   :style="{ background: avatarOf(props.row.employee).color }"
                 >
-                  <span class="identity-initials">{{
-                    avatarOf(props.row.employee).initials
-                  }}</span>
+                  <span class="identity-initials">{{ avatarOf(props.row.employee).initials }}</span>
                 </q-avatar>
                 <span class="identity-name">{{ props.row.employee }}</span>
               </div>
@@ -192,10 +191,7 @@
                 aria-label="Row actions"
                 @click.stop
               >
-                <PayslipRowMenu
-                  @resolve="resolve(props.row)"
-                  @reject="reject(props.row)"
-                />
+                <PayslipRowMenu @resolve="resolve(props.row)" @reject="reject(props.row)" />
               </q-btn>
             </q-td>
           </template>
@@ -244,7 +240,13 @@ const toast = useToast()
 const groupId = route.params.id
 const { identity, resolveQuietly } = usePayoutGroupIdentity()
 const stepperKey = ref(0)
-const { fetchPayslipOverview, fetchEmployeePayslips, fetchPayslipIssues, resolveIssue, rejectIssue } = useDisbursementApi()
+const {
+  fetchPayslipOverview,
+  fetchEmployeePayslips,
+  fetchPayslipIssues,
+  resolveIssue,
+  rejectIssue,
+} = useDisbursementApi()
 const { notifyLoaded } = useLoadedToast()
 const { employees, fetchEmployees } = useEmployees()
 
@@ -292,9 +294,28 @@ const attachment = ref({ url: '', title: '', subtitle: '', alt: '' })
 
 const columns = [
   { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
-  { name: 'position_name', label: 'Position', field: 'position_name', align: 'left', sortable: true },
-  { name: 'net_pay', label: 'Net pay', field: 'net_pay', align: 'right', sortable: true, format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}` },
-  { name: 'payslip_status', label: 'Status', field: 'payslip_status', align: 'left', sortable: true },
+  {
+    name: 'position_name',
+    label: 'Position',
+    field: 'position_name',
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'net_pay',
+    label: 'Net pay',
+    field: 'net_pay',
+    align: 'right',
+    sortable: true,
+    format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}`,
+  },
+  {
+    name: 'payslip_status',
+    label: 'Status',
+    field: 'payslip_status',
+    align: 'left',
+    sortable: true,
+  },
   { name: 'acknowledged_on', label: 'Acknowledged', field: 'acknowledged_on', align: 'left' },
   { name: 'dispute', label: 'Dispute', field: 'dispute_status', align: 'left' },
   { name: 'actions', label: '', field: 'actions', align: 'right' },
@@ -400,12 +421,13 @@ function goToFunding() {
   router.push({ path: `/app/payroll/funding/${groupId}`, query: route.query })
 }
 
-
 const filteredData = computed(() => {
   let result = payslips.value
   if (activeTab.value !== 'all') {
     const statusMap = { acknowledged: 'Acknowledged', pending: 'Pending', disputed: 'Disputed' }
-    result = result.filter((p) => p.payslip_status === (statusMap[activeTab.value] || activeTab.value))
+    result = result.filter(
+      (p) => p.payslip_status === (statusMap[activeTab.value] || activeTab.value),
+    )
   }
   if (searchTerm.value.trim()) {
     const term = searchTerm.value.toLowerCase()
@@ -748,8 +770,10 @@ async function reject(row) {
   color: var(--dash-ink-3);
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--dash-fast) var(--dash-ease),
-    color var(--dash-fast) var(--dash-ease), box-shadow var(--dash-fast) var(--dash-ease);
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease),
+    box-shadow var(--dash-fast) var(--dash-ease);
 }
 .tab:hover {
   color: var(--dash-ink-2);
@@ -762,7 +786,9 @@ async function reject(row) {
 }
 .tab:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--dash-n-100), 0 0 0 4px var(--dash-accent-ring);
+  box-shadow:
+    0 0 0 2px var(--dash-n-100),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 .tab .q-icon {
