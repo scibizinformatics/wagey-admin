@@ -20,7 +20,24 @@
       <!-- Built from the live `roleColumns`, so the placeholder shares the
            real table's columns, labels and alignment. -->
       <template v-if="loadingRoles">
-        <TableSkeleton :columns="roleColumns" :rows="5" />
+        <TableSkeleton :columns="roleColumns" />
+      </template>
+      <template v-else-if="!filteredRoles.length">
+        <div class="dash-empty">
+          <span class="dash-featured-icon"
+            ><q-icon name="o_admin_panel_settings" size="20px"
+          /></span>
+          <p class="dash-empty__title">
+            {{ searchQuery ? 'No roles match' : 'No roles yet' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              searchQuery
+                ? `Nothing here is called “${searchQuery}”.`
+                : 'Roles decide who may open the admin settings at all.'
+            }}
+          </p>
+        </div>
       </template>
       <template v-else>
         <q-table
