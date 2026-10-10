@@ -20,7 +20,22 @@
       <!-- Built from the live `columns`, so the placeholder shares the
            real table's columns, labels and alignment. -->
       <template v-if="loadingPayrollGroups">
-        <TableSkeleton :columns="columns" :rows="5" />
+        <TableSkeleton :columns="columns" />
+      </template>
+      <template v-else-if="!filteredPayrollGroups.length">
+        <div class="dash-empty">
+          <span class="dash-featured-icon"><q-icon name="o_groups" size="20px" /></span>
+          <p class="dash-empty__title">
+            {{ searchQuery ? 'No payroll groups match' : 'No payroll groups yet' }}
+          </p>
+          <p class="dash-empty__sub">
+            {{
+              searchQuery
+                ? `Nothing here is called “${searchQuery}”.`
+                : 'A payroll group is who gets paid together in one run.'
+            }}
+          </p>
+        </div>
       </template>
       <template v-else>
         <q-table
