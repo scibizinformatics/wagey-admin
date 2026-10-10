@@ -1,5 +1,5 @@
 <template>
-  <div class="emp-table-wrap dash-scroll-x">
+  <div class="emp-table-wrap dash-scroll-x dash-page-body">
     <q-table
       :rows="employees"
       :columns="columns"
@@ -299,7 +299,7 @@ const leaveColumnBudget = computed(() => {
 // only (`EmployeesPage.vue`'s `runPageDataFetch`), so employees on other pages
 // have no `_balance` to count yet.
 const visibleLeaveTypes = computed(() =>
-  rankLeaveTypesByUse(props.leaveTypes, props.employees).slice(0, leaveColumnBudget.value)
+  rankLeaveTypesByUse(props.leaveTypes, props.employees).slice(0, leaveColumnBudget.value),
 )
 
 const isLoadingContract = (employee) => props.loadingContractIds.has(employee.id)
