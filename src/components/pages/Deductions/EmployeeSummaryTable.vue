@@ -1,12 +1,12 @@
 <template>
   <ContributionTableSkeleton
     v-if="loading && !rows.length"
-    :rows="7"
     :cols="columns.length"
     label="employee contributions"
+    wrap-class="dash-page-body"
   />
 
-  <div v-else class="tbl-wrap">
+  <div v-else class="tbl-wrap dash-page-body">
     <q-table
       :rows="rows"
       :columns="columns"
