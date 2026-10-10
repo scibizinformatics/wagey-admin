@@ -183,10 +183,27 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   (no component uses them). Dialog fields are `__field` + `__field-label` above the control, never a
   Quasar floating label, and widths are written twice compounded with `.q-card` because Quasar caps a
   dialog card with a two-class selector. Do **not** build dialogs as HTML strings
-  (`$q.dialog({ html: true })`) — no call site uses it; use a component. Plain `$q.dialog` is fine for
-  a simple confirm/alert and is the norm rather than an exception (~20 sites, mostly delete-confirms
-  in `composables/admin/`). Don't strip them as violations, and don't treat them as precedent for a
-  dialog with real content.
+  (`$q.dialog({ html: true })`) — no call site uses it; use a component.
+- **Confirms wear the shared chrome; `dash-modal--confirm` is it.** The card markup lives **once**, in
+  `components/common/ConfirmCard.vue`. Two hosts render it: `components/common/ConfirmDialog.vue` for
+  anything holding a `confirm` ref (`v-model` + `@confirm`, `loading` owned by the caller), and —
+  **not yet built, and deliberately so** — a component handed to `$q.dialog({ component })` for the
+  composables that have no template. A page with a confirm should use `ConfirmDialog`; don't re-type the
+  head/footer. **~17 decision-confirms still use bare `$q.dialog({ title, message, ok, cancel })`** —
+  14 in `composables/admin/`, plus `AdminSettingsPanelHolidayTypes`, `EmployeeContributionsDialog` and
+  `ReviewPage`. That is the exception now, not the norm; converting one needs the imperative host, and
+  that path is **unproven at runtime**. `note` is optional in the confirm object — `EmployeeTerminateDialog`
+  has none because terminate is reversible, and the irreversible note would be a lie.
+- **`dash-page-body` marks a list region; it has no rule of its own.** A page-level list region
+  carries it so the empty-state rules can find it by context (`.dash-page-body .dash-empty` and
+  `.dash-page-body .grid-empty` take `--dash-body-min`, 580px). It exists purely as a selector prefix —
+  **do not give it a `min-height`**; it carried one once, and padding every region to 580 put a band of
+  dead space under any list shorter than that. A list with data ends where its data ends. Two
+  empty-state vocabularies exist, so the rules are split: `.dash-empty` for most, `.grid-empty` for the
+  Request tabs (`requestGrid.css`), and `.modern-table-container > .dash-empty` for the Admin Settings
+  panels, which are not marked `dash-page-body`. `TableSkeleton`'s `rows` default (16) is sized to that
+  same floor, which is why all 29 call sites pass no literal `:rows` — the only two still setting one
+  (`PayoutTable`, `CashAdvanceTable`) pass a local `SKELETON_ROWS` const.
 - **There are two `formatCurrency`s.** `composables/utils/format.js` hardcodes **₱** and is the app's
   formatter (15 files import it; 30 files contain the peso sign; there is no `₦` anywhere).
   `composables/utils/locale.js` takes a `countryCode` and is used only by `stores/company.js`.
@@ -219,17 +236,24 @@ These are live and not covered by the long-form doc — treat them as current, n
   `total_day_value: "0.50"`; render the _value_, not the count, via `leaveRequestDurationLabel` in
   `utils/leaveRequests.js` (it keeps the `total_days`/`hours`/`N/A` fallbacks). The write side of the
   same rule is `leaveDayValue` / `leaveDayValueLabel`.
-- **Irreversible actions go through a confirm gate, and there are four of them.** `RequestPage.vue`'s
+- **Irreversible actions go through a confirm gate.** `RequestPage.vue`'s
   `commit*Decision` writers are reachable only from `confirmDecision` (the dialog's `@confirm`);
-  `AccessCardsPage.vue`'s `commitStatusChange` only from `AccessCardStatusConfirmDialog`. Each has a
-  **wording module** returning a plain confirm object — `Request/decisionConfirm.js`,
-  `AccessCards/statusConfirm.js`, `Payroll/fundingConfirm.js`, `Payroll/disburseConfirm.js` — and all
-  four render through the shared `components/common/ConfirmDialog.vue`, which has **no slot and no
-  branch**: every word comes from the object — `title` / `name` / `sub` / `icon` / `tone` /
-  `actionLabel` / `buttonClass` / `facts` / `sentence` / `note`. Adding a gate means a `commit*`
-  writer plus a builder in the wording module, never a new dialog. Funding distinguishes **short /
-  settled / over** (a short amount is a legitimate instalment, not an error), and disbursement states
-  how many cash payouts the bulk release _excludes_ — "Disburse all" otherwise reads as "everything".
+  `AccessCardsPage.vue`'s `commitStatusChange` only from `AccessCardStatusConfirmDialog`; and
+  `EmployeesPage.vue`'s bulk terminate only from `commitBulkTerminate` — the write lives **there**,
+  not in the handler that opens the dialog, so `:loading` can cover it and block a second click. Each
+  has a **wording source** returning a plain confirm object: the per-feature modules
+  `Request/decisionConfirm.js`, `AccessCards/statusConfirm.js`, `Payroll/fundingConfirm.js`,
+  `Payroll/disburseConfirm.js` — where the wording is computed from live reactive state — or the
+  fixed-shape builders in `composables/utils/confirmWording.js` (`buildDeleteConfirm`,
+  `buildTerminateConfirm`, `buildNotice`) where it is not. All render through the shared
+  `components/common/ConfirmDialog.vue`, which has **no slot and no branch**: every word comes from the
+  object — `title` / `sub` / `icon` / `tone` / `name` / `sentence` / `note` / `actionLabel` /
+  `buttonClass` / `cancelable` (`facts` too, where the decision is about numbers). Adding a gate means
+  a `commit*` writer plus a builder, never a new dialog. `cancelable: false` renders a single OK —
+  that is what an alert is, and it is why the two "No shift on this day" notices on `AttendancePage`
+  are `buildNotice` rather than a confirm. Funding distinguishes **short / settled / over** (a short
+  amount is a legitimate instalment, not an error), and disbursement states how many cash payouts the
+  bulk release _excludes_ — "Disburse all" otherwise reads as "everything".
 - **Attendance filtering is opt-in, and partly probed.** `include_unassigned=true` pulls in records
   orphaned by shift reassignment. The month endpoint carries year/month in the path, and the `employee`
   param is _probed_, not assumed — `useAttendance.js` latches `employeeFilterSupported = false` once the
@@ -319,10 +343,23 @@ These are live and not covered by the long-form doc — treat them as current, n
   separate endpoint, which is why that cell has its own loading skeleton. `PayslipRowMenu.vue` renders
   only on a disputed row at all (`isDisputed` in `PayslipsPage.vue`), because the actions it offers are
   dispute actions.
+- **The audit page has two trails behind one dropdown, and they share almost everything.** Shift
+  assignments (`/audit/assignment/history/`) and contracts (`/audit/contracts/history/`) answer with
+  **the same six fields** — so the columns cannot differ; what differs is the **vocabulary**, and that
+  comes from one descriptor per source in `utils/auditSources.js`, read by the toolbar, the table and
+  the card list alike. Nothing threads an `isContract` boolean through a component; the page holds a
+  source _key_ and looks the descriptor up. `utils/auditRows.js` holds the readings both share (stamp
+  parsing, row shape, roster scoping), `utils/contractHistory.js` the contract normaliser, and
+  `utils/historySource.js` the page-walking fetch factory both composables are built from. **Row keys
+  are deliberately NEUTRAL** — `previousValue` / `newValue` / `dateValue`, not `previousShift` — so a
+  renderer holding a contract row is not reaching for a field called "shift"; the _labels_ are the
+  per-source part. If the backend later sends contract-specific fields, the change is confined to
+  `contractHistory.js` and the descriptor's `columns`. Only the selected source is fetched — the other
+  is created but never called, so opening the page still costs one request.
 - **Manning** (`useManning.js`, `GET /organization/sites/manning/{company_id}/`) and **the audit trail**
-  (`useAuditLogs.js` for the cross-module write log, `useAssignmentHistory.js` for
-  `GET /audit/assignment/history/`) are the newest composables and carry their traps in their header
-  comments — read those before trusting a field.
+  (`useAuditLogs.js` for the cross-module write log, `useAssignmentHistory.js` /
+  `useContractHistory.js` for the two trails) are the newest composables and carry their traps in
+  their header comments — read those before trusting a field.
 
 ## Traps
 
