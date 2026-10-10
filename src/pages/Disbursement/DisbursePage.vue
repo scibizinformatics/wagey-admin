@@ -42,7 +42,11 @@
             @click="requestDisburseAll"
           >
             <q-tooltip v-if="!bulkRows.length">
-              {{ cashRows.length ? 'Nothing but cash — release each one from its row' : 'Nothing to disburse yet' }}
+              {{
+                cashRows.length
+                  ? 'Nothing but cash — release each one from its row'
+                  : 'Nothing to disburse yet'
+              }}
             </q-tooltip>
           </q-btn>
         </template>
@@ -55,6 +59,7 @@
           :columns="columns"
           :rows="pageSize"
           aria-label="Loading disbursement details"
+          wrap-class="dash-page-body"
         />
 
         <!-- Empty. `hide-no-data` was on the table alongside this markup, and it
@@ -62,7 +67,7 @@
              drawn and an empty result showed a bare header strip. Rendered here
              instead, and without the loading guard it no longer needs: this branch
              is only reached once the fetch has answered. -->
-        <div v-else-if="!paginatedData.length" class="dash-empty">
+        <div v-else-if="!paginatedData.length" class="dash-empty dash-page-body">
           <span class="dash-featured-icon">
             <q-icon :name="searchTerm ? 'filter_alt_off' : 'o_payments'" size="20px" />
           </span>
@@ -109,9 +114,7 @@
                   class="identity-avatar"
                   :style="{ background: avatarOf(props.row.employee).color }"
                 >
-                  <span class="identity-initials">{{
-                    avatarOf(props.row.employee).initials
-                  }}</span>
+                  <span class="identity-initials">{{ avatarOf(props.row.employee).initials }}</span>
                 </q-avatar>
                 <span class="identity-name">{{ props.row.employee }}</span>
               </div>
@@ -153,7 +156,9 @@
 
           <template #body-cell-reference_no="props">
             <q-td :props="props">
-              <span v-if="props.row.reference_no" class="dash-num">{{ props.row.reference_no }}</span>
+              <span v-if="props.row.reference_no" class="dash-num">{{
+                props.row.reference_no
+              }}</span>
               <span v-else class="muted">—</span>
             </q-td>
           </template>
@@ -194,14 +199,14 @@
         </q-table>
       </DisbursementTableCard>
 
-    <!-- The gate in front of pay actually moving. One dialog for both routes;
+      <!-- The gate in front of pay actually moving. One dialog for both routes;
          wording comes from `disburseConfirm.js`. -->
-    <ConfirmDialog
-      v-model="showConfirm"
-      :confirm="confirm"
-      :loading="disbursing"
-      @confirm="onConfirm"
-    />
+      <ConfirmDialog
+        v-model="showConfirm"
+        :confirm="confirm"
+        :loading="disbursing"
+        @confirm="onConfirm"
+      />
     </DisbursementStepShell>
   </PageShell>
 </template>
@@ -217,7 +222,10 @@ import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
-import { buildDisburseAllConfirm, buildDisburseOneConfirm } from 'src/components/pages/Payroll/disburseConfirm'
+import {
+  buildDisburseAllConfirm,
+  buildDisburseOneConfirm,
+} from 'src/components/pages/Payroll/disburseConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
@@ -233,7 +241,8 @@ const toast = useToast()
 const groupId = route.params.id
 const { identity, resolveQuietly } = usePayoutGroupIdentity()
 const stepperKey = ref(0)
-const { fetchPayoutGroupInstanceSummary, fetchDisbursementEmployees, disbursePgi } = useDisbursementApi()
+const { fetchPayoutGroupInstanceSummary, fetchDisbursementEmployees, disbursePgi } =
+  useDisbursementApi()
 const { notifyLoaded } = useLoadedToast()
 const { employees, fetchEmployees } = useEmployees()
 
@@ -256,9 +265,22 @@ const pageSizeOptions = [10, 20, 50]
 const columns = [
   { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
   { name: 'position', label: 'Position', field: 'position', align: 'left', sortable: true },
-  { name: 'net_pay', label: 'Net pay', field: 'net_pay', align: 'right', sortable: true, format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}` },
+  {
+    name: 'net_pay',
+    label: 'Net pay',
+    field: 'net_pay',
+    align: 'right',
+    sortable: true,
+    format: (v) => `\u20B1${parseFloat(v || 0).toLocaleString('en-PH')}`,
+  },
   { name: 'payout_method', label: 'Method', field: 'payout_method', align: 'left', sortable: true },
-  { name: 'claim_status', label: 'Claim status', field: 'claim_status', align: 'left', sortable: true },
+  {
+    name: 'claim_status',
+    label: 'Claim status',
+    field: 'claim_status',
+    align: 'left',
+    sortable: true,
+  },
   { name: 'claimed_on', label: 'Claimed', field: 'claimed_on', align: 'left' },
   { name: 'proof_of_payment', label: 'Proof', field: 'proof_of_payment', align: 'left' },
   { name: 'reference_no', label: 'Reference', field: 'reference_no', align: 'left' },
@@ -401,7 +423,9 @@ onMounted(async () => {
  * runs, and `Cash Advance` is still cash.
  */
 function isCash(row) {
-  return String(row?.payout_method || '').toLowerCase().includes('cash')
+  return String(row?.payout_method || '')
+    .toLowerCase()
+    .includes('cash')
 }
 
 /**
@@ -426,9 +450,7 @@ const cashRows = computed(() => disbursements.value.filter(isCash))
 // rather than rebuilt per render. The gate that decides whether the menu exists
 // at all lives in the template — an action that does not apply is absent, not a
 // greyed-out item.
-const disburseActions = [
-  { key: 'disburse', label: 'Disburse', icon: 'o_payments' },
-]
+const disburseActions = [{ key: 'disburse', label: 'Disburse', icon: 'o_payments' }]
 
 // The confirmation gate. `pending` is snapshotted rather than re-read on confirm,
 // so the dialog describes the release that was asked about even though the table
@@ -456,7 +478,8 @@ function requestDisburseOne(row) {
 }
 
 function onConfirm() {
-  if (pendingAction.value === 'all') disburse(pendingRows.value, 'Released pay for everyone paid by bank or another method.')
+  if (pendingAction.value === 'all')
+    disburse(pendingRows.value, 'Released pay for everyone paid by bank or another method.')
   else if (pendingAction.value === 'one') disburse(pendingRows.value, 'Pay released.')
 }
 
@@ -602,7 +625,9 @@ async function disburse(rows, successMessage) {
 .proof:focus-visible {
   outline: none;
   border-radius: var(--dash-r-xs);
-  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-accent-ring);
+  box-shadow:
+    0 0 0 2px var(--dash-surface),
+    0 0 0 4px var(--dash-accent-ring);
 }
 
 .muted {
