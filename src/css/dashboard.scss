@@ -178,6 +178,17 @@
   // the ladder is a design decision, not a component detail.
   --dash-page-max: 1400px;
 
+  // ── Content floor ─────────────────────────────────────────────────────────
+  // How tall a page's main content region stays at minimum, so the same page is
+  // the same height whether it is loading, empty, or full. Without it a list
+  // page visibly jumps when the skeleton resolves to "no rows" — the content
+  // collapses to the 140px empty state and everything below it slides up.
+  //
+  // A floor, not a height: a forty-row table is never clipped, and a
+  // three-row one does not drag the page out to match. Set once here so the
+  // number can move in one edit rather than in twenty-seven.
+  --dash-body-min: 580px;
+
   // ── Motion ────────────────────────────────────────────────────────────────
   --dash-ease: cubic-bezier(0.2, 0.8, 0.3, 1);
   --dash-fast: 0.12s;
@@ -710,6 +721,10 @@
   gap: 10px;
   padding: 30px 20px;
   text-align: center;
+  // Sized for the places this class also serves — a panel, a settings tab, a
+  // dropdown. A page-level empty state is floored by `.dash-body` on the region
+  // around it, so that the skeleton beside it matches; do not raise this number
+  // to make a page taller, or every panel grows with it.
   min-height: 140px;
 }
 .dash-empty__title {
@@ -759,6 +774,45 @@
     animation: none;
     background: var(--dash-n-100);
   }
+}
+
+// ============================================================================
+// PAGE BODY MARKER — add `dash-page-body` to a page's main content region.
+// ----------------------------------------------------------------------------
+// A MARKER, not a size. It used to carry `min-height: var(--dash-body-min)`, so
+// every page-level list region was padded to 580px whether it held six rows or
+// sixty — which put a band of dead space under any list shorter than the floor and
+// held the footer away from the last row. Pages now hug their data, so the region
+// sets no height of its own and this class exists purely so the rules below can
+// find "an empty state belonging to a page-level list" by context.
+//
+// Do NOT restore a height here. The floor belongs to the empty state (below) and
+// to nothing else: a list with data should end where its data ends.
+//
+// NOT `.dash-body`. That name is already taken above by a typography utility
+// (13px, `--dash-ink-2`) sitting among `.dash-eyebrow` / `.dash-title` /
+// `.dash-num`. Reusing it would have merged a layout rule into a font rule.
+// ============================================================================
+
+/* ── The empty state is what takes the floor ──────────────────────────────────
+   An empty page is the one state with nothing to size itself to, so it takes the
+   full height rather than collapsing to a strip. `.dash-empty` already centres
+   its content (`display: flex` + `justify-content: center`), so the floor is all
+   it needs.
+
+   The floor goes on the empty state rather than on the region so that it also
+   reaches the empties that are NESTED — rendered inside QTable's `no-data` slot
+   on Manning, Card Taps, Attendance, Employees and the Deductions tables. A
+   descendant selector covers both placements in one rule.
+
+   Specificity (0,2,0) beats `.dash-empty`'s own (0,1,0), so this wins without
+   depending on where the two rules sit in the file.
+
+   Deliberately NOT applied to `.dash-empty` globally: that class is also used by
+   the notifications dropdown, the dashboard's panels and the Admin Settings
+   tabs, which carry their own floor or should stay small. */
+.dash-page-body .dash-empty {
+  min-height: var(--dash-body-min);
 }
 
 // ============================================================================
@@ -1241,12 +1295,12 @@
 }
 // Spinners on a number field are decoration a payroll form never wants: they
 // invite a click-to-increment on a peso amount.
-.dash-modal__body input[type="number"]::-webkit-outer-spin-button,
-.dash-modal__body input[type="number"]::-webkit-inner-spin-button {
+.dash-modal__body input[type='number']::-webkit-outer-spin-button,
+.dash-modal__body input[type='number']::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-.dash-modal__body input[type="number"] {
+.dash-modal__body input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -1280,8 +1334,6 @@
   line-height: 1.45;
   color: var(--dash-ink-4);
 }
-
-
 
 // The default stack for a form body: one column of fields at a constant rhythm.
 // The same rhythm for a group nested inside the body — a fieldset within a
