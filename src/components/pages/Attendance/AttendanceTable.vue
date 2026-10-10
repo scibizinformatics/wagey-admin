@@ -1,11 +1,10 @@
 <template>
-  <div class="att-table-wrap dash-scroll-x">
+  <div class="att-table-wrap dash-scroll-x dash-page-body">
     <!-- Built from the same `columns` the table renders, so the placeholder's
          column edges are the table's and nothing shifts on load. -->
     <TableSkeleton
       v-if="loading"
       :columns="columns"
-      :rows="8"
       :min-width="attTableMinWidth"
       wrap-class="dash-scroll-x att-tskel-wrap"
       aria-label="Loading attendance"
