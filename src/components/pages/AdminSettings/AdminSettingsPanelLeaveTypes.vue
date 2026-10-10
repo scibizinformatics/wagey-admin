@@ -20,7 +20,7 @@
       <!-- Built from the live `columns`, so the placeholder shares the real
            table's columns, labels and alignment. -->
       <template v-if="loading">
-        <TableSkeleton :columns="columns" :rows="5" />
+        <TableSkeleton :columns="columns" />
       </template>
       <template v-else-if="!filteredLeaveTypes.length">
         <!-- A header strip over an empty grid reads as a table that failed to
@@ -358,10 +358,7 @@
                   </q-input>
                 </label>
 
-                <label
-                  v-if="grantsFromAnchor(policyDraft.grant_type)"
-                  class="dash-modal__field"
-                >
+                <label v-if="grantsFromAnchor(policyDraft.grant_type)" class="dash-modal__field">
                   <span class="dash-modal__field-label">Granted from</span>
                   <q-select
                     v-model="policyDraft.grant_anchor"
