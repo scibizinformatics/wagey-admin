@@ -58,8 +58,25 @@ const props = defineProps({
    * intended use.
    */
   columns: { type: Array, required: true },
-  /** How many placeholder rows to draw. */
-  rows: { type: Number, default: 5 },
+  /**
+   * How many placeholder rows to draw.
+   *
+   * Sixteen is not an arbitrary "look busy" number: it is what brings the
+   * placeholder to roughly the height of the content floor
+   * (`--dash-body-min`, 580px) that every page-level list region now carries.
+   * A shorter skeleton left ~380px of dead space beneath it, so the region was
+   * 580px tall while the shimmer inside it was a third of that and the page
+   * still looked unfinished while loading.
+   *
+   * Derived from `--dash-row-y` (11px) + a 10px shimmer + a 1px rule ≈ 33px a
+   * row, plus a ~38px header: 38 + 16 × 33 ≈ 566px, just under the floor so the
+   * floor is what governs and the region lands on exactly 580.
+   *
+   * Callers deliberately do NOT pass their own count — this default is the one
+   * number to change when the floor moves. The one caller with a genuinely
+   * different need should pass `:rows` and say why in a comment.
+   */
+  rows: { type: Number, default: 16 },
   /**
    * Match `dash-qtable--flush`: no top padding on the header strip.
    *
