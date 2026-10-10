@@ -4,6 +4,42 @@ export function formatCurrency(val) {
 }
 
 /**
+ * Money at the precision it actually carries — `"₱319.0033"`, `"₱200.00"`.
+ *
+ * A sibling of `formatCurrency`, not a replacement: that one is the app's 2-dp
+ * standard and every ordinary figure should keep using it. This exists for the
+ * two kinds of money that are not always whole centavos — statutory
+ * contributions and hand-entered adjustments — where rounding for display makes
+ * a figure disagree with the payroll score behind it.
+ *
+ * At least two decimals always, up to `maxDecimals`, and trailing zeros past the
+ * second are trimmed: `319.00330` reads `319.0033`, not `319.00330`.
+ *
+ * Rounding is done on the scaled integer rather than by `toFixed`, for the same
+ * reason as `decimalHoursLabel`: these values are often client-side sums, so a
+ * `0.1 + 0.2` that is really `0.30000000000000004` as a double must print `0.30`
+ * rather than `0.30000000000000004`, and `toFixed` would faithfully render the
+ * noise. A read of the scaled integer drops it.
+ *
+ * @param {number|string|null|undefined} value
+ * @param {number} [maxDecimals]
+ * @returns {string}
+ */
+export function formatCurrencyPrecise(value, maxDecimals = 4) {
+  const n = Number(value ?? 0)
+  if (!Number.isFinite(n)) return formatCurrency(0)
+  const scale = 10 ** maxDecimals
+  const rounded = Math.round(n * scale + Number.EPSILON * Math.abs(n * scale)) / scale
+  return (
+    '\u20B1' +
+    rounded.toLocaleString('en-PH', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: maxDecimals,
+    })
+  )
+}
+
+/**
  * An instant as a readable date and time — `"Jul 1, 2026, 3:00 PM"`.
  *
  * The tables were printing the raw ISO string, so a claim landed in the cell as

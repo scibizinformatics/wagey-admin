@@ -54,16 +54,16 @@
             <dl class="contrib-summary__figures">
               <div>
                 <dt>Total</dt>
-                <dd class="dash-num">{{ formatCurrency(totalAmount) }}</dd>
+                <dd class="dash-num">{{ formatCurrencyPrecise(totalAmount) }}</dd>
               </div>
               <div>
                 <dt>Deducted</dt>
-                <dd class="dash-num">{{ formatCurrency(deductedAmount) }}</dd>
+                <dd class="dash-num">{{ formatCurrencyPrecise(deductedAmount) }}</dd>
               </div>
               <div>
                 <dt>Pending</dt>
                 <dd class="dash-num" :class="{ 'contrib-pending': pendingAmount > 0 }">
-                  {{ formatCurrency(pendingAmount) }}
+                  {{ formatCurrencyPrecise(pendingAmount) }}
                 </dd>
               </div>
             </dl>
@@ -158,7 +158,7 @@
                   </span>
                 </span>
 
-                <span class="contrib-row__amount dash-num">{{ formatCurrency(row.amount) }}</span>
+                <span class="contrib-row__amount dash-num">{{ formatCurrencyPrecise(row.amount) }}</span>
               </li>
             </ul>
 
@@ -281,7 +281,7 @@
       <q-card-actions class="dash-modal__foot">
         <span v-if="!loading && !error && contributions.length" class="dash-modal__foot-note">
           <template v-if="selected.length">
-            {{ selected.length }} selected · {{ formatCurrency(selectedAmount) }}
+            {{ selected.length }} selected · {{ formatCurrencyPrecise(selectedAmount) }}
           </template>
           <template v-else-if="pending.length">
             {{ pending.length }} contribution{{ pending.length > 1 ? 's' : '' }} still to deduct
@@ -352,7 +352,7 @@ import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import AdjustmentFormDialog from 'src/components/pages/Payroll/AdjustmentFormDialog.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
-import { formatCurrency, formatDateTime } from 'src/composables/utils/format'
+import { formatCurrencyPrecise, formatDateTime } from 'src/composables/utils/format'
 import { normalizeAdjustments, signedAmount } from 'src/composables/utils/payrollAdjustments'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { avatarFor } from 'src/composables/utils/employee'
@@ -433,7 +433,7 @@ const busy = computed(() => deducting.value || reverting.value || applying.value
 
 /** An unreadable figure is a dash; a zero would claim the endpoint said zero. */
 function moneyOrDash(value) {
-  return value === null || value === undefined ? '—' : formatCurrency(value)
+  return value === null || value === undefined ? '—' : formatCurrencyPrecise(value)
 }
 
 /** Decimal strings ("200.00") arrive from the API; sum them as numbers. */
@@ -567,7 +567,7 @@ async function load() {
 function netPayCaption(...parts) {
   const detail = parts.filter((part) => !!part)
   const net = adjustments.value.netPay
-  if (net !== null && net !== undefined) detail.push(`Net pay now ${formatCurrency(net)}`)
+  if (net !== null && net !== undefined) detail.push(`Net pay now ${formatCurrencyPrecise(net)}`)
   return detail.join(' · ')
 }
 
@@ -608,7 +608,7 @@ async function applyAdjustment(body) {
     await loadAdjustments()
     emit('deducted')
     toast.success(
-      `${body.type === 'addition' ? 'Added' : 'Deducted'} ${formatCurrency(written)}`,
+      `${body.type === 'addition' ? 'Added' : 'Deducted'} ${formatCurrencyPrecise(written)}`,
       { icon: 'check_circle', caption: netPayCaption(body.description), timeout: 3500 },
     )
   } catch (err) {
@@ -637,7 +637,7 @@ async function revertAdjustmentRow(row) {
     // The row's amount, held before the refetch: `row` is the pre-revert state
     // and the refreshed list will have dropped it to the reverted copy.
     toast.success(
-      `Reverted ${row.amount === null ? 'the adjustment' : formatCurrency(row.amount)}`,
+      `Reverted ${row.amount === null ? 'the adjustment' : formatCurrencyPrecise(row.amount)}`,
       { icon: 'undo', caption: netPayCaption(row.description), timeout: 3500 },
     )
   } catch (err) {
@@ -661,7 +661,7 @@ async function deduct() {
     // can move the item's overall status, neither of which is knowable here.
     await load()
     emit('deducted')
-    toast.success(`Deducted ${formatCurrency(written)}`, {
+    toast.success(`Deducted ${formatCurrencyPrecise(written)}`, {
       icon: 'check_circle',
       caption: netPayCaption(`${count} contribution${count > 1 ? 's' : ''}`),
       timeout: 3500,
@@ -711,7 +711,7 @@ async function revert(rows) {
     // `deducted_from` and the item's overall contribution status.
     await load()
     emit('deducted')
-    toast.success(`Reverted ${formatCurrency(written)}`, {
+    toast.success(`Reverted ${formatCurrencyPrecise(written)}`, {
       icon: 'undo',
       caption: netPayCaption(`${count} contribution${count > 1 ? 's' : ''}`),
       timeout: 3500,

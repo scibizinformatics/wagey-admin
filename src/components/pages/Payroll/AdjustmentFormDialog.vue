@@ -49,7 +49,7 @@
             <q-input
               v-model="form.amount"
               type="number"
-              step="0.01"
+              step="any"
               outlined
               dense
               hide-bottom-space
@@ -161,7 +161,12 @@ function submit() {
     // The endpoint takes these as decimal strings, like every other amount in
     // this API — sending a JS number here would be the one call on this screen
     // using a different shape.
-    amount: Number(form.value.amount).toFixed(2),
+    //
+    // Sent exactly as typed rather than through `toFixed(2)`: a contribution-
+    // precise figure is often not a whole centavo, and rounding it here would
+    // save an amount the reader did not enter. `isValidAdjustment` already
+    // proved the value parses and is positive.
+    amount: String(form.value.amount).trim(),
     category: form.value.category.trim(),
     description: form.value.description.trim(),
   })

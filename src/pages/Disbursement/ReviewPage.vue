@@ -272,7 +272,7 @@
                   class="dash-num contrib__amount"
                   :class="{ 'contrib__amount--zero': !amount(props.row.contribution) }"
                 >
-                  {{ formatCurrency(props.row.contribution) }}
+                  {{ formatCurrencyPrecise(props.row.contribution) }}
                 </span>
                 <span v-if="showsContributionStatus(props.row)" class="contrib__status">
                   {{ props.row.contribution_status }}
@@ -401,7 +401,7 @@ import EmployeeContributionsDialog from 'src/components/pages/Payroll/EmployeeCo
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { PGI_STATUS_MAP } from 'src/constants/pgiStatus'
-import { formatCurrency } from 'src/composables/utils/format'
+import { formatCurrency, formatCurrencyPrecise } from 'src/composables/utils/format'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'

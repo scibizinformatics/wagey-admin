@@ -15,7 +15,7 @@
  * server is better placed to set.
  */
 
-import { formatCurrency } from 'src/composables/utils/format'
+import { formatCurrencyPrecise } from 'src/composables/utils/format'
 
 /** The two things an adjustment can be, and how each reads. */
 export const ADJUSTMENT_TYPES = [
@@ -127,7 +127,7 @@ export function normalizeAdjustments(payload) {
 export function signedAmount(row) {
   if (row?.amount === null || row?.amount === undefined) return '—'
   const sign = !row.applied ? '' : row.type === 'addition' ? '+' : '−'
-  return sign + formatCurrency(row.amount)
+  return sign + formatCurrencyPrecise(row.amount)
 }
 
 /** Whether a typed apply-form body is complete enough to send. */
