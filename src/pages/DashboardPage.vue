@@ -89,7 +89,7 @@
              on the same line as each other, whichever tab's chip is showing —
              as siblings of the fields they were each nudged separately off the
              row's bottom edge and landed 5px apart on the Annual tab. ────── -->
-        <div class="header-meta" :class="{ 'header-meta--over-field': hasHeaderField }">
+        <div class="header-meta">
           <span
             v-if="activeView === 'current' && secondaryCutoffNotice"
             class="dash-chip dash-chip--critical"
@@ -257,13 +257,6 @@ const {
 
 const activeView = ref('today')
 
-// Today, Current Cutoff and Monthly Summary each put a labelled field in the
-// header; Annual Summary puts only a chip there. The label above a field makes
-// that column taller than the meta strip beside it, so the strip is lifted onto
-// the field's optical centre — a lift that would be wrong on the tab with no
-// field to line up against.
-const hasHeaderField = computed(() => activeView.value !== 'annual')
-
 const formattedToday = computed(() =>
   summaryToday.value?.toLocaleDateString('en-US', {
     month: 'short',
@@ -423,21 +416,29 @@ onMounted(async () => {
 
 .dash-header__controls {
   display: flex;
-  align-items: flex-end;
+  /* Centred, not bottom-aligned: every control in this row is one field tall,
+     because a control's eyebrow sits beside its field rather than above it. The
+     stacked layout this replaced needed a bottom edge and a per-item lift for
+     the shorter controls; neither is needed once the columns are gone. */
+  align-items: center;
   gap: 14px;
   flex-wrap: wrap;
 }
 
 /* ── Contextual controls ── */
+/* Eyebrow beside the field, not above it: the label is one word ("Date",
+   "Cutoff", "Month") and the field below it is 36px of hairline, so the pair
+   reads as one control rather than as a heading over a form. */
 .control {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
 .control__label {
-  padding-left: 1px;
+  white-space: nowrap;
 }
 
 .control__field :deep(.q-field__control) {
@@ -463,6 +464,15 @@ onMounted(async () => {
 .control__field--date {
   width: 158px;
 }
+/* Quasar dashes the outline of a readonly field, which reads as an empty
+   placeholder rather than as the day being viewed. The icon is the control
+   here; the edge stays a solid hairline. Only `border-style` is stated, so the
+   hover/focus/error colours `.dash-field` sets on the same pseudo-element are
+   untouched. `.q-field--readonly` is in the selector because the scoped
+   attribute alone ties Quasar's own (0,3,1) rule on specificity. */
+.control__field--date :deep(.q-field--readonly .q-field__control:before) {
+  border-style: solid;
+}
 .control__field--date :deep(.q-field__control),
 .control__field--date :deep(.q-field__append) {
   cursor: pointer;
@@ -474,22 +484,16 @@ onMounted(async () => {
 .control__toggle {
   font-size: 13px;
   color: var(--dash-ink-2);
-  padding-bottom: 7px;
 }
 
-/* Chip + freshness stamp, centred on one another. The row they sit in is
-   bottom-aligned so the labelled fields line up on their own bottom edge, which
-   means anything shorter than a field has to be lifted onto the field's optical
-   centre — done once here for the pair instead of per item. The lift only
-   applies on the tabs that actually render a field; the Annual tab has none, so
-   the pair would otherwise float above the tab rail's centre line. */
+/* Chip + freshness stamp. Centred on one another, and centred on the row the
+   same way the fields are — which is why there is no lift here any more: the
+   bottom-aligned row this used to correct put the pair 8px high on every tab
+   that renders a field. */
 .header-meta {
   display: flex;
   align-items: center;
   gap: 14px;
-}
-.header-meta--over-field {
-  margin-bottom: 8px;
 }
 
 .last-sync {
@@ -528,6 +532,10 @@ onMounted(async () => {
   }
   .dash-header__controls {
     justify-content: space-between;
+    /* Back to the stacked layout below, which is bottom-aligned: a control is a
+       label over a full-width field again, so its column is taller than the
+       toggle and the row lines them up on the bottom edge as it always has. */
+    align-items: flex-end;
   }
   .control__field--date,
   .control__field--select {
@@ -535,6 +543,14 @@ onMounted(async () => {
   }
   .control {
     flex: 1;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+  }
+  .control__toggle {
+    /* The lift onto the field's centre, which the stacked layout needs and the
+       beside-the-field layout does not. */
+    padding-bottom: 7px;
   }
   /* Narrow: the freshness stamp drops out and the row is space-between, where
      an empty wrapper would still claim a slot and push the controls apart.
