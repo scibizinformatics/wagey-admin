@@ -14,16 +14,38 @@
         aria-label="Previous day"
         @click="emit('prev-day')"
       />
+      <!-- Was a native `type="date"` input, which drew the browser's own
+           calendar: a popup with no idea what theme the rest of the app is on.
+           QDate is the same control the dashboard's and attendance's date
+           fields use, so the header, the chosen day and the surrounding chrome
+           match. Readonly, because the day here is a control rather than
+           something to key in, and `mask` keeps the emitted value an ISO day —
+           which is all `useManning` reads. `v-close-popup` is deliberately
+           absent: it fires for any click inside the calendar, month arrows
+           included. -->
       <q-input
         :model-value="date"
-        type="date"
         dense
         outlined
+        readonly
         hide-bottom-space
         class="daynav__field dash-field"
         aria-label="Date"
-        @update:model-value="onDateInput"
-      />
+      >
+        <template v-slot:append>
+          <q-icon name="event" size="16px" class="cursor-pointer">
+            <q-popup-proxy
+              cover
+              transition-show="scale"
+              transition-hide="scale"
+              anchor="bottom left"
+              self="top left"
+            >
+              <q-date :model-value="date" mask="YYYY-MM-DD" @update:model-value="onDateInput" />
+            </q-popup-proxy>
+          </q-icon>
+        </template>
+      </q-input>
       <q-btn
         flat
         dense
@@ -187,9 +209,8 @@ const searchRef = ref(null)
 defineExpose({ focusSearch: () => searchRef.value?.focus() })
 
 function onDateInput(value) {
-  // A cleared field would otherwise fetch a day the board cannot show. The
-  // native date input also emits mid-typing, so an incomplete value is dropped
-  // rather than sent.
+  // The board cannot show a day it does not have, so anything that is not a
+  // whole ISO day is dropped rather than emitted.
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return
   emit('update:date', value)
 }
@@ -229,6 +250,9 @@ function onDateInput(value) {
 
 .daynav__field {
   width: 138px;
+  /* The field is readonly — the calendar icon beside it opens the picker — so it
+     has to advertise that it is still a control, or it reads as a dead label. */
+  cursor: pointer;
 }
 .daynav__field :deep(.q-field__control) {
   height: 30px;
@@ -247,6 +271,10 @@ function onDateInput(value) {
   font-variant-numeric: tabular-nums;
   padding: 0;
   min-height: 30px;
+}
+.daynav__field :deep(.q-field__marginal) {
+  height: 30px;
+  color: var(--dash-ink-4);
 }
 
 /* A state marker, not a control — it says "you are on today". */
