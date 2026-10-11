@@ -51,17 +51,42 @@
               :disable="dateRangeActive"
               @click="goToPreviousDay"
             />
+            <!-- Was a native `type="date"` input, which drew the browser's own
+                 calendar: a popup with no idea what theme the rest of the app
+                 is on. QDate is the same control the dashboard's and
+                 attendance's date fields use, so the header, the chosen day and
+                 the surrounding chrome match. `mask` keeps `currentDate` the
+                 ISO day `onDateNavChange` and the day filter read.
+                 `v-close-popup` is deliberately absent: it fires for any click
+                 inside the calendar, month arrows included. -->
             <q-input
               v-model="currentDate"
-              type="date"
               dense
               outlined
+              readonly
               hide-bottom-space
               class="ctp-daynav__field dash-field"
               aria-label="Date"
               :disable="dateRangeActive"
-              @update:model-value="onDateNavChange"
-            />
+            >
+              <template v-slot:append>
+                <q-icon name="event" class="cursor-pointer">
+                  <q-popup-proxy
+                    cover
+                    transition-show="scale"
+                    transition-hide="scale"
+                    anchor="bottom left"
+                    self="top left"
+                  >
+                    <q-date
+                      v-model="currentDate"
+                      mask="YYYY-MM-DD"
+                      @update:model-value="onDateNavChange"
+                    />
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
             <q-btn
               flat
               dense
@@ -719,6 +744,18 @@ watch(companyId, (id) => {
 
 .ctp-daynav__field {
   width: 152px;
+  /* The field is readonly — the calendar icon beside it opens the picker — so it
+     has to advertise that it is still a control, or it reads as a dead label. */
+  cursor: pointer;
+}
+/* Quasar dashes the outline of a readonly field, which reads as an empty
+   placeholder rather than as the day being viewed. The icon is the control
+   here; the edge stays a solid hairline. Only `border-style` is stated, so the
+   hover/focus/error colours `.dash-field` sets on the same pseudo-element are
+   untouched. `.q-field--readonly` is in the selector because the scoped
+   attribute alone ties Quasar's own (0,3,1) rule on specificity. */
+.ctp-daynav__field :deep(.q-field--readonly .q-field__control:before) {
+  border-style: solid;
 }
 .ctp-daynav__field :deep(.q-field__control) {
   height: 34px;
