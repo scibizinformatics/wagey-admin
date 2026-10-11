@@ -1865,6 +1865,29 @@
 }
 
 // ============================================================================
+// DATE / TIME PICKERS — Quasar's calendar and clock.
+// ----------------------------------------------------------------------------
+// The header and the chosen day are painted from `--q-primary`: Quasar sets
+// `background-color: var(--q-primary)` on `.q-date__header` and compiles the
+// selected day's `color` to its `bg-primary` utility. So the brand-dark button
+// overrides near the bottom of app.scss never reach them — those target
+// `.q-btn--primary`, a class QBtn does not emit — and the picker keeps Quasar's
+// stock theme blue (#1976d2) against a product whose solid action is navy.
+//
+// The token is re-pointed inside the picker rather than each rule being
+// restated: it is the one value the header, the selected day and the range band
+// all read, so this is the whole fix. Nothing here needs `!important` — the one
+// on Quasar's `bg-primary` sits on the property, so the substituted variable is
+// still honoured, and the token is scoped to the picker so `--q-primary` means
+// the same stock colour everywhere else in the app.
+// ============================================================================
+
+.q-date,
+.q-time {
+  --q-primary: var(--dash-brand);
+}
+
+// ============================================================================
 // QTABLE — add `dash-qtable` to any flat QTable to give it the table styling
 // above without hand-rolling it per component.
 // ----------------------------------------------------------------------------
