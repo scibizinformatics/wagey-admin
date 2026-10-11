@@ -93,15 +93,27 @@
                 >Date<span class="dash-modal__req">*</span></span
               >
               <q-input
+                v-model="form.date"
+                mask="####-##-##"
                 outlined
-                :model-value="form.date"
-                @update:model-value="form.date = $event"
-                type="date"
-                :rules="[(val) => !!val || 'Date is required']"
-                class="dash-field dash-modal__span-2"
                 dense
+                placeholder="YYYY-MM-DD"
+                :rules="[(val) => !!val || 'Date is required']"
                 hide-bottom-space
-              />
+                class="dash-field dash-modal__span-2"
+              >
+                <!-- The allowance dialog's date field, reused: a form field stays
+                     typeable (masked), with the calendar beside it rather than
+                     instead of it. `mask="YYYY-MM-DD"` on the QDate keeps the
+                     model the ISO day `onSubmit` sends. -->
+                <template v-slot:append>
+                  <q-icon name="o_event" size="18px" class="cursor-pointer">
+                    <q-popup-proxy transition-show="scale" transition-hide="scale">
+                      <q-date v-model="form.date" mask="YYYY-MM-DD" />
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
             </label>
             <label class="dash-modal__field">
               <span class="dash-modal__field-label">Limit hours</span>
