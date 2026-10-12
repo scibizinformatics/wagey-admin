@@ -208,6 +208,24 @@
         :subtitle="attachment.subtitle"
         :image-alt="attachment.alt"
       />
+
+      <!-- The gate in front of a decision the employee cannot ask about again.
+           Two dialogs rather than one because rejecting needs a reason written
+           in it and resolving does not; the shared chrome they share is what
+           makes them read as one pair. Wording for the resolve side comes from
+           `issueDecisionConfirm.js`. -->
+      <ConfirmDialog
+        v-model="showResolveConfirm"
+        :confirm="resolveConfirm"
+        :loading="processing"
+        @confirm="commitResolve"
+      />
+      <PayslipRejectDialog
+        v-model="showRejectDialog"
+        :employee="pendingDecision?.employee || ''"
+        :loading="processing"
+        @confirm="commitReject"
+      />
     </DisbursementStepShell>
   </PageShell>
 </template>
@@ -223,7 +241,10 @@ import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRo
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import PayslipRowMenu from 'src/components/pages/Payroll/PayslipRowMenu.vue'
 import PayslipDisputeCell from 'src/components/pages/Payroll/PayslipDisputeCell.vue'
+import PayslipRejectDialog from 'src/components/pages/Payroll/PayslipRejectDialog.vue'
 import AttendanceSelfieViewer from 'src/components/pages/Attendance/AttendanceSelfieViewer.vue'
+import ConfirmDialog from 'src/components/common/ConfirmDialog.vue'
+import { buildResolveConfirm } from 'src/components/pages/Payroll/issueDecisionConfirm'
 import { createRequestToken } from 'src/composables/utils/requestToken'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
@@ -613,7 +634,7 @@ watch([searchTerm, activeTab, pageSize], () => {
  * that did succeed. `Promise.all` is still right for the two *reads* below —
  * there, one failure genuinely invalidates the pair.
  */
-async function processIssue(row, action) {
+async function processIssue(row, action, adminNotes = '') {
   processing.value = true
   try {
     const issues = await fetchPayslipIssues(row.epi_id)
@@ -624,7 +645,12 @@ async function processIssue(row, action) {
     }
 
     const fn = action === 'resolve' ? resolveIssue : rejectIssue
-    const results = await Promise.allSettled(issueIds.map((id) => fn(id, { admin_notes: '' })))
+    // The same reason goes on every issue this decision covers: the admin is
+    // answering one complaint about one payslip, and a reason written per issue
+    // would be the same sentence copied N times.
+    const results = await Promise.allSettled(
+      issueIds.map((id) => fn(id, { admin_notes: adminNotes })),
+    )
     const failures = results.filter((r) => r.status === 'rejected')
     const settled = issueIds.length - failures.length
 
@@ -670,13 +696,103 @@ async function processIssue(row, action) {
   }
 }
 
-async function resolve(row) {
-  await processIssue(row, 'resolve')
+// ─── The decision gate ───────────────────────────────────────────────────────
+
+/**
+ * Resolving or rejecting a dispute is the one write on this page nobody can
+ * look up afterwards: the payslip leaves "Disputed" and the reason the employee
+ * gave stops being the thing the page is about. Both routes are therefore asked
+ * rather than fired — `DisbursePage` and `FundingPage` gate the same way, and
+ * `PayslipRowMenu`'s two items are only the opening of a decision, not the
+ * decision itself.
+ *
+ * `pendingDecision` is snapshotted rather than re-read on confirm: the table
+ * behind the dialog is live, and a refetch can replace that row at any moment.
+ */
+const showResolveConfirm = ref(false)
+const resolveConfirm = ref(null)
+const showRejectDialog = ref(false)
+const pendingDecision = ref(null)
+
+/** One gate at a time, and none while a write from a previous one is running. */
+function gateBusy() {
+  return processing.value || showResolveConfirm.value || showRejectDialog.value
 }
 
-async function reject(row) {
-  await processIssue(row, 'reject')
+/**
+ * The issues on a payslip that are still undecided.
+ *
+ * The endpoint answers with pending and decided issues alike, so counting the
+ * array as it stands would tell the reader they are about to settle a dispute
+ * they settled last week. An absent status counts as open, matching
+ * `PayslipDisputeCell` — a dispute the endpoint reports without a status must not
+ * be one the gate quietly hides.
+ */
+function openIssuesOf(row) {
+  return issuesFor(row).filter((issue) => {
+    const status = String(issue?.status ?? '')
+      .trim()
+      .toLowerCase()
+    return status === '' || status === 'pending'
+  })
 }
+
+/** Open the "are you sure" side. Writes nothing. */
+function resolve(row) {
+  if (!isDisputed(row) || gateBusy()) return
+  const open = openIssuesOf(row)
+  pendingDecision.value = row
+  resolveConfirm.value = buildResolveConfirm({
+    employee: row.employee,
+    issueCount: open.length,
+    // The complaint itself, which is what the reader is actually answering.
+    reason: open[0]?.description,
+    groupName: groupName.value,
+  })
+  showResolveConfirm.value = true
+}
+
+/** Open the side that asks why. Writes nothing. */
+function reject(row) {
+  if (!isDisputed(row) || gateBusy()) return
+  pendingDecision.value = row
+  showRejectDialog.value = true
+}
+
+/**
+ * Confirmed resolve. Reachable only from the shared confirm's `@confirm`, which
+ * is what lets `:loading` sit on the button and stop a second decision being
+ * written against the same payslip.
+ */
+function commitResolve() {
+  const row = pendingDecision.value
+  if (!row || processing.value) return
+  showResolveConfirm.value = false
+  // Nothing recorded against an upheld dispute — the employee is told it was
+  // accepted, which is the outcome, not a note.
+  processIssue(row, 'resolve', '')
+}
+
+/**
+ * Confirmed reject, carrying the reason the admin typed. Same rule as above: the
+ * write lives here and not in the handler that opened the dialog.
+ */
+function commitReject(adminNotes) {
+  const row = pendingDecision.value
+  const reason = String(adminNotes ?? '').trim()
+  if (!row || !reason || processing.value) return
+  showRejectDialog.value = false
+  processIssue(row, 'reject', reason)
+}
+
+// Cancelling must clear the snapshot as surely as confirming does: a stale
+// `pendingDecision` left behind is a decision the next dialog's button would fire
+// against a row that may no longer be on screen.
+watch([showResolveConfirm, showRejectDialog], ([resolving, rejecting]) => {
+  if (resolving || rejecting) return
+  resolveConfirm.value = null
+  pendingDecision.value = null
+})
 </script>
 
 <style scoped>

@@ -45,8 +45,8 @@
           @clear-filters="clearScheduleFilters"
           @open-quick-add="openQuickAddModal"
           @open-reassign="openReassignModal"
-          @assign-dayoff="assignDayOff"
-          @assign-dual-dayoff="assignDualDayOff"
+          @assign-dayoff="requestDayOffForShift"
+          @assign-dual-dayoff="requestDayOffForDual"
           @quick-direct-assign="quickDirectAssign"
         />
 
@@ -146,6 +146,15 @@
       :loading="isReassigning"
       @confirm="commitReassign"
     />
+
+    <!-- Day off Confirm — the gate in front of all three day-off entry points,
+         so nothing on the grid replaces a shift without asking first. -->
+    <ConfirmDialog
+      v-model="showDayOffConfirm"
+      :confirm="dayOffConfirm"
+      :loading="isAssigningDayOff"
+      @confirm="commitDayOff"
+    />
   </PageShell>
 </template>
 
@@ -170,6 +179,8 @@ import ScheduleAddModal from '@/components/pages/Schedule/ScheduleAddModal.vue'
 import ScheduleQuickAddModal from '@/components/pages/Schedule/ScheduleQuickAddModal.vue'
 import ScheduleReassignModal from '@/components/pages/Schedule/ScheduleReassignModal.vue'
 import ScheduleReassignConfirmDialog from '@/components/pages/Schedule/ScheduleReassignConfirmDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { buildDayOffConfirm } from '@/components/pages/Schedule/dayOffConfirm'
 import { useToast } from '@/composables/useToast'
 
 const $q = useQuasar()
@@ -253,6 +264,26 @@ const pendingReassign = ref(null)
 const isCheckingConflict = ref(false)
 const isAddingShift = ref(false)
 const assigningDayOffId = ref(null)
+// The day-off confirmation and the write frozen inside it, mirroring the
+// reassign pair above: `pendingDayOff` is snapshotted when the dialog opens
+// rather than read off the grid when Confirm is pressed, because the grid under
+// the dialog is live — a refresh, a filter change or the row payload landing can
+// all replace it — and a confirm that re-read its subject would then describe a
+// day other than the one it is about to change.
+const showDayOffConfirm = ref(false)
+const dayOffConfirm = ref(null)
+const pendingDayOff = ref(null)
+const isAssigningDayOff = ref(false)
+
+// Cancel is the only exit the shared confirm offers, and it clears nothing by
+// itself — so a frozen write describing a day nobody agreed to would outlive the
+// dialog that asked about it. Clearing on the close (not on the write) keeps the
+// ref meaning "a question is on screen" rather than "a question was once asked".
+watch(showDayOffConfirm, (open) => {
+  if (open || isAssigningDayOff.value) return
+  dayOffConfirm.value = null
+  pendingDayOff.value = null
+})
 const quickActionLoading = ref(null)
 const refreshingRowUserId = ref(null)
 const leaveTypes = ref([])
@@ -1489,97 +1520,239 @@ const commitReassign = async () => {
   }
 }
 
-const assignDayOff = async (element) => {
-  assigningDayOffId.value = element.id
-  try {
-    const cId = numericCompanyId()
-    await assignDayOffApi({
-      employee_id: element.userId,
-      company_id: cId,
-      date: element.date,
-      site_id: parseInt(element.site),
-    })
-    const idx = shifts.value.findIndex((s) => s.id === element.id)
-    if (idx !== -1)
-      shifts.value[idx] = {
-        ...shifts.value[idx],
-        position: 'Day Off',
-        startTime: null,
-        endTime: null,
-      }
-    toast.success('Day off assigned!', {
-      caption: `${getEmployeeName(element.userId)}'s shift changed to Day Off`,
-      icon: 'event_busy',
-      timeout: 3000,
-    })
-    await refreshSingleEmployee(element.userId)
-  } catch (error) {
-    toast.error(extractErrorMessage(error, 'Failed to assign day off.'), { timeout: 5000 })
-  } finally {
-    assigningDayOffId.value = null
-  }
+// ─── Day off ────────────────────────────────────────────────────────────────
+// Assigning a day off is one PATCH that replaces whatever is on that day, and it
+// used to fire straight from a card button — a scheduler tidying one cell could
+// take somebody's shift away with a single click, and nothing on screen said it
+// had happened. All three entry points now ask first, and the write lives in
+// `commitDayOff` rather than in the handler that opens the dialog, so `:loading`
+// covers it and a second click cannot write the same day off twice.
+
+/**
+ * First step: work out what the day off would replace, freeze it, then ask.
+ *
+ * `pendingDayOff` carries everything the write needs — the employee, the dates,
+ * the sites, the row to spin, and the row to patch on success — so `commitDayOff`
+ * reads only that, never the grid. The grid is live underneath an open dialog: a
+ * refresh, a filter change or the row payload landing can all replace the row the
+ * dialog was opened over, and a confirm that re-read its subject would then
+ * describe a day other than the one it is about to change.
+ *
+ * Mirrors the reassign gate above it and the card-status gate on Access Cards —
+ * same split, same reason.
+ */
+function requestDayOff(pending, confirm) {
+  // A second open while one is in flight, or a click on another cell while the
+  // dialog is up, would leave `pendingDayOff` describing a day the dialog is not
+  // showing.
+  if (isAssigningDayOff.value || showDayOffConfirm.value) return
+
+  pendingDayOff.value = pending
+  dayOffConfirm.value = confirm
+  showDayOffConfirm.value = true
 }
 
-const assignDualDayOff = async (mergedElement) => {
-  assigningDayOffId.value = mergedElement.id
-  try {
-    const cId = numericCompanyId()
-    // The day-off payload names no assignment, so both legs of a dual shift on
-    // one day at one site produce the *same* request — sending it twice asked
-    // the backend to record the same day off twice. One write per distinct
-    // payload, and in order rather than at once, for the reason
-    // `settleInOrder` documents.
-    const seen = new Set()
-    const payloads = mergedElement.shifts
-      .map((s) => ({
-        employee_id: mergedElement.userId,
+/** The day-off button on a single shift's card. */
+const requestDayOffForShift = (element) => {
+  const cId = numericCompanyId()
+
+  requestDayOff(
+    {
+      kind: 'shift',
+      employeeId: element.userId,
+      payload: {
+        employee_id: element.userId,
         company_id: cId,
-        date: s.date,
-        site_id: parseInt(s.site),
-      }))
-      .filter((payload) => {
-        const key = `${payload.date}|${payload.site_id}`
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-    const results = await settleInOrder(payloads, (payload) => assignDayOffApi(payload))
-    const failed = results.filter((x) => x.status === 'rejected')
-    const done = results.length - failed.length
+        date: element.date,
+        site_id: parseInt(element.site),
+      },
+      // The card's own spinner, keyed on the row the confirm was opened over.
+      elementId: element.id,
+    },
+    buildDayOffConfirm({
+      employeeName: getEmployeeName(element.userId),
+      date: element.date,
+      dayLabel: days[element.day],
+      mode: 'shift',
+      shifts: [element],
+    }),
+  )
+}
 
-    await refreshSingleEmployee(mergedElement.userId)
+/** The same button on a dual-shift day: one day off across both legs. */
+const requestDayOffForDual = (mergedElement) => {
+  const cId = numericCompanyId()
+  // The day-off payload names no assignment, so both legs of a dual shift on one
+  // day at one site produce the *same* request — sending it twice asked the
+  // backend to record the same day off twice. One write per distinct payload,
+  // and in order rather than at once, for the reason `settleInOrder` documents.
+  const seen = new Set()
+  const payloads = mergedElement.shifts
+    .map((s) => ({
+      employee_id: mergedElement.userId,
+      company_id: cId,
+      date: s.date,
+      site_id: parseInt(s.site),
+    }))
+    .filter((payload) => {
+      const key = `${payload.date}|${payload.site_id}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
 
-    if (failed.length && !done) {
-      toast.error(extractErrorMessage(failed[0].reason, 'Failed to assign day off.'), {
-        timeout: 5000,
-      })
-    } else if (failed.length) {
-      toast.warning(`Day off assigned to ${done} of ${results.length} shifts.`, {
-        caption: extractErrorMessage(failed[0].reason, 'The other was refused'),
-        timeout: 6000,
+  requestDayOff(
+    {
+      kind: 'dual',
+      employeeId: mergedElement.userId,
+      payloads,
+      elementId: mergedElement.id,
+    },
+    buildDayOffConfirm({
+      employeeName: getEmployeeName(mergedElement.userId),
+      // The group carries no date of its own — `splitDayShifts` builds it from
+      // the day's shifts — so the date comes off the first leg.
+      date: mergedElement.shifts[0]?.date,
+      dayLabel: days[mergedElement.day],
+      mode: 'dual',
+      shifts: mergedElement.shifts,
+    }),
+  )
+}
+
+/**
+ * The confirmed day off.
+ *
+ * Reads only `pendingDayOff`, so it writes exactly what the confirmation
+ * described. The refetch is unconditional and comes after the toast, for the
+ * reason it is everywhere else: a write that reported failure may still have
+ * landed, and the grid is the only thing that can say what the day looks like now.
+ */
+async function commitDayOff() {
+  const pending = pendingDayOff.value
+  if (!pending || isAssigningDayOff.value) return
+
+  // Held in locals because the `finally` below clears the ref the confirm reads.
+  const { employeeId, elementId } = pending
+
+  isAssigningDayOff.value = true
+  // Whichever spinner the entry point owns: the card button for a shift it is
+  // replacing, the empty cell's `+` for a day it is filling.
+  if (elementId != null) assigningDayOffId.value = elementId
+  else quickActionLoading.value = pending.quickKey ?? null
+
+  try {
+    if (pending.kind === 'dual') {
+      const results = await settleInOrder(pending.payloads, (payload) => assignDayOffApi(payload))
+      const failed = results.filter((x) => x.status === 'rejected')
+      const done = results.length - failed.length
+
+      await refreshSingleEmployee(employeeId)
+
+      if (failed.length && !done) {
+        toast.error(extractErrorMessage(failed[0].reason, 'Failed to assign day off.'), {
+          timeout: 5000,
+        })
+      } else if (failed.length) {
+        toast.warning(`Day off assigned to ${done} of ${results.length} shifts.`, {
+          caption: extractErrorMessage(failed[0].reason, 'The other was refused'),
+          timeout: 6000,
+        })
+      } else {
+        toast.success('Day off assigned!', {
+          caption: `${getEmployeeName(employeeId)}'s dual shift changed to Day Off`,
+          icon: 'event_busy',
+          timeout: 3000,
+        })
+      }
+      return
+    }
+
+    await assignDayOffApi(pending.payload)
+
+    // The single-shift path is the only one that can patch its own row in place:
+    // the grid keys its local rows by the server's assignment id, so replacing
+    // the payload in place is what keeps the card from jumping out of its cell
+    // before the refetch lands.
+    if (pending.kind === 'shift') {
+      const idx = shifts.value.findIndex((s) => s.id === elementId)
+      if (idx !== -1)
+        shifts.value[idx] = {
+          ...shifts.value[idx],
+          position: 'Day Off',
+          startTime: null,
+          endTime: null,
+        }
+      toast.success('Day off assigned!', {
+        caption: `${getEmployeeName(employeeId)}'s shift changed to Day Off`,
+        icon: 'event_busy',
+        timeout: 3000,
       })
     } else {
       toast.success('Day off assigned!', {
-        caption: `${getEmployeeName(mergedElement.userId)}'s dual shift changed to Day Off`,
+        caption: `${getEmployeeName(employeeId)} — ${pending.dayLabel}`,
         icon: 'event_busy',
         timeout: 3000,
       })
     }
+
+    await refreshSingleEmployee(employeeId)
   } catch (error) {
     toast.error(extractErrorMessage(error, 'Failed to assign day off.'), { timeout: 5000 })
   } finally {
+    isAssigningDayOff.value = false
     assigningDayOffId.value = null
+    quickActionLoading.value = null
+    showDayOffConfirm.value = false
+    dayOffConfirm.value = null
+    pendingDayOff.value = null
   }
 }
 
 const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
   const key = `${userId}-${dayIdx}-${type}`
+  const { start } = selectedWeek.value
+  const targetDate = new Date(start)
+  targetDate.setDate(targetDate.getDate() + dayIdx)
+  const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`
+
+  // Day off asks first, and the spinner belongs to the commit rather than to this
+  // handler: starting it here would put a busy marker on a cell whose day off had
+  // not been agreed to yet, and it would stay on screen through the whole time
+  // the dialog is open. Everything else the cell can offer writes directly.
+  if (type === 'dayoff') {
+    const siteId = parseInt(sites.value[0]?.id)
+    if (!siteId) {
+      toast.error('No sites available to assign day off.')
+      return
+    }
+    requestDayOff(
+      {
+        kind: 'empty',
+        employeeId: userId,
+        // The date comes off the week shown when the dialog opened, not off the
+        // week on screen when Confirm is pressed.
+        payload: {
+          employee_id: userId,
+          company_id: numericCompanyId(),
+          date: dateStr,
+          site_id: siteId,
+        },
+        dayLabel: days[dayIdx],
+        quickKey: key,
+      },
+      buildDayOffConfirm({
+        employeeName: getEmployeeName(userId),
+        date: dateStr,
+        dayLabel: days[dayIdx],
+        mode: 'empty',
+      }),
+    )
+    return
+  }
+
   quickActionLoading.value = key
   try {
-    const { start } = selectedWeek.value
-    const targetDate = new Date(start)
-    targetDate.setDate(targetDate.getDate() + dayIdx)
-    const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`
     const cId = String(companyId.value ?? '')
     if (type === 'leave') {
       const leaveType = leaveTypes.value.find((lt) => lt.id === leaveSubType)
@@ -1613,29 +1786,10 @@ const quickDirectAssign = async (userId, dayIdx, type, leaveSubType = null) => {
         icon: 'beach_access',
         timeout: 3000,
       })
-    } else {
-      const siteOptionsList = sites.value.map((s) => ({ label: s.name, value: s.id }))
-      const siteId = parseInt(siteOptionsList[0]?.value)
-      if (!siteId)
-        return toast.error('No sites available to assign day off.')
-      await assignDayOffApi({
-        employee_id: userId,
-        company_id: cId,
-        date: dateStr,
-        site_id: siteId,
-      })
-      toast.success('Day off assigned!', {
-        caption: `${getEmployeeName(userId)} — ${days[dayIdx]}`,
-        icon: 'event_busy',
-        timeout: 3000,
-      })
     }
     await refreshSingleEmployee(userId)
   } catch (error) {
-    toast.error(
-      extractErrorMessage(error, `Failed to assign ${type === 'dayoff' ? 'day off' : 'leave'}.`),
-      { timeout: 5000 },
-    )
+    toast.error(extractErrorMessage(error, 'Failed to assign leave.'), { timeout: 5000 })
   } finally {
     quickActionLoading.value = null
   }

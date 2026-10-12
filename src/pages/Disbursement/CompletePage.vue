@@ -18,7 +18,7 @@
           <h2 class="done__title">Disbursement complete</h2>
           <p class="done__sub">
             <template v-if="completion?.completion_date">
-              Closed {{ completion.completion_date }} ·
+              Closed {{ formatDateTime(completion.completion_date) }} ·
             </template>
             {{ completion?.employees_paid ?? 0 }} of {{ employees.length }} employees paid
           </p>
@@ -163,6 +163,17 @@
             </q-td>
           </template>
 
+          <!-- The release arrived as an ISO instant and printed as one, in a
+               column whose neighbours are words. -->
+          <template #body-cell-released_on="props">
+            <q-td :props="props">
+              <span v-if="formatDateTime(props.row.released_on)" class="dash-num">
+                {{ formatDateTime(props.row.released_on) }}
+              </span>
+              <span v-else class="muted">—</span>
+            </q-td>
+          </template>
+
           <template #body-cell-received_by="props">
             <q-td :props="props">
               <span v-if="props.row.received_by">{{ props.row.received_by }}</span>
@@ -189,6 +200,7 @@ import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTabl
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
+import { formatDateTime } from 'src/composables/utils/format'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 
@@ -283,7 +295,7 @@ const statTiles = computed(() => [
   {
     key: 'date',
     label: 'Completed',
-    value: completion.value?.completion_date || '—',
+    value: formatDateTime(completion.value?.completion_date) || '—',
     mark: 'var(--dash-neutral-mark)',
     numeric: false,
   },
@@ -325,7 +337,9 @@ function exportSummary() {
   doc.setFontSize(9)
   doc.text(
     [
-      completion.value?.completion_date ? `Completed ${completion.value.completion_date}` : '',
+      completion.value?.completion_date
+        ? `Completed ${formatDateTime(completion.value.completion_date)}`
+        : '',
       `Employees paid: ${completion.value?.employees_paid ?? 0}`,
       `Net payroll: PHP ${parseAmount(completion.value?.net_payroll_amount)}`,
     ]
@@ -356,7 +370,7 @@ function exportSummary() {
       e.reference_no || '',
       `PHP ${parseAmount(e.net_pay)}`,
       e.status || '',
-      e.released_on || '',
+      formatDateTime(e.released_on),
       e.received_by || '',
     ]),
     styles: { fontSize: 8, cellPadding: 2 },
