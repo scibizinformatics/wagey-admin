@@ -1,17 +1,18 @@
 <template>
   <div class="monthly">
-    <div v-if="!loading && !months.length" class="notice" role="status">
+    <div v-if="!loading && !hasClosedMonth" class="notice" role="status">
       <q-icon name="hourglass_empty" size="18px" class="notice__icon" />
       <div>
         <p class="notice__title">No closed month yet</p>
         <p class="notice__body">
-          A month appears here once every cutoff inside it is complete and every payout group is
-          fully funded. As of {{ today }}, none qualifies.
+          A month counts as closed once every cutoff inside it is complete and every payout group is
+          fully funded. You can still open any month from the picker above to see how far it has
+          got. As of {{ today }}, none has closed.
         </p>
       </div>
     </div>
 
-    <template v-if="loading || months.length">
+    <template v-if="loading || hasClosedMonth">
       <!-- Lead: where this month sits in the run of months, and what it is made of. -->
       <div class="monthly__row monthly__row--lead">
         <MonthlyPayrollTrendPanel
@@ -100,11 +101,18 @@ const props = defineProps({
   selectedMonth: { type: String, default: null },
 })
 
+// `months` is the whole calendar year now, not just the closed months, so a
+// month can be opened before it has closed. The `selected` fallback to the last
+// entry is therefore dropped: an open month is a real answer with real (partial)
+// figures, and silently substituting a different month for it would put figures
+// from one month under another's name.
 const selected = computed(
-  () =>
-    props.months.find((m) => m.month === props.selectedMonth) ??
-    props.months[props.months.length - 1],
+  () => props.months.find((m) => m.month === props.selectedMonth) ?? null,
 )
+
+// Whether any month has closed at all — what the notice above is about, now that
+// `months.length` is always twelve and can no longer answer it.
+const hasClosedMonth = computed(() => props.months.some((m) => m.closed))
 
 const breakdown = computed(() => (selected.value ? props.componentBreakdown(selected.value) : []))
 
