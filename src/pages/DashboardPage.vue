@@ -142,13 +142,14 @@
           :payout-group-details="payoutGroupDetails"
           :cutoff-summary-rollup="cutoffSummaryRollup"
           :cutoff-status-summary="cutoffStatusSummary"
+          :cutoff-status-loaded="cutoffStatusLoaded"
           :previous-cutoff-incomplete="previousCutoffIncomplete"
           :current-cutoff-link="currentCutoffLink"
           :hide-completed="hideCompleted"
         />
         <MonthlySummaryTab
           v-else-if="activeView === 'monthly'"
-          :months="monthlySummaries"
+          :months="yearMonths"
           :selected-month="selectedMonth"
           :monthly-trend-series="monthlyTrendSeries"
           :thirteenth-month-pay="thirteenthMonthPay"
@@ -162,8 +163,8 @@
         <AnnualSummaryTab
           v-else
           :annual="annualSummary"
-          :trend-labels="monthlyTrendSeries.map((m) => m.label)"
-          :trend-values="monthlyTrendSeries.map((m) => m.value)"
+          :trend-labels="yearTrendSeries.map((m) => m.label)"
+          :trend-values="yearTrendSeries.map((m) => m.value)"
           :thirteenth-month-pay="thirteenthMonthPay"
           :component-breakdown="componentBreakdown"
           :monthly-comparison="monthlyComparison"
@@ -217,10 +218,13 @@ const { fetchLeaveRequests, fetchOvertimeRequests, fetchCashAdvanceRequests } = 
 
 // ── Payroll summary / 13th-month-pay data ──
 const {
-  monthlySummaries,
+  yearMonths,
+  yearTrendSeries,
   annualSummary,
   thirteenthMonthPay,
   monthlyTrendSeries,
+  selectedMonth,
+  monthOptions,
   componentBreakdown,
   paymentChannels,
   employeeReleases,
@@ -247,6 +251,7 @@ const {
   payoutGroupDetails,
   cutoffSummaryRollup,
   cutoffStatusSummary,
+  cutoffStatusLoaded,
   previousCutoffIncomplete,
   currentCutoffLink,
   hideCompleted,
@@ -272,21 +277,11 @@ watch(todayDate, (newDate) => {
   }
 })
 
-// ─── Monthly Summary — month picker (lives in the header) ────────────────────
-const selectedMonth = ref(null)
-const monthOptions = computed(() =>
-  monthlySummaries.value.map((m) => ({ label: m.label, value: m.month })),
-)
-watch(
-  monthlySummaries,
-  (list) => {
-    if (list.length && !list.find((m) => m.month === selectedMonth.value)) {
-      selectedMonth.value = list[list.length - 1].month
-    }
-  },
-  { immediate: true },
-)
-
+// ─── Monthly Summary — month picker ──────────────────────────────────
+// `selectedMonth` and `monthOptions` live in `useDashboardSummary`, beside the
+// cutoff picker: the six-month trend panel is derived from the same selection,
+// so the state has to sit where the derivation is rather than here beside a
+// binding for it.
 
 // ─── Stats cards — tab-aware ────────────────────────────────────────────────
 // Colours reference the validated categorical ramp in src/css/dashboard.scss and
