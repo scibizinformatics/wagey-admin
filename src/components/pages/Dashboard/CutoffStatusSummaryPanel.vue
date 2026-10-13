@@ -20,7 +20,13 @@
       />
     </template>
 
-    <CutoffStageRail ref="railRef" :data="data" :loading="loading" @filter="onFilter" />
+    <CutoffStageRail
+    ref="railRef"
+    :data="data"
+    :loaded="loaded"
+    :loading="loading"
+    @filter="onFilter"
+  />
   </DashPanel>
 </template>
 
@@ -40,6 +46,13 @@ import CutoffStageRail from '@/components/pages/Dashboard/CutoffStageRail.vue'
 const props = defineProps({
   data: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
+  /**
+   * Whether the summary actually arrived.
+   *
+   * Passed down rather than inferred from `data` being empty, because an empty
+   * summary and a failed fetch look identical here and mean opposite things.
+   */
+  loaded: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['filter'])
