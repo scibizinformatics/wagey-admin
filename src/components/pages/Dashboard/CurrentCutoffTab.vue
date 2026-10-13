@@ -12,6 +12,7 @@
       <CutoffStatusSummaryPanel
         class="cutoff__rail"
         :data="cutoffStatusSummary"
+        :loaded="cutoffStatusLoaded"
         :loading="loading"
         @filter="onStageFilter"
       />
@@ -104,6 +105,13 @@ const props = defineProps({
    */
   currentCutoffLink: { type: Object, default: null },
   hideCompleted: { type: Boolean, default: false },
+  /**
+   * Whether the stage summary arrived. Kept apart from `cutoffStatusSummary`,
+   * which is empty both when nothing is stuck and when the fetch failed — and the
+   * rail must not tell a reader their cutoff is clear on the strength of a
+   * request that never answered.
+   */
+  cutoffStatusLoaded: { type: Boolean, default: false },
 })
 
 const router = useRouter()
