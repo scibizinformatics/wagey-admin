@@ -31,9 +31,10 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 - No test framework exists. Verify changes with `npm run lint` (and a dev-server check if UI).
 - **Prettier is repo-wide dirty — do not run `npm run format` for a focused change.** `npm run format`
   is `prettier --write "**/*.{js,vue,scss,html,md,json}" --ignore-path .gitignore`, and that same glob
-  with `--list-different` reports **~154 unformatted files, 131 of them under `src/`**, plus the
-  lockfile, `package.json`, `quasar.config.js`, `index.html`, `README.md`, `eslint.config.js`,
-  `jsconfig.json`, `CLAUDE.md`, `AGENTS.md` and `.opencode/plans/*`. `--ignore-path .gitignore` keeps
+  with `--list-different` reports **~130 unformatted files, ~115 of them under `src/`** (the exact
+  count drifts as files land), plus `package-lock.json`, `package.json`, `quasar.config.js`,
+  `index.html`, `README.md`, `CLAUDE.md`, `eslint.config.js`, `jsconfig.json`, `.prettierrc.json`,
+  `.vscode/*`, `src-electron/*` and `.opencode/plans/*`. `--ignore-path .gitignore` keeps
   `node_modules`/`dist`/`venv` out, but every other tracked file is in scope and rewriting
   `package-lock.json` is not something a focused diff can undo. Format only what you touched
   (`npx prettier --write <file>`); pre-existing failures elsewhere are not yours. Repo style is
@@ -172,7 +173,11 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   `$q.notify` callable as a compatibility shim; that is not permission to add new ones.
 - Calendar dates: use `composables/utils/calendarDate.js` (`todayIso()`, `toIso`, `fromIso`,
   `shiftIso`, `longLabel`) — not `toISOString().slice(0,10)` and not `new Date('2026-09-02')` parsing.
-  Call `todayIso()` per use; caching it in a `ref` leaves an overnight tab reporting yesterday.
+  Call `todayIso()` per use; caching it in a `ref` leaves an overnight tab reporting yesterday. A true
+  **instant** (an ISO string carrying a zone offset) is the other shape entirely and goes through
+  `formatDateTime()` in `utils/format.js`, which prints it in the reader's own timezone and returns an
+  unparseable value verbatim rather than blanking it — the disbursement step-5 stamps used to print raw
+  `2026-07-01T15:00:00Z` into a table cell. Don't hand-derive either shape from the other.
 - localStorage: use `composables/utils/storage.js` (`readStoredJson`/`readStoredObject`/`writeStored`)
   so the literal string `"undefined"` cannot throw. Four `JSON.parse` sites are hand-rolled on
   purpose (their catch branch carries meaning): `useCompany.js`, `stores/company.js`,
@@ -183,13 +188,20 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   (no component uses them). Dialog fields are `__field` + `__field-label` above the control, never a
   Quasar floating label, and widths are written twice compounded with `.q-card` because Quasar caps a
   dialog card with a two-class selector. Do **not** build dialogs as HTML strings
-  (`$q.dialog({ html: true })`) — no call site uses it; use a component.
+  (`$q.dialog({ html: true })`) — no call site uses it; use a component. Inside Quasar's date/time
+  pickers `--q-primary` is re-pointed to `--dash-brand`, scoped to `.q-date` / `.q-time`: the header,
+  the selected day and the range band all read that one token, and the `.q-btn--primary` overrides
+  never reach them because QBtn compiles `color="primary"` to the `bg-primary` utility, not to a
+  `q-btn--primary` class — which is how a stock-theme blue survived next to the app's navy action.
 - **Confirms wear the shared chrome; `dash-modal--confirm` is it.** The card markup lives **once**, in
   `components/common/ConfirmCard.vue`. Two hosts render it: `components/common/ConfirmDialog.vue` for
   anything holding a `confirm` ref (`v-model` + `@confirm`, `loading` owned by the caller), and —
   **not yet built, and deliberately so** — a component handed to `$q.dialog({ component })` for the
-  composables that have no template. A page with a confirm should use `ConfirmDialog`; don't re-type the
-  head/footer. **~17 decision-confirms still use bare `$q.dialog({ title, message, ok, cancel })`** —
+  composables that have no template. (`ConfirmCard.vue`'s own header already describes that second host
+  as `openConfirm()` in `composables/utils/confirmAction.js`; that file is not on disk, so the comment
+  is a statement of intent, not an import path.) A page with a confirm should use `ConfirmDialog`; don't
+  re-type the head/footer. **~17 decision-confirms still use bare
+  `$q.dialog({ title, message, ok, cancel })`** —
   14 in `composables/admin/`, plus `AdminSettingsPanelHolidayTypes`, `EmployeeContributionsDialog` and
   `ReviewPage`. That is the exception now, not the norm; converting one needs the imperative host, and
   that path is **unproven at runtime**. `note` is optional in the confirm object — `EmployeeTerminateDialog`
@@ -204,10 +216,17 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   panels, which are not marked `dash-page-body`. `TableSkeleton`'s `rows` default (16) is sized to that
   same floor, which is why all 29 call sites pass no literal `:rows` — the only two still setting one
   (`PayoutTable`, `CashAdvanceTable`) pass a local `SKELETON_ROWS` const.
-- **There are two `formatCurrency`s.** `composables/utils/format.js` hardcodes **₱** and is the app's
-  formatter (15 files import it; 30 files contain the peso sign; there is no `₦` anywhere).
-  `composables/utils/locale.js` takes a `countryCode` and is used only by `stores/company.js`.
-  Money is **₱**, not ₦.
+- **Money is ₱, not ₦, and there is no `₦` anywhere in the tree.**
+  `composables/utils/format.js` hardcodes **₱** and is the app's formatter.
+  `composables/utils/locale.js` has a second `formatCurrency` that takes a `countryCode` and is used
+  only by `stores/company.js`.
+- **`formatCurrencyPrecise` is a third, for money that is not whole centavos.** Statutory
+  contributions and hand-entered adjustments routinely carry more than two decimals (one contribution
+  read `319.0033`), and rounding to 2 dp makes the figure disagree with the payroll score behind it —
+  so those columns render through it instead: at least 2 dp, up to 4, trailing zeros past the second
+  trimmed. `formatCurrency` stays the app-wide standard and is untouched; don't widen it. It rounds on
+  the scaled integer rather than by `toFixed`, for the reason `decimalHoursLabel` gives below, so a
+  client-side `0.1 + 0.2` prints `0.30` rather than `0.30000000000000004`.
 - Employee photos for tables/cards: build the index **once** with `buildEmployeeNameIndex()` and pass
   it down as an `employeeIndex` prop; read it with `avatarFor()` / `employeeByName()` from
   `composables/utils/employee.js`. A name shared by two employees maps to `null` **on purpose**, so the
@@ -238,18 +257,23 @@ These are live and not covered by the long-form doc — treat them as current, n
   same rule is `leaveDayValue` / `leaveDayValueLabel`.
 - **Irreversible actions go through a confirm gate.** `RequestPage.vue`'s
   `commit*Decision` writers are reachable only from `confirmDecision` (the dialog's `@confirm`);
-  `AccessCardsPage.vue`'s `commitStatusChange` only from `AccessCardStatusConfirmDialog`; and
+  `AccessCardsPage.vue`'s `commitStatusChange` only from `AccessCardStatusConfirmDialog`;
+  `SchedulePage.vue`'s three day-off entry points only from the single `commitDayOff`; and
   `EmployeesPage.vue`'s bulk terminate only from `commitBulkTerminate` — the write lives **there**,
   not in the handler that opens the dialog, so `:loading` can cover it and block a second click. Each
   has a **wording source** returning a plain confirm object: the per-feature modules
-  `Request/decisionConfirm.js`, `AccessCards/statusConfirm.js`, `Payroll/fundingConfirm.js`,
-  `Payroll/disburseConfirm.js` — where the wording is computed from live reactive state — or the
+  `Request/decisionConfirm.js`, `AccessCards/statusConfirm.js`, `Schedule/dayOffConfirm.js`,
+  `Payroll/fundingConfirm.js`, `Payroll/disburseConfirm.js`, `Payroll/issueDecisionConfirm.js` — where
+  the wording is computed from live reactive state — or the
   fixed-shape builders in `composables/utils/confirmWording.js` (`buildDeleteConfirm`,
   `buildTerminateConfirm`, `buildNotice`) where it is not. All render through the shared
   `components/common/ConfirmDialog.vue`, which has **no slot and no branch**: every word comes from the
   object — `title` / `sub` / `icon` / `tone` / `name` / `sentence` / `note` / `actionLabel` /
   `buttonClass` / `cancelable` (`facts` too, where the decision is about numbers). Adding a gate means
-  a `commit*` writer plus a builder, never a new dialog. `cancelable: false` renders a single OK —
+  a `commit*` writer plus a builder, and `ConfirmDialog` will render it. The one thing a plain confirm
+  object cannot do is **collect input**: rejecting a payslip dispute needs a required admin reason, so
+  that one decision gets its own dialog (`components/pages/Payroll/PayslipRejectDialog.vue`, a
+  deliberate exception, not a hole in the rule). `cancelable: false` renders a single OK —
   that is what an alert is, and it is why the two "No shift on this day" notices on `AttendancePage`
   are `buildNotice` rather than a confirm. Funding distinguishes **short / settled / over** (a short
   amount is a legitimate instalment, not an error), and disbursement states how many cash payouts the
@@ -342,7 +366,11 @@ These are live and not covered by the long-form doc — treat them as current, n
   when nothing better exists (`PayslipDisputeCell.vue`); the reason text and the attachment come from a
   separate endpoint, which is why that cell has its own loading skeleton. `PayslipRowMenu.vue` renders
   only on a disputed row at all (`isDisputed` in `PayslipsPage.vue`), because the actions it offers are
-  dispute actions.
+  dispute actions. Both decisions are gated: `resolve` / `reject` are openers and `commitResolve` /
+  `commitReject` sit behind `ConfirmDialog` and the reject dialog, rejection carrying a required admin
+  reason down `processIssue(row, action, adminNotes)` — which applies it to **every** open issue on the
+  payslip, so `openIssuesOf()` counts only undecided ones (an absent `status` means open, matching
+  `PayslipDisputeCell`) and a close watcher drops the pending snapshot.
 - **The audit page has two trails behind one dropdown, and they share almost everything.** Shift
   assignments (`/audit/assignment/history/`) and contracts (`/audit/contracts/history/`) answer with
   **the same six fields** — so the columns cannot differ; what differs is the **vocabulary**, and that
