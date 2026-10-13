@@ -7,7 +7,7 @@
     :empty="!values.length"
     empty-icon="show_chart"
     empty-title="No trend data yet"
-    empty-sub="A point appears here for each month once its payroll is closed."
+    empty-sub="Payroll appears here month by month as each month is run."
     skeleton="chart"
   >
     <TrendChart :labels="labels" :values="values" :type="chartType" :color="color" />
@@ -35,14 +35,23 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 
+// The change between the two most recent periods that actually have a figure.
+//
+// Not the last two slots in the series: the Monthly tab's window runs forward
+// from the selected month, so it routinely ends in months payroll has not reached
+// yet. Comparing those would report a collapse to zero — "down 100% on December"
+// for a December that has not happened — and a figure the reader acts on. Only a
+// month carrying money can take part, so empty ones are skipped rather than
+// treated as a value of zero.
 const subtitle = computed(() => {
   if (props.loading || props.values.length < 2) return ''
-  const vals = props.values.map(Number)
-  const latest = vals[vals.length - 1]
-  const prior = vals[vals.length - 2]
-  if (!prior) return ''
-  const pct = ((latest - prior) / prior) * 100
+  const pairs = props.labels.map((label, i) => ({ label, value: Number(props.values[i]) }))
+  const withMoney = pairs.filter((p) => Number.isFinite(p.value) && p.value > 0)
+  if (withMoney.length < 2) return ''
+  const latest = withMoney[withMoney.length - 1]
+  const prior = withMoney[withMoney.length - 2]
+  const pct = ((latest.value - prior.value) / prior.value) * 100
   const dir = pct >= 0 ? 'up' : 'down'
-  return `${dir} ${Math.abs(pct).toFixed(1)}% on ${props.labels[props.labels.length - 2] ?? 'the prior period'}`
+  return `${dir} ${Math.abs(pct).toFixed(1)}% on ${prior.label || 'the prior period'}`
 })
 </script>
