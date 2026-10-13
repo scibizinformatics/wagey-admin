@@ -3,7 +3,7 @@
     icon="table_rows"
     title="Month by month"
     :loading="loading"
-    :empty="!months.length"
+    :empty="!months.some((m) => m.closed)"
     empty-icon="table_rows"
     empty-title="No closed months yet"
     empty-sub="Each month joins this table once all of its cutoffs are complete."
@@ -11,15 +11,31 @@
     :skeleton-rows="6"
     scroll
   >
-    <DashTable :columns="columns" :rows="months" row-key="label" :min-width="480">
-      <template #cell-payroll="{ row }">{{ fmtCurrency(row.payroll) }}</template>
-      <template #cell-avgPerEmployee="{ row }">{{ fmtCurrency(row.avgPerEmployee) }}</template>
+    <DashTable :columns="columns" :rows="months" row-key="month" :min-width="480">
+      <!-- A month payroll has not reached yet prints an em dash rather than ₱0.
+           Nothing having happened in a month is not the same statement as that
+           month's payroll being zero, and a zero is what an admin would read and
+           act on. -->
+      <template #cell-payroll="{ row }">
+        {{ row.hasData ? fmtCurrency(row.payroll) : '—' }}
+      </template>
+      <template #cell-avgPerEmployee="{ row }">
+        {{ row.hasData ? fmtCurrency(row.avgPerEmployee) : '—' }}
+      </template>
+      <template #cell-employeesPaid="{ row }">{{ row.hasData ? row.employeesPaid : '—' }}</template>
 
+      <!-- Null where there is nothing to compare against — the first month of the
+           year, and any month following one with no figures. A percentage against
+           nothing is not a percentage, and "+0%" would claim the two are equal. -->
       <template #cell-changePercent="{ row }">
-        <!-- The sign is spelled out, so the direction survives without colour. -->
-        <span class="dash-delta" :class="deltaClass(row.changePercent)">
+        <span
+          v-if="row.changePercent != null"
+          class="dash-delta"
+          :class="deltaClass(row.changePercent)"
+        >
           {{ row.changePercent >= 0 ? '+' : '−' }}{{ Math.abs(row.changePercent) }}%
         </span>
+        <span v-else class="dash-delta dash-delta--flat">—</span>
       </template>
     </DashTable>
   </DashPanel>
@@ -27,7 +43,11 @@
 
 <script setup>
 /**
- * Payroll per closed month, with the month-over-month change.
+ * Payroll month by month across the year, with the month-over-month change.
+ *
+ * Every month of the calendar year has a row, not only the closed ones — the
+ * reader needs to see where the year is still to run. A month nothing has been
+ * run in yet says so with an em dash rather than a zero.
  *
  * Renamed from "Monthly Comparison Table" — a panel does not need to tell the
  * reader it is a table, they can see that.
