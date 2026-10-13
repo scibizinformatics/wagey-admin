@@ -42,6 +42,9 @@ import { api } from 'boot/axios'
 import { BASE } from 'src/composables/utils/http'
 import { resolvedCompanyId } from 'src/composables/page/useCompany'
 import { todayIso } from 'src/composables/utils/calendarDate'
+import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
+import { normalizeCutoffInstance } from 'src/composables/utils/leaveCutoffs'
+import { countCutoffStages, normalizeCutoffStage } from 'src/composables/utils/cutoffStatus'
 
 // ────────────────────────────────────────────────────────────────────
 // 1. CONFIGURE YOUR ENDPOINT — this is the only section you should
@@ -100,9 +103,73 @@ const MONTH_LABEL = (ym) => {
   return new Date(`${ym}-01`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
+/**
+ * The calendar parts of a `YYYY-MM-DD`, or null when the value is not a day.
+ *
+ * Read out of the string rather than parsed, deliberately. `fromIso` appends its
+ * own `T00:00:00` and would refuse an ISO datetime outright, and the obvious
+ * `new Date(iso)` fallback parses as UTC midnight, which turns a Manila cutoff
+ * closing on the 15th into the 14th west of Greenwich. Both are the traps
+ * `calendarDate.js` exists to avoid, and this only needs three numbers.
+ *
+ * @param {unknown} iso
+ * @returns {{year: number, month: number, day: number}|null} `month` 1-based.
+ */
+function dayParts(iso) {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso ?? '').trim())
+  if (!matched) return null
+  return { year: Number(matched[1]), month: Number(matched[2]), day: Number(matched[3]) }
+}
+
+/**
+ * A cutoff window reduced to the pattern it follows, with the year and the month
+ * length left out — `1-15`, `16-last`, `1-30`, `5-11`.
+ *
+ * Two cutoffs of the same type share a shape even though their dates differ: a
+ * semi-monthly company's March 16–31 and February 16–28 are both `16-last`, so
+ * the shape is what lets a cutoff the company already has recognise the rest of
+ * its kind in a list that mixes cutoff types together.
+ *
+ * "last" rather than the literal end day, because 28/30/31 are the same cutoff
+ * and a shape test that spelled them out separately would need three rules for
+ * what is one. Day 0 of a 1-based month is that month's last day.
+ *
+ * @param {unknown} startIso
+ * @param {unknown} endIso
+ * @returns {string|null} null when either bound is not a readable day.
+ */
+export function cutoffShape(startIso, endIso) {
+  const start = dayParts(startIso)
+  const end = dayParts(endIso)
+  if (!start || !end) return null
+  const lastDay = new Date(end.year, end.month, 0).getDate()
+  return `${start.day}-${end.day === lastDay ? 'last' : end.day}`
+}
+
+/** The shapes a semi-monthly cutoff type is made of. */
+const SEMI_MONTHLY_SHAPES = ['1-15', '16-last']
+
 export function useDashboardSummary() {
   const loading = ref(false)
   const cutoffs = ref([])
+
+  /**
+   * Every cutoff the reader may pick from, which is a superset of `cutoffs`.
+   *
+   * `cutoffs` comes from `payroll-trend` and carries the money; it is what every
+   * aggregation reads, and folding extra rows into it would change what those
+   * aggregations mean — a zero-money in-progress cutoff added to a month would
+   * flip that month out of `closedMonths` and quietly move the 13th-month ledger.
+   *
+   * The picker, though, has to offer every cutoff the company has, including one
+   * no payroll has been run for yet, or the reader cannot ask about it. Those come
+   * from `cutoff-instances` — the same list the Disbursement page and the leave
+   * filters read — so the two screens cannot disagree about which cutoffs exist.
+   * `normalizeCutoffInstance` is that module's reader of the payload's several
+   * spellings for a name and a window; only `id`, `period_label` and the window
+   * travel over, because that is all the current-cutoff fetches ask for.
+   */
+  const allCutoffs = ref([])
 
   /**
    * "Today", in the viewer's timezone, kept current.
@@ -146,6 +213,95 @@ export function useDashboardSummary() {
   onScopeDispose(() => clearInterval(rolloverTimer))
 
   /**
+   * Which window shapes count as this company's cutoffs.
+   *
+   * Nothing in the app knows a cutoff *type* — `cutoff-instances` sends a name and
+   * a window and no type or company field, and the labor-rule settings endpoint
+   * carries only `time_format`. So the type is learned from the one source that
+   * is already scoped to the company: `payroll-trend` answers about this
+   * workspace's own cutoffs, so whatever shape those follow is the shape this
+   * company uses. `cutoff-instances` is not scoped the same way and lists every
+   * cutoff type in the workspace, which is why it needs narrowing before it can
+   * be offered.
+   *
+   * The semi-monthly pair is completed deliberately. A company whose history so
+   * far holds only one half — a new company, or a year not yet past the 16th —
+   * would otherwise have the other half filtered out, and that other half is
+   * usually the cutoff in progress, the one the reader most wants to open.
+   *
+   * @returns {Set<string>}
+   */
+  function companyCutoffShapes() {
+    const known = new Set(
+      cutoffs.value.map((c) => cutoffShape(c.start_date, c.end_date)).filter(Boolean),
+    )
+    if (!known.size) return new Set(SEMI_MONTHLY_SHAPES)
+    if (SEMI_MONTHLY_SHAPES.some((shape) => known.has(shape))) {
+      for (const shape of SEMI_MONTHLY_SHAPES) known.add(shape)
+    }
+    return known
+  }
+
+  /**
+   * Widens the pickable cutoff list beyond what `payroll-trend` returned.
+   *
+   * Best-effort by design: the trend figures above stand on their own, so a
+   * failure here must not empty the dashboard. It only costs the reader the
+   * cutoffs nobody has run payroll for, and `mergeAllCutoffs` is called again on
+   * the next load.
+   *
+   * Only cutoffs of the company's own type are kept. If the shapes agree with
+   * nothing — the two endpoints describing their windows differently — the filter
+   * drops every extra row and the picker falls back to the `payroll-trend`
+   * cutoffs, which is the list this tab had before it was widened. Losing the
+   * extra options is recoverable; offering cutoffs of a type the company's own
+   * payroll rejects is not.
+   */
+  async function loadAllCutoffs() {
+    const { fetchCutoffInstances } = useDisbursementApi()
+    try {
+      const raw = await fetchCutoffInstances()
+      const list = Array.isArray(raw) ? raw : (raw?.results ?? raw?.data ?? [])
+      const allowedShapes = companyCutoffShapes()
+      const extra = (Array.isArray(list) ? list : [])
+        .map(normalizeCutoffInstance)
+        .filter((c) => c && c.id !== null && c.startIso && c.endIso)
+        .filter((c) => allowedShapes.has(cutoffShape(c.startIso, c.endIso)))
+        .map((c) => ({
+          id: c.id,
+          period_label: c.label,
+          start_date: c.startIso,
+          end_date: c.endIso,
+          month: c.startIso.slice(0, 7),
+          // No money: this row exists so the reader can select a cutoff, not so
+          // it can be totalled. `cutoffs` remains the only source of figures.
+        }))
+      mergeAllCutoffs(extra)
+    } catch (err) {
+      console.error('[useDashboardSummary] could not widen the cutoff list:', err)
+    }
+  }
+
+  /**
+   * The union, keyed by id, rebuilt from scratch each time so a cutoff the
+   * backend has stopped returning does not linger in the picker.
+   *
+   * `cutoffs` is applied second and therefore wins where both carry the same
+   * cutoff: it is the row holding the figures, and letting an `cutoff-instances`
+   * row overwrite it would leave the tab reading zero for a month that has money.
+   */
+  function mergeAllCutoffs(extra) {
+    const byId = new Map()
+    for (const c of extra) byId.set(String(c.id), c)
+    for (const c of cutoffs.value) {
+      if (c.id != null) byId.set(String(c.id), c)
+    }
+    allCutoffs.value = [...byId.values()].sort(
+      (a, b) => new Date(a.start_date ?? 0) - new Date(b.start_date ?? 0),
+    )
+  }
+
+  /**
    * Call this from your page's onMounted, same as your other
    * fetchXxx() composable functions, e.g.:
    *   await fetchDashboardSummary({ company_id: cid, year: 2026 })
@@ -156,11 +312,17 @@ export function useDashboardSummary() {
       const { company_id, ...rest } = params
       if (!company_id) {
         cutoffs.value = []
+        allCutoffs.value = []
         return
       }
       const raw = await requestCutoffSummaries(company_id, rest)
       const list = raw?.cutoffs ?? (Array.isArray(raw) ? raw : raw?.data ?? raw?.results ?? [])
       cutoffs.value = list.map(normalizeCutoff)
+      // The trend rows go in first so the picker is usable even if the wider list
+      // below fails: `mergeAllCutoffs` reads `cutoffs.value`, so it has to be
+      // populated before either merge runs.
+      mergeAllCutoffs([])
+      await loadAllCutoffs()
     } catch (err) {
       console.error('[useDashboardSummary] failed to fetch cutoff summaries:', err)
       cutoffs.value = []
@@ -251,6 +413,36 @@ export function useDashboardSummary() {
     }),
   )
 
+  // ─── The whole calendar year, closed or not ───────────────────────
+  // `monthlySummaries` above is deliberately the closed months only: it backs the
+  // 13th-month ledger and the YTD channel totals, which must not count a month
+  // twice and must not read an open month as "latest". The month picker, the
+  // annual chart and the annual "Month by month" table want the opposite — the
+  // full year — so they read this instead.
+  //
+  // Every month aggregates whatever cutoffs it actually holds, so a month that is
+  // still running shows its actual-to-date figures instead of a row of zeros that
+  // reads like "nobody was paid". `closed` and `hasData` are carried per entry so
+  // a renderer can tell the two cases apart: a month with no cutoffs yet is not
+  // the same statement as a month that earned nothing.
+  const yearMonths = computed(() => {
+    const year = today.value.getFullYear()
+    return Array.from({ length: 12 }, (_, i) => {
+      const month = `${year}-${String(i + 1).padStart(2, '0')}`
+      const list = cutoffsByMonth.value.get(month) ?? []
+      const agg = aggregateCutoffs(list)
+      return {
+        month,
+        label: MONTH_LABEL(month),
+        cutoffs: list,
+        hasData: list.length > 0,
+        closed: list.length > 0 && list.every(isCutoffDone),
+        ...agg,
+        thirteenth_month_accrual: agg.basic_pay / 12,
+      }
+    })
+  })
+
   // ─── Annual Summary (YTD across all closed months only) ──────────
   const annualSummary = computed(() => {
     const closed = monthlySummaries.value
@@ -282,8 +474,55 @@ export function useDashboardSummary() {
   })
 
   // ─── Trend series for charts ──────────────────────────────────────
+  // The whole year, for the annual tab. The `split` turns "January 2026" into the
+  // axis label "January"; the year is already in the panel's title.
+  const yearTrendSeries = computed(() =>
+    yearMonths.value.map((m) => ({ label: m.label.split(' ')[0], value: m.total_payroll })),
+  )
+
+  // ─── Month picker (Monthly tab) ───────────────────────────────────
+  // Kept here beside the cutoff picker for the same reason: both scope a tab's
+  // panels to one period, and both are read by a computed series that needs the
+  // selection. The options are all twelve months rather than the closed ones, so
+  // a reader can open a month that has not closed yet and see what it holds so
+  // far, instead of being unable to name it at all.
+  const selectedMonth = ref(null)
+
+  const monthOptions = computed(() =>
+    yearMonths.value.map((m) => ({ label: m.label, value: m.month })),
+  )
+
+  watch(
+    yearMonths,
+    (list) => {
+      if (!list.length) return
+      // A selection that still exists is left alone, so a refetch cannot move the
+      // month out from under the reader mid-session.
+      if (selectedMonth.value && list.some((m) => m.month === selectedMonth.value)) return
+      // Otherwise the most recent month that has actually closed — the only one
+      // whose figures are final — falling back to the current month on a company
+      // whose first payroll has not run yet.
+      const closed = list.filter((m) => m.closed)
+      selectedMonth.value =
+        closed[closed.length - 1]?.month ?? list[today.value.getMonth()]?.month ?? list[0].month
+    },
+    { immediate: true },
+  )
+
+  // The Monthly tab's six-month window runs FORWARD from the selected month, so
+  // the selection is the left-hand point rather than the last one. A month near
+  // the end of the year therefore shows months ahead of it that nothing has
+  // happened in yet — which is the honest answer, and why the panel's subtitle
+  // skips empty months rather than reporting a fall to zero.
+  const monthlyTrendWindow = computed(() => {
+    const list = yearMonths.value
+    const found = list.findIndex((m) => m.month === selectedMonth.value)
+    const start = found >= 0 ? found : Math.max(0, list.length - 1)
+    return list.slice(start, start + 6)
+  })
+
   const monthlyTrendSeries = computed(() =>
-    monthlySummaries.value.map((m) => ({ label: m.label.split(' ')[0], value: m.total_payroll })),
+    monthlyTrendWindow.value.map((m) => ({ label: m.label.split(' ')[0], value: m.total_payroll })),
   )
 
   const componentBreakdown = (source) => [
@@ -317,15 +556,31 @@ export function useDashboardSummary() {
     })),
   )
 
+  // The annual "Month by month" table — one row per month of the year, closed or
+  // not. `hasData` travels so the table can print an em dash for a month nothing
+  // has run in yet: "no payroll has happened" and "payroll of zero" are different
+  // statements, and ₱0 would assert the second one.
+  //
+  // The change column compares each month with the one before it, and is skipped
+  // entirely unless both months have figures and the earlier one is non-zero,
+  // because a percentage against nothing is not a percentage.
   const monthlyComparison = computed(() =>
-    monthlySummaries.value.map((m) => ({
-      month: m.month,
-      label: m.label,
-      payroll: m.total_payroll,
-      employeesPaid: m.employees_paid,
-      avgPerEmployee: m.employees_paid ? Math.round(m.total_payroll / m.employees_paid) : 0,
-      changePercent: 0,
-    })),
+    yearMonths.value.map((m, i, list) => {
+      const prev = list[i - 1]
+      const comparable = Boolean(prev && prev.hasData && m.hasData && prev.total_payroll > 0)
+      return {
+        month: m.month,
+        label: m.label,
+        payroll: m.total_payroll,
+        employeesPaid: m.employees_paid,
+        avgPerEmployee: m.employees_paid ? Math.round(m.total_payroll / m.employees_paid) : 0,
+        changePercent: comparable
+          ? Math.round(((m.total_payroll - prev.total_payroll) / prev.total_payroll) * 1000) / 10
+          : null,
+        hasData: m.hasData,
+        closed: m.closed,
+      }
+    }),
   )
 
   const annualIndicators = computed(() => ({
@@ -461,16 +716,47 @@ export function useDashboardSummary() {
 
   const cutoffStatusSummary = ref({})
 
+  /**
+   * Whether the stage summary actually arrived.
+   *
+   * Separate from `cutoffStatusSummary` being empty, because the two mean opposite
+   * things to the reader: a genuinely empty summary is a cutoff with nothing stuck
+   * in it, while a failed or unanswered fetch is a pipeline that could not be read.
+   * Both render as an empty rail, and only one of them is good news — so the rail
+   * is told which it is and never claims a cutoff has cleared when it simply did
+   * not check.
+   */
+  const cutoffStatusLoaded = ref(false)
+
   const hideCompleted = ref(false)
 
   const selectedCutoff = ref(null)
 
+  /**
+   * The cutoff the Current Cutoff tab is showing.
+   *
+   * The reader's explicit pick comes FIRST. It used to come last — `currentCutoff`
+   * was returned whenever it had dates, and it always has them, so `selectedCutoff`
+   * was only ever consulted in the case where no current cutoff existed. Choosing
+   * a different cutoff re-ran the three fetches below against the same current
+   * cutoff they had just run, which made the picker look inert.
+   *
+   * `currentCutoff` stays as the fallback so the tab still opens on something
+   * before the reader has chosen, and so a selection whose id no longer resolves
+   * lands on the current cutoff rather than on nothing.
+   *
+   * It reads `allCutoffs`, not `cutoffs`, because a reader may legitimately pick a
+   * cutoff no payroll has been run for yet — that cutoff has no `payroll-trend`
+   * row, and looking only there would find nothing and fall back silently.
+   */
   function resolveCutoff() {
-    const cc = currentCutoff.value
-    if (cc?.start_date && cc?.end_date) return cc
     const sel = selectedCutoff.value
-    if (!sel) return null
-    return cutoffs.value.find((c) => (c.id || c.period_label) === sel) ?? null
+    if (sel) {
+      const picked = allCutoffs.value.find((c) => (c.id ?? c.period_label) === sel)
+      if (picked) return picked
+    }
+    const cc = currentCutoff.value
+    return cc?.start_date && cc?.end_date ? cc : null
   }
 
   async function fetchTodaySummary(companyId, selectedDate) {
@@ -584,19 +870,28 @@ export function useDashboardSummary() {
         `${BASE}/payroll/admin/current-cutoff-payout-groups/${companyId}/${cutoff.start_date}/${cutoff.end_date}/`
       )
       const list = Array.isArray(data) ? data : (data?.data ?? data?.results ?? [])
-      payoutGroupDetails.value = list.map((g) => ({
-        id: g.id ?? g.payout_group,
-        payout_group: g.payout_group,
-        date_range: cutoff.period_label || `${cutoff.start_date} – ${cutoff.end_date}`,
-        disbursement_type: g.disbursement_type ?? 'Cash',
-        employees: g.employees ?? 0,
-        reviewed: g.reviewed ?? 0,
-        acknowledged: g.acknowledged ?? 0,
-        payroll_amount: Number(g.payroll_amount ?? g.final_amount ?? 0),
-        status: g.status ?? 'needs_attention',
-        next_action: computeNextAction(g.status),
-        notes: [],
-      }))
+      payoutGroupDetails.value = list.map((g) => {
+        // The stage a group sits at, read once and used for both the badge and the
+        // rail's filter. Normalised through the shared module because the filter
+        // compares against the rail's stage names: an un-normalised status here
+        // renders a badge that reads sensibly while matching no segment, so the
+        // reader clicks a stage and the table empties.
+        const raw = g.status ?? g.funding_status ?? 'needs_attention'
+        const status = normalizeCutoffStage(raw) ?? raw
+        return {
+          id: g.id ?? g.payout_group,
+          payout_group: g.payout_group,
+          date_range: cutoff.period_label || `${cutoff.start_date} – ${cutoff.end_date}`,
+          disbursement_type: g.disbursement_type ?? 'Cash',
+          employees: g.employees ?? 0,
+          reviewed: g.reviewed ?? 0,
+          acknowledged: g.acknowledged ?? 0,
+          payroll_amount: Number(g.payroll_amount ?? g.final_amount ?? 0),
+          status,
+          next_action: computeNextAction(status),
+          notes: [],
+        }
+      })
     } catch (err) {
       console.error('[useDashboardSummary] fetchPayoutGroupDetails failed:', err)
       payoutGroupDetails.value = []
@@ -628,21 +923,32 @@ export function useDashboardSummary() {
 
   async function fetchCutoffStatusSummary(companyId) {
     const cutoff = resolveCutoff()
-    if (!cutoff?.start_date || !cutoff?.end_date) return
+    if (!cutoff?.start_date || !cutoff?.end_date) {
+      // Nothing to ask about, which is not the same as an answer of nothing — the
+      // rail would otherwise claim the cutoff is clear when it was never asked.
+      cutoffStatusLoaded.value = false
+      return
+    }
     try {
       const { data } = await api.get(
         `${BASE}/payroll/admin/current-cutoff-status-summary/${companyId}/${cutoff.start_date}/${cutoff.end_date}/`
       )
-      const list = Array.isArray(data) ? data : (data?.data ?? data?.results ?? [])
-      const counts = {}
-      for (const g of list) {
-        const s = g.status ?? 'needs_attention'
-        counts[s] = (counts[s] ?? 0) + 1
+      const { counts, unknown } = countCutoffStages(data)
+      // Named out loud rather than dropped. A status with no stage is a group
+      // sitting in a place this tab cannot show, and silence is what made the
+      // pipeline look empty in the first place.
+      if (Object.keys(unknown).length) {
+        console.warn(
+          '[useDashboardSummary] statuses the stage rail has no segment for:',
+          unknown,
+        )
       }
       cutoffStatusSummary.value = counts
+      cutoffStatusLoaded.value = true
     } catch (err) {
       console.error('[useDashboardSummary] fetchCutoffStatusSummary failed:', err)
       cutoffStatusSummary.value = {}
+      cutoffStatusLoaded.value = false
     }
   }
 
@@ -727,19 +1033,24 @@ export function useDashboardSummary() {
   ])
 
   // ── Cutoff dashboard computed ───────────────────────────────────
+  // Every cutoff the company has, oldest first, so the picker reads as a
+  // timeline. `allCutoffs` rather than `cutoffs`, because a cutoff nobody has run
+  // payroll for is still a cutoff an owner may want to ask about.
   const cutoffOptions = computed(() =>
-    cutoffs.value.map((c) => ({
+    allCutoffs.value.map((c) => ({
       label: c.period_label || `${c.start_date} – ${c.end_date}`,
-      value: c.id || c.period_label,
+      value: c.id ?? c.period_label,
       cutoff: c,
     })),
   )
 
   watch(cutoffOptions, (opts) => {
-    if (opts.length && !selectedCutoff.value) {
-      const match = opts.find((o) => o.cutoff?.id === currentCutoff.value?.id)
-      selectedCutoff.value = match?.value ?? opts[0].value
-    }
+    if (!opts.length) return
+    // A pick that is still in the list is kept, so a background refetch cannot
+    // reset the tab to the current cutoff under the reader.
+    if (selectedCutoff.value && opts.some((o) => o.value === selectedCutoff.value)) return
+    const match = opts.find((o) => o.cutoff?.id === currentCutoff.value?.id)
+    selectedCutoff.value = match?.value ?? opts[opts.length - 1].value
   }, { immediate: true })
 
   watch(selectedCutoff, (val) => {
@@ -868,8 +1179,16 @@ export function useDashboardSummary() {
     previousCutoff,
     cutoffTrendSeries,
     monthlySummaries,
+    // Every month of the year, closed or not — the month picker, the annual
+    // chart and the annual table read this; `monthlySummaries` stays the closed
+    // months for the ledgers.
+    yearMonths,
+    yearTrendSeries,
     annualSummary,
     thirteenthMonthPay,
+    selectedMonth,
+    monthOptions,
+    monthlyTrendWindow,
     monthlyTrendSeries,
     componentBreakdown,
     payrollByCompany,
@@ -895,6 +1214,7 @@ export function useDashboardSummary() {
     previousCutoffIncomplete,
     currentCutoffLink,
     cutoffStatusSummary,
+    cutoffStatusLoaded,
     hideCompleted,
     selectedCutoff,
     cutoffOptions,
