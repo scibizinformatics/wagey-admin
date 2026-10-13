@@ -56,6 +56,18 @@
       </p>
     </template>
 
+    <!-- Two empties, not one. A cutoff with nothing stuck in it and a summary the
+         app could not read are the same blank rail, and only the first is good
+         news — so a failed read says so rather than congratulating the reader on
+         a cutoff that may be in trouble. -->
+    <div v-else-if="!loaded" class="dash-empty">
+      <q-icon name="error_outline" size="26px" :style="{ color: 'var(--dash-warn-mark)' }" />
+      <p class="dash-empty__title">Could not read this cutoff's pipeline</p>
+      <p class="dash-empty__sub">
+        The stage summary did not load, so where this cutoff has stalled is unknown — not clear.
+      </p>
+    </div>
+
     <div v-else class="dash-empty">
       <q-icon name="done_all" size="26px" :style="{ color: 'var(--dash-good)' }" />
       <p class="dash-empty__title">No open payout groups</p>
@@ -96,6 +108,12 @@ const BLOCKING = ['needs_attention', 'under_review', 'awaiting_acknowledgment']
 const props = defineProps({
   data: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
+  /**
+   * Whether the summary arrived. Default true so the panel reads as "nothing is
+   * stuck here" unless it is told otherwise — a caller that forgets the prop
+   * should not be told its pipeline is unreadable.
+   */
+  loaded: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['filter'])
