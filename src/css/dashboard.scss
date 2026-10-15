@@ -1510,11 +1510,22 @@
 
 // Quiet dismissal. Both buttons used to be filled navy in several dialogs,
 // which left every form with two identical-looking choices.
+//
+// The corner shape is declared here rather than only in the foot rule below
+// because these two selectors deliberately do NOT require a `.dash-modal__foot`
+// ancestor — and a dialog can put a button in its body (the subcategories
+// dialog's Cancel sits in the form's action row). Such a button misses the
+// footer's metrics entirely and falls back to Quasar's `.q-btn--rectangle` 3px
+// radius beside an 8px neighbour, which is how a Cancel came out looking like a
+// different shape from the Close above it. Radius travels with the class;
+// height and padding stay with the footer, which is where the row that sizes
+// them lives.
 .dash-modal__cancel.q-btn,
 .dash-modal__foot .dash-modal__cancel.q-btn {
   border: 1px solid var(--dash-line-strong);
   background: var(--dash-surface);
   color: var(--dash-ink-2);
+  border-radius: var(--dash-r-md);
 }
 .dash-modal__cancel.q-btn:hover,
 .dash-modal__foot .dash-modal__cancel.q-btn:hover {
@@ -1529,6 +1540,7 @@
   background: var(--dash-brand);
   color: #ffffff;
   box-shadow: var(--dash-shadow-xs);
+  border-radius: var(--dash-r-md);
 }
 .dash-modal__submit.q-btn:hover,
 .dash-modal__foot .dash-modal__submit.q-btn:hover {
