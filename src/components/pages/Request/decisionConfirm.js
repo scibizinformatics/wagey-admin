@@ -2,16 +2,18 @@
  * The wording behind every confirmation the Requests page raises.
  *
  * Three actions reach the same dialog, and all three are irreversible enough to
- * deserve it: one individual approve/reject on any of the four queues, a bulk
- * approve/reject on the two queues that batch, and the removal of a rejection
- * recommendation. The copy lives in a module rather than in the dialog for the
- * reason every other derivation in this codebase lives in `composables/utils`:
+ * deserve it: one individual approve/reject on any of the five queues, a bulk
+ * approve/reject on the three queues that batch, and the removal of a rejection
+ * recommendation or of one allowance. The copy lives in a module rather than in
+ * the dialog for the reason every other derivation in this codebase lives in
+ * `composables/utils`:
  * the table, the dialog and the toast all read the same words, so they cannot
  * drift apart.
  *
  * Rows arrive already normalized by each queue's own normalizer
- * (`normalizeOvertimeRequest`, `normalizeSwapRequest`, the leave list mapping in
- * the page), so this reads display-ready fields — `categoryName`, `duration`,
+ * (`normalizeOvertimeRequest`, `normalizeSwapRequest`,
+ * `normalizeCompensableApplication` and the leave list mapping in the page), so
+ * this reads display-ready fields — `categoryName`, `duration`,
  * `original_shift_label` — and never re-derives what they already resolved.
  */
 
@@ -153,6 +155,27 @@ const QUEUES = {
         ? `is approved and ${money(row.requested_amount)} is committed for disbursement.`
         : 'is rejected and nothing is disbursed.',
   },
+
+  // `datesLabel` is the span the queue's own normalizer read out of the
+  // serialized `dates` field — the column and this dialog say the same days.
+  compensable: {
+    noun: 'compensable time request',
+    name: (row) => row.employeeName || 'This employee',
+    facts: (row) =>
+      facts(
+        ['Category', row.categoryName],
+        ['Subcategory', row.subCategoryName],
+        ['Dates', row.datesLabel],
+        // The accrued value rather than the calendar-day count, resolved once by
+        // the queue's own normalizer — a half day reads the same here as it does
+        // in the table and in the detail dialog.
+        ['Duration', row.duration],
+      ),
+    sentence: (row, approved) =>
+      approved
+        ? 'is approved and the time is credited to their balance.'
+        : 'is rejected and no time is credited.',
+  },
 }
 
 /**
@@ -187,6 +210,18 @@ const BULK_QUEUES = {
         ? 'are approved and go to the next payroll.'
         : 'are rejected and will not be paid.',
   },
+  compensable: {
+    one: 'compensable time request',
+    many: 'compensable time requests',
+    one_sentence: (status) =>
+      status === 'approved'
+        ? 'is approved and the time is credited to their balance.'
+        : 'is rejected and no time is credited.',
+    many_sentence: (status) =>
+      status === 'approved'
+        ? 'are approved and the time is credited to their balances.'
+        : 'are rejected and no time is credited.',
+  },
 }
 
 /**
@@ -220,6 +255,38 @@ export function buildDecisionConfirm({ queue, status, row, context = {} } = {}) 
     // Continues from the bolded name, so it opens with a verb.
     sentence: spec.sentence(row, status === 'approved', context),
     note: spec.note ?? UNDO_NOTE,
+  }
+}
+
+/**
+ * The confirmation for taking one allowance back off an application.
+ *
+ * Its own builder rather than `buildDeleteConfirm` because the amount is the fact
+ * the decision is about: an admin removing a ₱4,500 allowance from a rest-day
+ * worked should see that figure quoted before they commit, not a dialog naming a
+ * type they may be scanning past. The note is the irreversible one, and it is
+ * true here — re-adding the allowance afterwards creates a new record rather than
+ * restoring this one, so the row this dialog is about is gone either way.
+ *
+ * @param {{amount: string, typeName: string, notes?: string}} allowance
+ */
+export function buildAllowanceRemoveConfirm({ allowance } = {}) {
+  if (!allowance) return null
+  const name = `${allowance.typeName} · ${money(allowance.amount)}`
+  return {
+    title: 'Remove this allowance?',
+    name,
+    sub: name,
+    icon: 'o_money_off',
+    tone: 'danger',
+    actionLabel: 'Remove',
+    buttonClass: 'dash-modal__danger',
+    facts: facts(
+      ['Amount', money(allowance.amount)],
+      ['Notes', (allowance.notes || '').trim() || null],
+    ),
+    sentence: 'is taken off this application and will not be paid.',
+    note: UNDO_NOTE,
   }
 }
 
