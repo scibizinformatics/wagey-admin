@@ -680,6 +680,11 @@ onMounted(fetchLeaveTypes)
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* QTable's `wrap-cells` default leaves the table `q-table--no-wrap`, which
+     puts `white-space: nowrap` on every cell; the span inherits it and the
+     clamp above never engages. Only the `max-width` below has been holding this
+     column down. See `.pos-desc` in AdminSettingsPanelPositions.vue. */
+  white-space: normal;
   margin-top: 2px;
   font-size: 11.5px;
   line-height: 1.35;
