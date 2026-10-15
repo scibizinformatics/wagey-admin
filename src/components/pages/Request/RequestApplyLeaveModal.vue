@@ -12,7 +12,7 @@
           </q-avatar>
           <div class="dash-modal__head-titles">
             <div class="dash-modal__title">Apply leave</div>
-            <div class="dash-modal__sub">Assign leave to an employee</div>
+            <div class="dash-modal__sub">Assign leave to one or more employees</div>
           </div>
         </div>
         <q-btn
@@ -31,17 +31,18 @@
           <div class="dash-modal__grid">
             <label class="dash-modal__field">
               <span class="dash-modal__field-label"
-                >Employee<span class="dash-modal__req">*</span></span
+                >Employees<span class="dash-modal__req">*</span></span
               >
               <q-select
                 outlined
-                :model-value="form.employee_id"
-                @update:model-value="form.employee_id = $event"
+                :model-value="form.employee_ids"
+                @update:model-value="form.employee_ids = $event"
                 :options="employeeOptions"
                 use-input
                 use-chips
+                multiple
                 @filter="onFilter"
-                :rules="[(val) => !!val || 'Employee is required']"
+                :rules="[(val) => (val && val.length > 0) || 'At least one employee is required']"
                 class="dash-field dash-modal__span-2"
                 :input-debounce="0"
                 option-value="id"
@@ -215,7 +216,7 @@ const emit = defineEmits(['update:modelValue', 'submit', 'filter-employees'])
 const MAX_DAYS = 60
 
 const emptyForm = () => ({
-  employee_id: null,
+  employee_ids: [],
   leave_type: null,
   start_date: '',
   end_date: '',
@@ -300,7 +301,10 @@ const onFilter = (val, update) => {
 const onSubmit = () => {
   if (!canSubmit.value) return
   emit('submit', {
-    employee_id: form.employee_id,
+    // The endpoint takes `employee_ids`, an array of employee uuids — one
+    // request books every chosen employee, which is why the control is a
+    // multi-select. Snapshotted so a later edit cannot change what was sent.
+    employee_ids: [...form.employee_ids],
     leave_type: form.leave_type,
     // Re-read from the range, not from the form: these are the entries the
     // payload is defined by, and a `days` array rebuilt by the watcher is the

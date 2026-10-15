@@ -1436,6 +1436,23 @@ const submitOvertimeAdvance = async (payload) => {
 }
 
 // ===== APPLY LEAVE =====
+
+/**
+ * One option for the apply-leave employee picker.
+ *
+ * The endpoint's `employee_ids` are employee uuids, not the roster's own pk, so
+ * the option value is the uuid the body wants — the same pairing the compensable
+ * apply picker already uses. A shared helper keeps the open and both filter
+ * branches from drifting apart.
+ */
+const applyLeaveEmployeeOption = (e) => ({
+  id: e.uuid || e.id,
+  name:
+    e.user?.full_name ||
+    `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
+    'Unknown',
+})
+
 const openApplyLeaveModal = async () => {
   applyLeaveEmployeeOptions.value = []
   applyLeaveTypes.value = []
@@ -1449,13 +1466,9 @@ const openApplyLeaveModal = async () => {
   }
   try {
     await fetchEmployees({ force: true })
-    applyLeaveEmployeeOptions.value = employees.value.map((e) => ({
-      id: e.id,
-      name:
-        e.user?.full_name ||
-        `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
-        'Unknown',
-    }))
+    applyLeaveEmployeeOptions.value = employees.value
+      .map(applyLeaveEmployeeOption)
+      .filter((option) => option.id !== null && option.id !== undefined)
     const res = await api.get('/attendance/leave-types/', {
       params: { company: companyId },
     })
@@ -1469,13 +1482,7 @@ const openApplyLeaveModal = async () => {
 
 const filterApplyLeaveEmployees = (val) => {
   if (!val || val.trim() === '') {
-    applyLeaveEmployeeOptions.value = employees.value.map((e) => ({
-      id: e.id,
-      name:
-        e.user?.full_name ||
-        `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
-        'Unknown',
-    }))
+    applyLeaveEmployeeOptions.value = employees.value.map(applyLeaveEmployeeOption)
     return
   }
   const search = val.toLowerCase()
@@ -1485,13 +1492,7 @@ const filterApplyLeaveEmployees = (val) => {
         e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim()
       return name.toLowerCase().includes(search)
     })
-    .map((e) => ({
-      id: e.id,
-      name:
-        e.user?.full_name ||
-        `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim() ||
-        'Unknown',
-    }))
+    .map(applyLeaveEmployeeOption)
 }
 
 const submitApplyLeave = async (payload) => {
@@ -1506,12 +1507,17 @@ const submitApplyLeave = async (payload) => {
   applyLeaveSubmitting.value = true
   try {
     // `days` replaces the start/end/hours the endpoint used to take, and
-    // carries each date's half-day flag. No `status` is sent: the server's
-    // default decides whether the request waits for review, and forcing it
-    // here made an admin-assigned leave skip the queue the same screen is for.
+    // carries each date's half-day flag. `employee_ids` is the documented array
+    // of employee uuids, so the same span is booked for every employee the
+    // admin picked in one call. No `status` is sent: the server's default
+    // decides whether the request waits for review, and forcing it here made an
+    // admin-assigned leave skip the queue the same screen is for.
     await api.post('/attendance/leave/apply-for-employee/', {
       company_id: companyId,
-      ...payload,
+      employee_ids: payload.employee_ids,
+      leave_type: payload.leave_type,
+      days: payload.days,
+      reason: payload.reason || '',
     })
     toast.success('Leave assigned successfully', { icon: 'check_circle' })
     showApplyLeaveModal.value = false
