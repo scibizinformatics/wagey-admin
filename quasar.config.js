@@ -124,6 +124,7 @@ export default defineConfig((ctx) => {
             '/admin',
             '/audit',
             '/allowance',
+            '/compensable_time',
           ],
           target: apiBaseUrl,
           changeOrigin: true,
