@@ -21,6 +21,7 @@ const props = defineProps({
   overtimeStats: Object,
   caStatistics: Object,
   swapStatistics: Object,
+  compensableStats: Object,
 })
 
 const EMPTY = { total: 0, pending: 0, approved: 0, rejected: 0 }
@@ -31,6 +32,7 @@ const stats = computed(() => {
       leave: props.leaveStats,
       overtime: props.overtimeStats,
       swap: props.swapStatistics,
+      compensable: props.compensableStats,
     }[props.activeTab] || props.caStatistics
   return { ...EMPTY, ...(source || {}) }
 })
