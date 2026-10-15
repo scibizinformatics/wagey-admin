@@ -3,7 +3,7 @@
    ----------------------------------------------------------------------------
    Imported by every `AdminSettingsPanel*.vue` through
    `@import './AdminSettingsPanelShared.scss'` inside its own scoped block, so
-   one edit here reaches all nine sections. Class names are fixed by that
+   one edit here reaches every section. Class names are fixed by that
    contract — the panels' markup names them — so this file restyles them rather
    than renaming them.
 
@@ -90,7 +90,7 @@
 }
 
 /* ── Table ────────────────────────────────────────────────────────────────── */
-/* Scroll affordance inlined rather than adding `dash-scroll-x` to nine panels'
+/* Scroll affordance inlined rather than adding `dash-scroll-x` to every panel's
    markup: this container class is already shared by all of them. Values match
    the design system's `.dash-scroll-x` — see src/css/dashboard.scss for why the
    track is always drawn below 1440.
