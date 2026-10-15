@@ -51,6 +51,15 @@
             class="primary-action-btn"
             @click="openOvertimeAdvanceModal"
           />
+          <q-btn
+            v-else-if="activeTab === 'compensable'"
+            unelevated
+            no-caps
+            icon="add"
+            label="Apply compensable time"
+            class="primary-action-btn"
+            @click="openCompensableApplyModal"
+          />
           <q-btn-toggle
             v-else-if="activeTab === 'cash_advance'"
             v-model="caViewMode"
@@ -94,6 +103,7 @@
               :overtime-stats="overtimeStats"
               :ca-statistics="caStatistics"
               :swap-statistics="swapStatistics"
+              :compensable-stats="compensableStats"
             />
           </div>
         </div>
@@ -214,6 +224,34 @@
               @reject="rejectSwapRequest"
             />
           </q-tab-panel>
+
+          <q-tab-panel name="compensable" class="tab-panel-content">
+            <RequestCompensableTable
+              :rows="filteredCompensableRequests"
+              :employee-index="employeeIndex"
+              :loading="compensableLoading || resolvingGroups"
+              :submitting="compensableSubmitting"
+              :selected-ids="selectedCompensableIds"
+              :status-filter="compensableStatusFilter"
+              :search="compensableSearch"
+              :payroll-group-filter="compensablePayrollGroupFilter"
+              :payroll-group-options="payrollGroupOptions"
+              :recommend-loading="compensableRecommendLoading"
+              @update:status-filter="compensableStatusFilter = $event"
+              @update:search="compensableSearch = $event"
+              @update:payroll-group-filter="compensablePayrollGroupFilter = $event"
+              @toggle-selection="toggleCompensableSelection"
+              @toggle-select-all="toggleSelectAllCompensable"
+              @clear-selection="clearCompensableSelection"
+              @view-details="openCompensableDetail"
+              @approve="approveCompensableSingle"
+              @reject="rejectCompensableSingle"
+              @recommend-rejection="openCompensableRecommendation"
+              @remove-recommendation="clearCompensableRecommendation"
+              @bulk-approve="bulkApproveCompensable"
+              @bulk-reject="bulkRejectCompensable"
+            />
+          </q-tab-panel>
         </q-tab-panels>
       </section>
 
@@ -283,6 +321,40 @@
         @filter-employees="filterApplyLeaveEmployees"
         @submit="submitApplyLeave"
       />
+
+      <!-- Declared after the confirm dialog above and therefore shown before it, so
+           the confirmation always lands on top of whichever dialog opened it —
+           including the details dialog, whose allowance removal routes through the
+           very same `decisionConfirm` object. -->
+      <RequestCompensableDetailModal
+        v-model="showCompensableDetail"
+        :request="selectedCompensableRequest"
+        :allowances="compensableAllowances"
+        :total-amount="compensableAllowanceTotal"
+        :allowances-loading="compensableAllowancesLoading"
+        :allowance-saving="compensableAllowanceSaving"
+        :allowance-types="allowanceTypes"
+        @add-allowance="submitCompensableAllowance"
+        @remove-allowance="openRemoveCompensableAllowance"
+      />
+
+      <RequestCompensableRecommendModal
+        v-model="showCompensableRecommendModal"
+        :request="selectedCompensableRecommendRequest"
+        :submitting="compensableRecommendSubmitting"
+        @submit="submitCompensableRecommendation"
+      />
+
+      <RequestCompensableApplyModal
+        v-model="showCompensableApplyModal"
+        :employee-options="compensableApplyEmployeeOptions"
+        :categories="compensableApplyCategories"
+        :subcategories="compensableApplySubcategories"
+        :submitting="compensableApplySubmitting"
+        @filter-employees="filterCompensableApplyEmployees"
+        @select-category="fetchCompensableApplySubcategories"
+        @submit="submitCompensableApply"
+      />
     </div>
   </PageShell>
 </template>
@@ -306,13 +378,33 @@ import RequestLeaveRecommendModal from 'src/components/pages/Request/RequestLeav
 import RequestCaApprovalModal from 'src/components/pages/Request/RequestCaApprovalModal.vue'
 import RequestCaViewModal from 'src/components/pages/Request/RequestCaViewModal.vue'
 import RequestDecisionConfirmDialog from 'src/components/pages/Request/RequestDecisionConfirmDialog.vue'
-import { buildBulkDecisionConfirm, buildDecisionConfirm, buildRecommendationConfirm } from 'src/components/pages/Request/decisionConfirm'
+import {
+  buildAllowanceRemoveConfirm,
+  buildBulkDecisionConfirm,
+  buildDecisionConfirm,
+  buildRecommendationConfirm,
+} from 'src/components/pages/Request/decisionConfirm'
 import RequestOvertimeDetailModal from 'src/components/pages/Request/RequestOvertimeDetailModal.vue'
 import OvertimeAdvanceModal from 'src/components/pages/Request/OvertimeAdvanceModal.vue'
 import RequestCashAdvanceCutoff from 'src/components/pages/Request/RequestCashAdvanceCutoff.vue'
 import RequestSwapTable from 'src/components/pages/Request/RequestSwapTable.vue'
 import RequestSwapViewModal from 'src/components/pages/Request/RequestSwapViewModal.vue'
 import RequestApplyLeaveModal from 'src/components/pages/Request/RequestApplyLeaveModal.vue'
+import RequestCompensableTable from 'src/components/pages/Request/RequestCompensableTable.vue'
+import RequestCompensableDetailModal from 'src/components/pages/Request/RequestCompensableDetailModal.vue'
+import RequestCompensableRecommendModal from 'src/components/pages/Request/RequestCompensableRecommendModal.vue'
+import RequestCompensableApplyModal from 'src/components/pages/Request/RequestCompensableApplyModal.vue'
+import { useAllowances } from 'src/composables/page/useAllowances'
+import {
+  compensableAllowancePayload,
+  compensableApplyPayload,
+  normalizeCategories,
+  normalizeCompensableApplications,
+  normalizeSubcategories,
+  offeredCategories,
+  offeredSubcategories,
+  readCompensableAllowances,
+} from 'src/composables/utils/compensableTime'
 import {
   buildEmployeeDirectory,
   normalizeSwapRequest,
@@ -376,8 +468,9 @@ const searchTerm = ref('')
 // ===== SHARED: PAYOUT GROUP FILTER =====
 // Every queue on this page can be narrowed to one payout group, the way the
 // Employees, Attendance and Schedule pages already can — a reviewer usually
-// works one group's cutoff at a time, across leave, overtime and cash advance
-// alike, so the same control and the same wording appear in all three toolbars.
+// works one group's cutoff at a time, across leave, overtime, cash advance and
+// compensable time alike, so the same control and the same wording appear in
+// every one of those toolbars.
 //
 // Client-side, and resolved per employee from their active contract: none of
 // `/attendance/leave-list/`, `/payroll/overtime-list/` or the cash-advance list
@@ -398,6 +491,7 @@ const {
 const leavePayrollGroupFilter = ref(null)
 const overtimePayrollGroupFilter = ref(null)
 const caPayrollGroupFilter = ref(null)
+const compensablePayrollGroupFilter = ref(null)
 
 const payrollGroupOptions = computed(() =>
   payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
@@ -464,6 +558,7 @@ function rowPayoutGroupId(candidates) {
 // with the others on where the person's id lives.
 const leaveRowEmployeeRefs = (row) => [row.employeeCompany, row.employeeRef, row.employeeId]
 const overtimeRowEmployeeRefs = (row) => [row.employeeCompany]
+const compensableRowEmployeeRefs = (row) => [row.employeeRef]
 const caRowEmployeeRefs = (row) => [
   row.employee_company,
   row.employee_company_id,
@@ -628,6 +723,55 @@ const swapDirectory = ref(null)
 const selectedSwapRequest = ref(null)
 const showSwapViewDialog = ref(false)
 
+// ===== COMPENSABLE TIME STATE =====
+// One flat queue for the whole company, the same shape the leave and overtime
+// tabs use. Applications are filed by employees; there is no admin-side apply on
+// this page, so unlike leave and overtime this tab carries no header action.
+const compensableRequests = ref([])
+const compensableLoading = ref(false)
+const compensableSearch = ref('')
+const compensableStatusFilter = ref('all')
+const selectedCompensableIds = ref(new Set())
+// Every decision write on this queue — single and bulk alike — lands in the same
+// Set, because this endpoint is one batch call for both and there is no separate
+// per-row write whose spinner could be distinguished from it.
+const compensableSubmitting = ref(new Set())
+// Per-row, in the same `verb-id` shape the leave queue's `recommendLoading` uses,
+// because a recommendation is a different endpoint from a decision and one of the
+// two can be busy while the other is not.
+const compensableRecommendLoading = ref(null)
+const selectedCompensableRequest = ref(null)
+const showCompensableDetail = ref(false)
+// The recommendation is its own record, separate from `selectedCompensableRequest`
+// (which the details dialog owns) so opening this dialog cannot disturb one that
+// is already on screen, and separate again from the selection so recommending an
+// application is not something a pending batch can sweep in.
+const selectedCompensableRecommendRequest = ref(null)
+const showCompensableRecommendModal = ref(false)
+const compensableRecommendSubmitting = ref(false)
+
+// The money attached to one application. Fetched when its details dialog opens
+// rather than carried on the row: the queue lists ids and amounts, and a reviewer
+// deciding on money needs the list — and its total — in front of them.
+const compensableAllowances = ref([])
+const compensableAllowanceTotal = ref(null)
+const compensableAllowancesLoading = ref(false)
+const compensableAllowanceSaving = ref(false)
+
+// ===== COMPENSABLE TIME: APPLY STATE =====
+// The one place an application is filed rather than reviewed, so unlike every
+// other state on this queue it needs a category list to choose from and nothing
+// to decide about afterwards.
+const showCompensableApplyModal = ref(false)
+const compensableApplySubmitting = ref(false)
+const compensableApplyEmployeeOptions = ref([])
+const compensableApplyCategories = ref([])
+const compensableApplySubcategories = ref([])
+// The picker for a new allowance. The company's own allowance types, read through
+// the same composable the Allowances page uses rather than a second fetch of the
+// same endpoint.
+const { allowanceTypes, fetchAllowanceTypes } = useAllowances()
+
 // ===== DECISION CONFIRMATION =====
 // Every individual approve/reject on this page writes on one click, from a row
 // menu and from inside the detail dialogs alike, and none of the four queues has
@@ -698,10 +842,15 @@ const confirmDecision = async () => {
     else if (action === 'overtime') await commitOvertimeDecision(subject, status)
     else if (action === 'swap') await commitSwapDecision(subject, status)
     else if (action === 'cashAdvance') await commitCaApproval()
+    else if (action === 'compensable') await commitCompensableDecision(subject, status)
+    else if (action === 'compensableAllowance') await commitRemoveCompensableAllowance(subject)
     else if (action === 'bulkLeave') await commitBulkLeave(status, subject)
     else if (action === 'bulkOvertime') await commitBulkOvertime(status, subject)
+    else if (action === 'bulkCompensable') await commitBulkCompensable(status, subject)
     else if (action === 'leaveRecommendation') await commitClearLeaveRecommendation(subject)
-    else console.error(`[Requests] no writer for action "${action}"`)
+    else if (action === 'compensableRecommendation') {
+      await commitClearCompensableRecommendation(subject)
+    } else console.error(`[Requests] no writer for action "${action}"`)
   } finally {
     decisionSubmitting.value = false
     showDecisionConfirm.value = false
@@ -736,6 +885,13 @@ const swapStatistics = computed(() => ({
   rejected: swapRequests.value.filter((r) => r.status === 'rejected').length,
 }))
 
+const compensableStats = computed(() => ({
+  total: compensableRequests.value.length,
+  pending: compensableRequests.value.filter((r) => r.status === 'pending').length,
+  approved: compensableRequests.value.filter((r) => r.status === 'approved').length,
+  rejected: compensableRequests.value.filter((r) => r.status === 'rejected').length,
+}))
+
 // ===== QUEUE RAIL =====
 const queues = computed(() => [
   { key: 'leave', label: 'Leave', icon: 'event_note', pending: leaveStats.value.pending },
@@ -745,6 +901,15 @@ const queues = computed(() => [
     label: 'Cash Advance',
     icon: 'account_balance_wallet',
     pending: caStatistics.value.pending,
+  },
+  // Before Swap, so the two queues a reviewer works as a payroll editor sit
+  // together and the swap queue — whose rows are often waiting on the other
+  // employee, not on them — stays last.
+  {
+    key: 'compensable',
+    label: 'Compensable Time',
+    icon: 'work_history',
+    pending: compensableStats.value.pending,
   },
   { key: 'swap', label: 'Swap', icon: 'swap_horiz', pending: swapStatistics.value.pending },
 ])
@@ -862,9 +1027,42 @@ const filteredSwapRequests = computed(() => {
   return filtered.slice(start, start + rowsPerPage)
 })
 
+// Filtered over the whole queue, then ordered — never over whatever happens to
+// be rendered. The grid shows every matching row, so there is no page slice to
+// filter behind. Newest application first, because a flat queue spanning every
+// payroll run has no other natural order; ties break on the id so the list does
+// not reshuffle between refreshes.
+const filteredCompensableRequests = computed(() => {
+  let filtered = [...compensableRequests.value]
+  if (compensableStatusFilter.value && compensableStatusFilter.value !== 'all') {
+    filtered = filtered.filter((r) => r.status === compensableStatusFilter.value)
+  }
+  const search = (compensableSearch.value || '').trim().toLowerCase()
+  if (search) {
+    filtered = filtered.filter(
+      (r) =>
+        r.employeeName?.toLowerCase().includes(search) ||
+        r.categoryName?.toLowerCase().includes(search) ||
+        (r.subCategoryName || '').toLowerCase().includes(search) ||
+        (r.notes || '').toLowerCase().includes(search),
+    )
+  }
+  // A row whose group cannot be resolved is excluded while a group is selected —
+  // "show me group A" should not fall back to including unknowns.
+  if (compensablePayrollGroupFilter.value) {
+    filtered = filtered.filter((r) =>
+      matchesPayrollGroup(compensableRowEmployeeRefs(r), compensablePayrollGroupFilter.value),
+    )
+  }
+  return filtered.sort(
+    (a, b) => new Date(b.submittedDate || 0) - new Date(a.submittedDate || 0) || b.id - a.id,
+  )
+})
+
 const refreshLoading = computed(() => {
   if (activeTab.value === 'swap') return swapLoading.value
   if (activeTab.value === 'overtime') return overtimeLoading.value
+  if (activeTab.value === 'compensable') return compensableLoading.value
   return loading.value
 })
 
@@ -879,6 +1077,14 @@ const actionableOvertimeIds = computed(() =>
 // still awaiting a decision can be picked up by the batch bar.
 const actionableLeaveIds = computed(() =>
   filteredLeaveRequests.value.filter((r) => r.status === 'pending').map((r) => r.id),
+)
+
+// And for compensable time. Recommended applications stay selectable — the batch
+// dialog counts them and states the skip before anything is written, exactly as
+// the leave batch does, so the reviewer learns about them before they commit
+// rather than from the closing toast.
+const actionableCompensableIds = computed(() =>
+  filteredCompensableRequests.value.filter((r) => r.status === 'pending').map((r) => r.id),
 )
 
 // ===== CASH ADVANCE HELPERS =====
@@ -2056,6 +2262,572 @@ const viewSwapRequest = (request) => {
   showSwapViewDialog.value = true
 }
 
+// ===== API: COMPENSABLE TIME =====
+//
+//   GET   /compensable_time/applications/company/{company_id}/
+//   PATCH /compensable_time/applications/{id}/approval/
+//   PATCH /compensable_time/applications/approval/bulk/
+//   PATCH /compensable_time/applications/{id}/recommendation/
+//   PATCH /compensable_time/applications/{id}/revert-recommendation/
+//   GET   /compensable_time/applications/{id}/allowances/list/
+//   POST  /compensable_time/applications/{id}/allowances/
+//   POST  /compensable_time/applications/{id}/allowances/revert/
+
+/**
+ * What one of these requests is called, in the batch's own grammar.
+ *
+ * Passed to `bulkLeaveOutcomeToast` so this queue announces its batch outcomes
+ * through the same four cases the leave queue does rather than a second set of
+ * sentences that would drift. The endpoint's documented contract is identical —
+ * the same three buckets, the same refusal to action a recommended row, the same
+ * always-200 partial success.
+ */
+const COMPENSABLE_NOUN = 'compensable time request'
+
+/** The batch endpoint: decides a run of applications itself and reports a summary. */
+const COMPENSABLE_APPROVAL_BULK = '/compensable_time/applications/approval/bulk/'
+
+const COMPENSABLE_BULK_ACTIONS = {
+  approved: {
+    verb: 'approve',
+    past: 'approved',
+    icon: 'check_circle',
+  },
+  rejected: {
+    verb: 'reject',
+    past: 'rejected',
+    icon: 'cancel',
+  },
+}
+
+// Guards a workspace switch landing mid-fetch: the request was issued for the
+// company the reader was on, and its answer must not be published over the
+// company they moved to.
+const compensableGuard = createRequestToken()
+
+const fetchCompensableRequests = async () => {
+  compensableLoading.value = true
+  try {
+    const companyId = selectedCompany.value
+    if (!companyId) throw new Error('No company selected')
+    const token = compensableGuard.next()
+    const res = await api.get(`/compensable_time/applications/company/${companyId}/`)
+    const rows = normalizeCompensableApplications(res.data)
+    if (!compensableGuard.isCurrent(token)) return
+    compensableRequests.value = rows
+    // Rows that are no longer awaiting a decision must not stay selected — a
+    // later bulk approve would then send ids that are no longer open.
+    const live = new Set(rows.filter((r) => r.status === 'pending').map((r) => r.id))
+    selectedCompensableIds.value = new Set(
+      Array.from(selectedCompensableIds.value).filter((id) => live.has(id)),
+    )
+  } catch (e) {
+    const errorMessage = extractErrorMessage(e, 'Failed to fetch compensable time requests.')
+    toast.error(errorMessage, { icon: 'error' })
+  } finally {
+    compensableLoading.value = false
+  }
+}
+
+// ===== COMPENSABLE TIME: APPROVE / REJECT =====
+//
+// One row is decided through `PATCH /compensable_time/applications/{id}/approval/`,
+// which takes a bare `{ status }`. That is a single-record write with a single
+// outcome, so it is written like the leave, overtime and swap single writers: the
+// verb picks the toast, and there is no summary to read back.
+//
+// Only a *batch* goes through the bulk endpoint, and only that path reads a
+// summary — see `commitBulkCompensable` for why the two are not folded together.
+
+/**
+ * Write the single decision the approver confirmed.
+ *
+ * A rejection is a refusal, not a success, so the two verbs get different toasts —
+ * the same distinction the overtime writer draws, and the one a reviewer reading
+ * the queue afterwards needs.
+ */
+const commitCompensableDecision = async (row, status) => {
+  const spec = COMPENSABLE_BULK_ACTIONS[status]
+  if (!spec || !row?.id) return
+  const approved = status === 'approved'
+
+  compensableSubmitting.value = new Set([row.id])
+  try {
+    await api.patch(`/compensable_time/applications/${row.id}/approval/`, { status })
+    if (approved) toast.success('Compensable time approved successfully', { icon: 'check_circle' })
+    else toast.warning('Compensable time request rejected', { icon: 'cancel' })
+    if (showCompensableDetail.value) showCompensableDetail.value = false
+  } catch (e) {
+    const errorMessage = extractErrorMessage(e, `Failed to ${spec.verb} this request.`)
+    toast.error(errorMessage, { icon: 'error' })
+  } finally {
+    // Unconditional, and on both paths: whatever the server did, the queue on
+    // screen is no longer the truth, and a row left showing as pending after a
+    // decision is how an application gets actioned twice.
+    await fetchCompensableRequests().catch((err) =>
+      console.error('[Requests] refetch after compensable decision failed:', err),
+    )
+    compensableSubmitting.value = new Set()
+  }
+}
+
+const approveCompensableSingle = (row) => openDecisionConfirm('compensable', 'approved', row)
+const rejectCompensableSingle = (row) => openDecisionConfirm('compensable', 'rejected', row)
+
+// ===== COMPENSABLE TIME: BULK =====
+//
+// The endpoint decides the whole batch itself and reports three outcomes rather
+// than two: `updated`, `skipped_recommended` (deliberately untouched, because
+// the application carries a rejection recommendation — not a failure, and the
+// reason it is a bucket of its own is that the server refuses to action it at
+// all for either verb) and `failed`. `bulkLeaveOutcome` reads all three, and
+// `bulkLeaveOutcomeToast` says all four cases, so nothing here re-derives them.
+
+/**
+ * Open the confirmation for the selected applications.
+ *
+ * The count in the headline is *not* the selection. A recommended application is
+ * skipped by the endpoint for either verb, so the dialog is headlined with the
+ * number the server will actually move and states the difference as a fact.
+ * Headlining the selection instead is how "Approve 12 requests?" can come back
+ * as "9 approved, 3 were already recommended for rejection".
+ *
+ * When every selection is flagged there is no batch left to write, so this reports
+ * that and stops rather than opening a dialog that can only decline.
+ */
+const bulkDecideCompensable = (status) => {
+  const spec = COMPENSABLE_BULK_ACTIONS[status]
+  if (!spec) return
+  const rows = filteredCompensableRequests.value.filter((row) =>
+    selectedCompensableIds.value.has(row.id),
+  )
+  if (!rows.length) return
+
+  const recommended = rows.filter((row) => row.recommendedForRejection).length
+  const actionable = rows.length - recommended
+
+  if (!actionable) {
+    toast.warning(
+      `Nothing to ${spec.verb} — all ${rows.length} selected ${
+        rows.length === 1 ? 'request is' : 'requests are'
+      } recommended for rejection`,
+      { icon: 'o_flag', caption: 'Remove the recommendation first, then decide it.' },
+    )
+    return
+  }
+
+  openConfirmation(
+    'bulkCompensable',
+    buildBulkDecisionConfirm({
+      queue: 'compensable',
+      status,
+      actionable,
+      selected: rows.length,
+      employees: new Set(rows.map((r) => r.employeeName).filter(Boolean)).size,
+      recommended,
+    }),
+    { ids: rows.map((r) => r.id), rows },
+    status,
+  )
+}
+
+/**
+ * Write the batch the approver confirmed.
+ *
+ * The body is what the leave batch sends: the endpoint answers with a summary
+ * that accounts for every id it received — including the ones it skipped — so a
+ * single request carries the whole outcome, and a status code alone cannot tell a
+ * partial run from a dead one.
+ *
+ * A 500 that still carries a summary is that summary, for the same reason as the
+ * leave batch: the body is a truthful account of what the server did, and
+ * discarding it in favour of the status code would report a completed batch as a
+ * dead one.
+ */
+const commitBulkCompensable = async (status, subject) => {
+  const spec = COMPENSABLE_BULK_ACTIONS[status]
+  if (!spec) return
+  const { ids } = subject || {}
+  if (!ids?.length) return
+
+  compensableSubmitting.value = new Set(ids)
+
+  let outcome = null
+  let failure = null
+
+  try {
+    const res = await api.patch(COMPENSABLE_APPROVAL_BULK, {
+      application_ids: ids,
+      status,
+    })
+    const read = bulkLeaveOutcome(res.data)
+    if (read.readable) outcome = read
+    else failure = new Error('The bulk response carried no summary')
+  } catch (e) {
+    const recovered = e?.response ? bulkLeaveOutcome(e.response.data) : null
+    if (recovered?.readable) outcome = recovered
+    else failure = e
+  } finally {
+    // The Set is what every affected row's spinner reads, so it is filled for the
+    // whole run rather than per id — one call, one span of "busy".
+    compensableSubmitting.value = new Set()
+    clearCompensableSelection()
+  }
+
+  await fetchCompensableRequests().catch((e) =>
+    console.error('[Requests] refetch after bulk compensable failed:', e),
+  )
+
+  if (!outcome) {
+    toast.error(extractErrorMessage(failure, `Failed to ${spec.verb} these requests`), {
+      icon: 'error',
+    })
+    return
+  }
+
+  const accounted = outcome.updated + outcome.skipped + outcome.failed
+  if (accounted !== ids.length) {
+    console.warn(
+      `[Requests] bulk ${spec.verb} for compensable time accounted for ${accounted} of ${ids.length} sent:`,
+      outcome,
+    )
+  }
+
+  const notice = bulkLeaveOutcomeToast(outcome, ids.length, spec.past, COMPENSABLE_NOUN)
+  toast[notice.type](notice.message, {
+    ...(notice.caption ? { caption: notice.caption } : {}),
+    ...(notice.type === 'success' ? { icon: spec.icon } : {}),
+  })
+}
+
+const bulkApproveCompensable = () => bulkDecideCompensable('approved')
+const bulkRejectCompensable = () => bulkDecideCompensable('rejected')
+
+// ===== COMPENSABLE TIME: REJECTION RECOMMENDATION =====
+//
+// Advisory, not a decision. It writes `is_recommended_for_rejection` and a note
+// against the application and leaves `status` at `pending`, so a recommended
+// application is still approvable one at a time — that is what the single
+// per-application endpoint does with it.
+//
+// The distinction that matters here is against the *batch*: the bulk endpoint
+// refuses outright to action a recommended row, for either verb, and reports it
+// as `skipped_recommended`. So the recommendation is not a hold on this queue,
+// but it does gate batching — which is why the batch dialog counts the skips
+// before anything is written, and why clearing one is a decision in its own
+// right.
+
+const submitCompensableRecommendation = async (note) => {
+  const request = selectedCompensableRecommendRequest.value
+  if (!request) return
+  compensableRecommendSubmitting.value = true
+  compensableRecommendLoading.value = `recommend-${request.id}`
+  try {
+    // Refetched rather than patched into the local list, for the reason the leave
+    // queue does the same: the flag is server state a reviewer of this queue reads
+    // back through two surfaces — the row's marker and the menu's own wording —
+    // and a local write that disagreed with the server for even one render is how
+    // an application ends up flagged on screen and unflagged on the ledger.
+    await api.patch(`/compensable_time/applications/${request.id}/recommendation/`, {
+      id: request.id,
+      rejection_recommendation_note: (note || '').trim(),
+    })
+    showCompensableRecommendModal.value = false
+    selectedCompensableRecommendRequest.value = null
+    toast.success('Rejection recommended', { icon: 'o_flag' })
+    await fetchCompensableRequests()
+  } catch (e) {
+    const errorMessage = extractErrorMessage(e, 'Failed to recommend rejection')
+    toast.error(errorMessage, { icon: 'error' })
+  } finally {
+    compensableRecommendSubmitting.value = false
+    compensableRecommendLoading.value = null
+  }
+}
+
+const openCompensableRecommendation = (request) => {
+  selectedCompensableRecommendRequest.value = request
+  // The row may be in the pending batch, and that batch's buttons are disabled
+  // while a bulk decision is unavailable. Selecting stays available so a reviewer
+  // can still narrow the queue, so this is where a stale selection is cleared
+  // instead — not by making selection itself unavailable.
+  clearCompensableSelection()
+  showCompensableRecommendModal.value = true
+}
+
+const clearCompensableRecommendation = (request) => {
+  if (!request) return
+  openConfirmation('compensableRecommendation', buildRecommendationConfirm({ request }), request)
+}
+
+const commitClearCompensableRecommendation = async (request) => {
+  if (!request) return
+  compensableRecommendLoading.value = `unrecommend-${request.id}`
+  try {
+    await api.patch(`/compensable_time/applications/${request.id}/revert-recommendation/`, {
+      id: request.id,
+      is_recommended_for_rejection: false,
+      rejection_recommendation_note: '',
+    })
+    toast.success('Rejection recommendation removed', { icon: 'o_flag' })
+    await fetchCompensableRequests()
+  } catch (e) {
+    const errorMessage = extractErrorMessage(e, 'Failed to remove the recommendation')
+    toast.error(errorMessage, { icon: 'error' })
+  } finally {
+    compensableRecommendLoading.value = null
+  }
+}
+
+// ===== COMPENSABLE TIME: SELECTION =====
+
+const toggleCompensableSelection = (id) => {
+  const newSet = new Set(selectedCompensableIds.value)
+  if (newSet.has(id)) newSet.delete(id)
+  else newSet.add(id)
+  selectedCompensableIds.value = newSet
+}
+
+const toggleSelectAllCompensable = () => {
+  const actionable = actionableCompensableIds.value
+  const allSelected =
+    actionable.length > 0 && actionable.every((id) => selectedCompensableIds.value.has(id))
+  selectedCompensableIds.value = allSelected ? new Set() : new Set(actionable)
+}
+
+const clearCompensableSelection = () => {
+  selectedCompensableIds.value = new Set()
+}
+
+// ===== COMPENSABLE TIME: ALLOWANCES =====
+//
+// Fetched when the details dialog opens rather than with the queue, and read
+// through `readCompensableAllowances` so the dialog and the page agree on what the
+// listing says. The dialog holds no state of its own and writes nothing itself:
+// removing an allowance takes money off a request, so it goes through the page's
+// confirmation like every other write on this page.
+
+const fetchCompensableAllowances = async (applicationId) => {
+  if (applicationId == null) return
+  compensableAllowancesLoading.value = true
+  try {
+    const res = await api.get(
+      `/compensable_time/applications/${applicationId}/allowances/list/`,
+    )
+    const { allowances, total } = readCompensableAllowances(res.data)
+    compensableAllowances.value = allowances
+    compensableAllowanceTotal.value = total
+  } catch (e) {
+    compensableAllowances.value = []
+    compensableAllowanceTotal.value = null
+    const errorMessage = extractErrorMessage(
+      e,
+      'Failed to load the allowances for this application',
+    )
+    toast.error(errorMessage, { icon: 'error' })
+  } finally {
+    compensableAllowancesLoading.value = false
+  }
+}
+
+const openCompensableDetail = async (row) => {
+  if (!row) return
+  selectedCompensableRequest.value = row
+  showCompensableDetail.value = true
+  // The picker's options are the company's allowance types. Fetched only when
+  // empty, because a company can configure more of them than a reviewer expects
+  // and a stale list would quietly offer a type that has since been renamed.
+  if (!allowanceTypes.value.length) {
+    await fetchAllowanceTypes().catch(() => [])
+  }
+  await fetchCompensableAllowances(row.id)
+}
+
+const submitCompensableAllowance = async (draft) => {
+  const applicationId = selectedCompensableRequest.value?.id
+  if (applicationId == null) return
+  compensableAllowanceSaving.value = true
+  try {
+    await api.post(
+      `/compensable_time/applications/${applicationId}/allowances/`,
+      compensableAllowancePayload(draft),
+    )
+    toast.success('Allowance added', { icon: 'check_circle' })
+    await fetchCompensableAllowances(applicationId)
+  } catch (e) {
+    const errorMessage = extractErrorMessage(e, 'Failed to add the allowance')
+    toast.error(errorMessage, { icon: 'error' })
+  } finally {
+    compensableAllowanceSaving.value = false
+  }
+}
+
+/**
+ * The gate in front of taking one allowance back off.
+ *
+ * The amount is quoted before the write rather than named after it: an admin
+ * removing ₱4,500 from a rest day worked is making a decision about money, and
+ * the dialog that says so is the last chance to notice the wrong row was open.
+ */
+const openRemoveCompensableAllowance = (allowance) => {
+  if (!allowance?.id) return
+  openConfirmation('compensableAllowance', buildAllowanceRemoveConfirm({ allowance }), allowance)
+}
+
+const commitRemoveCompensableAllowance = async (allowance) => {
+  const applicationId = selectedCompensableRequest.value?.id
+  if (!allowance?.id || applicationId == null) return
+  compensableAllowanceSaving.value = true
+  try {
+    await api.post(`/compensable_time/applications/${applicationId}/allowances/revert/`, {
+      allowance_ids: [allowance.id],
+    })
+    toast.success('Allowance removed', { icon: 'check_circle' })
+    await fetchCompensableAllowances(applicationId)
+  } catch (e) {
+    const errorMessage = extractErrorMessage(e, 'Failed to remove the allowance')
+    toast.error(errorMessage, { icon: 'error' })
+  } finally {
+    compensableAllowanceSaving.value = false
+  }
+}
+
+// ===== COMPENSABLE TIME: APPLY =====
+//
+//   POST /compensable_time/applications/company/{company_id}/bulk-create/
+//
+// The only write on this queue that files rather than decides, so the company is
+// in the path and re-resolved on submit rather than captured when the dialog
+// opened — a request booked against the company that was selected when it opened
+// is a request in the wrong ledger.
+
+/**
+ * Open the apply dialog with its pickers loaded.
+ *
+ * The company guard comes first and refuses to open at all: the endpoint is
+ * company-scoped, so a request built without a company is a request that cannot
+ * be scoped, and opening a dialog whose submit can only fail wastes the admin's
+ * time before it starts.
+ */
+const openCompensableApplyModal = async () => {
+  if (!selectedCompany.value) {
+    toast.error('Select a company before assigning compensable time', { icon: 'error' })
+    return
+  }
+  compensableApplyEmployeeOptions.value = []
+  compensableApplySubcategories.value = []
+  try {
+    await fetchEmployees({ force: true })
+    // The body's `employee_ids` are uuids, so the option value is the uuid the
+    // endpoint wants rather than the roster's own pk — the same pairing the
+    // attendance and access-card dropdowns already use.
+    compensableApplyEmployeeOptions.value = employees.value
+      .map((employee) => ({
+        id: employee.uuid || employee.id,
+        name:
+          employee.user?.full_name ||
+          `${employee.user?.first_name || ''} ${employee.user?.last_name || ''}`.trim() ||
+          'Unknown',
+      }))
+      .filter((option) => option.id !== null && option.id !== undefined)
+  } catch {
+    /* Names degrade together; the dialog still opens rather than not opening. */
+  }
+  await fetchCompensableApplyCategories()
+  showCompensableApplyModal.value = true
+}
+
+const fetchCompensableApplyCategories = async () => {
+  const companyId = selectedCompany.value
+  if (!companyId) {
+    compensableApplyCategories.value = []
+    return
+  }
+  try {
+    const res = await api.get(`/compensable_time/categories/company/${companyId}/`)
+    compensableApplyCategories.value = offeredCategories(normalizeCategories(res.data))
+  } catch (e) {
+    compensableApplyCategories.value = []
+    // Console, not a toast: the dialog is about to open with an empty picker and
+    // says why itself. A toast here would explain the same thing twice.
+    console.error('[requests] failed to load compensable categories', e)
+  }
+}
+
+/**
+ * The subcategories belonging to the category the admin just picked.
+ *
+ * A null category clears the list, which is what the dialog asks for when it
+ * opens — the types left over from the last time it was used belong to a category
+ * this request is not in.
+ */
+const fetchCompensableApplySubcategories = async (categoryId) => {
+  if (categoryId == null) {
+    compensableApplySubcategories.value = []
+    return
+  }
+  try {
+    const res = await api.get(`/compensable_time/subcategories/category/${categoryId}/`)
+    compensableApplySubcategories.value = offeredSubcategories(normalizeSubcategories(res.data))
+  } catch (e) {
+    compensableApplySubcategories.value = []
+    console.error('[requests] failed to load compensable subcategories', e)
+  }
+}
+
+const filterCompensableApplyEmployees = (val) => {
+  const all = employees.value.map((employee) => ({
+    id: employee.uuid || employee.id,
+    name:
+      employee.user?.full_name ||
+      `${employee.user?.first_name || ''} ${employee.user?.last_name || ''}`.trim() ||
+      'Unknown',
+  }))
+  if (!val || val.trim() === '') {
+    compensableApplyEmployeeOptions.value = all
+    return
+  }
+  const search = val.toLowerCase()
+  compensableApplyEmployeeOptions.value = all.filter((option) =>
+    option.name.toLowerCase().includes(search),
+  )
+}
+
+const submitCompensableApply = async (draft) => {
+  const companyId = selectedCompany.value
+  if (!companyId) {
+    toast.error('Select a company before assigning compensable time', { icon: 'error' })
+    return
+  }
+  compensableApplySubmitting.value = true
+  try {
+    await api.post(
+      `/compensable_time/applications/company/${companyId}/bulk-create/`,
+      compensableApplyPayload(draft),
+    )
+    const count = draft.employeeIds?.length ?? 0
+    toast.success(
+      count > 1 ? `Compensable time filed for ${count} employees` : 'Compensable time filed',
+      { icon: 'check_circle' },
+    )
+    showCompensableApplyModal.value = false
+    await fetchCompensableRequests()
+  } catch (e) {
+    // A `bulk-create` endpoint may answer with an `errors` array naming each row
+    // that failed, and here there is more than one row in flight — a blanket
+    // "failed" would answer none of the questions the admin is actually asking.
+    // The same shape SchedulePage prints in full for its own bulk create.
+    const errors = e?.response?.data?.errors
+    const message =
+      Array.isArray(errors) && errors.length
+        ? errors.join('; ')
+        : extractErrorMessage(e, 'Failed to file the compensable time request')
+    toast.error(message, { timeout: 10000, icon: 'error' })
+  } finally {
+    compensableApplySubmitting.value = false
+  }
+}
+
 // ===== REFRESH HANDLER =====
 const handleRefresh = () => {
   markUpdated()
@@ -2073,6 +2845,8 @@ const handleRefresh = () => {
     fetchOvertimeCategories()
   } else if (activeTab.value === 'swap') {
     fetchSwapRequests()
+  } else if (activeTab.value === 'compensable') {
+    fetchCompensableRequests()
   } else {
     fetchLeaveRequests()
   }
@@ -2092,6 +2866,9 @@ watch(activeTab, (newTab) => {
     fetchOvertimeCategories()
   } else if (newTab === 'swap') {
     fetchSwapRequests()
+  } else if (newTab === 'compensable') {
+    compensableStatusFilter.value = 'all'
+    fetchCompensableRequests()
   } else {
     fetchLeaveRequests()
   }
@@ -2147,6 +2924,11 @@ watch([caPayrollGroupFilter, caRequests], async () => {
   await ensureGroupsFor(caRequests.value, caRowEmployeeRefs)
 })
 
+watch([compensablePayrollGroupFilter, compensableRequests], async () => {
+  if (!compensablePayrollGroupFilter.value) return
+  await ensureGroupsFor(compensableRequests.value, compensableRowEmployeeRefs)
+})
+
 // Re-fetch all data when selected company changes
 watch(selectedCompany, () => {
   markUpdated()
@@ -2155,13 +2937,16 @@ watch(selectedCompany, () => {
   // Ids from the previous workspace mean nothing in the next one.
   clearOvertimeSelection()
   clearLeaveSelection()
+  clearCompensableSelection()
   overtimeRequests.value = []
   overtimeDirectory.value = null
+  compensableRequests.value = []
   // Group ids belong to the company they were listed for, so the filters cannot
   // survive a switch — they would silently match nothing in the new workspace.
   leavePayrollGroupFilter.value = null
   overtimePayrollGroupFilter.value = null
   caPayrollGroupFilter.value = null
+  compensablePayrollGroupFilter.value = null
   leaveCutoffFilter.value = null
   leaveCutoffs.value = []
   fetchLeaveRequests()
@@ -2170,6 +2955,7 @@ watch(selectedCompany, () => {
   fetchCaRequests()
   fetchCaDisbursementLogs()
   fetchSwapRequests()
+  fetchCompensableRequests()
 })
 
 onMounted(() => {
@@ -2180,6 +2966,7 @@ onMounted(() => {
   fetchCaRequests()
   fetchCaDisbursementLogs()
   fetchSwapRequests()
+  fetchCompensableRequests()
   tickTimer = setInterval(() => {
     nowTick.value = Date.now()
   }, 30000)
