@@ -154,17 +154,10 @@
                 <span>{{ longLabel(day.date) }}</span>
                 <span class="day-list__iso">{{ day.date }}</span>
               </div>
-              <q-btn-toggle
+              <DayPartToggle
                 :model-value="day.is_half_day ? 'half' : 'full'"
                 @update:model-value="setHalfDay(day.date, $event)"
-                unelevated
-                no-caps
-                dense
-                :options="[
-                  { label: 'Full', value: 'full' },
-                  { label: 'Half', value: 'half' },
-                ]"
-                class="day-list__toggle"
+                aria-label="Day part for " + day.date
               />
             </div>
           </div>
@@ -200,6 +193,7 @@
 import { reactive, computed, watch } from 'vue'
 import { isoRange, longLabel } from 'src/composables/utils/calendarDate'
 import { leaveDayValueLabel } from 'src/composables/utils/leaveRequests'
+import DayPartToggle from './DayPartToggle.vue'
 
 const props = defineProps({
   modelValue: Boolean,
