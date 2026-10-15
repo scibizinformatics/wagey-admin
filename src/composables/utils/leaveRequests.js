@@ -117,6 +117,10 @@ const UNREADABLE_OUTCOME = { updated: 0, skipped: 0, failed: 0, skipMessage: '',
  * body genuinely carries a summary, so a bodyless 500 stays a real failure
  * instead of being reported as an empty — but successful — batch.
  *
+ * Shared with the compensable-time queue, whose bulk approval endpoint documents
+ * the same three buckets under the same keys, so it is read through this reader
+ * rather than a second one that could learn to read them differently.
+ *
  * @param {object} body - the response body, from either a 200 or a 500
  * @returns {{updated: number, skipped: number, failed: number, skipMessage: string, readable: boolean}}
  */
@@ -161,14 +165,20 @@ export function bulkLeaveOutcome(body) {
  *   reviewer's own yardstick: a batch is only "all" if everything they picked
  *   moved, whatever the server says it accounted for
  * @param {string} past - the verb's past tense, for the message
+ * @param {string} [noun] - what one of them is called, defaulting to the leave
+ *   queue's own. The compensable-time bulk endpoint documents the identical
+ *   contract — same three buckets, same refusal to action a recommended row, same
+ *   always-200 partial success — so it reads its outcomes through this same
+ *   reader and announces them through this same grammar, and only the noun
+ *   differs. Singular-only: the plural is this noun plus an `s`.
  */
-export function bulkLeaveOutcomeToast(outcome, requested, past) {
+export function bulkLeaveOutcomeToast(outcome, requested, past, noun = 'leave request') {
   const { updated, skipped, failed, skipMessage } = outcome
   const caption = skipMessage || undefined
-  const noun = (n) => `${n} leave request${n === 1 ? '' : 's'}`
+  const countOf = (n) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
   if (updated >= requested) {
-    return { type: 'success', message: `${noun(updated)} ${past}` }
+    return { type: 'success', message: `${countOf(updated)} ${past}` }
   }
 
   if (updated > 0) {
