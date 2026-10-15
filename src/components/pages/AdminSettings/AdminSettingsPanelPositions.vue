@@ -60,7 +60,11 @@
               <q-td class="table-body-cell"
                 ><span class="item-name">{{ props.row.title || props.row.name }}</span></q-td
               >
-              <q-td class="table-body-cell">{{ props.row.description }}</q-td>
+              <q-td class="table-body-cell">
+                <span v-if="props.row.description" class="pos-desc" :title="props.row.description">
+                  {{ props.row.description }}
+                </span>
+              </q-td>
               <q-td class="table-body-cell actions-cell">
                 <q-btn flat round dense icon="more_horiz" class="action-menu-btn">
                   <q-menu anchor="bottom right" self="top right" class="action-dropdown">
@@ -195,4 +199,26 @@ onMounted(fetchPositions)
 
 <style scoped lang="scss">
 @import './AdminSettingsPanelShared.scss';
+
+/* A description is context, not a paragraph — two lines is the most a table row
+   can carry without the rows losing their rhythm, same as the other panels that
+   render one.
+
+   `white-space: normal` is load-bearing, not decoration. QTable's `wrap-cells`
+   prop defaults to false, so the table carries `q-table--no-wrap` and Quasar's
+   `.q-table--no-wrap td { white-space: nowrap }` reaches this cell. Without it
+   the clamp never engages, the column's minimum width becomes the whole
+   description on one line, the table runs past the panel's edge and
+   `src/css/app.scss` clips `.settings-table .q-table__middle` — which is what
+   took the Actions column and its row menu off screen. `max-width` is what
+   bounds the column; the `nowrap` is what keeps the text on one line so
+   something has to bring it back. */
+.pos-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  max-width: 320px;
+}
 </style>
