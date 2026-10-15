@@ -159,8 +159,8 @@
           The calendar stays in a popup, so it floats over the list beneath it
           while open. That is deliberate: the field carries the count and the list
           is where the per-day detail lives, so the calendar is a picker and
-          nothing else — closing it with Done is always safe, because every day it
-          picked is already in the list behind it.
+          nothing else — closing it by clicking outside is always safe, because
+          every day it picked is already in the list behind it.
         -->
         <div class="form-section">
           <div class="dash-modal__section-title">Dates</div>
@@ -183,14 +183,7 @@
                     transition-hide="scale"
                     popup-content-class="dash-popup"
                   >
-                    <div class="ct-calendar">
-                      <q-date v-model="selectedDates" multiple mask="YYYY-MM-DD" />
-                    </div>
-                    <!-- Multi-select cannot close itself the way a single-date
-                           picker does, so the popup carries an explicit way out. -->
-                    <div class="ct-cal-foot">
-                      <q-btn v-close-popup flat no-caps label="Done" class="dash-modal__cancel" />
-                    </div>
+                    <q-date v-model="selectedDates" multiple mask="YYYY-MM-DD" />
                   </q-popup-proxy>
                 </q-icon>
               </template>
@@ -486,37 +479,14 @@ const onSubmit = () => {
   font-size: 12px;
   color: var(--dash-critical);
 }
-/* Quasar's `q-date` opens with a header that echoes the selection — the chosen
-   dates, or a bare "—" when there are none. In a multi-select picker inside a
-   dialog that already lists every day beneath it, that block is pure redundancy,
-   and its empty state is a large slab of brand navy carrying two dashes, which
-   reads as a broken panel rather than a date picker. The list below is the one
-   place the selection is shown, so the header is removed outright rather than
-   restyled into something else that would say it again.
-
-   `:deep` because the header belongs to QDate's own template, and the whole
-   component lives inside a popup Quasar teleports to <body> — the wrapper around
-   it is in this template, so it carries the scope attribute the rule hangs off. */
-.ct-calendar :deep(.q-date__header) {
-  display: none;
-}
-/* The popup's own close. Quasar's `q-date` ends at its grid, so without this the
-   Done button sits hard against the last week row; the padding below it keeps the
-   calendar and the button from reading as one block of controls. */
-.ct-cal-foot {
-  display: flex;
-  justify-content: flex-end;
-  padding: 6px 8px 8px;
-  border-top: 1px solid var(--dash-line);
-}
-.ct-cal-foot :deep(.q-btn) {
-  height: 28px;
-  min-height: 28px;
-  padding: 0 12px;
-  font-size: 12.5px;
-  font-weight: 500;
-  border-radius: var(--dash-r-sm);
-}
+/* The header is kept, not hidden. It is Quasar's `q-date` chrome that every other
+   date picker in the app already wears — the dashboard, attendance, card taps and
+   Manning all show it — and it reads the brand navy from `--q-primary`, which
+   `dashboard.scss` re-points at `--dash-brand` for `.q-date`. Hiding it here made
+   the one multi-select picker in the app the only one that looked like a bare grid.
+   In `multiple` mode it echoes the selection: one day prints "Thu, Oct 15", several
+   print the span and "N Days", and none print a pair of dashes. The list beneath is
+   still where the per-day detail lives; the header just names the pick. */
 /* Three controls per row where the leave list carries one, so the row stops
    stretching to its content and lays them out instead. */
 .ct-day-row {
