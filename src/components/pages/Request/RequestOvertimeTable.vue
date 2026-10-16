@@ -210,11 +210,15 @@
                 <span class="stat-num">{{ formatDate(props.row.date) }}</span>
               </q-td>
 
-              <!-- An open request is still negotiable, so its hours are a field
-                   an approver can settle; a decided one is a fact, so it is text. -->
+              <!-- A request the employee has merely *asked* for is still
+                   negotiable, so its hours are a field an approver can settle;
+                   a `qualified` row is the backend's own arithmetic and stays
+                   read-only even though it can still be approved, and a decided
+                   row is a fact. Hence `hoursEditable`, which is not the same
+                   test as `actionable`. -->
               <q-td key="hours" :props="props" class="grid-cell ot-cell-hours">
                 <q-input
-                  v-if="props.row.actionable"
+                  v-if="props.row.hoursEditable"
                   :model-value="editableHours[props.row.id] ?? props.row.hours"
                   @update:model-value="$emit('update:editable-hours', props.row.id, $event)"
                   @click.stop
@@ -319,6 +323,7 @@ const statusOptions = [
   { label: 'All statuses', value: 'all' },
   { label: 'Requested', value: 'requested' },
   { label: 'Qualified', value: 'qualified' },
+  { label: 'Unqualified', value: 'unqualified' },
   { label: 'Approved', value: 'approved' },
   { label: 'Rejected', value: 'rejected' },
 ]
