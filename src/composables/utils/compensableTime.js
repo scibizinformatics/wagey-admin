@@ -313,6 +313,9 @@ function normalizeDateEntry(entry) {
   return {
     date: day,
     is_half_day: entry.is_half_day === true,
+    // Extra hours with no base day at all — the one state neither `is_half_day`
+    // nor `excess_hours` can express on its own, so it is carried, not derived.
+    is_excess_only: entry.is_excess_only === true,
     excess_hours: Number(entry.excess_hours) || 0,
   }
 }
@@ -325,7 +328,7 @@ function normalizeDateEntry(entry) {
  * that says so twice is the first sign the payload is wrong.
  *
  * @param {string|Array} value the raw `dates` field
- * @returns {Array<{date: string, is_half_day: boolean, excess_hours: number}>}
+ * @returns {Array<{date: string, is_half_day: boolean, is_excess_only: boolean, excess_hours: number}>}
  */
 export function readCompensableDates(value) {
   const seen = new Map()
@@ -477,7 +480,7 @@ export const MAX_COMPENSABLE_DATES = 60
 
 /** A fresh entry for the date list: a full day with no excess hours recorded. */
 export function compensableDateEntry(date) {
-  return { date, is_half_day: false, excess_hours: 0 }
+  return { date, is_half_day: false, is_excess_only: false, excess_hours: 0 }
 }
 
 /**
@@ -499,10 +502,21 @@ export function offeredSubcategories(subcategories) {
 /**
  * The bulk-create body.
  *
- * Two deliberate coercions. **`excess_hours` is always sent, as a number, and is
- * `0` when the admin left it blank** — the endpoint's own sample carries the key
- * on every entry, so omitting it is the shape this code knows works, and a blank
- * field means "none recorded" rather than "leave it out".
+ * Each entry reproduces one of the five shapes the endpoint documents, and the
+ * keys that do not apply are **omitted rather than sent as zero**:
+ *
+ *   full day            { date, is_half_day: false }
+ *   full day + excess   { date, is_half_day: false, excess_hours: N }
+ *   half day            { date, is_half_day: true }
+ *   half day + excess   { date, is_half_day: true, excess_hours: N }
+ *   excess only         { date, is_excess_only: true, excess_hours: N }
+ *
+ * So `excess_hours` rides along only when there are hours to record, and
+ * `is_excess_only` only when a day contributes no base at all. Sending
+ * `excess_hours: 0` on every entry was the shape this code knew worked, but the
+ * samples above are the endpoint's own, and the excess-only state has no other
+ * way to be expressed — a day cannot be told "no base" by a boolean pinned to
+ * false.
  *
  * **`is_half_day` is a strict boolean.** It arrives from a segmented toggle as one
  * already, but a truthy reading would turn the string "false" into a half day.
@@ -514,11 +528,18 @@ export function compensableApplyPayload(draft = {}) {
       (id) => id !== null && id !== undefined && id !== '',
     ),
     sub_category: draft.subCategory ?? null,
-    dates: dates.map((entry) => ({
-      date: entry?.date ?? '',
-      is_half_day: entry?.is_half_day === true,
-      excess_hours: Number(entry?.excess_hours) || 0,
-    })),
+    dates: dates.map((entry) => {
+      const date = entry?.date ?? ''
+      const excess = Number(entry?.excess_hours) || 0
+      // Excess-only carries no base day, so `is_half_day` is left off entirely
+      // rather than sent as a false that would read as a full day.
+      if (entry?.is_excess_only === true) {
+        return { date, is_excess_only: true, excess_hours: excess }
+      }
+      const row = { date, is_half_day: entry?.is_half_day === true }
+      if (excess > 0) row.excess_hours = excess
+      return row
+    }),
     notes: (draft.notes ?? '').trim(),
   }
 }
