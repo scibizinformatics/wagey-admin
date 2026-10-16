@@ -122,14 +122,6 @@
   color: var(--dash-ink);
   min-width: 0;
 }
-/* The raw ISO date, kept quiet beside the readable one. Two spellings of the
-   same day is not redundancy when one of them is the exact string the payload
-   carries and the other is a rendering of it. */
-.day-list__iso {
-  font-size: 12px;
-  color: var(--dash-ink-4);
-  font-variant-numeric: tabular-nums;
-}
 .day-list__date-icon {
   color: var(--dash-ink-4);
   align-self: center;
