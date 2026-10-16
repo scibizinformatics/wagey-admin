@@ -99,8 +99,15 @@
             </template>
           </q-select>
 
+          <!-- One cutoff at a time. The options come from the cutoff *list*, not
+               from the rows, because only the selected cutoff's runs are fetched —
+               building them from rows would leave the dropdown holding whichever
+               cutoff happened to load first, and no ongoing cutoff at all until
+               somebody opened it. Hidden while the Completed toggle is on, since
+               that view spans every completed cutoff and a single-cutoff picker
+               would have nothing to pick from. -->
           <q-select
-            v-if="cutoffSelectOptions.length > 2"
+            v-if="!completedOnly && cutoffSelectOptions.length > 1"
             v-model="cutoffFilter"
             :options="cutoffSelectOptions"
             emit-value
@@ -117,20 +124,51 @@
             </template>
           </q-select>
 
+          <!-- History across every finished cutoff. Shaped like the Manning
+               board's "Needs attention" button rather than the chip beside it:
+               same outline, icon and counted label, because it is the same kind of
+               control — a visible, pressed-looking shortcut rather than a silent
+               rule, since a table showing a subset without saying so reads as a
+               table missing rows. -->
+          <q-btn
+            outline
+            no-caps
+            dense
+            size="12px"
+            icon="o_check_circle"
+            :label="completedLabel"
+            class="disb-completed-btn"
+            :class="{ 'disb-completed-btn--on': completedOnly }"
+            :disable="!cutoffs.length && !completedOnly"
+            @click="completedOnly = !completedOnly"
+          >
+            <q-tooltip>
+              {{
+                completedOnly
+                  ? 'Showing every cutoff whose payout groups have all finished — press to go back to one at a time'
+                  : 'Show every cutoff whose payout groups have all finished'
+              }}
+              <span v-if="completedSweepSummary">
+                <br />
+                {{ completedSweepSummary }}
+              </span>
+            </q-tooltip>
+          </q-btn>
+
           <!-- The deep-link narrowing that the cutoff select could *not* take
                over, because neither the id nor the name matched a cutoff the
                list actually holds. It stays visible because a list that
                silently shows a subset reads as a list that is missing rows. -->
           <button
-            v-if="cutoffFilterLabel"
+            v-if="unmatchedCutoffChip"
             type="button"
             class="dash-chip dash-chip--info disb-cutoff-chip"
             @click="clearCutoffFilter"
           >
             <span class="dash-chip__dot" />
-            {{ cutoffFilterLabel }}
+            {{ unmatchedCutoffChip }}
             <q-icon name="close" size="13px" class="disb-cutoff-chip__x" />
-            <q-tooltip>Show every open cutoff</q-tooltip>
+            <q-tooltip>Clear this cutoff filter</q-tooltip>
           </button>
 
           <!-- Most runs in a cutoff have nobody borrowing, so a cash advance
@@ -224,7 +262,7 @@ import 'jspdf-autotable'
 import PageShell from 'src/components/layout/PageShell.vue'
 import PayoutTable from 'src/components/pages/Payroll/PayoutTable.vue'
 import CashAdvanceTable from 'src/components/pages/Payroll/CashAdvanceTable.vue'
-import { stepRouteForPgiStatus } from 'src/constants/pgiStatus'
+import { stepRouteForPgiStatus, isCompletePgiStatus } from 'src/constants/pgiStatus'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useEmployees } from 'src/composables/page/useEmployees'
@@ -233,6 +271,12 @@ import { useToast } from 'src/composables/useToast'
 import { todayIso } from 'src/composables/utils/calendarDate'
 import { buildEmployeeNameIndex } from 'src/composables/utils/employee'
 import { createRequestToken } from 'src/composables/utils/requestToken'
+import { normalizeCutoffInstance } from 'src/composables/utils/leaveCutoffs'
+import {
+  companyCutoffShapes,
+  defaultCutoff,
+  narrowCutoffsByShape,
+} from 'src/composables/utils/cutoffState'
 import {
   aggregateCashAdvance,
   emptyCashAdvanceSummary,
@@ -247,6 +291,7 @@ const toast = useToast()
 const { companyId } = useCompany()
 const {
   fetchCutoffInstances,
+  fetchCompanyCutoffs,
   fetchDashboardSummary,
   fetchEmployeeReviewSummary,
   fetchPayoutGroupInstances,
@@ -336,22 +381,124 @@ const pageSizeOptions = [10, 20, 50]
 
 /**
  * Toolbar filters. `groupFilter` holds a payout-group name and `cutoffFilter` a
- * cutoff key, both null for "all".
+ * cutoff key.
  *
- * The options are derived from the rows rather than fetched, because the list is
- * already assembled from every open cutoff -- a second lookup could offer a
- * cutoff or a group that has no run on this page, which is a filter that empties
- * the table for no visible reason.
+ * The group options are still derived from the loaded rows, because a second
+ * lookup could offer a group that has no run in scope — a filter that empties the
+ * table for no visible reason. The *cutoff* options no longer are, because the
+ * rows are one cutoff's and the list is the whole workspace: they come from
+ * `cutoffs` below, which is fetched before any runs.
  */
 const groupFilter = ref(null)
 const cutoffFilter = ref(null)
 
-// A cutoff is keyed by id where the row has one, since two cutoffs may share a
-// display name; the name is the fallback so a row without an id is still
-// selectable rather than silently unreachable.
-function cutoffKey(run) {
-  return run.cutoffId != null ? `id:${run.cutoffId}` : `name:${(run.cutoff || '').toLowerCase()}`
-}
+/**
+ * Every cutoff the workspace has, as metadata only — id, name, window, state —
+ * read from `cutoff-instances` with no runs behind them.
+ *
+ * This list is what the dropdown is built from, which is the point of fetching it
+ * separately: the table used to load every cutoff's payout groups at once and
+ * derive its options from the rows it had already fetched, so the dropdown only
+ * ever offered cutoffs somebody had paid for. Now the ongoing cutoff is offered
+ * whether or not it has runs yet, and selecting a cutoff costs one request for
+ * that cutoff rather than a request for all of them.
+ */
+const cutoffs = ref([])
+
+/**
+ * History view: every completed cutoff's runs in one table, instead of one cutoff
+ * at a time. Off by default, so the page opens on the most recent finished
+ * cutoff — a working list — and the heavier all-completed load happens only when
+ * somebody asks for it.
+ */
+const completedOnly = ref(false)
+
+/**
+ * Every cutoff's runs, keyed by cutoff, from the last sweep.
+ *
+ * Held rather than discarded because classifying a cutoff as completed means
+ * asking that question of its runs, and the runs are what the sweep paid for.
+ * Dropping them would make going back and forth between the two views refetch
+ * every cutoff each time.
+ */
+const runsByCutoff = ref(new Map())
+
+/**
+ * The cutoffs whose every payout group reached the final step.
+ *
+ * Empty until a sweep has run, which is why the toggle cannot promise a count
+ * before it has been pressed: the answer only exists once every cutoff's runs have
+ * been read, and no cheaper endpoint answers it.
+ */
+const completedCutoffKeys = ref(new Set())
+
+/** The completed cutoffs the toggle shows, for its label and its count. */
+const completedCutoffOptions = computed(() =>
+  cutoffs.value.filter((cutoff) => completedCutoffKeys.value.has(cutoff.key)),
+)
+
+/**
+ * The toggle's own label, counting what it would show.
+ *
+ * Mirrors the Manning board's "Needs attention (4)": the count is the reason the
+ * control exists. It stays bare until the first sweep, because a count before then
+ * would be a guess dressed as a fact — and a guess that turned out to be zero on
+ * press is worse than admitting it had not looked.
+ */
+const completedLabel = computed(() => {
+  const count = completedCutoffOptions.value.length
+  return count ? `Completed (${count})` : 'Completed'
+})
+
+/**
+ * What the sweep found, for the toggle's tooltip.
+ *
+ * The count of scanned cutoffs is here because "0 completed" means two very
+ * different things — nothing has finished, or nothing has been looked at — and the
+ * button cannot tell the reader which without saying it.
+ */
+const completedSweepSummary = computed(() => {
+  // Only while the history view is open. Leaving it up afterwards would report
+  // "1 cutoff · 0 fully paid" after a return to the single-cutoff view, which
+  // reads as a finding about the company rather than as the default scope.
+  if (!completedOnly.value) return ''
+  const scanned = runsByCutoff.value.size
+  const done = completedCutoffKeys.value.size
+  return `Scanned ${scanned} cutoff${scanned === 1 ? '' : 's'} · ${done} fully paid`
+})
+
+// Guards for the two re-run loads, so a reader flipping the dropdown or the toggle
+// faster than the API answers cannot land an older scope's rows on screen.
+const runsGuard = createRequestToken()
+const dashboardGuard = createRequestToken()
+
+/**
+ * Whether the cutoff list has settled, so the dropdown watcher can tell a reader
+ * asking for a different cutoff from the page choosing its own default.
+ *
+ * Without it, `loadCutoffs` setting `cutoffFilter` would look exactly like a
+ * reader picking a cutoff, and the page would fire two loads for one visit.
+ */
+const ready = ref(false)
+
+/**
+ * The dropdown's options, in the endpoint's own order.
+ *
+ * Insertion order, not alphabetical: the rows arrive in the order the cutoff
+ * endpoint returned its cutoffs, which is chronological, and sorting names like
+ * "Oct 1–15" as text would shuffle them.
+ *
+ * Each option reads as the window it covers rather than as the cutoff's own name.
+ * The names are not usable in a list — a company running a semi-monthly cutoff
+ * calls every one of them the same thing — while the window is what tells two
+ * cutoffs apart, which is exactly what an option has to do.
+ */
+const cutoffSelectOptions = computed(() =>
+  cutoffs.value.map((cutoff) => ({
+    label: cutoff.windowLabel || cutoff.label,
+    value: cutoff.key,
+  })),
+)
 
 const groupSelectOptions = computed(() => {
   const names = new Set()
@@ -362,49 +509,32 @@ const groupSelectOptions = computed(() => {
   ]
 })
 
-// Insertion order, not alphabetical: the rows arrive in the order the cutoff
-// endpoint returned its cutoffs, which is chronological, and sorting names like
-// "Sept 1-15" as text would shuffle them.
-const cutoffSelectOptions = computed(() => {
-  const seen = new Map()
-  for (const run of rows.value) {
-    const key = cutoffKey(run)
-    if (!seen.has(key)) seen.set(key, { label: run.cutoff || 'Unnamed cutoff', value: key })
-  }
-  return [{ label: 'All cutoffs', value: null }, ...seen.values()]
-})
-
 const activeCutoffLabel = computed(() => {
-  if (cutoffFilter.value) {
-    return cutoffSelectOptions.value.find((o) => o.value === cutoffFilter.value)?.label || ''
-  }
-  return cutoffFilterLabel.value
+  if (completedOnly.value) return 'every completed cutoff'
+  const match = cutoffSelectOptions.value.find((o) => o.value === cutoffFilter.value)
+  return match?.label || ''
 })
 
-const cutoffScopedRuns = computed(() => {
-  if (!cutoffFilterId.value && !cutoffFilterLabel.value) return rows.value
+/**
+ * The deep-link chip's own copy, which outlives the filter it failed to set.
+ *
+ * Only shown when a linked cutoff matched nothing in `cutoffs` — once the select
+ * owns the narrowing, the chip's state is cleared.
+ */
+const unmatchedCutoffChip = computed(() => cutoffFilterLabel.value)
 
-  // The id is the exact key, so it wins whenever it matches anything at all.
-  if (cutoffFilterId.value) {
-    const byId = rows.value.filter((run) => String(run.cutoffId) === cutoffFilterId.value)
-    if (byId.length) return byId
-  }
-
-  if (!cutoffFilterLabel.value) return rows.value
-  const label = cutoffFilterLabel.value.toLowerCase()
-  const byLabel = rows.value.filter((run) => (run.cutoff || '').toLowerCase() === label)
-  // Neither key found the cutoff — the two endpoints disagree about both its id
-  // and its name. Showing everything is the honest answer; the chip stays up so
-  // the reader can see the narrowing was asked for and did not take.
-  return byLabel.length ? byLabel : rows.value
-})
-
-// Everything the toolbar narrowing leaves, before the search term. Kept apart
-// from `filteredRuns` because the subtitle counts the scope the reader chose,
-// not what they are part-way through typing.
+/**
+ * Everything the toolbar narrowing leaves, before the search term. Kept apart
+ * from `filteredRuns` because the subtitle counts the scope the reader chose,
+ * not what they are part-way through typing.
+ *
+ * No cutoff narrowing here: the runs on screen already *are* the selected
+ * cutoff (or, with the toggle on, the completed ones), so filtering them again
+ * by cutoff would be a no-cost pass over a list that cannot contain anything
+ * else.
+ */
 const narrowedRuns = computed(() => {
-  let out = cutoffScopedRuns.value
-  if (cutoffFilter.value) out = out.filter((run) => cutoffKey(run) === cutoffFilter.value)
+  let out = rows.value
   if (groupFilter.value) out = out.filter((run) => run.group === groupFilter.value)
   return out
 })
@@ -501,7 +631,6 @@ function clearCutoffFilter() {
   cutoffFilterLabel.value = ''
   page.value = 1
 }
-
 const totalPages = computed(() => Math.ceil((listRows.value?.length ?? 0) / pageSize.value) || 1)
 
 const searchRef = ref(null)
@@ -510,7 +639,7 @@ const searchRef = ref(null)
 const scopeLabel = computed(() => {
   const parts = []
   if (groupFilter.value) parts.push(groupFilter.value)
-  parts.push(activeCutoffLabel.value || 'the open cutoffs')
+  parts.push(activeCutoffLabel.value || 'the selected cutoff')
   return parts.join(' · ')
 })
 
@@ -714,57 +843,298 @@ function applyDeepLink() {
   router.replace({ query: {} })
 }
 
-onMounted(async () => {
-  applyDeepLink()
-  try {
-    const raw = await fetchCutoffInstances()
-    const cutoffs = Array.isArray(raw) ? raw : raw?.results ?? []
+/**
+ * Hands a deep-linked cutoff over to the select as soon as the cutoff list makes
+ * it resolvable, so the narrowing shows up as a filter the reader can change
+ * rather than as a chip beside an untouched dropdown.
+ *
+ * Resolved against the cutoff *list* now rather than against fetched rows, which
+ * is what a one-cutoff-at-a-time page requires — the linked cutoff's runs have not
+ * been asked for at this point, so matching against rows would find nothing and
+ * the link would silently lose its narrowing.
+ *
+ * A link that matches nothing is left as a chip: the reader sees that a cutoff was
+ * asked for and that this workspace has no such cutoff, rather than being handed
+ * the default with no explanation for the link that brought them.
+ */
+function resolveDeepLink() {
+  const fallback = () => {
+    if (!cutoffFilter.value) cutoffFilter.value = defaultCutoff(cutoffs.value)?.key ?? null
+  }
 
-    if (!cutoffs.length) {
-      loading.value = false
+  if (!cutoffFilterId.value && !cutoffFilterLabel.value) {
+    fallback()
+    return
+  }
+  const wantedId = cutoffFilterId.value ? `id:${cutoffFilterId.value}` : null
+  const wantedLabel = cutoffFilterLabel.value.toLowerCase()
+  const match = cutoffs.value.find(
+    (cutoff) => cutoff.key === wantedId || cutoff.label.toLowerCase() === wantedLabel,
+  )
+  // A link that matched nothing falls back to the default cutoff rather than to an
+  // empty table. The chip stays up, so the reader is told the cutoff they were
+  // sent here for is not one this workspace has — an empty table would say that
+  // less clearly, and would look like the page is broken rather than the link.
+  if (!match) {
+    fallback()
+    return
+  }
+  cutoffFilter.value = match.key
+  cutoffFilterId.value = ''
+  cutoffFilterLabel.value = ''
+}
+
+/**
+ * Reads the cutoff list — metadata only, no runs behind it — and narrows it to
+ * this company's own cutoffs.
+ *
+ * Two requests, because the workspace-wide list cannot answer that on its own.
+ * `cutoff-instances` lists every cutoff *type* in the workspace, so it arrives
+ * carrying weekly, bi-weekly, monthly and annual cutoffs alongside this company's
+ * fortnightly ones. Offering those raw filled the dropdown with a dozen periods
+ * this company cannot pay against.
+ *
+ * `payroll-trend` is company-scoped, so the windows *it* reports are this
+ * company's. Its shapes are therefore the filter: `1-15` and `16-last` for a
+ * semi-monthly payroll, which keeps `Oct 1–15` and `Oct 16–31` and drops
+ * everything else in that list. This is the same narrowing the Dashboard already
+ * applies, now shared rather than duplicated.
+ *
+ * The ids still come from `cutoff-instances`, because that is the endpoint whose
+ * ids `payout-group-instances` takes — `payroll-trend` is used for the shape and
+ * the status, never as the key a payout run is fetched by.
+ *
+ * Deliberately the one pair of requests that touches every cutoff: the dropdown
+ * has to know what exists before anything is selected. What it deliberately does
+ * *not* do is ask each of those cutoffs for its payout groups, which is what this
+ * page used to do and what made it slow — a workspace with a few years of cutoffs
+ * paid one request per cutoff on every visit, only to show the reader a list they
+ * had to narrow before it was readable.
+ *
+ * If the filter matches nothing — the two endpoints describing their windows in
+ * ways this code cannot align — the narrowed-empty list is *not* what the reader
+ * gets. A noisy dropdown is recoverable and the reader can see why; an empty one
+ * looks like a broken page.
+ */
+async function loadCutoffs() {
+  // Settled rather than caught, because "this call failed" is the single most
+  // useful thing to know here: the cutoff list and the payroll-trend list feed two
+  // different halves of this function, and only one of them failing looks like a
+  // working page. Swallowed into `null` both times, they are indistinguishable
+  // from an empty answer.
+  const [instancesResult, companyResult] = await Promise.allSettled([
+    fetchCutoffInstances(),
+    fetchCompanyCutoffs(companyId.value),
+  ])
+  const instancesRaw = instancesResult.status === 'fulfilled' ? instancesResult.value : null
+  const companyRaw = companyResult.status === 'fulfilled' ? companyResult.value : null
+
+  if (instancesResult.status === 'rejected') {
+    console.error('[DisbursementListPage] cutoff-instances failed', instancesResult.reason)
+  }
+  if (companyResult.status === 'rejected') {
+    console.error('[DisbursementListPage] payroll-trend failed', companyResult.reason)
+  }
+
+  const instanceList = Array.isArray(instancesRaw)
+    ? instancesRaw
+    : (instancesRaw?.results ?? instancesRaw?.data ?? [])
+  const instances = (Array.isArray(instanceList) ? instanceList : [])
+    .map(normalizeCutoffInstance)
+    .filter(Boolean)
+
+  const companyList = Array.isArray(companyRaw)
+    ? companyRaw
+    : (companyRaw?.cutoffs ?? companyRaw?.results ?? companyRaw?.data ?? [])
+  const companyCutoffs = Array.isArray(companyList) ? companyList : []
+
+  const shapes = companyCutoffShapes(companyCutoffs)
+  let narrowed = narrowCutoffsByShape(instances, shapes)
+  if (!narrowed.length && instances.length) {
+    console.warn(
+      `[DisbursementListPage] no cutoff matched this company's shapes ` +
+        `(${[...shapes].join(', ')}); offering the full workspace list`,
+    )
+    narrowed = instances
+  }
+
+  cutoffs.value = narrowed
+
+  // What actually came back, in the one place that can see both ends of it. The
+  // dropdown depends on the *shape* narrowing — the list arriving unfiltered is
+  // the failure mode, and it looks like nothing is wrong until you notice a dozen
+  // periods the company cannot pay against.
+  console.log(
+    '[DisbursementListPage] cutoffs:',
+    `workspace=${instances.length} kept=${narrowed.length}`,
+    `| payroll-trend=${companyCutoffs.length}`,
+    `| shapes=${[...shapes].join('+') || '(none)'}`,
+  )
+
+  if (narrowed.length) return true
+  console.warn('[DisbursementListPage] no cutoffs returned for this workspace')
+  return false
+}
+
+/**
+ * The runs for whatever is in scope, fetched now.
+ *
+ * One request per cutoff in scope, so the default view costs one and the
+ * Completed view costs one per finished cutoff — the heavy load the reader opts
+ * into by pressing the toggle rather than paying it on every visit. A cutoff
+ * with no id cannot be asked about and is skipped rather than requested with
+ * `undefined` in the path.
+ *
+ * `expectedStatuses: [404]` in the composable is why a cutoff this company has no
+ * runs for answers instead of throwing; a rejected cutoff is a fact about the
+ * workspace, not an error, and the table showing nothing for it is correct.
+ */
+/** One payout group as a table row, tagged with the cutoff it was fetched under. */
+function toRunRow(item, cutoff) {
+  return {
+    id: item.id,
+    cutoffId: cutoff?.id ?? null,
+    // The cutoff the row was asked for, not just the one the payload names: the
+    // payload identifies its cutoff by name only, and a name is not something to
+    // key a selection on.
+    cutoffKey: cutoff?.key ?? null,
+    group: item.payout_group_name,
+    // The window the row belongs to, in the same words the dropdown uses, so a
+    // reader can tell at a glance which option produced this row. The payload's
+    // own `cutoff_instance_name` is the fallback for a cutoff whose dates were
+    // unreadable — better a possibly long name than a blank.
+    cutoff: cutoff?.windowLabel || item.cutoff_instance_name || '',
+    method: item.payout_method_name,
+    employees: item.employees,
+    netAmount: parseFloat(item.net_amount || 0),
+    status: item.payout_status,
+    statusDisplay: item.payout_status_display,
+  }
+}
+
+/**
+ * One request per cutoff, batched, returning the runs keyed by cutoff.
+ *
+ * A cutoff with no id cannot be asked about and is skipped rather than requested
+ * with `undefined` in the path.
+ */
+async function fetchRunsByCutoff(scope) {
+  const batches = await fetchWithConcurrency(
+    scope,
+    (cutoff) =>
+      cutoff?.id == null
+        ? null
+        : fetchPayoutGroupInstances(companyId.value, cutoff.id).catch(() => null),
+    10,
+  )
+  const map = new Map()
+  scope.forEach((cutoff, i) => {
+    map.set(
+      cutoff.key,
+      (batches[i] || []).map((item) => toRunRow(item, cutoff)),
+    )
+  })
+  return map
+}
+
+/**
+ * The rows for whatever is in scope, fetched now.
+ *
+ * The default view asks about one cutoff, which is the whole point of the page
+ * having stopped fetching every cutoff in the workspace. The Completed view cannot
+ * be that cheap: "has this payroll finished" is a property of its payout groups
+ * and exists nowhere else, so classifying every cutoff means reading all of them.
+ * That cost is opt-in — paid on the press, cached for five minutes afterwards, and
+ * never on the default view.
+ *
+ * A cutoff qualifies when it has at least one run and *every* run is finished. One
+ * group still sitting in Funding means the payroll is not done, whatever the rest
+ * of the cutoff looks like; a cutoff with no runs at all has no payroll to call
+ * finished and is not history either.
+ */
+async function loadRuns() {
+  const token = runsGuard.next()
+  loading.value = true
+  try {
+    if (!completedOnly.value) {
+      const scope = cutoffs.value.filter((cutoff) => cutoff.key === cutoffFilter.value)
+      const map = await fetchRunsByCutoff(scope)
+      if (!runsGuard.isCurrent(token)) return
+      runsByCutoff.value = map
+      completedCutoffKeys.value = new Set()
+      rows.value = scope.flatMap((cutoff) => map.get(cutoff.key) || [])
       return
     }
 
-    // PHASE 1: Fetch payout groups for all cutoffs (batched) and show table immediately
-    const allGroups = await fetchWithConcurrency(
-      cutoffs,
-      (c) => fetchPayoutGroupInstances(companyId.value, c.id).catch(() => null),
-      10,
-    )
-    // `fetchWithConcurrency` returns its results in input order, so the index
-    // still names the cutoff each batch of groups came from. The id is carried
-    // onto the row because the payload identifies a cutoff only by name, and a
-    // name is not something to filter an exact selection on.
-    rows.value = allGroups.flatMap((g, i) => (g || []).map((item) => ({
-      id: item.id,
-      cutoffId: cutoffs[i]?.id ?? null,
-      group: item.payout_group_name,
-      cutoff: item.cutoff_instance_name,
-      method: item.payout_method_name,
-      employees: item.employees,
-      netAmount: parseFloat(item.net_amount || 0),
-      status: item.payout_status,
-      statusDisplay: item.payout_status_display,
-    })))
-    loading.value = false
+    const scope = cutoffs.value
+    const map = await fetchRunsByCutoff(scope)
+    if (!runsGuard.isCurrent(token)) return
+    runsByCutoff.value = map
+
+    const finished = new Set()
+    for (const cutoff of scope) {
+      const runs = map.get(cutoff.key) || []
+      if (runs.length && runs.every((run) => isCompletePgiStatus(run.status))) {
+        finished.add(cutoff.key)
+      }
+    }
+    completedCutoffKeys.value = finished
+    rows.value = scope
+      .filter((cutoff) => finished.has(cutoff.key))
+      .flatMap((cutoff) => map.get(cutoff.key))
+  } catch (err) {
+    console.error('[DisbursementListPage] runs failed:', err)
+  } finally {
+    if (runsGuard.isCurrent(token)) loading.value = false
+  }
+}
+
+/**
+ * The pipeline tiles for the selected cutoff.
+ *
+ * One cutoff, deliberately — the tiles sit directly above the table and used to
+ * aggregate every cutoff while the table showed all of them, which agreed by
+ * accident. With the table scoped, the tiles describe the same cutoff. In the
+ * Completed view they keep describing the *selected* cutoff rather than summing
+ * every completed one: the toggle is a history view, and a total across
+ * arbitrary past cutoffs would answer a question nobody asked.
+ */
+async function loadDashboard() {
+  const cutoff = cutoffs.value.find((c) => c.key === cutoffFilter.value)
+  if (cutoff?.id == null) {
+    dashboard.value = null
+    return
+  }
+  const token = dashboardGuard.next()
+  loadingDashboards.value = true
+  try {
+    const summary = await fetchDashboardSummary(companyId.value, cutoff.id).catch(() => null)
+    if (!dashboardGuard.isCurrent(token)) return
+    dashboard.value = summary ? aggregateDashboards([summary]) : null
+  } finally {
+    if (dashboardGuard.isCurrent(token)) loadingDashboards.value = false
+  }
+}
+
+onMounted(async () => {
+  applyDeepLink()
+  try {
+    const hasCutoffs = await loadCutoffs()
+    resolveDeepLink()
+    // Past this point the dropdown owns the scope, so a change to it is a reader
+    // asking for something different — not the page settling itself up.
+    ready.value = true
+
+    await loadRuns()
+    if (hasCutoffs) await loadDashboard()
     notifyLoaded('Payout groups', rows.value.length, {
       noun: 'payout group',
       nounPlural: 'payout groups',
     })
-
-    // PHASE 2: Background-fetch dashboard summaries and aggregate stats
-    loadingDashboards.value = true
-    const dashboardResults = await fetchWithConcurrency(
-      cutoffs,
-      (c) => fetchDashboardSummary(companyId.value, c.id).catch(() => null),
-      10,
-    )
-    dashboard.value = aggregateDashboards(dashboardResults.filter(Boolean))
   } catch (err) {
     console.error('[DisbursementListPage] load failed:', err)
   } finally {
     loading.value = false
-    loadingDashboards.value = false
   }
 })
 
@@ -935,8 +1305,28 @@ function parseAmount(val) {
 // Both reset to page 1: narrowing the list while on page 3 would otherwise land
 // on a page that no longer exists. Search was previously reset by a `filterRuns`
 // handler on the input; a watcher covers it without the template wiring.
-watch([pageSize, searchTerm, groupFilter, cutoffFilter, onlyWithAdvances, view], () => {
-  page.value = 1
+watch(
+  [pageSize, searchTerm, groupFilter, cutoffFilter, onlyWithAdvances, view, completedOnly],
+  () => {
+    page.value = 1
+  },
+)
+
+/**
+ * A change of scope re-runs both loads.
+ *
+ * This is what the single-cutoff page costs per change: one request for the newly
+ * selected cutoff, plus one for its dashboard figures. It is also why the toggle
+ * is opt-in — pressing it is the only thing on this page that fetches more than
+ * one cutoff at a time.
+ *
+ * The dashboard follows only the selected cutoff, never the toggle: the tiles
+ * describe one cutoff in both modes.
+ */
+watch([cutoffFilter, completedOnly], () => {
+  if (!ready.value) return
+  loadRuns()
+  if (!completedOnly.value) loadDashboard()
 })
 
 /**
@@ -950,26 +1340,12 @@ watch(view, (next) => {
 })
 
 watch(rows, () => {
-  if (isCashAdvance.value && !cashAdvanceLoaded.value) loadCashAdvances()
-})
-
-/**
- * Hands a deep-linked cutoff over to the select as soon as the rows make it
- * resolvable, so the narrowing shows up as a filter the reader can change rather
- * than as a chip beside an untouched dropdown. The chip's own state is cleared
- * once the select owns it; it stays only for a link that matched nothing.
- */
-watch(rows, () => {
-  if (!cutoffFilterId.value && !cutoffFilterLabel.value) return
-  const wantedId = cutoffFilterId.value ? `id:${cutoffFilterId.value}` : null
-  const wantedLabel = cutoffFilterLabel.value.toLowerCase()
-  const match = cutoffSelectOptions.value.find(
-    (o) => o.value && (o.value === wantedId || o.label.toLowerCase() === wantedLabel),
-  )
-  if (!match) return
-  cutoffFilter.value = match.value
-  cutoffFilterId.value = ''
-  cutoffFilterLabel.value = ''
+  if (!isCashAdvance.value) return
+  // Re-read whenever the runs change, not only on the first pass. Changing cutoff
+  // replaces the rows wholesale, and a table that kept the previous cutoff's
+  // summaries — or none at all — under the new cutoff's groups would put one
+  // cutoff's cash advances beside another's payroll.
+  loadCashAdvances()
 })
 </script>
 
@@ -1169,6 +1545,33 @@ watch(rows, () => {
 }
 .disb-view :deep(.q-field__prepend) {
   padding-right: 7px;
+}
+
+/* The completed-cutoff toggle, cut from the Manning toolbar's "Needs attention"
+   button: same outline, same 34px rung, same counted label. Re-declared rather
+   than shared because each page scopes its own toolbar, and a page-wide
+   cross-component class for one button is a wider coupling than this is worth. */
+.disb-completed-btn {
+  height: 34px;
+  padding: 0 11px;
+  border-radius: var(--dash-r-md);
+  color: var(--dash-ink-2);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.disb-completed-btn :deep(.q-btn__content) {
+  gap: 6px;
+}
+/* Info rather than warn, which is what the Manning equivalent uses. Warn would be
+   right there because that filter selects for problems; this one selects for a
+   neutral slice of history, and a warning tone on it would say something the
+   table is not saying. */
+.disb-completed-btn--on {
+  background: var(--dash-info-bg);
+  color: var(--dash-info);
+}
+.disb-completed-btn--on :deep(.q-btn__content) {
+  color: var(--dash-info);
 }
 
 /* A chip that is also its own toggle. Off, it keeps the chip's shape so the row
