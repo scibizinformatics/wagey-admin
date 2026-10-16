@@ -65,6 +65,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
+import { useCarriedRunQuery } from 'src/composables/disbursement/useCarriedRunQuery'
 import { computeStepsFromPgiStatus } from 'src/constants/pgiStatus'
 
 const route = useRoute()
@@ -84,14 +85,7 @@ const BASE_PATH = '/app/payroll'
  * header and a stepper that had to refetch its progress. The identity of the
  * run does not change between its own steps, so it travels with the link.
  */
-const carriedQuery = computed(() => {
-  const { pgi_status: status, group, cutoff } = route.query
-  const query = {}
-  if (status) query.pgi_status = status
-  if (group) query.group = group
-  if (cutoff) query.cutoff = cutoff
-  return query
-})
+const carriedQuery = useCarriedRunQuery()
 
 const stepDefs = [
   { label: 'Review', routeKey: 'review' },
