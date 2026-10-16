@@ -429,17 +429,29 @@ function isCash(row) {
 }
 
 /**
- * Whether a row still has pay owed against it.
+ * Claim statuses that mean the pay has already been dealt with, so the row has
+ * nothing left to release.
  *
- * ASSUMPTION, flagged: this reads `claim_status`, on the basis that a release
- * moves it off `Pending`. Release and *claim* are different events, so if the
- * status only moves when the employee actually collects the cash, this would
- * hide the button on rows that were released but not yet claimed. The alternative
- * — no gate — offers a second release of the same pay, which is worse. If the
- * backend has a real per-row released flag, this is the one line to swap.
+ * This list used to be its own inverse — the test was `!== 'pending'`, which
+ * counted the backend's `not applicable` for an unreleased cash payout as
+ * settled. That hid the row menu on every cash row while the bulk button's own
+ * tooltip said "release each one from its row", so nothing was releasable at all.
+ *
+ * Everything not listed here — `pending`, `not applicable`, a blank, or a word
+ * this list has not seen — reads as still owed. That is the deliberate
+ * direction: an unlisted status shows the release action rather than silently
+ * hiding money the company still has to pay out. A settled word the backend
+ * introduces later goes in this array.
  */
+const SETTLED_CLAIM_STATUSES = ['claimed', 'released', 'received', 'paid', 'confirmed']
+
+/** Whether a row still has pay owed against it. */
 function isSettled(row) {
-  return String(row?.claim_status || '').toLowerCase() !== 'pending'
+  return SETTLED_CLAIM_STATUSES.includes(
+    String(row?.claim_status || '')
+      .trim()
+      .toLowerCase(),
+  )
 }
 
 /** Everything the batch is allowed to move. */
