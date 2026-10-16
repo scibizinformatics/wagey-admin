@@ -44,6 +44,10 @@ import { resolvedCompanyId } from 'src/composables/page/useCompany'
 import { todayIso } from 'src/composables/utils/calendarDate'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { normalizeCutoffInstance } from 'src/composables/utils/leaveCutoffs'
+import {
+  companyCutoffShapes as companyCutoffShapesShared,
+  cutoffShape,
+} from 'src/composables/utils/cutoffState'
 import { countCutoffStages, normalizeCutoffStage } from 'src/composables/utils/cutoffStatus'
 
 // ────────────────────────────────────────────────────────────────────
@@ -103,51 +107,13 @@ const MONTH_LABEL = (ym) => {
   return new Date(`${ym}-01`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
-/**
- * The calendar parts of a `YYYY-MM-DD`, or null when the value is not a day.
- *
- * Read out of the string rather than parsed, deliberately. `fromIso` appends its
- * own `T00:00:00` and would refuse an ISO datetime outright, and the obvious
- * `new Date(iso)` fallback parses as UTC midnight, which turns a Manila cutoff
- * closing on the 15th into the 14th west of Greenwich. Both are the traps
- * `calendarDate.js` exists to avoid, and this only needs three numbers.
- *
- * @param {unknown} iso
- * @returns {{year: number, month: number, day: number}|null} `month` 1-based.
- */
-function dayParts(iso) {
-  const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso ?? '').trim())
-  if (!matched) return null
-  return { year: Number(matched[1]), month: Number(matched[2]), day: Number(matched[3]) }
-}
+// `cutoffShape`, `SEMI_MONTHLY_SHAPES` and `companyCutoffShapes` now live in
+// `utils/cutoffState.js`, where the Disbursement list reads them too. They used to
+// live here, which meant the one rule for "which cutoffs are this company's" was
+// only available to the one screen that needed it. Re-exported below because this
+// module's own doc and callers still name `cutoffShape`.
 
-/**
- * A cutoff window reduced to the pattern it follows, with the year and the month
- * length left out — `1-15`, `16-last`, `1-30`, `5-11`.
- *
- * Two cutoffs of the same type share a shape even though their dates differ: a
- * semi-monthly company's March 16–31 and February 16–28 are both `16-last`, so
- * the shape is what lets a cutoff the company already has recognise the rest of
- * its kind in a list that mixes cutoff types together.
- *
- * "last" rather than the literal end day, because 28/30/31 are the same cutoff
- * and a shape test that spelled them out separately would need three rules for
- * what is one. Day 0 of a 1-based month is that month's last day.
- *
- * @param {unknown} startIso
- * @param {unknown} endIso
- * @returns {string|null} null when either bound is not a readable day.
- */
-export function cutoffShape(startIso, endIso) {
-  const start = dayParts(startIso)
-  const end = dayParts(endIso)
-  if (!start || !end) return null
-  const lastDay = new Date(end.year, end.month, 0).getDate()
-  return `${start.day}-${end.day === lastDay ? 'last' : end.day}`
-}
-
-/** The shapes a semi-monthly cutoff type is made of. */
-const SEMI_MONTHLY_SHAPES = ['1-15', '16-last']
+export { cutoffShape }
 
 export function useDashboardSummary() {
   const loading = ref(false)
@@ -232,14 +198,7 @@ export function useDashboardSummary() {
    * @returns {Set<string>}
    */
   function companyCutoffShapes() {
-    const known = new Set(
-      cutoffs.value.map((c) => cutoffShape(c.start_date, c.end_date)).filter(Boolean),
-    )
-    if (!known.size) return new Set(SEMI_MONTHLY_SHAPES)
-    if (SEMI_MONTHLY_SHAPES.some((shape) => known.has(shape))) {
-      for (const shape of SEMI_MONTHLY_SHAPES) known.add(shape)
-    }
-    return known
+    return companyCutoffShapesShared(cutoffs.value)
   }
 
   /**
