@@ -1265,6 +1265,30 @@ const fetchOvertimeRequests = async () => {
     // one query parameter, and a wrong count here is the first sign it stopped
     // being honoured.
     console.log(`[overtime] company ${companyId}: ${data.length} row(s)`)
+    // The status vocabulary the backend is actually answering with, per value
+    // rather than per row, plus the two qualification fields that decide whether
+    // an "Unqualified" status can be derived client-side at all. The admin
+    // settings screen offers All / Admin Approved / Qualified / Requested /
+    // Approved / Rejected / Cancelled, but a UI filter cannot confirm what the
+    // list endpoint fills in — and `qualified_hours` is currently `null` on
+    // every row, which is exactly what blocks the unqualified reading (see the
+    // deferred note in `normalizeOvertimeRequest`). Watch both counts.
+    const statusCounts = {}
+    let withQualifiedHours = 0
+    let withLimitHours = 0
+    for (const item of data) {
+      const key = item?.status === null || item?.status === undefined ? '(missing)' : item.status
+      statusCounts[key] = (statusCounts[key] || 0) + 1
+      if (item?.qualified_hours !== null && item?.qualified_hours !== undefined) {
+        withQualifiedHours += 1
+      }
+      if (item?.limit_hours !== null && item?.limit_hours !== undefined) withLimitHours += 1
+    }
+    console.log(
+      `[overtime] backend statuses:`,
+      statusCounts,
+      `| qualified_hours on ${withQualifiedHours}/${data.length}, limit_hours on ${withLimitHours}/${data.length}`,
+    )
     // Rows that vanished from the queue must not stay selected — a later bulk
     // approve would then patch ids that are no longer on screen.
     const live = new Set(overtimeRequests.value.filter((r) => r.actionable).map((r) => r.id))
@@ -1286,13 +1310,22 @@ const setOvertimeEditableHours = (id, value) => {
 }
 
 // What to settle the request at: the approver's edit if they made one, then the
-// hours claimed, then the qualified figure. A row carrying no figure at all
+// figure that applies to this row's state. A row carrying no figure at all
 // patches as 0 — the endpoint wants a decimal string, and sending the text of
 // whatever placeholder the payload used is how it ends up storing "null".
+//
+// Which figure applies depends on whether the cell was editable, and that is
+// the same `hoursEditable` test the table renders from, so the dialog, the bulk
+// total and the write cannot disagree about it. An editable (`requested`) row
+// settles at the claimed hours, because negotiating the claim is the point. A
+// non-editable (`qualified`) row settles at the backend's qualified figure,
+// since that row's hours were never the approver's to change; the claim is the
+// fallback for the records where `qualified_hours` was never filled in.
 const resolveApprovedHours = (row) => {
-  const parsed = Number(
-    overtimeEditableHours.value[row?.id] ?? row?.hours ?? row?.qualifiedHours ?? 0,
-  )
+  const fallback = row?.hoursEditable
+    ? (row?.hours ?? row?.qualifiedHours)
+    : (row?.qualifiedHours ?? row?.hours)
+  const parsed = Number(overtimeEditableHours.value[row?.id] ?? fallback ?? 0)
   return String(Number.isFinite(parsed) ? parsed : 0)
 }
 
