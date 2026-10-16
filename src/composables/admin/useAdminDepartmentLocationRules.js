@@ -193,7 +193,7 @@ export function useAdminDepartmentLocationRules() {
 
     saving.value = true
     try {
-      const response = await api.post(url(departmentId), toLocationRulePayload(form))
+      const response = await api.post(url(departmentId), toLocationRulePayload(form, departmentId))
       const raw = response.data?.data ?? response.data ?? null
       // The response is the saved rule, so the column updates from what the
       // server stored rather than from what was typed.
