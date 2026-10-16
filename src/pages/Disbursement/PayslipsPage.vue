@@ -32,9 +32,13 @@
           <!-- Funding is money leaving the company against payslips the people
                being paid have not yet agreed to. The step stays shut until they
                have, and says what it is waiting for rather than showing a
-               button that would be wrong to press. -->
+               button that would be wrong to press.
+
+               And once the run is past funding there is nowhere for this button
+               to lead: it is dropped rather than left pointing at a step the run
+               has already left. The shell's "moved on" notice takes its place. -->
           <q-btn
-            v-if="allAcknowledged"
+            v-if="allAcknowledged && !fundingBehind"
             unelevated
             no-caps
             dense
@@ -43,7 +47,7 @@
             class="btn-primary"
             @click="goToFunding"
           />
-          <span v-else class="action-wait">
+          <span v-else-if="!allAcknowledged && !fundingBehind" class="action-wait">
             <q-icon name="o_schedule" size="15px" />
             Funding opens once everyone has acknowledged
           </span>
@@ -246,6 +250,7 @@ import AttendanceSelfieViewer from 'src/components/pages/Attendance/AttendanceSe
 import ConfirmDialog from 'src/components/common/ConfirmDialog.vue'
 import { buildResolveConfirm } from 'src/components/pages/Payroll/issueDecisionConfirm'
 import { createRequestToken } from 'src/composables/utils/requestToken'
+import { currentStepIndexForPgiStatus } from 'src/constants/pgiStatus'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
@@ -395,6 +400,18 @@ const payslipsSent = computed(() => overview.value?.payslip_sent ?? 0)
 const allAcknowledged = computed(
   () => payslipsSent.value > 0 && acknowledgedCount.value >= payslipsSent.value,
 )
+
+/**
+ * Whether the run has already left funding behind. The "Continue to funding"
+ * button is this step's only way forward, and past funding it leads to a step the
+ * run has been through — so it is withdrawn rather than left pointing backwards.
+ * Strictly greater than funding's index (2): a run sitting *on* funding still
+ * wants the button, and an unknown status is left alone.
+ */
+const fundingBehind = computed(() => {
+  const index = currentStepIndexForPgiStatus(pgiStatus.value)
+  return index != null && index > 2
+})
 
 const statTiles = computed(() => [
   {
