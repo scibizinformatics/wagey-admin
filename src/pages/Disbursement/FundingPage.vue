@@ -9,9 +9,12 @@
       :stepper-key="stepperKey"
     >
       <!-- This step has no list toolbar to sit in, so its forward action goes in
-           the page header — also above the fold, and beside the status badge. -->
+           the page header — also above the fold, and beside the status badge.
+           Withdrawn once the run is past disbursement: the shell's "moved on"
+           notice then carries the only link forward worth offering. -->
       <template #header-actions>
         <q-btn
+          v-if="!disbursementBehind"
           unelevated
           no-caps
           icon-right="o_arrow_forward"
@@ -310,6 +313,7 @@ import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employe
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { formatCurrency } from 'src/composables/utils/format'
+import { currentStepIndexForPgiStatus } from 'src/constants/pgiStatus'
 import { useAuthStore } from 'src/boot/auth'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
@@ -389,6 +393,19 @@ const sourceOptions = [
 // the list page last loaded, so on a refresh it can name a step the run has long
 // since left. It stands in only until the run itself answers.
 const pgiStatus = computed(() => identity.value?.status || route.query.pgi_status || '')
+
+/**
+ * Whether the run has already left disbursement behind. The "Continue to
+ * disbursement" button is this step's only way forward, and past disbursement it
+ * leads to a step the run has been through — so it is withdrawn rather than left
+ * pointing backwards. Strictly greater than disbursement's index (3): a run
+ * sitting *on* disbursement still wants the button, and an unknown status is left
+ * alone.
+ */
+const disbursementBehind = computed(() => {
+  const index = currentStepIndexForPgiStatus(pgiStatus.value)
+  return index != null && index > 3
+})
 
 const groupName = computed(
   () =>
