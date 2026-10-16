@@ -69,3 +69,29 @@ export function formatHours(value) {
   if (value === null || value === undefined || value === '' || Number.isNaN(num)) return ''
   return `${num} hr${num === 1 ? '' : 's'} / week`
 }
+
+/**
+ * The CTO eligibility is a monthly-only term — every dialog that shows its
+ * checkbox hides it under any other pay type (`v-if="ctoId && pay_type ===
+ * 'monthly'"`). Hiding the checkbox does not remove the id from the form,
+ * though, so switching pay type leaves an id the user cannot see and the
+ * backend rejects with "LEAVE_CREDITS/OVERTIME_AS_CTO not allowed for daily pay
+ * type". Strip it wherever the form's pay type changes.
+ */
+export const CTO_ELIGIBILITY_NAME = 'Overtime Converted to CTO'
+
+/** The CTO eligibility's id in a payroll-eligibilities list, or `null`. */
+export function ctoEligibilityId(options = []) {
+  return options.find((e) => e.name === CTO_ELIGIBILITY_NAME)?.id ?? null
+}
+
+/**
+ * The eligibility ids valid for a pay type: CTO is kept only for monthly pay,
+ * and returned unchanged when the CTO option is not in the list at all.
+ */
+export function eligibilitiesForPayType(eligibilities, payType, options = []) {
+  const list = eligibilities ?? []
+  if (payType === 'monthly') return list
+  const ctoId = ctoEligibilityId(options)
+  return ctoId === null ? list : list.filter((id) => id !== ctoId)
+}
