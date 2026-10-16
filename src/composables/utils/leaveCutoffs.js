@@ -33,9 +33,16 @@
  * and go one step further, because that screen always has an id to hand while an
  * id-less cutoff here would otherwise collapse a year of "Semi-monthly" into a
  * single option.
+ *
+ * The cutoff's own state is read too, even though the leave queue never asks for
+ * it: this is the one reader of this endpoint, so the Disbursement list's
+ * completed-cutoff scope comes through here rather than through a second
+ * hand-rolled parser that would drift. See `utils/cutoffState.js` for the
+ * tolerant reading and for what an unrecognised value does.
  */
 
 import { fromIso } from 'src/composables/utils/calendarDate'
+import { formatCutoffWindow, normalizeCutoffStatus } from 'src/composables/utils/cutoffState'
 
 /** A bare calendar day. Anything longer is truncated before it is tested. */
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
@@ -119,8 +126,9 @@ function windowLabel(startMs, endMs) {
  * cutoffs apart.
  *
  * @param {object} raw
- * @returns {{key: string, id: number|string|null, label: string, startIso: string|null,
- *   endIso: string|null, startMs: number|null, endMs: number|null}|null}
+ * @returns {{key: string, id: number|string|null, label: string, windowLabel: string,
+ *   status: string, startIso: string|null, endIso: string|null, startMs: number|null,
+ *   endMs: number|null}|null}
  */
 export function normalizeCutoffInstance(raw) {
   if (!raw || typeof raw !== 'object') return null
@@ -138,6 +146,12 @@ export function normalizeCutoffInstance(raw) {
     key: id !== null ? `id:${id}` : `name:${name.toLowerCase()}@${startIso ?? '?'}`,
     id,
     label: name || (startMs !== null && endMs !== null ? windowLabel(startMs, endMs) : ''),
+    // The same window again, written the way a reader is meant to see it —
+    // "Oct 1–15, 2026". A separate field rather than a replacement for `label`,
+    // because the payload's own name is sometimes the better word for it and the
+    // leave queue still shows that one.
+    windowLabel: formatCutoffWindow(startIso, endIso),
+    status: normalizeCutoffStatus(raw),
     startIso,
     endIso,
     startMs,
