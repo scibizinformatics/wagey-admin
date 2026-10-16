@@ -351,9 +351,40 @@ export function useDisbursementApi() {
     return data
   }
 
+  /**
+   * This company's own cutoffs, from `payroll-trend`.
+   *
+   * Exists because `cutoff-instances` above is workspace-wide: it lists every
+   * cutoff *type* in the workspace, so a company running a semi-monthly payroll is
+   * also handed weekly, bi-weekly, monthly and annual cutoffs. Anything that needs
+   * to tell "this company's cutoffs" from "every cutoff in the workspace" learns
+   * the shape from this endpoint, which is scoped to the company, and filters the
+   * wider list with it — see `utils/cutoffState.js`.
+   *
+   * It also carries a `status` per cutoff (`in_progress` / `completed`), so it is
+   * the trustworthy answer where `cutoff-instances` is only best-effort. It does
+   * not list a cutoff nobody has run payroll for, so it cannot replace the wider
+   * list — it narrows it.
+   *
+   * Cached like its neighbours. The `year` param is left off deliberately: this is
+   * read for the *shape* its windows follow and for statuses, neither of which is
+   * about a particular year, and pinning one would make a January dashboard unable
+   * to describe a December cutoff.
+   */
+  async function fetchCompanyCutoffs(companyId) {
+    const key = cacheKey('payroll-trend', companyId ?? '')
+    const cached = getCached(key)
+    if (cached) return cached
+    const { data } = await api.get(`${BASE}/payroll/admin/payroll-trend/${companyId}/`)
+    const list = data?.cutoffs ?? (Array.isArray(data) ? data : (data?.data ?? data?.results ?? []))
+    setCached(key, list)
+    return list
+  }
+
   return {
     invalidateCache,
     fetchCutoffInstances,
+    fetchCompanyCutoffs,
     fetchDashboardSummary,
     fetchPayoutGroupInstances,
     fetchPayoutGroupProgress,
