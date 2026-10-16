@@ -153,7 +153,6 @@
               <div class="day-list__date">
                 <q-icon name="event" size="16px" class="day-list__date-icon" />
                 <span>{{ longLabel(day.date) }}</span>
-                <span class="day-list__iso">{{ day.date }}</span>
               </div>
               <DayPartToggle
                 :model-value="day.is_half_day ? 'half' : 'full'"
