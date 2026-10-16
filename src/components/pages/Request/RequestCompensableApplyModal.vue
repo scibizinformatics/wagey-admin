@@ -200,16 +200,36 @@
               <div class="day-list__date">
                 <q-icon name="event" size="16px" class="day-list__date-icon" />
                 <span>{{ longLabel(row.date) }}</span>
-                <span class="day-list__iso">{{ row.date }}</span>
               </div>
 
               <DayPartToggle
-                :model-value="row.is_half_day ? 'half' : 'full'"
-                @update:model-value="setHalfDay(row.date, $event)"
-                aria-label="Day part for " + row.date
+                :model-value="dayPartOf(row)"
+                :options="DAY_PART_OPTIONS"
+                @update:model-value="setDayPart(row.date, $event)"
+                :aria-label="'Day part for ' + row.date"
+              />
+
+              <!--
+                The excess field is hidden on a plain Full/Half row rather than
+                sitting there reading "excess 0" on every date. An Excess-only row
+                always shows it (it has no base, so the hours are the whole entry);
+                a Full/Half row reveals it on demand, which is what keeps
+                "full day + excess" and "half day + excess" reachable without the
+                dead field.
+              -->
+              <q-btn
+                v-if="!excessVisible(row)"
+                flat
+                dense
+                no-caps
+                class="ct-excess-add"
+                label="+ excess"
+                :aria-label="'Add excess hours on ' + row.date"
+                @click="revealExcess(row.date)"
               />
 
               <q-input
+                v-else
                 :model-value="row.excess_hours"
                 @update:model-value="setExcessHours(row.date, $event)"
                 type="number"
@@ -218,6 +238,7 @@
                 dense
                 outlined
                 hide-bottom-space
+                :error="excessHoursMissing(row)"
                 class="ct-hours"
                 :aria-label="'Excess hours on ' + row.date"
               >
@@ -239,6 +260,9 @@
                 <q-tooltip>Remove this date</q-tooltip>
               </q-btn>
             </div>
+          </div>
+          <div v-if="excessHoursError" class="ct-error ct-error--below-list">
+            {{ excessHoursError }}
           </div>
         </div>
       </q-card-section>
@@ -361,6 +385,7 @@ const dateRows = computed(() =>
   [...selectedDates.value].sort().map((date) => ({
     date,
     is_half_day: dayDetail[date]?.is_half_day === true,
+    is_excess_only: dayDetail[date]?.is_excess_only === true,
     excess_hours: dayDetail[date]?.excess_hours ?? 0,
   })),
 )
@@ -407,14 +432,66 @@ watch(selectedDates, (next) => {
   }
 })
 
-/** Keyed by date, never by position — a removal or a reorder cannot misfile it. */
-const setHalfDay = (date, value) => {
-  if (dayDetail[date]) dayDetail[date].is_half_day = value === 'half'
+/**
+ * The three states a compensable date can be in, in fixed order.
+ *
+ * The `excess` segment is specific to this dialog: the endpoint books a day that
+ * is **only** extra hours — a rest day, say — and neither `is_half_day` nor
+ * `excess_hours` alone can say "no base". The leave dialog keeps the default
+ * Full/Half pair, so this list is passed in rather than baked into the control.
+ */
+const DAY_PART_OPTIONS = [
+  { value: 'full', label: 'Full' },
+  { value: 'half', label: 'Half' },
+  { value: 'excess', label: 'Excess' },
+]
+
+/** The day-part the control shows, read off the row's two flags. */
+const dayPartOf = (row) => (row.is_excess_only ? 'excess' : row.is_half_day ? 'half' : 'full')
+
+/**
+ * Whether the row shows the excess-hours field.
+ *
+ * An Excess-only row always does — the hours are the whole entry. A Full/Half row
+ * does only once the admin has revealed it, so a plain full day is not cluttered
+ * with a field reading zero. `excess_revealed` is transient UI state on
+ * `dayDetail`, keyed by date like the flags beside it, and is deliberately never
+ * part of `dateRows` or the payload.
+ */
+const excessVisible = (row) => row.is_excess_only || dayDetail[row.date]?.excess_revealed === true
+
+const revealExcess = (date) => {
+  if (dayDetail[date]) dayDetail[date].excess_revealed = true
+}
+
+/**
+ * Keyed by date, never by position — a removal or a reorder cannot misfile it.
+ *
+ * `is_half_day` and `is_excess_only` are the two halves of one decision, so they
+ * are written together: "excess" clears the half flag and "half" clears the
+ * excess flag, and neither can be left set from a previous choice.
+ */
+const setDayPart = (date, value) => {
+  const detail = dayDetail[date]
+  if (!detail) return
+  detail.is_half_day = value === 'half'
+  detail.is_excess_only = value === 'excess'
 }
 
 const setExcessHours = (date, value) => {
   if (dayDetail[date]) dayDetail[date].excess_hours = value
 }
+
+/**
+ * An excess-only day with no hours recorded is a day that contributes nothing —
+ * the base is already dropped, so there is literally no time left to credit. It
+ * is blocked rather than filed as a no-op against a real employee.
+ */
+const excessHoursMissing = (row) => row.is_excess_only && !(Number(row.excess_hours) > 0)
+
+const excessHoursError = computed(() =>
+  dateRows.value.some(excessHoursMissing) ? 'Excess-only dates need hours recorded.' : '',
+)
 
 /**
  * Removing a row also unticks it on the calendar.
@@ -433,6 +510,7 @@ const canSubmit = computed(
     form.category != null &&
     form.sub_category != null &&
     dateRows.value.length > 0 &&
+    !excessHoursError.value &&
     !props.submitting,
 )
 
@@ -479,6 +557,12 @@ const onSubmit = () => {
   font-size: 12px;
   color: var(--dash-critical);
 }
+/* The date list carries no bottom margin of its own, so the error beneath it needs
+   its own separation — the base rule's -4px is tuned to follow `.ct-add-row`,
+   which already ends in 12px. */
+.ct-error--below-list {
+  margin-top: 8px;
+}
 /* The header is kept, not hidden. It is Quasar's `q-date` chrome that every other
    date picker in the app already wears — the dashboard, attendance, card taps and
    Manning all show it — and it reads the brand navy from `--q-primary`, which
@@ -487,13 +571,17 @@ const onSubmit = () => {
    In `multiple` mode it echoes the selection: one day prints "Thu, Oct 15", several
    print the span and "N Days", and none print a pair of dashes. The list beneath is
    still where the per-day detail lives; the header just names the pick. */
-/* Three controls per row where the leave list carries one, so the row stops
-   stretching to its content and lays them out instead. */
+/* The date, the day-part control, and — on an Excess row or one the admin
+   revealed — the hours field: more than the leave list's single control, so the
+   row stops stretching to its content and lays them out instead. */
 .ct-day-row {
   gap: 10px;
 }
 .ct-hours {
-  width: 150px;
+  /* Bounded rather than elastic: the figure is rarely more than two digits
+     ("2", "0.25"), so a wide field just pushes the toggle and the remove button
+     around. */
+  width: 96px;
   flex-shrink: 0;
 }
 .ct-hours :deep(.q-field__control) {
@@ -518,6 +606,22 @@ const onSubmit = () => {
   color: var(--dash-ink);
   font-variant-numeric: tabular-nums;
 }
+/* The reveal affordance that stands in for the hours field on a Full/Half row.
+   Sized and placed where the field will appear, so clicking it does not shift the
+   rest of the row. Muted by default — it is an offer, not the primary action. */
+.ct-excess-add {
+  min-height: 30px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-ink-4);
+  border-radius: var(--dash-r-sm);
+}
+.ct-excess-add:hover {
+  background: var(--dash-n-100);
+  color: var(--dash-ink-2);
+}
 .ct-remove {
   width: 26px;
   height: 26px;
@@ -538,8 +642,13 @@ const onSubmit = () => {
   .ct-add-field {
     max-width: none;
   }
+  /* A third segment in the day-part control plus the hours field and the remove
+     button no longer fit one line, so the row wraps rather than overflowing. */
+  .ct-day-row {
+    flex-wrap: wrap;
+  }
   .ct-hours {
-    width: 130px;
+    width: 84px;
   }
 }
 </style>
