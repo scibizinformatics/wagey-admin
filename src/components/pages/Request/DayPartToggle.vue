@@ -1,7 +1,7 @@
 <template>
   <div class="day-part" role="radiogroup" :aria-label="ariaLabel">
     <button
-      v-for="option in OPTIONS"
+      v-for="option in options"
       :key="option.value"
       type="button"
       role="radio"
@@ -17,6 +17,8 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 /**
  * Whole day or half day — the one decision a leave request adds over a plain
  * date, and the only per-row control the date list carries besides the day
@@ -36,24 +38,35 @@
  * would also have put three elements in the row's flex chain instead of one, for
  * no gain.
  *
- * Written once and used by both apply dialogs, so "full or half" cannot come to
- * mean two different controls.
+ * Written once and used by both apply dialogs. The leave dialog takes the default
+ * Full/Half pair and cannot drift from it; the compensable dialog passes its own
+ * list because a day there can also carry **excess hours with no base day**, and
+ * "full or half" alone cannot say that. The options come in as a prop for exactly
+ * that reason — so the two callers differ in how many states a day has without
+ * either growing a second control.
  */
-defineProps({
+const props = defineProps({
   modelValue: { type: String, default: 'full' },
   // Named rather than left generic: the group has to announce what it selects,
   // and a radiogroup labelled "Day part" says nothing on its own.
   ariaLabel: { type: String, default: 'Day part' },
+  /**
+   * The states a day can be in, in fixed order. Defaults to the Full/Half pair
+   * every non-compensable caller means; only the compensable apply dialog adds
+   * the `excess` segment.
+   */
+  options: {
+    type: Array,
+    default: () => [
+      { value: 'full', label: 'Full' },
+      { value: 'half', label: 'Half' },
+    ],
+  },
 })
 
 defineEmits(['update:modelValue'])
 
-// Fixed order, and never derived from the caller — a day is either the whole of
-// it or half of it, so there is nothing to configure.
-const OPTIONS = [
-  { value: 'full', label: 'Full' },
-  { value: 'half', label: 'Half' },
-]
+const options = computed(() => props.options)
 </script>
 
 <style scoped>
@@ -104,9 +117,10 @@ const OPTIONS = [
   box-shadow: var(--dash-shadow-xs);
 }
 
-/* The two marks. A whole day is a solid disc; a half day is the same disc with
-   only its left half filled — the same language as the day grid the date came
-   from, where a half day is one half of a whole one.
+/* The marks. A whole day is a solid disc; a half day is the same disc with only
+   its left half filled — the same language as the day grid the date came from,
+   where a half day is one half of a whole one. An excess-only day has no base at
+   all, so it gets a hollow ring: the shape of a day with nothing filled in.
 
    Drawn rather than iconified on purpose: the outlined set behind the `o_`
    prefix offers a ring and a contrast glyph, neither of which is the solid disc
@@ -125,6 +139,12 @@ const OPTIONS = [
   border: 1px solid var(--dash-accent);
   /* The gradient is measured to the padding box, so the border shifts the fill a
      pixel off centre; fixing the box keeps the split exactly down the middle. */
+  box-sizing: border-box;
+}
+.day-part__mark--excess {
+  /* Hollow: a base day left empty, the accent reading as the extra hours on top. */
+  background: transparent;
+  border: 1.5px solid var(--dash-accent);
   box-sizing: border-box;
 }
 </style>
