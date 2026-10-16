@@ -79,10 +79,26 @@ export function findCtoCategoryId(categories) {
 
 /**
  * States that still await a decision. A row in any of these is selectable, gets
- * the waiting row tint, and shows its hours as an editable field — an approver
- * may settle on fewer hours than were claimed.
+ * the waiting row tint, and can be approved or rejected.
  */
 const ACTIONABLE = new Set(['requested', 'qualified', 'pending'])
+
+/**
+ * States whose hours the approver may still settle. Narrower than
+ * `ACTIONABLE` on purpose: an approver negotiates the figure only while the
+ * employee has merely *asked*. Once the backend has said the employee
+ * qualified (`qualified`), the hours are that verdict's arithmetic rather than
+ * the approver's to change, so the cell is read-only text while the row stays
+ * selectable and approvable.
+ *
+ * Two capabilities, not one — conflating them is what let a qualified row carry
+ * an editable input the approver could settle below the qualified figure.
+ */
+const EDITABLE = new Set(['requested', 'pending'])
+
+export function isEditableOvertimeStatus(status) {
+  return EDITABLE.has(normalizeOvertimeStatus(status))
+}
 
 /**
  * Copy for the states this app knows. Anything else is humanised rather than
@@ -99,6 +115,10 @@ const STATUS_LABELS = {
   admin_rejected: 'Rejected',
   cancelled: 'Cancelled',
   converted: 'Converted',
+  // Not a backend status — the API answers `requested`, `qualified`,
+  // `approved`, `admin_approved`, `rejected` or `cancelled`. "Unqualified" is
+  // derived from `cancelled` for display; see `DISPLAY_STATUS_OVERRIDES`.
+  unqualified: 'Unqualified',
 }
 
 const STATUS_TONES = {
@@ -111,6 +131,30 @@ const STATUS_TONES = {
   admin_rejected: 'status-pill--rejected',
   cancelled: 'status-pill--default',
   converted: 'status-pill--info',
+  // Neutral rather than red: an unqualified row is an outcome the rules
+  // produced, not a rejection somebody chose, and painting it with the rejected
+  // tone would make it read as a decision the approver never made.
+  unqualified: 'status-pill--default',
+}
+
+/**
+ * Backend statuses this workspace reads as a different state on screen.
+ *
+ * `cancelled` is how the API reports an employee who did not qualify for a
+ * pre-approved overtime, so it is presented as **Unqualified** rather than
+ * Cancelled. That reading is provisional — the list payload has not yet been
+ * seen to carry a `cancelled` row — so the mapping lives in this one map,
+ * deliberately, to keep it a one-line revert if the backend turns out to use
+ * `cancelled` for other reasons too (an admin withdrawal, a superseded record),
+ * in which case it should be scoped rather than removed.
+ *
+ * Nothing else about such a row changes: it stays non-actionable, its hours
+ * stay read-only, and it is excluded from the pending count — an unqualified
+ * request is not something an approver can act on. The backend's own value is
+ * preserved on the row as `rawStatus` for diagnostics.
+ */
+const DISPLAY_STATUS_OVERRIDES = {
+  cancelled: 'unqualified',
 }
 
 /** Lowercase token form, so `REQUESTED` and `requested` compare equal. */
@@ -142,6 +186,7 @@ export function isActionableOvertimeStatus(status) {
 export function overtimeStatusGroup(status) {
   const key = normalizeOvertimeStatus(status)
   if (!key) return 'other'
+  if (key === 'unqualified') return 'unqualified'
   if (key === 'qualified') return 'qualified'
   if (ACTIONABLE.has(key)) return 'requested'
   if (key.includes('approved')) return 'approved'
@@ -172,7 +217,11 @@ export function formatOvertimeHours(value) {
 
 export function normalizeOvertimeRequest(item, directory = null) {
   if (!item || typeof item !== 'object') return null
-  const status = normalizeOvertimeStatus(item.status)
+  // The backend's own status, kept verbatim for diagnostics, and the status the
+  // screen shows, which may be one of `DISPLAY_STATUS_OVERRIDES` — see that map
+  // for why `cancelled` reads as Unqualified.
+  const rawStatus = normalizeOvertimeStatus(item.status)
+  const status = DISPLAY_STATUS_OVERRIDES[rawStatus] || rawStatus
   const hours = toHours(item.hours)
   const qualifiedHours = toHours(item.qualified_hours)
   return {
@@ -197,9 +246,23 @@ export function normalizeOvertimeRequest(item, directory = null) {
     attendances: Array.isArray(item.attendances) ? item.attendances : [],
     schedules: Array.isArray(item.schedules) ? item.schedules : [],
     status,
+    // The backend's own value, untouched by `DISPLAY_STATUS_OVERRIDES`, so a
+    // row reading "Unqualified" can still be traced back to `cancelled`.
+    rawStatus,
     statusLabel: overtimeStatusLabel(status),
     statusGroup: overtimeStatusGroup(status),
     actionable: isActionableOvertimeStatus(status),
+    // Whether the Hours cell is an input or settled text. Decided separately
+    // from `actionable`: a `qualified` row can still be approved or rejected,
+    // it just cannot have its hours retyped under it.
+    hoursEditable: isEditableOvertimeStatus(status),
+    // The other candidate signal for "unqualified" — a populated
+    // `qualified_hours` of 0 on a still-undecided row — remains unwired because
+    // `GET /payroll/overtime-list/` currently sends `qualified_hours: null` on
+    // every row. If the backend ever populates it, the derivation is
+    // `rawStatus` actionable && qualifiedHours === 0, forced false for
+    // `actionable` and `hoursEditable` exactly as `DISPLAY_STATUS_OVERRIDES`
+    // already does for `cancelled`.
     approvedByName: item.approved_by_name || '',
     convertedToCto: Boolean(item.converted_to_cto),
     reason: item.reason || '',
