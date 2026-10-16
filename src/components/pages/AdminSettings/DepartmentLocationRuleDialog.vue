@@ -22,9 +22,10 @@
       <q-card-section v-else class="dash-modal__body">
         <p class="dlr-intro">
           A cap on how many <strong>on-site</strong> and <strong>off-site</strong> shifts anyone in
-          this department may hold in a period. It is a hard block: an assignment that would go over
-          it is refused, whether it comes from the schedule board, auto-assign, a reassignment or an
-          approved swap.
+          this department may hold in a period, plus rules for which days a
+          <strong>swap</strong> may land on. It is a hard block: an assignment that would go over a
+          cap, or a swap on a disallowed day, is refused — whether it comes from the schedule board,
+          auto-assign, a reassignment or an approved swap.
         </p>
 
         <label class="dash-modal__field">
@@ -116,6 +117,47 @@
           </div>
         </div>
 
+        <div class="dash-modal__group">
+          <p class="dash-modal__group-label">Swaps</p>
+          <label class="dash-modal__field">
+            <span class="dash-modal__field-label">Swaps allowed on</span>
+            <q-select
+              v-model="form.allowedSwapDays"
+              :options="SWAP_DAY_OPTIONS"
+              option-value="value"
+              option-label="label"
+              emit-value
+              map-options
+              outlined
+              dense
+              options-dense
+              hide-bottom-space
+              class="dash-field"
+              popup-content-class="dash-popup dash-popup--modal"
+            >
+              <template v-slot:prepend><q-icon name="o_swap_horiz" size="18px" /></template>
+            </q-select>
+            <span class="dash-modal__field-hint">{{ swapDaysHint }}</span>
+          </label>
+
+          <div class="toggle-item">
+            <q-toggle
+              v-model="form.swapBlockHolidays"
+              color="primary"
+              size="md"
+              class="brand-toggle"
+              aria-label="Block swaps on holidays"
+            />
+            <div class="toggle-label-group">
+              <div class="toggle-label">Block swaps on holidays</div>
+              <div class="toggle-hint">
+                Switch on to refuse a swap whose shift falls on a holiday, even on an otherwise
+                allowed day.
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- The same sentence the table column's tooltip shows, built from what
              is currently typed rather than from what is saved. -->
         <div class="dlr-preview" :class="{ 'dlr-preview--invalid': !!problem }">
@@ -169,11 +211,13 @@
  */
 import { computed, reactive, watch } from 'vue'
 import {
+  DEFAULT_ALLOWED_SWAP_DAYS,
   PERIOD_TYPES,
-  WEEK_MAX,
+  SWAP_DAY_OPTIONS,
   blankLocationRuleForm,
   limitLabel,
   locationRuleToForm,
+  maxShiftsFor,
   perPeriodLabel,
   ruleSentence,
   validateLocationRule,
@@ -197,12 +241,18 @@ const hasRule = computed(() => !!props.rule)
 
 const periodHint = computed(() => PERIOD_TYPES.find((p) => p.value === form.periodType)?.hint || '')
 
+const swapDaysHint = computed(
+  () => SWAP_DAY_OPTIONS.find((o) => o.value === form.allowedSwapDays)?.hint || '',
+)
+
 const perLabel = computed(() => perPeriodLabel(form.periodType))
 
-/** A week holds seven shifts of one kind; the other periods have no stated cap. */
-const numberMax = computed(() => (form.periodType === 'week' ? WEEK_MAX : undefined))
+/** A period can hold only so many shifts; the server caps the limit there. */
+const numberMax = computed(() => maxShiftsFor(form.periodType))
 
 const problem = computed(() => validateLocationRule(form))
+
+const restrictsSwapDays = computed(() => form.allowedSwapDays !== DEFAULT_ALLOWED_SWAP_DAYS)
 
 const previewSentence = computed(() =>
   ruleSentence({
@@ -212,6 +262,10 @@ const previewSentence = computed(() =>
     isActive: form.isActive,
     capsOnSite: Number(form.onSite) > 0,
     capsOffSite: Number(form.offSite) > 0,
+    allowedSwapDays: form.allowedSwapDays,
+    swapBlockHolidays: form.swapBlockHolidays === true,
+    restrictsSwapDays: restrictsSwapDays.value,
+    restrictsSwaps: restrictsSwapDays.value || form.swapBlockHolidays === true,
   }),
 )
 
