@@ -408,6 +408,7 @@ import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
 import { useCompany } from '@/composables/page/useCompany'
 import { extractErrorMessage } from '@/composables/utils/http'
+import { eligibilitiesForPayType } from '@/composables/utils/contractTerms'
 import { useAdminContracts } from '@/composables/admin/useAdminContracts'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 import { useAdminPositions } from '@/composables/admin/useAdminPositions'
@@ -581,6 +582,14 @@ function onContractTypeChange(contractTypeId) {
   } else {
     assignForm.value.pay_type = null
   }
+  // A contract type can carry CTO alongside a daily pay type (legacy rows), and
+  // the checkbox that would clear it is hidden for anything but monthly — so
+  // reconcile the ids to the pay type before they reach the payload.
+  assignForm.value.eligibilities = eligibilitiesForPayType(
+    assignForm.value.eligibilities,
+    assignForm.value.pay_type,
+    eligibilityOptions.value,
+  )
   if (assignForm.value.pay_type === 'daily') {
     assignForm.value.work_hours_per_week = 8
   } else {
@@ -1252,6 +1261,15 @@ function _emptyEditContractForm() {
 
 const updateEditContractField = ({ field, value }) => {
   editContractForm.value[field] = value
+  // Switching away from monthly hides the CTO checkbox without clearing its id;
+  // drop it here so the payload matches what the form shows.
+  if (field === 'pay_type') {
+    editContractForm.value.eligibilities = eligibilitiesForPayType(
+      editContractForm.value.eligibilities,
+      value,
+      eligibilityOptions.value,
+    )
+  }
 }
 
 /**
@@ -1318,7 +1336,13 @@ async function handleOpenEditContract(employee) {
     position: contract.position ?? null,
     department: contract.department ?? null,
     payroll_group: contract.payroll_group_id ?? contract.payroll_group ?? null,
-    eligibilities: parseEligibilities(contract.eligibilities),
+    // A contract stored as daily + CTO would otherwise be unrenewable: the
+    // checkbox is hidden, so the form can only ever send the id back.
+    eligibilities: eligibilitiesForPayType(
+      parseEligibilities(contract.eligibilities),
+      contract.pay_type,
+      eligibilityOptions.value,
+    ),
     contributions: (contract.contributions ?? []).map((c) => c.id ?? c),
     holiday_pay_types: contract.holiday_pay_types ?? [],
     overtime_multiplier: contract.overtime_multiplier ?? null,
@@ -1400,7 +1424,9 @@ async function submitContractUpdate() {
     regular_holiday_ot_multiplier: num(f.regular_holiday_ot_multiplier),
     special_holiday_ot_multiplier: num(f.special_holiday_ot_multiplier),
     undertime_multiplier: num(f.undertime_multiplier),
-    eligibilities: f.eligibilities ?? [],
+    // Final guard: the form is already reconciled on pay-type change, but the
+    // payload is the last place before the backend sees it.
+    eligibilities: eligibilitiesForPayType(f.eligibilities, f.pay_type, eligibilityOptions.value),
     contributions: f.contributions ?? [],
     holiday_pay_types: f.holiday_pay_types ?? [],
   }
@@ -1483,6 +1509,13 @@ async function handleOpenAssignDialog(employee) {
 
   // Sync eligibility display when pre-filled from existing contract
   if (activeContract.value && assignForm.value.eligibilities.length) {
+    // A legacy daily + CTO contract would otherwise be unrenewable: the CTO
+    // checkbox is hidden, so the form could only ever send the id back.
+    assignForm.value.eligibilities = eligibilitiesForPayType(
+      assignForm.value.eligibilities,
+      assignForm.value.pay_type,
+      eligibilityOptions.value,
+    )
     const eligs = eligibilityOptions.value.filter((el) =>
       assignForm.value.eligibilities.includes(el.id),
     )
@@ -2135,6 +2168,13 @@ const updateAssignField = ({ field, value }) => {
   // `openAssignDialog` was prefilling from the employee's active contract,
   // overwriting a stored 40 with 48 and posting that back on renew.
   if (field === 'pay_type') {
+    // The CTO checkbox only shows for monthly; clear the hidden id so the
+    // payload cannot carry "CTO not allowed for daily pay type".
+    assignForm.value.eligibilities = eligibilitiesForPayType(
+      assignForm.value.eligibilities,
+      value,
+      eligibilityOptions.value,
+    )
     if (value === 'daily') {
       assignForm.value.work_hours_per_week = 8
     } else if (value === 'monthly') {
