@@ -93,15 +93,14 @@
                 <div v-for="day in request.dates" :key="day.date" class="ct-days__row">
                   <span class="ct-days__date">
                     {{ longLabel(day.date) }}
-                    <span class="ct-days__iso">{{ day.date }}</span>
                   </span>
                   <span class="ct-days__part">
                     <span
                       class="day-part__mark"
-                      :class="day.is_half_day ? 'day-part__mark--half' : 'day-part__mark--full'"
+                      :class="`day-part__mark--${dayPartOf(day)}`"
                       aria-hidden="true"
                     />
-                    {{ day.is_half_day ? 'Half day' : 'Full day' }}
+                    {{ dayPartLabel(day) }}
                   </span>
                   <span class="ct-days__excess">{{ excessLabel(day.excess_hours) }}</span>
                 </div>
@@ -350,6 +349,14 @@ const excessLabel = (value) => {
   return `${hours} excess hour${hours === 1 ? '' : 's'}`
 }
 
+/** The read-only day part, mirroring the apply dialog's three states. */
+const dayPartOf = (day) => (day?.is_excess_only ? 'excess' : day?.is_half_day ? 'half' : 'full')
+
+const dayPartLabel = (day) => {
+  if (day?.is_excess_only) return 'Excess only'
+  return day?.is_half_day ? 'Half day' : 'Full day'
+}
+
 const chipTone = (status) => {
   const key = String(status || '').toLowerCase()
   if (key === 'pending') return 'dash-chip--warn'
@@ -363,9 +370,9 @@ const chipTone = (status) => {
 
 <style scoped>
 /* ===== Per-day breakdown =====
-   The two marks repeat `DayPartToggle`'s geometry rather than importing it: that
-   component's styles are scoped to it, and a 22px disc duplicated here is far
-   cheaper than a second component or a global class for one dialog's list. */
+   The three marks repeat `DayPartToggle`'s geometry rather than importing it:
+   that component's styles are scoped to it, and a 22px disc duplicated here is
+   far cheaper than a second component or a global class for one dialog's list. */
 .ct-days {
   display: flex;
   flex-direction: column;
@@ -391,11 +398,6 @@ const chipTone = (status) => {
   min-width: 0;
   font-size: 13px;
   color: var(--dash-ink);
-}
-.ct-days__iso {
-  font-size: 11.5px;
-  color: var(--dash-ink-4);
-  font-variant-numeric: tabular-nums;
 }
 .ct-days__part {
   display: inline-flex;
@@ -425,6 +427,12 @@ const chipTone = (status) => {
 .day-part__mark--half {
   background: linear-gradient(90deg, var(--dash-accent) 50%, transparent 50%);
   border: 1px solid var(--dash-accent);
+  box-sizing: border-box;
+}
+.day-part__mark--excess {
+  /* Hollow ring: an excess-only day has no base, matching the apply control. */
+  background: transparent;
+  border: 1.5px solid var(--dash-accent);
   box-sizing: border-box;
 }
 /* ===== Allowances =====
