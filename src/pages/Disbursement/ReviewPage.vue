@@ -32,7 +32,8 @@
 
           <!-- Reviewing the rest in one go, beside reviewing them one at a time
                from the row menu. It disappears once there is nobody left to
-               review rather than sitting there disabled. -->
+               review rather than sitting there disabled. Both routes ask first —
+               see `ConfirmDialog` at the end of the template. -->
           <q-btn
             v-if="!reviewClosed && unreviewedIds.length"
             outline
@@ -43,7 +44,7 @@
             class="btn-outline"
             :loading="reviewingAll"
             :disable="reviewingAll"
-            @click="reviewAll"
+            @click="requestReviewAll"
           >
             <q-tooltip>
               Reviews the {{ unreviewedIds.length }} employee{{
@@ -62,7 +63,7 @@
             class="btn-primary"
             :loading="releasing"
             :disable="!releasableIds.length || releasing"
-            @click="confirmReleaseAll"
+            @click="requestReleaseAll"
           >
             <q-tooltip v-if="releaseClosed">
               Payslips for this run have already been released
@@ -302,7 +303,7 @@
                         reviewClosed ||
                         reviewingId === props.row.epi_id
                       "
-                      @click="reviewEmployee(props.row)"
+                      @click="requestReviewOne(props.row)"
                     >
                       <q-item-section avatar>
                         <q-spinner v-if="reviewingId === props.row.epi_id" size="15px" />
@@ -383,21 +384,38 @@
       :employee-index="employeeIndex"
       @deducted="refreshAfterDeduct"
     />
+
+    <!-- The gate in front of every write this step makes: reviewing one employee,
+         reviewing everyone outstanding, and releasing the payslips that follow.
+         One dialog for all three, the wording built in `reviewConfirm.js`, and the
+         writes live behind `@confirm` so `:loading` sits on the button that starts
+         them. -->
+    <ConfirmDialog
+      v-model="showConfirm"
+      :confirm="confirm"
+      :loading="confirmBusy"
+      @confirm="commitPending"
+    />
   </PageShell>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useQuasar } from 'quasar'
 import StatusPill from 'src/components/common/StatusPill.vue'
 import TableSkeleton from 'src/components/common/TableSkeleton.vue'
+import ConfirmDialog from 'src/components/common/ConfirmDialog.vue'
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import EmployeeDetailDialog from 'src/components/pages/Payroll/EmployeeDetailDialog.vue'
 import EmployeeContributionsDialog from 'src/components/pages/Payroll/EmployeeContributionsDialog.vue'
+import {
+  buildReleaseConfirm,
+  buildReviewAllConfirm,
+  buildReviewOneConfirm,
+} from 'src/components/pages/Payroll/reviewConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { PGI_STATUS_MAP } from 'src/constants/pgiStatus'
@@ -408,9 +426,6 @@ import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
 
 const route = useRoute()
-// Only for the confirm dialog before an irreversible submit; every notice on
-// this page goes through the app's own toast.
-const $q = useQuasar()
 const groupId = route.params.id
 const { identity, resolveQuietly } = usePayoutGroupIdentity()
 // Bumped after releasing payslips so the progress header refetches.
@@ -470,6 +485,24 @@ const selectedEmployeeId = ref(null)
 const contributionsDialogOpen = ref(false)
 const selectedEpiId = ref(null)
 const selectedEmployeeName = ref('')
+
+// The confirmation gate. `pendingIds` and `pendingEmployee` are snapshotted rather
+// than re-read on confirm, so the dialog describes the review that was asked about
+// even though the table behind it is live and a refresh can replace those rows at
+// any moment — the same reasoning `DisbursePage` keeps its `pendingRows` for.
+const showConfirm = ref(false)
+const confirm = ref(null)
+// 'reviewAll' | 'reviewOne' | 'releaseAll' — the one key `commitPending` switches
+// on, naming which write the dialog's button starts.
+const pendingAction = ref(null)
+const pendingIds = ref([])
+const pendingEmployee = ref(null)
+
+// The dialog's button is the loading guard, so it has to cover all three writes —
+// each of which owns its own flag for the toolbar and row-menu spinners.
+const confirmBusy = computed(
+  () => reviewingAll.value || reviewingId.value !== null || releasing.value,
+)
 
 /** Decimal strings ("0.00") arrive from the API; compare and sort them as numbers. */
 function amount(val) {
@@ -864,11 +897,6 @@ async function refreshAfterDeduct() {
 }
 
 /**
- * Submitting closes review for the run, so an incomplete list is worth a pause.
- * Everyone marked goes in one call; anyone left unmarked never gets another
- * chance at it, which is the part worth saying out loud before it happens.
- */
-/**
  * Reviewing is per employee here and in bulk from the toolbar, and both go the
  * same way: `pgi/<id>/review-to-ready/` takes a list of employee payroll items,
  * so one employee is a list of one and the whole run is a list of all of them.
@@ -977,9 +1005,83 @@ async function sendReview(epiIds, describe) {
   }
 }
 
-/** One employee, from the row menu. */
-async function reviewEmployee(row) {
-  if (reviewClosed.value || reviewedIds.value.includes(row.epi_id)) return
+/**
+ * Ask before reviewing one employee, from the row menu. Writes nothing.
+ *
+ * Review is the gate before payslips and there is no endpoint that takes one back,
+ * so this is a question rather than a click. It still asks on the last employee
+ * outstanding, where the answer is the one that moves the run on.
+ */
+function requestReviewOne(row) {
+  // A second open while one is already up would leave the snapshot describing a row
+  // the reader has since moved on from.
+  if (showConfirm.value || confirmBusy.value) return
+  if (!row?.epi_id || reviewClosed.value || reviewedIds.value.includes(row.epi_id)) return
+  pendingEmployee.value = row
+  pendingIds.value = [row.epi_id]
+  confirm.value = buildReviewOneConfirm({
+    employee: row.employee,
+    groupName: groupName.value,
+    alreadyReviewed: reviewedIds.value.length,
+    stillToReview: unreviewedIds.value.length - 1,
+  })
+  pendingAction.value = 'reviewOne'
+  showConfirm.value = true
+}
+
+/**
+ * Ask before reviewing everyone still outstanding, from the toolbar.
+ *
+ * Reviewing closes the run's review for everyone marked — and anyone left unmarked
+ * never gets another chance at it, which is the part worth saying out loud before
+ * it happens. So the batch is asked about even though it is only the people who were
+ * deliberately left out that it covers.
+ *
+ * Writes nothing. The wording, including that warning, lives in `reviewConfirm.js`.
+ */
+function requestReviewAll() {
+  if (showConfirm.value || confirmBusy.value) return
+  const epiIds = [...unreviewedIds.value]
+  if (!epiIds.length || reviewClosed.value) return
+  pendingIds.value = epiIds
+  pendingEmployee.value = null
+  confirm.value = buildReviewAllConfirm({
+    count: epiIds.length,
+    alreadyReviewed: reviewedIds.value.length,
+    groupName: groupName.value,
+  })
+  pendingAction.value = 'reviewAll'
+  showConfirm.value = true
+}
+
+/**
+ * The one button in the dialog, dispatching on what was asked.
+ *
+ * Every write on this step is reachable only from here, which is what puts
+ * `:loading` on the button that starts them and stops a second write being recorded
+ * against the same snapshot.
+ */
+function commitPending() {
+  if (pendingAction.value === 'reviewAll') commitReviewAll()
+  else if (pendingAction.value === 'reviewOne') commitReviewOne()
+  else if (pendingAction.value === 'releaseAll') commitReleaseAll()
+}
+
+// Cancelling must clear the snapshot as surely as confirming does: a stale
+// `pendingIds` left behind is a review the next dialog's button would fire.
+watch(showConfirm, (open) => {
+  if (open) return
+  confirm.value = null
+  pendingAction.value = null
+  pendingIds.value = []
+  pendingEmployee.value = null
+})
+
+/** One employee, confirmed from the row menu. */
+async function commitReviewOne() {
+  const row = pendingEmployee.value
+  if (!row || reviewClosed.value || reviewedIds.value.includes(row.epi_id)) return
+  showConfirm.value = false
   reviewingId.value = row.epi_id
   try {
     await sendReview([row.epi_id], () => `${row.employee || 'Employee'} reviewed.`)
@@ -989,16 +1091,18 @@ async function reviewEmployee(row) {
 }
 
 /**
- * Everyone still outstanding, from the toolbar.
+ * Everyone still outstanding, confirmed from the toolbar.
  *
  * One request for the lot, then — if the server declines it for a reason that is
  * not the run being over — one request each. A single employee the server will
  * not take fails the whole batch, and the rest should not go unreviewed on their
  * account.
  */
-async function reviewAll() {
-  const epiIds = [...unreviewedIds.value]
+async function commitReviewAll() {
+  // Snapshotted before the dialog closes, because the close is what clears it.
+  const epiIds = pendingIds.value
   if (!epiIds.length || reviewClosed.value) return
+  showConfirm.value = false
   reviewingAll.value = true
   try {
     try {
@@ -1061,31 +1165,37 @@ async function reviewAll() {
  * Releasing leaves the unreviewed behind, which is easy to miss from a button
  * labelled "Release payslips" — so when the batch is partial it says who is in
  * it and who is not before it goes.
+ *
+ * A complete release is not asked about: there is nobody to warn about, and a
+ * confirmation with nothing in it is a click that teaches people to click through
+ * the ones that matter.
  */
-function confirmReleaseAll() {
+function requestReleaseAll() {
   const going = releasableIds.value.length
   const staying = unreviewedIds.value.length
-  if (!going || releasing.value) return
+  if (showConfirm.value || confirmBusy.value) return
+  if (!going) return
   if (!staying) {
-    releaseAll()
+    // Nothing to warn about, so no dialog — but the batch is still snapshotted,
+    // because this is the one route into the release that does not go through one.
+    pendingIds.value = releasableIds.value
+    commitReleaseAll()
     return
   }
-  $q.dialog({
-    title: 'Release payslips?',
-    message:
-      `This sends payslips to the ${going} reviewed employee${going === 1 ? '' : 's'} on this ` +
-      `run. The ${staying} still unreviewed ${staying === 1 ? 'is' : 'are'} left out, and can ` +
-      'be released once reviewed.',
-    cancel: { label: 'Cancel', flat: true, noCaps: true },
-    ok: { label: 'Release payslips', unelevated: true, color: 'primary', noCaps: true },
-    persistent: true,
-  }).onOk(() => releaseAll())
+  pendingIds.value = releasableIds.value
+  pendingEmployee.value = null
+  confirm.value = buildReleaseConfirm({ going, staying, groupName: groupName.value })
+  pendingAction.value = 'releaseAll'
+  showConfirm.value = true
 }
 
-async function releaseAll() {
+/** The payslips for everyone reviewed so far, confirmed from the toolbar. */
+async function commitReleaseAll() {
+  // Snapshotted before the dialog closes, because the close is what clears it.
+  const releasable = new Set(pendingIds.value)
+  showConfirm.value = false
   releasing.value = true
   try {
-    const releasable = new Set(releasableIds.value)
     const epiIds = reviewData.value.filter((e) => releasable.has(e.epi_id)).map((e) => e.epi_id)
     if (!epiIds.length) {
       toast.warning('No reviewed employees to release.')
@@ -1104,7 +1214,7 @@ async function releaseAll() {
     toast.success(`Payslips released for ${epiIds.length} employee${epiIds.length > 1 ? 's' : ''}.`)
     await refresh()
   } catch (err) {
-    console.error('[ReviewPage] releaseAll ✖ error:', err)
+    console.error('[ReviewPage] commitReleaseAll ✖ error:', err)
     toast.error(serverMessage(err) || 'Failed to release payslips.')
   } finally {
     releasing.value = false

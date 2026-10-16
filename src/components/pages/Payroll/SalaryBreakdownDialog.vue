@@ -105,11 +105,18 @@
                 <div class="detail-card-label">Days worked</div>
                 <div class="detail-card-value">{{ bd.summary.days_worked ?? 0 }}</div>
               </div>
+              <!-- Same unit, same sub-line and same wording as the attendance
+                   dialog's tile — one payload, one reading, in both places. See
+                   `reviewSummary.js`. -->
               <div class="detail-card">
-                <div class="detail-card-label">Absent days</div>
+                <div class="detail-card-label">
+                  Absent shifts
+                  <q-tooltip>{{ ABSENT_SHIFTS_TIP }}</q-tooltip>
+                </div>
                 <div class="detail-card-value amount-red">
                   {{ bd.summary.absent_days ?? 0 }}
                 </div>
+                <div v-if="absentDaySpan" class="detail-card-note">{{ absentDaySpan }}</div>
               </div>
               <div class="detail-card">
                 <div class="detail-card-label">Undertime</div>
@@ -193,6 +200,7 @@
 import { ref, computed, watch } from 'vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { buildSalaryBreakdown, formatCurrency } from 'src/components/pages/Payroll/salaryBreakdown'
+import { ABSENT_SHIFTS_TIP, absentDaySpanLabel } from 'src/components/pages/Payroll/reviewSummary'
 import { decimalHoursLabel } from 'src/composables/utils/format'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { avatarFor } from 'src/composables/utils/employee'
@@ -223,6 +231,14 @@ const error = ref('')
 const data = ref(null)
 
 const bd = computed(() => buildSalaryBreakdown(data.value, { fallbackNet: props.netPay }))
+
+/**
+ * The absence tile's sub-line, from the same reader the attendance dialog uses — see
+ * `reviewSummary.js`. Reads `bd.issues`, which is the endpoint's `issues` already
+ * normalised to an array, so this cannot read `undefined` where the sibling reads a
+ * list.
+ */
+const absentDaySpan = computed(() => absentDaySpanLabel(bd.value.summary, bd.value.issues))
 
 // The row's name stands in until the payload supplies its own, so the header is
 // never blank while loading.
@@ -395,6 +411,15 @@ watch(internalShow, (open) => {
   color: var(--dash-ink);
   font-variant-numeric: tabular-nums;
   word-break: break-word;
+}
+
+/* The date span the absence figure's unit hides. Matches the attendance dialog's
+   rule, including the type sizes — the two dialogs are read side by side. */
+.detail-card-note {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--dash-ink-3);
 }
 
 /* A figure is only toned where it means something is off. Gross pay being

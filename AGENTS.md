@@ -200,12 +200,15 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   composables that have no template. (`ConfirmCard.vue`'s own header already describes that second host
   as `openConfirm()` in `composables/utils/confirmAction.js`; that file is not on disk, so the comment
   is a statement of intent, not an import path.) A page with a confirm should use `ConfirmDialog`; don't
-  re-type the head/footer. **~17 decision-confirms still use bare
+  re-type the head/footer. **16 decision-confirms still use bare
   `$q.dialog({ title, message, ok, cancel })`** —
-  14 in `composables/admin/`, plus `AdminSettingsPanelHolidayTypes`, `EmployeeContributionsDialog` and
-  `ReviewPage`. That is the exception now, not the norm; converting one needs the imperative host, and
-  that path is **unproven at runtime**. `note` is optional in the confirm object — `EmployeeTerminateDialog`
-  has none because terminate is reversible, and the irreversible note would be a lie.
+  14 in `composables/admin/`, plus `AdminSettingsPanelHolidayTypes` and `EmployeeContributionsDialog`.
+   That is the exception now, not the norm; converting one needs the imperative host, and that path
+   is **unproven at runtime**. `ReviewPage` was the third and left the list by the *other* route: it has
+   a template, so it took `ConfirmDialog` and a `reviewConfirm.js` exactly as Funding and Disburse did —
+   the imperative host is only the answer for a composable with no template of its own. `note` is
+   optional in the confirm object — `EmployeeTerminateDialog` has none because terminate is reversible,
+   and the irreversible note would be a lie.
 - **`dash-page-body` marks a list region; it has no rule of its own.** A page-level list region
   carries it so the empty-state rules can find it by context (`.dash-page-body .dash-empty` and
   `.dash-page-body .grid-empty` take `--dash-body-min`, 580px). It exists purely as a selector prefix —
