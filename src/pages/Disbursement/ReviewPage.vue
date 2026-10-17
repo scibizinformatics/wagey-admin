@@ -26,9 +26,7 @@
         <!-- The step's action sits beside search, so it is on screen the moment
              the page loads rather than below the table. -->
         <template #actions>
-          <span class="action-note dash-num">
-            {{ reviewedIds.length }}/{{ reviewData.length }} reviewed
-          </span>
+          <span class="action-note dash-num">{{ reviewedNote }}</span>
 
           <!-- Reviewing the rest in one go, beside reviewing them one at a time
                from the row menu. It disappears once there is nobody left to
@@ -268,14 +266,14 @@
                deduction is missing. -->
           <template #body-cell-contribution="props">
             <q-td :props="props">
-              <button type="button" class="contrib" @click="viewContributions(props.row)">
+              <button type="button" class="figure-link" @click="viewContributions(props.row)">
                 <span
-                  class="dash-num contrib__amount"
-                  :class="{ 'contrib__amount--zero': !amount(props.row.contribution) }"
+                  class="dash-num figure-link__amount"
+                  :class="{ 'figure-link__amount--zero': !amount(props.row.contribution) }"
                 >
                   {{ formatCurrencyPrecise(props.row.contribution) }}
                 </span>
-                <span v-if="showsContributionStatus(props.row)" class="contrib__status">
+                <span v-if="showsContributionStatus(props.row)" class="figure-link__sub">
                   {{ props.row.contribution_status }}
                 </span>
                 <q-tooltip :delay="400">View contributions</q-tooltip>
@@ -283,9 +281,80 @@
             </q-td>
           </template>
 
+          <!-- Hours worked against the hours the cutoff expects, as one
+               `worked / needed` reading for the same reason the attendance
+               pairs above are one cell: neither figure means much alone, and two
+               columns would put "13.10" and "88.00" far enough apart to be read
+               against the wrong employees.
+
+               The achieved half recedes and the requirement carries the ink, so
+               the eye lands on what is still owed — and the cell is toned while
+               the hours are short, dropping to plain once they are made up, the
+               way the attendance cells behave. A row with no hours expected of
+               it is not behind, so it is not tinted and the pair collapses to
+               what was worked. -->
+          <template #body-cell-work_hours="props">
+            <q-td :props="props">
+              <span class="dash-num" :class="workHoursTone(props.row)">
+                <template v-if="workHoursPair(props.row).hasNeeded">
+                  <span class="count-pair__done">{{
+                    decimalHoursLabel(props.row.work_hours_worked)
+                  }}</span
+                  ><span class="count-pair__sep">/</span
+                  >{{ decimalHoursLabel(props.row.work_hours_needed) }}
+                </template>
+                <template v-else>{{
+                  decimalHoursLabel(props.row.work_hours_worked) || '—'
+                }}</template>
+              </span>
+              <q-tooltip v-if="workHoursPair(props.row).hasNeeded" :delay="400">
+                {{ workHoursTitle(props.row) }}
+              </q-tooltip>
+            </q-td>
+          </template>
+
+          <!-- Money, like every other figure on the row: 2 dp through the app's
+               standard formatter and receded at zero, rather than given a
+               format of its own to disagree with.
+
+               The figure is the way into what produced it, on the same
+               construction as the contribution cell above: net pay is the
+               number the run exists to settle and the one that explains nothing
+               by itself, so the days, rates and money behind it live one click
+               away. It opens on a zero net pay too — nothing paid is exactly the
+               case worth asking about, and the dialog says whether the run
+               recorded no days or the days came to nothing. -->
+          <template #body-cell-net_pay="props">
+            <q-td :props="props">
+              <button
+                type="button"
+                class="figure-link"
+                :aria-label="`View salary breakdown for ${props.row.employee}`"
+                @click="viewBreakdown(props.row)"
+              >
+                <span
+                  class="dash-num figure-link__amount"
+                  :class="{ 'figure-link__amount--zero': !amount(props.row.net_pay) }"
+                >
+                  {{ formatCurrency(props.row.net_pay) }}
+                </span>
+                <q-tooltip :delay="400">View salary breakdown</q-tooltip>
+              </button>
+            </q-td>
+          </template>
+
+          <!-- The pill names the provenance as well as the state: a review the server
+             already had reads "Reviewed earlier", so a row that was signed off before
+             this page opened cannot be mistaken for one this visit settled. The
+             status is still passed through untouched — the tone stays the settled
+             green either way, and the server's own value is what the column sorts
+             on. -->
           <template #body-cell-review_status="props">
             <q-td :props="props">
-              <StatusPill :status="props.row.review_status" />
+              <StatusPill
+                :status="props.row.review_status"
+                :label="isReviewedEarlier(props.row) ? 'Reviewed earlier' : null"
+              />
             </q-td>
           </template>
 
@@ -314,6 +383,9 @@
                       </q-item-section>
                       <q-tooltip v-if="reviewClosed && !reviewedIds.includes(props.row.epi_id)">
                         Review closed when the run moved on — payslips are the next step
+                      </q-tooltip>
+                      <q-tooltip v-else-if="isReviewedEarlier(props.row)">
+                        Reviewed before this run was opened — nothing to decide here
                       </q-tooltip>
                     </q-item>
 
@@ -346,6 +418,18 @@
                         <q-icon name="o_account_balance" size="17px" />
                       </q-item-section>
                       <q-item-section>Contributions</q-item-section>
+                    </q-item>
+
+                    <q-item
+                      v-close-popup
+                      clickable
+                      class="disb-menu__item"
+                      @click="viewBreakdown(props.row)"
+                    >
+                      <q-item-section avatar>
+                        <q-icon name="o_receipt_long" size="17px" />
+                      </q-item-section>
+                      <q-item-section>Salary breakdown</q-item-section>
                     </q-item>
 
                     <q-item
@@ -385,6 +469,18 @@
       @deducted="refreshAfterDeduct"
     />
 
+    <!-- How the net pay in this row was arrived at, day by day. Read-only, and the
+         same dialog the Funding step opens from its earners table — one endpoint,
+         one reader, one reconciliation, so the two steps cannot describe a
+         person's payroll differently. -->
+    <SalaryBreakdownDialog
+      v-model="breakdownDialogOpen"
+      :employee-id="selectedEpiId"
+      :employee-name="selectedEmployeeName"
+      :net-pay="selectedNetPay"
+      :employee-index="employeeIndex"
+    />
+
     <!-- The gate in front of every write this step makes: reviewing one employee,
          reviewing everyone outstanding, and releasing the payslips that follow.
          One dialog for all three, the wording built in `reviewConfirm.js`, and the
@@ -411,6 +507,7 @@ import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRo
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import EmployeeDetailDialog from 'src/components/pages/Payroll/EmployeeDetailDialog.vue'
 import EmployeeContributionsDialog from 'src/components/pages/Payroll/EmployeeContributionsDialog.vue'
+import SalaryBreakdownDialog from 'src/components/pages/Payroll/SalaryBreakdownDialog.vue'
 import {
   buildReleaseConfirm,
   buildReviewAllConfirm,
@@ -419,7 +516,11 @@ import {
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { PGI_STATUS_MAP } from 'src/constants/pgiStatus'
-import { formatCurrency, formatCurrencyPrecise } from 'src/composables/utils/format'
+import {
+  formatCurrency,
+  formatCurrencyPrecise,
+  decimalHoursLabel,
+} from 'src/composables/utils/format'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
@@ -469,6 +570,23 @@ const reviewRejectedByServer = ref(false)
 // onto the refreshed rows rather than letting the pill fall back to its old
 // status.
 const sessionReviewedIds = ref([])
+// The employees already signed off before this page loaded, and the latch that
+// records it once.
+//
+// `review_status` is a stored column the backend set at some earlier point, not a
+// record of this visit — `POST pgi/<id>/review-to-ready/` is the only thing in the
+// API that writes it, and it has already run by the time these rows arrive. So a row
+// can come back "Reviewed" before the reader has clicked anything, and every
+// surface that counts a review then reads as though the page did it. Naming the
+// split lets the page say which is which without disputing either: the review
+// happened, it just was not this visit's.
+//
+// Seeded from the first `load()` that answers, never re-seeded. The flag is
+// separate from the value because `load()` runs again after every action, and
+// re-seeding then would relabel the employees reviewed during this visit as
+// earlier ones.
+const preReviewedIds = ref([])
+let seededPreReviewed = false
 const reviewingId = ref(null)
 const reviewingAll = ref(false)
 const releasingId = ref(null)
@@ -485,6 +603,12 @@ const selectedEmployeeId = ref(null)
 const contributionsDialogOpen = ref(false)
 const selectedEpiId = ref(null)
 const selectedEmployeeName = ref('')
+// The breakdown's own open flag and the one figure it reconciles against. The id
+// and name are shared with the contributions dialog rather than duplicated: both
+// are read only at open, and each opener writes them before opening, so a second
+// selection trio on this page would be three ways of naming the same row.
+const breakdownDialogOpen = ref(false)
+const selectedNetPay = ref(null)
 
 // The confirmation gate. `pendingIds` and `pendingEmployee` are snapshotted rather
 // than re-read on confirm, so the dialog describes the review that was asked about
@@ -540,6 +664,55 @@ function pairTitle(row, kind, noun) {
   const days = total === 1 ? 'day' : 'days'
   if (!outstanding) return `All ${total} ${noun} ${days} resolved`
   return `${resolved} of ${total} ${noun} ${days} resolved — ${outstanding} still open`
+}
+
+/**
+ * Work hours for one employee: what the cutoff expects of them, and what they
+ * actually worked. Both arrive as decimal strings ("88.00", "13.10").
+ *
+ * The two figures only mean something together — 13.10 hours is a whole cutoff
+ * for somebody contracted for a dozen and a shortfall worth a look for somebody
+ * who needed 88 — so the table shows them as one `worked / needed` reading, for
+ * the same reason the attendance pairs are one cell rather than two columns.
+ *
+ * `shortfall` is what is still to be made up and drives the column's sort and
+ * tone, floored at zero so a payload that over-reports hours cannot produce a
+ * negative gap and sort itself above the rows that do need attention. Clamping
+ * here rather than at the server is what `attendancePair` does with `resolved`,
+ * and for the same reason.
+ *
+ * `hasNeeded` reads the raw field rather than the coerced number, so a genuinely
+ * absent requirement reads as "no figure" rather than as a real `0.00` — a
+ * missing figure and a zero hour are not the same statement.
+ */
+function workHoursPair(row) {
+  const needed = amount(row.work_hours_needed)
+  const worked = amount(row.work_hours_worked)
+  return {
+    needed,
+    worked,
+    hasNeeded: row.work_hours_needed != null && row.work_hours_needed !== '',
+    shortfall: Math.max(0, needed - worked),
+  }
+}
+
+/**
+ * Amber while the hours are still short; plain once made up, and plain when
+ * there is no requirement to meet — with nothing expected of them, an employee
+ * who worked hours is not behind, so their figure is not tinted.
+ */
+function workHoursTone(row) {
+  const { hasNeeded, shortfall } = workHoursPair(row)
+  return hasNeeded && shortfall > 0 ? 'num-warn' : ''
+}
+
+/** Spells the pair out, which is quicker to trust than reading "13.10 / 88.00". */
+function workHoursTitle(row) {
+  const { needed, worked, shortfall } = workHoursPair(row)
+  const workedLabel = decimalHoursLabel(worked)
+  const neededLabel = decimalHoursLabel(needed)
+  if (!shortfall) return `${workedLabel} of ${neededLabel} hours`
+  return `${workedLabel} of ${neededLabel} hours — ${decimalHoursLabel(shortfall)} still needed`
 }
 
 /**
@@ -614,6 +787,27 @@ const columns = [
     align: 'right',
     sortable: true,
   },
+  // Hours worked against the hours the cutoff expects of them, as one cell for
+  // the reason the attendance pairs are one cell. Sorted by what is still
+  // outstanding rather than by what was worked, so a run can be read furthest
+  // behind first — and an employee with no hours expected of them sorts with
+  // the quiet rows rather than at the top.
+  {
+    name: 'work_hours',
+    label: 'Work hours',
+    field: (row) => workHoursPair(row).shortfall,
+    align: 'right',
+    sortable: true,
+  },
+  // The figure the whole run exists to settle, so it sits with the other money
+  // columns rather than being left to the detail dialog.
+  {
+    name: 'net_pay',
+    label: 'Net pay',
+    field: (row) => amount(row.net_pay),
+    align: 'right',
+    sortable: true,
+  },
   {
     name: 'review_status',
     label: 'Review status',
@@ -669,7 +863,43 @@ const unreviewedIds = computed(() =>
   reviewData.value.filter((e) => !reviewedIds.value.includes(e.epi_id)).map((e) => e.epi_id),
 )
 
+/**
+ * The reviewed rows that were signed off before this visit, narrowed to the rows
+ * still on screen and to those this visit did not review.
+ *
+ * Narrowing by what is present, not by what was seeded: a refresh can replace the
+ * table under us, and a row that is no longer there must not go on counting in the
+ * figures. And `sessionReviewedIds` is subtracted even though the two sets cannot
+ * overlap — a row already reviewed is refused by the review handlers — so a payload
+ * that arrived contradicting them costs one row's wording rather than two claims.
+ */
+const reviewedEarlierIds = computed(() => {
+  const present = new Set(reviewData.value.map((e) => e.epi_id))
+  return preReviewedIds.value.filter(
+    (id) => present.has(id) && !sessionReviewedIds.value.includes(id),
+  )
+})
+
+/** One row's provenance, for the pill and the row menu to agree on. */
+function isReviewedEarlier(row) {
+  return preReviewedIds.value.includes(row.epi_id) && !sessionReviewedIds.value.includes(row.epi_id)
+}
+
+/**
+ * The count beside the table's actions.
+ *
+ * "Reviewed" here means reviewed on this run, not reviewed by this visit, so the
+ * part that was already signed off is named beside it — otherwise the tally reads
+ * as work the reader just did, on a run they have only just opened.
+ */
+const reviewedNote = computed(() => {
+  const tally = `${reviewedIds.value.length}/${reviewData.value.length} reviewed`
+  if (!reviewedEarlierIds.value.length) return tally
+  return `${tally} · ${reviewedEarlierIds.value.length} earlier`
+})
+
 function reviewLabel(row) {
+  if (isReviewedEarlier(row)) return 'Reviewed earlier'
   if (reviewedIds.value.includes(row.epi_id)) return 'Reviewed'
   return reviewClosed.value ? 'Review closed' : 'Mark reviewed'
 }
@@ -737,6 +967,9 @@ const statTiles = computed(() => [
     label: 'Reviewed',
     value: overview.value?.reviewed ?? 0,
     mark: 'var(--dash-good-mark)',
+    // The figure is the server's and stays untouched; the sub-line is what keeps
+    // it from reading as this visit's work when part of it predates the page.
+    note: reviewedEarlierIds.value.length ? `${reviewedEarlierIds.value.length} earlier` : '',
   },
   {
     key: 'attention',
@@ -823,6 +1056,17 @@ async function load() {
   })
   reviewedIds.value = reviewData.value.filter(isReviewed).map((e) => e.epi_id)
 
+  // Only ever the first load that answers, and after the token guard so a
+  // superseded response cannot set it. On that load `sessionReviewedIds` is still
+  // empty — nothing has been reviewed yet — so what is captured here is exactly
+  // what the server already had, which is the point.
+  if (!seededPreReviewed) {
+    // Copied rather than aliased: `reviewedIds` is rebuilt from scratch on every
+    // later load, and the two are not meant to be the same list.
+    preReviewedIds.value = [...reviewedIds.value]
+    seededPreReviewed = true
+  }
+
   const status = readPgiStatus(progress) || readPgiStatus(ov) || readPgiStatus(rev)
   if (status) {
     pgiStatus.value = status
@@ -889,6 +1133,25 @@ function viewContributions(row) {
   selectedEpiId.value = row.epi_id
   selectedEmployeeName.value = row.employee || ''
   contributionsDialogOpen.value = true
+}
+
+/**
+ * The salary breakdown behind a row's net pay.
+ *
+ * Snapshotted off the row rather than read off it on render — the same reasoning
+ * FundingPage keeps its selection for: this table is refetched after every
+ * deduction, so a dialog left open across a write would otherwise re-point itself
+ * at whatever row took that id next.
+ *
+ * `net_pay` travels with it so the dialog can reconcile the days against the
+ * figure this row was listed at. Two of the three fields are already on the page
+ * for the contributions dialog, which is why it does not get its own selection.
+ */
+function viewBreakdown(row) {
+  selectedEpiId.value = row?.epi_id ?? null
+  selectedEmployeeName.value = row?.employee || ''
+  selectedNetPay.value = row?.net_pay ?? null
+  breakdownDialogOpen.value = true
 }
 
 /** A deduction moves the row's contribution status and the run's figures. */
@@ -1337,10 +1600,14 @@ async function releaseEmployee(row) {
   font-weight: 600;
 }
 
-/* A cell that opens the contribution breakdown. Inline-flex so the hover tint
-   hugs the figure instead of washing the whole column, and a plain button so it
-   is reachable by keyboard — the amount used to be inert text. */
-.contrib {
+/* A figure that opens something. Inline-flex so the hover tint hugs the figure
+   instead of washing the whole column, and a plain button so it is reachable by
+   keyboard — both of these amounts used to be inert text.
+
+   Named for the affordance rather than for the first column that wanted it:
+   Contribution and Net pay both open a dialog off the figure itself, and they
+   must read as the same kind of thing. */
+.figure-link {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1357,11 +1624,11 @@ async function releaseEmployee(row) {
   transition: background 0.12s ease;
 }
 
-.contrib:hover {
+.figure-link:hover {
   background: var(--dash-accent-bg);
 }
 
-.contrib:focus-visible {
+.figure-link:focus-visible {
   outline: 2px solid var(--dash-accent);
   outline-offset: 1px;
 }
@@ -1370,7 +1637,7 @@ async function releaseEmployee(row) {
    column has to be able to tell the amount opens something without hovering it
    first. Underline rather than a trailing chevron so the digits still end on a
    common right edge and the column reads as numbers. */
-.contrib__amount {
+.figure-link__amount {
   color: var(--dash-accent);
   font-weight: 600;
   text-decoration: underline;
@@ -1382,24 +1649,29 @@ async function releaseEmployee(row) {
   transition: text-decoration-color 0.12s ease;
 }
 
-.contrib:hover .contrib__amount {
+.figure-link:hover .figure-link__amount {
   text-decoration-color: var(--dash-accent);
 }
 
 /* A zero recedes as it does in the other figure columns, but keeps the underline
-   — zero is the case most likely to need opening, so it must not read as inert. */
-.contrib__amount--zero {
+   — zero is the case most likely to need opening, so it must not read as inert.
+   A zero net pay earns this too: nothing paid is exactly the row worth asking
+   about, and the dialog says whether the run recorded no days or the days came to
+   nothing. */
+.figure-link__amount--zero {
   color: var(--dash-ink-4);
   font-weight: 400;
   text-decoration-color: var(--dash-n-300, #d0d5dd);
 }
 
-.contrib:hover .contrib__amount--zero {
+.figure-link:hover .figure-link__amount--zero {
   color: var(--dash-accent);
   text-decoration-color: var(--dash-accent);
 }
 
-.contrib__status {
+/* The second line under a figure — only the contribution cell has one, where the
+   contribution's own status rides under its amount. */
+.figure-link__sub {
   font-size: 11px;
   line-height: 1.3;
   color: var(--dash-ink-4);
