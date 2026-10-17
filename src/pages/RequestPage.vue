@@ -300,7 +300,6 @@
         :categories="overtimeCategories"
         :employee-options="overtimeAdvanceEmployeeOptions"
         :submitting="overtimeAdvanceSubmitting"
-        :company-id="selectedCompany"
         @filter-employees="filterOvertimeAdvanceEmployees"
         @submit="submitOvertimeAdvance"
       />
@@ -1266,28 +1265,26 @@ const fetchOvertimeRequests = async () => {
     // being honoured.
     console.log(`[overtime] company ${companyId}: ${data.length} row(s)`)
     // The status vocabulary the backend is actually answering with, per value
-    // rather than per row, plus the two qualification fields that decide whether
-    // an "Unqualified" status can be derived client-side at all. The admin
-    // settings screen offers All / Admin Approved / Qualified / Requested /
+    // rather than per row, plus how often it fills in `qualified_hours`. The
+    // admin settings screen offers All / Admin Approved / Qualified / Requested /
     // Approved / Rejected / Cancelled, but a UI filter cannot confirm what the
-    // list endpoint fills in — and `qualified_hours` is currently `null` on
-    // every row, which is exactly what blocks the unqualified reading (see the
-    // deferred note in `normalizeOvertimeRequest`). Watch both counts.
+    // list endpoint fills in. `qualified_hours` used to arrive `null` on every
+    // row, which is what blocked the unqualified reading (see the deferred note
+    // in `normalizeOvertimeRequest`); the backend has since started sending it,
+    // so keep counting — a silent return to `null` would hide that again.
     const statusCounts = {}
     let withQualifiedHours = 0
-    let withLimitHours = 0
     for (const item of data) {
       const key = item?.status === null || item?.status === undefined ? '(missing)' : item.status
       statusCounts[key] = (statusCounts[key] || 0) + 1
       if (item?.qualified_hours !== null && item?.qualified_hours !== undefined) {
         withQualifiedHours += 1
       }
-      if (item?.limit_hours !== null && item?.limit_hours !== undefined) withLimitHours += 1
     }
     console.log(
       `[overtime] backend statuses:`,
       statusCounts,
-      `| qualified_hours on ${withQualifiedHours}/${data.length}, limit_hours on ${withLimitHours}/${data.length}`,
+      `| qualified_hours on ${withQualifiedHours}/${data.length}`,
     )
     // Rows that vanished from the queue must not stay selected — a later bulk
     // approve would then patch ids that are no longer on screen.
@@ -1453,7 +1450,10 @@ const submitOvertimeAdvance = async (payload) => {
       date: payload.date,
       reason: payload.reason,
     }
-    if (payload.limit_hours) {
+    // The modal has already decided whether a limit travels — it omits the key
+    // when the field is blank. Forward whatever arrived rather than re-testing
+    // truthiness, which silently dropped a legitimate `0` limit.
+    if (payload.limit_hours !== undefined && payload.limit_hours !== '') {
       body.limit_hours = payload.limit_hours
     }
     await api.post(`/attendance/overtime/admin/${companyId}/`, body)
