@@ -18,6 +18,18 @@ import { statusTone } from 'src/composables/utils/statusColors'
 
 const props = defineProps({
   status: { type: String, default: '' },
+  /**
+   * Display text that overrides `status`, for a row whose state is the one the
+   * status names but whose provenance needs saying: a review that was already
+   * done before this visit still sends `status="Reviewed"` and wants to read
+   * "Reviewed earlier".
+   *
+   * Only the text moves. The tone is still read from `status`, because that is
+   * what the state actually is — an earlier review is settled, so it keeps the
+   * green a "Reviewed" has, and faking a second status to colour it would put a
+   * state in `statusColors` that the backend never sends.
+   */
+  label: { type: String, default: null },
   /** sm | md */
   size: { type: String, default: 'sm' },
 })
@@ -29,6 +41,7 @@ const toneClass = computed(() =>
 )
 
 const displayLabel = computed(() => {
+  if (props.label) return props.label
   if (!props.status) return '—'
   // "pending_review" -> "Pending review": sentence case, not Title Case, which
   // is what the rest of the app uses for status labels.
