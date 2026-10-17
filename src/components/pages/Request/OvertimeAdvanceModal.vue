@@ -28,7 +28,18 @@
       <q-card-section class="dash-modal__body">
         <div class="form-section">
           <div class="dash-modal__section-title">Request details</div>
-          <div class="dash-modal__grid">
+          <!-- A `q-form`, because a rule nobody calls is decoration: without one
+               `onSubmit` emitted regardless of what these fields said, so the
+               rules below only ever painted the field red while the write went
+               ahead. With it, the limit rule actually blocks the submit — and so
+               do the three required-field rules that were already on screen but
+               unenforced. That is a behaviour change, and it is the point: a
+               rejected advance is better than one stored with a typo. -->
+          <!-- `@submit.prevent` because this is a real `<form>` now: without it, an
+               Enter keypress that triggered implicit submission would navigate
+               the SPA instead of validating. Submit goes through the same
+               validated path as the button. -->
+          <q-form ref="formRef" class="dash-modal__grid" @submit.prevent="onSubmit">
             <label class="dash-modal__field">
               <span class="dash-modal__field-label"
                 >Employees<span class="dash-modal__req">*</span></span
@@ -115,14 +126,21 @@
                 </template>
               </q-input>
             </label>
+            <!-- Optional, but a number when present. Stays `type="text"` on
+                 purpose: `type="number"` fights the negative values this field
+                 explicitly exists to accept, and the backend takes the decimal as
+                 a string either way. `inputmode` nudges a numeric keypad on a
+                 phone without changing how the value parses. -->
             <label class="dash-modal__field">
               <span class="dash-modal__field-label">Limit hours</span>
               <q-input
                 outlined
                 :model-value="form.limit_hours"
                 @update:model-value="form.limit_hours = $event"
+                :rules="[limitHoursRule]"
                 type="text"
-                hint="Accepts negative values like -5.9"
+                inputmode="decimal"
+                hint="Accepts negative values like -5.9. Leave blank for no limit."
                 class="dash-field dash-modal__span-2"
                 dense
                 hide-bottom-space
@@ -141,7 +159,7 @@
                 hide-bottom-space
               />
             </label>
-          </div>
+          </q-form>
         </div>
       </q-card-section>
 
@@ -165,17 +183,20 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 
 defineProps({
   modelValue: Boolean,
   categories: { type: Array, default: () => [] },
   employeeOptions: { type: Array, default: () => [] },
   submitting: Boolean,
-  companyId: String,
 })
 
 const emit = defineEmits(['update:modelValue', 'submit', 'filter-employees'])
+
+// `validate()` in `onSubmit` has to reach this, hence the ref rather than the
+// rules merely decorating the field.
+const formRef = ref(null)
 
 const form = reactive({
   employee_ids: [],
@@ -185,21 +206,45 @@ const form = reactive({
   reason: '',
 })
 
+// Blank is allowed — the limit is optional, and "no limit" is a real answer.
+// Anything present has to parse as a decimal, negative included: this field
+// used to accept any text at all and hand `"abc"` straight to the backend,
+// which rejected it in a toast that named none of the fields. The decimal is
+// deliberately not capped at 2dp, because statutory rates elsewhere in the app
+// carry more precision and silently truncating one is worse than sending it.
+const LIMIT_HOURS_PATTERN = /^-?\d+(\.\d+)?$/
+const limitHoursRule = (value) => {
+  const raw = String(value ?? '').trim()
+  if (raw === '') return true
+  return LIMIT_HOURS_PATTERN.test(raw) || 'Enter a number, e.g. 4 or -5.9'
+}
+
 const onFilter = (val, update) => {
   emit('filter-employees', val)
   update(() => {})
 }
 
-const onSubmit = () => {
+const onSubmit = async () => {
+  // Rules are only enforced when something asks them to; without this the
+  // whole form was decorative and the write went ahead regardless.
+  const valid = await formRef.value?.validate()
+  if (!valid) return
+
   const payload = {
     employee_ids: form.employee_ids,
     category: form.category,
     date: form.date,
     reason: form.reason,
   }
-  if (form.limit_hours !== '' && form.limit_hours !== null) {
-    payload.limit_hours = form.limit_hours
-  }
+
+  // The one place that decides whether a limit travels. It used to be decided
+  // twice — here and again in `submitOvertimeAdvance`, which tested truthiness
+  // and so dropped a legitimate `0`. Whitespace-only counts as blank, and a
+  // blank limit omits the key rather than sending an empty string the backend
+  // could store as the text of its own placeholder.
+  const limit = String(form.limit_hours ?? '').trim()
+  if (limit !== '') payload.limit_hours = limit
+
   emit('submit', payload)
 }
 </script>
