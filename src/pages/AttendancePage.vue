@@ -414,7 +414,6 @@ import {
   formatInTimezone,
   formatClockTime,
   clockTimeOptions,
-  nowClock,
 } from '@/composables/utils/timezone'
 import { useOrganization } from '@/composables/page/useOrganization'
 import { shiftIso } from '@/composables/utils/calendarDate'
@@ -1752,12 +1751,11 @@ function openAddDialog() {
     employee: '',
     cost_center_id: '',
     date: currentDate.value || today,
-    // The minute the dialog was opened at, not a fixed hour — the old HR system
-    // opened on "now" and an admin clocking in at 06:40 should not have to back
-    // out of a default three hours away. Only Time In: it is the punch being
-    // recorded, and defaulting Time Out to the same instant would file a
-    // zero-hour shift the moment the admin hit Save.
-    time_in: nowClock(),
+    // No default on either punch. A prefilled time is a guess an admin has to
+    // read and consciously overwrite rather than an absence they have to notice
+    // — so a forgotten Time In is caught by the `Required` rule and the disabled
+    // Save, where a wrong one is filed as fact.
+    time_in: '',
     time_out: '',
     source: 'admin',
     selected_assignment_id: null,
