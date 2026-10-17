@@ -215,7 +215,14 @@
                    a `qualified` row is the backend's own arithmetic and stays
                    read-only even though it can still be approved, and a decided
                    row is a fact. Hence `hoursEditable`, which is not the same
-                   test as `actionable`. -->
+                   test as `actionable`.
+
+                   An editable cell prefills from `row.hours`, the claim, because
+                   negotiating the claim is the point. A read-only cell renders
+                   `displayHours` instead — the figure that applies to this row's
+                   status (the settled one on an approval, the qualified one on a
+                   qualified row) — because `row.hours` is the claim and printing
+                   it beside an "Approved" pill shows a number nobody agreed to. -->
               <q-td key="hours" :props="props" class="grid-cell ot-cell-hours">
                 <q-input
                   v-if="props.row.hoursEditable"
@@ -229,7 +236,7 @@
                   class="hours-input"
                   :aria-label="'Approved hours for ' + props.row.employeeName"
                 />
-                <span v-else class="amount">{{ formatHours(props.row.hours) }}</span>
+                <span v-else class="amount">{{ formatHours(props.row.displayHours) }}</span>
               </q-td>
 
               <q-td key="reason" :props="props" class="grid-cell ot-cell-reason">
@@ -338,7 +345,12 @@ const otColumns = [
   { name: 'employeeName', label: 'Employee', field: 'employeeName', align: 'left' },
   { name: 'category', label: 'Category', field: 'categoryName', align: 'left' },
   { name: 'date', label: 'Date', field: 'date', align: 'left' },
-  { name: 'hours', label: 'Hours', field: 'hours', align: 'left' },
+  // `displayHours`, not `hours`: the field is the column's declared data
+  // source, and `hours` is the claim. The body slot renders `displayHours`
+  // today and sorting is off, so this is inert — but leaving it pointing at the
+  // claim is exactly the latent bug that comes back the moment someone enables
+  // sorting on this column.
+  { name: 'hours', label: 'Hours', field: 'displayHours', align: 'left' },
   { name: 'reason', label: 'Reason', field: 'reason', align: 'left' },
   { name: 'status', label: 'Status', field: 'status', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'right' },
