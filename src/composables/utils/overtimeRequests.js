@@ -12,7 +12,10 @@
  *   - hours arrive as strings (`"-83"`, `"-2"`) and there are three of them —
  *     `hours` is what the employee claimed, `qualified_hours` what the rules
  *     allowed, `approved_hours` what an admin settled on. They are distinct
- *     readings, so the table shows the claim and the modal shows the rest;
+ *     readings, and only one of them is the row's hours at any moment, so the
+ *     modal shows all three under their own labels while the queue's single
+ *     Hours column shows the one that applies (`displayHours`, see
+ *     `resolveDisplayHours`);
  *   - the status vocabulary is wider than the four states the UI used to know.
  *     `admin_approved` is the backend's name for an approval that came from
  *     this dashboard, and it means the same thing to a reader as `approved` —
@@ -215,6 +218,47 @@ export function formatOvertimeHours(value) {
   return `${Number(hours.toFixed(2))}h`
 }
 
+/**
+ * The single figure the queue's Hours column shows for a row.
+ *
+ * The backend sends three readings and they are not interchangeable: the claim,
+ * what the rules allowed, and what an admin settled on. Which one *is* the
+ * row's hours depends on how far the request got.
+ *
+ *   - a decided approval is the settled figure. Showing the claim beside an
+ *     "Approved" pill prints a number nobody agreed to — on staging, row 337
+ *     claimed 3h and was approved for 4h, row 175 claimed 3h and was approved
+ *     for 2h, and both read the claim;
+ *   - a `qualified` row is the rules' own arithmetic, which is also the claim's
+ *     fallback for the records where no claim was ever recorded;
+ *   - a rejection paid nothing, so the claim is the figure of record;
+ *   - a row still awaiting a decision is the claim, and the approver negotiates
+ *     that figure rather than accepting one.
+ *
+ * Every branch falls through to the neighbouring reading rather than to `0`:
+ * `null` means the backend recorded no figure at all and has to render the em
+ * dash. Some `admin_approved` rows carry no figure on any of the three fields,
+ * and inventing one for them is worse than admitting there is none.
+ */
+function resolveDisplayHours(status, hours, qualifiedHours, approvedHours) {
+  switch (status) {
+    case 'approved':
+    case 'admin_approved':
+      return approvedHours ?? qualifiedHours ?? hours
+    case 'qualified':
+      return qualifiedHours ?? approvedHours ?? hours
+    case 'converted':
+      return approvedHours ?? hours ?? qualifiedHours
+    case 'rejected':
+    case 'admin_rejected':
+      return hours ?? approvedHours ?? qualifiedHours
+    default:
+      // `requested` / `pending` / `unqualified` — the claim, which is also what
+      // the cell's input prefills with while the row is negotiable.
+      return hours ?? qualifiedHours
+  }
+}
+
 export function normalizeOvertimeRequest(item, directory = null) {
   if (!item || typeof item !== 'object') return null
   // The backend's own status, kept verbatim for diagnostics, and the status the
@@ -224,6 +268,11 @@ export function normalizeOvertimeRequest(item, directory = null) {
   const status = DISPLAY_STATUS_OVERRIDES[rawStatus] || rawStatus
   const hours = toHours(item.hours)
   const qualifiedHours = toHours(item.qualified_hours)
+  const approvedHours = toHours(item.approved_hours)
+  // Read-only display figure, decided from the row's status rather than from a
+  // fixed field preference — see `resolveDisplayHours`. `hours` below stays the
+  // claim because the edit prefill and the approve write both depend on it.
+  const displayHours = resolveDisplayHours(status, hours, qualifiedHours, approvedHours)
   return {
     id: item.id,
     employeeCompany: item.employee_company,
@@ -239,10 +288,18 @@ export function normalizeOvertimeRequest(item, directory = null) {
     categoryName: item.category_name || CTO_CATEGORY_LABEL,
     date: item.date || '',
     // The claim is what the row is about; qualified hours stand in only when the
-    // claim itself was never recorded.
+    // claim itself was never recorded. The Hours cell does NOT render this on a
+    // decided row — it renders `displayHours` — but the editable input prefills
+    // from it and the approve write settles against it.
     hours: hours ?? qualifiedHours,
+    // The claim on its own, with no fallback, so a detail view can label it
+    // honestly: the modal must not print "Claimed hours: 12h" for a row whose
+    // `hours` was `null` and whose 12h is the qualified figure.
+    claimedHours: hours,
     qualifiedHours,
-    approvedHours: toHours(item.approved_hours),
+    approvedHours,
+    // What the Hours column prints once the row is no longer negotiable.
+    displayHours,
     attendances: Array.isArray(item.attendances) ? item.attendances : [],
     schedules: Array.isArray(item.schedules) ? item.schedules : [],
     status,
@@ -257,11 +314,13 @@ export function normalizeOvertimeRequest(item, directory = null) {
     // it just cannot have its hours retyped under it.
     hoursEditable: isEditableOvertimeStatus(status),
     // The other candidate signal for "unqualified" — a populated
-    // `qualified_hours` of 0 on a still-undecided row — remains unwired because
-    // `GET /payroll/overtime-list/` currently sends `qualified_hours: null` on
-    // every row. If the backend ever populates it, the derivation is
-    // `rawStatus` actionable && qualifiedHours === 0, forced false for
-    // `actionable` and `hoursEditable` exactly as `DISPLAY_STATUS_OVERRIDES`
+    // `qualified_hours` of 0 on a still-undecided row — remains unwired. It was
+    // written off as impossible because `GET /payroll/overtime-list/` used to
+    // send `qualified_hours: null` on every row; it no longer does (81 of 212
+    // staging rows carried one, all of them `qualified` or already decided), so
+    // the signal is observable and merely unadopted. If it is wired, the
+    // derivation is `rawStatus` actionable && qualifiedHours === 0, forced false
+    // for `actionable` and `hoursEditable` exactly as `DISPLAY_STATUS_OVERRIDES`
     // already does for `cancelled`.
     approvedByName: item.approved_by_name || '',
     convertedToCto: Boolean(item.converted_to_cto),
