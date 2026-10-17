@@ -30,17 +30,34 @@
                 <span class="dash-modal__label">Date:</span>
                 <span class="dash-modal__value">{{ formatDate(request?.date) }}</span>
               </div>
-              <div class="dash-modal__row">
-                <span class="dash-modal__label">Hours:</span>
-                <span class="dash-modal__value">{{ formatOvertimeHours(request?.hours) }}</span>
+              <!-- The three hours readings, each under its own name, and each row shown
+                   only when the backend actually recorded that figure — a
+                   `qualified` row has no claim, so it lists the qualified hours
+                   alone rather than repeating them as "claimed". The queue's
+                   single Hours column shows the one that applies to the status
+                   (`displayHours`); this dialog deliberately keeps them apart. -->
+              <div
+                v-if="request?.claimedHours !== null && request?.claimedHours !== undefined"
+                class="dash-modal__row"
+              >
+                <span class="dash-modal__label">Claimed hours:</span>
+                <span class="dash-modal__value">
+                  {{ formatOvertimeHours(request?.claimedHours) }}
+                </span>
               </div>
-              <div v-if="request?.qualifiedHours !== null" class="dash-modal__row">
+              <div
+                v-if="request?.qualifiedHours !== null && request?.qualifiedHours !== undefined"
+                class="dash-modal__row"
+              >
                 <span class="dash-modal__label">Qualified hours:</span>
                 <span class="dash-modal__value">{{
                   formatOvertimeHours(request?.qualifiedHours)
                 }}</span>
               </div>
-              <div v-if="request?.approvedHours !== null" class="dash-modal__row">
+              <div
+                v-if="request?.approvedHours !== null && request?.approvedHours !== undefined"
+                class="dash-modal__row"
+              >
                 <span class="dash-modal__label">Approved hours:</span>
                 <span class="dash-modal__value">{{
                   formatOvertimeHours(request?.approvedHours)
