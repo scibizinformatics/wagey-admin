@@ -328,8 +328,9 @@ These are live and not covered by the long-form doc — treat them as current, n
   `components/common/TimeField.vue`, **not** `<input type="time">`: no browser will draw 24h on request.
   `TimeField` is **two** typeable dropdowns (hour `00–23`, minute `00–59`), not one list of whole
   `HH:mm` strings — a single list means the minute can only change by picking a whole different time.
-  Time In defaults to the current minute (`nowClock()` in `timezone.js`, read per open in
-  `openAddDialog()`), which is exactly why both halves must be editable rather than pick-only.
+  Neither punch is **prefilled** — `openAddDialog()` opens both blank, so a forgotten Time In is
+  caught by the `Required` rule and the disabled Save rather than filed as a guess. Both halves of
+  `TimeField` must therefore be editable rather than pick-only.
   Relatedly, `formatClockTime` / `parseClockTime` in `composables/utils/timezone.js` are **wall-clock**,
   not instants: never route a bare shift time through `formatInTimezone`, which takes an instant and
   turns 08:00 into 16:00 west of Greenwich. `parseClockTime` accepts `6:00 PM` / `0600` / `18:00`
