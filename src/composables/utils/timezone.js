@@ -55,28 +55,6 @@ export function clockTimeOptions(format) {
 }
 
 /**
- * The current wall-clock time in the viewer's own timezone, as canonical 24h
- * `HH:mm`.
- *
- * The default a punch field opens on, so it is deliberately dynamic: a fixed
- * `18:00` is wrong for every admin who clocks in before six and wrong again for
- * the graveyard shift after midnight. Read the local hour and minute fields
- * directly rather than deriving them from `toISOString()`, which reports UTC —
- * the same trap `calendarDate.js` documents for dates, and eight hours of
- * "current time" is a worse mistake than the one it looks like.
- *
- * A function rather than a constant: the value is only correct until the next
- * minute, and a module-level capture would leave an open tab defaulting a punch
- * to whenever it was loaded. Call it per use — at the moment the field opens.
- *
- * @returns {string} `HH:mm` between `00:00` and `23:59`.
- */
-export function nowClock() {
-  const now = new Date()
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-}
-
-/**
  * A bare wall-clock `HH:mm` printed the company's way, with no zone applied.
  *
  * Distinct from `formatInTimezone`, which takes an *instant* and moves it to the
