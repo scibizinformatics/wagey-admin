@@ -35,143 +35,179 @@
           <span>Loading contributions…</span>
         </div>
 
-        <div v-else-if="error" class="contrib-state contrib-state--error">
-          <q-icon name="o_error_outline" size="20px" />
-          <span>Could not load contributions for this employee.</span>
-          <q-btn flat dense no-caps label="Try again" class="contrib-retry" @click="load" />
-        </div>
+        <!-- Everything below the spinner renders together rather than as a chain
+             of `v-else-if`s. The chain made the two sections mutually exclusive,
+             so a contributions failure hid the manual adjustments that had been
+             fetched successfully — the request was made, the answer discarded,
+             and the dialog said nothing about it. They are independent facts
+             about the same employee, and now each is shown or not shown on its
+             own evidence. -->
+        <template v-else>
+          <!-- The run has no tax month configured, so there is nothing to
+               calculate. Quieter than the error below it and, deliberately,
+               without a retry: pressing "Try again" cannot conjure a tax month
+               onto a cutoff, and offering the button would invite a reader to
+               keep pressing it. It says what has to happen instead — somebody
+               sets the tax month on the backend — rather than reporting a fault
+               that did not happen. -->
+          <div v-if="noTaxMonth" class="contrib-state contrib-state--unconfigured">
+            <p class="contrib-empty__title">No tax month for this cutoff</p>
+            <p class="contrib-empty__sub">
+              Nothing can be calculated for
+              {{ employeeName || 'this employee' }} until a tax month is set for
+              {{ cutoffName || 'this period' }}.
+            </p>
+          </div>
 
-        <template v-else-if="data">
-          <!-- ── Summary ──────────────────────────────────────────────────
+          <div v-if="error" class="contrib-state contrib-state--error">
+            <q-icon name="o_error_outline" size="20px" />
+            <span>Could not load contributions for this employee.</span>
+            <!-- The status and the server's own words. `Try again` cannot fix a
+                 missing route or a refused permission, and without these it was
+                 impossible to tell which had happened. -->
+            <span v-if="errorDetail" class="contrib-error__detail">{{ errorDetail }}</span>
+            <q-btn flat dense no-caps label="Try again" class="contrib-retry" @click="load" />
+          </div>
+
+          <template v-if="data">
+            <!-- ── Summary ──────────────────────────────────────────────────
                The item's own status leads, because it is what the review table
                shows and what deducting here changes. -->
-          <div class="contrib-summary">
-            <div class="contrib-summary__status">
-              <span class="contrib-summary__label">Contribution status</span>
-              <StatusPill :status="data.epi_contribution_status" size="md" />
-            </div>
+            <div class="contrib-summary">
+              <div class="contrib-summary__status">
+                <span class="contrib-summary__label">Contribution status</span>
+                <StatusPill :status="data.epi_contribution_status" size="md" />
+              </div>
 
-            <dl class="contrib-summary__figures">
-              <div>
-                <dt>Total</dt>
-                <dd class="dash-num">{{ formatCurrencyPrecise(totalAmount) }}</dd>
-              </div>
-              <div>
-                <dt>Deducted</dt>
-                <dd class="dash-num">{{ formatCurrencyPrecise(deductedAmount) }}</dd>
-              </div>
-              <div>
-                <dt>Pending</dt>
-                <dd class="dash-num" :class="{ 'contrib-pending': pendingAmount > 0 }">
-                  {{ formatCurrencyPrecise(pendingAmount) }}
-                </dd>
-              </div>
-            </dl>
+              <dl class="contrib-summary__figures">
+                <div>
+                  <dt>Total</dt>
+                  <dd class="dash-num">{{ formatCurrencyPrecise(totalAmount) }}</dd>
+                </div>
+                <div>
+                  <dt>Deducted</dt>
+                  <dd class="dash-num">{{ formatCurrencyPrecise(deductedAmount) }}</dd>
+                </div>
+                <div>
+                  <dt>Pending</dt>
+                  <dd class="dash-num" :class="{ 'contrib-pending': pendingAmount > 0 }">
+                    {{ formatCurrencyPrecise(pendingAmount) }}
+                  </dd>
+                </div>
+              </dl>
 
-            <!-- The manual figures sit on their own line, below a rule, rather
+              <!-- The manual figures sit on their own line, below a rule, rather
                  than being folded into Total or Deducted: those two mean
                  "required by law", and a reader who cannot tell which is which
                  will either distrust the number or trust it wrongly. -->
-            <dl v-if="adjustments.hasAny" class="contrib-summary__figures contrib-summary__figures--manual">
-              <div>
-                <dt>Manual additions</dt>
-                <dd class="dash-num">{{ moneyOrDash(adjustments.manualAdditions) }}</dd>
-              </div>
-              <div>
-                <dt>Manual deductions</dt>
-                <dd class="dash-num contrib-pending">{{ moneyOrDash(adjustments.manualDeductions) }}</dd>
-              </div>
-              <div>
-                <dt>Net pay</dt>
-                <dd class="dash-num">{{ moneyOrDash(adjustments.netPay) }}</dd>
-              </div>
-            </dl>
-          </div>
+              <dl
+                v-if="adjustments.hasAny"
+                class="contrib-summary__figures contrib-summary__figures--manual"
+              >
+                <div>
+                  <dt>Manual additions</dt>
+                  <dd class="dash-num">{{ moneyOrDash(adjustments.manualAdditions) }}</dd>
+                </div>
+                <div>
+                  <dt>Manual deductions</dt>
+                  <dd class="dash-num contrib-pending">
+                    {{ moneyOrDash(adjustments.manualDeductions) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Net pay</dt>
+                  <dd class="dash-num">{{ moneyOrDash(adjustments.netPay) }}</dd>
+                </div>
+              </dl>
+            </div>
 
-          <!-- ── Contributions ────────────────────────────────────────────
+            <!-- ── Contributions ────────────────────────────────────────────
                A list rather than a table: each row is a name, an amount and one
                state, and the pending rows need a checkbox that a q-table
                selection column would place away from the state it applies to. -->
-          <div class="contrib-section">
-            <div class="contrib-section__head">
-              <p class="contrib-section__label">
-                Contributions
-                <span v-if="contributions.length" class="dash-num"
-                  >({{ contributions.length }})</span
-                >
-              </p>
-              <q-btn
-                v-if="selectable.length > 1"
-                flat
-                dense
-                no-caps
-                size="12px"
-                class="contrib-selectall"
-                :label="selectAllLabel"
-                @click="toggleAllSelectable"
-              />
-            </div>
+            <div class="contrib-section">
+              <div class="contrib-section__head">
+                <p class="contrib-section__label">
+                  Contributions
+                  <span v-if="contributions.length" class="dash-num"
+                    >({{ contributions.length }})</span
+                  >
+                </p>
+                <q-btn
+                  v-if="selectable.length > 1"
+                  flat
+                  dense
+                  no-caps
+                  size="12px"
+                  class="contrib-selectall"
+                  :label="selectAllLabel"
+                  @click="toggleAllSelectable"
+                />
+              </div>
 
-            <ul v-if="contributions.length" class="contrib-list">
-              <li
-                v-for="row in contributions"
-                :key="row.id"
-                class="contrib-row"
-                :class="{
-                  'contrib-row--selected': selected.includes(row.id),
-                  'contrib-row--reverting': selected.includes(row.id) && isComplete,
-                }"
-              >
-                <!-- A row is selectable when there is an action for it: pending
+              <ul v-if="contributions.length" class="contrib-list">
+                <li
+                  v-for="row in contributions"
+                  :key="row.id"
+                  class="contrib-row"
+                  :class="{
+                    'contrib-row--selected': selected.includes(row.id),
+                    'contrib-row--reverting': selected.includes(row.id) && isComplete,
+                  }"
+                >
+                  <!-- A row is selectable when there is an action for it: pending
                      rows can be deducted, and once the item is complete the
                      deducted rows can be reverted. Unselectable deducted rows
                      keep the same slot so names stay on one vertical line. -->
-                <span class="contrib-row__pick">
-                  <q-checkbox
-                    v-if="isSelectable(row)"
-                    :model-value="selected.includes(row.id)"
-                    dense
-                    size="xs"
-                    :disable="busy"
-                    @update:model-value="toggle(row.id)"
-                  />
-                  <q-icon
-                    v-else
-                    :name="row.deducted ? 'o_check_circle' : 'o_radio_button_unchecked'"
-                    size="17px"
-                    :class="row.deducted ? 'contrib-row__done' : 'contrib-row__waiting'"
-                  />
-                </span>
-
-                <span class="contrib-row__body">
-                  <span class="contrib-row__name">{{ row.name }}</span>
-                  <span class="contrib-row__meta">
-                    <template v-if="row.deducted">
-                      <!-- With the tick replaced by a checkbox on a complete
-                           item, this line carries the deducted state alone. -->
-                      <q-icon name="check" size="13px" class="contrib-row__meta-tick" />
-                      Deducted<template v-if="row.deducted_from">
-                        from {{ row.deducted_from }}</template
-                      >
-                    </template>
-                    <template v-else>Not yet deducted</template>
+                  <span class="contrib-row__pick">
+                    <q-checkbox
+                      v-if="isSelectable(row)"
+                      :model-value="selected.includes(row.id)"
+                      dense
+                      size="xs"
+                      :disable="busy"
+                      @update:model-value="toggle(row.id)"
+                    />
+                    <q-icon
+                      v-else
+                      :name="row.deducted ? 'o_check_circle' : 'o_radio_button_unchecked'"
+                      size="17px"
+                      :class="row.deducted ? 'contrib-row__done' : 'contrib-row__waiting'"
+                    />
                   </span>
+
+                  <span class="contrib-row__body">
+                    <span class="contrib-row__name">{{ row.name }}</span>
+                    <span class="contrib-row__meta">
+                      <template v-if="row.deducted">
+                        <!-- With the tick replaced by a checkbox on a complete
+                           item, this line carries the deducted state alone. -->
+                        <q-icon name="check" size="13px" class="contrib-row__meta-tick" />
+                        Deducted<template v-if="row.deducted_from">
+                          from {{ row.deducted_from }}</template
+                        >
+                      </template>
+                      <template v-else>Not yet deducted</template>
+                    </span>
+                  </span>
+
+                  <span class="contrib-row__amount dash-num">{{
+                    formatCurrencyPrecise(row.amount)
+                  }}</span>
+                </li>
+              </ul>
+
+              <div v-else class="contrib-empty">
+                <span class="dash-featured-icon">
+                  <q-icon name="o_account_balance" size="18px" />
                 </span>
-
-                <span class="contrib-row__amount dash-num">{{ formatCurrencyPrecise(row.amount) }}</span>
-              </li>
-            </ul>
-
-            <div v-else class="contrib-empty">
-              <span class="dash-featured-icon">
-                <q-icon name="o_account_balance" size="18px" />
-              </span>
-              <p class="contrib-empty__title">No contributions</p>
-              <p class="contrib-empty__sub">
-                Nothing is due from this employee for {{ taxMonthLabel || 'this period' }}.
-              </p>
+                <p class="contrib-empty__title">No contributions</p>
+                <p class="contrib-empty__sub">
+                  Nothing is due from this employee for {{ taxMonthLabel || 'this period' }}.
+                </p>
+              </div>
             </div>
-          </div>
+          </template>
 
           <!-- ── Manual adjustments ───────────────────────────────────────
                Kept apart from the contributions above rather than mixed into
@@ -206,7 +242,22 @@
             <div v-if="adjustmentsError" class="contrib-note">
               <q-icon name="o_error_outline" size="15px" />
               <span>Could not load manual adjustments.</span>
-              <q-btn flat dense no-caps label="Retry" class="contrib-retry" @click="loadAdjustments" />
+              <q-btn
+                flat
+                dense
+                no-caps
+                label="Retry"
+                class="contrib-retry"
+                @click="loadAdjustments"
+              />
+            </div>
+
+            <!-- Not an empty state, because "not known yet" and "there are none"
+                 are different statements, and only the first one is true while
+                 this request is in flight. -->
+            <div v-else-if="adjustmentsLoading" class="contrib-note">
+              <q-spinner size="15px" />
+              <span>Loading manual adjustments…</span>
             </div>
 
             <ul v-else-if="adjustments.rows.length" class="contrib-list">
@@ -220,7 +271,9 @@
                   <q-icon
                     :name="row.applied ? row.typeIcon : 'o_undo'"
                     size="17px"
-                    :class="row.applied ? `adj-mark--${row.typeTone}` : 'contrib-row__reverted-mark'"
+                    :class="
+                      row.applied ? `adj-mark--${row.typeTone}` : 'contrib-row__reverted-mark'
+                    "
                   />
                 </span>
 
@@ -230,13 +283,18 @@
                   </span>
                   <span class="contrib-row__meta">
                     <template v-if="row.applied">
-                      {{ row.typeLabel }}<template v-if="row.category"> · {{ row.category }}</template>
+                      {{ row.typeLabel
+                      }}<template v-if="row.category"> · {{ row.category }}</template>
                       <template v-if="row.appliedBy"> · {{ row.appliedBy }}</template>
-                      <template v-if="row.appliedAt"> · {{ formatDateTime(row.appliedAt) }}</template>
+                      <template v-if="row.appliedAt">
+                        · {{ formatDateTime(row.appliedAt) }}</template
+                      >
                     </template>
                     <template v-else>
                       Reverted<template v-if="row.revertedBy"> by {{ row.revertedBy }}</template
-                      ><template v-if="row.revertedAt"> · {{ formatDateTime(row.revertedAt) }}</template>
+                      ><template v-if="row.revertedAt">
+                        · {{ formatDateTime(row.revertedAt) }}</template
+                      >
                     </template>
                   </span>
                 </span>
@@ -376,6 +434,17 @@ const props = defineProps({
   /** Employee payroll item id. */
   epiId: { type: [Number, String], default: null },
   employeeName: { type: String, default: '' },
+  /**
+   * The cutoff the run belongs to, so the "no tax month" state can name the
+   * period that is unconfigured instead of saying "this cutoff" to a reader who
+   * is looking at a dialog that does not otherwise say which one. Taken from the
+   * review payload the page already holds — nothing extra is fetched for it.
+   *
+   * Only used when the contributions request has nothing to show. Once they load,
+   * the header names the cutoff from the endpoint's own `cutoff` object, which is
+   * the authority on it.
+   */
+  cutoffName: { type: String, default: '' },
   // Name → employee record, to put a face in the header; built once per page and
   // shared by every tab. A name held by two employees resolves to null, so the
   // avatar draws initials rather than the wrong photo. See `avatarFor`.
@@ -408,6 +477,33 @@ const COMPLETE_STATUSES = ['complete', 'completed']
 
 const loading = ref(false)
 const error = ref(false)
+/**
+ * What the server actually said, kept for the dialog to show.
+ *
+ * A dialog that reads only "Could not load contributions" is undiagnosable: the
+ * status and the server's own sentence are what separate a missing route from a
+ * permission refusal from a crash, and they are all indistinguishable from the
+ * outside. `Try again` cannot help with any of them, so it needs the evidence
+ * beside it. Empty when the response carried nothing worth quoting — an HTML
+ * error page, or no response at all.
+ */
+const errorDetail = ref('')
+/**
+ * The run has nothing to calculate: the backend answered 404 because this cutoff
+ * has no tax month set, so there is no period to credit contributions against.
+ *
+ * A configuration state, not a failure — so it gets its own quiet block rather
+ * than the red error and a "Try again" that could never succeed. What the reader
+ * is told is what has to happen next (a tax month gets set on the backend), not
+ * what went wrong, because nothing went wrong.
+ *
+ * Every 404 from the endpoint lands here, which is deliberate: the other 404s it
+ * can answer — an employee payroll item that is not in this payout group — mean
+ * the same thing to this screen, that there is nothing configured here to show.
+ * Reading the server's message to tell them apart would mean a third hand-rolled
+ * `data.detail || ...` chain for no gain a reader could act on.
+ */
+const noTaxMonth = ref(false)
 const deducting = ref(false)
 const reverting = ref(false)
 const data = ref(null)
@@ -422,6 +518,14 @@ const selected = ref([])
  */
 const adjustmentsData = ref(null)
 const adjustmentsError = ref(false)
+/**
+ * The adjustments request has its own in-flight flag because it now has its own
+ * place on screen. It used to ride on `loading`, which is cleared before this
+ * request starts — so the section briefly rendered its empty state ("No manual
+ * adjustments") and then filled in, claiming for a moment that an employee had
+ * none when the truth was simply not known yet.
+ */
+const adjustmentsLoading = ref(false)
 const showAdjustForm = ref(false)
 const applying = ref(false)
 /** The one adjustment currently being reverted, so only its button spins. */
@@ -429,7 +533,9 @@ const revertingId = ref(null)
 
 const adjustments = computed(() => normalizeAdjustments(adjustmentsData.value))
 
-const busy = computed(() => deducting.value || reverting.value || applying.value || revertingId.value !== null)
+const busy = computed(
+  () => deducting.value || reverting.value || applying.value || revertingId.value !== null,
+)
 
 /** An unreadable figure is a dash; a zero would claim the endpoint said zero. */
 function moneyOrDash(value) {
@@ -536,12 +642,22 @@ async function load() {
   if (!props.pgiId || !props.epiId) return
   loading.value = true
   error.value = false
+  errorDetail.value = ''
+  noTaxMonth.value = false
   selected.value = []
   try {
     data.value = await fetchEpiContributions(props.pgiId, props.epiId)
   } catch (err) {
     console.error('[EmployeeContributionsDialog] fetch failed:', err)
-    error.value = true
+    if (err?.response?.status === 404) {
+      // Nothing is wrong, so nothing is reported as wrong. The endpoint's own
+      // console line is silenced by `expectedStatuses` on the request; this
+      // catch is where the answer becomes a screen state.
+      noTaxMonth.value = true
+    } else {
+      error.value = true
+      errorDetail.value = describeFetchFailure(err)
+    }
     data.value = null
   } finally {
     loading.value = false
@@ -581,13 +697,33 @@ function netPayCaption(...parts) {
 async function loadAdjustments() {
   if (!props.epiId) return
   adjustmentsError.value = false
+  adjustmentsLoading.value = true
   try {
     adjustmentsData.value = await fetchEpiAdjustments(props.epiId)
   } catch (err) {
     console.error('[EmployeeContributionsDialog] adjustments fetch failed:', err)
     adjustmentsError.value = true
     adjustmentsData.value = null
+  } finally {
+    adjustmentsLoading.value = false
   }
+}
+
+/**
+ * The status and whatever the server said, as one line for the error state.
+ *
+ * `extractErrorMessage` is the shared reader rather than a `data.detail || ...`
+ * chain here for the same reason as everywhere else, with an empty fallback: an
+ * HTML error page, a proxy gateway page, or a request that never reached the
+ * server all resolve to nothing quotable, and `''` is the honest result. The
+ * status is prepended because it survives those cases and still says whose
+ * problem this is.
+ */
+function describeFetchFailure(err) {
+  const status = err?.response?.status
+  const detail = extractErrorMessage(err, '')
+  const parts = [status ? `HTTP ${status}` : 'No response from the server', detail]
+  return parts.filter(Boolean).join(' · ')
 }
 
 /**
@@ -734,9 +870,12 @@ watch(
       data.value = null
       adjustmentsData.value = null
       adjustmentsError.value = false
+      adjustmentsLoading.value = false
       showAdjustForm.value = false
       selected.value = []
       error.value = false
+      errorDetail.value = ''
+      noTaxMonth.value = false
     }
   },
 )
@@ -755,6 +894,23 @@ watch(
 
 .contrib-state--error {
   color: var(--dash-critical);
+  /* Only the error state needs it: the detail below is given a full-width basis
+     so it drops to its own line, and wrapping is what lets that happen. */
+  flex-wrap: wrap;
+}
+
+/* The status and the server's words, under the message they belong to. Its own
+   line and a quieter ink rather than more of the same red: the message above is
+   the reader-facing part, this is the evidence they would otherwise have to open
+   devtools to get. A long sentence from the server wraps instead of being
+   truncated — it is the only copy of what went wrong anywhere on screen. */
+.contrib-error__detail {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dash-ink-4);
+  overflow-wrap: anywhere;
 }
 
 .contrib-retry {
@@ -999,6 +1155,25 @@ watch(
   margin: 0;
   font-size: 12.5px;
   color: var(--dash-ink-4);
+}
+
+/* The "no tax month" state, in the same words as the other empty states in this
+   dialog but centred in the body's own space rather than boxed into a section.
+
+   A column, because `.contrib-state` is a row and these two lines have to stack
+   to read as a sentence and its explanation. The title's own `10px` top margin
+   is dropped here — the gap below already separates it from the body's edge, and
+   together they opened a hole above the text. */
+.contrib-state--unconfigured {
+  flex-direction: column;
+  gap: 3px;
+  padding: 26px 24px;
+  text-align: center;
+}
+
+.contrib-state--unconfigured .contrib-empty__title {
+  margin: 0;
+  color: var(--dash-ink-2);
 }
 
 /* Reverting is a correction, not the happy path, so it is a soft amber button
