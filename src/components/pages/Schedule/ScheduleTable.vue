@@ -23,6 +23,14 @@
           <span class="day-head__name">{{ day }}</span>
           <span class="day-head__date dash-num">{{ dateNumber(i) }}</span>
         </div>
+        <!-- The holiday is a property of the day, not of the row, so it is
+             declared once in the column rather than repeated in every cell that
+             happens to be on leave. Read from the company's holidays, because the
+             schedule payload carries no holiday field of its own. -->
+        <div v-if="dayHolidayNames[i]" class="day-head__holiday" :title="dayHolidayNames[i]">
+          <q-icon name="o_celebration" size="12px" />
+          <span class="day-head__holiday-name">{{ dayHolidayNames[i] }}</span>
+        </div>
         <!-- Per-day roll-up. A scheduler's first question is "is Thursday
              covered?", which a bare column of day names cannot answer. -->
         <div class="day-head__totals">
@@ -49,11 +57,7 @@
               <span class="dash-shimmer who__sk-total" />
             </div>
           </div>
-          <div
-            v-for="(_, dayIdx) in days"
-            :key="`sk-${n}-${dayIdx}`"
-            class="cell cell--day"
-          >
+          <div v-for="(_, dayIdx) in days" :key="`sk-${n}-${dayIdx}`" class="cell cell--day">
             <span class="dash-shimmer day__sk-chip" :style="chipBarStyle(n, dayIdx)" />
           </div>
         </template>
@@ -64,7 +68,12 @@
           <q-avatar v-if="avatarOf(user)" size="30px" class="who__avatar">
             <img :src="avatarOf(user)" alt="" loading="lazy" @error="onAvatarError(user)" />
           </q-avatar>
-          <q-avatar v-else size="30px" class="who__avatar" :style="{ background: getAvatarColor(user.name) }">
+          <q-avatar
+            v-else
+            size="30px"
+            class="who__avatar"
+            :style="{ background: getAvatarColor(user.name) }"
+          >
             <span class="who__initials">{{ getInitials(user.name) }}</span>
           </q-avatar>
           <div class="who__block">
@@ -89,9 +98,31 @@
           :class="{ 'cell--today': isToday(dayIdx), 'cell--weekend': isWeekend(dayIdx) }"
           role="cell"
         >
-          <!-- Leave and day off -->
+          <!-- A banner, never a card, and never on its own. It says what the day
+               is; the chips below it say what this person is doing. On a holiday
+               date it also stands in for the leave the holiday granted, so a cell
+               whose only row is that leave shows this and nothing else. When the
+               cell has nothing at all it steps aside for the "+": a holiday chip
+               above an add button says nothing a bare "+" does not, and the
+               column header already names the holiday for every row. Derived from
+               the column rather than from the shifts, which is why it needs no
+               shift to anchor to. -->
           <div
-            v-for="element in cellFor(user.id, dayIdx).special"
+            v-if="dayHolidayNames[dayIdx] && cellHasOtherContent(user.id, dayIdx)"
+            class="chip chip--holiday"
+            :class="{ 'chip--holiday--solo': cellDrawsOnlyHoliday(user.id, dayIdx) }"
+            :title="dayHolidayNames[dayIdx]"
+          >
+            <div class="chip__row">
+              <q-icon name="o_celebration" size="13px" />
+              <span class="chip__title">{{ dayHolidayNames[dayIdx] }}</span>
+            </div>
+          </div>
+
+          <!-- Leave and day off. On a holiday date the leave rows are the banner
+               above's business, not this list's; see `specialFor`. -->
+          <div
+            v-for="element in specialFor(user.id, dayIdx)"
             :key="element.id"
             class="chip"
             :class="element.isLeave ? 'chip--leave' : 'chip--off'"
@@ -108,7 +139,15 @@
                 <span class="chip__title">Day off</span>
               </div>
               <div class="chip__tools">
-                <q-btn flat dense round icon="o_swap_horiz" size="9px" class="chip__tool" @click="$emit('open-reassign', element)">
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="o_swap_horiz"
+                  size="9px"
+                  class="chip__tool"
+                  @click="$emit('open-reassign', element)"
+                >
                   <q-tooltip>Reassign day off</q-tooltip>
                 </q-btn>
               </div>
@@ -150,7 +189,12 @@
 
             <div class="chip__tools">
               <q-btn
-                flat dense round icon="o_swap_horiz" size="9px" class="chip__tool"
+                flat
+                dense
+                round
+                icon="o_swap_horiz"
+                size="9px"
+                class="chip__tool"
                 @click="onReassign(user.id, dayIdx)"
               >
                 <q-tooltip>
@@ -158,43 +202,67 @@
                 </q-tooltip>
               </q-btn>
               <q-btn
-                flat dense round icon="o_event_busy" size="9px" class="chip__tool"
+                flat
+                dense
+                round
+                icon="o_event_busy"
+                size="9px"
+                class="chip__tool"
                 :loading="assigningDayOffId === cellTargetId(user.id, dayIdx)"
                 :disable="assigningDayOffId === cellTargetId(user.id, dayIdx)"
                 @click.stop="onDayOff(user.id, dayIdx)"
               >
                 <q-tooltip>
-                  {{
-                    isDualCell(user.id, dayIdx) ? 'Assign day off (both)' : 'Assign day off'
-                  }}
+                  {{ isDualCell(user.id, dayIdx) ? 'Assign day off (both)' : 'Assign day off' }}
                 </q-tooltip>
               </q-btn>
             </div>
           </div>
 
-          <!-- Empty day: one quiet target that reveals the three ways to fill
-               it. The previous grid stacked all three buttons permanently in
-               every empty cell, which on a 20 x 7 grid meant up to 420 buttons
-               competing with the shifts they surrounded. -->
-          <template v-if="!hasShifts(user.id, dayIdx)">
+          <!-- Empty day: one quiet target that reveals the two ways to fill it.
+               The previous grid stacked every button permanently in every empty
+               cell, which on a 20 x 7 grid meant up to 420 buttons competing
+               with the shifts they surrounded.
+
+               A holiday whose own leave approval is the cell's only row is NOT
+               empty, so it shows the banner — which stands in for that leave
+               chip — rather than an add button. -->
+          <template v-if="!cellHasOtherContent(user.id, dayIdx)">
             <button
               type="button"
               class="add"
               :class="{ 'add--busy': quickActionLoading?.startsWith(`${user.id}-${dayIdx}-`) }"
               :aria-label="`Add for ${user.name} on ${days[dayIdx]}`"
             >
-              <q-spinner v-if="quickActionLoading?.startsWith(`${user.id}-${dayIdx}-`)" size="13px" />
+              <q-spinner
+                v-if="quickActionLoading?.startsWith(`${user.id}-${dayIdx}-`)"
+                size="13px"
+              />
               <q-icon v-else name="add" size="15px" />
 
               <q-menu anchor="bottom middle" self="top middle" :offset="[0, 4]" class="add-menu">
                 <q-list dense class="add-menu__list">
-                  <q-item v-close-popup clickable class="add-menu__item" @click="$emit('open-quick-add', user.id, dayIdx)">
-                    <q-item-section avatar><q-icon name="o_more_time" size="16px" /></q-item-section>
+                  <q-item
+                    v-close-popup
+                    clickable
+                    class="add-menu__item"
+                    @click="$emit('open-quick-add', user.id, dayIdx)"
+                  >
+                    <q-item-section avatar
+                      ><q-icon name="o_more_time" size="16px"
+                    /></q-item-section>
                     <q-item-section>Add shift</q-item-section>
                   </q-item>
 
-                  <q-item v-close-popup clickable class="add-menu__item" @click="$emit('quick-direct-assign', user.id, dayIdx, 'dayoff')">
-                    <q-item-section avatar><q-icon name="o_event_busy" size="16px" /></q-item-section>
+                  <q-item
+                    v-close-popup
+                    clickable
+                    class="add-menu__item"
+                    @click="$emit('quick-direct-assign', user.id, dayIdx, 'dayoff')"
+                  >
+                    <q-item-section avatar
+                      ><q-icon name="o_event_busy" size="16px"
+                    /></q-item-section>
                     <q-item-section>Day off</q-item-section>
                   </q-item>
                 </q-list>
@@ -267,6 +335,8 @@ import {
   shiftChipTone,
   isSameDate,
 } from '@/composables/utils/schedule'
+import { toIso } from '@/composables/utils/calendarDate'
+import { holidayForDate } from '@/composables/utils/holidays'
 
 const props = defineProps({
   users: { type: Array, default: () => [] },
@@ -279,6 +349,12 @@ const props = defineProps({
   assigningDayOffId: { type: String, default: null },
   sites: { type: Array, default: () => [] },
   shiftTypes: { type: Array, default: () => [] },
+  /**
+   * The company's holidays, normalized rows. Overlaid on the grid by date —
+   * the schedule payload has no holiday field — so a leave day that falls on one
+   * says which, and the column header says it for the whole day.
+   */
+  holidays: { type: Array, default: () => [] },
   refreshingRowUserId: { type: [Number, String], default: null },
   /** Drives which empty state to show when no employees match. */
   isFiltered: { type: Boolean, default: false },
@@ -407,9 +483,6 @@ const byCell = computed(() => {
   return map
 })
 
-const cellShifts = (userId, dayIdx) => byCell.value.get(`${userId}-${dayIdx}`) ?? []
-const hasShifts = (userId, dayIdx) => cellShifts(userId, dayIdx).length > 0
-
 // Split once per cell and memoised for the render pass. The template reads this
 // several times per cell (working list, its length, the group action), and
 // re-splitting on each read would repeat the sort 140+ times a frame.
@@ -469,6 +542,74 @@ const isWeekend = (i) => {
   const dow = d.getDay()
   return dow === 0 || dow === 6
 }
+
+/**
+ * A `Date` as the `YYYY-MM-DD` the holidays are stored in.
+ *
+ * Local calendar fields, not `toISOString()` — that reads the UTC day, which is
+ * yesterday for everyone east of Greenwich until 08:00 local. Same reason
+ * `calendarDate.js` exists.
+ */
+const isoOf = (date) => (date ? toIso(date) : '')
+
+// ─── Holidays ───────────────────────────────────────────────────────────────
+
+/**
+ * The holiday on each column's day, or '' — read once here because two places
+ * need it: the header's mark and the chip that opens every cell of that column.
+ * Both read this one array, so the column and its cells cannot disagree about
+ * which day is a holiday.
+ *
+ * Recurring holidays match on month and day in any year; see `holidayForDate`.
+ */
+const dayHolidayNames = computed(() =>
+  props.weekDates.map((date) => holidayForDate(props.holidays, isoOf(date))?.name || ''),
+)
+
+/**
+ * The chips a cell draws in its leave/day-off area.
+ *
+ * On a holiday date the leave rows are dropped. They exist *because* the holiday
+ * granted them — `auto_generate_leave` — so the holiday chip the cell already
+ * draws names the actual reason, and a chip reading "On leave" beside it is the
+ * same fact in less useful words. A day off is kept: that one a person filed.
+ *
+ * This is the **render** list only, and `cellHasOtherContent` deliberately still
+ * counts those rows. Testing the filtered list there would make a cell whose
+ * only row is the holiday's own leave count as empty — the banner would be
+ * suppressed and the cell would fall back to a bare "+", with nothing on screen
+ * recording that the day is a holiday at all.
+ */
+const specialFor = (userId, dayIdx) => {
+  const cell = cellFor(userId, dayIdx)
+  if (!dayHolidayNames.value[dayIdx]) return cell.special
+  return cell.special.filter((element) => !element.isLeave)
+}
+
+/**
+ * Whether the cell has anything of its own — a shift, a leave chip or a day-off
+ * chip — counted whether or not the leave is being drawn.
+ *
+ * Drives two things that are deliberately the mirror image of each other: the
+ * "+" appears exactly where this is false, and the holiday banner appears exactly
+ * where it is true. Neither is ever shown next to the other, so an empty holiday
+ * day is a bare "+" rather than a banner over an add button.
+ */
+const cellHasOtherContent = (userId, dayIdx) => {
+  const cell = cellFor(userId, dayIdx)
+  return Boolean(cell?.special?.length || cell?.working?.length)
+}
+
+/**
+ * Whether the holiday banner is the only thing this cell draws.
+ *
+ * Deliberately not `!cellHasOtherContent`. That counts the holiday's own leave
+ * row, which is suppressed rather than drawn, so it would answer false for
+ * exactly the cell this is about and leave the banner short. This asks what the
+ * cell actually renders.
+ */
+const cellDrawsOnlyHoliday = (userId, dayIdx) =>
+  !specialFor(userId, dayIdx).length && !cellFor(userId, dayIdx).working.length
 
 // Chip class and rail are applied directly in the template now that the three
 // kinds render from separate loops — `special` knows it is leave or a day off,
@@ -599,6 +740,37 @@ const isWeekend = (i) => {
 }
 .day-head__empty {
   color: var(--dash-n-400);
+}
+
+/* The holiday sits between the date and the day's roll-up: it is a fact about the
+   column, and the totals below it still matter. Truncated rather than wrapped,
+   because a three-word name turning the header two lines taller would push every
+   row in the grid down with it; the full name is on the title. */
+.day-head__holiday {
+  display: flex;
+  align-items: center;
+  /* `justify-content`, not `text-align`: the name and its glyph are flex items,
+     and only this property moves them. The cell is `text-align: center` and the
+     "Mon 19" row above centres the same way, so without this the holiday alone
+     hung left of the two lines it sits between. */
+  justify-content: center;
+  gap: 3px;
+  margin-top: 3px;
+  font-size: 11px;
+  /* Ink, not the gold the glyph below wears: same reason the chip's title is ink
+     — cat-5 is a mark colour, and this line is 11px type. */
+  color: var(--dash-ink-2);
+  min-width: 0;
+}
+.day-head__holiday .q-icon {
+  flex: 0 0 auto;
+  color: var(--dash-cat-5);
+}
+.day-head__holiday-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .day-head__sk-bar {
   display: inline-block;
@@ -797,6 +969,32 @@ const isWeekend = (i) => {
   color: var(--dash-cat-4);
 }
 
+/* The holiday chip is a banner above a shift or a day-off chip, and sizing it to
+   a shift card's 44px whenever it shares a cell would push a holiday week roughly
+   twice as tall. Row direction so the glyph and the name sit as one centred
+   line; the title's ellipsis and ink come from `.chip`, because cat-5 is a mark
+   colour and this file keeps it off 11px type. `chip--holiday--solo` is the case
+   where it has the cell to itself. */
+.chip--holiday {
+  --chip-edge: var(--dash-cat-5-soft);
+  --chip-tint: var(--dash-cat-5-tint);
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 9px;
+  gap: 0;
+}
+.chip--holiday .chip__row .q-icon {
+  color: var(--dash-cat-5);
+}
+
+/* The banner standing in for the leave chip it replaced, so it is the same card
+   an "On leave" chip would have been. `min-height` rather than `height` so a long
+   name ellipsises on one line instead of being clipped. */
+.chip--holiday--solo {
+  min-height: var(--chip-min-h);
+}
+
 /* A day off is not a warning. It used to be an amber card with uppercase amber
    type, which made every rest day the loudest thing in the week; it now recedes
    so the shifts around it are what the eye lands on. */
@@ -874,7 +1072,9 @@ const isWeekend = (i) => {
    that action belongs in the card's own tools, which is also where the original
    grid had it. */
 
-/* ── Add button ── */
+/* ── Add button ──
+   Still the empty cell's fill affordance, except on a holiday date — there the
+   holiday chip is the cell and carries these two actions as its own tools. */
 .add {
   display: flex;
   align-items: center;
@@ -887,8 +1087,10 @@ const isWeekend = (i) => {
   background: none;
   color: var(--dash-n-400);
   cursor: pointer;
-  transition: border-color var(--dash-fast) var(--dash-ease),
-    background var(--dash-fast) var(--dash-ease), color var(--dash-fast) var(--dash-ease);
+  transition:
+    border-color var(--dash-fast) var(--dash-ease),
+    background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
 }
 .cell--day:hover .add {
   border-color: var(--dash-line-strong);
