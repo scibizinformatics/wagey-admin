@@ -5,6 +5,13 @@
  *   { id, userId, day: 0-6, startTime: 'HH:MM'|null, endTime: 'HH:MM'|null,
  *     site, siteName, position, isLeave, leaveTypeName, status, is_off, ... }
  *
+ * `date` is the `YYYY-MM-DD` an assignment falls on, and it is what the holidays
+ * list is matched against: the payload carries no holiday field, so a day that is
+ * a holiday is known only by looking that date up. `ScheduleTable` does the
+ * lookup itself from its `holidays` prop rather than having the page stamp a name
+ * onto every row, which is what lets a holiday appear without the grid being
+ * rebuilt around it.
+ *
  * These were inline in ScheduleTable, which meant the grid could not report
  * totals without duplicating the same parsing. Pulling them out lets the header
  * show per-day hours and the employee column show a weekly total from exactly
