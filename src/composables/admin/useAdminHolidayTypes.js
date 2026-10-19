@@ -1,6 +1,5 @@
 import { ref, watch } from 'vue'
 import { api } from 'src/boot/axios'
-import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useToast } from 'src/composables/useToast'
 import { extractErrorMessage } from 'src/composables/utils/http'
@@ -36,7 +35,6 @@ import {
  * edited in place afterwards — see `useAdminHolidayPolicies`.
  */
 export function useAdminHolidayTypes() {
-  const $q = useQuasar()
   const toast = useToast()
   const { companyId } = useCompany()
 
@@ -181,23 +179,35 @@ export function useAdminHolidayTypes() {
 
   // ─── Delete ────────────────────────────────────────────────────────────────
 
-  function deleteHolidayType(type) {
-    $q.dialog({
-      title: 'Delete this holiday type?',
-      message: `"${type.name}" is removed along with its leave sources. Holidays that name the code "${type.code}" lose the type they were attached to. This cannot be undone.`,
-      cancel: { label: 'Cancel', flat: true },
-      ok: { label: 'Delete', color: 'negative', unelevated: true },
-      persistent: true,
-    }).onOk(async () => {
-      try {
-        await api.delete(`/attendance/holiday-types/${type.id}/`)
-        toast.success('Holiday type deleted')
-        await fetchHolidayTypes()
-      } catch (error) {
-        console.error('Error deleting holiday type:', error)
-        toast.error(extractErrorMessage(error, 'Failed to delete holiday type'))
-      }
-    })
+  /**
+   * The confirmed delete — the write only.
+   *
+   * The question is asked by `AdminSettingsPanelHolidayTypes`'s
+   * `ConfirmDialog`, which owns the wording (`holidayConfirm.js`) and the freeze.
+   * It used to open a `$q.dialog` from here, which is the stock chrome rather
+   * than the app's, and put the write in an `.onOk` the panel could not cover
+   * with a loading state.
+   *
+   * @param {object} type - the row the confirmation was opened over
+   * @returns {Promise<boolean>} whether it was deleted.
+   */
+  async function deleteHolidayType(type) {
+    if (type?.id == null) {
+      toast.error('That holiday type could not be found any more')
+      return false
+    }
+    try {
+      await api.delete(`/attendance/holiday-types/${type.id}/`)
+      toast.success('Holiday type deleted')
+      // Unconditional, after the toast, for the reason it is everywhere else: a
+      // write that reported failure may still have landed.
+      await fetchHolidayTypes()
+      return true
+    } catch (error) {
+      console.error('Error deleting holiday type:', error)
+      toast.error(extractErrorMessage(error, 'Failed to delete holiday type'))
+      return false
+    }
   }
 
   return {
