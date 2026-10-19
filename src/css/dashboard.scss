@@ -149,6 +149,14 @@
   --dash-cat-3-tint: #faefeb;
   --dash-cat-4-soft: #dccefc;
   --dash-cat-4-tint: #f6f2fe;
+  // A fourth pair, for the schedule's holiday chip. Same derivation as the three
+  // above — the hue at 30% over white for the edge, 8% for the fill — so it joins
+  // that family rather than inventing a new one. It is needed because cat-5 was
+  // never used on a repeating small card when only three were defined, and the
+  // leave violet a holiday chip would otherwise borrow belongs to the leave chip.
+  // The fixed order and CVD separation of the ramp itself are untouched.
+  --dash-cat-5-soft: #e9dcb3;
+  --dash-cat-5-tint: #f9f6eb;
 
   // ── Radius ────────────────────────────────────────────────────────────────
   --dash-r-xs: 4px;
