@@ -151,10 +151,18 @@ export function useDisbursementApi() {
    *
    * Scoped by both ids because a contribution is a fact about an employee
    * payroll item *within* a payout group instance, not about the employee alone.
+   *
+   * `expectedStatuses: [404]` because this endpoint answers a question rather
+   * than failing when the run has no tax month configured — the answer is a 404
+   * reading "No tax month found for this cutoff." Every employee on such a cutoff
+   * asks this, so without it the console filled with one red line per row and
+   * buried the genuine failures. The promise still rejects, so
+   * `EmployeeContributionsDialog` gets to read the 404 as the empty state it is.
    */
   async function fetchEpiContributions(payoutGroupInstanceId, epiId) {
     const { data } = await api.get(
       `${BASE}/payroll/admin/epi-contributions/${payoutGroupInstanceId}/${epiId}/`,
+      { expectedStatuses: [404] },
     )
     return data
   }
