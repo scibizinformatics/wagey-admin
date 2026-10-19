@@ -10,17 +10,20 @@
     >
       <!-- This step has no list toolbar to sit in, so its forward action goes in
            the page header — also above the fold, and beside the status badge.
-           Withdrawn once the run is past disbursement: the shell's "moved on"
-           notice then carries the only link forward worth offering. -->
+           Withdrawn on both counts. Once the run reaches disbursement the shell's
+           "moved on" notice carries the same link one screen higher up, and
+           leaving this in put two identical buttons on one screen; and while the
+           group is short there is nothing to continue to — disbursement only pays
+           money the company has actually recorded. -->
       <template #header-actions>
         <q-btn
-          v-if="!disbursementBehind"
+          v-if="fullyFunded && !disbursementReached"
           unelevated
           no-caps
           icon-right="o_arrow_forward"
           label="Continue to disbursement"
           class="btn-primary"
-          @click="requestContinue"
+          @click="commitContinue"
         />
       </template>
 
@@ -303,10 +306,7 @@ import SalaryBreakdownDialog from 'src/components/pages/Payroll/SalaryBreakdownD
 import PageShell from 'src/components/layout/PageShell.vue'
 import DisbursementStepShell from 'src/components/pages/Payroll/DisbursementStepShell.vue'
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
-import {
-  buildFundingConfirm,
-  buildDisburseConfirm,
-} from 'src/components/pages/Payroll/fundingConfirm'
+import { buildFundingConfirm } from 'src/components/pages/Payroll/fundingConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
@@ -395,16 +395,21 @@ const sourceOptions = [
 const pgiStatus = computed(() => identity.value?.status || route.query.pgi_status || '')
 
 /**
- * Whether the run has already left disbursement behind. The "Continue to
- * disbursement" button is this step's only way forward, and past disbursement it
- * leads to a step the run has been through — so it is withdrawn rather than left
- * pointing backwards. Strictly greater than disbursement's index (3): a run
- * sitting *on* disbursement still wants the button, and an unknown status is left
+ * Whether the run has already reached disbursement. The "Continue to
+ * disbursement" button is this step's only way forward, but from that point the
+ * shell's "moved on" notice carries the same link — so the button is withdrawn
+ * rather than left duplicating it.
+ *
+ * `>=` disbursement's own index (3), and deliberately not `>`: the shell shows its
+ * notice as soon as the run is *strictly ahead* of the page, which for this step
+ * means index 3 and up. Comparing one step further left the button on screen for
+ * the whole of disbursement itself, putting the same link on screen twice. The
+ * same off-by-one `PayslipsPage` had with funding. An unknown status is left
  * alone.
  */
-const disbursementBehind = computed(() => {
+const disbursementReached = computed(() => {
   const index = currentStepIndexForPgiStatus(pgiStatus.value)
-  return index != null && index > 3
+  return index != null && index >= 3
 })
 
 const groupName = computed(
@@ -467,6 +472,19 @@ const amountNumber = computed(() => {
 })
 
 const hasAmounts = computed(() => !loading.value && !!amounts.value)
+
+/**
+ * Whether this group can actually be disbursed: every peso of what it requires
+ * has been recorded. Gates the header's forward button.
+ *
+ * `hasAmounts` is not decoration here and must not be dropped. Until the amounts
+ * call answers, both `net_funding_required` and `total_funded` are zero, so
+ * `remainingToFund` reads a clean 0 — and a button gated on the gap alone would
+ * announce itself as ready to continue during the first paint, then vanish when
+ * the real figures landed. Gating on both means the button appears only once it
+ * has been measured against something.
+ */
+const fullyFunded = computed(() => hasAmounts.value && remainingToFund.value <= 0)
 
 const shortfall = computed(() => Math.max(0, remainingToFund.value - amountNumber.value))
 const overage = computed(() => Math.max(0, amountNumber.value - remainingToFund.value))
@@ -593,26 +611,14 @@ function requestFunding() {
 }
 
 /**
- * First step of leaving for disbursement.
+ * The forward action, now that the button only exists for a fully funded group.
  *
- * A fully funded group is not asked about — a confirmation with nothing to warn
- * about is a click that teaches people to click through the ones that matter.
+ * There is no longer a question to ask on the way out: the "Continue while still
+ * short?" gate went with the button's withdrawal, because a group that is short
+ * is no longer offered the step at all. `buildDisburseConfirm` was that gate's
+ * wording and has been deleted for the same reason — leaving it exported would be
+ * a false lead for whoever looks for the way past this step next.
  */
-function requestContinue() {
-  if (remainingToFund.value > 0) {
-    confirm.value = buildDisburseConfirm({
-      remaining: remainingToFund.value,
-      groupName: groupName.value,
-      employees: allEarners.value.length,
-    })
-    pendingAction.value = 'disburse'
-    pendingFunding.value = null
-    showConfirm.value = true
-    return
-  }
-  commitContinue()
-}
-
 function commitContinue() {
   router.push({ path: `/app/payroll/disburse/${groupId}`, query: route.query })
 }
@@ -620,7 +626,6 @@ function commitContinue() {
 /** The one button in the dialog, dispatching on what was asked. */
 function onConfirm() {
   if (pendingAction.value === 'fund') commitFunding()
-  else if (pendingAction.value === 'disburse') commitContinue()
 }
 
 // Cancelling must clear the snapshot as surely as confirming does: a stale
@@ -727,6 +732,18 @@ async function commitFunding() {
 
     stepperKey.value++
     await refreshRun()
+    // Auto-close, and only here. `ConfirmDialog` is persistent, so without this
+    // the dialog sits in front of the page the reader just successfully funded
+    // until they reach for Cancel themselves — the write was done, and the
+    // button's spinner stopping was the only sign.
+    //
+    // After the refetch rather than the moment the POST lands, so the spinner
+    // covers both: closing earlier would expose the pre-write "Still to fund"
+    // figure for a frame, and the reader would be looking at the very number the
+    // dialog had just reported as changed. The `catch` above returns without
+    // reaching this, so a failed write deliberately leaves the dialog open to be
+    // read and retried.
+    showConfirm.value = false
     form.value = { funding_source: null, amount: '', reference_no: '', notes: '' }
     toast.success('Funding added successfully!')
   } finally {
