@@ -23,6 +23,13 @@ export const STATUS_TONES = {
   needs_attention: 'warn',
   pending_review: 'warn',
   missing_date: 'warn',
+  // The same condition, spelled two ways by one endpoint. On the disbursement
+  // review step the overview counter is `missing_date`, but the row's own
+  // `review_status` arrives as the display string "Missing Data" — and
+  // `statusTone` lower-cases and underscore-writes it to `missing_data`. With
+  // only the first spelling mapped, that row fell through to the neutral
+  // default and rendered grey on a page whose tile counts it as a warning.
+  missing_data: 'warn',
   disbursing: 'warn',
   // Contributions: a department that has not finished collecting for the month.
   incomplete: 'warn',
