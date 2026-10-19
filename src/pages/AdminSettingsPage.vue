@@ -144,6 +144,9 @@
             <q-tab-panel name="leave-types" class="q-pa-none">
               <AdminSettingsPanelLeaveTypes :search-query="searchQuery || ''" />
             </q-tab-panel>
+            <q-tab-panel name="holidays" class="q-pa-none">
+              <AdminSettingsPanelHolidays :search-query="searchQuery || ''" />
+            </q-tab-panel>
             <q-tab-panel name="holiday-types" class="q-pa-none">
               <AdminSettingsPanelHolidayTypes :search-query="searchQuery || ''" />
             </q-tab-panel>
@@ -169,6 +172,7 @@ import AdminSettingsPanelCostCenters from '@/components/pages/AdminSettings/Admi
 import AdminSettingsPanelPayrollGroups from '@/components/pages/AdminSettings/AdminSettingsPanelPayrollGroups.vue'
 import AdminSettingsPanelCompensable from '@/components/pages/AdminSettings/AdminSettingsPanelCompensable.vue'
 import AdminSettingsPanelLeaveTypes from '@/components/pages/AdminSettings/AdminSettingsPanelLeaveTypes.vue'
+import AdminSettingsPanelHolidays from '@/components/pages/AdminSettings/AdminSettingsPanelHolidays.vue'
 import AdminSettingsPanelHolidayTypes from '@/components/pages/AdminSettings/AdminSettingsPanelHolidayTypes.vue'
 
 const { company } = useCompany()
@@ -258,13 +262,6 @@ const sectionGroups = [
         blurb: 'What can be filed, and how its credits are granted',
       },
       {
-        name: 'holiday-types',
-        label: 'Holiday types',
-        icon: 'o_celebration',
-        searchable: true,
-        blurb: 'Kinds of holiday, and the leave they apply',
-      },
-      {
         name: 'custom-multipliers',
         label: 'Custom multipliers',
         icon: 'o_percent',
@@ -277,6 +274,31 @@ const sectionGroups = [
         icon: 'o_groups',
         searchable: true,
         blurb: 'Who is paid together, and when',
+      },
+    ],
+  },
+  {
+    // Holidays had been a single section under "Time and pay", which put the
+    // dates and the kinds they belong to one click apart in a group that never
+    // claimed to be about either. A holiday is a *date* that points at a *type*,
+    // and that pair reads as its own group. Adjacent to "Time and pay" rather
+    // than last in the rail, because a recurring holiday is what those multipliers
+    // and that leave policy are adjusting for.
+    title: 'Holiday',
+    sections: [
+      {
+        name: 'holidays',
+        label: 'Holidays',
+        icon: 'o_event_available',
+        searchable: true,
+        blurb: 'The dates the calendar observes',
+      },
+      {
+        name: 'holiday-types',
+        label: 'Holiday Types',
+        icon: 'o_celebration',
+        searchable: true,
+        blurb: 'Kinds of holiday, and the leave they apply',
       },
     ],
   },
