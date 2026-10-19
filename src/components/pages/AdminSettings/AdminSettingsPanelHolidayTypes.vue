@@ -134,7 +134,7 @@
                         clickable
                         v-close-popup
                         class="dropdown-item dropdown-item-danger"
-                        @click="deleteHolidayType(props.row)"
+                        @click="openDeleteHolidayType(props.row)"
                       >
                         <q-item-section side
                           ><q-icon name="delete" size="16px" color="negative"
@@ -353,6 +353,23 @@
       @move="handleMove"
       @remove="handleRemove"
     />
+
+    <!-- ── Confirmations ────────────────────────────────────────────────────
+         Two questions this panel asks, both through the shared chrome so they
+         read like the confirms on Requests and Schedule rather than like Quasar's
+         stock box. The wording is in `holidayConfirm.js`. -->
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      :confirm="deleteConfirm"
+      :loading="isDeletingType"
+      @confirm="commitDeleteHolidayType"
+    />
+    <ConfirmDialog
+      v-model="showRemoveConfirm"
+      :confirm="removeConfirm"
+      :loading="isRemovingSource"
+      @confirm="commitRemoveSource"
+    />
   </div>
 </template>
 
@@ -365,11 +382,17 @@
  * summary the table column prints. The leave types are here for the same
  * reason — the create dialog's first source and the chain dialog's picker both
  * offer them, and they are what resolves a policy's leave-type name.
+ *
+ * The dated holidays that attach to these types are a separate resource with
+ * their own panel — `AdminSettingsPanelHolidays`, in the Holiday group beside
+ * this one. Nothing here creates one: a holiday needs a type to exist, and this
+ * panel is the one that makes types.
  */
 import { computed, onMounted, ref, watch } from 'vue'
-import { useQuasar } from 'quasar'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import HolidayTypePoliciesDialog from './HolidayTypePoliciesDialog.vue'
+import { buildHolidayPolicyRemoveConfirm, buildHolidayTypeDeleteConfirm } from './holidayConfirm.js'
 import { useAdminHolidayTypes } from '@/composables/admin/useAdminHolidayTypes'
 import { useAdminHolidayPolicies } from '@/composables/admin/useAdminHolidayPolicies'
 import { useAdminLeaveTypes } from '@/composables/admin/useAdminLeaveTypes'
@@ -387,7 +410,6 @@ const props = defineProps({
   searchQuery: { type: String, default: '' },
 })
 
-const $q = useQuasar()
 const { companyId } = useCompany()
 
 const {
@@ -547,19 +569,85 @@ async function handleMove({ policy, direction }) {
   await refreshAfterChainWrite(typeId)
 }
 
+// ─── Confirmations ───────────────────────────────────────────────────────────
+//
+// Two questions this panel asks, each in three parts: a `pending` ref holding the
+// row the question was asked about, a computed confirm object that describes it,
+// and a `commit*` that does the write. The snapshot is the point — the table and
+// the chain dialog under the confirm are live, so a confirm that re-read its
+// subject could describe one row while deleting another.
+
+const showDeleteConfirm = ref(false)
+const pendingDeleteType = ref(null)
+const isDeletingType = ref(false)
+
+const deleteConfirm = computed(() =>
+  pendingDeleteType.value ? buildHolidayTypeDeleteConfirm(pendingDeleteType.value) : null,
+)
+
+const showRemoveConfirm = ref(false)
+const pendingRemovePolicy = ref(null)
+const isRemovingSource = ref(false)
+
+const removeConfirm = computed(() =>
+  pendingRemovePolicy.value ? buildHolidayPolicyRemoveConfirm(pendingRemovePolicy.value) : null,
+)
+
+// Cancel is the only exit the shared confirm offers and it clears nothing by
+// itself, so a frozen write describing a row nobody agreed to would outlive the
+// dialog that asked about it. Cleared on the close rather than on the write.
+watch(showDeleteConfirm, (open) => {
+  if (open || isDeletingType.value) return
+  pendingDeleteType.value = null
+})
+
+watch(showRemoveConfirm, (open) => {
+  if (open || isRemovingSource.value) return
+  pendingRemovePolicy.value = null
+})
+
+/** Opens the question. The write lives in `commitDeleteHolidayType`, below. */
+function openDeleteHolidayType(type) {
+  pendingDeleteType.value = type
+  showDeleteConfirm.value = true
+}
+
+async function commitDeleteHolidayType() {
+  const pending = pendingDeleteType.value
+  if (!pending || isDeletingType.value) return
+
+  isDeletingType.value = true
+  try {
+    await deleteHolidayType(pending)
+  } finally {
+    // Cleared either way: the composable's toast says whether it landed, and a
+    // row still on screen after a confirmed delete is a backend problem, not
+    // something this dialog should stay open to explain.
+    isDeletingType.value = false
+    showDeleteConfirm.value = false
+    pendingDeleteType.value = null
+  }
+}
+
 function handleRemove(policy) {
+  pendingRemovePolicy.value = policy
+  showRemoveConfirm.value = true
+}
+
+async function commitRemoveSource() {
+  const policy = pendingRemovePolicy.value
   const typeId = policiesFor.value?.id
-  const name = policy.leaveTypeName || 'This leave type'
-  $q.dialog({
-    title: 'Remove this leave source?',
-    message: `${name} is taken out of the chain, and holidays of this type stop drawing on it. The sources below it move up. Leave already granted is not affected.`,
-    cancel: { label: 'Cancel', flat: true },
-    ok: { label: 'Remove', color: 'negative', unelevated: true },
-    persistent: true,
-  }).onOk(async () => {
+  if (!policy || isRemovingSource.value) return
+
+  isRemovingSource.value = true
+  try {
     await deletePolicy(typeId, policy)
     await refreshAfterChainWrite(typeId)
-  })
+  } finally {
+    isRemovingSource.value = false
+    showRemoveConfirm.value = false
+    pendingRemovePolicy.value = null
+  }
 }
 
 // ─── Lookups ────────────────────────────────────────────────────────────────
