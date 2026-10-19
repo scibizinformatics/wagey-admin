@@ -349,12 +349,25 @@
              status is still passed through untouched — the tone stays the settled
              green either way, and the server's own value is what the column sorts
              on. -->
+
+          <!-- And it carries the explanation, because the label alone invites the one
+               reading it must not have: that the app reviewed the row by itself. The
+               tooltip says plainly that this predates the current visit, and that no
+               reviewer or timestamp is recorded — because none is. `review_status` is
+               a bare read-only string on the payload and the audit log carries no
+               review entries, so there is no who to show. Saying so is the honest
+               answer; inventing one would be worse. -->
           <template #body-cell-review_status="props">
             <q-td :props="props">
-              <StatusPill
-                :status="props.row.review_status"
-                :label="isReviewedEarlier(props.row) ? 'Reviewed earlier' : null"
-              />
+              <span class="review-status-cell">
+                <StatusPill
+                  :status="props.row.review_status"
+                  :label="isReviewedEarlier(props.row) ? 'Reviewed earlier' : null"
+                />
+                <q-tooltip v-if="isReviewedEarlier(props.row)">
+                  {{ REVIEWED_EARLIER_HINT }}
+                </q-tooltip>
+              </span>
             </q-td>
           </template>
 
@@ -885,6 +898,16 @@ function isReviewedEarlier(row) {
   return preReviewedIds.value.includes(row.epi_id) && !sessionReviewedIds.value.includes(row.epi_id)
 }
 
+// What the pill cannot say for itself. The reader's first question about a green
+// "Reviewed earlier" is "did this app just do that?", and the answer has to be no,
+// explicitly — a review is irreversible, so an unexplained one is the worst kind
+// of surprise on a payroll. It also has to own the gap: nobody asked *who*, and
+// the honest answer is that the API does not record it, rather than leaving the
+// reader to assume the page forgot to show it.
+const REVIEWED_EARLIER_HINT =
+  'Signed off before this run was opened, so it was not reviewed here. ' +
+  'This app records no reviewer or timestamp for it, so it cannot show who.'
+
 /**
  * The count beside the table's actions.
  *
@@ -979,7 +1002,12 @@ const statTiles = computed(() => [
   },
   {
     key: 'missing',
-    label: 'Missing date',
+    // Spelled to match the row, not the counter it reads. The overview keys this
+    // bucket `missing_date`, but a row in it arrives as `review_status:
+    // "Missing Data"`, and the pill prints the row's own words — so a tile
+    // reading "Missing date" above rows reading "Missing data" made the same
+    // condition look like two.
+    label: 'Missing data',
     value: overview.value?.missing_date ?? 0,
     mark: 'var(--dash-warn-mark)',
   },
@@ -1577,6 +1605,15 @@ async function releaseEmployee(row) {
 .num-warn {
   color: var(--dash-warn);
   font-weight: 600;
+}
+
+/* The pill needs an element to hang the tooltip off, and wrapping it must not
+   change how the cell lays out: inline-flex keeps the chip at its own size and on
+   the same baseline as before, rather than letting the wrapper stretch it to the
+   cell's full width or push the row's line-height around. */
+.review-status-cell {
+  display: inline-flex;
+  align-items: center;
 }
 
 /* The resolved half of a `resolved/total` cell. It recedes rather than taking a
