@@ -3,6 +3,7 @@ import { api } from 'src/boot/axios'
 import { useCompany } from 'src/composables/page/useCompany'
 import { BASE } from 'src/composables/utils/http'
 import { createRequestToken } from 'src/composables/utils/requestToken'
+import { normalizeHolidays } from 'src/composables/utils/holidays'
 
 export function useSchedule() {
   const { companyId } = useCompany()
@@ -116,10 +117,9 @@ export function useSchedule() {
    * @param {string|number} assignmentId
    */
   async function cancelAssignment(assignmentId) {
-    const response = await api.patch(
-      `${BASE}/organization/assignments/${assignmentId}/cancel/`,
-      { status: 'cancelled' },
-    )
+    const response = await api.patch(`${BASE}/organization/assignments/${assignmentId}/cancel/`, {
+      status: 'cancelled',
+    })
     return response.data
   }
 
@@ -151,10 +151,10 @@ export function useSchedule() {
   async function applyLeaveForEmployee(payload) {
     saving.value = true
     try {
-      const response = await api.post(
-        `${BASE}/attendance/leave/apply-for-employee/`,
-        { ...payload, status: 'approved' },
-      )
+      const response = await api.post(`${BASE}/attendance/leave/apply-for-employee/`, {
+        ...payload,
+        status: 'approved',
+      })
       return response.data
     } catch (error) {
       console.error('applyLeaveForEmployee error:', error.response?.data)
@@ -170,6 +170,45 @@ export function useSchedule() {
       params: { company: companyId.value },
     })
     return response.data.data ?? response.data ?? []
+  }
+
+  /**
+   * The company's holidays, for the grid's day-header and leave-chip overlay.
+   *
+   * **A second read of a resource `useAdminHolidays` also reads, and on purpose.**
+   * That one is the admin surface, where a failed fetch is a management failure
+   * worth a toast; this one is a calendar overlay on a scheduling board, where a
+   * lookup that fails must not nag a scheduler and the grid should simply carry
+   * on rendering what it already knows. They share no cache for the same reason:
+   * the admin panel writes holidays and the board does not, so a shared one would
+   * need an invalidation signal the board has no reason to know about.
+   *
+   * `leave-types` above is read this way twice as well — here and in
+   * `useAdminLeaveTypes` — so this is the file's normal shape rather than a
+   * departure from it.
+   *
+   * The payload carries no holiday fields, so the overlay is matched by date
+   * alone: see `holidayForDate` in `composables/utils/holidays.js`.
+   *
+   * @returns {Promise<Array>} normalized rows; `[]` when there are none, when the
+   *   company is unresolved, or when the read failed. Never throws.
+   */
+  async function fetchHolidays() {
+    if (!companyId.value) return []
+    const askedFor = String(companyId.value)
+    try {
+      const response = await api.get(`${BASE}/attendance/holidays/company/${companyId.value}/`)
+      const rows = normalizeHolidays(response.data)
+      // The company is in the path, but a row naming another one means the list
+      // is not scoped the way it was asked for. Dropping it keeps a workspace
+      // switch from painting one calendar onto another's grid.
+      return rows.filter(
+        (holiday) => holiday.companyId == null || String(holiday.companyId) === askedFor,
+      )
+    } catch (error) {
+      console.error('Error fetching holidays for the schedule:', error)
+      return []
+    }
   }
 
   /**
@@ -315,10 +354,11 @@ export function useSchedule() {
         )
       }
 
-      const response = await api.post(
-        `${BASE}/organization/assignments/assign/`,
-        { company_id, employee_ids, schedules },
-      )
+      const response = await api.post(`${BASE}/organization/assignments/assign/`, {
+        company_id,
+        employee_ids,
+        schedules,
+      })
       return response.data
     } catch (error) {
       console.error('assignRecurringSchedule error:', error.response?.data)
@@ -343,6 +383,7 @@ export function useSchedule() {
     assignDayOff,
     applyLeaveForEmployee,
     fetchLeaveTypes,
+    fetchHolidays,
     deleteLeave,
     fetchShiftTemplates,
     fetchShiftTemplates24h,
