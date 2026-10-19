@@ -41,6 +41,7 @@
           :refreshing-row-user-id="refreshingRowUserId"
           :sites="sites"
           :shift-types="shiftTypes"
+          :holidays="holidays"
           :is-filtered="isFiltered"
           @clear-filters="clearScheduleFilters"
           @open-quick-add="openQuickAddModal"
@@ -196,6 +197,7 @@ const {
   assignDayOff: assignDayOffApi,
   applyLeaveForEmployee,
   fetchLeaveTypes: fetchLeaveTypesApi,
+  fetchHolidays: fetchHolidaysApi,
   fetchShiftTemplates: fetchShiftTemplatesApi,
   fetchShiftTemplates24h: fetchShiftTemplates24hApi,
   schedulePagination,
@@ -226,6 +228,16 @@ const {
 
 const users = ref([])
 const shifts = ref([])
+/**
+ * The company's holidays, overlaid on the grid.
+ *
+ * The monthly schedule payload carries no holiday field — a leave row says it is
+ * leave and, at best, which leave type, never why — so a holiday can only be
+ * known by matching the date against this list. Without it the affected days
+ * render the generic "On leave", which is indistinguishable from a leave somebody
+ * filed themselves.
+ */
+const holidays = ref([])
 const isReassigning = ref(false)
 const isLoadingSchedule = ref(false)
 const userTimezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
@@ -694,6 +706,42 @@ const fetchLeaveTypes = async () => {
   leaveTypes.value = await fetchLeaveTypesApi()
 }
 
+/**
+ * Holidays are not week-scoped — the endpoint answers with the company's whole
+ * set — so this runs once per company rather than on every week arrow.
+ *
+ * Never rejects: the composable swallows its own failures and answers `[]`, so a
+ * holiday read that goes wrong degrades the grid to what it showed before instead
+ * of leaving the board blank. The list is handed to `ScheduleTable`, which is
+ * where a shift's date is matched against it — deriving it there rather than
+ * stamping it onto every shift here is what keeps a company switch and a late
+ * holiday landing from needing the whole grid rebuilt to take effect.
+ */
+const fetchHolidaysList = async () => {
+  holidays.value = await fetchHolidaysApi()
+}
+
+/**
+ * The calendar is fetched once per company, and this is what makes "once"
+ * reliable in both directions.
+ *
+ * It lives beside `fetchHolidaysList` and is deliberately **not** part of the
+ * big `companyId` watcher above. That one guards on `prev !== undefined` so its
+ * first evaluation cannot clobber a draft, and reusing that guard here meant the
+ * holidays never loaded whenever the company resolved *after* the page mounted —
+ * `onMounted`'s fetch is a no-op without a company, and the watcher skipped the
+ * one transition that would have corrected it. A holiday silently missing is
+ * worse than a stale one, so the list is dropped before the refetch here too.
+ *
+ * No `immediate`: when the company is already resolved the mount below fetches,
+ * and a second call would be a duplicate request for the same list.
+ */
+watch(companyId, (id, prev) => {
+  if (!id || String(id) === String(prev)) return
+  holidays.value = []
+  fetchHolidaysList()
+})
+
 const fetchShiftTemplatesList = async () => {
   shiftTemplates.value = await fetchShiftTemplatesApi()
 }
@@ -846,7 +894,8 @@ const renderPage = () => {
         day: daysDiff,
         startTime,
         endTime,
-        position: leaveTypeName || shiftTypeName || (startTime ? `${startTime}–${endTime}` : 'Shift'),
+        position:
+          leaveTypeName || shiftTypeName || (startTime ? `${startTime}–${endTime}` : 'Shift'),
         shiftTypeId,
         shiftTemplateId: schedule.shift_template || schedule.shift_template_id || null,
         site: schedule.site || null,
@@ -1193,44 +1242,35 @@ const employeeUuid = (key) => {
 
 const addSchedule = async () => {
   const n = newSchedule.value
-  if (!n.userIds?.length)
-    return toast.error('Please select at least one employee.')
+  if (!n.userIds?.length) return toast.error('Please select at least one employee.')
   if (n.scheduleType === 'one-time') {
-    if (!n.selectedDates?.length)
-      return toast.error('Please select at least one date.')
+    if (!n.selectedDates?.length) return toast.error('Please select at least one date.')
     for (const s of n.oneTimeShifts) {
-      if (!s.shiftTemplate)
-        return toast.error('Please select a shift template for all shifts.')
+      if (!s.shiftTemplate) return toast.error('Please select a shift template for all shifts.')
     }
   }
   if (n.scheduleType === 'recurring') {
-    if (!n.recurringStartDate)
-      return toast.error('Please select a start date.')
-    if (!n.recurringEndDate)
-      return toast.error('Please select an end date.')
-    if (!n.recurringSchedule)
-      return toast.error('Please select a recurring template.')
+    if (!n.recurringStartDate) return toast.error('Please select a start date.')
+    if (!n.recurringEndDate) return toast.error('Please select an end date.')
+    if (!n.recurringSchedule) return toast.error('Please select a recurring template.')
   }
   // Resolved while validating the rotating form, then reused to build its payload.
   let rotatingSiteIds = []
   let rotatingEmployeeUuids = []
   if (n.scheduleType === 'rotating') {
-    if (!n.recurringStartDate)
-      return toast.error('Please select a start date.')
-    if (!n.recurringEndDate)
-      return toast.error('Please select an end date.')
-    if (!n.rotatingShiftTemplate)
-      return toast.error('Please select a shift template.')
-    if (!n.weekdays?.length)
-      return toast.error('Please select at least one weekday.')
+    if (!n.recurringStartDate) return toast.error('Please select a start date.')
+    if (!n.recurringEndDate) return toast.error('Please select an end date.')
+    if (!n.rotatingShiftTemplate) return toast.error('Please select a shift template.')
+    if (!n.weekdays?.length) return toast.error('Please select at least one weekday.')
     // A rotation with no site isn't something to create quietly, so this fails
     // loudly rather than posting an empty `site_ids`.
     rotatingSiteIds = (n.rotatingSites || []).map(resolveId).filter((id) => id !== null)
-    if (!rotatingSiteIds.length)
-      return toast.error('Please select at least one site.')
+    if (!rotatingSiteIds.length) return toast.error('Please select at least one site.')
     rotatingEmployeeUuids = n.userIds.map(employeeUuid).filter(Boolean)
     if (rotatingEmployeeUuids.length !== n.userIds.length)
-      return toast.error('Could not resolve every selected employee. Reload the page and try again.')
+      return toast.error(
+        'Could not resolve every selected employee. Reload the page and try again.',
+      )
   }
   isCheckingConflict.value = true
   addConflictWarning.value = false
@@ -1329,8 +1369,7 @@ const addSchedule = async () => {
 
 const quickAddSchedule = async () => {
   const { userId, day, shifts: qShifts } = quickAdd.value
-  if (!userId || day === null)
-    return toast.error('Employee and day are required.')
+  if (!userId || day === null) return toast.error('Employee and day are required.')
   for (let i = 0; i < qShifts.length; i++) {
     if (!qShifts[i].shiftTemplate)
       return toast.error(`Please select a shift template for shift ${i + 1}`)
@@ -1357,9 +1396,12 @@ const quickAddSchedule = async () => {
         }
       }),
     })
-    toast.success(`${qShifts.length} shift${qShifts.length > 1 ? 's' : ''} added successfully for ${days[day]}!`, {
-      icon: 'check_circle',
-    })
+    toast.success(
+      `${qShifts.length} shift${qShifts.length > 1 ? 's' : ''} added successfully for ${days[day]}!`,
+      {
+        icon: 'check_circle',
+      },
+    )
     showQuickAddModal.value = false
     quickAdd.value = { userId: null, day: null, shifts: [], leaveType: null }
     await refreshSingleEmployee(userId)
@@ -1803,9 +1845,10 @@ const handleScheduleError = (error) => {
   // branch with no markup guard used to drop Django's entire 500 page into
   // this toast, and `multiLine` with a 10-second timeout made it unmissable.
   const errors = error.response?.data?.errors
-  const msg = Array.isArray(errors) && errors.length
-    ? errors.join('; ')
-    : extractErrorMessage(error, 'Failed to create schedule')
+  const msg =
+    Array.isArray(errors) && errors.length
+      ? errors.join('; ')
+      : extractErrorMessage(error, 'Failed to create schedule')
   toast.error(msg, { timeout: 10000 })
 }
 
@@ -1817,6 +1860,11 @@ onMounted(async () => {
   await fetchShiftTemplatesList()
   await fetchData()
   fetchLeaves()
+  // Last, and not awaited: the holidays are an overlay the table derives
+  // reactively, so nothing on screen is waiting for them, and holding the grid's
+  // first paint for a calendar lookup would be a bad trade. The watcher above
+  // covers the company resolving after this point.
+  fetchHolidaysList()
 })
 </script>
 
