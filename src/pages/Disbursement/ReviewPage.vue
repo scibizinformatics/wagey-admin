@@ -170,6 +170,20 @@
             </q-td>
           </template>
 
+          <!-- Overtime the employee already had approved, beside the requests they
+               made. Two counts of the same resource rather than one derived
+               reading, so they stay in two columns like the cash advance pair above
+               — and like that pair, no relationship is claimed between them: not
+               every request needs pre-approval, so a pre-approved count below the
+               requested one is not a shortfall and is not toned as one. -->
+          <template #body-cell-pre_approved_ot="props">
+            <q-td :props="props">
+              <span class="dash-num" :class="{ 'num-zero': !props.row.pre_approved_ot }">
+                {{ props.row.pre_approved_ot ?? 0 }}
+              </span>
+            </q-td>
+          </template>
+
           <!-- Attendance that needs a person. Suspicious and flagged days each
                read as `resolved/total`, so the pair that only means something
                together stays in one cell instead of the resolved half sitting in
@@ -309,6 +323,27 @@
               </span>
               <q-tooltip v-if="workHoursPair(props.row).hasNeeded" :delay="400">
                 {{ workHoursTitle(props.row) }}
+              </q-tooltip>
+            </q-td>
+          </template>
+
+          <!-- Days run past the hours the cutoff expected of them. The counterpart
+               to the shortfall in the cell before it, and reported as its own count
+               rather than folded into it: a row can be short overall (13.10 of 88.00)
+               and still have days it exceeded, and netting the two would hide both.
+
+               Neutral rather than toned. A manual attendance entry stays plain for
+               the same reason — this is a fact about how a day was recorded, and the
+               payload carries nothing saying excess hours are a fault, so the
+               decision of what an excess day costs belongs to the reader. The tooltip
+               spells the column out because "Excess days" does not. -->
+          <template #body-cell-days_with_excess_hours="props">
+            <q-td :props="props">
+              <span class="dash-num" :class="{ 'num-zero': !props.row.days_with_excess_hours }">
+                {{ props.row.days_with_excess_hours ?? 0 }}
+              </span>
+              <q-tooltip v-if="props.row.days_with_excess_hours" :delay="400">
+                Days worked beyond the hours this cutoff expected
               </q-tooltip>
             </q-td>
           </template>
@@ -479,6 +514,7 @@
       :epi-id="selectedEpiId"
       :employee-name="selectedEmployeeName"
       :employee-index="employeeIndex"
+      :cutoff-name="summary?.cutoff_name || ''"
       @deducted="refreshAfterDeduct"
     />
 
@@ -751,6 +787,16 @@ const columns = [
     align: 'right',
     sortable: true,
   },
+  // Overtime already approved, next to the requests made for it. Sorted as its own
+  // count rather than as a ratio against `ot_request`: pre-approval is not owed on
+  // every request, so the gap between the two is not a quantity to rank by.
+  {
+    name: 'pre_approved_ot',
+    label: 'Pre-approved OT',
+    field: (row) => amount(row.pre_approved_ot),
+    align: 'right',
+    sortable: true,
+  },
   {
     name: 'requested_cash_advance',
     label: 'CA requested',
@@ -809,6 +855,16 @@ const columns = [
     name: 'work_hours',
     label: 'Work hours',
     field: (row) => workHoursPair(row).shortfall,
+    align: 'right',
+    sortable: true,
+  },
+  // Days worked past what the cutoff expected, beside the hours shortfall it
+  // balances against. Sorted by the count itself, worst-first — the only ordering
+  // that means anything when there is no total to sort against.
+  {
+    name: 'days_with_excess_hours',
+    label: 'Excess days',
+    field: (row) => amount(row.days_with_excess_hours),
     align: 'right',
     sortable: true,
   },
