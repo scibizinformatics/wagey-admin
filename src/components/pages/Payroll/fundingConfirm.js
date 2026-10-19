@@ -1,9 +1,9 @@
 /**
- * The wording behind the Funding step's two confirmations.
+ * The wording behind the Funding step's confirmation.
  *
  * Money leaving the company is not a label somebody can correct later in the
- * screen, so both gates here are asked rather than assumed: recording a funding
- * entry at all, and leaving a group that is not fully funded for disbursement.
+ * screen, so the gate here is asked rather than assumed: recording a funding
+ * entry at all.
  *
  * The copy lives in a module rather than in the dialog for the reason every
  * other derivation in this codebase lives in `composables/utils` or beside its
@@ -15,6 +15,11 @@
  * `statusConfirm.js` on purpose — the same confirm object contract, the same
  * "bolded subject then the verb" sentence, the same facts-then-note order — so
  * `components/common/ConfirmDialog.vue` renders them without a branch.
+ *
+ * There was once a second builder in this file, for leaving a group that was not
+ * fully funded for disbursement. That gate is gone — `FundingPage` no longer
+ * offers the forward button to an underfunded group at all, so there is nothing
+ * left to ask about.
  */
 
 import { formatCurrency } from 'src/composables/utils/format'
@@ -99,41 +104,5 @@ export function buildFundingConfirm({
       : short
         ? `This leaves ${formatCurrency(after)} still to fund. Disbursement stays closed until the group is fully funded.`
         : 'This covers the group in full.',
-  }
-}
-
-/**
- * Confirmation for leaving a group that is not fully funded.
- *
- * Not raised when the gap is zero — there is nothing to warn about, and a
- * confirmation an admin cannot dismiss by reading it is how people learn to click
- * through them.
- *
- * @param {object}  params
- * @param {number}  params.remaining   the outstanding gap
- * @param {string}  [params.groupName] the run's name
- * @param {number}  [params.employees] how many people the run pays
- * @returns {{title: string, name: string, sub: string, icon: string, tone: string,
- *   actionLabel: string, buttonClass: string, facts: Array<{label: string, value: string}>,
- *   sentence: string, note: string}}
- */
-export function buildDisburseConfirm({ remaining, groupName, employees }) {
-  const gap = Number(remaining) || 0
-
-  return {
-    title: 'Continue while still short?',
-    name: groupOf(groupName),
-    sub: 'Funding is not complete',
-    icon: 'o_warning',
-    tone: 'warn',
-    actionLabel: 'Continue anyway',
-    buttonClass: 'dash-modal__approve',
-    facts: facts(
-      ['Still to fund', formatCurrency(gap)],
-      employees ? ['Employees in this run', String(employees)] : null,
-    ),
-    // Reads from the bolded group name, so it continues rather than restates it.
-    sentence: 'has not been funded in full.',
-    note: `Disbursement will proceed with the ${formatCurrency(gap)} still outstanding. Top the group up first if that is not intended.`,
   }
 }
