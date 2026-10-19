@@ -541,6 +541,14 @@ async function disburse(rows, successMessage) {
 
     stepperKey.value++
     await refresh()
+    // Auto-close once the release has landed. `ConfirmDialog` is persistent, so
+    // without this the reader is left dismissing a dialog for work that is
+    // already done — the stopped spinner is the only thing that says so.
+    //
+    // Placed after the refetch so the spinner covers both, and the page behind
+    // never shows a pre-write row state for a frame. The `catch` returns above,
+    // so a refused release keeps the dialog open to be read.
+    showConfirm.value = false
     toast.success(successMessage)
   } finally {
     disbursing.value = false
