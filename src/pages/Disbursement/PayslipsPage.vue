@@ -34,11 +34,15 @@
                have, and says what it is waiting for rather than showing a
                button that would be wrong to press.
 
-               And once the run is past funding there is nowhere for this button
-               to lead: it is dropped rather than left pointing at a step the run
-               has already left. The shell's "moved on" notice takes its place. -->
+               And once the run has reached funding the shell's "moved on" notice
+               offers the same link one screen higher up — so this button is
+               dropped, rather than leaving the reader two buttons to the same
+               next step. The boundary is deliberately `reached`, not `past`: the
+               notice appears the moment the run *arrives* here, and testing for
+               one step further meant both rendered together in exactly the case
+               the notice exists for. -->
           <q-btn
-            v-if="allAcknowledged && !fundingBehind"
+            v-if="allAcknowledged && !fundingReached"
             unelevated
             no-caps
             dense
@@ -47,7 +51,7 @@
             class="btn-primary"
             @click="goToFunding"
           />
-          <span v-else-if="!allAcknowledged && !fundingBehind" class="action-wait">
+          <span v-else-if="!allAcknowledged && !fundingReached" class="action-wait">
             <q-icon name="o_schedule" size="15px" />
             Funding opens once everyone has acknowledged
           </span>
@@ -402,15 +406,21 @@ const allAcknowledged = computed(
 )
 
 /**
- * Whether the run has already left funding behind. The "Continue to funding"
- * button is this step's only way forward, and past funding it leads to a step the
- * run has been through — so it is withdrawn rather than left pointing backwards.
- * Strictly greater than funding's index (2): a run sitting *on* funding still
- * wants the button, and an unknown status is left alone.
+ * Whether the run has already reached funding. The "Continue to funding" button
+ * is this step's only way forward, but from that point the shell's "moved on"
+ * notice carries the same link — so the button is withdrawn rather than left
+ * duplicating it.
+ *
+ * `>=` funding's own index (2), and deliberately not `>`: the shell shows its
+ * notice as soon as the run is *strictly ahead* of the page, which for this step
+ * means index 2 and up. Comparing one step further left the button on screen for
+ * the whole of funding itself, so a run sitting on `ready_for_funding` showed a
+ * `Go to Funding` in the notice and a `Continue to funding` in the toolbar
+ * directly below it. An unknown status is left alone.
  */
-const fundingBehind = computed(() => {
+const fundingReached = computed(() => {
   const index = currentStepIndexForPgiStatus(pgiStatus.value)
-  return index != null && index > 2
+  return index != null && index >= 2
 })
 
 const statTiles = computed(() => [
