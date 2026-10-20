@@ -124,7 +124,7 @@
               :payroll-group-filter="leavePayrollGroupFilter"
               :payroll-group-options="payrollGroupOptions"
               :cutoff-filter="leaveCutoffFilter"
-              :cutoff-options="leaveCutoffOptions"
+              :cutoff-options="requestCutoffOptions"
               @update:status-filter="statusFilter = $event"
               @update:search="searchTerm = $event"
               @update:payroll-group-filter="leavePayrollGroupFilter = $event"
@@ -154,9 +154,14 @@
               :search="overtimeSearch"
               :payroll-group-filter="overtimePayrollGroupFilter"
               :payroll-group-options="payrollGroupOptions"
+              :cutoff-filter="overtimeCutoffFilter"
+              :cutoff-options="requestCutoffOptions"
+              :sort-by="overtimeSortBy"
               @update:status-filter="overtimeStatusFilter = $event"
               @update:search="overtimeSearch = $event"
               @update:payroll-group-filter="overtimePayrollGroupFilter = $event"
+              @update:cutoff-filter="overtimeCutoffFilter = $event"
+              @update:sort-by="overtimeSortBy = $event"
               @update:editable-hours="setOvertimeEditableHours"
               @toggle-selection="toggleOvertimeSelection"
               @toggle-select-all="toggleSelectAllOvertime"
@@ -420,11 +425,13 @@ import {
 } from 'src/composables/utils/leaveRequests'
 import {
   buildLeaveCutoffOptions,
+  dayWithinCutoff,
   findLeaveCutoff,
   leavePeriodOverlapsCutoff,
   normalizeLeaveCutoffs,
 } from 'src/composables/utils/leaveCutoffs'
 import { createRequestToken } from 'src/composables/utils/requestToken'
+import { companyCutoffShapes, narrowCutoffsByShape } from 'src/composables/utils/cutoffState'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useAdminPayrollGroups } from 'src/composables/admin/useAdminPayrollGroups'
 import { useEmployeePayoutGroup } from 'src/composables/page/useEmployeePayoutGroup'
@@ -618,53 +625,96 @@ const recommendSubmitting = ref(false)
 // `isBusy` can tell which request is mid-write.
 const recommendLoading = ref(null)
 
-// ===== LEAVE CUTOFF FILTER =====
-// Narrows the leave queue to the payroll cutoff a reviewer is working, the way the
+// ===== CUTOFF FILTERS (LEAVE + OVERTIME) =====
+// Narrow a queue to the payroll cutoff a reviewer is working, the way the
 // payout-group select beside it narrows to a group. Joined from the cutoff
-// instances' date windows rather than from the rows, because `/attendance/leave-list/`
-// carries a span and no cutoff — see `composables/utils/leaveCutoffs.js` for the
-// overlap rule and for why an unplaceable cutoff is dropped rather than offered.
+// instances' date windows rather than from the rows, because neither
+// `/attendance/leave-list/` nor `/payroll/overtime-list/` returns a cutoff or
+// accepts one as a query param.
+//
+// One list serves both filters — a cutoff window means the same thing to either
+// tab — while each queue keeps its own selected key, so switching tabs cannot
+// silently leave a filter set somewhere else. See `composables/utils/leaveCutoffs.js`
+// for the leave overlap rule, the single-day rule overtime uses, and why an
+// unplaceable cutoff is dropped rather than offered.
+//
+// The list is narrowed to this company's own cutoff type, the way the
+// Disbursement list does it: `cutoff-instances` is workspace-wide and carries
+// weekly, bi-weekly, monthly and annual cutoffs from every type in the workspace,
+// while `payroll-trend` is company-scoped and its window shapes are what tell
+// this company's cutoffs apart from the rest.
 //
 // Loaded with the page rather than on first use, the opposite of the group filter:
 // there is no per-employee contract resolution to wait for, and a filter that is
 // only reachable by first failing to be useful is not worth the round trip saved.
-const leaveCutoffs = ref([])
+const requestCutoffs = ref([])
 const leaveCutoffFilter = ref(null)
-const { fetchCutoffInstances } = useDisbursementApi()
+const { fetchCutoffInstances, fetchCompanyCutoffs } = useDisbursementApi()
 
 // Guards a workspace switch landing mid-fetch: the request was issued for the
 // company the reader was on, and its answer must not be published over the
 // company they moved to.
-const leaveCutoffGuard = createRequestToken()
+const requestCutoffGuard = createRequestToken()
 
-const leaveCutoffOptions = computed(() => buildLeaveCutoffOptions(leaveCutoffs.value))
+const requestCutoffOptions = computed(() => buildLeaveCutoffOptions(requestCutoffs.value))
 
-const fetchLeaveCutoffs = async () => {
+const fetchRequestCutoffs = async () => {
   const company = selectedCompany.value
   if (!company) {
-    leaveCutoffs.value = []
+    requestCutoffs.value = []
     return
   }
-  const token = leaveCutoffGuard.next()
-  try {
-    const { cutoffs, undated } = normalizeLeaveCutoffs(await fetchCutoffInstances())
-    if (!leaveCutoffGuard.isCurrent(token)) return
-    leaveCutoffs.value = cutoffs
-    // Said once, not per option: a cutoff we cannot place is a payload this code
-    // does not fully understand, and a reviewer needs to know the dropdown is
-    // shorter than the payroll run rather than assume it is complete.
-    if (undated) {
-      console.warn(
-        `[requests] ${undated} cutoff(s) carried no readable date window and cannot be filtered by`,
-      )
-    }
-  } catch (error) {
-    if (!leaveCutoffGuard.isCurrent(token)) return
-    leaveCutoffs.value = []
-    // The select hides itself on an empty list, so this degrades to the queue
-    // working exactly as it did before — no toast for a filter that was only
+  const token = requestCutoffGuard.next()
+  // Settled rather than caught, because the two sources answer different halves
+  // of the question: instances supply the ids and windows, payroll-trend supplies
+  // the shapes this company actually pays. Only one of them failing must not look
+  // like the other succeeded with an empty answer, so each failure is logged on
+  // its own below.
+  const [instancesResult, companyResult] = await Promise.allSettled([
+    fetchCutoffInstances(),
+    fetchCompanyCutoffs(company),
+  ])
+  if (!requestCutoffGuard.isCurrent(token)) return
+
+  if (instancesResult.status === 'rejected') {
+    requestCutoffs.value = []
+    // The selects hide themselves on an empty list, so this degrades to the queues
+    // working exactly as they did before — no toast for a filter that was only
     // ever a convenience.
-    console.error('[requests] failed to load cutoff instances', error)
+    console.error('[requests] failed to load cutoff instances', instancesResult.reason)
+    return
+  }
+  if (companyResult.status === 'rejected') {
+    // Keep going: `companyCutoffShapes` falls back to the semi-monthly pair when
+    // it is handed nothing, so a failed trend request narrows to the common case
+    // rather than emptying the dropdown.
+    console.error(
+      '[requests] failed to load payroll trend for cutoff shapes',
+      companyResult.reason,
+    )
+  }
+
+  const { cutoffs, undated } = normalizeLeaveCutoffs(instancesResult.value)
+  const companyCutoffs = companyResult.status === 'fulfilled' ? companyResult.value : []
+  const shapes = companyCutoffShapes(companyCutoffs)
+  let narrowed = narrowCutoffsByShape(cutoffs, shapes)
+  if (!narrowed.length && cutoffs.length) {
+    // A noisy dropdown is recoverable and the reader can see why; an empty one
+    // looks like a broken page. Same safety rule as the Disbursement list.
+    console.warn(
+      `[requests] no cutoff matched this company's shapes ` +
+        `(${[...shapes].join(', ')}); offering the full workspace list`,
+    )
+    narrowed = cutoffs
+  }
+  requestCutoffs.value = narrowed
+  // Said once, not per option: a cutoff we cannot place is a payload this code
+  // does not fully understand, and a reviewer needs to know the dropdown is
+  // shorter than the payroll run rather than assume it is complete.
+  if (undated) {
+    console.warn(
+      `[requests] ${undated} cutoff(s) carried no readable date window and cannot be filtered by`,
+    )
   }
 }
 
@@ -677,6 +727,12 @@ const overtimeRequests = ref([])
 const overtimeLoading = ref(false)
 const overtimeSearch = ref('')
 const overtimeStatusFilter = ref('all')
+// Cutoff and sort are per-tab state, like every other toolbar control here: each
+// queue shows what its own table is filtered and ordered by. Null is "all
+// cutoffs"; the sort opens on the alphabetical order this queue is read in, and
+// "Newest" restores the date-first order.
+const overtimeCutoffFilter = ref(null)
+const overtimeSortBy = ref('A-Z')
 // id -> employee name for the active company, rebuilt on every overtime fetch:
 // the list names people by primary key alone, so a stale directory would label
 // rows with the previous workspace's roster.
@@ -974,7 +1030,7 @@ const filteredLeaveRequests = computed(() => {
   // is excluded while a cutoff is selected rather than folded in. Overlap, not
   // containment, so a request straddling two cutoffs is listed under both.
   if (leaveCutoffFilter.value) {
-    const cutoff = findLeaveCutoff(leaveCutoffs.value, leaveCutoffFilter.value)
+    const cutoff = findLeaveCutoff(requestCutoffs.value, leaveCutoffFilter.value)
     if (cutoff) filtered = filtered.filter((r) => leavePeriodOverlapsCutoff(r, cutoff))
     // A key that no longer resolves — the list reloaded and that cutoff is gone —
     // shows the whole queue rather than an empty one. An empty table reads as
@@ -1705,9 +1761,18 @@ const bulkRejectOvertime = () => bulkDecideOvertime('rejected')
 
 // Filtered over the whole queue, then ordered — never over whatever happens to
 // be rendered. The grid shows every matching row, so there is no page slice to
-// filter behind. Newest overtime first, because a flat queue spanning every
-// payroll run has no other natural order; ties break on the request id so the
-// list does not reshuffle between refreshes.
+// filter behind.
+//
+// The cutoff narrows on the date the overtime was *worked*, which is the day the
+// payroll period pays for. A row whose date cannot be read is excluded while a
+// cutoff is selected rather than folded in, and a key that no longer resolves —
+// the list reloaded and that cutoff is gone — shows the full queue rather than an
+// empty one, the same safety rule the leave tab follows.
+//
+// Alphabetical by default, because a reviewer works through people; one person's
+// rows fall back to newest first, and ties break on the request id so the list
+// does not reshuffle between refreshes. "Newest first" restores the date-first
+// order this queue had before the sort control existed.
 const filteredOvertimeRequests = computed(() => {
   let filtered = [...overtimeRequests.value]
   if (overtimeStatusFilter.value && overtimeStatusFilter.value !== 'all') {
@@ -1727,6 +1792,18 @@ const filteredOvertimeRequests = computed(() => {
   if (overtimePayrollGroupFilter.value) {
     filtered = filtered.filter((r) =>
       matchesPayrollGroup(overtimeRowEmployeeRefs(r), overtimePayrollGroupFilter.value),
+    )
+  }
+  if (overtimeCutoffFilter.value) {
+    const cutoff = findLeaveCutoff(requestCutoffs.value, overtimeCutoffFilter.value)
+    if (cutoff) filtered = filtered.filter((r) => dayWithinCutoff(r.date, cutoff))
+  }
+  if (overtimeSortBy.value === 'A-Z') {
+    return filtered.sort(
+      (a, b) =>
+        (a.employeeName || '').toLowerCase().localeCompare((b.employeeName || '').toLowerCase()) ||
+        (b.date || '').localeCompare(a.date || '') ||
+        b.id - a.id,
     )
   }
   return filtered.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id)
@@ -2934,10 +3011,11 @@ watch(
     // and so can simply be fetched. Clearing first matters more than usual here:
     // the previous workspace's options must not sit on screen for the length of a
     // round trip, and a key from them would select nothing.
-    if (id) fetchLeaveCutoffs()
+    if (id) fetchRequestCutoffs()
     else {
-      leaveCutoffs.value = []
+      requestCutoffs.value = []
       leaveCutoffFilter.value = null
+      overtimeCutoffFilter.value = null
     }
   },
   { immediate: true },
@@ -2987,7 +3065,8 @@ watch(selectedCompany, () => {
   caPayrollGroupFilter.value = null
   compensablePayrollGroupFilter.value = null
   leaveCutoffFilter.value = null
-  leaveCutoffs.value = []
+  overtimeCutoffFilter.value = null
+  requestCutoffs.value = []
   fetchLeaveRequests()
   fetchOvertimeRequests()
   fetchOvertimeCategories()
