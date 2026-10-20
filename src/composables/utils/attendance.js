@@ -688,6 +688,44 @@ export function attendanceLeaveLabel(row, index) {
   return leaveTypeFromIndex(index, ref.id)?.name || null
 }
 
+// ── Status order ─────────────────────────────────────────────────────────────
+
+/**
+ * Where a record sits in the attendance list's status order:
+ * Work (0) → Absent (1) → Leave (2) → Rest (3) → unrecognised (4).
+ *
+ * `work_type` carries the day's classification ("Work", "Absent Without Leave",
+ * "Rest Day"), so the reading is by keyword rather than equality: the endpoint
+ * spells the same bucket more than one way. "Absent Without Leave" is matched
+ * before "leave" so the word in its own name cannot file an absence under leave.
+ *
+ * A leave day is also identified by its leave reference, not only by
+ * `work_type` — that is what the row badge reads first (`attendanceLeaveLabel`),
+ * so it takes precedence here too. Rows with no recognisable type sort last
+ * rather than being guessed into one of the four blocks.
+ *
+ * @param {object} row an attendance record
+ * @returns {number} 0 work, 1 absent, 2 leave, 3 rest, 4 unknown/untyped
+ */
+export function attendanceStatusRank(row) {
+  const type = String(row?.work_type || '')
+    .trim()
+    .toLowerCase()
+
+  if (type.includes('absent')) return 1
+  if (attendanceLeaveRef(row) || type.includes('leave')) return 2
+  if (
+    type.includes('rest') ||
+    type.includes('day off') ||
+    type.includes('off day') ||
+    type === 'off'
+  ) {
+    return 3
+  }
+  if (type.startsWith('work')) return 0
+  return 4
+}
+
 /** Warned once per reason, so a payload problem is noticed, not repeated. */
 const warnedAboutLeave = new Set()
 
