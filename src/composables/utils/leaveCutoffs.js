@@ -147,9 +147,10 @@ export function normalizeCutoffInstance(raw) {
     id,
     label: name || (startMs !== null && endMs !== null ? windowLabel(startMs, endMs) : ''),
     // The same window again, written the way a reader is meant to see it —
-    // "Oct 1–15, 2026". A separate field rather than a replacement for `label`,
-    // because the payload's own name is sometimes the better word for it and the
-    // leave queue still shows that one.
+    // "Oct 1–15, 2026". Kept separate from `label` because the raw name is still
+    // useful for diagnostics, but the filter options prefer this one: instance
+    // names repeat ("Semi-monthly" for every period), so only the window tells
+    // two options apart. The Disbursement list labels its dropdown the same way.
     windowLabel: formatCutoffWindow(startIso, endIso),
     status: normalizeCutoffStatus(raw),
     startIso,
@@ -205,6 +206,29 @@ export function findLeaveCutoff(cutoffs, key) {
 }
 
 /**
+ * Whether a bare calendar day falls inside a cutoff's window.
+ *
+ * The single-day counterpart of `leavePeriodOverlapsCutoff`, for the queues
+ * whose rows are one date rather than a span — an overtime request is one
+ * employee's work on one day, so containment is the whole test.
+ *
+ * Inclusive at both ends, so work done on the cutoff's closing day is in that
+ * cutoff. A value that cannot be read as a day is not in any cutoff: that is a
+ * real answer, and claiming otherwise would put an undated row under every
+ * cutoff at once.
+ *
+ * @param {string} value `YYYY-MM-DD` (a datetime starting with one is truncated)
+ * @param {{startMs: number, endMs: number}|null} cutoff
+ * @returns {boolean}
+ */
+export function dayWithinCutoff(value, cutoff) {
+  if (!isPlaceableCutoff(cutoff)) return false
+  const day = dayStartMs(value)
+  if (day === null) return false
+  return day >= cutoff.startMs && day <= cutoff.endMs
+}
+
+/**
  * Whether a leave request touches a cutoff's window.
  *
  * Inclusive at both ends, so a request whose last day is the cutoff's closing day
@@ -241,6 +265,11 @@ export function leavePeriodOverlapsCutoff(row, cutoff) {
  *
  * "All cutoffs" leads, worded to match the payout-group select beside it.
  *
+ * Each option is labelled by the window it covers — "Oct 1–15, 2026" — rather
+ * than by the instance's own name. A semi-monthly company names every period
+ * "Semi-monthly", so a list of names is a list of identical options; the dates
+ * are the identity. The Disbursement list's cutoff dropdown reads the same way.
+ *
  * Unplaceable cutoffs are dropped here as well as in `normalizeLeaveCutoffs`, so
  * the function is safe on its own for a caller holding a raw list: an option with
  * a null window sorts first (null coerces to 0 in the subtraction below, and no
@@ -256,6 +285,9 @@ export function buildLeaveCutoffOptions(cutoffs) {
   )
   return [
     { label: 'All cutoffs', value: null },
-    ...ordered.map((cutoff) => ({ label: cutoff.label, value: cutoff.key })),
+    ...ordered.map((cutoff) => ({
+      label: cutoff.windowLabel || cutoff.label,
+      value: cutoff.key,
+    })),
   ]
 }
