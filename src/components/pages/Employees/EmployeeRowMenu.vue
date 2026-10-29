@@ -27,7 +27,7 @@
           @click="$emit('edit-contract', employee)"
         >
           <q-item-section avatar><q-icon name="o_edit_note" size="17px" /></q-item-section>
-          <q-item-section>Edit contract</q-item-section>
+          <q-item-section>Edit payroll profile</q-item-section>
         </q-item>
 
         <q-separator class="row-menu__sep" />

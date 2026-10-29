@@ -63,6 +63,29 @@
             round
             dense
             class="icon-btn"
+            :class="{ 'icon-btn--alert': issueHasFailures }"
+            :aria-label="issueAriaLabel"
+            @click="toggleIssuesDrawer"
+          >
+            <q-icon name="o_report_problem" size="19px" />
+            <span v-if="issueBadgeCount > 0" class="icon-btn__badge">
+              {{ issueBadgeCount > 9 ? '9+' : issueBadgeCount }}
+            </span>
+            <span
+              v-else-if="issueHasFailures"
+              class="icon-btn__badge"
+              aria-hidden="true"
+            >
+              !
+            </span>
+            <q-tooltip>{{ issueAriaLabel }}</q-tooltip>
+          </q-btn>
+
+          <q-btn
+            flat
+            round
+            dense
+            class="icon-btn"
             :aria-label="
               liveUpdatesDown ? 'Notifications — live updates disconnected' : 'Notifications'
             "
@@ -366,6 +389,62 @@
       </q-tooltip>
     </q-btn>
 
+    <!-- ═══ Needs-attention drawer ═══════════════════════════════════════════
+         A sibling of the rail, not a page child, because the inbox is global:
+         the same unresolved attendance, schedule, request, payroll and card
+         issues follow the reader across routes. `overlay` keeps it from
+         resizing the working surface, and the tab below is its handle when it
+         is closed. -->
+    <q-drawer
+      v-model="issuesDrawerOpen"
+      side="right"
+      overlay
+      :width="issuesDrawerWidth"
+      class="issues-drawer"
+      aria-label="Needs attention"
+    >
+      <IssueDrawer
+        :sections="issueSections"
+        :source-errors="issueSourceErrors"
+        :loading="issueLoading"
+        :has-details="issueHasDetails"
+        :last-updated="issueLastUpdated"
+        @refresh="forceRefreshIssues"
+        @close="issuesDrawerOpen = false"
+        @navigate="navigateIssue"
+      />
+    </q-drawer>
+
+    <!-- On desktop the handle is always in the same place, with the count that
+         made the reader look. On tablet and below the header button is the
+         handle — a vertical tab would cover the content it is reporting on. -->
+    <button
+      v-if="$q.screen.gt.sm && !issuesDrawerOpen"
+      type="button"
+      class="issues-tab"
+      :class="{ 'issues-tab--alert': issueHasFailures }"
+      :aria-label="issueAriaLabel"
+      @click="openIssuesDrawer"
+    >
+      <span class="issues-tab__icon-wrap">
+        <q-icon
+          :name="issueAllClear ? 'o_check_circle' : 'o_report_problem'"
+          size="17px"
+        />
+        <span v-if="issueBadgeCount > 0" class="issues-tab__badge">
+          {{ issueBadgeCount > 99 ? '99+' : issueBadgeCount }}
+        </span>
+        <span
+          v-else-if="issueHasFailures"
+          class="issues-tab__badge issues-tab__badge--alert"
+          aria-hidden="true"
+        >
+          !
+        </span>
+      </span>
+      <span class="issues-tab__label">{{ issueAllClear ? 'Clear' : 'Issues' }}</span>
+    </button>
+
     <q-page-container>
       <router-view />
     </q-page-container>
@@ -373,13 +452,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 
 // ─── Composables ──────────────────────────────────────────────────────────────
 import { useOrganization } from '@/composables/page/useOrganization'
 import { useNotifications } from '@/composables/useNotifications'
+import { useAdminIssues } from '@/composables/page/useAdminIssues'
 import { CONNECTION_STATES } from '@/composables/useWebSocket'
 import { useCompanyStore } from '@/stores/company'
 import { useAuthStore } from '@/boot/auth'
@@ -389,6 +469,7 @@ import { api } from 'src/boot/axios'
 // transparent padding, so a 34px box of it drew an 11px logo; that file has
 // since been deleted.
 import wageyLogo from 'src/assets/wagey_mark.png'
+import IssueDrawer from '@/components/layout/IssueDrawer.vue'
 import { useToast } from '@/composables/useToast'
 
 const $q = useQuasar()
@@ -472,6 +553,7 @@ const leftDrawerOpen = ref(true)
 const miniPref = ref(false)
 const notifModal = ref(false)
 const accountMenu = ref(false)
+const issuesDrawerOpen = ref(false)
 
 // Notification scope. Unread-only is the view people actually want when the
 // badge is what brought them here, so it is one click away rather than a mental
@@ -512,6 +594,24 @@ const {
   cleanup: cleanupNotifications,
   formatTimeAgo,
 } = useNotifications()
+
+// ─── Needs attention (global admin inbox) ─────────────────────────────────────
+// The drawer lives here rather than on one page because the reader's job is to
+// find the next thing to settle, not to remember which route holds it. The
+// summary count feeds the header badge before the drawer has ever been opened;
+// the full read runs when it does.
+const {
+  sections: issueSections,
+  sourceErrors: issueSourceErrors,
+  loading: issueLoading,
+  hasDetails: issueHasDetails,
+  lastUpdated: issueLastUpdated,
+  badgeCount: issueBadgeCount,
+  hasFailures: issueHasFailures,
+  allClear: issueAllClear,
+  refresh: refreshIssues,
+  forceRefresh: forceRefreshIssues,
+} = useAdminIssues()
 
 // The socket retries on its own indefinitely now, so "not connected" is not by
 // itself worth telling anyone about — the first connect of a page load passes
@@ -643,6 +743,29 @@ const drawerWidth = computed(() => {
   if (w < 1024) return 240
   if (w < 1440) return 264
   return 284
+})
+
+// Wide enough for a title, a two-line reason and a chip without wrapping the
+// chip onto its own line; on a phone it takes almost the whole screen, because
+// a two-column drawer there would leave neither column readable.
+const issuesDrawerWidth = computed(() => {
+  const w = $q.screen.width
+  if (w < 600) return Math.max(300, Math.round(w * 0.94))
+  return 404
+})
+
+// The count is the number of known issues; a failed source is not a number, so
+// it is named in the label instead of being left to the drawer. A screen-reader
+// user otherwise hears "3 open" and has no way to know one check never ran.
+const issueAriaLabel = computed(() => {
+  if (issueHasFailures.value) {
+    return issueBadgeCount.value > 0
+      ? `Needs attention — ${issueBadgeCount.value} open, a check failed`
+      : 'Needs attention — a check failed'
+  }
+  return issueBadgeCount.value > 0
+    ? `Needs attention — ${issueBadgeCount.value} open`
+    : 'Needs attention'
 })
 
 // ─── Collapsing the rail ──────────────────────────────────────────────────────
@@ -787,6 +910,44 @@ function onExternalCompanyChange(event) {
   const current = companyStore.company
   if (current) selectedCompany.value = String(current.id)
 }
+
+// ─── Needs-attention drawer ──────────────────────────────────────────────────
+function openIssuesDrawer() {
+  issuesDrawerOpen.value = true
+  // Cache-aware: opening the drawer twice in a minute does not start another
+  // full read. The drawer's own Refresh is the explicit bypass.
+  refreshIssues()
+}
+
+function toggleIssuesDrawer() {
+  if (issuesDrawerOpen.value) {
+    issuesDrawerOpen.value = false
+    return
+  }
+  openIssuesDrawer()
+}
+
+function navigateIssue(payload) {
+  const to = payload?.to
+  if (!to) return
+  issuesDrawerOpen.value = false
+  router.push(to)
+}
+
+// A workspace switch replaces every count in the drawer, so the drawer is
+// closed rather than left showing another company's inbox.
+watch(selectedCompany, () => {
+  issuesDrawerOpen.value = false
+})
+
+// Following a link out of the drawer, or using the rail under it, closes it.
+// The drawer is a reading surface, not a modal the reader has to dismiss.
+watch(
+  () => route.fullPath,
+  () => {
+    issuesDrawerOpen.value = false
+  },
+)
 
 function scrollToActiveTab() {
   if (!tabsWrapperRef.value) return
@@ -1116,6 +1277,13 @@ onUnmounted(() => {
   background: var(--dash-n-50);
 }
 
+/* A failed check is not a count, so it tints the glyph rather than claiming a
+   number in the badge. The count stays readable beside it. */
+.icon-btn--alert,
+.icon-btn--alert:hover {
+  color: var(--dash-warn-mark);
+}
+
 /* Count badge with a surface-coloured ring, so it stays legible where it
    overlaps the bell glyph. */
 .icon-btn__badge {
@@ -1318,10 +1486,28 @@ onUnmounted(() => {
   flex-direction: column;
   overflow-x: hidden;
   border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* The needs-attention drawer is the same surface as the rail, on the other
+   edge. It shares the wash below rather than inventing a second navy, so the
+   two furniture surfaces read as one shell. */
+.issues-drawer :deep(.q-drawer__content) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+.app-nav :deep(.q-drawer__content),
+.issues-drawer :deep(.q-drawer__content) {
   background-image:
     radial-gradient(120% 46% at 6% 0%, rgba(91, 140, 255, 0.16) 0%, rgba(91, 140, 255, 0) 60%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 22%),
     linear-gradient(180deg, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.22) 100%);
+}
+
+.issues-drawer.q-drawer {
+  box-shadow: -18px 0 40px rgba(16, 31, 45, 0.26);
 }
 
 /* ── Brand ──────────────────────────────────────────────────────────────────
@@ -1465,6 +1651,90 @@ onUnmounted(() => {
 }
 .app-nav__collapse.q-btn:active {
   transform: translate(-50%, -50%) scale(0.92);
+}
+
+/* ── Needs-attention handle ──────────────────────────────────────────────────
+   The rail's counterpart on the right edge: a navy tab that stays put while the
+   page scrolls, with the count that made the reader look. Hidden while the
+   drawer is open, and on tablet/below where the header button is the handle. */
+.issues-tab {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  z-index: 2001;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 30px;
+  padding: 10px 7px 12px;
+  border: 1px solid var(--nav-line);
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  background: var(--nav-bg);
+  color: var(--nav-ink-3);
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: -4px 2px 14px rgba(16, 31, 45, 0.24);
+  transform: translateY(-50%);
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    color var(--dash-fast) var(--dash-ease);
+}
+
+.issues-tab:hover {
+  background: #16293a;
+  color: var(--nav-ink);
+}
+
+.issues-tab--alert,
+.issues-tab--alert:hover {
+  color: var(--dash-warn-mark);
+}
+
+.issues-tab:focus-visible {
+  outline: 2px solid var(--nav-accent);
+  outline-offset: 2px;
+}
+
+.issues-tab__icon-wrap {
+  position: relative;
+  display: flex;
+}
+
+.issues-tab__badge {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 2px solid var(--nav-bg);
+  border-radius: 999px;
+  background: var(--dash-critical-mark);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.issues-tab__badge--alert {
+  background: var(--dash-warn-mark);
+  color: #3b2500;
+}
+
+.issues-tab__label {
+  color: var(--nav-ink-3);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
 }
 
 /* ── Groups ── */

@@ -11,7 +11,7 @@
             <q-icon name="o_edit_note" size="22px" />
           </q-avatar>
           <div class="dash-modal__head-titles">
-            <div class="dash-modal__title">Edit Contract</div>
+            <div class="dash-modal__title">Edit Payroll Profile</div>
             <div v-if="employeeName" class="dash-modal__sub">
               Editing payroll profile
               <q-chip dense outline size="12px" icon="person" class="employee-chip">
@@ -194,6 +194,30 @@
           <!-- Eligibilities -->
           <div class="dash-modal__span-2">
             <div class="section-label">Eligibilities</div>
+            <!-- An either/or choice, not a checkbox: the two work-hours
+                 eligibilities replace one another, and carrying both is a
+                 contradiction. Writing the choice is the page's job — this
+                 only reports the decision. -->
+            <div v-if="workHoursAvailable" class="dash-modal__grid">
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Work hours type</span>
+                <q-select
+                  :model-value="form.work_hours_type || null"
+                  @update:model-value="
+                    $emit('update:field', { field: 'work_hours_type', value: $event ?? null })
+                  "
+                  :options="workHoursTypeOptions"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  clearable
+                  class="dash-field"
+                  hide-bottom-space
+                  popup-content-class="dash-popup dash-popup--modal"
+                />
+              </label>
+            </div>
             <div class="checkbox-grid">
               <q-checkbox
                 v-if="overtimeId"
@@ -323,7 +347,12 @@
 
 <script setup>
 import { computed } from 'vue'
-import { PAY_TYPE_OPTIONS } from '@/composables/utils/contractTerms'
+import {
+  PAY_TYPE_OPTIONS,
+  WORK_HOURS_ELIGIBILITY_NAMES,
+  WORK_HOURS_TYPE_OPTIONS,
+  hasWorkHoursEligibilities,
+} from '@/composables/utils/contractTerms'
 
 const emit = defineEmits(['update:modelValue', 'update:field', 'submit'])
 
@@ -386,9 +415,13 @@ const dedicatedEligibilityNames = [
   'Undertime Deduction',
   'Night Differential Eligible',
   'Contributions',
-  'Work Hours Flexible',
-  'Work Hours Strict',
+  ...WORK_HOURS_ELIGIBILITY_NAMES,
 ]
+
+// Offered only where both eligibility records exist: without them there is
+// nothing to choose between and no id the backend would understand.
+const workHoursTypeOptions = WORK_HOURS_TYPE_OPTIONS
+const workHoursAvailable = computed(() => hasWorkHoursEligibilities(props.allEligibilityOptions))
 
 const otherEligibilityOptions = computed(() =>
   props.allEligibilityOptions.filter((e) => !dedicatedEligibilityNames.includes(e.name)),
@@ -495,7 +528,7 @@ const multiplierFields = [
   display: flex;
   flex-wrap: wrap;
   gap: 2px 12px;
-  margin-top: 6px;
+  margin-top: 8px;
   padding: 10px 12px;
   background: var(--dash-n-25);
   border: 1px solid var(--dash-line);

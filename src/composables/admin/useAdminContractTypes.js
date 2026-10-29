@@ -1,9 +1,14 @@
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
 import { usePayroll } from 'src/composables/page/usePayroll'
 import { BASE } from 'src/composables/utils/http'
+import {
+  WORK_HOURS_ELIGIBILITY_NAMES,
+  workHoursTypeOf,
+  withWorkHoursType,
+} from 'src/composables/utils/contractTerms'
 import { PHILIPPINES_DEFAULT_MULTIPLIERS } from './useAdminContracts.js'
 import { useToast } from 'src/composables/useToast'
 
@@ -26,13 +31,6 @@ export function useAdminContractTypes() {
   const editing = ref(false)
   const selectedContractType = ref(null)
   const form = ref(_emptyForm())
-
-  const flexibleId = computed(
-    () => eligibilities.value.find((e) => e.name === 'Work Hours Flexible')?.id,
-  )
-  const strictId = computed(
-    () => eligibilities.value.find((e) => e.name === 'Work Hours Strict')?.id,
-  )
 
   function _emptyForm() {
     return {
@@ -72,17 +70,13 @@ export function useAdminContractTypes() {
   watch(
     () => form.value.work_hours_type,
     (newVal) => {
-      if (!flexibleId.value || !strictId.value) return
-      const current = form.value.eligibilities.filter(
-        (id) => id !== flexibleId.value && id !== strictId.value,
+      // One rule for the whole app: both ids removed, the chosen one appended.
+      // A tenant missing one of the eligibility records keeps the list as it is.
+      form.value.eligibilities = withWorkHoursType(
+        form.value.eligibilities,
+        newVal,
+        eligibilities.value,
       )
-      if (newVal === 'flexible') {
-        form.value.eligibilities = [...current, flexibleId.value]
-      } else if (newVal === 'strict') {
-        form.value.eligibilities = [...current, strictId.value]
-      } else {
-        form.value.eligibilities = current
-      }
     },
   )
 
@@ -203,7 +197,7 @@ export function useAdminContractTypes() {
     // Pre-select all non-work-hours, non-dedicated eligibilities
     const otherEligibilities = eligibilities.value
       .filter((e) => {
-        if (e.name === 'Work Hours Flexible' || e.name === 'Work Hours Strict') return false
+        if (WORK_HOURS_ELIGIBILITY_NAMES.includes(e.name)) return false
         if (dedicatedEligibilityNames.includes(e.name)) return false
         return true
       })
@@ -244,12 +238,7 @@ export function useAdminContractTypes() {
 
     // Determine work_hours_type from existing eligibilities
     const currentEligibilities = contractType.eligibilities ?? []
-    let workHoursType = null
-    if (flexibleId.value && currentEligibilities.includes(flexibleId.value)) {
-      workHoursType = 'flexible'
-    } else if (strictId.value && currentEligibilities.includes(strictId.value)) {
-      workHoursType = 'strict'
-    }
+    const workHoursType = workHoursTypeOf(currentEligibilities, eligibilities.value)
 
     form.value = {
       id: contractType.id,

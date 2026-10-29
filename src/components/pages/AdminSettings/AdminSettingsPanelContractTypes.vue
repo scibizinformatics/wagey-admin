@@ -227,10 +227,7 @@
             <span class="dash-modal__field-label">Work Hours Type</span>
             <q-select
               v-model="contractTypeForm.work_hours_type"
-              :options="[
-                { label: 'Work Hours Flexible', value: 'flexible' },
-                { label: 'Work Hours Strict', value: 'strict' },
-              ]"
+              :options="WORK_HOURS_TYPE_OPTIONS"
               outlined
               dense
               emit-value
@@ -445,6 +442,10 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
+import {
+  WORK_HOURS_ELIGIBILITY_NAMES,
+  WORK_HOURS_TYPE_OPTIONS,
+} from '@/composables/utils/contractTerms'
 
 const {
   contractTypes: contractTypeDefinitions,
@@ -614,7 +615,7 @@ const tableColumns = computed(() => {
     cols.push(col)
   }
   for (const el of eligibilities.value) {
-    if (el.name === 'Work Hours Flexible' || el.name === 'Work Hours Strict') continue
+    if (WORK_HOURS_ELIGIBILITY_NAMES.includes(el.name)) continue
     push({
       name: `el_${el.id}`,
       label: getShortName(el.name),
@@ -729,7 +730,7 @@ const dedicatedEligibilityNames = [
 const eligibilityOptions = computed(() =>
   eligibilities.value
     .filter((e) => {
-      if (e.name === 'Work Hours Flexible' || e.name === 'Work Hours Strict') return false
+      if (WORK_HOURS_ELIGIBILITY_NAMES.includes(e.name)) return false
       if (dedicatedEligibilityNames.includes(e.name)) return false
       return true
     })

@@ -285,6 +285,32 @@
               class="dash-modal__span-2"
             >
               <div class="section-label">Eligibilities</div>
+              <!-- Work-hours mode is one of the eligibilities, but it is an
+                   either/or choice, not a checkbox: both ids at once is a
+                   contradiction the backend has to guess at. It is offered
+                   here — and editable in contract-type mode, like the rest of
+                   the grid — and the chosen value is written into
+                   `form.eligibilities` by the page. -->
+              <div v-if="workHoursAvailable" class="dash-modal__grid">
+                <label class="dash-modal__field">
+                  <span class="dash-modal__field-label">Work hours type</span>
+                  <q-select
+                    :model-value="form.work_hours_type || null"
+                    @update:model-value="
+                      $emit('update:field', { field: 'work_hours_type', value: $event ?? null })
+                    "
+                    :options="workHoursTypeOptions"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    clearable
+                    class="dash-field"
+                    hide-bottom-space
+                    popup-content-class="dash-popup dash-popup--modal"
+                  />
+                </label>
+              </div>
               <div class="checkbox-grid">
                 <q-checkbox
                   v-if="overtimeId"
@@ -444,7 +470,13 @@
 
 <script setup>
 import { computed } from 'vue'
-import { MONTH_OPTIONS, PAY_TYPE_OPTIONS } from '@/composables/utils/contractTerms'
+import {
+  MONTH_OPTIONS,
+  PAY_TYPE_OPTIONS,
+  WORK_HOURS_ELIGIBILITY_NAMES,
+  WORK_HOURS_TYPE_OPTIONS,
+  hasWorkHoursEligibilities,
+} from '@/composables/utils/contractTerms'
 
 const emit = defineEmits(['update:modelValue', 'update:field', 'contractTypeChange', 'submit'])
 
@@ -533,9 +565,14 @@ const dedicatedEligibilityNames = [
   'Undertime Deduction',
   'Night Differential Eligible',
   'Contributions',
-  'Work Hours Flexible',
-  'Work Hours Strict',
+  ...WORK_HOURS_ELIGIBILITY_NAMES,
 ]
+
+// The select only exists where the company actually has both eligibility
+// records; on a tenant without them there is nothing to choose between and no
+// id to send, so the field is better absent than broken.
+const workHoursTypeOptions = WORK_HOURS_TYPE_OPTIONS
+const workHoursAvailable = computed(() => hasWorkHoursEligibilities(props.allEligibilityOptions))
 
 const otherEligibilityOptions = computed(() =>
   props.allEligibilityOptions.filter((e) => !dedicatedEligibilityNames.includes(e.name)),
@@ -669,7 +706,7 @@ const visibleMultiplierFields = computed(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 2px 12px;
-  margin-top: 6px;
+  margin-top: 8px;
   padding: 10px 12px;
   background: var(--dash-n-25);
   border: 1px solid var(--dash-line);

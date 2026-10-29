@@ -408,7 +408,12 @@ import { useRolesAndPositions } from '@/composables/page/useRolesAndPositions'
 import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGroup'
 import { useCompany } from '@/composables/page/useCompany'
 import { extractErrorMessage } from '@/composables/utils/http'
-import { eligibilitiesForPayType } from '@/composables/utils/contractTerms'
+import {
+  WORK_HOURS_ELIGIBILITY_NAMES,
+  eligibilitiesForPayType,
+  withWorkHoursType,
+  workHoursTypeOf,
+} from '@/composables/utils/contractTerms'
 import { useAdminContracts } from '@/composables/admin/useAdminContracts'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 import { useAdminPositions } from '@/composables/admin/useAdminPositions'
@@ -590,6 +595,17 @@ function onContractTypeChange(contractTypeId) {
     assignForm.value.pay_type,
     eligibilityOptions.value,
   )
+  // The type owns the starting work-hours mode, and the select may override it
+  // afterwards the same way it may override the other eligibilities. Normalise
+  // immediately: a type carrying both ids is a contradiction the select cannot
+  // display, so it is reduced to the mode that wins the tie.
+  const workHoursType = workHoursTypeOf(assignForm.value.eligibilities, eligibilityOptions.value)
+  assignForm.value.work_hours_type = workHoursType
+  assignForm.value.eligibilities = withWorkHoursType(
+    assignForm.value.eligibilities,
+    workHoursType,
+    eligibilityOptions.value,
+  )
   if (assignForm.value.pay_type === 'daily') {
     assignForm.value.work_hours_per_week = 8
   } else {
@@ -655,7 +671,13 @@ watch(
     } else if (newMode === 'custom') {
       assignForm.value.contract_type_id = null
       assignForm.value.pay_type = null
-      assignForm.value.eligibilities = eligibilityOptions.value.map((e) => e.id)
+      // The work-hours pair is left out of the "everything" default: it is an
+      // either/or choice, and Custom terms start with it unset — the same state
+      // a new custom contract starts in.
+      assignForm.value.work_hours_type = null
+      assignForm.value.eligibilities = eligibilityOptions.value
+        .filter((e) => !WORK_HOURS_ELIGIBILITY_NAMES.includes(e.name))
+        .map((e) => e.id)
       assignForm.value.contributions = []
       assignForm.value.holiday_pay_types = []
       assignForm.value.overtime_multiplier =
@@ -1246,6 +1268,9 @@ function _emptyEditContractForm() {
     position: null,
     department: null,
     payroll_group: null,
+    // Mirror of the `Work Hours Flexible` / `Work Hours Strict` eligibility ids
+    // in `eligibilities`; kept in step by `updateEditContractField`.
+    work_hours_type: null,
     eligibilities: [],
     contributions: [],
     holiday_pay_types: [],
@@ -1265,6 +1290,16 @@ const updateEditContractField = ({ field, value }) => {
   // drop it here so the payload matches what the form shows.
   if (field === 'pay_type') {
     editContractForm.value.eligibilities = eligibilitiesForPayType(
+      editContractForm.value.eligibilities,
+      value,
+      eligibilityOptions.value,
+    )
+  }
+  // The work-hours select is the only writer of that mode. Both ids are removed
+  // and the chosen one put back, so `eligibilities` cannot end up carrying a
+  // strict and a flexible id at once.
+  if (field === 'work_hours_type') {
+    editContractForm.value.eligibilities = withWorkHoursType(
       editContractForm.value.eligibilities,
       value,
       eligibilityOptions.value,
@@ -1327,6 +1362,19 @@ async function handleOpenEditContract(employee) {
     return
   }
 
+  // A contract stored as daily + CTO would otherwise be unrenewable: the
+  // checkbox is hidden, so the form can only ever send the id back. The
+  // work-hours mode is normalised in the same pass — a legacy row carrying both
+  // ids cannot be shown by an either/or select, so it is reduced to the mode
+  // that wins the tie. Otherwise the select would display one mode while the
+  // payload went on carrying both.
+  const eligibilities = eligibilitiesForPayType(
+    parseEligibilities(contract.eligibilities),
+    contract.pay_type,
+    eligibilityOptions.value,
+  )
+  const workHoursType = workHoursTypeOf(eligibilities, eligibilityOptions.value)
+
   selectedEditEmployee.value = employee
   editingContractId.value = contractId
   editContractForm.value = {
@@ -1336,13 +1384,8 @@ async function handleOpenEditContract(employee) {
     position: contract.position ?? null,
     department: contract.department ?? null,
     payroll_group: contract.payroll_group_id ?? contract.payroll_group ?? null,
-    // A contract stored as daily + CTO would otherwise be unrenewable: the
-    // checkbox is hidden, so the form can only ever send the id back.
-    eligibilities: eligibilitiesForPayType(
-      parseEligibilities(contract.eligibilities),
-      contract.pay_type,
-      eligibilityOptions.value,
-    ),
+    work_hours_type: workHoursType,
+    eligibilities: withWorkHoursType(eligibilities, workHoursType, eligibilityOptions.value),
     contributions: (contract.contributions ?? []).map((c) => c.id ?? c),
     holiday_pay_types: contract.holiday_pay_types ?? [],
     overtime_multiplier: contract.overtime_multiplier ?? null,
@@ -1481,7 +1524,13 @@ async function handleOpenAssignDialog(employee) {
 
   // Populate defaults for new custom assignment
   if (!activeContract.value && assignForm.value.assignment_mode === 'custom') {
-    assignForm.value.eligibilities = eligibilityOptions.value.map((e) => e.id)
+    // Every eligibility except the work-hours pair: those two are an either/or
+    // choice, and "select everything" would send a strict *and* a flexible id.
+    // A new contract starts with the mode unset, which is what the contract-type
+    // admin form allows and what the select can express.
+    assignForm.value.eligibilities = eligibilityOptions.value
+      .filter((e) => !WORK_HOURS_ELIGIBILITY_NAMES.includes(e.name))
+      .map((e) => e.id)
     assignForm.value.contributions = contributions.value.map((c) => c.id)
     assignForm.value.overtime_multiplier =
       companyMultipliers.value?.overtime_multiplier ?? defaultMultipliers.overtime ?? null
@@ -1521,6 +1570,21 @@ async function handleOpenAssignDialog(employee) {
     )
     selectedEligibilityObjectsData.value = eligs
   }
+
+  // Whatever the form was filled from — a renewed contract's stored terms or a
+  // brand-new custom default — the mode on screen is derived from the ids that
+  // will actually be sent, and those ids are reduced to exactly one work-hours
+  // eligibility. A contract carrying both is unshowable; one carrying neither is
+  // the unset state.
+  assignForm.value.work_hours_type = workHoursTypeOf(
+    assignForm.value.eligibilities,
+    eligibilityOptions.value,
+  )
+  assignForm.value.eligibilities = withWorkHoursType(
+    assignForm.value.eligibilities,
+    assignForm.value.work_hours_type,
+    eligibilityOptions.value,
+  )
 }
 
 async function handleBulkAssignDialog() {
@@ -1540,6 +1604,9 @@ async function handleBulkAssignDialog() {
     company_id: companyId.value,
     contract_type_id: null,
     assignment_mode: 'custom',
+    // Bulk assign creates new terms for everyone selected, so — like the single
+    // custom path — the mode starts unset rather than carrying both ids.
+    work_hours_type: null,
     pay_type: 'monthly',
     rate: 100,
     work_hours_per_week: 48,
@@ -1547,7 +1614,9 @@ async function handleBulkAssignDialog() {
     department: null,
     payroll_group_id: null,
     payroll_group: null,
-    eligibilities: eligibilityOptions.value.map((e) => e.id),
+    eligibilities: eligibilityOptions.value
+      .filter((e) => !WORK_HOURS_ELIGIBILITY_NAMES.includes(e.name))
+      .map((e) => e.id),
     contributions: contributions.value.map((c) => c.id),
     year: new Date().getFullYear(),
     month: new Date().getMonth() + 1,
@@ -2162,6 +2231,17 @@ const handleAddCtoBalance = async (payload) => {
 
 const updateAssignField = ({ field, value }) => {
   assignForm.value[field] = value
+
+  // The work-hours select is the only writer of that mode. Both ids are removed
+  // and the chosen one put back, so `eligibilities` cannot end up carrying a
+  // strict and a flexible id at once.
+  if (field === 'work_hours_type') {
+    assignForm.value.eligibilities = withWorkHoursType(
+      assignForm.value.eligibilities,
+      value,
+      eligibilityOptions.value,
+    )
+  }
 
   // Pay type seeds the sensible starting hours — but only when a person picks
   // it. This used to be a watcher on `pay_type`, which also fired while

@@ -95,6 +95,7 @@ import {
   formatRate,
   monthLabel,
   payTypeLabel,
+  workHoursTypeLabel,
 } from '@/composables/utils/contractTerms'
 
 const props = defineProps({
@@ -173,6 +174,7 @@ const summaryRows = computed(() => [
   { label: 'Pay type', value: payTypeLabel(props.form.pay_type) },
   { label: 'Rate', value: formatRate(props.form.rate) },
   { label: 'Work hours', value: formatHours(props.form.work_hours_per_week) },
+  { label: 'Work hours type', value: workHoursTypeLabel(props.form.work_hours_type) },
   { label: 'Department', value: nameFor(props.departments, props.form.department) },
   { label: 'Position', value: nameFor(props.positions, props.form.position) },
   {

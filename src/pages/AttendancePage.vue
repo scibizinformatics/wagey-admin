@@ -163,6 +163,31 @@
             </template>
           </q-select>
 
+          <!-- Narrows the loaded issue set to the records nobody has settled.
+               Deliberately client-side: acknowledgement is a per-record state,
+               not a query param the month endpoint reads, and turning it on
+               must not throw away a month already in hand. -->
+          <q-btn
+            outline
+            no-caps
+            dense
+            size="12px"
+            icon="o_pending_actions"
+            label="Unresolved"
+            class="att-unassigned-btn"
+            :class="{ 'att-unassigned-btn--on': onlyUnresolved }"
+            :aria-pressed="onlyUnresolved"
+            @click="onlyUnresolved = !onlyUnresolved"
+          >
+            <q-tooltip>
+              {{
+                onlyUnresolved
+                  ? 'Showing only audits nobody has acknowledged'
+                  : 'Show only audits nobody has acknowledged'
+              }}
+            </q-tooltip>
+          </q-btn>
+
           <!-- Widens the month rather than narrowing it, so it is a button that
                carries state instead of a select: there is nothing to choose
                between, only whether the records left behind by a shift change
@@ -443,9 +468,11 @@ import {
   attendanceStatusRank,
   reportLeaveTypeCoverage,
   matchesIssueFilter,
+  hasOpenAudit,
   ATTENDANCE_ISSUE_FILTERS,
 } from '@/composables/utils/attendance'
 import { buildLeaveTypeIndex } from '@/composables/utils/leaveTypes'
+import { isTerminated } from 'src/composables/utils/employee'
 import { useAdminLeaveTypes } from '@/composables/admin/useAdminLeaveTypes'
 import { useAdminLaborRuleSettings } from '@/composables/admin/useAdminLaborRuleSettings'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
@@ -628,6 +655,11 @@ const includeUnassigned = ref(false)
 // filteredAttendanceRows, because an unknown query param is ignored rather than
 // rejected and a backend that ignored this one would answer in full.
 const issueFilter = ref(null)
+
+// Client-side, because "unresolved" is the acknowledgement state rather than a
+// flag the month endpoint knows how to narrow on. It is a subset of whatever
+// the issue filter loaded, so turning it on never costs a request.
+const onlyUnresolved = ref(false)
 
 const payrollGroupOptions = computed(() =>
   payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
@@ -931,6 +963,13 @@ const filteredAttendanceRows = computed(() => {
   if (issueFilter.value) {
     data = data.filter((row) => matchesIssueFilter(row, issueFilter.value))
   }
+
+  // The audit dot can mark an auto-closed record the endpoint's `issue=all`
+  // does not return, so this is deliberately wider than `matchesIssueFilter`.
+  // It is still a subset of what is loaded, never a second fetch.
+  if (onlyUnresolved.value) {
+    data = data.filter(hasOpenAudit)
+  }
   return data
 })
 
@@ -1111,6 +1150,9 @@ const activeFilters = computed(() => {
     const option = ATTENDANCE_ISSUE_FILTERS.find((f) => f.value === issueFilter.value)
     out.push({ key: 'issue', label: option?.label ?? 'Issues' })
   }
+  if (onlyUnresolved.value) {
+    out.push({ key: 'unresolved', label: 'Unresolved only' })
+  }
   // Not a narrowing filter like the rest of this list — it widens it. It still
   // gets a chip: the footer count speaks for whatever set is loaded, so a
   // widened set nobody disclosed would read as the normal number of records.
@@ -1127,6 +1169,7 @@ function clearFilter(key) {
   // nothing to call here.
   if (key === 'includeUnassigned') includeUnassigned.value = false
   if (key === 'issue') issueFilter.value = null
+  if (key === 'unresolved') onlyUnresolved.value = false
   // Dropping the span leaves range mode entirely; dropping just the employee
   // widens the same span to everyone, which needs no refetch — the months are
   // already loaded and filteredAttendanceRows re-runs on its own.
@@ -1783,6 +1826,7 @@ function clearAllFilters() {
   payrollGroupFilter.value = null
   includeUnassigned.value = false
   issueFilter.value = null
+  onlyUnresolved.value = false
   dateRangeActive.value = false
   dateRangeEmployee.value = null
   currentDate.value = today
@@ -1839,11 +1883,17 @@ function exitDateRange() {
 // typed into the add dialog's search) stayed applied and showed up over there as
 // a dropdown with a couple of names in it. Matching text is filtered inside each
 // dialog now; the page only decides eligibility.
+//
+// Terminated employees are excluded from *this* picker only: a new attendance
+// record filed against someone who has left would be reviewed and paid out
+// wrongly. The date-range picker keeps them, because reviewing a former
+// employee's final days is exactly what that filter is for.
 const addDialogEmployeeOptions = computed(() => {
   const siteId = newRecord.value.site_id
-  if (isAdmin.value || !siteId) return employeeOptions.value
+  const assignableOptions = employeeOptions.value.filter((option) => !isTerminated(option.employee))
+  if (isAdmin.value || !siteId) return assignableOptions
 
-  return employeeOptions.value.filter((option) => {
+  return assignableOptions.filter((option) => {
     const employee = option.employee ?? {}
     const employeeSiteId = employee.site_id || employee.siteId || employee.site
     return employeeSiteId && Number(employeeSiteId) === Number(siteId)
@@ -2055,6 +2105,12 @@ watch(
  * in the search box rather than in hidden state, so it shows up as a filter
  * chip the reader can see and clear.
  *
+ * The needs-attention drawer adds `from`/`to` (a span), `issue=all` and
+ * `unresolved=1`. They follow the same contract: each one lands in a control
+ * the reader can see and clear, and the query is consumed, so a reload does not
+ * re-apply a narrowing they had since removed. The route watcher below is what
+ * makes a link work when the reader is already on this page.
+ *
  * Applied before the first fetch: the endpoint is keyed by year/month, so
  * setting the date afterwards would mean fetching the current month and then
  * immediately refetching the linked one.
@@ -2067,12 +2123,38 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 function applyDeepLink() {
   const linkedDate = route.query.date
   const linkedEmployee = route.query.employee
+  const linkedFrom = route.query.from
+  const linkedTo = route.query.to
+  const linkedIssue = route.query.issue
+  const linkedUnresolved = route.query.unresolved
   let applied = false
 
   if (typeof linkedDate === 'string' && ISO_DATE.test(linkedDate)) {
     currentDate.value = linkedDate
     filters.value.date_from = linkedDate
     filters.value.date_to = linkedDate
+    // A day link is narrower than a range; leave range mode rather than leave
+    // the picker active around a single day.
+    dateRangeActive.value = false
+    dateRangeEmployee.value = null
+    applied = true
+  }
+
+  // The needs-attention drawer's "all unresolved" link is a span, not a day.
+  // Both ends are validated and ordered here for the same reason the picker
+  // guards an inverted hand-entered range.
+  if (
+    typeof linkedFrom === 'string' &&
+    ISO_DATE.test(linkedFrom) &&
+    typeof linkedTo === 'string' &&
+    ISO_DATE.test(linkedTo)
+  ) {
+    const from = linkedFrom <= linkedTo ? linkedFrom : linkedTo
+    const to = linkedFrom <= linkedTo ? linkedTo : linkedFrom
+    filters.value.date_from = from
+    filters.value.date_to = to
+    dateRangeActive.value = true
+    dateRangeEmployee.value = null
     applied = true
   }
 
@@ -2081,13 +2163,37 @@ function applyDeepLink() {
     applied = true
   }
 
-  if (!applied) return
+  if (
+    typeof linkedIssue === 'string' &&
+    ATTENDANCE_ISSUE_FILTERS.some((filter) => filter.value === linkedIssue)
+  ) {
+    issueFilter.value = linkedIssue
+    applied = true
+  }
+
+  if (linkedUnresolved === '1' || linkedUnresolved === 'true') {
+    onlyUnresolved.value = true
+    applied = true
+  }
+
+  if (!applied) return false
 
   pagination.value.page = 1
   // Consumed once. Left in the URL, a reload would silently re-apply a filter
   // the reader had since cleared, and the page would look stuck.
   router.replace({ query: {} })
+  return true
 }
+
+// The drawer is global, so a link can point at the page it was opened from.
+// `onMounted` alone would miss that navigation because the page is reused.
+// The replacement above re-enters here with an empty query and does nothing.
+watch(
+  () => route.query,
+  () => {
+    if (applyDeepLink()) fetchAttendanceData()
+  },
+)
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(async () => {

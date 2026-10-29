@@ -302,6 +302,7 @@
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar, copyToClipboard } from 'quasar'
+import { useRoute, useRouter } from 'vue-router'
 import PageShell from '@/components/layout/PageShell.vue'
 import AccessCardTable from '@/components/pages/AccessCards/AccessCardTable.vue'
 import AccessCardCardList from '@/components/pages/AccessCards/AccessCardCardList.vue'
@@ -341,6 +342,8 @@ import {
 } from 'src/composables/utils/employee'
 
 const $q = useQuasar()
+const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const { notifyLoaded } = useLoadedToast()
 const { companyId } = useCompany()
@@ -429,6 +432,21 @@ function onFilterChange(which, value) {
   if (which === 'assignment') assignmentFilter.value = value
   else if (which === 'status') statusFilter.value = value
   page.value = 1
+}
+
+// The needs-attention drawer opens the cards that need a person with
+// `?filter=alert`, which is the toolbar's own "Needs attention" option rather
+// than a second alert-only view. Consumed once so a reload does not re-apply a
+// filter the reader cleared.
+function applyDeepLink() {
+  const filter = route.query.filter
+  if (filter == null) return false
+  if (filter === 'alert') {
+    assignmentFilter.value = 'alert'
+    page.value = 1
+  }
+  router.replace({ query: {} })
+  return filter === 'alert'
 }
 
 // ─── Paging ───────────────────────────────────────────────────────────────────
@@ -893,8 +911,18 @@ function onGlobalKey(event) {
   searchRef.value?.focus()
 }
 
+// The drawer is global, so a link can point at the page it was opened from.
+// `onMounted` alone would miss that navigation because the page is reused.
+watch(
+  () => route.query,
+  () => {
+    applyDeepLink()
+  },
+)
+
 onMounted(() => {
   window.addEventListener('keydown', onGlobalKey)
+  applyDeepLink()
   load()
 })
 

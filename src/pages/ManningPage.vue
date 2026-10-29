@@ -107,10 +107,11 @@
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
+import { useRoute, useRouter } from 'vue-router'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useManning, todayIso } from 'src/composables/page/useManning'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
-import { manningStatus, sumManning } from 'src/composables/utils/manning'
+import { manningNeedsAttention, sumManning } from 'src/composables/utils/manning'
 import PageShell from '@/components/layout/PageShell.vue'
 import ManningToolbar from '@/components/pages/Manning/ManningToolbar.vue'
 import ManningStatsRow from '@/components/pages/Manning/ManningStatsRow.vue'
@@ -118,6 +119,8 @@ import ManningTable from '@/components/pages/Manning/ManningTable.vue'
 import ManningCardList from '@/components/pages/Manning/ManningCardList.vue'
 
 const $q = useQuasar()
+const route = useRoute()
+const router = useRouter()
 const { companyId } = useCompany()
 const { notifyLoaded } = useLoadedToast()
 
@@ -145,16 +148,9 @@ const search = ref('')
 const siteFilter = ref(null)
 const onlyGaps = ref(false)
 
-/** A position with somebody missing, short, or unaccounted for. */
-const ATTENTION_STATUSES = new Set(['awol', 'understaffed', 'under-assigned', 'not-timed-in'])
-
-function needsAttention(row) {
-  return ATTENTION_STATUSES.has(manningStatus(row).key)
-}
-
 /** Over the whole response, not the filtered view — the toolbar's count has to
  *  say how many there are to find, not how many are already on screen. */
-const attentionCount = computed(() => rows.value.filter(needsAttention).length)
+const attentionCount = computed(() => rows.value.filter(manningNeedsAttention).length)
 
 const filteredRows = computed(() => {
   let list = rows.value
@@ -175,7 +171,7 @@ const filteredRows = computed(() => {
   }
 
   if (onlyGaps.value) {
-    list = list.filter(needsAttention)
+    list = list.filter(manningNeedsAttention)
   }
 
   return list
@@ -191,6 +187,37 @@ function clearFilters() {
   search.value = ''
   siteFilter.value = null
   onlyGaps.value = false
+}
+
+// The needs-attention drawer links here with `?gaps=1` and the day the drawer's
+// board came from, the same narrowing the toolbar's own toggle applies. The
+// filters are client-side, but a link from another day has to load that day;
+// the query is consumed once so a reload does not re-apply either.
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+function applyDeepLink() {
+  const gaps = route.query.gaps
+  const linkedDate = route.query.date
+  let applied = false
+  let dayChanged = false
+
+  if (gaps != null) {
+    onlyGaps.value = gaps === '1' || gaps === 'true'
+    applied = true
+  }
+
+  if (linkedDate != null) {
+    if (typeof linkedDate === 'string' && ISO_DATE.test(linkedDate) && linkedDate !== date.value) {
+      date.value = linkedDate
+      dayChanged = true
+    }
+    applied = true
+  }
+
+  if (!applied) return { applied: false, dayChanged: false }
+
+  router.replace({ query: {} })
+  return { applied: true, dayChanged }
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
@@ -247,8 +274,19 @@ function onGlobalKey(event) {
   toolbarRef.value?.focusSearch()
 }
 
+// The drawer is global, so a link can point at the page it was opened from.
+// `onMounted` alone would miss that navigation because the page is reused.
+watch(
+  () => route.query,
+  () => {
+    const { dayChanged } = applyDeepLink()
+    if (dayChanged) fetchManning()
+  },
+)
+
 onMounted(() => {
   window.addEventListener('keydown', onGlobalKey)
+  applyDeepLink()
   load()
 })
 

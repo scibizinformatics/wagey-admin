@@ -268,6 +268,24 @@ export function manningStatus(row) {
 }
 
 /**
+ * The statuses a reader has to act on.
+ *
+ * Exported because the needs-attention drawer reads the same set: a row the
+ * board calls "needs attention" must not be missing from the inbox, and a row
+ * the board considers settled must not appear there.
+ */
+export const MANNING_ATTENTION_STATUSES = new Set([
+  'awol',
+  'understaffed',
+  'under-assigned',
+  'not-timed-in',
+])
+
+export function manningNeedsAttention(row) {
+  return MANNING_ATTENTION_STATUSES.has(manningStatus(row).key)
+}
+
+/**
  * Everything about a row that needs a person, and nothing that does not.
  *
  * This replaces five columns — not timed in, AWOL, leave, CTO, off — that were

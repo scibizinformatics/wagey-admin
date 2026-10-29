@@ -234,6 +234,22 @@ export function matchesIssueFilter(row, issue) {
   }
 }
 
+/**
+ * The three states the audit dot marks: a flagged or suspicious punch, or a
+ * record the system had to close itself. `matchesIssueFilter` deliberately
+ * covers only the first two — the endpoint's `issue` param does not know about
+ * `auto_closed` — so the dot's reading lives here where the page and the
+ * needs-attention drawer can share it.
+ */
+export function hasAuditFlags(row) {
+  return Boolean(row?.flagged || row?.is_suspicious || row?.auto_closed)
+}
+
+/** An audit row a person still has to settle. */
+export function hasOpenAudit(row) {
+  return Boolean(row) && !row.acknowledged && hasAuditFlags(row)
+}
+
 export function getShiftName(row) {
   return row?.employee_assignment?.schedule?.shift_type?.name || '—'
 }

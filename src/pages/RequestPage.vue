@@ -366,13 +366,18 @@
 <script setup>
 import PageShell from '@/components/layout/PageShell.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from 'src/boot/axios'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { invalidateEmployeeBalances } from 'src/composables/page/useEmployeeBalances'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useAuthStore } from 'src/boot/auth'
-import { buildEmployeeNameIndex, getApproverName } from 'src/composables/utils/employee'
+import {
+  buildEmployeeNameIndex,
+  getApproverName,
+  isTerminated,
+} from 'src/composables/utils/employee'
 import RequestStatsCards from 'src/components/pages/Request/RequestStatsCards.vue'
 import RequestLeaveTable from 'src/components/pages/Request/RequestLeaveTable.vue'
 import RequestOvertimeTable from 'src/components/pages/Request/RequestOvertimeTable.vue'
@@ -444,6 +449,11 @@ const { employees, fetchEmployees } = useEmployees()
 // A name shared by two employees resolves to null, so no photo is shown rather
 // than the wrong one — mirroring Card taps, Audit, and the Deductions roster.
 const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
+// The create-dialog pickers exclude terminated staff: a leave, overtime or
+// compensable request filed against someone who has left can only be reviewed
+// and paid out wrongly. The roster itself stays whole — the request tables and
+// the payroll-group lookups still need former employees' names and photos.
+const assignableEmployees = computed(() => employees.value.filter((emp) => !isTerminated(emp)))
 // Aliased to `selectedCompany`: several functions in this file declare their own
 // local `companyId` from it, and an outer binding by that name would read as the
 // one being shadowed. It is a *computed* over the Pinia company store, so it
@@ -452,6 +462,8 @@ const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
 // the tabs that did not make the change.
 const { company, companyId: selectedCompany } = useCompany()
 const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const companyName = computed(() => company.value?.name || '')
 
@@ -470,6 +482,23 @@ const applyLeaveTypes = ref([])
 const activeTab = ref('leave')
 const loading = ref(false)
 const searchTerm = ref('')
+
+// The needs-attention drawer links straight at a queue. The tab is set during
+// setup, before the `activeTab` watcher further down is registered, so the deep
+// link does not fire that watcher on top of the initial all-queue load below.
+// The query is consumed once: left in the URL, a reload would re-apply a tab
+// the reader had since changed.
+const REQUEST_TAB_KEYS = new Set(['leave', 'overtime', 'cash_advance', 'compensable', 'swap'])
+
+function applyDeepLink() {
+  const tab = route.query.tab
+  if (tab == null) return false
+  if (typeof tab === 'string' && REQUEST_TAB_KEYS.has(tab)) activeTab.value = tab
+  router.replace({ query: {} })
+  return typeof tab === 'string' && REQUEST_TAB_KEYS.has(tab)
+}
+
+applyDeepLink()
 
 // ===== SHARED: PAYOUT GROUP FILTER =====
 // Every queue on this page can be narrowed to one payout group, the way the
@@ -1452,7 +1481,7 @@ const openOvertimeAdvanceModal = async () => {
 const fetchOvertimeAdvanceEmployees = async () => {
   try {
     await fetchEmployees({ force: true })
-    overtimeAdvanceEmployeeOptions.value = employees.value.map((e) => ({
+    overtimeAdvanceEmployeeOptions.value = assignableEmployees.value.map((e) => ({
       id: e.id,
       name:
         e.user?.full_name ||
@@ -1466,7 +1495,7 @@ const fetchOvertimeAdvanceEmployees = async () => {
 
 const filterOvertimeAdvanceEmployees = (val) => {
   if (!val || val.trim() === '') {
-    overtimeAdvanceEmployeeOptions.value = employees.value.map((e) => ({
+    overtimeAdvanceEmployeeOptions.value = assignableEmployees.value.map((e) => ({
       id: e.id,
       name:
         e.user?.full_name ||
@@ -1476,7 +1505,7 @@ const filterOvertimeAdvanceEmployees = (val) => {
     return
   }
   const search = val.toLowerCase()
-  overtimeAdvanceEmployeeOptions.value = employees.value
+  overtimeAdvanceEmployeeOptions.value = assignableEmployees.value
     .filter((e) => {
       const name =
         e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim()
@@ -1555,7 +1584,7 @@ const openApplyLeaveModal = async () => {
   }
   try {
     await fetchEmployees({ force: true })
-    applyLeaveEmployeeOptions.value = employees.value
+    applyLeaveEmployeeOptions.value = assignableEmployees.value
       .map(applyLeaveEmployeeOption)
       .filter((option) => option.id !== null && option.id !== undefined)
     const res = await api.get('/attendance/leave-types/', {
@@ -1571,11 +1600,11 @@ const openApplyLeaveModal = async () => {
 
 const filterApplyLeaveEmployees = (val) => {
   if (!val || val.trim() === '') {
-    applyLeaveEmployeeOptions.value = employees.value.map(applyLeaveEmployeeOption)
+    applyLeaveEmployeeOptions.value = assignableEmployees.value.map(applyLeaveEmployeeOption)
     return
   }
   const search = val.toLowerCase()
-  applyLeaveEmployeeOptions.value = employees.value
+  applyLeaveEmployeeOptions.value = assignableEmployees.value
     .filter((e) => {
       const name =
         e.user?.full_name || `${e.user?.first_name || ''} ${e.user?.last_name || ''}`.trim()
@@ -2837,7 +2866,7 @@ const openCompensableApplyModal = async () => {
     // The body's `employee_ids` are uuids, so the option value is the uuid the
     // endpoint wants rather than the roster's own pk — the same pairing the
     // attendance and access-card dropdowns already use.
-    compensableApplyEmployeeOptions.value = employees.value
+    compensableApplyEmployeeOptions.value = assignableEmployees.value
       .map((employee) => ({
         id: employee.uuid || employee.id,
         name:
@@ -2892,7 +2921,7 @@ const fetchCompensableApplySubcategories = async (categoryId) => {
 }
 
 const filterCompensableApplyEmployees = (val) => {
-  const all = employees.value.map((employee) => ({
+  const all = assignableEmployees.value.map((employee) => ({
     id: employee.uuid || employee.id,
     name:
       employee.user?.full_name ||
@@ -2989,6 +3018,16 @@ watch(activeTab, (newTab) => {
     fetchLeaveRequests()
   }
 })
+
+// The drawer is global, so a link can point at the page it was opened from.
+// `onMounted` alone would miss that navigation because the page is reused. A
+// changed tab is fetched by the watcher above; an unchanged one needs nothing.
+watch(
+  () => route.query,
+  () => {
+    applyDeepLink()
+  },
+)
 
 watch(caViewMode, (mode) => {
   if (activeTab.value === 'cash_advance') {

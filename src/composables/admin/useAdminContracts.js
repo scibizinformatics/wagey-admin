@@ -63,6 +63,10 @@ export function useAdminContracts() {
       company_id: null,
       contract_type_id: null,
       assignment_mode: 'custom',
+      // The work-hours mode is not a contract field: it is a UI mirror of the
+      // `Work Hours Flexible` / `Work Hours Strict` eligibility ids, and
+      // `EmployeesPage` is what writes the chosen value into `eligibilities`.
+      work_hours_type: null,
       pay_type: null,
       rate: '',
       work_hours_per_week: null,
