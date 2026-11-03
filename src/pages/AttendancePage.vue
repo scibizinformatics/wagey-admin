@@ -141,11 +141,14 @@
             </q-tooltip>
           </q-select>
 
-          <!-- Which records need looking at. A plain query param on the month
-               endpoint, so unlike the payout-group select it works over a date
-               range too. "Any issue" is flagged OR suspicious — the label says
-               "any" rather than "all" because `issue=all` means either flag set,
-               not no filter at all. -->
+          <!-- Which records need looking at. Mostly a plain query param on the
+               month endpoint, so unlike the payout-group select it works over a
+               date range too. "Any issue" is flagged OR suspicious — the label
+               says "any" rather than "all" because `issue=all` means either flag
+               set, not no filter at all. The last option is the exception: an
+               audit nobody has acknowledged is a per-record state the endpoint
+               cannot narrow on, so it is filtered from the loaded month instead
+               of sent as a param. -->
           <q-select
             v-model="issueFilter"
             :options="ATTENDANCE_ISSUE_FILTERS"
@@ -156,37 +159,12 @@
             hide-bottom-space
             :popup-content-class="'att-popup'"
             class="att-filter dash-field"
-            aria-label="Filter by issue"
+            aria-label="Filter records"
           >
             <template v-slot:prepend>
               <q-icon name="o_report" size="16px" />
             </template>
           </q-select>
-
-          <!-- Narrows the loaded issue set to the records nobody has settled.
-               Deliberately client-side: acknowledgement is a per-record state,
-               not a query param the month endpoint reads, and turning it on
-               must not throw away a month already in hand. -->
-          <q-btn
-            outline
-            no-caps
-            dense
-            size="12px"
-            icon="o_pending_actions"
-            label="Unresolved"
-            class="att-unassigned-btn"
-            :class="{ 'att-unassigned-btn--on': onlyUnresolved }"
-            :aria-pressed="onlyUnresolved"
-            @click="onlyUnresolved = !onlyUnresolved"
-          >
-            <q-tooltip>
-              {{
-                onlyUnresolved
-                  ? 'Showing only audits nobody has acknowledged'
-                  : 'Show only audits nobody has acknowledged'
-              }}
-            </q-tooltip>
-          </q-btn>
 
           <!-- Widens the month rather than narrowing it, so it is a button that
                carries state instead of a select: there is nothing to choose
@@ -468,7 +446,7 @@ import {
   attendanceStatusRank,
   reportLeaveTypeCoverage,
   matchesIssueFilter,
-  hasOpenAudit,
+  serverIssueParam,
   ATTENDANCE_ISSUE_FILTERS,
 } from '@/composables/utils/attendance'
 import { buildLeaveTypeIndex } from '@/composables/utils/leaveTypes'
@@ -648,18 +626,20 @@ const payrollGroupFilter = ref(null)
 const includeUnassigned = ref(false)
 
 // ─── Issue filter ──────────────────────────────────────────────────────────────
-// Which records need a human to look at them. Server-side, like the unassigned
-// flag above: the endpoint narrows on `flagged` / `is_suspicious`, and a record
-// with neither set is not something this page can compute as needing attention
-// any more cheaply than the backend can. The rows are narrowed again locally in
-// filteredAttendanceRows, because an unknown query param is ignored rather than
-// rejected and a backend that ignored this one would answer in full.
+// Which records need a human to look at them. Mostly server-side, like the
+// unassigned flag above: the endpoint narrows on `flagged` / `is_suspicious`, and
+// a record with neither set is not something this page can compute as needing
+// attention any more cheaply than the backend can. The rows are narrowed again
+// locally in filteredAttendanceRows, because an unknown query param is ignored
+// rather than rejected and a backend that ignored this one would answer in full.
+//
+// "Unresolved only" is the exception, and the reason the select is not a plain
+// pass-through: acknowledgement is a per-record state the endpoint does not read,
+// so `serverIssueParam` returns null for it and the narrowing happens over the
+// loaded month. Sending nothing is also what keeps it sharing the All-records
+// cache entry, and what lets an auto-closed record — wider than `issue=all` —
+// stay in view.
 const issueFilter = ref(null)
-
-// Client-side, because "unresolved" is the acknowledgement state rather than a
-// flag the month endpoint knows how to narrow on. It is a subset of whatever
-// the issue filter loaded, so turning it on never costs a request.
-const onlyUnresolved = ref(false)
 
 const payrollGroupOptions = computed(() =>
   payrollGroups.value.map((g) => ({ label: g.name, value: g.id })),
@@ -959,16 +939,11 @@ const filteredAttendanceRows = computed(() => {
   // The endpoint has already applied this one; doing it again costs a boolean per
   // row and is what makes the filter honest against a backend that ignores it,
   // which an unknown query param invites. A subset of what came back either way,
-  // so the server's own totals are unaffected.
+  // so the server's own totals are unaffected. "Unresolved only" is narrowed here
+  // and only here — it is the one option the endpoint never sees, and applying it
+  // over the loaded month is also what keeps an auto-closed record in view.
   if (issueFilter.value) {
     data = data.filter((row) => matchesIssueFilter(row, issueFilter.value))
-  }
-
-  // The audit dot can mark an auto-closed record the endpoint's `issue=all`
-  // does not return, so this is deliberately wider than `matchesIssueFilter`.
-  // It is still a subset of what is loaded, never a second fetch.
-  if (onlyUnresolved.value) {
-    data = data.filter(hasOpenAudit)
   }
   return data
 })
@@ -1146,12 +1121,10 @@ const activeFilters = computed(() => {
   if (issueFilter.value) {
     // Labelled from the option list rather than the raw value, so the chip reads
     // the way the select did — and so "issue=all" never surfaces as a chip
-    // claiming it means "everything".
+    // claiming it means "everything". It also means the local "Unresolved only"
+    // option gets its chip from the same place, with no separate key to clear.
     const option = ATTENDANCE_ISSUE_FILTERS.find((f) => f.value === issueFilter.value)
     out.push({ key: 'issue', label: option?.label ?? 'Issues' })
-  }
-  if (onlyUnresolved.value) {
-    out.push({ key: 'unresolved', label: 'Unresolved only' })
   }
   // Not a narrowing filter like the rest of this list — it widens it. It still
   // gets a chip: the footer count speaks for whatever set is loaded, so a
@@ -1169,7 +1142,6 @@ function clearFilter(key) {
   // nothing to call here.
   if (key === 'includeUnassigned') includeUnassigned.value = false
   if (key === 'issue') issueFilter.value = null
-  if (key === 'unresolved') onlyUnresolved.value = false
   // Dropping the span leaves range mode entirely; dropping just the employee
   // widens the same span to everyone, which needs no refetch — the months are
   // already loaded and filteredAttendanceRows re-runs on its own.
@@ -1291,8 +1263,11 @@ async function fetchAttendanceData(params = {}) {
     // Same reasoning, and the same absence: 'all' is a real request for either
     // flag, so it goes up, but an unused filter sends nothing at all rather than
     // `issue=` — paramsKey drops only undefined/null/'' , and a changed key would
-    // mean the unfiltered month no longer shares its cache entry.
-    const issueParams = issueFilter.value ? { issue: issueFilter.value } : {}
+    // mean the unfiltered month no longer shares its cache entry. "Unresolved
+    // only" resolves to null here for the same two reasons: the endpoint cannot
+    // narrow on it, and it must share the All-records entry.
+    const issueValue = serverIssueParam(issueFilter.value)
+    const issueParams = issueValue ? { issue: issueValue } : {}
 
     const extraParams = {
       ...(filters.value.cost_center ? { cost_center: filters.value.cost_center } : {}),
@@ -1826,7 +1801,6 @@ function clearAllFilters() {
   payrollGroupFilter.value = null
   includeUnassigned.value = false
   issueFilter.value = null
-  onlyUnresolved.value = false
   dateRangeActive.value = false
   dateRangeEmployee.value = null
   currentDate.value = today
@@ -2051,11 +2025,12 @@ watch(attendanceData, async () => {
   await ensurePayoutGroups(ids)
 })
 
-// Both server-side, so a change means a refetch rather than a recompute — the
-// rows are not in the payload until they are asked for. The page resets because
-// the row count changes under the reader's feet. One watcher for both, so a
-// `clearAllFilters` that resets them together issues a single fetch rather than
-// one per ref.
+// Fetching, not recomputing: the rows are not in the payload until they are
+// asked for. The page resets because the row count changes under the reader's
+// feet. One watcher for both, so a `clearAllFilters` that resets them together
+// issues a single fetch rather than one per ref. "Unresolved only" is the one
+// `issueFilter` value that sends nothing new, so it lands on the All-records
+// cache entry — a refetch that costs no request.
 watch([includeUnassigned, issueFilter], () => {
   pagination.value.page = 1
   fetchAttendanceData()
@@ -2105,11 +2080,11 @@ watch(
  * in the search box rather than in hidden state, so it shows up as a filter
  * chip the reader can see and clear.
  *
- * The needs-attention drawer adds `from`/`to` (a span), `issue=all` and
- * `unresolved=1`. They follow the same contract: each one lands in a control
- * the reader can see and clear, and the query is consumed, so a reload does not
- * re-apply a narrowing they had since removed. The route watcher below is what
- * makes a link work when the reader is already on this page.
+ * The needs-attention drawer adds `from`/`to` (a span) and `issue=unresolved`.
+ * They follow the same contract: each one lands in a control the reader can see
+ * and clear, and the query is consumed, so a reload does not re-apply a narrowing
+ * they had since removed. The route watcher below is what makes a link work when
+ * the reader is already on this page.
  *
  * Applied before the first fetch: the endpoint is keyed by year/month, so
  * setting the date afterwards would mean fetching the current month and then
@@ -2171,8 +2146,12 @@ function applyDeepLink() {
     applied = true
   }
 
+  // The drawer used to send `unresolved=1` beside `issue=all`; it now sends
+  // `issue=unresolved`, which the check above already accepts. Kept as an alias
+  // so a link from that build still lands on the visible option instead of
+  // silently losing its narrowing.
   if (linkedUnresolved === '1' || linkedUnresolved === 'true') {
-    onlyUnresolved.value = true
+    issueFilter.value = 'unresolved'
     applied = true
   }
 
