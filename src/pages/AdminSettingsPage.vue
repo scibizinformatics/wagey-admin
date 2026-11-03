@@ -138,6 +138,9 @@
             <q-tab-panel name="payroll-groups" class="q-pa-none">
               <AdminSettingsPanelPayrollGroups :search-query="searchQuery || ''" />
             </q-tab-panel>
+            <q-tab-panel name="contributions" class="q-pa-none">
+              <AdminSettingsPanelContributions :search-query="searchQuery || ''" />
+            </q-tab-panel>
             <q-tab-panel name="compensable" class="q-pa-none">
               <AdminSettingsPanelCompensable :search-query="searchQuery || ''" />
             </q-tab-panel>
@@ -170,6 +173,7 @@ import AdminSettingsPanelContractTypes from '@/components/pages/AdminSettings/Ad
 import AdminSettingsPanelCustomMultipliers from '@/components/pages/AdminSettings/AdminSettingsPanelCustomMultipliers.vue'
 import AdminSettingsPanelCostCenters from '@/components/pages/AdminSettings/AdminSettingsPanelCostCenters.vue'
 import AdminSettingsPanelPayrollGroups from '@/components/pages/AdminSettings/AdminSettingsPanelPayrollGroups.vue'
+import AdminSettingsPanelContributions from '@/components/pages/AdminSettings/AdminSettingsPanelContributions.vue'
 import AdminSettingsPanelCompensable from '@/components/pages/AdminSettings/AdminSettingsPanelCompensable.vue'
 import AdminSettingsPanelLeaveTypes from '@/components/pages/AdminSettings/AdminSettingsPanelLeaveTypes.vue'
 import AdminSettingsPanelHolidays from '@/components/pages/AdminSettings/AdminSettingsPanelHolidays.vue'
@@ -274,6 +278,16 @@ const sectionGroups = [
         icon: 'o_groups',
         searchable: true,
         blurb: 'Who is paid together, and when',
+      },
+      {
+        // Contribution components sit beside payroll groups rather than beside
+        // leave or holiday: they are the figures a pay run deducts, and the
+        // types they file under are managed from this same section.
+        name: 'contributions',
+        label: 'Contributions',
+        icon: 'o_savings',
+        searchable: true,
+        blurb: 'Statutory contribution components, and the types they belong to',
       },
     ],
   },
