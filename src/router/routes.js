@@ -118,9 +118,12 @@ const routes = [
         component: () => import('pages/DeductionsPage.vue'),
       },
       {
+        // Allowance types are configured in Admin Settings now. Kept as a
+        // redirect so an old bookmark or link still lands on the section that
+        // replaced this page.
         path: 'allowances',
         name: 'allowances',
-        component: () => import('pages/AllowancesPage.vue'),
+        redirect: { name: 'admin-settings', query: { tab: 'allowances' } },
       },
       {
         path: 'announcements',

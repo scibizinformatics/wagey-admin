@@ -252,8 +252,9 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 These are live and not covered by the long-form doc — treat them as current, not dead:
 
 - **Card taps** `/app/card-taps` (`GET /audit/card-taps/{company_id}/`) and **allowances**
-  `/app/allowances` (`/allowance/...`) — `CardTapsPage.vue`/`useCardTaps.js`/`utils/cardTaps.js`,
-  `AllowancesPage.vue`/`useAllowances.js`/`useEmployeeAllowances.js`/`utils/allowances.js`.
+  (Admin Settings > Allowances; `/app/allowances` redirects there) — `CardTapsPage.vue`/`useCardTaps.js`/
+  `utils/cardTaps.js`, `AdminSettingsPanelAllowances.vue`/`useAllowances.js`/`useEmployeeAllowances.js`/
+  `utils/allowances.js`.
 - **Half-day leave** — `/attendance/leave-list/` reports a half day as `total_days: 1` with
   `total_day_value: "0.50"`; render the _value_, not the count, via `leaveRequestDurationLabel` in
   `utils/leaveRequests.js` (it keeps the `total_days`/`hours`/`N/A` fallbacks). The write side of the

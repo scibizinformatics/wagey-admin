@@ -6,8 +6,9 @@ import { extractErrorMessage } from 'src/composables/utils/http'
 import { useToast } from 'src/composables/useToast'
 
 /**
- * Allowance types for the active company — the table rows behind the
- * Allowances page (`/app/allowances`).
+ * Allowance types for the active company — the table rows behind the Admin
+ * Settings > Allowances panel (`/app/admin-settings`; the old `/app/allowances`
+ * route redirects there).
  *
  * The endpoints are keyed by company in the *path*:
  *   GET  /allowance/allowance-types/company/{company_id}/

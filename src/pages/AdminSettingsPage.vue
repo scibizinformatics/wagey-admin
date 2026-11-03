@@ -144,6 +144,9 @@
             <q-tab-panel name="compensable" class="q-pa-none">
               <AdminSettingsPanelCompensable :search-query="searchQuery || ''" />
             </q-tab-panel>
+            <q-tab-panel name="allowances" class="q-pa-none">
+              <AdminSettingsPanelAllowances :search-query="searchQuery || ''" />
+            </q-tab-panel>
             <q-tab-panel name="leave-types" class="q-pa-none">
               <AdminSettingsPanelLeaveTypes :search-query="searchQuery || ''" />
             </q-tab-panel>
@@ -162,7 +165,8 @@
 
 <script setup>
 import PageShell from '@/components/layout/PageShell.vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useCompany } from '@/composables/page/useCompany'
 
 import AdminSettingsPanelSites from '@/components/pages/AdminSettings/AdminSettingsPanelSites.vue'
@@ -175,13 +179,13 @@ import AdminSettingsPanelCostCenters from '@/components/pages/AdminSettings/Admi
 import AdminSettingsPanelPayrollGroups from '@/components/pages/AdminSettings/AdminSettingsPanelPayrollGroups.vue'
 import AdminSettingsPanelContributions from '@/components/pages/AdminSettings/AdminSettingsPanelContributions.vue'
 import AdminSettingsPanelCompensable from '@/components/pages/AdminSettings/AdminSettingsPanelCompensable.vue'
+import AdminSettingsPanelAllowances from '@/components/pages/AdminSettings/AdminSettingsPanelAllowances.vue'
 import AdminSettingsPanelLeaveTypes from '@/components/pages/AdminSettings/AdminSettingsPanelLeaveTypes.vue'
 import AdminSettingsPanelHolidays from '@/components/pages/AdminSettings/AdminSettingsPanelHolidays.vue'
 import AdminSettingsPanelHolidayTypes from '@/components/pages/AdminSettings/AdminSettingsPanelHolidayTypes.vue'
 
 const { company } = useCompany()
 
-const activeTab = ref('sites')
 const searchQuery = ref('')
 
 const companyName = computed(() => company.value?.name || '')
@@ -289,6 +293,17 @@ const sectionGroups = [
         searchable: true,
         blurb: 'Statutory contribution components, and the types they belong to',
       },
+      {
+        // Allowance types were their own page (`/app/allowances`) in the pay
+        // group of the sidebar, but they are company configuration like the
+        // contribution components above — so they live here, where the admin
+        // who sets pay policy is already working.
+        name: 'allowances',
+        label: 'Allowances',
+        icon: 'o_card_giftcard',
+        searchable: true,
+        blurb: 'Allowance types, and how they are paid',
+      },
     ],
   },
   {
@@ -320,6 +335,16 @@ const sectionGroups = [
 
 const sections = sectionGroups.flatMap((group) => group.sections)
 
+const route = useRoute()
+const router = useRouter()
+
+// Resolve the redirect target in the same tick the page is created, so the
+// panel does not animate from Sites to Allowances after mount.
+const initialTab = String(route.query.tab || '')
+const activeTab = ref(
+  sections.some((section) => section.name === initialTab) ? initialTab : 'sites',
+)
+
 const activeSection = computed(
   () => sections.find((section) => section.name === activeTab.value) ?? sections[0],
 )
@@ -329,6 +354,26 @@ const activeSection = computed(
 watch(activeTab, () => {
   searchQuery.value = ''
 })
+
+/**
+ * The retired `/app/allowances` route redirects here with `?tab=allowances`.
+ * Read it once and drop it from the URL: left behind, it would re-open that
+ * section after the reader had moved on, and a reload would undo their choice.
+ */
+function applyDeepLink() {
+  const requestedTab = String(route.query.tab || '')
+  if (!requestedTab) return
+  if (sections.some((section) => section.name === requestedTab)) {
+    activeTab.value = requestedTab
+  }
+  router.replace({ query: {} })
+}
+
+// The page is reused by the router, so `onMounted` alone would miss a link
+// aimed at it while it is already open. The replacement above re-enters here
+// with an empty query and does nothing.
+watch(() => route.query, applyDeepLink)
+onMounted(applyDeepLink)
 </script>
 
 <style scoped>
