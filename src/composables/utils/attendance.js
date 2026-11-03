@@ -200,25 +200,42 @@ export function workTypeToneClass(workType) {
 // whole month, and the reader would be looking at every record under a chip that
 // claims "Flagged only" — nothing on screen contradicts the claim.
 //
-// `all` is either flag, *not* "no filter". Hence four options rather than three,
+// `all` is either flag, *not* "no filter". Hence five options rather than four,
 // and the first one's value is `null`, which is what keeps the parameter off the
 // request entirely when the filter is unused — sending `issue=` would key the
 // month cache differently and throw away a month already in hand.
 //
-// `auto_closed` is deliberately absent: it is not part of what the endpoint's
-// `issue` means, so a record the audit dot marks for that reason alone falls out
-// of "Any issue". The dot's own rule is wider, and cannot be reconciled here — a
-// server-narrowed set cannot be widened after the fact.
+// The last option is the odd one. Acknowledgement is a per-record state the
+// `issue` param does not read, so `unresolved` is narrowed locally and carries
+// `local` to say so. It deliberately sends *no* `issue` param: that keeps the
+// All-records cache key, and it keeps the loaded set unfiltered, which is what
+// lets it see an `auto_closed` record the endpoint's `issue=all` never returns.
+// The dot's own rule is wider than the endpoint's, and a server-narrowed set
+// cannot be widened after the fact.
 export const ATTENDANCE_ISSUE_FILTERS = [
   { label: 'All records', value: null },
   { label: 'Any issue', value: 'all' },
   { label: 'Flagged only', value: 'flagged' },
   { label: 'Suspicious only', value: 'suspicious' },
+  { label: 'Unresolved only', value: 'unresolved', local: true },
 ]
 
 /**
+ * The `issue` value to put on the request, or `null` when the option is narrowed
+ * locally and must not be sent at all. Null is also what lets an unused filter
+ * and the unresolved one share the All-records cache entry.
+ *
+ * @param {'flagged'|'suspicious'|'all'|'unresolved'|null} issue
+ * @returns {'flagged'|'suspicious'|'all'|null}
+ */
+export function serverIssueParam(issue) {
+  const option = ATTENDANCE_ISSUE_FILTERS.find((filter) => filter.value === issue)
+  return option && !option.local ? option.value : null
+}
+
+/**
  * @param {object} row  An attendance record.
- * @param {'flagged'|'suspicious'|'all'|null} issue
+ * @param {'flagged'|'suspicious'|'all'|'unresolved'|null} issue
  * @returns {boolean}
  */
 export function matchesIssueFilter(row, issue) {
@@ -229,6 +246,8 @@ export function matchesIssueFilter(row, issue) {
       return Boolean(row?.is_suspicious)
     case 'all':
       return Boolean(row?.flagged || row?.is_suspicious)
+    case 'unresolved':
+      return hasOpenAudit(row)
     default:
       return true
   }
@@ -236,10 +255,9 @@ export function matchesIssueFilter(row, issue) {
 
 /**
  * The three states the audit dot marks: a flagged or suspicious punch, or a
- * record the system had to close itself. `matchesIssueFilter` deliberately
- * covers only the first two — the endpoint's `issue` param does not know about
- * `auto_closed` — so the dot's reading lives here where the page and the
- * needs-attention drawer can share it.
+ * record the system had to close itself. The endpoint's `issue` param knows only
+ * the first two, so `auto_closed` is why the page and the needs-attention drawer
+ * share this reading rather than asking the server for it.
  */
 export function hasAuditFlags(row) {
   return Boolean(row?.flagged || row?.is_suspicious || row?.auto_closed)
