@@ -2133,13 +2133,112 @@
 // Only worth drawing where a scroll can actually happen. Above the laptop step
 // the tables fit, and a permanent empty track under a table that does not move
 // is just noise.
+//
+// `--reveal` is excluded on purpose, not by accident of source order: that
+// variant reserves its gutter at every width, because the table that uses it
+// still overflows well above the laptop step.
 @media (min-width: 1440px) {
-  .dash-scroll-x::-webkit-scrollbar {
+  .dash-scroll-x:not(.dash-scroll-x--reveal)::-webkit-scrollbar {
     height: 0;
   }
-  .dash-scroll-x {
+  .dash-scroll-x:not(.dash-scroll-x--reveal) {
     scrollbar-width: auto;
   }
+}
+
+// ----------------------------------------------------------------------------
+// `.dash-scroll-x--reveal` — the same container and the same 8px track, painted
+// only while the reader is in contact with it: pointer over it, focus inside it,
+// or a scroll in flight, which the owning component reports as `.is-scrolling`.
+//
+// The comment above argues for an always-drawn track; this is the opt-in
+// exception, and the reason is what the table *is*. The step-1 review table is
+// fourteen columns — the widest in the product — and the subject of its own
+// page, so a permanent 8px band under it read as a stray rule resting on the
+// card's footer rather than as part of the table. It overflows at every desktop
+// width regardless, so a reveal that answers on contact still answers the
+// question the track exists to answer: "does this continue sideways?".
+//
+// Only the colours swap. `overflow-x: auto` with a thin scrollbar draws the
+// strip whenever the content overflows, so the gutter is already reserved and
+// hovering cannot move the table by 8px. The reveal is also an instant swap
+// rather than a fade — scrollbar pseudo-elements cannot be transitioned.
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// The track belongs to the element that scrolls, not to the element the class
+// sits on. Quasar's QTable renders its own scrollport — `div.q-table__middle`
+// carrying Quasar's `scroll` utility (`overflow: auto`) and `max-width: 100%` —
+// so a table's overflow is absorbed there and the wrapper around it never
+// overflows at all. Styling `::-webkit-scrollbar` on the wrapper therefore draws
+// nothing, at any width, which is why this page had no horizontal affordance
+// even once its columns were wide enough to need one.
+// `AdminSettingsPanelContractTypes.vue` documents the same fact from the other
+// side; its "Where the horizontal scroll lives" note is worth reading before
+// moving any of this back out.
+// ----------------------------------------------------------------------------
+.dash-scroll-x--reveal .q-table__middle {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.dash-scroll-x--reveal .q-table__middle::-webkit-scrollbar {
+  height: 8px;
+}
+
+.dash-scroll-x--reveal .q-table__middle::-webkit-scrollbar-track {
+  background: transparent;
+  border-top: 1px solid transparent;
+}
+
+.dash-scroll-x--reveal .q-table__middle::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--dash-r-pill);
+}
+
+.dash-scroll-x--reveal:hover .q-table__middle,
+.dash-scroll-x--reveal:focus-within .q-table__middle,
+.dash-scroll-x--reveal.is-scrolling .q-table__middle {
+  scrollbar-color: var(--dash-line-strong) var(--dash-n-50);
+}
+
+.dash-scroll-x--reveal:hover .q-table__middle::-webkit-scrollbar-track,
+.dash-scroll-x--reveal:focus-within .q-table__middle::-webkit-scrollbar-track,
+.dash-scroll-x--reveal.is-scrolling .q-table__middle::-webkit-scrollbar-track {
+  background: var(--dash-n-50);
+  border-top-color: var(--dash-line-soft);
+}
+
+.dash-scroll-x--reveal:hover .q-table__middle::-webkit-scrollbar-thumb,
+.dash-scroll-x--reveal:focus-within .q-table__middle::-webkit-scrollbar-thumb,
+.dash-scroll-x--reveal.is-scrolling .q-table__middle::-webkit-scrollbar-thumb {
+  background: var(--dash-line-strong);
+}
+
+.dash-scroll-x--reveal:hover .q-table__middle::-webkit-scrollbar-thumb:hover {
+  background: var(--dash-n-400);
+}
+
+// The pointer is the other half of the affordance: the hand says the table can be
+// picked up and pushed. It sits on the wrapper rather than the scrollport so it
+// covers the whole table area, and it waits for `.is-pannable`, which the card
+// sets from the scrollport's own measurements — a `grab` cursor over a table that
+// fits promises movement nothing delivers.
+//
+// `grabbing` has to reach the cells too — `*` out-specifies the `pointer` Quasar
+// puts on its buttons and sortable headers, or the cursor would flick back to an
+// arrow the moment a pan crossed one. `user-select` is off only while a pan is in
+// flight; a plain press still selects, which is how a name gets copied.
+.dash-scroll-x--reveal.is-pannable {
+  cursor: grab;
+}
+
+.dash-scroll-x--reveal.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.dash-scroll-x--reveal.is-dragging * {
+  cursor: grabbing;
 }
 
 // ============================================================================

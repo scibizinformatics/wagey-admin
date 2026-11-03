@@ -19,6 +19,7 @@
         :page-size-options="pageSizeOptions"
         :loading="loading"
         searchable
+        interactive-scroll
         search-placeholder="Search employee"
         unit-label="employee"
         unit-label-plural="employees"
@@ -765,20 +766,42 @@ function workHoursTitle(row) {
 }
 
 /**
- * Figures are right-aligned so a column of them reads as numbers.
+ * Column widths are load-bearing here, not decoration.
  *
- * The money columns sort through a `field` function that coerces to Number: the
- * API sends decimals as strings ("1500.00"), and sorting those as text puts
- * "900.00" above "1500.00".
+ * Fourteen columns with no floor of their own were being compressed to fit the
+ * card: every cell wrapped, the employee name was truncated to an ellipsis, and
+ * the table was never wider than its container — so there was nothing to scroll,
+ * and the horizontal affordance this page asks for (`interactiveScroll` on the
+ * table card: the track on contact plus drag-to-pan) had nothing to act on. Each
+ * column now declares a minimum wide enough for its own content; together they
+ * exceed a laptop card, which is what makes the table scroll at all.
+ *
+ * Declared twice on purpose: QTable reads `style` and applies it to header and
+ * body cells alike, while TableSkeleton reads `minWidth`. The loading placeholder
+ * is built from this same array, so the two stay in step.
+ *
+ * Figures right-aligned so a column of them reads as numbers. The money columns
+ * sort through a `field` function that coerces to Number: the API sends decimals
+ * as strings ("1500.00"), and sorting those as text puts "900.00" above "1500.00".
  */
 const columns = [
-  { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
+  {
+    name: 'employee',
+    label: 'Employee',
+    field: 'employee',
+    align: 'left',
+    sortable: true,
+    style: 'min-width: 220px',
+    minWidth: 220,
+  },
   {
     name: 'leave_request_count',
     label: 'Leave',
     field: (row) => amount(row.leave_request_count),
     align: 'right',
     sortable: true,
+    style: 'min-width: 88px',
+    minWidth: 88,
   },
   {
     name: 'ot_request',
@@ -786,6 +809,8 @@ const columns = [
     field: (row) => amount(row.ot_request),
     align: 'right',
     sortable: true,
+    style: 'min-width: 88px',
+    minWidth: 88,
   },
   // Overtime already approved, next to the requests made for it. Sorted as its own
   // count rather than as a ratio against `ot_request`: pre-approval is not owed on
@@ -796,6 +821,8 @@ const columns = [
     field: (row) => amount(row.pre_approved_ot),
     align: 'right',
     sortable: true,
+    style: 'min-width: 120px',
+    minWidth: 120,
   },
   {
     name: 'requested_cash_advance',
@@ -803,6 +830,8 @@ const columns = [
     field: (row) => amount(row.requested_cash_advance),
     align: 'right',
     sortable: true,
+    style: 'min-width: 120px',
+    minWidth: 120,
   },
   {
     name: 'approved_cash_advance',
@@ -810,6 +839,8 @@ const columns = [
     field: (row) => amount(row.approved_cash_advance),
     align: 'right',
     sortable: true,
+    style: 'min-width: 120px',
+    minWidth: 120,
   },
   {
     name: 'contribution',
@@ -817,6 +848,8 @@ const columns = [
     field: (row) => amount(row.contribution),
     align: 'right',
     sortable: true,
+    style: 'min-width: 120px',
+    minWidth: 120,
   },
   // Attendance the run could not take at face value. Each is its own column
   // rather than one total, because they call for different things: a suspicious
@@ -831,6 +864,8 @@ const columns = [
     field: (row) => attendancePair(row, 'suspicious').outstanding,
     align: 'right',
     sortable: true,
+    style: 'min-width: 104px',
+    minWidth: 104,
   },
   {
     name: 'flagged_attendance_count',
@@ -838,6 +873,8 @@ const columns = [
     field: (row) => attendancePair(row, 'flagged').outstanding,
     align: 'right',
     sortable: true,
+    style: 'min-width: 92px',
+    minWidth: 92,
   },
   {
     name: 'manual_attendance_count',
@@ -845,6 +882,8 @@ const columns = [
     field: (row) => amount(row.manual_attendance_count),
     align: 'right',
     sortable: true,
+    style: 'min-width: 92px',
+    minWidth: 92,
   },
   // Hours worked against the hours the cutoff expects of them, as one cell for
   // the reason the attendance pairs are one cell. Sorted by what is still
@@ -857,6 +896,8 @@ const columns = [
     field: (row) => workHoursPair(row).shortfall,
     align: 'right',
     sortable: true,
+    style: 'min-width: 120px',
+    minWidth: 120,
   },
   // Days worked past what the cutoff expected, beside the hours shortfall it
   // balances against. Sorted by the count itself, worst-first — the only ordering
@@ -867,6 +908,8 @@ const columns = [
     field: (row) => amount(row.days_with_excess_hours),
     align: 'right',
     sortable: true,
+    style: 'min-width: 104px',
+    minWidth: 104,
   },
   // The figure the whole run exists to settle, so it sits with the other money
   // columns rather than being left to the detail dialog.
@@ -876,6 +919,8 @@ const columns = [
     field: (row) => amount(row.net_pay),
     align: 'right',
     sortable: true,
+    style: 'min-width: 120px',
+    minWidth: 120,
   },
   {
     name: 'review_status',
@@ -883,8 +928,17 @@ const columns = [
     field: 'review_status',
     align: 'left',
     sortable: true,
+    style: 'min-width: 140px',
+    minWidth: 140,
   },
-  { name: 'action', label: '', field: 'action', align: 'center' },
+  {
+    name: 'action',
+    label: '',
+    field: 'action',
+    align: 'center',
+    style: 'min-width: 48px',
+    minWidth: 48,
+  },
 ]
 
 function isCashAdvanceShort(row) {

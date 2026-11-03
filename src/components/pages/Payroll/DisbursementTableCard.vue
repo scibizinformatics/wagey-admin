@@ -46,8 +46,33 @@
     <!-- ── Table ── -->
     <!-- `dash-qtable` sits on the scroll wrapper rather than on each slotted
          table: it is the ancestor of all of them, so the five disbursement
-         pages inherit the system chrome without carrying the class each. -->
-    <div class="table-card__scroll dash-qtable dash-qtable--flush dash-scroll-x">
+         pages inherit the system chrome without carrying the class each.
+         `interactiveScroll` is opt-in per page: it draws the scroll track on
+         contact instead of permanently, lets a mouse press pan the table, and
+         makes the container a labelled, keyboard-reachable region. -->
+    <div
+      ref="scrollEl"
+      :class="[
+        'table-card__scroll',
+        'dash-qtable',
+        'dash-qtable--flush',
+        'dash-scroll-x',
+        {
+          'dash-scroll-x--reveal': interactiveScroll,
+          'is-pannable': pannable,
+          'is-scrolling': scrolling,
+          'is-dragging': dragging,
+        },
+      ]"
+      :role="interactiveScroll ? 'region' : undefined"
+      :aria-label="interactiveScroll ? title || 'Table' : undefined"
+      @pointerenter="measurePannable"
+      @pointerdown.capture="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerCancel"
+      @scroll.passive.capture="onScroll"
+    >
       <slot />
     </div>
 
@@ -104,8 +129,9 @@
  * so the owning page keeps its own state and filtering logic; this component only
  * renders the controls.
  */
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useQuasar } from 'quasar'
+import { createDragScroll, resolveScrollport } from 'src/composables/utils/dragScroll'
 
 const $q = useQuasar()
 
@@ -122,11 +148,96 @@ const props = defineProps({
   searchPlaceholder: { type: String, default: 'Search' },
   unitLabel: { type: String, default: 'row' },
   unitLabelPlural: { type: String, default: 'rows' },
+  /**
+   * Treat the table as a canvas rather than a document: draw the horizontal
+   * scroll track only while the reader is in contact with it (see
+   * `.dash-scroll-x--reveal` in src/css/dashboard.scss), let a mouse press drag
+   * it left and right, and make the scroll area a labelled, focusable region.
+   * Off by default: the four step pages share this card, and only the step-1
+   * review table — fourteen columns, the subject of its own page — asks for it.
+   * Turning another step on is this one attribute.
+   */
+  interactiveScroll: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:search', 'update:page', 'update:pageSize'])
 
 const searchRef = ref(null)
+const scrollEl = ref(null)
+
+/**
+ * Passed a getter that returns `null` while the behaviour is not wanted, so the
+ * four pages that do not ask for it get handlers that bail on their first line
+ * instead of four conditionally-bound listeners. The handlers are bound one by
+ * one rather than through `v-on="handlers"`: that form reads the object's keys as
+ * event names, and `onPointerDown` there becomes `on:onPointerDown`, which never
+ * fires.
+ */
+const { dragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel } = createDragScroll(
+  () => (props.interactiveScroll ? scrollEl.value : null),
+)
+
+/**
+ * A reveal can be asked for and cannot answer itself. `:hover` is already false
+ * the moment the pointer leaves the container — which it does halfway through a
+ * drag of the thumb — and it never applies at all to a trackpad flick or a touch
+ * swipe, the two gestures this table is most likely to be read with. A beat of
+ * grace after the last scroll event covers every one of those, and it is only
+ * maintained when the interaction is actually in play.
+ */
+const SCROLL_IDLE_MS = 500
+const scrolling = ref(false)
+let scrollIdleTimer = null
+
+function onScroll() {
+  if (!props.interactiveScroll) return
+  scrolling.value = true
+  clearTimeout(scrollIdleTimer)
+  scrollIdleTimer = setTimeout(() => {
+    scrolling.value = false
+  }, SCROLL_IDLE_MS)
+}
+
+/**
+ * Whether the table is actually wider than the box that scrolls it.
+ *
+ * The box is not the element this card puts the class on — Quasar's QTable renders
+ * its own `.q-table__middle` scrollport and absorbs the table's overflow there, so
+ * the wrapper's own `scrollWidth` always equals its `clientWidth`. Measuring the
+ * wrapper is what made the grab cursor lie (and, before that, made the whole
+ * gesture look broken). `resolveScrollport` is the one place that knowledge lives,
+ * shared with the pan handler so the two can never disagree.
+ *
+ * Rows landing, the page size changing and the window (or the nav rail) resizing
+ * all move the answer, which is why this is observed rather than measured once —
+ * and re-measured on `pointerenter`, so the hand is right at the moment of the
+ * press rather than whenever the last box happened to change.
+ */
+const pannable = ref(false)
+let pannableObserver = null
+
+function measurePannable() {
+  const box = resolveScrollport(scrollEl.value)
+  if (!box) return
+  pannable.value = box.scrollWidth > box.clientWidth
+}
+
+onMounted(() => {
+  measurePannable()
+  if (typeof ResizeObserver === 'function' && scrollEl.value) {
+    pannableObserver = new ResizeObserver(measurePannable)
+    pannableObserver.observe(scrollEl.value)
+    const box = resolveScrollport(scrollEl.value)
+    if (box && box !== scrollEl.value) pannableObserver.observe(box)
+  }
+  window.addEventListener('resize', measurePannable)
+})
+
+onBeforeUnmount(() => {
+  clearTimeout(scrollIdleTimer)
+  pannableObserver?.disconnect()
+  window.removeEventListener('resize', measurePannable)
+})
 
 const maxPages = computed(() => Math.ceil(props.total / props.pageSize) || 1)
 const rangeStart = computed(() => (props.total ? (props.page - 1) * props.pageSize + 1 : 0))
@@ -138,6 +249,18 @@ defineExpose({ focusSearch: () => searchRef.value?.focus() })
 <style scoped>
 .table-card {
   overflow: hidden;
+}
+
+/* Quasar's `.q-table__middle` is the scrollport and Quasar gives it `tabindex="0"`
+   itself, so the keyboard reaches the table there — the wrapper is not given a tab
+   stop, which would have been a dead one (it never scrolls). The system focus ring
+   is painted *outside* the border box and the wrapper clips on both axes, so the
+   ring is drawn inside instead, in the accent rather than its 14%-alpha halo
+   (which reads only beside the white spacer it normally sits against). Same
+   reasoning as `.dash-table__row--clickable` in src/css/dashboard.scss. */
+.table-card__scroll :deep(.q-table__middle:focus-visible) {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--dash-accent);
 }
 
 /* ── Toolbar ── */
