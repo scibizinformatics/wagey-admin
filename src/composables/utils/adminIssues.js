@@ -100,7 +100,7 @@ export function attendanceIssueItem(row, roster = [], index = 0) {
   const resolvedIsPlaceholder = resolved === 'Unknown Employee' || resolved.startsWith('Employee #')
   const name = resolvedIsPlaceholder && row?.employee_name ? row.employee_name : resolved
   const reason = attendanceReason(row)
-  const query = { issue: 'all', unresolved: '1' }
+  const query = { issue: 'unresolved' }
   if (date) query.date = date
   // A bare employee id resolves to "Employee #12", which is not a search term.
   if (name && !name.startsWith('Employee #') && name !== 'Unknown Employee') {
@@ -130,7 +130,7 @@ export function attendanceIssueSection(rows = [], roster = [], { from = '', to =
   const items = sorted.map((row, index) => attendanceIssueItem(row, roster, index))
   if (!items.length) return null
 
-  const query = { issue: 'all', unresolved: '1' }
+  const query = { issue: 'unresolved' }
   if (from) query.from = from
   if (to) query.to = to
 
