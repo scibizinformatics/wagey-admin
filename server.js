@@ -9,6 +9,7 @@ import http from 'http'
 import fs from 'fs'
 import path from 'path'
 import url from 'url'
+import { createHash } from 'crypto'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -16,6 +17,85 @@ const __dirname = path.dirname(__filename)
 
 const PORT = Number(process.env.PORT || 8000)
 const DIST_DIR = process.env.DIST_DIR || path.join(__dirname, 'dist', 'spa')
+
+// ─── Security headers ──────────────────────────────────────────────
+// The SPA shell carries one inline script: the legacy-alias redirect in
+// index.html. A CSP can only allow it by naming its exact bytes, so the digest
+// is computed from the built file at startup instead of being hard-coded —
+// editing index.html and rebuilding cannot leave a stale hash behind and
+// silently break the redirect.
+function inlineScriptHashes() {
+  const indexPath = path.join(DIST_DIR, 'index.html')
+  let html
+  try {
+    html = fs.readFileSync(indexPath, 'utf8')
+  } catch {
+    console.warn(`[security] ${indexPath} unreadable — CSP cannot allow the inline redirect script`)
+    return []
+  }
+  const hashes = []
+  const pattern = /<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/gi
+  let match
+  while ((match = pattern.exec(html))) {
+    if (!match[1].trim()) continue
+    hashes.push(`'sha256-${createHash('sha256').update(match[1], 'utf8').digest('base64')}'`)
+  }
+  return hashes
+}
+
+// Mirrors the build-time defaults in quasar.config.js, so a deployment that
+// builds against a different API host can point the CSP at it with the same
+// env var it already sets.
+function originFrom(value, fallback) {
+  try {
+    return new URL(value).origin
+  } catch {
+    return fallback
+  }
+}
+
+const API_ORIGIN = originFrom(
+  process.env.API_BASE_URL || 'https://staging.wageyapp.com',
+  'https://staging.wageyapp.com',
+)
+const WS_ORIGIN = originFrom(
+  process.env.VITE_WS_URL || 'wss://staging.wageyapp.com',
+  'wss://staging.wageyapp.com',
+)
+
+// unpkg enters script-src/style-src/img-src because the Sites map loads Leaflet
+// from there on demand; connect-src needs Nominatim for the address lookup.
+// style-src keeps 'unsafe-inline' because Vue/Quasar write style attributes at
+// runtime (ECharts tooltips, dialog positioning) and those are style-src's to
+// police.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  ["script-src 'self'", ...inlineScriptHashes(), 'https://unpkg.com'].join(' '),
+  "style-src 'self' 'unsafe-inline' https://unpkg.com",
+  [
+    "img-src 'self' data: blob:",
+    API_ORIGIN,
+    'https://*.wageyapp.com',
+    'https://*.tile.openstreetmap.org',
+    'https://unpkg.com',
+  ].join(' '),
+  "font-src 'self' data:",
+  ['connect-src', "'self'", API_ORIGIN, WS_ORIGIN, 'https://nominatim.openstreetmap.org'].join(' '),
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ')
+
+// HSTS is ignored over plain HTTP, so serving it here as well as in nginx.conf
+// is harmless and covers a direct :8000 deployment.
+const SECURITY_HEADERS = {
+  'Content-Security-Policy': CONTENT_SECURITY_POLICY,
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -37,7 +117,8 @@ const MIME = {
 }
 
 function send(res, statusCode, headers, bodyStreamOrBuffer) {
-  res.writeHead(statusCode, headers)
+  // Every response carries them, including the 4xx/5xx paths.
+  res.writeHead(statusCode, { ...SECURITY_HEADERS, ...headers })
   if (!bodyStreamOrBuffer) return res.end()
   if (Buffer.isBuffer(bodyStreamOrBuffer) || typeof bodyStreamOrBuffer === 'string') {
     return res.end(bodyStreamOrBuffer)
