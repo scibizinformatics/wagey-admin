@@ -525,19 +525,35 @@ let leafletLoaded = false
 const mapSearchLoading = ref(false)
 let locationDebounceTimer = null
 
+// Leaflet comes from a third-party CDN at runtime, so the URL pins the version
+// and the hashes pin the bytes; a tampered or swapped file fails to execute
+// instead of running in the admin session. SRI is only enforced on a
+// cross-origin request, hence the crossorigin attribute — move the library into
+// the bundle and it becomes unnecessary. Bump the version and both hashes
+// together:
+//   curl -sSL https://unpkg.com/leaflet@<version>/dist/leaflet.js \
+//     | openssl dgst -sha256 -binary | openssl base64 -A
+const LEAFLET_BASE_URL = 'https://unpkg.com/leaflet@1.9.4/dist'
+const LEAFLET_CSS_SRI = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='
+const LEAFLET_JS_SRI = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='
+
 async function loadLeaflet() {
   if (leafletLoaded) return
   if (!document.getElementById('leaflet-css')) {
     const link = document.createElement('link')
     link.id = 'leaflet-css'
     link.rel = 'stylesheet'
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+    link.href = `${LEAFLET_BASE_URL}/leaflet.css`
+    link.integrity = LEAFLET_CSS_SRI
+    link.setAttribute('crossorigin', 'anonymous')
     document.head.appendChild(link)
   }
   if (!window.L) {
     await new Promise((resolve, reject) => {
       const script = document.createElement('script')
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+      script.src = `${LEAFLET_BASE_URL}/leaflet.js`
+      script.integrity = LEAFLET_JS_SRI
+      script.setAttribute('crossorigin', 'anonymous')
       script.onload = resolve
       script.onerror = reject
       document.head.appendChild(script)
