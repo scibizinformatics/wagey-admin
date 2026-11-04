@@ -291,7 +291,7 @@ const sectionGroups = [
         label: 'Contributions',
         icon: 'o_savings',
         searchable: true,
-        blurb: 'Statutory contribution components, and the types they belong to',
+        blurb: 'Contribution components, their types, and employee account numbers',
       },
       {
         // Allowance types were their own page (`/app/allowances`) in the pay
