@@ -40,8 +40,13 @@ export function sameId(a, b) {
   return String(a) === String(b)
 }
 
-/** The list envelope this API uses, tolerating a bare array and a `results` page. */
-function rowsFrom(payload) {
+/**
+ * The list envelope this API uses, tolerating a bare array and a `results` page.
+ *
+ * Exported because the contribution-accounts module reads the same endpoints'
+ * sibling collection and must not grow a second copy of this unwrapping.
+ */
+export function rowsFrom(payload) {
   if (Array.isArray(payload)) return payload
   const direct = payload?.data ?? payload?.results
   if (Array.isArray(direct)) return direct
