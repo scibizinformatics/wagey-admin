@@ -23,7 +23,9 @@
 
             <div class="dash-modal__grid">
               <label class="dash-modal__field dash-modal__span-2">
-                <span class="dash-modal__field-label">Contribution type</span>
+                <span class="dash-modal__field-label">
+                  Contribution type<span class="dash-modal__req">*</span>
+                </span>
                 <q-select
                   v-model="draft.type"
                   :options="typeOptions"
@@ -34,43 +36,22 @@
                   outlined
                   dense
                   options-dense
-                  clearable
                   hide-bottom-space
                   class="dash-field"
-                  placeholder="Unassigned"
+                  placeholder="Choose a type"
                   popup-content-class="dash-popup dash-popup--modal"
                 >
                   <template v-slot:prepend><q-icon name="o_category" size="18px" /></template>
                   <template v-slot:no-option>
                     <q-item>
                       <q-item-section class="text-grey-7">
-                        No contribution types yet — leave this blank, or create one from the panel's
-                        Type column
+                        No contribution types yet — close this and add one from Manage types first
                       </q-item-section>
                     </q-item>
                   </template>
                 </q-select>
                 <span class="dash-modal__field-hint">
-                  Optional. Add the component now and file it under a scheme whenever types are set
-                  up.
-                </span>
-              </label>
-
-              <label class="dash-modal__field dash-modal__span-2">
-                <span class="dash-modal__field-label">Name</span>
-                <q-input
-                  v-model="draft.name"
-                  outlined
-                  dense
-                  hide-bottom-space
-                  class="dash-field"
-                  maxlength="150"
-                  placeholder="Optional — e.g. SSS component 12"
-                >
-                  <template v-slot:prepend><q-icon name="label" size="18px" /></template>
-                </q-input>
-                <span class="dash-modal__field-hint">
-                  Leave it blank to identify the row by its income band instead.
+                  Required. Every component files under a scheme — SSS, PhilHealth, Pag-IBIG.
                 </span>
               </label>
 
@@ -81,7 +62,7 @@
                 <q-input
                   v-model="draft.income_from"
                   type="number"
-                  step="any"
+                  step="0.01"
                   min="0"
                   outlined
                   dense
@@ -103,7 +84,7 @@
                 <q-input
                   v-model="draft.income_to"
                   type="number"
-                  step="any"
+                  step="0.01"
                   min="0"
                   outlined
                   dense
@@ -126,7 +107,7 @@
                 <q-input
                   v-model="draft.employee_fixed"
                   type="number"
-                  step="any"
+                  step="0.01"
                   min="0"
                   outlined
                   dense
@@ -146,7 +127,7 @@
                 <q-input
                   v-model="draft.employee_percent"
                   type="number"
-                  step="any"
+                  step="0.01"
                   min="0"
                   max="100"
                   outlined
@@ -169,7 +150,7 @@
                 <q-input
                   v-model="draft.fixed_amount"
                   type="number"
-                  step="any"
+                  step="0.01"
                   min="0"
                   outlined
                   dense
@@ -303,15 +284,19 @@ watch(
   () => props.modelValue,
   (open) => {
     if (!open) return
-    const form = props.bracket
-      ? bracketToForm(props.bracket)
-      : emptyBracketForm(props.presetTypeId ?? null)
+    if (props.bracket) {
+      draft.value = bracketToForm(props.bracket)
+    } else {
+      // A company with exactly one scheme has no real choice to make, so the
+      // form opens on it rather than asking for a pick that can only go one way.
+      const onlyType = props.types.length === 1 ? (props.types[0]?.id ?? null) : null
+      draft.value = emptyBracketForm(props.presetTypeId ?? onlyType)
+    }
     // Ids cross the wire as numbers here and as strings elsewhere; q-select
     // matches an option by strict `===`, so the draft takes the option's own
     // value rather than whatever spelling the row carried.
-    const matched = props.types.find((type) => sameId(type.id, form.type))
-    if (matched) form.type = matched.id
-    draft.value = form
+    const matched = props.types.find((type) => sameId(type.id, draft.value.type))
+    if (matched) draft.value.type = matched.id
   },
 )
 
