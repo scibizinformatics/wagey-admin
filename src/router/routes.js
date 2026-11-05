@@ -110,6 +110,29 @@ const routes = [
             name: 'disbursement-complete',
             component: () => import('pages/Disbursement/CompletePage.vue'),
           },
+          // The cash-advance flow is a parallel four-step sequence against the
+          // same payout group instance. It lives under `/app/payroll` because it
+          // is opened from that page's "Cash advances" view and returns there.
+          {
+            path: 'cash-advance/:id/review',
+            name: 'cash-advance-review',
+            component: () => import('pages/Disbursement/CashAdvance/CashAdvanceReviewPage.vue'),
+          },
+          {
+            path: 'cash-advance/:id/funding',
+            name: 'cash-advance-funding',
+            component: () => import('pages/Disbursement/CashAdvance/CashAdvanceFundingPage.vue'),
+          },
+          {
+            path: 'cash-advance/:id/disburse',
+            name: 'cash-advance-disburse',
+            component: () => import('pages/Disbursement/CashAdvance/CashAdvanceDisbursePage.vue'),
+          },
+          {
+            path: 'cash-advance/:id/complete',
+            name: 'cash-advance-complete',
+            component: () => import('pages/Disbursement/CashAdvance/CashAdvanceCompletePage.vue'),
+          },
         ],
       },
       {
