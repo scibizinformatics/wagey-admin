@@ -16,9 +16,10 @@ import { useRoute } from 'vue-router'
 export function useCarriedRunQuery() {
   const route = useRoute()
   return computed(() => {
-    const { pgi_status: status, group, cutoff } = route.query
+    const { pgi_status: status, ca_status: caStatus, group, cutoff } = route.query
     const query = {}
     if (status) query.pgi_status = status
+    if (caStatus) query.ca_status = caStatus
     if (group) query.group = group
     if (cutoff) query.cutoff = cutoff
     return query
