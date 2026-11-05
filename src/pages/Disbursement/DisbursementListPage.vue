@@ -208,8 +208,7 @@
             :rows="paginatedRuns"
             :loading="loading || loadingCashAdvance"
             :sort="cashAdvanceSort"
-            :employee-index="employeeIndex"
-            @view="openRun"
+            @view="openCashAdvanceRun"
             @update:sort="cashAdvanceSort = $event"
           />
         </div>
@@ -263,13 +262,12 @@ import PageShell from 'src/components/layout/PageShell.vue'
 import PayoutTable from 'src/components/pages/Payroll/PayoutTable.vue'
 import CashAdvanceTable from 'src/components/pages/Payroll/CashAdvanceTable.vue'
 import { stepRouteForPgiStatus, isCompletePgiStatus } from 'src/constants/pgiStatus'
+import { stepRouteForCashAdvanceStatus } from 'src/constants/cashAdvanceStatus'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useCompany } from 'src/composables/page/useCompany'
-import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
 import { todayIso } from 'src/composables/utils/calendarDate'
-import { buildEmployeeNameIndex } from 'src/composables/utils/employee'
 import { createRequestToken } from 'src/composables/utils/requestToken'
 import { normalizeCutoffInstance } from 'src/composables/utils/leaveCutoffs'
 import {
@@ -296,7 +294,6 @@ const {
   fetchEmployeeReviewSummary,
   fetchPayoutGroupInstances,
 } = useDisbursementApi()
-const { employees, fetchEmployees } = useEmployees()
 const { notifyLoaded } = useLoadedToast()
 
 const loading = ref(true)
@@ -327,6 +324,12 @@ const VIEW_OPTIONS = [
 ]
 
 const view = ref(VIEW_PAYOUT)
+// The cash-advance step pages link back here with `?view=cash_advance`, so Back
+// lands on the table the reader was working in rather than on the payout view.
+// Read once, on arrival; switching the dropdown does not rewrite the URL.
+if (String(route.query.view || '').toLowerCase() === VIEW_CASH_ADVANCE) {
+  view.value = VIEW_CASH_ADVANCE
+}
 const isCashAdvance = computed(() => view.value === VIEW_CASH_ADVANCE)
 const viewIcon = computed(() => (isCashAdvance.value ? 'o_request_quote' : 'o_payments'))
 
@@ -355,14 +358,6 @@ const cashAdvanceGuard = createRequestToken()
 // table can render every row from the moment the view opens rather than
 // appearing one row at a time.
 const EMPTY_CASH_ADVANCE = emptyCashAdvanceSummary()
-
-/**
- * Puts a face beside a name in the expanded rows. The summary payload names an
- * employee and gives their id but carries no photograph, so the roster is the
- * only thing that can supply one — the same construction the Audit trail uses,
- * including its refusal to guess when a name belongs to two people.
- */
-const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
 
 /**
  * Narrows the list to one cutoff, set from `?cutoff_id=` / `?cutoff=` when the
@@ -1009,6 +1004,11 @@ function toRunRow(item, cutoff) {
     netAmount: parseFloat(item.net_amount || 0),
     status: item.payout_status,
     statusDisplay: item.payout_status_display,
+    // The cash-advance flow has its own status on the PGI row. It moves when the
+    // advances are funded/released, independently of the payroll status, so the
+    // cash-advance table's rail and the step it opens both read this first.
+    cashAdvanceStatus: item.cash_advance_status || item.pgi_ca_status || '',
+    cashAdvanceStatusDisplay: item.cash_advance_status_display || '',
   }
 }
 
@@ -1159,6 +1159,30 @@ function openRun(row) {
 }
 
 /**
+ * Opens the cash-advance flow for a payout group, at the step its payroll status
+ * suggests.
+ *
+ * The cash-advance flow has no status endpoint of its own, so the row's payroll
+ * status is the opening hint; each step page then corrects the stage from its own
+ * payload. The hint only decides where the reader lands — it cannot make a step
+ * claim work that its figures do not support.
+ */
+function openCashAdvanceRun(row) {
+  const caStatus = row.cashAdvanceStatus || ''
+  router.push({
+    path: `/app/payroll/cash-advance/${row.id}/${stepRouteForCashAdvanceStatus(
+      caStatus || row.status,
+    )}`,
+    query: {
+      pgi_status: row.status,
+      ca_status: caStatus || undefined,
+      group: row.group || undefined,
+      cutoff: row.cutoff || undefined,
+    },
+  })
+}
+
+/**
  * Fills the cash advance view, one request per run.
  *
  * Lazy and once: the endpoint answers about a single payout group instance, so
@@ -1177,17 +1201,11 @@ async function loadCashAdvances() {
   const token = cashAdvanceGuard.next()
   loadingCashAdvance.value = true
   try {
-    // The roster only feeds the expanded rows' photographs, so it is not worth
-    // blocking the figures on: it is started here and awaited after, and
-    // `useEmployees` caches per company and de-duplicates in-flight requests.
-    const roster = fetchEmployees().catch(() => null)
-
     const summaries = await fetchWithConcurrency(
       rows.value,
       (run) => fetchEmployeeReviewSummary(run.id, { cache: true }).catch(() => null),
       8,
     )
-    await roster
 
     if (!cashAdvanceGuard.isCurrent(token)) return
 
