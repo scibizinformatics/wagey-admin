@@ -25,19 +25,37 @@
         />
       </div>
 
-      <div v-else-if="!loading && missingEpiIds && !allReleased" class="ca-notice" role="status">
+      <div v-else-if="!loading && allClaimed && !caComplete" class="ca-notice" role="status">
         <q-icon name="o_info" size="16px" class="ca-notice__icon" />
         <span class="ca-notice__text">
-          The release endpoint needs each employee's payroll item id, and this group's summary did
-          not include them.
+          Every advance has been claimed. The payroll run must be completed before this cash advance
+          record can close.
         </span>
       </div>
 
-      <div v-else-if="!loading && allReleased && !payrollComplete" class="ca-notice" role="status">
+      <div
+        v-else-if="!loading && !needsFunding && !releaseAvailable"
+        class="ca-notice"
+        role="status"
+      >
         <q-icon name="o_info" size="16px" class="ca-notice__icon" />
         <span class="ca-notice__text">
-          Every advance has been released. The payroll run must be completed before this cash
-          advance record can close.
+          The cash advance status is {{ caStatus }}. The release endpoint only accepts a group whose
+          status is funded, so the remaining rows cannot be released from this screen.
+        </span>
+      </div>
+
+      <div
+        v-else-if="!loading && !needsFunding && unresolvedRows.length"
+        class="ca-notice"
+        role="status"
+      >
+        <q-icon name="o_info" size="16px" class="ca-notice__icon" />
+        <span class="ca-notice__text">
+          {{ unresolvedRows.length }}
+          {{ unresolvedRows.length === 1 ? 'row has' : 'rows have' }} no payroll item id. Releasing
+          now would move the group to disbursing without
+          {{ unresolvedRows.length === 1 ? 'it' : 'them' }}.
         </span>
       </div>
 
@@ -58,7 +76,7 @@
       >
         <template #actions>
           <span class="action-note dash-num">
-            {{ summary.released }} released · {{ summary.pending }} pending
+            {{ summary.released }} claimed · {{ summary.pending }} pending
           </span>
           <q-btn
             unelevated
@@ -68,16 +86,24 @@
             label="Release cash advances"
             class="btn-primary"
             :loading="disbursing"
-            :disable="!bulkRows.length || disbursing || needsFunding"
+            :disable="
+              !bulkRows.length ||
+              disbursing ||
+              needsFunding ||
+              !releaseAvailable ||
+              unresolvedRows.length > 0
+            "
             @click="requestDisburseAll"
           >
-            <q-tooltip v-if="!bulkRows.length">
+            <q-tooltip v-if="!bulkRows.length || !releaseAvailable || unresolvedRows.length">
               {{
                 needsFunding
                   ? 'Fund these advances first'
-                  : missingEpiIds
-                    ? 'Employee payroll item ids unavailable'
-                    : 'Nothing left to release on this group'
+                  : !releaseAvailable
+                    ? `Cash advance status: ${caStatus || 'unknown'}`
+                    : unresolvedRows.length
+                      ? `${unresolvedRows.length} rows have no payroll item id`
+                      : 'Nothing left to release on this group'
               }}
             </q-tooltip>
           </q-btn>
@@ -200,7 +226,7 @@
           <template #body-cell-actions="props">
             <q-td :props="props" class="cell-actions">
               <q-btn
-                v-if="isEligible(props.row)"
+                v-if="canReleaseRow(props.row)"
                 flat
                 round
                 dense
@@ -236,6 +262,11 @@
  * card, the same bulk action beside search — with the cash-advance endpoint's
  * own eligibility rule: an employee is releasable while they have an amount and
  * their claim is not already settled.
+ *
+ * The release endpoint is one-shot: it only accepts a group whose cash-advance
+ * status is `funded`. The first release moves the group to `disbursing`, so the
+ * action is disabled from then on. The `released` / `pending` counts here are
+ * claims, not a release queue.
  *
  * The summary endpoint is also what tells this page whether the group has been
  * funded at all. Opening it from the list on an unfunded group therefore shows a
@@ -315,21 +346,39 @@ const groupStatus = computed(() => {
 const groupName = computed(() => identity.value?.name || route.query.group || '')
 const cutoffName = computed(() => identity.value?.cutoff || route.query.cutoff || '')
 
+const caStatus = computed(() => {
+  const key = normalizeStatusKey(
+    summary.value.groupStatus || identity.value?.cashAdvanceStatus || '',
+  )
+  return key === 'na' ? '' : key
+})
+
+/**
+ * The release endpoint is a one-shot action: it only accepts a group whose
+ * cash-advance status is `funded`. The first release moves the group to
+ * `disbursing`, so a second call would answer "must be in funded status".
+ */
+const releaseAvailable = computed(() => !caStatus.value || caStatus.value === 'funded')
+
 // `group_status` arrives as a display string ("Complete", "Disbursing"), so it
 // goes through the same normaliser the stage does rather than an exact map key.
-const payrollComplete = computed(() => cashAdvanceStepIndex(groupStatus.value) === 3)
+const caComplete = computed(() => cashAdvanceStepIndex(groupStatus.value) === 3)
 
 /** Nothing has been released until the group is funded. */
 const needsFunding = computed(() => !summary.value.loaded || summary.value.fundedAmount <= 0)
 
-// The summary does not always carry `epi_id`; the Review payload does, and the
-// page fills the gap by employee name. If even that cannot resolve an id, no row
-// is releasable and the page says why rather than leaving a dead button.
-const missingEpiIds = computed(
-  () => summary.value.total > 0 && summary.value.employees.every((row) => row.epiId == null),
+// The summary does not always carry `epi_id`; the Review payload fills the gap.
+// A row that still has none would be left out of the one release call, and the
+// group would move to `disbursing` without it — so the release is blocked until
+// every eligible row has an id.
+const unresolvedRows = computed(() =>
+  summary.value.employees.filter((row) => row.amount > 0 && !row.settled && row.epiId == null),
 )
 
-const allReleased = computed(
+// These counts are claims, not releases: `released` means claimed and `pending`
+// means marked for disbursement but not yet collected. Once the group is
+// `disbursing`, the release action is over and this page is a claim tracker.
+const allClaimed = computed(
   () =>
     summary.value.total > 0 &&
     summary.value.pending === 0 &&
@@ -339,12 +388,12 @@ const allReleased = computed(
 
 /**
  * The stage the flow is actually on. A group with no funding is sent back to
- * Funding; a fully released group whose payroll run has also finished has moved
- * on to Complete. Everything between those two is this step.
+ * Funding; a fully claimed group whose run has also finished has moved on to
+ * Complete. Everything between those two is this step.
  */
 const stage = computed(() => {
   if (needsFunding.value) return 'funding'
-  if (allReleased.value && payrollComplete.value) return 'complete'
+  if (allClaimed.value && caComplete.value) return 'complete'
   return 'disburse'
 })
 
@@ -367,7 +416,7 @@ const statTiles = computed(() => [
   },
   {
     key: 'released',
-    label: 'Released',
+    label: 'Claimed',
     value: summary.value.released,
     mark: 'var(--dash-good-mark)',
   },
@@ -415,6 +464,16 @@ function methodIcon(method) {
  */
 function isEligible(row) {
   return row.epiId != null && row.amount > 0 && !row.settled
+}
+
+/**
+ * Whether a row may be released now. The status gate and the unresolved-id gate
+ * apply to every row, not only the bulk button: releasing one row while a
+ * stranded row exists would move the group to `disbursing` and leave that row
+ * behind.
+ */
+function canReleaseRow(row) {
+  return releaseAvailable.value && unresolvedRows.value.length === 0 && isEligible(row)
 }
 
 const bulkRows = computed(() => summary.value.employees.filter(isEligible))
@@ -477,6 +536,7 @@ function parseAmount(val) {
 function requestDisburseAll() {
   const rows = bulkRows.value
   if (!rows.length || disbursing.value || showConfirm.value) return
+  if (!releaseAvailable.value || unresolvedRows.value.length) return
   pendingAction.value = 'all'
   pendingRows.value = rows
   confirm.value = buildCashAdvanceDisburseConfirm({
@@ -488,7 +548,7 @@ function requestDisburseAll() {
 }
 
 function requestDisburseOne(row) {
-  if (!isEligible(row) || disbursing.value || showConfirm.value) return
+  if (!canReleaseRow(row) || disbursing.value || showConfirm.value) return
   pendingAction.value = 'one'
   pendingRows.value = [row]
   confirm.value = buildCashAdvanceDisburseOneConfirm({
