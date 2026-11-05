@@ -35,7 +35,7 @@
                 dense
                 hide-bottom-space
                 class="dash-field"
-                maxlength="150"
+                maxlength="100"
                 placeholder="Social Security System"
               >
                 <template v-slot:prepend><q-icon name="label" size="18px" /></template>
