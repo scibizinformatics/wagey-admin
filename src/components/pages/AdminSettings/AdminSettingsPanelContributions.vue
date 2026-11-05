@@ -47,7 +47,7 @@
           />
           <q-btn
             color="primary"
-            label="Add component"
+            :label="addComponentLabel"
             icon="add"
             class="add-btn"
             @click="openBracketDialog"
@@ -100,12 +100,12 @@
             {{
               isFiltered
                 ? 'Nothing matches the type filter and search in place.'
-                : 'Add the income bands each component applies to, with the employee and employer share.'
+                : componentsEmptyHint
             }}
           </p>
           <q-btn
             v-if="!isFiltered"
-            label="Add component"
+            :label="addComponentLabel"
             icon="add"
             class="dash-modal__submit cb-empty__btn"
             unelevated
@@ -146,8 +146,9 @@
               <!-- The scheme and the way to manage it are the same control, so
                    an admin can open the type manager from the row without
                    hunting the toolbar for it — the pattern Compensable time uses
-                   for subcategories. A component may have no type yet, which is
-                   why this cell is also where the first type is created. -->
+                   for subcategories. A row created before the type requirement
+                   may still carry none, so this cell also says "Unassigned" and
+                   offers the way to fix it. -->
               <q-td class="table-body-cell">
                 <button
                   type="button"
@@ -449,8 +450,9 @@
  *
  *   Components        an income band with the employee and employer share
  *                     taken from it. A *type* is the scheme a component files
- *                     under ("SSS", "PhilHealth", "Pag-IBIG") and is optional —
- *                     a company can add its components before the schemes exist.
+ *                     under ("SSS", "PhilHealth", "Pag-IBIG") and is required by
+ *                     the endpoint — "Add component" routes into the type
+ *                     manager when the company has none yet.
  *   Employee accounts one employee's number for one contribution type.
  *
  * The panel owns every composable the views read: the component list, the type
@@ -613,6 +615,21 @@ const subtitle = computed(() =>
     : 'Statutory contribution components, and the types they belong to',
 )
 
+/**
+ * The components view's call to action names the thing that is actually
+ * missing. With no scheme configured the endpoint refuses every component, so
+ * the button leads to the type manager rather than to a form that cannot save.
+ */
+const addComponentLabel = computed(() =>
+  contributionTypes.value.length ? 'Add component' : 'Add a contribution type',
+)
+
+const componentsEmptyHint = computed(() =>
+  contributionTypes.value.length
+    ? 'Add the income bands each component applies to, with the employee and employer share.'
+    : 'Add a contribution type first — every component files under one — then the income bands it applies to.',
+)
+
 // ─── Lookups ────────────────────────────────────────────────────────────────
 
 const typeById = computed(() => {
@@ -662,7 +679,8 @@ const typeFilter = ref('all')
 const typeFilterOptions = computed(() => {
   const options = [{ value: 'all', label: 'All types' }]
   // Accounts always have a type — the endpoint requires `component_type` — so
-  // "Unassigned" would only ever produce an empty table there.
+  // "Unassigned" would only ever produce an empty table there. Components keep
+  // it for rows created before the type requirement.
   if (view.value === 'components') options.push({ value: 'unassigned', label: 'Unassigned' })
   options.push(
     ...contributionTypes.value
@@ -769,11 +787,19 @@ const bracketDialog = ref(false)
 const editingBracket = ref(null)
 
 /**
- * Open the component form. A component may exist before its type does, so this
- * no longer detours through the types dialog when the company has none — the
- * Type column is where a scheme gets created.
+ * Open the component form.
+ *
+ * The endpoint requires a type, so a company with no scheme cannot create a
+ * component at all. Sending the admin into a form the server will refuse is
+ * worse than sending them to the one screen that unblocks it, so the type
+ * manager opens instead.
  */
 function openBracketDialog() {
+  if (!contributionTypes.value.length) {
+    toast.info('Add a contribution type first — every component belongs to one')
+    openTypesDialog()
+    return
+  }
   editingBracket.value = null
   bracketDialog.value = true
 }
