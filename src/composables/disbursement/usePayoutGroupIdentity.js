@@ -22,7 +22,7 @@ export function usePayoutGroupIdentity() {
   const { companyId } = useCompany()
   const { fetchCutoffInstances, fetchPayoutGroupInstances } = useDisbursementApi()
 
-  /** `{ name, cutoff, status }` once resolved, null until then. */
+  /** `{ name, cutoff, status, cashAdvanceStatus }` once resolved, null until then. */
   const identity = ref(null)
   const resolving = ref(false)
 
@@ -50,6 +50,10 @@ export function usePayoutGroupIdentity() {
         name: match.payout_group_name || '',
         cutoff: match.cutoff_instance_name || '',
         status: match.payout_status || '',
+        // The PGI row's own cash-advance stage. It moves independently of
+        // `payout_status` — funding a cash advance does not necessarily move the
+        // payroll run — so the cash-advance bars read this one first.
+        cashAdvanceStatus: match.cash_advance_status || match.pgi_ca_status || '',
       }
       return identity.value
     } finally {
