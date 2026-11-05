@@ -29,6 +29,13 @@
  * `employee_percent` are the employee's — the endpoint documents only the
  * employee side, but the field is present on every row and this panel names it
  * for what it is rather than leaving an unlabelled figure in a payroll table.
+ * The newer schema also carries `employer_fixed` / `employer_percent`; a row
+ * may report the employer share under either name, so the normaliser reads the
+ * newer field first and falls back to `fixed_amount`.
+ *
+ * Fourth, **`name` is read-only on the API.** The server derives it from the
+ * type and the band, so the form never offers it and the write body never sends
+ * it — a typed name would be silently discarded.
  */
 
 import { longLabel, todayIso } from 'src/composables/utils/calendarDate'
@@ -74,6 +81,26 @@ function decimalText(value) {
   return String(value).trim()
 }
 
+/**
+ * A blank decimal is `null`, not `""`, in the write body.
+ *
+ * The endpoint documents its decimal fields as nullable, and DRF's
+ * `DecimalField` reads an empty string as "not a number" rather than as "not
+ * set" — so a form left with its share fields blank used to be refused with
+ * "A valid number is required." on every one of them.
+ */
+function decimalOrNull(value) {
+  const text = decimalText(value)
+  return text === '' ? null : text
+}
+
+/** How many digits a decimal text carries after the point. */
+function decimalPlaces(value) {
+  const text = decimalText(value)
+  const dot = text.indexOf('.')
+  return dot === -1 ? 0 : text.length - dot - 1
+}
+
 /** One contribution type into the shape every renderer reads. */
 export function normalizeContributionType(raw) {
   return {
@@ -107,7 +134,9 @@ export function normalizeContributionBracket(raw) {
     employeePercent: toAmount(raw?.employee_percent),
     incomeFrom: toAmount(raw?.income_from),
     incomeTo: toAmount(raw?.income_to),
-    employerFixed: toAmount(raw?.fixed_amount),
+    // The employer share answers to two names; prefer the newer field and fall
+    // back to `fixed_amount`, which is the one the form writes.
+    employerFixed: toAmount(raw?.employer_fixed) ?? toAmount(raw?.fixed_amount),
     effectiveDate: String(raw?.effective_date ?? ''),
     isActive: raw?.is_active ?? true,
   }
@@ -219,7 +248,6 @@ export function emptyBracketForm(typeId = null) {
   return {
     id: null,
     type: typeId,
-    name: '',
     employee_fixed: '',
     employee_percent: '',
     income_from: '',
@@ -235,7 +263,6 @@ export function bracketToForm(bracket) {
   return {
     id: bracket?.id ?? null,
     type: bracket?.typeId ?? null,
-    name: bracket?.name ?? '',
     employee_fixed: text(bracket?.employeeFixed),
     employee_percent: text(bracket?.employeePercent),
     income_from: text(bracket?.incomeFrom),
@@ -249,13 +276,23 @@ export function bracketToForm(bracket) {
 /**
  * A message worth showing a person, or null when the form can be saved.
  *
- * The band is the one thing a bracket cannot be wrong about: an inverted or
+ * The type is the one field the endpoint will not accept without: `type` is
+ * required and non-nullable, so a component cannot exist before its scheme does
+ * — which is why the panel routes "Add component" into the type manager when
+ * the company has none.
+ *
+ * The band is the next thing a bracket cannot be wrong about: an inverted or
  * empty range silently matches nobody, so it is refused here rather than left
  * for a pay run to discover. Overlap between neighbouring brackets is not
  * checked — the server owns that rule, and two overlapping bands are a question
  * about policy rather than a malformed form.
  */
 export function validateBracketForm(form) {
+  const type = form?.type
+  if (type == null || (typeof type === 'string' && type.trim() === '')) {
+    return 'Choose the contribution type this component belongs to'
+  }
+
   const from = toAmount(form?.income_from)
   const to = toAmount(form?.income_to)
   if (from == null) return 'Income from is required'
@@ -265,12 +302,17 @@ export function validateBracketForm(form) {
   if (from >= to) return 'Income from has to be lower than income to'
 
   for (const [field, label] of [
+    ['income_from', 'Income from'],
+    ['income_to', 'Income to'],
     ['employee_fixed', 'Employee fixed amount'],
     ['employee_percent', 'Employee percentage'],
     ['fixed_amount', 'Employer share'],
   ]) {
     const value = toAmount(form?.[field])
     if (value != null && value < 0) return `${label} cannot be negative`
+    // The endpoint stores two decimal places; a third would be refused by the
+    // server with a message about the field rather than a readable sentence.
+    if (decimalPlaces(form?.[field]) > 2) return `${label} can have at most two decimal places`
   }
 
   const percent = toAmount(form?.employee_percent)
@@ -284,18 +326,18 @@ export function validateBracketForm(form) {
  * The write body for a bracket.
  *
  * `company` is passed on create only; PATCH is partial and a row already
- * belongs to a company. Every decimal travels back as text, blank included,
- * because that is the shape the endpoint documents.
+ * belongs to a company. Every decimal travels back as text, and a blank one
+ * travels as `null` — the shape the endpoint documents. `name` is read-only on
+ * the API, so it is not sent at all.
  */
 export function bracketPayload(form, { companyId = null } = {}) {
   const payload = {
-    type: form?.type ?? null,
-    name: String(form?.name ?? '').trim(),
-    employee_fixed: decimalText(form?.employee_fixed),
-    employee_percent: decimalText(form?.employee_percent),
-    income_from: decimalText(form?.income_from),
-    income_to: decimalText(form?.income_to),
-    fixed_amount: decimalText(form?.fixed_amount),
+    type: form?.type == null || form?.type === '' ? null : Number(form.type),
+    employee_fixed: decimalOrNull(form?.employee_fixed),
+    employee_percent: decimalOrNull(form?.employee_percent),
+    income_from: decimalOrNull(form?.income_from),
+    income_to: decimalOrNull(form?.income_to),
+    fixed_amount: decimalOrNull(form?.fixed_amount),
     effective_date: String(form?.effective_date ?? '').trim(),
     is_active: form?.is_active ?? true,
   }
