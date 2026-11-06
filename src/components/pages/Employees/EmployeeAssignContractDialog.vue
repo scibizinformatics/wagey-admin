@@ -314,42 +314,42 @@
               <div class="checkbox-grid">
                 <q-checkbox
                   v-if="overtimeId"
-                  :model-value="form.eligibilities.includes(overtimeId)"
+                  :model-value="hasEligibility(form.eligibilities, overtimeId)"
                   @update:model-value="toggleEligibility(overtimeId, $event)"
                   label="Overtime eligible"
                   dense
                 />
                 <q-checkbox
                   v-if="ctoId && form.pay_type === 'monthly'"
-                  :model-value="form.eligibilities.includes(ctoId)"
+                  :model-value="hasEligibility(form.eligibilities, ctoId)"
                   @update:model-value="toggleEligibility(ctoId, $event)"
                   label="Overtime converted to CTO"
                   dense
                 />
                 <q-checkbox
                   v-if="holidayPayId"
-                  :model-value="form.eligibilities.includes(holidayPayId)"
+                  :model-value="hasEligibility(form.eligibilities, holidayPayId)"
                   @update:model-value="toggleEligibility(holidayPayId, $event)"
                   label="Holiday pay"
                   dense
                 />
                 <q-checkbox
                   v-if="undertimeId"
-                  :model-value="form.eligibilities.includes(undertimeId)"
+                  :model-value="hasEligibility(form.eligibilities, undertimeId)"
                   @update:model-value="toggleEligibility(undertimeId, $event)"
                   label="Undertime deduction"
                   dense
                 />
                 <q-checkbox
                   v-if="nightDiffId"
-                  :model-value="form.eligibilities.includes(nightDiffId)"
+                  :model-value="hasEligibility(form.eligibilities, nightDiffId)"
                   @update:model-value="toggleEligibility(nightDiffId, $event)"
                   label="Night differential eligible"
                   dense
                 />
                 <q-checkbox
                   v-if="contributionsEligId"
-                  :model-value="form.eligibilities.includes(contributionsEligId)"
+                  :model-value="hasEligibility(form.eligibilities, contributionsEligId)"
                   @update:model-value="toggleEligibility(contributionsEligId, $event)"
                   label="Contributions"
                   dense
@@ -357,7 +357,7 @@
                 <q-checkbox
                   v-for="opt in otherEligibilityOptions"
                   :key="opt.id"
-                  :model-value="form.eligibilities.includes(opt.id)"
+                  :model-value="hasEligibility(form.eligibilities, opt.id)"
                   @update:model-value="toggleEligibility(opt.id, $event)"
                   :label="opt.name"
                   dense
@@ -475,7 +475,9 @@ import {
   PAY_TYPE_OPTIONS,
   WORK_HOURS_ELIGIBILITY_NAMES,
   WORK_HOURS_TYPE_OPTIONS,
+  hasEligibility,
   hasWorkHoursEligibilities,
+  withoutEligibility,
 } from '@/composables/utils/contractTerms'
 
 const emit = defineEmits(['update:modelValue', 'update:field', 'contractTypeChange', 'submit'])
@@ -580,13 +582,15 @@ const otherEligibilityOptions = computed(() =>
 
 function toggleEligibility(id, checked) {
   const current = [...props.form.eligibilities]
-  const value = checked ? [...current, id] : current.filter((e) => e !== id)
+  // Untick removes the id in both spellings — a stored `"5"` rendered as
+  // ticked by `hasEligibility` must not survive the tick being removed.
+  const value = checked ? [...current, id] : withoutEligibility(current, id)
   emit('update:field', { field: 'eligibilities', value })
 }
 
 function toggleContribution(id, checked) {
   const current = [...(props.form.contributions || [])]
-  const value = checked ? [...current, id] : current.filter((c) => c !== id)
+  const value = checked ? [...current, id] : withoutEligibility(current, id)
   emit('update:field', { field: 'contributions', value })
 }
 
@@ -634,16 +638,16 @@ function isMultiplierVisible(key) {
   const eligs = props.form.eligibilities
   switch (key) {
     case 'overtime_multiplier':
-      return overtimeId.value && eligs.includes(overtimeId.value)
+      return overtimeId.value && hasEligibility(eligs, overtimeId.value)
     case 'special_holiday_multiplier':
     case 'regular_holiday_multiplier':
     case 'special_holiday_ot_multiplier':
     case 'regular_holiday_ot_multiplier':
-      return holidayPayId.value && eligs.includes(holidayPayId.value)
+      return holidayPayId.value && hasEligibility(eligs, holidayPayId.value)
     case 'night_diff_multiplier':
-      return nightDiffId.value && eligs.includes(nightDiffId.value)
+      return nightDiffId.value && hasEligibility(eligs, nightDiffId.value)
     case 'undertime_multiplier':
-      return undertimeId.value && eligs.includes(undertimeId.value)
+      return undertimeId.value && hasEligibility(eligs, undertimeId.value)
     default:
       return true
   }

@@ -411,6 +411,7 @@ import { extractErrorMessage } from '@/composables/utils/http'
 import {
   WORK_HOURS_ELIGIBILITY_NAMES,
   eligibilitiesForPayType,
+  hasEligibility,
   withWorkHoursType,
   workHoursTypeOf,
 } from '@/composables/utils/contractTerms'
@@ -574,7 +575,7 @@ function onContractTypeChange(contractTypeId) {
   const selectedType = contractTypeOptions.value.find((ct) => ct.id === contractTypeId)
   if (selectedType && selectedType.eligibilities) {
     const eligs = eligibilityOptions.value.filter((el) =>
-      selectedType.eligibilities.includes(el.id),
+      hasEligibility(selectedType.eligibilities, el.id),
     )
     selectedEligibilityObjectsData.value = eligs
     assignForm.value.eligibilities = [...selectedType.eligibilities]
@@ -656,7 +657,7 @@ watch(
   () => eligibilityOptions.value,
   (newEligs) => {
     if (newEligs.length && assignForm.value.eligibilities.length) {
-      const eligs = newEligs.filter((el) => assignForm.value.eligibilities.includes(el.id))
+      const eligs = newEligs.filter((el) => hasEligibility(assignForm.value.eligibilities, el.id))
       selectedEligibilityObjectsData.value = eligs
     }
   },
@@ -1452,6 +1453,12 @@ async function submitContractUpdate() {
     return
   }
 
+  // The eligibilities guard below drops the CTO id by resolving it against the
+  // payroll-eligibilities list; without the list it silently passes CTO
+  // through. Fetch once instead of letting the payload carry what the form
+  // does not show.
+  if (!eligibilityOptions.value.length) await fetchEligibilityOptions()
+
   const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v))
   const payload = {
     pay_type: f.pay_type,
@@ -1566,7 +1573,7 @@ async function handleOpenAssignDialog(employee) {
       eligibilityOptions.value,
     )
     const eligs = eligibilityOptions.value.filter((el) =>
-      assignForm.value.eligibilities.includes(el.id),
+      hasEligibility(assignForm.value.eligibilities, el.id),
     )
     selectedEligibilityObjectsData.value = eligs
   }
@@ -1666,6 +1673,18 @@ function handleAssignSubmit() {
  */
 async function confirmAssignSubmit() {
   const ids = [...pendingAssignIds.value]
+  // Last sender for assign, renew and bulk — all three post from `assignForm`.
+  // The pay-type field handler strips the hidden CTO id on change, but a
+  // prefilled legacy contract (or an eligibilities list that failed to load,
+  // leaving no id for the strip to resolve) can pass CTO through, and the
+  // backend answers "LEAVE_CREDITS/OVERTIME_AS_CTO not allowed for daily pay
+  // type". Reconcile at the write itself.
+  if (!eligibilityOptions.value.length) await fetchEligibilityOptions()
+  assignForm.value.eligibilities = eligibilitiesForPayType(
+    assignForm.value.eligibilities,
+    assignForm.value.pay_type,
+    eligibilityOptions.value,
+  )
   if (ids.length > 0) {
     const { successCount, failCount } = await bulkAssignContract(ids)
     showAssignConfirm.value = false

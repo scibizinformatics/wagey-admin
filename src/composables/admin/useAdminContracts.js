@@ -35,7 +35,7 @@ export function useAdminContracts() {
   const selectedContract = ref(null)
   const form = ref(_emptyForm())
 
-  const payTypeOptions = ['monthly', 'semi-monthly', 'weekly', 'daily', 'hourly']
+  const payTypeOptions = ['monthly', 'daily']
 
   // ─── Assign Contract state ─────────────────────────────────────────────────
   const assignDialog = ref(false)
@@ -220,14 +220,34 @@ export function useAdminContracts() {
     }
   }
 
+  /**
+   * A contract's `eligibilities` into the ids (integers) the write endpoints
+   * declare. The active-contract payload serialises the field itself, and older
+   * rows were filled by a form input, so an id can arrive as `"6"` — one of
+   * those is enough to defeat every strict `includes`/`!==` check downstream
+   * (checkbox state, the CTO strip, a toggle's removal filter). Coerce what
+   * parses as an integer; leave the rest untouched, because an entry that is a
+   * name or code is identified by text further along.
+   */
   function parseEligibilities(raw) {
-    if (!raw) return []
-    if (Array.isArray(raw)) return raw.map((item) => item.id ?? item)
+    // Coerce only when the text is a real integer: Number('') is 0 and Number(' ')
+    // is 0 too, and storing an id nobody sent is worse than storing what was sent.
+    const toId = (value) => {
+      if (typeof value === 'string' && value.trim() === '') return value
+      const num = Number(value)
+      return Number.isInteger(num) ? num : value
+    }
+    if (raw == null || raw === '') return []
+    if (Array.isArray(raw)) return raw.map((item) => toId(item.id ?? item))
     if (typeof raw === 'string') {
       // A value that parses as JSON is trusted as-is; one that does not is the
       // comma-separated id list the older endpoint returned.
       const parsed = safeParseJson(raw, null)
-      if (parsed !== null) return Array.isArray(parsed) ? parsed : []
+      if (parsed !== null) {
+        // The same unwrapping the array branch does: a JSON string of records
+        // is just that array once it is parsed.
+        return Array.isArray(parsed) ? parsed.map((item) => toId(item.id ?? item)) : []
+      }
       return raw
         .split(',')
         .map((s) => parseInt(s.trim(), 10))

@@ -241,7 +241,7 @@
           <div class="row">
             <div class="col-6 q-mb-sm" v-if="overtimeId">
               <q-checkbox
-                :model-value="contractTypeForm.eligibilities.includes(overtimeId)"
+                :model-value="hasEligibility(contractTypeForm.eligibilities, overtimeId)"
                 @update:model-value="toggleEligibility(overtimeId, $event)"
                 label="Overtime eligible"
                 dense
@@ -249,7 +249,7 @@
             </div>
             <div class="col-6 q-mb-sm" v-if="ctoId && contractTypeForm.pay_type === 'monthly'">
               <q-checkbox
-                :model-value="contractTypeForm.eligibilities.includes(ctoId)"
+                :model-value="hasEligibility(contractTypeForm.eligibilities, ctoId)"
                 @update:model-value="toggleEligibility(ctoId, $event)"
                 label="Overtime converted to CTO"
                 dense
@@ -257,7 +257,7 @@
             </div>
             <div class="col-6 q-mb-sm" v-if="holidayPayId">
               <q-checkbox
-                :model-value="contractTypeForm.eligibilities.includes(holidayPayId)"
+                :model-value="hasEligibility(contractTypeForm.eligibilities, holidayPayId)"
                 @update:model-value="toggleEligibility(holidayPayId, $event)"
                 label="Holiday pay"
                 dense
@@ -265,7 +265,7 @@
             </div>
             <div class="col-6 q-mb-sm" v-if="undertimeId">
               <q-checkbox
-                :model-value="contractTypeForm.eligibilities.includes(undertimeId)"
+                :model-value="hasEligibility(contractTypeForm.eligibilities, undertimeId)"
                 @update:model-value="toggleEligibility(undertimeId, $event)"
                 label="Undertime deduction"
                 dense
@@ -273,7 +273,7 @@
             </div>
             <div class="col-6 q-mb-sm" v-if="nightDiffId">
               <q-checkbox
-                :model-value="contractTypeForm.eligibilities.includes(nightDiffId)"
+                :model-value="hasEligibility(contractTypeForm.eligibilities, nightDiffId)"
                 @update:model-value="toggleEligibility(nightDiffId, $event)"
                 label="Night differential eligible"
                 dense
@@ -281,7 +281,7 @@
             </div>
             <div class="col-6 q-mb-sm" v-if="hasContributionsId">
               <q-checkbox
-                :model-value="contractTypeForm.eligibilities.includes(hasContributionsId)"
+                :model-value="hasEligibility(contractTypeForm.eligibilities, hasContributionsId)"
                 @update:model-value="toggleEligibility(hasContributionsId, $event)"
                 label="Contributions"
                 dense
@@ -289,7 +289,7 @@
             </div>
             <div v-for="opt in eligibilityOptions" :key="opt.value" class="col-6 q-mb-sm">
               <q-checkbox
-                :model-value="contractTypeForm.eligibilities.includes(opt.value)"
+                :model-value="hasEligibility(contractTypeForm.eligibilities, opt.value)"
                 @update:model-value="toggleEligibility(opt.value, $event)"
                 :label="opt.label"
                 dense
@@ -299,7 +299,8 @@
 
           <template
             v-if="
-              !hasContributionsId || contractTypeForm.eligibilities.includes(hasContributionsId)
+              !hasContributionsId ||
+              hasEligibility(contractTypeForm.eligibilities, hasContributionsId)
             "
           >
             <div class="section-label">Contributions</div>
@@ -315,7 +316,9 @@
             </div>
           </template>
 
-          <template v-if="holidayPayId && contractTypeForm.eligibilities.includes(holidayPayId)">
+          <template
+            v-if="holidayPayId && hasEligibility(contractTypeForm.eligibilities, holidayPayId)"
+          >
             <div class="section-label">Holiday</div>
             <div class="row">
               <div class="col-6 q-mb-sm">
@@ -445,6 +448,8 @@ import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes
 import {
   WORK_HOURS_ELIGIBILITY_NAMES,
   WORK_HOURS_TYPE_OPTIONS,
+  hasEligibility,
+  withoutEligibility,
 } from '@/composables/utils/contractTerms'
 
 const {
@@ -775,7 +780,9 @@ function toggleEligibility(id, checked) {
       contractTypeForm.value.regular_holiday_enabled = true
     }
   } else {
-    contractTypeForm.value.eligibilities = current.filter((eid) => eid !== id)
+    // Untick removes the id whatever spelling it was stored in, so a legacy
+    // `"5"` cannot stay behind the tick it just lost.
+    contractTypeForm.value.eligibilities = withoutEligibility(current, id)
     if (hasContributionsId.value && id === hasContributionsId.value) {
       contractTypeForm.value.contributions = []
     }
@@ -804,7 +811,7 @@ function isMultiplierVisible(fieldKey) {
   }
   const eligibilityId = map[fieldKey]?.value
   if (!eligibilityId) return true
-  if (!contractTypeForm.value.eligibilities.includes(eligibilityId)) return false
+  if (!hasEligibility(contractTypeForm.value.eligibilities, eligibilityId)) return false
 
   if (fieldKey === 'special_holiday' || fieldKey === 'special_holiday_ot')
     return contractTypeForm.value.special_holiday_enabled
@@ -857,8 +864,8 @@ watch(
   () => contractTypeForm.value.eligibilities,
   (newVal) => {
     if (!overtimeId.value || !ctoId.value) return
-    const hasOvertime = newVal.includes(overtimeId.value)
-    const hasCto = newVal.includes(ctoId.value)
+    const hasOvertime = hasEligibility(newVal, overtimeId.value)
+    const hasCto = hasEligibility(newVal, ctoId.value)
     const isMonthly = contractTypeForm.value.pay_type === 'monthly'
 
     // Overtime is checked but CTO is not -> auto-check CTO (only when monthly)
@@ -869,7 +876,7 @@ watch(
 
     // Overtime is unchecked but CTO is checked -> auto-uncheck CTO
     if (!hasOvertime && hasCto) {
-      contractTypeForm.value.eligibilities = newVal.filter((id) => id !== ctoId.value)
+      contractTypeForm.value.eligibilities = withoutEligibility(newVal, ctoId.value)
     }
   },
   { immediate: true },
@@ -882,8 +889,8 @@ watch(
     const current = contractTypeForm.value.eligibilities
     // If switched to daily, remove CTO from eligibilities
     if (newVal === 'daily') {
-      if (current.includes(ctoId.value)) {
-        contractTypeForm.value.eligibilities = current.filter((id) => id !== ctoId.value)
+      if (hasEligibility(current, ctoId.value)) {
+        contractTypeForm.value.eligibilities = withoutEligibility(current, ctoId.value)
       }
       return
     }
@@ -891,8 +898,8 @@ watch(
     if (newVal === 'monthly') {
       if (
         overtimeId.value &&
-        current.includes(overtimeId.value) &&
-        !current.includes(ctoId.value)
+        hasEligibility(current, overtimeId.value) &&
+        !hasEligibility(current, ctoId.value)
       ) {
         contractTypeForm.value.eligibilities = [...current, ctoId.value]
       }
