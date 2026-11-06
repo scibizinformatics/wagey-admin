@@ -29,6 +29,9 @@
       >
       <span v-else class="prog__pos">All steps done</span>
     </span>
+    <span v-else-if="noAdvances" class="prog__caption prog__caption--empty">
+      No cash advance
+    </span>
     <span v-else class="prog__caption prog__caption--empty">—</span>
   </div>
 </template>
@@ -46,9 +49,12 @@
  *
  * The stages come from the PGI row's `cash_advance_status` first — that is the
  * field the cash-advance flow actually moves — and fall back to the payroll
- * status when the row has no cash-advance status (`na`, blank, or a value this
- * flow does not recognise). Unknown statuses open Review, the same fallback the
- * row uses.
+ * status only when the row carries no cash-advance status at all. Unknown
+ * statuses open Review, the same fallback the row uses.
+ *
+ * A row that explicitly answers `na` has no advances, so it renders that instead
+ * of a rail: quoting the payroll stage in a four-step advance rail read as
+ * "Review · step 1 of 4" on a run with nothing to review.
  *
  * When the visual contract changes, change it here *and* in the payroll stepper.
  */
@@ -60,6 +66,7 @@ import {
   cashAdvanceStepIndex,
   normalizeStatusKey,
 } from 'src/constants/cashAdvanceStatus'
+import { isCashAdvanceNone } from 'src/composables/utils/payoutProgress'
 
 const router = useRouter()
 
@@ -78,12 +85,19 @@ const STATE_WORDS = { done: 'done', active: 'in progress', pending: 'locked' }
 
 /**
  * The cash-advance status when it is a stage this flow knows, otherwise the
- * payroll status. `cash_advance_status` is `na` for groups with no advances, and
- * falling through to the payroll status keeps those rows sensible.
+ * payroll status. Only a blank cash-advance status falls through — `na` is an
+ * answer ("no advances"), not a stage, and renders its own caption below.
  */
-const sourceStatus = computed(() =>
-  cashAdvanceStepIndex(props.caStatus) != null ? props.caStatus : props.pgiStatus,
-)
+const sourceStatus = computed(() => {
+  if (isCashAdvanceNone(props.caStatus)) return null
+  return cashAdvanceStepIndex(props.caStatus) != null ? props.caStatus : props.pgiStatus
+})
+
+/**
+ * A row that explicitly answers `na`: no advances on this run, so there is no
+ * advance rail to draw at all.
+ */
+const noAdvances = computed(() => isCashAdvanceNone(props.caStatus))
 
 /**
  * A finished run reads as all four segments done, the same way the payroll
@@ -100,8 +114,9 @@ const currentIndex = computed(() => {
   return cashAdvanceStepIndex(sourceStatus.value) ?? 0
 })
 
-const steps = computed(() =>
-  CA_STEP_ROUTES.map((name, i) => ({
+const steps = computed(() => {
+  if (noAdvances.value) return []
+  return CA_STEP_ROUTES.map((name, i) => ({
     name,
     state: finished.value
       ? 'done'
@@ -110,8 +125,8 @@ const steps = computed(() =>
         : i === currentIndex.value
           ? 'active'
           : 'pending',
-  })),
-)
+  }))
+})
 
 const allDone = computed(
   () => steps.value.length > 0 && steps.value.every((step) => step.state === 'done'),
@@ -122,6 +137,7 @@ const currentLabel = computed(() =>
 )
 
 const ariaLabel = computed(() => {
+  if (noAdvances.value) return 'No cash advances on this run'
   if (!steps.value.length) return 'Progress unavailable'
   if (allDone.value) return 'Progress: complete, all 4 steps done'
   return `Progress: step ${currentIndex.value + 1} of ${steps.value.length}, ${currentLabel.value}`
