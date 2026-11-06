@@ -41,7 +41,7 @@
           :props="props"
           class="dash-qtable__row dash-qtable__row--clickable run"
           tabindex="0"
-          :aria-label="`Open ${props.row.group}`"
+          :aria-label="rowLabel(props.row)"
           @click="$emit('view', props.row)"
           @keydown.enter="$emit('view', props.row)"
           @keydown.space.prevent="$emit('view', props.row)"
@@ -76,6 +76,7 @@
             <PayoutProgressStepper
               :group-id="props.row.id"
               :pgi-status="props.row.status"
+              :ca-status="props.row.cashAdvanceStatus"
               :group-name="props.row.group"
               :cutoff-name="props.row.cutoff"
             />
@@ -106,6 +107,7 @@
  */
 import TableSkeleton from 'src/components/common/TableSkeleton.vue'
 import PayoutProgressStepper from 'src/components/pages/Payroll/PayoutProgressStepper.vue'
+import { isPayrollPausedByStatus } from 'src/composables/utils/payoutProgress'
 
 defineProps({
   rows: { type: Array, default: () => [] },
@@ -121,6 +123,18 @@ defineEmits(['view'])
  * answers, and the card's footer is hidden until then anyway.
  */
 const SKELETON_ROWS = 10
+
+/**
+ * What the row opens. A payout row usually opens the payroll flow, but a run an
+ * active cash advance is holding has all its live work in the advances, and the
+ * row-click goes there — `openRun` on the page decides the same way, so the
+ * label and the destination cannot drift apart.
+ */
+function rowLabel(row) {
+  return isPayrollPausedByStatus(row.cashAdvanceStatus, row.status)
+    ? `Open cash advances for ${row.group}`
+    : `Open ${row.group}`
+}
 
 // The `columns` prop is gone. Rows are now rendered by an explicit #body slot, so
 // a caller-supplied column set would have moved the headers while the cells
