@@ -45,15 +45,24 @@
  * A copy of `components/pages/Payroll/PayoutGroupStepperHeader.vue` carrying the
  * same markup and the same styles, so the two flows read as one control. It is a
  * copy rather than a shared component on purpose: the payroll header resolves its
- * states from `payout-group-progress` plus a status map, and the cash-advance
- * flow has no progress endpoint. Sharing the component would mean teaching it a
- * second, weaker mode; keeping them separate means the working five-step flow is
- * not touched at all.
+ * states from a step-numbered payload plus a status map, and the cash-advance
+ * flow historically had no progress source at all. Sharing the component would
+ * mean teaching it a second, weaker mode; keeping them separate means the
+ * working five-step flow is not touched at all.
  *
- * The states come from one derived stage, handed in by the step page: everything
- * before it is done, it is in progress, and everything after it is locked. The
- * page derives that stage from its own payload, because no cash-advance endpoint
- * returns a single status the way `payout_status` does for a payroll run.
+ * The bar has three sources now, furthest-along wins:
+ *
+ *  - the `payout-group-progress` payload's `ca_progress` array — the flow's own
+ *    per-step truth, handed in by the step shell — used whenever the payload
+ *    actually carries one (`has_cash_advance` false sends an all-locked
+ *    placeholder, which quotes nothing);
+ *  - `ca_current_progress` inside the same payload for the "moved on" notice the
+ *    shell draws;
+ *  - the derived `stage` the page hands in, the pre-payload fallback and the
+ *    optimistic reading right after an action.
+ *
+ * The first fixes the case `waiting_admin_approval`: a status word the status
+ * map never placed, over a flow the payload describes perfectly.
  *
  * When the visual contract changes, change it here *and* in the payroll header.
  */
@@ -65,6 +74,10 @@ import {
   CA_STEP_ROUTES,
   cashAdvanceStepIndex,
 } from 'src/constants/cashAdvanceStatus'
+import {
+  cashAdvanceStepsFromProgress,
+  hasCashAdvanceTrack,
+} from 'src/composables/utils/payoutProgress'
 
 const route = useRoute()
 const carriedQuery = useCarriedRunQuery()
@@ -73,6 +86,12 @@ const props = defineProps({
   pgiId: { type: [String, Number], required: true },
   /** `review` / `funding` / `disburse` / `complete`, or a status word. */
   stage: { type: String, default: null },
+  /**
+   * The `payout-group-progress` payload, fetched by the step shell around this
+   * header — it needs the same call for its "moved on" notice, so this header
+   * does not fetch a second time. `null` reads as "not loaded yet".
+   */
+  progress: { type: Object, default: null },
 })
 
 const BASE_PATH = '/app/payroll/cash-advance'
@@ -90,21 +109,63 @@ const STATE_LABELS = {
 
 const stateLabel = (state) => STATE_LABELS[state] ?? ''
 
+const withRoute = (def) => ({
+  ...def,
+  route: `${BASE_PATH}/${props.pgiId}/${def.routeKey}`,
+})
+
 // The status is a hint that travels in the query, so a deep link or a refresh
 // can still place the run when the page has not fetched its payload yet. An
 // unknown value opens Review, the same fallback the list uses.
-const currentIndex = computed(() => {
+const stageIndex = computed(() => {
   const status = props.stage || route.query.ca_status || route.query.pgi_status
   return cashAdvanceStepIndex(status) ?? 0
 })
 
-const steps = computed(() =>
+/** The bar as this page's derived stage places it — everything before done. */
+const stageSteps = computed(() =>
   stepDefs.map((def, i) => ({
     ...def,
-    route: `${BASE_PATH}/${props.pgiId}/${def.routeKey}`,
-    state: i < currentIndex.value ? 'completed' : i === currentIndex.value ? 'current' : 'locked',
+    ...withRoute(def),
+    state: i < stageIndex.value ? 'completed' : i === stageIndex.value ? 'current' : 'locked',
   })),
 )
+
+/** A per-step progress word onto this header's rendering states. */
+const stateFor = (state) =>
+  state === 'in_progress' ? 'current' : state === 'completed' ? 'completed' : 'locked'
+
+/** The bar as the run's own `ca_progress` describes it, per step. */
+const progressSteps = computed(() => {
+  const mapped = cashAdvanceStepsFromProgress(props.progress, CA_STEP_ROUTES)
+  if (!mapped || !hasCashAdvanceTrack(props.progress)) return []
+  return mapped.map((s, i) => ({
+    ...stepDefs[i],
+    ...withRoute(stepDefs[i]),
+    state: stateFor(s.state),
+  }))
+})
+
+/** How far along the flow a given reading of the bar puts it. */
+function positionOf(stepList) {
+  let position = -1
+  stepList.forEach((step, i) => {
+    if (step.state === 'completed' || step.state === 'current') position = Math.max(position, i)
+  })
+  return position
+}
+
+/**
+ * Two readings, both able to be behind: the payload is fetched once, so an
+ * action taken since reads stale, while the page's stage can also get ahead of
+ * the status its payload carries. A run only ever moves forward, so the
+ * further-along one wins and "behind" — which is the same thing as stale — loses.
+ */
+const steps = computed(() => {
+  const fromProgress = progressSteps.value
+  if (!fromProgress.length) return stageSteps.value
+  return positionOf(fromProgress) >= stageIndex.value ? fromProgress : stageSteps.value
+})
 </script>
 
 <style scoped>
