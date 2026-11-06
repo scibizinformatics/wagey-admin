@@ -38,14 +38,42 @@
 
     <!-- ── Progress + content ──────────────────────────────────────────────── -->
     <section class="dash-panel step-board">
-      <!-- `stepperKey` lets a step force the progress header to refetch after an
-           action that advances the flow — incrementing it remounts the header. -->
-      <PayoutGroupStepperHeader :key="stepperKey" :group-id="groupId" :pgi-status="status" />
+      <!-- `stepperKey` makes the shell refetch the run's progress after an
+           action that advances the flow; the payload also drives the pause
+           banner below. -->
+      <PayoutGroupStepperHeader
+        :key="stepperKey"
+        :group-id="groupId"
+        :pgi-status="status"
+        :progress="progressPayload"
+      />
 
       <!-- No footer slot by design. A step's primary action belongs in its list
            toolbar, beside search, where it is visible without scrolling past the
            table to find it. -->
       <div :class="['step-board__body', { 'step-board__body--flush': flush }]">
+        <!-- An active cash advance holds the run from here on: the rail says
+             where payroll resumes, this says why it cannot move, and the button
+             goes to where the work actually is. The CA stage named in the text
+             comes from `ca_current_progress`, not from this page's step. -->
+        <div v-if="pausedCashAdvance" class="step-paused" role="status">
+          <q-icon name="o_hourglass_top" size="16px" class="step-paused__icon" />
+          <span class="step-paused__text">
+            Payroll paused — the cash advances for this run are in
+            <strong>{{ pausedCashAdvance.label }}</strong
+            >. This step opens again once they are complete.
+          </span>
+          <q-btn
+            unelevated
+            no-caps
+            dense
+            label="Open cash advances"
+            icon-right="o_arrow_forward"
+            :to="{ path: pausedCashAdvance.route, query: carriedQuery }"
+            class="step-paused__btn"
+          />
+        </div>
+
         <!-- The run moves on without this page knowing: a stale list row can
              route an open into a step the run has already left, and a run can
              advance while the page sits open. The step still renders — a
@@ -84,22 +112,36 @@
  * paddings, different title sizes, the exit in a different spot. This holds the
  * frame still: the only thing that changes between steps is the content slot.
  *
+ * It also fetches the run's `payout-group-progress` once and hands it to the
+ * header, so the rail, the "moved on" notice and the cash-advance pause banner
+ * all read one payload. While an active cash advance holds the run
+ * (`current_progress: "cash_advance"`) the frozen rail and the pause banner are
+ * the whole story: the status-mapped "moved on" notice is suppressed, because
+ * the payroll is not moving on, it is waiting.
+ *
  * Layout is the same page-header-plus-card pattern as Employees, Attendance and
  * Schedule, so the disbursement flow stops being the odd one out.
  */
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import PayoutGroupStepperHeader from 'src/components/pages/Payroll/PayoutGroupStepperHeader.vue'
 import PayoutStatusBadge from 'src/components/pages/Payroll/PayoutStatusBadge.vue'
 import { useCarriedRunQuery } from 'src/composables/disbursement/useCarriedRunQuery'
+import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import {
   PGI_STEP_LABELS,
   currentStepIndexForPgiStatus,
   stepRouteForPgiStatus,
 } from 'src/constants/pgiStatus'
+import { CA_STEP_LABELS, cashAdvanceStepIndex } from 'src/constants/cashAdvanceStatus'
+import {
+  cashAdvanceStageRoute,
+  isPayrollPaused,
+} from 'src/composables/utils/payoutProgress'
 
 const router = useRouter()
 const carriedQuery = useCarriedRunQuery()
+const { fetchPayoutGroupProgress } = useDisbursementApi()
 
 const props = defineProps({
   groupId: { type: [String, Number], required: true },
@@ -120,6 +162,55 @@ const STEP_NAMES = ['Review employees', 'Payslips', 'Funding', 'Disbursement', '
 const stepNumber = computed(() => props.step)
 const stepName = computed(() => STEP_NAMES[props.step - 1] ?? '')
 
+/**
+ * The run's progress payload, fetched here rather than inside the header so the
+ * pause banner, the "moved on" notice and the rail all read one call — a shell
+ * that fetched separately from the bar it sits above could show a pause
+ * explanation over a bar claiming the work is elsewhere. Passed down to the
+ * header, which renders the frozen rail from it.
+ *
+ * The `stepperKey` bump makes the shells refetch after a state-advancing action,
+ * exactly as it used to remount the header for its own fetch.
+ */
+const progressPayload = ref(null)
+
+async function loadProgress() {
+  if (!props.groupId) return
+  try {
+    progressPayload.value = await fetchPayoutGroupProgress(props.groupId)
+  } catch (err) {
+    // A header without progress still draws from the status; the banner is the
+    // only thing that silently disappears.
+    console.error('[DisbursementStepShell] progress fetch failed:', err)
+  }
+}
+
+onMounted(loadProgress)
+watch(
+  () => [props.groupId, props.stepperKey],
+  ([id, key], [prevId, prevKey]) => {
+    if (id !== prevId || key !== prevKey) loadProgress()
+  },
+)
+
+/**
+ * Whether an active cash advance holds this run. Only the payload's own
+ * `current_progress` word decides it — a loading or failed fetch is not a pause,
+ * it is "unknown".
+ */
+const paused = computed(() => isPayrollPaused(progressPayload.value))
+
+/** The stage the cash advances work on, as a label + route for the banner. */
+const pausedCashAdvance = computed(() => {
+  if (!paused.value) return null
+  const stageRoute = cashAdvanceStageRoute(progressPayload.value) ?? 'review'
+  const index = cashAdvanceStepIndex(stageRoute) ?? 0
+  return {
+    label: CA_STEP_LABELS[index] ?? 'Review',
+    route: `/app/payroll/cash-advance/${props.groupId}/${stageRoute}`,
+  }
+})
+
 /** The 0-based index of the step this page renders. */
 const pageStepIndex = computed(() => props.step - 1)
 
@@ -133,9 +224,16 @@ const runStepIndex = computed(() => currentStepIndexForPgiStatus(props.status))
 /**
  * Whether the run has moved past the step on screen. Strictly greater: a run on
  * this page's own step has not moved on, and one on a later step has.
+ *
+ * Suppressed while an active cash advance holds the run: the `pgi_status` in the
+ * query still names a payroll stage the run reached before the pause, so without
+ * this a paused run could show "This run has moved on to Funding" directly under
+ * a bar frozen at Payslips — two notices about the same run that contradict each
+ * other. The pause banner is the only truth while the advances hold the run.
  */
 const movedOn = computed(
-  () => runStepIndex.value != null && runStepIndex.value > pageStepIndex.value,
+  () =>
+    !paused.value && runStepIndex.value != null && runStepIndex.value > pageStepIndex.value,
 )
 
 // The label the progress header uses, so the notice names the step the same way
@@ -288,6 +386,54 @@ function goBack() {
   background: #193d5c;
 }
 
+/* ── Pause notice ──
+   The payroll is held by an active cash advance, and the CA flow is where the
+   work is. Same construction as the "moved on" notice — a pause is a state of
+   the step, not an error — but it wears the warn tint, because the surface says
+   "why is this frozen?" in a way an info tone does not. Labeled with the CA
+   stage and one way into the cash-advance flow. */
+.step-paused {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--dash-warn-line);
+  border-radius: var(--dash-r-md);
+  background: var(--dash-warn-bg);
+  font-size: 13px;
+  color: var(--dash-ink-2);
+}
+
+.step-paused__icon {
+  color: var(--dash-warn-mark);
+  flex-shrink: 0;
+}
+
+.step-paused__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-paused__text strong {
+  color: var(--dash-ink);
+  font-weight: 600;
+}
+
+.step-paused__btn {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-brand);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: var(--dash-shadow-xs);
+}
+.step-paused__btn:hover {
+  background: #193d5c;
+}
+
 @media (max-width: 1023px) {
   .step-head__title {
     font-size: 20px;
@@ -297,6 +443,12 @@ function goBack() {
 @media (max-width: 640px) {
   .step-head {
     align-items: stretch;
+  }
+  /* Two lines of text plus a button do not fit one row on a phone; wrapping
+       the button under the text is the readable order. */
+  .step-moved,
+  .step-paused {
+    flex-wrap: wrap;
   }
 }
 </style>
