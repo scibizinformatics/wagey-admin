@@ -43,6 +43,12 @@ export const CA_STAGE_MAP = {
   awaiting_acknowledgment: 0,
   awaiting_ack: 0,
   disputed: 0,
+  // `waiting_admin_approval` is the endpoint's own word for an advance that has
+  // been requested and is sitting on an admin decision (`cash_advance_status`
+  // on `payout-group-progress`). Review is the step that work lives on. Without
+  // the key the value fell through to the *payroll* status here, which named a
+  // stage of a different flow entirely.
+  waiting_admin_approval: 0,
 
   // ── Funding ──
   ready_for_funding: 1,
@@ -53,6 +59,9 @@ export const CA_STAGE_MAP = {
   funded: 2,
   disbursing: 2,
   ready_for_disbursement: 2,
+  // `ca_current_progress` on `payout-group-progress` spells the release stage
+  // `disbursement` — the route key is `disburse`, this is the stage word.
+  disbursement: 2,
   ready_for_release: 2,
 
   // ── Complete ──
