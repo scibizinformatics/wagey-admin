@@ -168,6 +168,61 @@ export function useDisbursementApi() {
   }
 
   /**
+   * One employee's withholding tax for a run: the cutoff and tax month they
+   * fall in, whether the tax is applied or has been reverted, and — when it is
+   * applied — the bracket it was computed from and the monthly tax row behind
+   * it.
+   *
+   * A sibling of `fetchEpiContributions`, read apart from it on purpose: tax is
+   * applied or reverted as a whole against the payroll item, while contributions
+   * are row-by-row, and the contributions endpoint carries neither the tax
+   * figure nor its bracket.
+   *
+   * No `expectedStatuses`: the no-tax-month case is an answer in the body, not
+   * a 404 (`tax_month` comes back `null` and `tax.details` empty), so a reject
+   * here is a genuine failure.
+   */
+  async function fetchEpiTax(epiId) {
+    const { data } = await api.get(`${BASE}/payroll/admin/epi-tax/${epiId}/`)
+    return data
+  }
+
+  /**
+   * Applies withholding tax to the named employee payroll items — the manual
+   * fallback when the run did not take it off automatically, and the way back
+   * in after a revert.
+   *
+   * `force` defaults to false like the endpoint does: an already-applied item
+   * is worth reporting as `skipped` with its own reason, not overwritten.
+   * Returns the per-item response; callers should refetch, since applying
+   * moves the item's money and the run's figures.
+   */
+  async function applyTax(epiIds = [], { force = false } = {}) {
+    const { data } = await api.post(`${BASE}/payroll/admin/apply-tax/`, {
+      epi_ids: epiIds,
+      force,
+    })
+    return data
+  }
+
+  /**
+   * Undoes an applied withholding tax, the mirror of `applyTax` and the way out
+   * of tax taken from the wrong bracket. The reason is required by the payload
+   * shape and is what `fetchEpiTax` reads back after it — so it always reaches
+   * this as a non-empty string from the dialog that collected it.
+   *
+   * Returns the per-item response; callers should refetch, and `skipped` here is
+   * "this item had nothing applied to revert", not a failure.
+   */
+  async function revertTax(epiIds = [], reason = '') {
+    const { data } = await api.post(`${BASE}/payroll/admin/revert-tax/`, {
+      epi_ids: epiIds,
+      reason,
+    })
+    return data
+  }
+
+  /**
    * Deducts the named contributions from an employee payroll item by hand — the
    * fallback when a contribution did not come off automatically. Returns the
    * server's response; callers should refetch, since deducting changes both the
@@ -400,6 +455,9 @@ export function useDisbursementApi() {
     fetchAttendanceSummary,
     fetchEmployeeReviewSummary,
     fetchEpiContributions,
+    fetchEpiTax,
+    applyTax,
+    revertTax,
     deductContributions,
     revertContributions,
     fetchEpiAdjustments,
