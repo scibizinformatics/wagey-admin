@@ -12,7 +12,7 @@
         class="prog__seg"
         :class="[
           `prog__seg--${step.state}`,
-          { 'prog__seg--here': i === currentIndex && !allDone },
+          { 'prog__seg--here': i === currentIndex && !allDone && !paused },
         ]"
         :disabled="step.state === 'pending'"
         :aria-label="`${STEP_LABELS[i]} — ${STATE_WORDS[step.state]}`"
@@ -29,9 +29,15 @@
          run sitting on step 3 read "Funding 2/5", two numbers describing the same
          place and disagreeing. -->
     <span v-if="steps.length" class="prog__caption">
-      <span class="prog__stage">{{ currentLabel }}</span>
-      <span v-if="!allDone" class="prog__pos dash-num">Step {{ currentIndex + 1 }} of {{ steps.length }}</span>
-      <span v-else class="prog__pos">All steps done</span>
+      <template v-if="paused">
+        <span class="prog__stage prog__stage--paused">Paused</span>
+        <span class="prog__pos">Cash advance in progress</span>
+      </template>
+      <template v-else>
+        <span class="prog__stage">{{ currentLabel }}</span>
+        <span v-if="!allDone" class="prog__pos dash-num">Step {{ currentIndex + 1 }} of {{ steps.length }}</span>
+        <span v-else class="prog__pos">All steps done</span>
+      </template>
     </span>
     <span v-else class="prog__caption prog__caption--empty">—</span>
   </div>
@@ -49,15 +55,24 @@
  * The caption names the current stage. That is the information the table's
  * separate Status column was carrying, which is why this component now replaces
  * both.
+ *
+ * A run held by an active cash advance reads differently: the rail is drawn
+ * frozen at wherever payroll was (work done behind, the held step locked) and the
+ * caption says Paused, because "Payslips · Step 2 of 5" over a run nobody may
+ * work on is a claim the row click then contradicts by opening the advances.
+ * The list row has no `current_progress`, so the pause is inferred from the two
+ * statuses it does have — see `isPayrollPausedByStatus`.
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import {
   computeStepsFromPgiStatus,
+  currentStepIndexForPgiStatus,
   PGI_STATUS_MAP,
   PGI_STEP_ROUTES,
 } from 'src/constants/pgiStatus'
+import { isPayrollPausedByStatus } from 'src/composables/utils/payoutProgress'
 
 const router = useRouter()
 const { fetchPayoutGroupProgress } = useDisbursementApi()
@@ -65,6 +80,8 @@ const { fetchPayoutGroupProgress } = useDisbursementApi()
 const props = defineProps({
   groupId: { type: [Number, String], required: true },
   pgiStatus: { type: String, default: null },
+  /** The PGI row's cash-advance status: the other half of the pause inference. */
+  caStatus: { type: String, default: null },
   /** Passed through to the step page's header, which no step endpoint returns. */
   groupName: { type: String, default: '' },
   cutoffName: { type: String, default: '' },
@@ -77,7 +94,7 @@ const STATE_WORDS = { done: 'done', active: 'in progress', pending: 'locked' }
 const stepDefs = ROUTES.map((r) => ({ name: r }))
 const progressData = ref(null)
 
-const steps = computed(() => {
+const baseSteps = computed(() => {
   if (props.pgiStatus) {
     // Fast path: a known status maps to the whole sequence without a request.
     const mapped = computeStepsFromPgiStatus(props.pgiStatus, stepDefs)
@@ -95,6 +112,28 @@ const steps = computed(() => {
     ...p,
     state: p.status === 'in_progress' ? 'active' : p.status === 'completed' ? 'done' : 'pending',
   }))
+})
+
+/**
+ * Whether an active cash advance holds this row's payroll. Rows carry no
+ * `current_progress`, so this is the two statuses' own inference — payroll
+ * still in Review cannot be paused, so an active advance beside a status at
+ * Payslips or later is a hold.
+ */
+const paused = computed(() => isPayrollPausedByStatus(props.caStatus, props.pgiStatus))
+
+const steps = computed(() => {
+  if (paused.value) {
+    // Frozen at wherever payroll was when the advances took over: work done
+    // behind, the held step and everything past it locked. No in-progress step
+    // — nothing in the payroll is being worked on.
+    const index = currentStepIndexForPgiStatus(props.pgiStatus) ?? 0
+    return stepDefs.map((def, i) => ({
+      ...def,
+      state: i < index ? 'done' : 'pending',
+    }))
+  }
+  return baseSteps.value
 })
 
 const allDone = computed(() => steps.value.length > 0 && steps.value.every((s) => s.state === 'done'))
@@ -116,6 +155,7 @@ const currentLabel = computed(() =>
 
 const ariaLabel = computed(() => {
   if (!steps.value.length) return 'Progress unavailable'
+  if (paused.value) return 'Progress: paused, payroll waiting on cash advances to finish'
   if (allDone.value) return 'Progress: complete, all 5 steps done'
   return `Progress: step ${currentIndex.value + 1} of ${steps.value.length}, ${currentLabel.value}`
 })
@@ -236,6 +276,12 @@ function goToStep(index) {
 }
 .prog--complete .prog__stage {
   color: var(--dash-good);
+}
+
+/* A held run names the hold rather than a stage: warn colour, so "Paused"
+   reads as "waiting", not as a state the reader can dismiss like done. */
+.prog__stage--paused {
+  color: var(--dash-warn);
 }
 
 .prog__pos {
