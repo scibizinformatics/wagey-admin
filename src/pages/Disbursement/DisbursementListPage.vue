@@ -263,6 +263,7 @@ import PayoutTable from 'src/components/pages/Payroll/PayoutTable.vue'
 import CashAdvanceTable from 'src/components/pages/Payroll/CashAdvanceTable.vue'
 import { stepRouteForPgiStatus, isCompletePgiStatus } from 'src/constants/pgiStatus'
 import { stepRouteForCashAdvanceStatus } from 'src/constants/cashAdvanceStatus'
+import { isPayrollPausedByStatus } from 'src/composables/utils/payoutProgress'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useCompany } from 'src/composables/page/useCompany'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
@@ -1142,12 +1143,22 @@ onMounted(async () => {
  * Opens the run where it actually is — the step its own progress bar names —
  * rather than always at Review.
  *
+ * A run an active cash advance holds has no live payroll work: its live work is
+ * in the advances, so the row opens the cash-advance flow instead, the same way
+ * `PayoutProgressStepper`'s caption says Paused. The inference is the shared
+ * one — an advance is only ever a hold from Payslips onward — so an un-paused
+ * row at Review opens Review as before.
+ *
  * The step pages also show the run's name and cutoff in their header, and no
  * step endpoint returns either, so the row that already has them passes them on.
  * They are a courtesy, not a contract: a deep link that arrives without them
  * resolves the same facts from the API.
  */
 function openRun(row) {
+  if (isPayrollPausedByStatus(row.cashAdvanceStatus, row.status)) {
+    openCashAdvanceRun(row)
+    return
+  }
   router.push({
     path: `/app/payroll/${stepRouteForPgiStatus(row.status)}/${row.id}`,
     query: {
