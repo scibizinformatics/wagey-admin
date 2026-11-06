@@ -112,16 +112,37 @@ export function ctoEligibilityId(options = []) {
 /**
  * The eligibility ids valid for a pay type: CTO is kept only for monthly pay.
  * An id is recognised as CTO whether it arrives as a number, as the text of a
- * number, or as the eligibility's own name/code. When the options list carries
- * no CTO record at all and no entry names one, the list is returned unchanged —
- * the strip cannot name an id it cannot resolve, so callers fetch the list
- * before writing rather than relying on this quietly passing CTO through.
+ * number, or as an eligibility's own name/code — either carried by the
+ * submitted entry itself or by the catalogue record the id matches.
+ *
+ * Under a non-monthly pay type the write also drops ids **no catalogue record
+ * resolves**. An unresolvable id is invisible to every checkbox — the reader
+ * can neither review nor clear it — yet legacy contracts still carry them (a
+ * re-seeded catalogue leaves an old CTO id behind in the stored array), and
+ * sending it blind is exactly what produced "LEAVE_CREDITS/OVERTIME_AS_CTO not
+ * allowed for daily pay type". A monthly write keeps such ids untouched: CTO is
+ * harmless there, and silently rewriting monthly terms is not this function's
+ * job.
+ *
+ * When the catalogue itself is empty the list is returned unchanged — the strip
+ * cannot name an id it cannot resolve, so callers fetch the list before writing
+ * rather than relying on this quietly passing CTO through.
  */
 export function eligibilitiesForPayType(eligibilities, payType, options = []) {
   const list = eligibilities ?? []
   if (payType === 'monthly') return list
   const knownCtoIds = ctoEligibilityIds(options)
-  return list.filter((id) => !isCtoLike(id) && !knownCtoIds.some((ctoId) => sameId(id, ctoId)))
+  const knownIds = (options ?? []).map((e) => e?.id)
+  const hasCatalogue = knownIds.length > 0
+  return list.filter((id) => {
+    if (isCtoLike(id)) return false
+    if (knownCtoIds.some((ctoId) => sameId(id, ctoId))) return false
+    // An id the catalogue cannot name never renders as ticked, so a non-monthly
+    // write does not send it blind. Monthly keeps it (the guard above returns
+    // early).
+    if (hasCatalogue && !knownIds.some((knownId) => sameId(id, knownId))) return false
+    return true
+  })
 }
 
 /**
