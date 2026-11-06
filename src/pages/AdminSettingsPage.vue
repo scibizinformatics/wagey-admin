@@ -141,6 +141,9 @@
             <q-tab-panel name="contributions" class="q-pa-none">
               <AdminSettingsPanelContributions :search-query="searchQuery || ''" />
             </q-tab-panel>
+            <q-tab-panel name="tax-brackets" class="q-pa-none">
+              <AdminSettingsPanelTaxBrackets :search-query="searchQuery || ''" />
+            </q-tab-panel>
             <q-tab-panel name="compensable" class="q-pa-none">
               <AdminSettingsPanelCompensable :search-query="searchQuery || ''" />
             </q-tab-panel>
@@ -178,6 +181,7 @@ import AdminSettingsPanelCustomMultipliers from '@/components/pages/AdminSetting
 import AdminSettingsPanelCostCenters from '@/components/pages/AdminSettings/AdminSettingsPanelCostCenters.vue'
 import AdminSettingsPanelPayrollGroups from '@/components/pages/AdminSettings/AdminSettingsPanelPayrollGroups.vue'
 import AdminSettingsPanelContributions from '@/components/pages/AdminSettings/AdminSettingsPanelContributions.vue'
+import AdminSettingsPanelTaxBrackets from '@/components/pages/AdminSettings/AdminSettingsPanelTaxBrackets.vue'
 import AdminSettingsPanelCompensable from '@/components/pages/AdminSettings/AdminSettingsPanelCompensable.vue'
 import AdminSettingsPanelAllowances from '@/components/pages/AdminSettings/AdminSettingsPanelAllowances.vue'
 import AdminSettingsPanelLeaveTypes from '@/components/pages/AdminSettings/AdminSettingsPanelLeaveTypes.vue'
@@ -292,6 +296,20 @@ const sectionGroups = [
         icon: 'o_savings',
         searchable: true,
         blurb: 'Contribution components, their types, and employee account numbers',
+      },
+      {
+        // Withholding tax is a payroll deduction like the contributions above,
+        // but it shares none of that setup — no component type, no
+        // employee/employer split, no account number — so forcing a third view
+        // into a panel built as a two-view pair is worse than its own section.
+        name: 'tax-brackets',
+        label: 'Tax brackets',
+        // Not `o_percent`: the Custom multipliers section above already uses it
+        // for a different thing (rates), and two sections in one group reading
+        // the same in the rail is the one place the icon has to disambiguate.
+        icon: 'o_calculate',
+        searchable: true,
+        blurb: 'Withholding tax bands, and the rate over each minimum',
       },
       {
         // Allowance types were their own page (`/app/allowances`) in the pay
