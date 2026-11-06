@@ -36,9 +36,15 @@
 
     <!-- ── Progress + content ──────────────────────────────────────────────── -->
     <section class="dash-panel step-board">
-      <!-- `stepperKey` lets a step force the progress header to refetch after an
-           action that advances the flow — incrementing it remounts the header. -->
-      <CashAdvanceStepperHeader :key="stepperKey" :pgi-id="pgiId" :stage="stage" />
+      <!-- `stepperKey` makes the shell refetch the run's progress after an
+           action that advances the flow; the payload also revises the "moved
+           on" notice below. -->
+      <CashAdvanceStepperHeader
+        :key="stepperKey"
+        :pgi-id="pgiId"
+        :stage="stage"
+        :progress="progressPayload"
+      />
 
       <div :class="['step-board__body', { 'step-board__body--flush': flush }]">
         <!-- The cash-advance flow can move on without this page knowing: a
@@ -78,10 +84,11 @@
  * same header, back affordance, board and "moved on" notice, so the cash-advance
  * flow is visually the payroll flow with four steps instead of five. It is a copy
  * rather than a shared component on purpose: the payroll shell resolves its
- * position from `PGI_STATUS_MAP`, and this one resolves it from the cash-advance
- * stage the page derives. Sharing would mean teaching the payroll shell a second
- * mode and touching the working five-step flow; the two copies are deliberately
- * kept small and identical in layout.
+ * position from `PGI_STATUS_MAP` plus the payroll progress array, and this one
+ * resolves it from the cash-advance stage the page derives, corrected by the
+ * payload's `ca_progress` / `ca_current_progress`. Sharing would mean teaching
+ * the payroll shell a second mode and touching the working five-step flow; the
+ * two copies are deliberately kept small and identical in layout.
  *
  * `stage` and `status` are separate on purpose. `stage` places the run in the
  * four-step flow and drives the progress bar; `status` is the payout/group status
@@ -90,19 +97,22 @@
  *
  * When the visual contract changes, change it here *and* in the payroll shell.
  */
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import CashAdvanceStepperHeader from 'src/components/pages/CashAdvance/CashAdvanceStepperHeader.vue'
 import PayoutStatusBadge from 'src/components/pages/Payroll/PayoutStatusBadge.vue'
 import { useCarriedRunQuery } from 'src/composables/disbursement/useCarriedRunQuery'
+import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import {
   CA_STEP_LABELS,
   CA_STEP_ROUTES,
   cashAdvanceStepIndex,
 } from 'src/constants/cashAdvanceStatus'
+import { cashAdvanceStageRoute } from 'src/composables/utils/payoutProgress'
 
 const router = useRouter()
 const carriedQuery = useCarriedRunQuery()
+const { fetchPayoutGroupProgress } = useDisbursementApi()
 
 const props = defineProps({
   pgiId: { type: [String, Number], required: true },
@@ -124,15 +134,52 @@ const props = defineProps({
 const stepNumber = computed(() => props.step)
 const stepName = computed(() => CA_STEP_LABELS[props.step - 1] ?? '')
 
+/**
+ * The run's progress payload, fetched here and handed to the header. The
+ * cash-advance payload's `ca_progress` array is the one place the flow's steps
+ * are spelled out step by step, and `ca_current_progress` names the stage even
+ * when `cash_advance_status` is a state this app does not map (e.g.
+ * `waiting_admin_approval`). The header draws its rail from it; this shell
+ * reads the same stage for its "moved on" notice, so a bar and the notice under
+ * it cannot disagree about where the advances went.
+ *
+ * The `stepperKey` bump refetches after a state-advancing action, exactly as it
+ * used to remount the header for its own fetch.
+ */
+const progressPayload = ref(null)
+
+async function loadProgress() {
+  if (!props.pgiId) return
+  try {
+    progressPayload.value = await fetchPayoutGroupProgress(props.pgiId)
+  } catch (err) {
+    console.error('[CashAdvanceStepShell] progress fetch failed:', err)
+  }
+}
+
+onMounted(loadProgress)
+watch(() => [props.pgiId, props.stepperKey], loadProgress)
+
 /** The 0-based index of the step this page renders. */
 const pageStepIndex = computed(() => props.step - 1)
 
 /**
- * Where the cash-advance flow sits, when the derived stage is known. `null`
- * before it resolves — an unknown position is not a position, and must not be
- * read as "behind".
+ * Where the cash-advance flow sits, as the further-along of the stage the page
+ * derives and the payload's `ca_current_progress` / `ca_progress`.
+ *
+ * The two lag in opposite directions — the page's stage advances optimistically
+ * when its own payload leaves nothing to do, the fetched payload lags behind a
+ * just-taken action — so the further-along one wins, the same rule the payroll
+ * header applies. `null` from either side falls back to the other; both `null`
+ * is "unknown", which is not a position and never reads as "behind".
  */
-const runStepIndex = computed(() => cashAdvanceStepIndex(props.stage))
+const runStepIndex = computed(() => {
+  const pageIndex = cashAdvanceStepIndex(props.stage)
+  const progressIndex = cashAdvanceStepIndex(cashAdvanceStageRoute(progressPayload.value))
+  if (pageIndex == null) return progressIndex
+  if (progressIndex == null) return pageIndex
+  return Math.max(pageIndex, progressIndex)
+})
 
 /** Whether the flow has moved past the step on screen. Strictly greater. */
 const movedOn = computed(
