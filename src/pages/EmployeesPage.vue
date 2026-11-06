@@ -1480,6 +1480,13 @@ async function submitContractUpdate() {
     contributions: f.contributions ?? [],
     holiday_pay_types: f.holiday_pay_types ?? [],
   }
+  // TEMP DIAGNOSTIC (contract 213 daily CTO rejection) — remove once confirmed.
+  console.log(
+    '[cto-fix] patch pay_type:', payload.pay_type,
+    '| form eligibilities:', f.eligibilities,
+    '| payload eligibilities:', payload.eligibilities,
+    '| catalogue ids:', eligibilityOptions.value.map((e) => e?.id),
+  )
 
   savingContract.value = true
   const { ok, error } = await updateEmploymentContract(contractId, payload)
@@ -1684,6 +1691,12 @@ async function confirmAssignSubmit() {
     assignForm.value.eligibilities,
     assignForm.value.pay_type,
     eligibilityOptions.value,
+  )
+  // TEMP DIAGNOSTIC (contract 213 daily CTO rejection) — remove once confirmed.
+  console.log(
+    '[cto-fix] assign/renew pay_type:', assignForm.value.pay_type,
+    '| payload eligibilities:', assignForm.value.eligibilities,
+    '| catalogue ids:', eligibilityOptions.value.map((e) => e?.id),
   )
   if (ids.length > 0) {
     const { successCount, failCount } = await bulkAssignContract(ids)
