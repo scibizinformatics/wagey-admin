@@ -45,7 +45,7 @@
             <h2 class="done__title">Cash advance complete</h2>
             <p class="done__sub">
               <template v-if="completion.completionDate">
-                Closed {{ formatDateTime(completion.completionDate) }} ·
+                Closed {{ longLabel(completion.completionDate) }} ·
               </template>
               {{ completion.claimedEmployees }} of {{ completion.totalEmployees }} employees claimed
             </p>
@@ -183,7 +183,7 @@
             <template #body-cell-released_on="props">
               <q-td :props="props">
                 <span v-if="props.row.releasedOn" class="dash-num">
-                  {{ formatDateTime(props.row.releasedOn) }}
+                  {{ longLabel(props.row.releasedOn) }}
                 </span>
                 <span v-else class="muted">—</span>
               </q-td>
@@ -228,8 +228,9 @@ import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { summariseCashAdvanceCompletion } from 'src/composables/utils/cashAdvance'
 import { extractErrorMessage } from 'src/composables/utils/http'
+import { longLabel } from 'src/composables/utils/calendarDate'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
-import { formatCurrency, formatDateTime } from 'src/composables/utils/format'
+import { formatCurrency } from 'src/composables/utils/format'
 import { createRequestToken } from 'src/composables/utils/requestToken'
 import { normalizeStatusKey } from 'src/constants/cashAdvanceStatus'
 
@@ -302,7 +303,7 @@ const statTiles = computed(() => [
   {
     key: 'date',
     label: 'Completed',
-    value: formatDateTime(completion.value.completionDate) || '—',
+    value: longLabel(completion.value.completionDate) || '—',
     mark: 'var(--dash-neutral-mark)',
     numeric: false,
   },
@@ -387,7 +388,7 @@ function exportSummary() {
   doc.text(
     [
       completion.value.completionDate
-        ? `Completed ${formatDateTime(completion.value.completionDate)}`
+        ? `Completed ${longLabel(completion.value.completionDate)}`
         : '',
       `Employees: ${completion.value.totalEmployees}`,
       `Claimed: ${completion.value.claimedEmployees}`,
@@ -410,7 +411,7 @@ function exportSummary() {
       record.reference,
       `PHP ${parseAmount(record.amount)}`,
       record.status,
-      formatDateTime(record.releasedOn),
+      longLabel(record.releasedOn),
       record.receivedBy,
     ]),
     styles: { fontSize: 8, cellPadding: 2 },
