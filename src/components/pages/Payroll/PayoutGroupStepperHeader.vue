@@ -59,21 +59,30 @@
  *  - The connecting rail belongs to the step it leads into and fills from the
  *    step before, which is what makes the run of completed work legible.
  *
- * Progress still comes from either the `pgiStatus` prop / query param (mapped by
- * computeStepsFromPgiStatus) or the progress endpoint, unchanged.
+ * Progress comes from one of two sources: the `pgiStatus` prop / query param
+ * (mapped by computeStepsFromPgiStatus), or the `progress` payload prop handed
+ * down from the step shell, which is the further-along winner whenever the two
+ * disagree. A run paused by an active cash advance takes the payload's frozen
+ * array alone — see `isPayrollPaused`.
  */
-import { ref, computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useCarriedRunQuery } from 'src/composables/disbursement/useCarriedRunQuery'
 import { computeStepsFromPgiStatus } from 'src/constants/pgiStatus'
+import { isPayrollPaused, payrollStepsFromProgress } from 'src/composables/utils/payoutProgress'
 
 const route = useRoute()
-const { fetchPayoutGroupProgress } = useDisbursementApi()
 
 const props = defineProps({
   groupId: { type: [String, Number], required: true },
   pgiStatus: { type: String, default: null },
+  /**
+   * The `payout-group-progress` payload, fetched by the step shell around this
+   * header — it needs the same call for its pause banner, so this header does
+   * not fetch a second time. `null` reads as "not loaded yet", and every
+   * derivation below falls back to the status then.
+   */
+  progress: { type: Object, default: null },
 })
 
 const BASE_PATH = '/app/payroll'
@@ -95,7 +104,7 @@ const stepDefs = [
   { label: 'Complete', routeKey: 'complete' },
 ]
 
-const progressData = ref(null)
+const progressData = computed(() => props.progress)
 
 const STATE_LABELS = {
   completed: 'Done',
@@ -111,18 +120,24 @@ const withRoute = (def) => ({
   route: `${BASE_PATH}/${def.routeKey}/${props.groupId}`,
 })
 
-/** The bar as the run's own progress endpoint describes it. */
+/** A per-step progress status word onto this header's rendering states. */
+const stateFor = (state) =>
+  state === 'in_progress' ? 'current' : state === 'completed' ? 'completed' : 'locked'
+
+/**
+ * The bar as the run's own progress endpoint describes it, matched to the five
+ * steps by the payload's `step` numbers.
+ */
 const progressSteps = computed(() => {
-  const progress = progressData.value?.progress
-  if (!Array.isArray(progress) || !progress.length) return []
-  return stepDefs.map((def, i) => {
-    const prog = progress[i]
-    let state = 'upcoming'
-    if (prog?.status === 'completed') state = 'completed'
-    else if (prog?.status === 'in_progress') state = 'current'
-    else if (prog?.status === 'locked') state = 'locked'
-    return { ...withRoute(def), state }
-  })
+  const mapped = payrollStepsFromProgress(
+    progressData.value,
+    stepDefs.map((d) => ({ name: d.routeKey })),
+  )
+  if (!mapped) return []
+  return mapped.map((s, i) => ({
+    ...withRoute(stepDefs[i]),
+    state: stateFor(s.state),
+  }))
 })
 
 /** The bar as the status this header was handed maps it. */
@@ -163,21 +178,24 @@ function positionOf(steps) {
  * knows the run has moved to awaiting acknowledgment before a refetch could say
  * so. That reading is behind too, and loses in its turn. Ties go to progress,
  * which describes each step rather than inferring it from one status.
+ *
+ * The pause outranks both. An active cash advance holds the payroll, and the
+ * payload says so in `current_progress` while every per-step truth stays in the
+ * frozen `progress` array — the status beside it still names a payroll stage
+ * that is not being worked on, so letting the further-along rule read it would
+ * draw "Payslips, in progress" over a run nobody may work on. The frozen array
+ * is exactly the truth about where payroll resumes, so it wins for as long as
+ * the run is held; the shell says why it is held.
  */
 const steps = computed(() => {
+  if (isPayrollPaused(progressData.value)) {
+    return progressSteps.value.length ? progressSteps.value : statusSteps.value
+  }
   const fromProgress = progressSteps.value
   const fromStatus = statusSteps.value
   if (!fromProgress.length) return fromStatus
   if (!fromStatus.length) return fromProgress
   return positionOf(fromProgress) >= positionOf(fromStatus) ? fromProgress : fromStatus
-})
-
-onMounted(async () => {
-  try {
-    progressData.value = await fetchPayoutGroupProgress(props.groupId)
-  } catch (err) {
-    console.error('[PayoutGroupStepperHeader] fetch failed:', err)
-  }
 })
 </script>
 
