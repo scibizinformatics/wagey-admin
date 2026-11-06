@@ -10,13 +10,17 @@
  * labels live here and every surface reads the same source.
  */
 
-/** Options for the pay-type select. `label` is what the UI shows, everywhere. */
+/**
+ * Options for the pay-type select. The backend writes exactly `monthly` and
+ * `daily` (the contract endpoints' `pay_type` enum), and Admin Settings gives
+ * the same pair, so the selects offer nothing else. `label` is what the UI
+ * shows, everywhere. A pre-existing contract with another value still
+ * *display* — `payTypeLabel` prints the raw text rather than blanking — but
+ * re-saving it now means picking one of these.
+ */
 export const PAY_TYPE_OPTIONS = [
   { label: 'Monthly', value: 'monthly' },
-  { label: 'Semi-Monthly', value: 'semi-monthly' },
-  { label: 'Weekly', value: 'weekly' },
   { label: 'Daily', value: 'daily' },
-  { label: 'Hourly', value: 'hourly' },
 ]
 
 export const MONTH_OPTIONS = [
@@ -80,20 +84,64 @@ export function formatHours(value) {
  */
 export const CTO_ELIGIBILITY_NAME = 'Overtime Converted to CTO'
 
+/**
+ * The same CTO record can be written down three ways: its id (a number, or the
+ * text legacy rows were written from), its `name`, or its `code` — the
+ * OVERTIME_AS_CTO string the backend's validation error prints. An eligibilities
+ * entry is CTO whenever it is any of these shapes, and the strip only works if
+ * it recognises the shape the payload actually carries.
+ */
+function isCtoLike(value) {
+  if (value == null) return false
+  const text = String(value).trim().toLowerCase()
+  if (!text) return false
+  if (text.includes('overtime_as_cto')) return true
+  return text.includes('overtime') && text.includes('cto')
+}
+
+/** Every record in a payroll-eligibilities list that is a CTO one. */
+export function ctoEligibilityIds(options = []) {
+  return (options ?? []).filter((e) => isCtoLike(e?.name) || isCtoLike(e?.code)).map((e) => e.id)
+}
+
 /** The CTO eligibility's id in a payroll-eligibilities list, or `null`. */
 export function ctoEligibilityId(options = []) {
-  return options.find((e) => e.name === CTO_ELIGIBILITY_NAME)?.id ?? null
+  return ctoEligibilityIds(options)[0] ?? null
 }
 
 /**
- * The eligibility ids valid for a pay type: CTO is kept only for monthly pay,
- * and returned unchanged when the CTO option is not in the list at all.
+ * The eligibility ids valid for a pay type: CTO is kept only for monthly pay.
+ * An id is recognised as CTO whether it arrives as a number, as the text of a
+ * number, or as the eligibility's own name/code. When the options list carries
+ * no CTO record at all and no entry names one, the list is returned unchanged —
+ * the strip cannot name an id it cannot resolve, so callers fetch the list
+ * before writing rather than relying on this quietly passing CTO through.
  */
 export function eligibilitiesForPayType(eligibilities, payType, options = []) {
   const list = eligibilities ?? []
   if (payType === 'monthly') return list
-  const ctoId = ctoEligibilityId(options)
-  return ctoId === null ? list : list.filter((id) => id !== ctoId)
+  const knownCtoIds = ctoEligibilityIds(options)
+  return list.filter((id) => !isCtoLike(id) && !knownCtoIds.some((ctoId) => sameId(id, ctoId)))
+}
+
+/**
+ * Id-tolerant membership: the option's `5` is the stored `"5"`. Every
+ * checkbox on an eligibilities array — and `isMultiplierVisible`, which hides
+ * the rows tied to one — reads through this, so a legacy id written as text
+ * still renders as ticked instead of ticking off a hidden state.
+ */
+export function hasEligibility(list, id) {
+  return (list ?? []).some((e) => sameId(e, id))
+}
+
+/**
+ * `list` without every occurrence of `id`. Unticking a checkbox rendered by
+ * `hasEligibility` has to remove the same entries it showed, so the removal is
+ * as tolerant as the tick test — otherwise the checkbox lies about what the
+ * form will send.
+ */
+export function withoutEligibility(list, id) {
+  return (list ?? []).filter((e) => !sameId(e, id))
 }
 
 /**
