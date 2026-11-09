@@ -393,6 +393,18 @@ These are live and not covered by the long-form doc — treat them as current, n
   (`useAuditLogs.js` for the cross-module write log, `useAssignmentHistory.js` /
   `useContractHistory.js` for the two trails) are the newest composables and carry their traps in
   their header comments — read those before trusting a field.
+- **Devices** `/app/devices` (`DevicesPage.vue`/`useDevices.js`/`utils/devices.js`).
+  `GET /user/companies/{company_id}/devices/` answers a bare array of the phones/browsers employees
+  sign in to the app on. The deactivate route is **documented as `{employee_uuid}` but takes the
+  device's `device_uuid` there**, confirmed against the backend — if a 404 ever comes off this write,
+  that mismatch is the first thing to re-check. Deactivation is **one-way** (`PATCH .../deactivate/`
+  with `{ is_active: false, deactivated_reason, deactivated_at }`; no reactivate verb — the device
+  returns by registering again in the app), and the reason is required input from the admin, so the
+  gate is the bespoke-dialog pattern (`DeviceDeactivateDialog.vue`), not `ConfirmDialog`.
+  `DEACTIVATE_REASONS` in `utils/devices.js` is the single source of the reason enum — only
+  `replaced` is evidenced by the documented payload, so a 400 on the write is that list first.
+  `is_active` is read strictly (`true`/`false` present, anything else Unknown), and the three payload
+  stamps are instants that print through `formatDateTime()`.
 
 ## Traps
 
