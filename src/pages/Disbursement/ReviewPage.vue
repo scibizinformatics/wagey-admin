@@ -455,6 +455,31 @@
                       <q-item-section>Release payslip</q-item-section>
                     </q-item>
 
+                    <!-- A write, like review and release above it, so it sits
+                         with them ahead of the read-only items. The picker it
+                         opens holds only the payout groups running in this
+                         same cutoff, which is what keeps a moved employee on
+                         the period their payslip belongs to. -->
+                    <q-item
+                      v-close-popup
+                      clickable
+                      class="disb-menu__item"
+                      :disable="reviewClosed || transferring"
+                      @click="openTransfer(props.row)"
+                    >
+                      <q-item-section avatar>
+                        <q-spinner
+                          v-if="transferring && transferRow?.epi_id === props.row.epi_id"
+                          size="15px"
+                        />
+                        <q-icon v-else name="o_swap_horiz" size="17px" />
+                      </q-item-section>
+                      <q-item-section>Transfer to another group</q-item-section>
+                      <q-tooltip v-if="reviewClosed" :delay="400">
+                        Transfer is only available while this run is under review
+                      </q-tooltip>
+                    </q-item>
+
                     <q-separator class="disb-menu__sep" />
 
                     <q-item
@@ -531,6 +556,21 @@
       :employee-index="employeeIndex"
     />
 
+    <!-- Moving one employee payroll item into another payout group's run inside
+         this cutoff. The picker is filled by `openTransfer` from the run's
+         same-cutoff siblings joined to payroll-groups, and the write lives in
+         `commitTransfer`, reachable only from the dialog's @confirm — the same
+         gate-and-commit split the review confirms below keep. -->
+    <TransferPayoutGroupDialog
+      v-model="transferDialogOpen"
+      :employee="transferRow?.employee || ''"
+      :cutoff="cutoffLabel"
+      :groups="transferGroups"
+      :groups-loading="transferGroupsLoading"
+      :loading="transferring"
+      @confirm="commitTransfer"
+    />
+
     <!-- The gate in front of every write this step makes: reviewing one employee,
          reviewing everyone outstanding, and releasing the payslips that follow.
          One dialog for all three, the wording built in `reviewConfirm.js`, and the
@@ -558,6 +598,7 @@ import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTabl
 import EmployeeDetailDialog from 'src/components/pages/Payroll/EmployeeDetailDialog.vue'
 import EmployeeContributionsDialog from 'src/components/pages/Payroll/EmployeeContributionsDialog.vue'
 import SalaryBreakdownDialog from 'src/components/pages/Payroll/SalaryBreakdownDialog.vue'
+import TransferPayoutGroupDialog from 'src/components/pages/Payroll/TransferPayoutGroupDialog.vue'
 import {
   buildReleaseConfirm,
   buildReviewAllConfirm,
@@ -565,6 +606,8 @@ import {
 } from 'src/components/pages/Payroll/reviewConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
+import { useAdminPayrollGroups } from 'src/composables/admin/useAdminPayrollGroups'
+import { extractErrorMessage } from 'src/composables/utils/http'
 import { PGI_STATUS_MAP } from 'src/constants/pgiStatus'
 import {
   formatCurrency,
@@ -578,7 +621,7 @@ import { useToast } from 'src/composables/useToast'
 
 const route = useRoute()
 const groupId = route.params.id
-const { identity, resolveQuietly } = usePayoutGroupIdentity()
+const { identity, resolve, resolveQuietly } = usePayoutGroupIdentity()
 // Bumped after releasing payslips so the progress header refetches.
 const stepperKey = ref(0)
 const {
@@ -587,10 +630,14 @@ const {
   fetchPayoutGroupProgress,
   reviewToReady,
   releasePayslips,
+  transferEmployeePayrollItem,
   invalidateCache,
 } = useDisbursementApi()
 const { notifyLoaded } = useLoadedToast()
 const { employees, fetchEmployees } = useEmployees()
+// The picker's master list: the run's same-cutoff siblings arrive as names, and
+// payroll-groups is what turns a name into the id the transfer endpoint wants.
+const { payrollGroups, fetchPayrollGroups } = useAdminPayrollGroups()
 
 // Puts a face beside each name. The review payload names an employee but
 // carries no photograph, so the roster is the only thing that can supply one —
@@ -659,6 +706,30 @@ const selectedEmployeeName = ref('')
 // selection trio on this page would be three ways of naming the same row.
 const breakdownDialogOpen = ref(false)
 const selectedNetPay = ref(null)
+
+// ── Transfer to another payout group ──
+//
+// The picker is built, not free: every target must already be running in this
+// cutoff, which is what keeps a moved employee on the period their payslip
+// belongs to. The run's siblings supply the names (`usePayoutGroupIdentity`),
+// `payroll-groups` supplies the ids, and the join happens when the dialog opens.
+const transferDialogOpen = ref(false)
+// Snapshotted at open, like the review confirm's `pendingEmployee` — the table
+// is live and this row can be replaced by a refresh at any moment.
+const transferRow = ref(null)
+const transferGroups = ref([])
+const transferGroupsLoading = ref(false)
+const transferring = ref(false)
+
+/**
+ * The cutoff both runs sit on, for the dialog's sentence. The same three
+ * sources the header's subtitle reads — the review summary, the deep link, and
+ * the identity the list page handed over — in the same order, so the two cannot
+ * name different periods.
+ */
+const cutoffLabel = computed(
+  () => summary.value?.cutoff_name || route.query.cutoff || identity.value?.cutoff || '',
+)
 
 // The confirmation gate. `pendingIds` and `pendingEmployee` are snapshotted rather
 // than re-read on confirm, so the dialog describes the review that was asked about
@@ -1295,6 +1366,135 @@ function viewBreakdown(row) {
 /** A deduction moves the row's contribution status and the run's figures. */
 async function refreshAfterDeduct() {
   await refresh()
+}
+
+// ── Transfer to another payout group ──
+
+/**
+ * Turns the run's same-cutoff siblings into picker options.
+ *
+ * The siblings arrive as names; the master payroll groups arrive as `{ id,
+ * name }`, so the two meet on the name. Three sibling shapes fall out of that
+ * join, and only the first is offered:
+ *
+ * - name matched one master group → the target, id from the sibling row when
+ *   the payload carries one, from the master list when it does not;
+ * - name matched by two master groups → skipped. A shared name cannot say
+ *   which group it means, and transferring an employee to the wrong group is
+ *   a worse outcome than offering fewer of them (the same refusal
+ *   `avatarFor` makes about a name held by two employees);
+ * - name matched by none → skipped, unless the sibling row carries its own
+ *   master id, which needs no join at all.
+ *
+ * Inactive master groups are excluded too, and a target is dropped as a whole
+ * when its id is the current run's — an option that no-ops has no business in
+ * a picker that is about moving someone *away*.
+ */
+function buildTransferOptions(siblings) {
+  const byName = new Map()
+  for (const group of payrollGroups.value || []) {
+    const key = String(group?.name || '')
+      .trim()
+      .toLowerCase()
+    if (!key) continue
+    byName.set(key, byName.has(key) ? null : group)
+  }
+
+  const options = new Map()
+  for (const sibling of siblings || []) {
+    if (String(sibling?.instanceId) === String(groupId)) continue
+    const name = String(sibling?.name || '').trim()
+    if (!name) continue
+    const master = byName.get(name.toLowerCase())
+    if (master === undefined || master === null) {
+      // A payroll group this company does not have (or does not name
+      // uniquely) still transfers if the sibling row named its master id —
+      // the endpoint takes an id, not a name.
+      if (sibling?.payrollGroupId == null) continue
+    } else if (master?.is_active === false) {
+      continue
+    }
+    const id = sibling?.payrollGroupId ?? master?.id ?? null
+    if (id == null) continue
+    if (options.has(String(id))) continue
+    options.set(String(id), { id, name: master?.name || name })
+  }
+  return [...options.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * Opens the transfer gate for one row. Resolves its own inputs, so a deep link
+ * that skipped the list page still gets a picker. Writes nothing — the write
+ * lives in `commitTransfer`, behind the dialog's `@confirm`.
+ */
+async function openTransfer(row) {
+  if (showConfirm.value || confirmBusy.value || reviewClosed.value) return
+  if (!row?.epi_id || transferring.value) return
+
+  transferRow.value = { epi_id: row.epi_id, employee: row.employee || '' }
+  transferGroups.value = []
+  transferGroupsLoading.value = true
+  transferDialogOpen.value = true
+
+  try {
+    // Master groups first: the picker joins the run's siblings to them by
+    // name, and the settings module re-fetches on every call, so the list is
+    // as current as this opening moment. The setting page's own error toast
+    // covers a failed read; this one then renders its own empty state.
+    if (!payrollGroups.value.length) await fetchPayrollGroups()
+
+    // Siblings come from the cutoff the run was resolved under. Mount already
+    // resolved the run quietly; only a deep link that landed before that
+    // resolution finished has to ask again.
+    let resolved = identity.value
+    if (!resolved?.siblings?.length) resolved = await resolve(groupId)
+
+    // The dialog can be closed while its inputs are still loading; feeding it
+    // options then would be a result for nobody.
+    if (!transferDialogOpen.value) return
+    transferGroups.value = buildTransferOptions(resolved?.siblings || [])
+  } catch (err) {
+    console.error('[ReviewPage] transfer options failed:', err)
+    if (transferDialogOpen.value) {
+      toast.error(extractErrorMessage(err, 'Could not read the payout groups in this cutoff.'))
+    }
+  } finally {
+    transferGroupsLoading.value = false
+  }
+}
+
+/**
+ * The transfer write, reachable only from the dialog's `@confirm` — the same
+ * gate-and-commit split every other write on this page keeps. The dialog hands
+ * over the picked id; the button's `:loading` covers the request and a second
+ * click cannot land.
+ *
+ * Success moves the row out of this run, so the refresh that follows is not
+ * cosmetic: the table must lose the employee and the run's figures must move
+ * with them. `refresh()` drops the cached dashboard and payout-group lists too,
+ * so the run the employee just joined is not still described by a list written
+ * before they arrived.
+ */
+async function commitTransfer(targetId) {
+  const row = transferRow.value
+  if (!row?.epi_id || targetId == null || transferring.value) return
+  transferring.value = true
+  try {
+    await transferEmployeePayrollItem(row.epi_id, targetId)
+    const targetName =
+      transferGroups.value.find((group) => String(group.id) === String(targetId))?.name ||
+      'the picked group'
+    transferDialogOpen.value = false
+    toast.success(`${row.employee || 'Employee'} transferred to ${targetName}.`, {
+      caption: cutoffLabel.value ? `Payslip stays on ${cutoffLabel.value}.` : undefined,
+    })
+    await refresh()
+  } catch (err) {
+    console.error('[ReviewPage] commitTransfer ✖ error:', err)
+    toast.error(extractErrorMessage(err, 'Failed to transfer this employee. Nothing was changed.'))
+  } finally {
+    transferring.value = false
+  }
 }
 
 /**
