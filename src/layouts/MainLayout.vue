@@ -502,6 +502,10 @@ const navGroups = [
       // What those cards have actually done — the tap log behind the manning
       // board's punches. Sits directly after the card roll it reads.
       { label: 'Card Taps', icon: 'tap_and_play', to: '/app/card-taps' },
+      // What the app itself runs on — the phones and browsers employees sign in
+      // to. Sits with the roster and the hardware above it: deactivating one is
+      // a workforce task about a specific person's device.
+      { label: 'Devices', icon: 'devices', to: '/app/devices' },
     ],
   },
   {
