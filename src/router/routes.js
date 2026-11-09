@@ -72,6 +72,11 @@ const routes = [
         component: () => import('pages/CardTapsPage.vue'),
       },
       {
+        path: 'devices',
+        name: 'devices',
+        component: () => import('pages/DevicesPage.vue'),
+      },
+      {
         path: 'requests',
         name: 'requests',
         component: () => import('pages/RequestPage.vue'),
