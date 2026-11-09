@@ -22,9 +22,46 @@ export function usePayoutGroupIdentity() {
   const { companyId } = useCompany()
   const { fetchCutoffInstances, fetchPayoutGroupInstances } = useDisbursementApi()
 
-  /** `{ name, cutoff, status, cashAdvanceStatus }` once resolved, null until then. */
+  /**
+   * `{ name, cutoff, status, cashAdvanceStatus, cutoffId, siblings }` once
+   * resolved, null until then. `siblings` is the same cutoff's other runs —
+   * what the Review step's transfer picker draws its targets from.
+   */
   const identity = ref(null)
   const resolving = ref(false)
+
+  /** The instance rows one `payout-group-instances` answer carries, whatever envelope it used. */
+  function toRows(batch) {
+    if (Array.isArray(batch)) return batch
+    return batch?.results ?? batch?.data ?? []
+  }
+
+  /**
+   * The master payroll-group id an instance row may carry, if it carries one.
+   *
+   * The rows are not documented to expose the master group — the frontend reads
+   * `payout_group_name` off them — so every spelling a payload might use is
+   * tried once here and the answer stays null when none is present. A null is
+   * fine: the transfer picker falls back to matching the row's name against
+   * `payroll-groups`, and a name held by two master groups is skipped rather
+   * than guessed.
+   */
+  function payrollGroupIdOf(row) {
+    const nested = [row?.payout_group, row?.payroll_group]
+    for (const candidate of nested) {
+      if (candidate && typeof candidate === 'object' && candidate.id != null) return candidate.id
+    }
+    return (
+      row?.payroll_group_id ??
+      row?.payout_group_id ??
+      (typeof row?.payout_group === 'number' || typeof row?.payout_group === 'string'
+        ? row.payout_group
+        : null) ??
+      (typeof row?.payroll_group === 'number' || typeof row?.payroll_group === 'string'
+        ? row.payroll_group
+        : null)
+    )
+  }
 
   async function resolve(payoutGroupInstanceId) {
     const cid = companyId.value
@@ -41,15 +78,42 @@ export function usePayoutGroupIdentity() {
       const groups = await Promise.all(
         cutoffs.map((c) => fetchPayoutGroupInstances(cid, c.id).catch(() => null)),
       )
-      const match = groups
-        .flatMap((g) => (Array.isArray(g) ? g : (g?.results ?? [])))
-        .find((row) => String(row?.id) === String(payoutGroupInstanceId))
+
+      // Walked per cutoff rather than flatMapped, so the cutoff the match was
+      // found under — and the runs sharing it — stay attached to it. The
+      // transfer picker needs both: its targets are only the other payroll
+      // groups running in this same cutoff, which is what keeps a moved
+      // employee on the period their payslip belongs to.
+      let matchedCutoff = null
+      let match = null
+      let siblingRows = []
+      for (let i = 0; i < cutoffs.length && !match; i++) {
+        const rows = toRows(groups[i])
+        const found = rows.find((row) => String(row?.id) === String(payoutGroupInstanceId))
+        if (found) {
+          matchedCutoff = cutoffs[i]
+          match = found
+          siblingRows = rows
+        }
+      }
       if (!match) return null
 
       identity.value = {
         name: match.payout_group_name || '',
         cutoff: match.cutoff_instance_name || '',
         status: match.payout_status || '',
+        // The cutoff the run was found under, as an id. `cutoff` above is the
+        // name the payload prints, which is not something an API can be asked
+        // about again; this is.
+        cutoffId: matchedCutoff?.id ?? null,
+        // The other runs in this cutoff, as { instanceId, name, payrollGroupId }.
+        // Carried raw enough for a caller to exclude this run by instanceId and
+        // resolve each name to a master payroll group without another fetch.
+        siblings: siblingRows.map((row) => ({
+          instanceId: row?.id ?? null,
+          name: row?.payout_group_name || '',
+          payrollGroupId: payrollGroupIdOf(row),
+        })),
         // The PGI row's own cash-advance stage. It moves independently of
         // `payout_status` — funding a cash advance does not necessarily move the
         // payroll run — so the cash-advance bars read this one first.
