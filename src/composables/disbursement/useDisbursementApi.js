@@ -310,6 +310,23 @@ export function useDisbursementApi() {
     return data
   }
 
+  /**
+   * Moves one employee payroll item into another payroll group's run.
+   *
+   * The cutoff is not part of the payload — the backend keeps the item on the
+   * cutoff it was created for, which is why the caller must not offer a group
+   * that has no run in this cutoff (see `usePayoutGroupIdentity`'s siblings).
+   * The item leaves this run's rows, so callers should refetch, and the cached
+   * dashboard and payout-group lists are stale the moment it moves.
+   */
+  async function transferEmployeePayrollItem(epiId, targetPayrollGroupId) {
+    const { data } = await api.post(
+      `${BASE}/payroll/admin/employee-payroll-item/${epiId}/transfer/`,
+      { target_payroll_group_id: targetPayrollGroupId },
+    )
+    return data
+  }
+
   // ── Payslips (Step 2) ──
   async function fetchPayslipOverview(payoutGroupInstanceId) {
     const { data } = await api.get(`${BASE}/payroll/admin/payslip-overview/${payoutGroupInstanceId}/`)
@@ -465,6 +482,7 @@ export function useDisbursementApi() {
     revertAdjustment,
     fetchEmployeePayrollItem,
     fetchEmployeePayrollItemEarnings,
+    transferEmployeePayrollItem,
     fetchPayslipOverview,
     fetchEmployeePayslips,
     fetchPayoutGroupInstanceAmounts,
