@@ -503,6 +503,34 @@ export const SORT_OPTIONS = [
   { label: 'Employee A–Z', value: 'employee' },
 ]
 
+// ─── The assign dialog's pick list ───────────────────────────────────────────
+
+/** How many free cards the dialog offers before "the rest are in the table" is
+ *  said instead of building an endless list inside a modal. */
+export const ASSIGN_PICK_LIMIT = 6
+
+/**
+ * The cards the assign dialog's UID path offers to pick from.
+ *
+ * The tap log carries no card uid, so this app can never name "the card that
+ * just tapped" — but the tap that registered the card is the same tap the roll
+ * records in `last_tap`, which makes *newest tap first* the one ordering that
+ * puts the card in the reader's hand at the top of the list. Free cards only:
+ * handing a card to somebody is this dialog's whole job, and a held card is
+ * already reachable from its row.
+ *
+ * @param {Array<object>} cards the normalised roll
+ * @param {number} [limit]
+ * @returns {Array<object>} a new array sorted and sliced — the roll itself is
+ *   never reordered, the table owns that
+ */
+export function assignableCardOptions(cards, limit = ASSIGN_PICK_LIMIT) {
+  return cards
+    .filter((card) => !card.assigned)
+    .sort(SORTS.recent)
+    .slice(0, limit)
+}
+
 /** Counts for the page header. One pass, so the figures cannot disagree. */
 export function summarizeAccessCards(cards) {
   const tally = { total: 0, assigned: 0, unassigned: 0, active: 0, inactive: 0, alerts: 0 }
