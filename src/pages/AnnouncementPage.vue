@@ -301,6 +301,7 @@ import AnnouncementEditDialog from '@/components/pages/Announcement/Announcement
 import AnnouncementDeleteDialog from '@/components/pages/Announcement/AnnouncementDeleteDialog.vue'
 import {
   announcementState,
+  attachmentFiles,
   audienceSummary,
   hasTargeting,
   typeMeta,
@@ -425,6 +426,9 @@ const decorated = computed(() => {
     _state: announcementState(announcement),
     _type: typeMeta(announcement.announcement_type),
     _audience: audienceSummary(announcement, lookups),
+    // The Files column and the card list's Attachments line both read this, so
+    // the board cannot disagree with itself about what a payload attached.
+    _files: attachmentFiles(announcement),
   }))
 })
 
@@ -739,6 +743,11 @@ const saveAnnouncement = async (form) => {
     if (form.attachments?.length) payload.attachments = form.attachments
 
     if (editingAnnouncement.value) {
+      // Only the update serializer declares `remove_attachment_ids`; the create
+      // one has no such field, so it never reaches a create body.
+      if (form.remove_attachment_ids?.length) {
+        payload.remove_attachment_ids = form.remove_attachment_ids
+      }
       await updateAnnouncement(editingAnnouncement.value.id, payload)
       toast.success('Announcement updated')
     } else {
