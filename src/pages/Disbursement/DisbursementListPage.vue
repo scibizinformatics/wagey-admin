@@ -266,6 +266,7 @@ import { stepRouteForCashAdvanceStatus } from 'src/constants/cashAdvanceStatus'
 import { isPayrollPausedByStatus } from 'src/composables/utils/payoutProgress'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useCompany } from 'src/composables/page/useCompany'
+import { useDisbursementViewState } from 'src/composables/page/useDisbursementViewState'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
 import { todayIso } from 'src/composables/utils/calendarDate'
@@ -325,12 +326,6 @@ const VIEW_OPTIONS = [
 ]
 
 const view = ref(VIEW_PAYOUT)
-// The cash-advance step pages link back here with `?view=cash_advance`, so Back
-// lands on the table the reader was working in rather than on the payout view.
-// Read once, on arrival; switching the dropdown does not rewrite the URL.
-if (String(route.query.view || '').toLowerCase() === VIEW_CASH_ADVANCE) {
-  view.value = VIEW_CASH_ADVANCE
-}
 const isCashAdvance = computed(() => view.value === VIEW_CASH_ADVANCE)
 const viewIcon = computed(() => (isCashAdvance.value ? 'o_request_quote' : 'o_payments'))
 
@@ -408,6 +403,36 @@ const cutoffs = ref([])
  * somebody asks for it.
  */
 const completedOnly = ref(false)
+
+// ── View memory ───────────────────────────────────────────────────────────────
+// Leaving for another page and coming back used to restart the reader at page 1
+// with every filter reset: this component unmounts on navigation and recreates
+// its refs at setup. The snapshot below is module-level — it outlives the
+// unmounted page, is keyed by company, and dies on reload. Deliberately neither
+// keep-alive (the app has none, on purpose) nor the URL (this page consumes its
+// own query — `?cutoff_id`, `?view` — which a `?page=` would collide with).
+// Seeding happens here, in setup, so the deep-link handling below and the
+// reset-to-page-1 watchers see a remembered value exactly as if the reader had
+// just chosen it.
+const { restoreScroll } = useDisbursementViewState('list', {
+  page,
+  pageSize,
+  searchTerm,
+  groupFilter,
+  cutoffFilter,
+  view,
+  onlyWithAdvances,
+  cashAdvanceSort,
+  completedOnly,
+})
+
+// The cash-advance step pages link back here with `?view=cash_advance`, so Back
+// lands on the table the reader was working in rather than on the payout view.
+// Read once, on arrival, and after the memory above seeds `view` — a link
+// outranks a remembered view. Switching the dropdown does not rewrite the URL.
+if (String(route.query.view || '').toLowerCase() === VIEW_CASH_ADVANCE) {
+  view.value = VIEW_CASH_ADVANCE
+}
 
 /**
  * Every cutoff's runs, keyed by cutoff, from the last sweep.
@@ -833,6 +858,12 @@ function applyDeepLink() {
 
   if (!applied) return
 
+  // A linked cutoff outranks the remembered one: the reader followed a link to a
+  // specific narrowing, so the memory's cutoff — and the page it sat on — give
+  // way, and `resolveDeepLink` below resolves the link or falls back to the
+  // default cutoff the way a first visit does.
+  cutoffFilter.value = null
+  groupFilter.value = null
   page.value = 1
   // Consumed once. Left in the URL, a reload would re-apply a narrowing the
   // reader had since dismissed, and the list would look permanently short.
@@ -1122,11 +1153,25 @@ onMounted(async () => {
   try {
     const hasCutoffs = await loadCutoffs()
     resolveDeepLink()
+    // A remembered cutoff can outlive the cutoff itself: the snapshot was
+    // written before this company's list changed (a new period, a removed
+    // type), and loading runs for a key nothing offers would read as a broken
+    // page rather than as a stale memory. Falls back the way a first visit does.
+    if (cutoffFilter.value && !cutoffs.value.some((c) => c.key === cutoffFilter.value)) {
+      cutoffFilter.value = defaultCutoff(cutoffs.value)?.key ?? null
+      page.value = 1
+    }
     // Past this point the dropdown owns the scope, so a change to it is a reader
     // asking for something different — not the page settling itself up.
     ready.value = true
 
     await loadRuns()
+    // A remembered group filter can name a group the freshly loaded scope no
+    // longer has. Left set it would empty the table while its option had
+    // vanished from the select, so it gives way like the stale cutoff above.
+    if (groupFilter.value && !groupSelectOptions.value.some((o) => o.value === groupFilter.value)) {
+      groupFilter.value = null
+    }
     if (hasCutoffs) await loadDashboard()
     notifyLoaded('Payout groups', rows.value.length, {
       noun: 'payout group',
@@ -1136,6 +1181,7 @@ onMounted(async () => {
     console.error('[DisbursementListPage] load failed:', err)
   } finally {
     loading.value = false
+    restoreScroll()
   }
 })
 
@@ -1340,6 +1386,13 @@ watch(
     page.value = 1
   },
 )
+
+// A remembered page can also outrun a list that shrank while the tab was
+// elsewhere — a row released, a cutoff closed — without any control having been
+// touched. Land on the last real page rather than on an empty one.
+watch(totalPages, (last) => {
+  if (page.value > last) page.value = last
+})
 
 /**
  * A change of scope re-runs both loads.
