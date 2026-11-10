@@ -10,7 +10,9 @@
           </div>
         </div>
         <div class="ann-card__facts">
-          <span v-for="f in 2" :key="`skf-${n}-${f}`" class="dash-shimmer" style="height: 28px" />
+          <!-- Three, matching the real card's Audience / Schedule / Attachments
+               rows. -->
+          <span v-for="f in 3" :key="`skf-${n}-${f}`" class="dash-shimmer" style="height: 28px" />
         </div>
       </div>
     </template>
@@ -91,6 +93,22 @@
           <dd>
             {{ windowLabel(row) }}
             <span class="ann-card__rel">{{ windowNote(row) }}</span>
+          </dd>
+        </div>
+        <div class="ann-card__fact">
+          <dt>Attachments</dt>
+          <dd>
+            <template v-if="row._files.length === 1">{{ row._files[0].name }}</template>
+            <template v-else-if="row._files.length">
+              {{ row._files.length }} files
+              <span class="ann-card__rel">
+                {{ row._files.map((file) => file.name).slice(0, 2).join(', ') }}
+                <template v-if="row._files.length > 2">
+                  +{{ row._files.length - 2 }}
+                </template>
+              </span>
+            </template>
+            <template v-else>—</template>
           </dd>
         </div>
       </dl>
