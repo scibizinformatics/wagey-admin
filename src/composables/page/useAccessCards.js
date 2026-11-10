@@ -81,9 +81,15 @@ export function useAccessCards() {
   /**
    * Load every card in the active workspace.
    *
+   * @param {object} [options]
+   *   quiet — used by the assign dialog's open-time refresh: the table is not
+   *   spinning for this call, so `loading` is left exactly as a concurrent full
+   *   load is managing it rather than being flashed on and immediately off.
+   *   Everything else behaves the same — the roll is re-read, a failure still
+   *   lands in `error` for the page to show.
    * @returns {Promise<Array>} the normalised rows, or [] on failure.
    */
-  async function fetchCards() {
+  async function fetchCards({ quiet = false } = {}) {
     const company = companyId.value
     if (!company) {
       cards.value = []
@@ -95,7 +101,7 @@ export function useAccessCards() {
     }
 
     const token = ++latestRequest
-    loading.value = true
+    if (!quiet) loading.value = true
     error.value = ''
 
     try {
@@ -117,7 +123,9 @@ export function useAccessCards() {
       error.value = extractErrorMessage(err, 'Failed to load access cards')
       return []
     } finally {
-      if (token === latestRequest) loading.value = false
+      // Quiet refreshes never stop a spinner: one may finish while a full load
+      // started later is still on screen, and that spinner is its to clear.
+      if (!quiet && token === latestRequest) loading.value = false
     }
   }
 
