@@ -110,6 +110,53 @@
           </span>
         </div>
 
+        <!-- The roll's free cards, newest tap first. A tap on a reader is what
+             registers a card, so the card somebody is holding has usually
+             already arrived here — picking it beats typing its UID, which is
+             the one thing about it that has to be copied by eye. The page
+             refreshes the roll when this dialog opens, so a tap that happened
+             while the page sat open is in the list too. -->
+        <div v-if="!uidLocked" class="acc-pick">
+          <div class="acc-pick__head">
+            <span class="acc-pick__title">Free cards</span>
+            <span v-if="cardsLoading && cards.length" class="acc-pick__note">
+              Fetching the latest cards…
+            </span>
+            <span v-else-if="pickTruncated" class="acc-pick__note">
+              Newest {{ cards.length }} of {{ cardsTotal }} — the rest are in the table
+            </span>
+            <span v-else-if="cards.length" class="acc-pick__note">Newest taps first</span>
+          </div>
+
+          <template v-if="cards.length">
+            <button
+              v-for="free in cards"
+              :key="free.uid"
+              type="button"
+              class="acc-pick__row"
+              :class="{ 'acc-pick__row--current': free.uid === card?.uid }"
+              @click="$emit('pick', free)"
+            >
+              <span class="acc-pick__uid">{{ formatUid(free.uid) }}</span>
+              <span class="dash-chip" :class="chipClass(free.status?.tone)">
+                <span class="dash-chip__dot" />
+                {{ free.status?.label || '—' }}
+              </span>
+              <span class="acc-pick__when">
+                {{ free.lastTapDay ? free.lastTapAgo : 'Never tapped' }}
+              </span>
+            </button>
+          </template>
+
+          <div v-else class="acc-pick__empty">
+            <template v-if="cardsLoading">Fetching the latest cards…</template>
+            <template v-else>
+              No free cards on the roll. A card appears here once it has been tapped on a reader —
+              one that has not arrived yet can still be typed above.
+            </template>
+          </div>
+        </div>
+
         <template v-if="card">
           <label class="dash-modal__field">
             <span class="dash-modal__field-label">
@@ -201,6 +248,15 @@
  * at the same PATCH: splitting them would be two forms to keep in step for one
  * request.
  *
+ * The UID path offers more than the field: `cards` is the roll's free cards,
+ * newest tap first, and **picking one takes the place of typing its UID**. A tap
+ * on a reader both registers the card and stamps `last_tap`, so the card in the
+ * reader's hand is normally the top row of that list — and the tap log carries
+ * no uid anywhere, so that list is the only thing that can offer the card by
+ * anything other than the number printed on it. Typing stays for a card that has
+ * not reached the roll yet. The page owns the list and its open-time refresh;
+ * this component only shows it and reports the pick.
+ *
  * **This is the holder, and only the holder.** Whether the card still opens a
  * door used to be a second select here, saved in the same request. It is not any
  * more: `PATCH /user/access-cards/{uid}/status/` is its own endpoint with its own
@@ -235,6 +291,16 @@ const props = defineProps({
   uidLocked: { type: Boolean, default: true },
   lookupLoading: { type: Boolean, default: false },
   lookupError: { type: String, default: '' },
+  /**
+   * The roll's free cards, newest tap first and capped by the page — the pick
+   * list for a card that already reached the roll. Empty means "not there yet",
+   * which is what the typed field is for.
+   */
+  cards: { type: Array, default: () => [] },
+  /** Free cards on the whole roll — what the truncation note counts against. */
+  cardsTotal: { type: Number, default: 0 },
+  /** True while the page's open-time roll refresh is still on the network. */
+  cardsLoading: { type: Boolean, default: false },
   /** `{ value, label, caption, pictureUrl, initials, color }` per employee. */
   employeeOptions: { type: Array, default: () => [] },
   loadingEmployees: { type: Boolean, default: false },
@@ -248,13 +314,18 @@ const props = defineProps({
   currentEmployeeId: { type: [String, Number], default: null },
 })
 
-const emit = defineEmits(['update:modelValue', 'lookup', 'save'])
+const emit = defineEmits(['update:modelValue', 'lookup', 'pick', 'save'])
 
 const uid = ref('')
 const employeeId = ref(null)
 
 /** What the API is keyed on, whatever separators were typed. */
 const cleanUid = computed(() => normalizeUidInput(uid.value))
+
+/** The page capped the list and has more free cards than it sent. */
+const pickTruncated = computed(
+  () => props.cards.length > 0 && props.cardsTotal > props.cards.length,
+)
 
 const title = computed(() => {
   if (!props.uidLocked) return 'Assign a card'
@@ -322,11 +393,17 @@ function resetForm() {
 }
 
 // A lookup landing is the UID path's equivalent of opening: it is the moment a
-// card first exists for this form, so the field below it is seeded then.
+// card first exists for this form, so the field below it is seeded then. A pick
+// from the free-card list is the same moment, and it also re-aims the field —
+// the write goes to `card.uid`, so the input has to show that card, whatever
+// was typed into it before the pick. A lookup landing is already in step with
+// the field, so re-aiming it here changes nothing; this only guards the pick.
 watch(
   () => props.card?.uid,
   (next, previous) => {
-    if (next && next !== previous) seedFromCard()
+    if (!next || next === previous) return
+    if (!props.uidLocked) uid.value = next
+    seedFromCard()
   },
 )
 
@@ -418,6 +495,90 @@ function submit() {
 .acc-hint .q-icon {
   flex: none;
   margin-top: 1px;
+}
+
+/* ── Pick list ── */
+/* The roll's free cards. Rows are buttons so a keyboard can move through them
+ * the way the employee dropdown can; a row already picked reads as current so
+ * the list can be used to switch without losing the choice that is showing. */
+.acc-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.acc-pick__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.acc-pick__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dash-ink-2);
+}
+.acc-pick__note {
+  font-size: 11.5px;
+  color: var(--dash-ink-4);
+  text-align: right;
+  min-width: 0;
+}
+.acc-pick__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--dash-r-md);
+  border: 1px solid var(--dash-line);
+  background: var(--dash-n-25);
+  cursor: pointer;
+  text-align: left;
+}
+.acc-pick__row:hover {
+  border-color: var(--dash-accent);
+}
+.acc-pick__row--current {
+  border-color: var(--dash-accent);
+}
+.acc-pick__row:focus-visible {
+  outline: 2px solid var(--dash-accent);
+  outline-offset: 1px;
+}
+.acc-pick__uid {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  /* The same treatment the typed field gives a uid: figures that hold their
+   * columns across the four-character runs, in the case the API keys on. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acc-pick__row .dash-chip {
+  flex: none;
+}
+.acc-pick__when {
+  flex: none;
+  font-size: 12px;
+  color: var(--dash-ink-3);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+.acc-pick__empty {
+  padding: 9px 11px;
+  border-radius: var(--dash-r-md);
+  background: var(--dash-n-25);
+  border: 1px solid var(--dash-line);
+  color: var(--dash-ink-3);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 /* ── Option avatar ── */
