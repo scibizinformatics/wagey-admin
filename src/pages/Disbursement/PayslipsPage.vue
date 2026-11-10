@@ -262,6 +262,7 @@ import { useEmployees } from 'src/composables/page/useEmployees'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
 import { extractErrorMessage } from 'src/composables/utils/http'
+import { useDisbursementViewState } from 'src/composables/page/useDisbursementViewState'
 
 const route = useRoute()
 const router = useRouter()
@@ -296,6 +297,15 @@ const searchTerm = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const pageSizeOptions = [10, 20, 50]
+// Remembers the table state, tab and scroll position while the reader is on
+// another page, and hands them back on return. Run-scoped, so opening a
+// different run never inherits this one's page. See useDisbursementViewState.
+const { restoreScroll } = useDisbursementViewState(`payslips:${groupId}`, {
+  page,
+  pageSize,
+  searchTerm,
+  activeTab,
+})
 
 /**
  * The dispute reason and attachment, which the payslip row does not carry.
@@ -394,6 +404,11 @@ const tabs = computed(() => [
   { value: 'disputed', label: 'Disputed', icon: 'o_report', count: overview.value?.disputed ?? 0 },
 ])
 
+// A remembered tab is only kept if this page still offers it — a tab renamed or
+// removed while the reader was elsewhere falls back to All rather than silently
+// filtering to nothing.
+if (!tabs.value.some((t) => t.value === activeTab.value)) activeTab.value = 'all'
+
 const acknowledgedCount = computed(() => overview.value?.acknowledged ?? 0)
 const payslipsSent = computed(() => overview.value?.payslip_sent ?? 0)
 
@@ -491,6 +506,17 @@ const paginatedData = computed(() => {
   const start = (page.value - 1) * pageSize.value
   return filteredData.value.slice(start, start + pageSize.value)
 })
+
+// A remembered page can outrun a list that shrank while the tab was elsewhere —
+// a payslip acknowledged out from under it, a dispute resolved — without any
+// control being touched. Land on the last real page rather than an empty one.
+watch(
+  () => filteredData.value.length,
+  (n) => {
+    const last = Math.max(1, Math.ceil(n / pageSize.value))
+    if (page.value > last) page.value = last
+  },
+)
 
 // ─── Dispute reasons and attachments ─────────────────────────────────────────
 
@@ -632,6 +658,7 @@ onMounted(async () => {
     console.error('[PayslipsPage] fetch failed:', err)
   } finally {
     loading.value = false
+    restoreScroll()
   }
 })
 
