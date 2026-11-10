@@ -335,16 +335,32 @@
               @change="onFilesPicked"
             />
 
-            <!-- Files already on the announcement. They come back as URLs, not
-                 as the base64 the create payload takes, so they are listed
-                 rather than re-sent. -->
-            <ul v-if="existingAttachments.length" class="ann-files__list">
-              <li v-for="file in existingAttachments" :key="file.url" class="ann-files__item">
+            <!-- Files already on the announcement, answered as `{ id, file }`.
+                 `file` is the URL shown; `id` is what `remove_attachment_ids`
+                 takes, so these rows carry an X and the create-side files do
+                 not (they are data URIs, not yet saved). -->
+            <ul v-if="visibleExisting.length" class="ann-files__list">
+              <li
+                v-for="file in visibleExisting"
+                :key="file.id || file.url"
+                class="ann-files__item"
+              >
                 <q-icon name="o_description" size="16px" class="ann-files__icon" />
                 <a :href="file.url" target="_blank" rel="noopener" class="ann-files__link">
                   {{ file.name }}
                 </a>
                 <span class="ann-files__note">already attached</span>
+                <q-btn
+                  v-if="file.id"
+                  flat
+                  dense
+                  round
+                  size="9px"
+                  icon="close"
+                  class="ann-files__drop"
+                  :aria-label="`Remove ${file.name}`"
+                  @click="markExistingRemoved(file)"
+                />
               </li>
             </ul>
 
@@ -417,7 +433,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useToast } from 'src/composables/useToast'
 import { fileToDataUrl } from '@/composables/page/useAnnouncements'
-import { typeMeta } from './announcementStatus'
+import { attachmentFiles, typeMeta } from './announcementStatus'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -691,26 +707,23 @@ const removeAttachment = (index) => {
 }
 
 /**
- * Files already saved on the announcement. The list endpoint returns them as
- * URLs (or objects wrapping one), which cannot be fed back into the base64
- * `attachments` field, so they are shown read-only.
+ * Files already saved on the announcement, normalised once in
+ * `announcementStatus.attachmentFiles()`. Removal is local until Save: a click
+ * queues the id and the row leaves the list, and cancelling the dialog discards
+ * it. That is the same contract as the X on a freshly picked file.
  */
-const existingAttachments = computed(() => {
-  const list = props.editingAnnouncement?.attachments
-  if (!Array.isArray(list)) return []
-  return list
-    .map((item) => {
-      const url = typeof item === 'string' ? item : item?.file || item?.url || item?.attachment
-      if (!url || typeof url !== 'string') return null
-      const name = (typeof item === 'object' && (item?.name || item?.filename)) || fileNameOf(url)
-      return { url, name }
-    })
-    .filter(Boolean)
-})
+const removedAttachmentIds = ref([])
 
-function fileNameOf(url) {
-  const path = String(url).split('?')[0]
-  return decodeURIComponent(path.slice(path.lastIndexOf('/') + 1)) || 'Attachment'
+const existingAttachments = computed(() => attachmentFiles(props.editingAnnouncement))
+
+/** Only rows the server gave an id for — a queued-once file cannot be removed. */
+const visibleExisting = computed(() =>
+  existingAttachments.value.filter((file) => !removedAttachmentIds.value.includes(file.id)),
+)
+
+function markExistingRemoved(file) {
+  if (!file.id || removedAttachmentIds.value.includes(file.id)) return
+  removedAttachmentIds.value.push(file.id)
 }
 
 function formatBytes(bytes) {
@@ -728,6 +741,8 @@ const onSave = () => {
     target_users: [...localForm.value.target_users],
     // The payload wants the data URIs alone; name and size are dialog-side.
     attachments: localForm.value.attachments.map((file) => file.data),
+    // Ids of saved files the X has queued for removal; empty until one is.
+    remove_attachment_ids: [...removedAttachmentIds.value],
   })
 }
 
@@ -761,6 +776,9 @@ watch(
   (open) => {
     if (!open) return
     peopleTerm.value = ''
+    // Queued removals belong to one editing session; a cancelled dialog must
+    // not carry them into the next open.
+    removedAttachmentIds.value = []
     resetFilters()
     const editing = props.editingAnnouncement
     if (!editing) {
