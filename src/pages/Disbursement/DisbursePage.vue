@@ -228,6 +228,7 @@ import {
 } from 'src/components/pages/Payroll/disburseConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
+import { useDisbursementViewState } from 'src/composables/page/useDisbursementViewState'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { formatDateTime } from 'src/composables/utils/format'
@@ -261,6 +262,14 @@ const searchTerm = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const pageSizeOptions = [10, 20, 50]
+// Remembers the table state and scroll position while the reader is on another
+// page, and hands them back on return. Run-scoped, so opening a different run
+// never inherits this one's page. See useDisbursementViewState.
+const { restoreScroll } = useDisbursementViewState(`disburse:${groupId}`, {
+  page,
+  pageSize,
+  searchTerm,
+})
 
 const columns = [
   { name: 'employee', label: 'Employee', field: 'employee', align: 'left', sortable: true },
@@ -384,6 +393,17 @@ const paginatedData = computed(() => {
   return filteredData.value.slice(start, start + pageSize.value)
 })
 
+// A remembered page can outrun a list that shrank while the tab was elsewhere —
+// a payout recalled, an employee removed — without any control being touched.
+// Land on the last real page rather than on an empty one.
+watch(
+  () => filteredData.value.length,
+  (n) => {
+    const last = Math.max(1, Math.ceil(n / pageSize.value))
+    if (page.value > last) page.value = last
+  },
+)
+
 function parseAmount(val) {
   return parseFloat(val || 0).toLocaleString('en-PH')
 }
@@ -410,6 +430,7 @@ onMounted(async () => {
     console.error('[DisbursePage] fetch failed:', err)
   } finally {
     loading.value = false
+    restoreScroll()
   }
 })
 
