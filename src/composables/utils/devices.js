@@ -45,6 +45,13 @@ function instantMs(value) {
   return Number.isNaN(ms) ? null : ms
 }
 
+// ── Identifier shape ─────────────────────────────────────────────────────────
+
+// Canonical lowercase uuid — the exact pattern Django's uuid path converter
+// matches. `swapRequests.js` and `AttendancePage.vue` carry their own copies for
+// their own id checks; this one guards what goes into the deactivate route.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
 // ── Device type ──────────────────────────────────────────────────────────────
 
 /**
@@ -111,21 +118,23 @@ export function deviceStatusOf(value) {
 
 /**
  * The reasons deactivation can be given, one row each — this is the **single
- * source** for both the dialog's select and the guard on the write. Only
- * `replaced` is evidenced by the documented payload; the rest are the words the
- * feature would naturally carry. If the backend validates against a narrower
- * enum, correct it here once and the select, the guard and the labels all follow.
+ * source** for both the dialog's select and the guard on the write, and the
+ * values are exactly the backend's own vocabulary. The backend validates the
+ * write against its `DeactivatedReasonEnum` (`replaced` / `terminated` /
+ * `security` / `admin`), so anything else here 400s with "invalid choice" —
+ * these four are read off the live server, not guessed. Labels are this app's
+ * wording over the server's tokens; `deactivateReasonLabel` below prints the raw
+ * token when a payload carries one this list has not been taught.
  *
- * Order is deliberate: the administrative grade (replaced, retired) before the
- * security grades (lost, stolen), so the everyday answer is the default reading
- * and the alarming ones sit where a scan still finds them.
+ * Order is deliberate: the administrative grades before the personnel and
+ * security ones, so the everyday answer is the default reading and the alarming
+ * one sits where a scan still finds it.
  */
 export const DEACTIVATE_REASONS = [
   { value: 'replaced', label: 'Replaced' },
-  { value: 'retired', label: 'Retired' },
-  { value: 'lost', label: 'Lost' },
-  { value: 'stolen', label: 'Stolen' },
-  { value: 'other', label: 'Other' },
+  { value: 'admin', label: 'Admin action' },
+  { value: 'terminated', label: 'Employment terminated' },
+  { value: 'security', label: 'Security issue (lost or stolen)' },
 ]
 
 /** The value set, for guarding the write rather than rendering a select. */
@@ -140,6 +149,24 @@ const DEACTIVATE_REASON_VALUES = new Set(DEACTIVATE_REASONS.map((reason) => reas
  */
 export function isDeactivateReason(value) {
   return DEACTIVATE_REASON_VALUES.has(text(value).toLowerCase())
+}
+
+/**
+ * The value as a canonical lowercase uuid, or '' when it is not one.
+ *
+ * Django's uuid path converter matches `[0-9a-f]{8}-…` and nothing else — an
+ * uppercase hex or a free-form string in a converter slot is a URL mismatch that
+ * answers Django's bare HTML 404 rather than a DRF error (see the header note in
+ * `page/useDevices.js`). Anything about to be placed in one of those slots is
+ * normalised here first. Case is folded because it is lossless; shape is not
+ * guessed at.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function canonicalUuid(value) {
+  const candidate = text(value).toLowerCase()
+  return UUID_RE.test(candidate) ? candidate : ''
 }
 
 /**
