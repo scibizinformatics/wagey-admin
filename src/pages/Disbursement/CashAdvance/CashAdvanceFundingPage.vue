@@ -330,6 +330,7 @@ import { useCashAdvanceApi } from 'src/composables/disbursement/useCashAdvanceAp
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { useEmployees } from 'src/composables/page/useEmployees'
+import { useDisbursementViewState } from 'src/composables/page/useDisbursementViewState'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
 import { useAuthStore } from 'src/boot/auth'
@@ -355,6 +356,11 @@ const submitting = ref(false)
 const funding = ref(null)
 const stepperKey = ref(0)
 const guard = createRequestToken()
+
+// Remembers this step's scroll position while the reader is on another page,
+// and hands it back on return. Run-scoped, so opening a different run never
+// inherits this one's place. See useDisbursementViewState.
+const { restoreScroll } = useDisbursementViewState(`cash-advance-funding:${pgiId}`, {})
 
 const summary = computed(() => summariseCashAdvanceFunding(funding.value))
 
@@ -680,6 +686,10 @@ onMounted(async () => {
       nounPlural: 'entries',
     })
   }
+  // This step has no pager or search of its own, so scroll position is the only
+  // place a returning reader had. `refresh` clears `loading` in its own finally,
+  // so the page is rendered by the time this runs.
+  restoreScroll()
 })
 </script>
 
