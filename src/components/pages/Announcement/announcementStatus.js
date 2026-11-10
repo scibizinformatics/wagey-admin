@@ -191,6 +191,40 @@ export function hasTargeting(announcement) {
   )
 }
 
+// ─── Files ───────────────────────────────────────────────────────────────────
+/**
+ * Saved files on an announcement, normalised to `{ id, url, name }`. Read by the
+ * table's Files column, the card list's Attachments fact and the edit dialog's
+ * existing-file list, so all three agree on what a payload's `attachments`
+ * carries: `{ id, file, uploaded_at }` objects, with a bare-string URL kept as a
+ * fallback for deployments that send it unstructured.
+ *
+ * `id` is the uuid the update endpoint's `remove_attachment_ids` keys on, and is
+ * `null` when the row has no structured object — a file with no id is listed but
+ * cannot be removed, because there is nothing to quote.
+ *
+ * @returns {Array<{id: string|null, url: string, name: string}>}
+ */
+export function attachmentFiles(announcement) {
+  const list = announcement?.attachments
+  if (!Array.isArray(list)) return []
+  return list
+    .map((item) => {
+      const url = typeof item === 'string' ? item : item?.file || item?.url || item?.attachment
+      if (!url || typeof url !== 'string') return null
+      const name = (typeof item === 'object' && (item?.name || item?.filename)) || fileNameOf(url)
+      const id = typeof item === 'object' ? item?.id : null
+      return { id: id || null, url, name }
+    })
+    .filter(Boolean)
+}
+
+/** The stored filename of a file URL, as written back by the endpoint. */
+function fileNameOf(url) {
+  const path = String(url).split('?')[0]
+  return decodeURIComponent(path.slice(path.lastIndexOf('/') + 1)) || 'Attachment'
+}
+
 /** Trim a message to a single-line preview for the card list. */
 export function messagePreview(message, max = 140) {
   const text = String(message ?? '')
