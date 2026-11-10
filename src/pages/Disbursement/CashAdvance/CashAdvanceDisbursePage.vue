@@ -291,6 +291,7 @@ import { useDisbursementApi } from 'src/composables/disbursement/useDisbursement
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { invalidateEmployeeBalances } from 'src/composables/page/useEmployeeBalances'
+import { useDisbursementViewState } from 'src/composables/page/useDisbursementViewState'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { useToast } from 'src/composables/useToast'
 import {
@@ -328,6 +329,14 @@ const searchTerm = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const pageSizeOptions = [10, 20, 50]
+// Remembers the table state and scroll position while the reader is on another
+// page, and hands them back on return. Run-scoped, so opening a different run
+// never inherits this one's page. See useDisbursementViewState.
+const { restoreScroll } = useDisbursementViewState(`cash-advance-disburse:${pgiId}`, {
+  page,
+  pageSize,
+  searchTerm,
+})
 const guard = createRequestToken()
 
 const summary = computed(() => summariseCashAdvanceDisbursement(payload.value))
@@ -495,6 +504,17 @@ const paginatedRows = computed(() => {
   return filteredRows.value.slice(start, start + pageSize.value)
 })
 
+// A remembered page can outrun a list that shrank while the tab was elsewhere —
+// an advance released out from under it — without any control being touched.
+// Land on the last real page rather than on an empty one.
+watch(
+  () => filteredRows.value.length,
+  (n) => {
+    const last = Math.max(1, Math.ceil(n / pageSize.value))
+    if (page.value > last) page.value = last
+  },
+)
+
 const columns = [
   { name: 'employee', label: 'Employee', field: 'name', align: 'left', style: 'min-width: 220px' },
   {
@@ -655,6 +675,9 @@ onMounted(async () => {
       nounPlural: 'employees',
     })
   }
+  // `refresh` clears `loading` in its own finally, so the rows are on screen by
+  // the time this runs.
+  restoreScroll()
 })
 </script>
 
