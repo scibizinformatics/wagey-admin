@@ -606,6 +606,7 @@ import {
 } from 'src/components/pages/Payroll/reviewConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
+import { useDisbursementViewState } from 'src/composables/page/useDisbursementViewState'
 import { useAdminPayrollGroups } from 'src/composables/admin/useAdminPayrollGroups'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { PGI_STATUS_MAP } from 'src/constants/pgiStatus'
@@ -695,6 +696,14 @@ const searchTerm = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const pageSizeOptions = [10, 20, 50]
+// Remembers the table state and scroll position while the reader is on another
+// page, and hands them back on return. Run-scoped, so opening a different run
+// never inherits this one's page. See useDisbursementViewState.
+const { restoreScroll } = useDisbursementViewState(`review:${groupId}`, {
+  page,
+  pageSize,
+  searchTerm,
+})
 const detailDialogOpen = ref(false)
 const selectedEmployeeId = ref(null)
 const contributionsDialogOpen = ref(false)
@@ -1237,6 +1246,17 @@ const paginatedData = computed(() => {
   return filteredData.value.slice(start, start + pageSize.value)
 })
 
+// A remembered page can outrun a list that shrank while the tab was elsewhere —
+// a row released, a decision withdrawn — without any control being touched.
+// Land on the last real page rather than on an empty one.
+watch(
+  () => filteredData.value.length,
+  (n) => {
+    const last = Math.max(1, Math.ceil(n / pageSize.value))
+    if (page.value > last) page.value = last
+  },
+)
+
 // Actions can land faster than their refreshes return; a token per call keeps an
 // older response from painting over a newer one.
 let loadToken = 0
@@ -1330,6 +1350,7 @@ onMounted(async () => {
     console.error('[ReviewPage] fetch failed:', err)
   } finally {
     loading.value = false
+    restoreScroll()
   }
 })
 
