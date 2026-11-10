@@ -460,7 +460,9 @@ async function commitDeactivate(reason) {
   const owner = pending.employeeName || 'Unknown employee'
 
   try {
-    await deactivateDevice(pending.deviceUuid, reason)
+    // The route looks the device up through its holder — `employeeUuid` — not
+    // the device uuid; see the `useDevices` header for why.
+    await deactivateDevice(pending.employeeUuid, reason)
     showDeactivate.value = false
     pendingDevice.value = null
     toast.success('Device deactivated', {
