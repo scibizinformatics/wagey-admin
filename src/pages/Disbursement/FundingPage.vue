@@ -309,6 +309,7 @@ import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRo
 import { buildFundingConfirm } from 'src/components/pages/Payroll/fundingConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
+import { useDisbursementViewState } from 'src/composables/page/useDisbursementViewState'
 import { avatarFor, buildEmployeeNameIndex } from 'src/composables/utils/employee'
 import { useEmployees } from 'src/composables/page/useEmployees'
 import { extractErrorMessage } from 'src/composables/utils/http'
@@ -330,6 +331,11 @@ const { fetchPayoutGroupInstanceAmounts, fetchEmployeePayslips, createPgiFunding
   useDisbursementApi()
 const { notifyLoaded } = useLoadedToast()
 const { employees, fetchEmployees } = useEmployees()
+
+// Remembers this step's scroll position while the reader is on another page,
+// and hands it back on return. Run-scoped, so opening a different run never
+// inherits this one's place. See useDisbursementViewState.
+const { restoreScroll } = useDisbursementViewState(`funding:${groupId}`, {})
 
 // Puts a face beside each name. The payslip payload names an employee but
 // carries no photograph, so the roster is the only thing that can supply one —
@@ -696,6 +702,9 @@ onMounted(async () => {
     })
   }
   loading.value = false
+  // This step has no pager or search of its own, so scroll position is the only
+  // place a returning reader had. See useDisbursementViewState.
+  restoreScroll()
 })
 
 /**
