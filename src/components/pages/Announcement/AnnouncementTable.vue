@@ -50,8 +50,9 @@
             <q-th v-if="showType" key="type" :props="props">Type</q-th>
             <q-th key="audience" :props="props">Audience</q-th>
             <q-th key="window" :props="props">Schedule</q-th>
+            <q-th key="files" :props="props">Files</q-th>
             <q-th key="state" :props="props">Status</q-th>
-            <q-th key="actions" :props="props" class="num">&nbsp;</q-th>
+            <q-th key="actions" :props="props" class="actions">&nbsp;</q-th>
           </q-tr>
         </template>
 
@@ -114,6 +115,37 @@
               </span>
             </q-td>
 
+            <!-- One file reads as its own name and opens it; several read as a
+                 count and name themselves on hover. Both stops matter: the row
+                 behind them is click-to-edit, and its own Enter handler would
+                 swallow the link's keyboard activation. -->
+            <q-td key="files" :props="props">
+              <span v-if="!props.row._files.length" class="files__void">—</span>
+              <span v-else class="files">
+                <q-icon name="o_attach_file" size="14px" class="files__clip" />
+                <a
+                  v-if="props.row._files.length === 1"
+                  :href="props.row._files[0].url"
+                  target="_blank"
+                  rel="noopener"
+                  class="files__link"
+                  :aria-label="`Open ${props.row._files[0].name}`"
+                  @click.stop
+                  @keydown.enter.stop
+                >
+                  {{ props.row._files[0].name }}
+                </a>
+                <template v-else>
+                  <span class="files__count">{{ props.row._files.length }} files</span>
+                  <q-tooltip anchor="bottom middle" self="top middle" max-width="280px">
+                    <div v-for="file in props.row._files" :key="file.url" class="files__tip">
+                      {{ file.name }}
+                    </div>
+                  </q-tooltip>
+                </template>
+              </span>
+            </q-td>
+
             <q-td key="state" :props="props">
               <span class="dash-chip" :class="chipClass(props.row._state.tone)">
                 <span class="dash-chip__dot" />
@@ -121,33 +153,27 @@
               </span>
             </q-td>
 
-            <q-td key="actions" :props="props" class="num">
-              <div class="row-actions">
-                <q-btn
-                  flat
-                  dense
-                  round
-                  size="sm"
-                  icon="o_edit"
-                  class="row-action"
-                  :aria-label="`Edit ${props.row.title}`"
-                  @click.stop="$emit('edit', props.row)"
-                >
-                  <q-tooltip anchor="bottom right" self="top right">Edit</q-tooltip>
-                </q-btn>
-                <q-btn
-                  flat
-                  dense
-                  round
-                  size="sm"
-                  icon="o_delete"
-                  class="row-action row-action--danger"
-                  :aria-label="`Delete ${props.row.title}`"
-                  @click.stop="$emit('delete', props.row)"
-                >
-                  <q-tooltip anchor="bottom right" self="top right">Delete</q-tooltip>
-                </q-btn>
-              </div>
+            <!-- The one affordance the cell holds is the row menu; the verbs it
+                 carries are re-emitted upward, not acted on. Both stops matter:
+                 the row behind this cell is click-to-edit, and its own Enter
+                 handler would otherwise swallow the kebab's activation. -->
+            <q-td key="actions" :props="props" class="actions">
+              <q-btn
+                flat
+                dense
+                round
+                icon="more_horiz"
+                size="12px"
+                class="row-btn"
+                :aria-label="`Actions for ${props.row.title || 'this announcement'}`"
+                @click.stop
+                @keydown.enter.stop
+              >
+                <RowMenu
+                  :actions="rowActions"
+                  @select="(key) => $emit(key === 'delete' ? 'delete' : 'edit', props.row)"
+                />
+              </q-btn>
             </q-td>
           </q-tr>
         </template>
@@ -161,17 +187,19 @@
  * Desktop and laptop view of the announcement board. Below 1024px the page
  * swaps this for AnnouncementCardList.
  *
- * Rows arrive carrying `_state`, `_type` and `_audience` from the page, so the
- * state a row shows is the value the page filtered and counted on.
+ * Rows arrive carrying `_state`, `_type`, `_audience` and `_files` from the page,
+ * so the state a row shows is the value the page filtered and counted on.
  *
- * Editing and deleting live here. Both dialogs existed before this pass but
- * nothing on the page could open them: the table had no action column, so
- * `editingAnnouncement` was only ever set to null and `announcementToDelete`
- * was never set at all.
+ * Editing and deleting live in the row menu. The dialog components existed
+ * before this pass but nothing on the page could open them: the table had no
+ * action affordance at all, so `editingAnnouncement` was only ever set to null
+ * and `announcementToDelete` was never set. The two verbs re-emit rather than
+ * act, the same boundary `DeviceTable` and the other row-menu tables keep.
  */
 import { computed } from 'vue'
 import { useQuasar } from 'quasar'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import RowMenu from '@/components/common/RowMenu.vue'
 import { chipClass, windowLabel, windowNote } from './announcementStatus'
 
 defineProps({
@@ -182,11 +210,18 @@ defineProps({
 
 defineEmits(['edit', 'delete', 'clear-filters'])
 
+/** The menu is two verbs; `separatorBefore` puts the destructive one on its own. */
+const rowActions = [
+  { key: 'edit', label: 'Edit', icon: 'o_edit' },
+  { key: 'delete', label: 'Delete', icon: 'o_delete', tone: 'danger', separatorBefore: true },
+]
+
 const columns = [
   { name: 'announcement', label: 'Announcement', field: 'title', align: 'left' },
   { name: 'type', label: 'Type', field: 'announcement_type', align: 'left' },
   { name: 'audience', label: 'Audience', field: 'target_everyone', align: 'left' },
   { name: 'window', label: 'Schedule', field: 'start_at', align: 'left' },
+  { name: 'files', label: 'Files', field: (row) => row._files?.length ?? 0, align: 'left' },
   { name: 'state', label: 'Status', field: (row) => row._state.key, align: 'left' },
   { name: 'actions', label: '', field: 'id', align: 'right' },
 ]
@@ -328,22 +363,53 @@ const noteClass = (row) => {
   color: var(--dash-ink-4);
 }
 
-/* ── Actions ── */
-.row-actions {
+/* ── Files ── */
+.files {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
+  min-width: 0;
+  max-width: 190px;
 }
-.row-action {
+.files__clip {
+  flex: none;
   color: var(--dash-ink-4);
 }
-.row-action:hover {
+.files__link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dash-accent);
+  text-decoration: none;
+}
+.files__link:hover {
+  text-decoration: underline;
+}
+.files__count {
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+  white-space: nowrap;
+}
+.files__void {
+  color: var(--dash-ink-4);
+}
+.files__tip {
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+/* ── Row action ──
+   The same trigger Access Cards, Employees, Devices and the Disbursement tables
+   give their row menu, so the control reads as one thing everywhere. Quiet at
+   rest, ink on hover. */
+.row-btn {
+  color: var(--dash-ink-4);
+}
+.row-btn:hover {
   color: var(--dash-ink);
   background: var(--dash-n-100);
-}
-.row-action--danger:hover {
-  color: var(--dash-critical);
-  background: var(--dash-critical-bg);
 }
 
 .ann-tbl__empty-btn {
@@ -361,6 +427,9 @@ const noteClass = (row) => {
   }
   .audience__names {
     max-width: 150px;
+  }
+  .files {
+    max-width: 140px;
   }
 }
 </style>
