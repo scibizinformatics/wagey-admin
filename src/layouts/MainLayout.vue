@@ -63,6 +63,7 @@
             round
             dense
             class="icon-btn"
+            data-issues-toggle
             :class="{ 'icon-btn--alert': issueHasFailures }"
             :aria-label="issueAriaLabel"
             @click="toggleIssuesDrawer"
@@ -404,6 +405,7 @@
       aria-label="Needs attention"
     >
       <IssueDrawer
+        ref="issueDrawerRef"
         :sections="issueSections"
         :source-errors="issueSourceErrors"
         :loading="issueLoading"
@@ -557,6 +559,9 @@ const miniPref = ref(false)
 const notifModal = ref(false)
 const accountMenu = ref(false)
 const issuesDrawerOpen = ref(false)
+// The drawer panel itself, for the click-outside dismiss — see
+// onIssuesOutsidePointer below.
+const issueDrawerRef = ref(null)
 
 // Notification scope. Unread-only is the view people actually want when the
 // badge is what brought them here, so it is one click away rather than a mental
@@ -930,6 +935,25 @@ function toggleIssuesDrawer() {
   openIssuesDrawer()
 }
 
+// A click anywhere outside the panel dismisses it. QDrawer only wires that up
+// in its modal state (tablet/below, where it paints a backdrop — the backdrop
+// lives under `belowBreakpoint` in QDrawer's own render); on desktop this
+// drawer is an overlay panel with no backdrop, so an outside click was simply
+// lost. The drawer is a reading surface, not a modal: the click still lands
+// where it was aimed, it just also closes the inbox. Listened on `pointerdown`
+// rather than `click` because the listener is attached for the whole page
+// lifetime — on `click`, the very click that opens the drawer would bubble on
+// to document and immediately close it again.
+function onIssuesOutsidePointer(event) {
+  if (!issuesDrawerOpen.value || !$q.screen.gt.sm) return
+  const target = event.target
+  if (!(target instanceof Element)) return
+  if (issueDrawerRef.value?.$el?.contains(target)) return
+  // The header button owns its own toggle; closing first would make it reopen.
+  if (target.closest('[data-issues-toggle]')) return
+  issuesDrawerOpen.value = false
+}
+
 function navigateIssue(payload) {
   const to = payload?.to
   if (!to) return
@@ -1062,12 +1086,14 @@ onMounted(async () => {
   if (scrollHintTarget) {
     scrollHintTarget.addEventListener('scroll', updateOverflowHint)
   }
+  document.addEventListener('pointerdown', onIssuesOutsidePointer, true)
 })
 
 onUnmounted(() => {
   cleanupNotifications()
   window.removeEventListener('resize', updateOverflowHint)
   window.removeEventListener('storage', onExternalCompanyChange)
+  document.removeEventListener('pointerdown', onIssuesOutsidePointer, true)
   if (scrollHintTarget) {
     scrollHintTarget.removeEventListener('scroll', updateOverflowHint)
     scrollHintTarget = null
