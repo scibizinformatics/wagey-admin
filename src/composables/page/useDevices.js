@@ -3,24 +3,32 @@ import { api } from 'src/boot/axios'
 import { useCompany } from 'src/composables/page/useCompany'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { createRequestToken } from 'src/composables/utils/requestToken'
-import { isDeactivateReason, normalizeDevices } from 'src/composables/utils/devices'
+import { canonicalUuid, isDeactivateReason, normalizeDevices } from 'src/composables/utils/devices'
 
 /**
  * Employee devices for the active workspace — the phones and browsers staff
  * sign in to the app on.
  *
- *   GET   /user/companies/{company_id}/devices/                        the roll
- *   PATCH /user/companies/{company_id}/devices/{uuid}/deactivate/      switch one off
+ *   GET   /user/companies/{company_id}/devices/                            the roll
+ *   PATCH /user/companies/{company_id}/devices/{employee_uuid}/deactivate/  switch one off
  *
  * Two things about this API shape the composable.
  *
- * The deactivate route is **documented as `{employee_uuid}` but actually carries
- * the device's `device_uuid`** — that mismatch is confirmed against the backend,
- * and if it is ever wrong the correction is the one path template below. The
- * endpoint is nested under the company in the path, so unlike the access-card
- * writes there is no un-scoped route to be an extra guard for: the company is
- * still re-resolved on every call, because a workspace switch that lands
- * mid-flight must not write the previous workspace's id into the URL.
+ * The deactivate route keys on the **employee's uuid, not the device's**. The
+ * backend's OpenAPI schema (`/api/schema/` on the server) names the path
+ * parameter `employee_uuid` with `format: uuid`, and Django's uuid path
+ * converter only matches a canonical lowercase uuid — while `device_uuid`, the
+ * row's own identifier, is a free-form string of up to 255 characters (whatever
+ * the registering app generated). The device uuid in that slot is exactly the
+ * bare HTML 404 this write used to answer: a URL mismatch can never be mistaken
+ * for a DRF error, because a DRF "Not found." is JSON. The write is therefore
+ * guarded here — an id that cannot be a converter-shaped uuid is refused locally
+ * with a message that names the real failure, and `DevicesPage` hands over the
+ * row's `employee_id` for it. The endpoint is nested under the company in the
+ * path, so unlike the access-card writes there is no un-scoped route to be an
+ * extra guard for: the company is still re-resolved on every call, because a
+ * workspace switch that lands mid-flight must not write the previous
+ * workspace's id into the URL.
  *
  * And **deactivation is one-way**. The write sends `is_active: false` with a
  * reason, and there is no reactivate verb — a device comes back only by being
@@ -100,25 +108,33 @@ export function useDevices() {
   /**
    * Deactivate one device.
    *
-   * The reason is guarded, not trusted: `isDeactivateReason` is the endpoint's
-   * apparent vocabulary, and a stale value reappearing in a select is exactly
-   * the failure a form cannot catch on its own. The reject is local and
-   * immediate, so it cannot half-apply.
+   * The reason is guarded, not trusted: `isDeactivateReason` is the backend's
+   * `DeactivatedReasonEnum` (`replaced` / `terminated` / `security` / `admin`),
+   * and a stale value reappearing in a select is exactly the failure a form
+   * cannot catch on its own. The reject is local and immediate, so it cannot
+   * half-apply.
    *
-   * `deactivated_at` is sent because the documented payload carries it; if the
+   * The employee uuid is guarded the same way, for a different failure: it is
+   * what the route looks the device up by, and Django's uuid converter answers a
+   * non-uuid with a bare HTML 404 page. `canonicalUuid` normalises the case and
+   * refuses anything that is not one — the one shape the URL can carry.
+   *
+   * `deactivated_at` is sent because the write serializer carries it; if the
    * server stamps its own, deleting that one key is the whole correction.
    *
-   * @param {string} deviceUuid the row's `device_uuid` — see the header note
-   *   about the `{employee_uuid}` in the documented path
+   * @param {string} employeeUuid the row's `employee_id` — see the header note
+   *   on why the route wants the employee's uuid rather than the device's
    * @param {string} reason one of the tokens `isDeactivateReason` accepts
    * @returns {Promise<object>} the endpoint's response payload
    */
-  async function deactivateDevice(deviceUuid, reason) {
-    const uuid = String(deviceUuid ?? '').trim()
+  async function deactivateDevice(employeeUuid, reason) {
+    const uuid = canonicalUuid(employeeUuid)
     if (!uuid) {
-      // A row the list produced should always carry one; this is the guard for
-      // a caller that has somehow reached a device without it.
-      throw new Error('No device was named for this deactivation.')
+      // The list payload carries `employee_id` beside every device; this is the
+      // guard for a caller that has somehow reached one without it. Refused
+      // locally rather than sent into the converter slot to come back as an
+      // HTML page nobody can read.
+      throw new Error('This device carries no employee id the deactivate route can look up.')
     }
     const reasonKey = String(reason ?? '')
       .trim()
@@ -134,14 +150,11 @@ export function useDevices() {
 
     deactivating.value = true
     try {
-      const response = await api.patch(
-        `/user/companies/${company}/devices/${encodeURIComponent(uuid)}/deactivate/`,
-        {
-          is_active: false,
-          deactivated_reason: reasonKey,
-          deactivated_at: new Date().toISOString(),
-        },
-      )
+      const response = await api.patch(`/user/companies/${company}/devices/${uuid}/deactivate/`, {
+        is_active: false,
+        deactivated_reason: reasonKey,
+        deactivated_at: new Date().toISOString(),
+      })
       return response.data
     } finally {
       deactivating.value = false
