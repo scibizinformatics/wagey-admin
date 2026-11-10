@@ -415,6 +415,29 @@
         @close="issuesDrawerOpen = false"
         @navigate="navigateIssue"
       />
+
+      <!-- The rail's collapse disc, mirrored: a 26px button straddling the
+           drawer's inner edge at the panel's own vertical centre. Mounted only
+           while the panel is open (`v-if`, not `v-show`, so a closed drawer
+           leaves nothing to tab into), and a child of the drawer rather than a
+           fixed sibling of it — unlike the rail, this content never scrolls,
+           only `.issues__body` does, so nothing clips a child that straddles
+           the edge and the disc tracks the panel even while it fits content. -->
+      <q-btn
+        v-if="issuesDrawerOpen"
+        unelevated
+        dense
+        round
+        size="11px"
+        class="issues-collapse"
+        icon="chevron_right"
+        aria-label="Close needs attention"
+        @click="issuesDrawerOpen = false"
+      >
+        <q-tooltip anchor="center left" self="center right" :offset="[10, 0]" class="nav-tooltip">
+          Close
+        </q-tooltip>
+      </q-btn>
     </q-drawer>
 
     <!-- On desktop the handle is always in the same place, with the count that
@@ -948,7 +971,11 @@ function onIssuesOutsidePointer(event) {
   if (!issuesDrawerOpen.value || !$q.screen.gt.sm) return
   const target = event.target
   if (!(target instanceof Element)) return
-  if (issueDrawerRef.value?.$el?.contains(target)) return
+  // The drawer's root, not the panel alone: the collapse disc on the edge is
+  // chrome of this drawer too, and a press on it must reach its own click
+  // rather than be pre-closed here and fall through to the page behind.
+  const drawerEl = issueDrawerRef.value?.$el?.closest('.issues-drawer')
+  if (drawerEl?.contains(target)) return
   // The header button owns its own toggle; closing first would make it reopen.
   if (target.closest('[data-issues-toggle]')) return
   issuesDrawerOpen.value = false
@@ -1521,9 +1548,13 @@ onUnmounted(() => {
    edge. It shares the wash below rather than inventing a second navy, so the
    two furniture surfaces read as one shell. */
 .issues-drawer :deep(.q-drawer__content) {
+  position: relative;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* The collapse disc straddles this edge, so unlike the rail's content this
+     one must not clip its children. Nothing else can escape: `.issues` is the
+     panel and `.issues__body` scrolls inside it. */
+  overflow: visible;
   border-left: 1px solid rgba(0, 0, 0, 0.18);
 }
 
@@ -1764,6 +1795,62 @@ onUnmounted(() => {
   text-transform: uppercase;
   writing-mode: vertical-rl;
   text-orientation: mixed;
+}
+
+/* ── Needs-attention collapse disc ───────────────────────────────────────────
+   The rail's collapse handle, mirrored onto the drawer's inner edge: same 26px
+   disc, same gradient and navy ring, so the two furniture surfaces read as one
+   family. Absolutely placed against the content box — which is the panel
+   itself since the height rules went in — so it centres on the panel at any
+   height, a short inbox or one capped at 70vh. The disc is the mirror image of
+   the rail's: it points off-screen to the right, the direction the drawer
+   collapses. */
+.issues-collapse.q-btn {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  color: #fff;
+  background: linear-gradient(145deg, var(--nav-accent) 0%, var(--nav-accent-deep) 100%);
+  /* The ring is the drawer's own navy, so the disc reads as punched through
+     the edge rather than laid over it. */
+  box-shadow:
+    0 0 0 3px var(--nav-bg),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 8px rgba(16, 31, 45, 0.45);
+  transition:
+    filter var(--dash-fast) var(--dash-ease),
+    box-shadow var(--dash-fast) var(--dash-ease);
+}
+/* The chevron is the whole content of a 26px disc, so it is sized here rather
+   than left to the `size` prop, which also drives the button's own box. */
+.issues-collapse :deep(.q-icon) {
+  font-size: 16px;
+}
+/* Quasar tints round buttons on hover through this overlay; the disc is already
+   a solid fill, so the tint would only muddy it. Same as the rail's disc. */
+.issues-collapse :deep(.q-focus-helper) {
+  display: none;
+}
+.issues-collapse.q-btn:hover {
+  filter: brightness(1.12);
+  box-shadow:
+    0 0 0 3px var(--nav-bg),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 3px 11px rgba(16, 31, 45, 0.55);
+}
+.issues-collapse.q-btn:active {
+  transform: translate(-50%, -50%) scale(0.92);
+}
+.issues-collapse.q-btn:focus-visible {
+  outline: 2px solid var(--nav-accent);
+  outline-offset: 2px;
 }
 
 /* ── Groups ── */
@@ -2351,5 +2438,34 @@ onUnmounted(() => {
   border: 1px solid var(--dash-line);
   box-shadow: var(--dash-shadow-lg) !important;
   overflow: hidden;
+}
+
+/* ── Needs-attention drawer height ────────────────────────────────────────────
+   Unscoped on purpose: these rules must not depend on this component's scoped
+   `data-v-…` attribute landing on the drawer's root element — a prod bundle and
+   a dev bundle hash that id differently, and a stale page holding one while the
+   stylesheet carries the other would silently drop every rule here. The panel
+   fits its content at every size — no breakpoint — and never takes more than
+   70% of the window. Past that the list scrolls inside it. */
+.issues-drawer.q-drawer {
+  bottom: auto;
+  height: auto;
+}
+
+/* Quasar's `.fit` makes the content `height: 100%`; against an auto-height
+   aside that would just be `auto`, stated so nothing is stretched. */
+.issues-drawer.q-drawer .q-drawer__content {
+  height: auto;
+}
+
+/* The ceiling belongs on the column that owns the scrolling body, because it
+   is a definite, viewport-derived length — further out, the body would have no
+   height to scroll within and the overflow would be clipped. 70% leaves the
+   window visibly breathing below a long inbox on any monitor; `dvh` keeps
+   mobile browser chrome from hiding the last row, `vh` is the fallback. */
+.issues-drawer.q-drawer .issues {
+  height: auto;
+  max-height: 70vh;
+  max-height: 70dvh;
 }
 </style>
