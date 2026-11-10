@@ -243,11 +243,15 @@
       :uid-locked="assignUidLocked"
       :lookup-loading="lookupLoading"
       :lookup-error="lookupError"
+      :cards="assignableCards"
+      :cards-total="summary.unassigned"
+      :cards-loading="rollRefreshing"
       :employee-options="employeeOptions"
       :loading-employees="loadingEmployees"
       :saving="saving"
       :current-employee-id="currentHolderId"
       @lookup="lookupUid"
+      @pick="pickCard"
       @save="saveAssignment"
     />
 
@@ -322,9 +326,11 @@ import {
   SORTS,
   SORT_OPTIONS,
   STATUS_FILTERS,
+  assignableCardOptions,
   matchesAssignment,
   matchesSearch,
   monthlyHoursByCard,
+  normalizeUidInput,
   statusLabel,
   tapAgo,
   WRITABLE_STATUSES,
@@ -574,6 +580,42 @@ const assignUidLocked = ref(true)
 const lookupLoading = ref(false)
 const lookupError = ref('')
 
+/**
+ * The roll refresh that runs behind the toolbar assign dialog.
+ *
+ * A tap on a reader is what registers a card, so a card held in somebody's hand
+ * usually already exists on the roll — but the page has been sitting open since
+ * it was last read, and the pick list reads the roll. One quiet re-read when the
+ * dialog opens, and the just-tapped card is in the list without the table
+ * flashing its skeleton behind the modal. A failure here is this page's error
+ * banner as anywhere else; the dialog keeps working off the stale roll.
+ */
+const rollRefreshing = ref(false)
+
+/**
+ * Which lookup or pick is current.
+ *
+ * `selectedCard` is written by both paths — the typed-UID lookup and the pick
+ * list — and a lookup that is still on the network when a pick happens must not
+ * land on top of it. Bumping this wave retires every lookup in flight, so
+ * `lookupUid` checks its own wave before each commit and a superseded response
+ * returns without writing anything.
+ */
+let lookupWave = 0
+
+/**
+ * The roll re-read behind the open dialog. Not shown as the table's spinner:
+ * `fetchCards({ quiet: true })` leaves `loading` alone.
+ */
+async function refreshRollForAssign() {
+  rollRefreshing.value = true
+  try {
+    await fetchCards({ quiet: true })
+  } finally {
+    rollRefreshing.value = false
+  }
+}
+
 const selectedAvatar = computed(() => {
   const name = detailCard.value?.employeeName || selectedCard.value?.employeeName
   return name ? avatarFor(employeeIndex.value, name) : null
@@ -589,6 +631,21 @@ const currentHolderId = computed(() => {
   const match = employeeByName(employeeIndex.value, selectedCard.value?.employeeName)
   return match ? (match.uuid ?? match.id ?? null) : null
 })
+
+/**
+ * The free cards the assign dialog's UID path offers to pick from — stripped to
+ * the newest `ASSIGN_PICK_LIMIT` taps by `assignableCardOptions`, so the card in
+ * the reader's hand is the first row. `lastTapAgo` is decorated here, exactly
+ * the way `displayRows` does it, because it is relative to now rather than to
+ * anything in the payload. The full free count comes from `summary.unassigned`,
+ * which is what the dialog's truncation note quotes.
+ */
+const assignableCards = computed(() =>
+  assignableCardOptions(cards.value).map((card) => ({
+    ...card,
+    lastTapAgo: tapAgo(card.lastTapMs),
+  })),
+)
 
 function openDetail(card) {
   selectedCard.value = card
@@ -620,9 +677,13 @@ async function loadDetail() {
 
 function openAssign(card) {
   if (!card) return
+  // A lookup left over from a previous open must not land on top of this row:
+  // it is the same stale-write hazard the wave exists for.
+  lookupWave += 1
   selectedCard.value = card
   assignUidLocked.value = true
   lookupError.value = ''
+  lookupLoading.value = false
   showDetail.value = false
   showAssign.value = true
 }
@@ -635,14 +696,20 @@ function openAssign(card) {
  * has to exist because the table can only offer cards this workspace has already
  * been told about — a card that has just been tapped for the first time, or one
  * an admin is holding before it has ever been near a reader, is reachable no
- * other way.
+ * other way. The roll is re-read behind it, so a tap that happened while the
+ * page sat open is offered by the pick list without the admin copying its UID
+ * by eye.
  */
 function openAssignByUid() {
+  // Same retire as `openAssign`: nothing left looking up may write into this.
+  lookupWave += 1
   selectedCard.value = null
   assignUidLocked.value = false
   lookupError.value = ''
+  lookupLoading.value = false
   showDetail.value = false
   showAssign.value = true
+  refreshRollForAssign()
 }
 
 /**
@@ -654,13 +721,26 @@ function openAssignByUid() {
  * fault: there is no route that creates a card, so "not registered" is a real
  * state with a real next step, and it is said here rather than left to a failed
  * PATCH afterwards.
+ *
+ * The list match compares normalised forms on both sides: the typed uid arrives
+ * upper-cased with separators stripped (`requestLookup`), while a roll row keeps
+ * the uid exactly as the payload sent it — an already-known card that misses the
+ * free match over a difference in case would go asking the detail endpoint, or
+ * 404 off it if that route is stricter than this comparison.
+ *
+ * Each wave of its own: a `pickCard` underneath a lookup still on the network
+ * retires the request, and the response returns without ever being committed,
+ * so the dialog keeps showing the card that was picked rather than whatever the
+ * lookup finally answered.
  */
 async function lookupUid(uid) {
   lookupError.value = ''
   selectedCard.value = null
+
+  const wave = ++lookupWave
   if (!uid) return
 
-  const known = cards.value.find((card) => card.uid === uid)
+  const known = cards.value.find((card) => normalizeUidInput(card.uid) === uid)
   if (known) {
     selectedCard.value = known
     return
@@ -668,15 +748,34 @@ async function lookupUid(uid) {
 
   lookupLoading.value = true
   try {
-    selectedCard.value = await fetchCard(uid, { expectMissing: true })
+    const card = await fetchCard(uid, { expectMissing: true })
+    if (wave === lookupWave) selectedCard.value = card
   } catch (err) {
+    if (wave !== lookupWave) return
     lookupError.value =
       err?.response?.status === 404
         ? 'No card with that UID is registered. A card registers itself the first time it is tapped on a reader.'
         : extractErrorMessage(err, 'Could not look up that card')
   } finally {
-    lookupLoading.value = false
+    // Only a current wave clears its own spinner: a superseded one has already
+    // been handed a stopped one, and a newer lookup owns it now.
+    if (wave === lookupWave) lookupLoading.value = false
   }
+}
+
+/**
+ * The picked card takes the place a looked-up one would have.
+ *
+ * Nothing is re-read — the row is already the roll's full answer, which is the
+ * reason the list is offered at all. The in-flight wave is bumped so a lookup
+ * still out there cannot overwrite this choice when it lands.
+ */
+function pickCard(card) {
+  if (!card || card.assigned) return
+  lookupWave += 1
+  selectedCard.value = card
+  lookupError.value = ''
+  lookupLoading.value = false
 }
 
 /**
