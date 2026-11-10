@@ -35,12 +35,13 @@ export function useAnnouncements() {
   }
 
   /**
-   * Both spellings, deliberately. The sibling endpoints all name their filters
-   * with an `_id` suffix (`payroll_group_id`, `position_id`, `department_id`),
-   * and DRF ignores a query param it does not filter on rather than rejecting
-   * it — so sending only `company` risks an unscoped board that looks like it
-   * was scoped, which is the worst of the three outcomes. Sending both means
-   * whichever the backend reads, it reads the selected company.
+   * Both spellings, deliberately. The list endpoint declares no query
+   * parameters at all — it scopes itself to the requesting user's companies —
+   * so these are sent defensively rather than because they narrow anything
+   * today: if the backend ever grows a company filter, the board is already
+   * asking for it, and DRF ignores a param it does not read instead of
+   * rejecting it. The real guarantee that only this workspace's rows are shown
+   * is `onlyThisCompany()` on the response.
    */
   function companyParams() {
     const cid = requireCompanyId()
@@ -56,10 +57,13 @@ export function useAnnouncements() {
   // ─── Read ─────────────────────────────────────────────────────────────────
 
   /**
-   * The list endpoint takes the same four contract filters as the employee
-   * list, and applies them to an announcement's audience — so filtering the
-   * board by payroll group answers "what has the monthly-paid warehouse been
-   * told?" without any client-side guessing about who a target user is.
+   * The list endpoint declares no query parameters: it answers everything
+   * visible to the requesting user — `target_everyone` announcements of their
+   * companies, ones explicitly targeting them, and ones they created — so a
+   * multi-company account legitimately receives several boards in one
+   * response. The company params and the four contract filters are sent for
+   * forward-compatibility (see `companyParams`), and narrowing to the selected
+   * workspace happens after the fact in `onlyThisCompany()`.
    *
    * Anything else passed in is forwarded as a raw query param, which is how the
    * pre-existing callers passed `params`.
@@ -139,13 +143,16 @@ export function useAnnouncements() {
 
   // ─── Update ───────────────────────────────────────────────────────────────
 
+  // The update endpoint is `.../{id}/update/`, PATCH and PUT both — and its
+  // serializer makes every field optional and applies partial semantics, so the
+  // patch verb is the honest one. `company` is immutable after creation and not
+  // declared on the update serializer, so it is not sent.
   async function updateAnnouncement(announcementId, payload) {
-    const company = companyValue()
     saving.value = true
     try {
-      const response = await api.put(
-        `${BASE}/communication/announcements/${announcementId}/`,
-        { ...payload, company },
+      const response = await api.patch(
+        `${BASE}/communication/announcements/${announcementId}/update/`,
+        payload,
       )
       return response.data
     } finally {
@@ -155,10 +162,16 @@ export function useAnnouncements() {
 
   // ─── Delete ───────────────────────────────────────────────────────────────
 
+  // Delete is `.../{id}/delete/` — a soft delete that clears `is_active`. The
+  // company params keep the no-workspace guard; the endpoint itself ignores
+  // them, like every other call here.
   async function deleteAnnouncement(announcementId) {
-    const response = await api.delete(`${BASE}/communication/announcements/${announcementId}/`, {
-      params: companyParams(),
-    })
+    const response = await api.delete(
+      `${BASE}/communication/announcements/${announcementId}/delete/`,
+      {
+        params: companyParams(),
+      },
+    )
     return response.data
   }
 
@@ -194,12 +207,14 @@ function toContractParams(filters = {}) {
 }
 
 /**
- * Last line of defence for "only this company's announcements". The query param
- * is the mechanism; this is the guarantee — if the backend ever ignores the
- * param, or a cached response arrives after a workspace switch, a foreign row
- * still never reaches the table. Rows whose serializer omits a company are kept
- * (there is nothing to contradict), and anything dropped is logged, because it
- * means the server-side filter is not being applied and that is worth knowing.
+ * Last line of defence for "only this workspace's announcements". The list
+ * endpoint is user-scoped by design — a multi-company account receives every
+ * board it can see, and it takes no query parameters to narrow by — so this
+ * filter is the mechanism, not a bug report about a missing server feature.
+ * Rows whose serializer omits a company are kept (there is nothing to
+ * contradict), and anything dropped is logged at debug level, which production
+ * strips: a multi-company admin does not need a warning on every board load,
+ * but a developer wondering why a row vanished still gets the count.
  */
 function onlyThisCompany(rows, companyId) {
   if (!companyId) return []
@@ -210,9 +225,10 @@ function onlyThisCompany(rows, companyId) {
     return id === undefined || id === null || id === '' || String(id) === active
   })
   if (kept.length !== rows.length) {
-    console.warn(
-      `[useAnnouncements] dropped ${rows.length - kept.length} announcement(s) belonging to ` +
-        `another company — the list endpoint is not filtering on the company param`,
+    console.debug(
+      `[useAnnouncements] hid ${rows.length - kept.length} announcement(s) belonging to ` +
+        `another company — the list endpoint is user-scoped, so a multi-company account ` +
+        `sees several boards`,
     )
   }
   return kept
