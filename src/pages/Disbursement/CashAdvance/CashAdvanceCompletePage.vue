@@ -225,6 +225,7 @@ import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTabl
 import { useCashAdvanceApi } from 'src/composables/disbursement/useCashAdvanceApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
 import { useEmployees } from 'src/composables/page/useEmployees'
+import { useDisbursementViewState } from 'src/composables/page/useDisbursementViewState'
 import { useLoadedToast } from 'src/composables/useLoadedToast'
 import { summariseCashAdvanceCompletion } from 'src/composables/utils/cashAdvance'
 import { extractErrorMessage } from 'src/composables/utils/http'
@@ -253,6 +254,14 @@ const searchTerm = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const pageSizeOptions = [10, 20, 50]
+// Remembers the table state and scroll position while the reader is on another
+// page, and hands them back on return. Run-scoped, so opening a different run
+// never inherits this one's page. See useDisbursementViewState.
+const { restoreScroll } = useDisbursementViewState(`cash-advance-complete:${pgiId}`, {
+  page,
+  pageSize,
+  searchTerm,
+})
 const guard = createRequestToken()
 
 const completion = computed(() => summariseCashAdvanceCompletion(completionPayload.value))
@@ -363,6 +372,17 @@ const paginatedData = computed(() => {
   return filteredData.value.slice(start, start + pageSize.value)
 })
 
+// A remembered page can outrun a list that shrank while the tab was elsewhere —
+// without any control being touched. Land on the last real page rather than an
+// empty one.
+watch(
+  () => filteredData.value.length,
+  (n) => {
+    const last = Math.max(1, Math.ceil(n / pageSize.value))
+    if (page.value > last) page.value = last
+  },
+)
+
 watch([searchTerm, pageSize], () => {
   page.value = 1
 })
@@ -456,6 +476,9 @@ onMounted(async () => {
       nounPlural: 'employees',
     })
   }
+  // `refresh` clears `loading` in its own finally, so the rows are on screen by
+  // the time this runs.
+  restoreScroll()
 })
 </script>
 
