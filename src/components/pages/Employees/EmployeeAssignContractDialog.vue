@@ -104,7 +104,7 @@
             <label v-else-if="selectedContractType?.pay_type" class="dash-modal__field">
               <span class="dash-modal__field-label">Pay type</span>
               <q-input
-                :model-value="payTypeLabel"
+                :model-value="selectedContractTypePayTypeLabel"
                 outlined
                 dense
                 readonly
@@ -127,10 +127,8 @@
                 type="number"
                 outlined
                 dense
-                :hint="'Min 8, max 48 hours per week'"
-                :rules="[
-                  (val) => !val || (val >= 8 && val <= 48) || 'Must be between 8 and 48 hours',
-                ]"
+                :hint="workHoursHint()"
+                :rules="[workHoursRule]"
                 class="dash-field dash-modal__span-2"
                 hide-bottom-space
               />
@@ -256,7 +254,7 @@
                   prefix="₱"
                   @wheel.prevent
                   :rules="[(val) => !val || val >= 100 || 'Minimum rate is ₱100']"
-                  :hint="form.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate (min ₱100)'"
+                  :hint="rateHintFor(form.pay_type)"
                   hide-bottom-space
                   class="dash-field"
                 />
@@ -473,11 +471,16 @@ import { computed } from 'vue'
 import {
   MONTH_OPTIONS,
   PAY_TYPE_OPTIONS,
+  WORK_HOURS_BOUNDS,
   WORK_HOURS_ELIGIBILITY_NAMES,
   WORK_HOURS_TYPE_OPTIONS,
   hasEligibility,
   hasWorkHoursEligibilities,
+  payTypeLabel,
+  rateHintFor,
   withoutEligibility,
+  workHoursError,
+  workHoursHint,
 } from '@/composables/utils/contractTerms'
 
 const emit = defineEmits(['update:modelValue', 'update:field', 'contractTypeChange', 'submit'])
@@ -501,10 +504,18 @@ const selectedContractType = computed(() =>
   props.contractTypeOptions.find((ct) => ct.id === props.form.contract_type_id),
 )
 
-const payTypeLabel = computed(() => {
-  if (!selectedContractType.value?.pay_type) return ''
-  return selectedContractType.value.pay_type === 'monthly' ? 'Monthly' : 'Daily'
-})
+// A contract type's pay type is read-only here, but it still has to be spelled
+// the same way the select beside it spells it — hence the shared label, not a
+// local ternary that would print "Daily" for anything that is not monthly.
+const selectedContractTypePayTypeLabel = computed(() =>
+  payTypeLabel(selectedContractType.value?.pay_type),
+)
+
+// Every pay type shares the 8–48 span; only the default differs.
+const workHoursRule = (val) => {
+  const { min, max } = WORK_HOURS_BOUNDS
+  return !val || (val >= min && val <= max) || workHoursError()
+}
 
 const assignmentModeOptions = [
   { label: 'Contract Type', value: 'contract_type' },
