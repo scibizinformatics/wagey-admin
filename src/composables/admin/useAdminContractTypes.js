@@ -5,7 +5,10 @@ import { useCompany } from 'src/composables/page/useCompany'
 import { usePayroll } from 'src/composables/page/usePayroll'
 import { BASE } from 'src/composables/utils/http'
 import {
+  WORK_HOURS_BOUNDS,
   WORK_HOURS_ELIGIBILITY_NAMES,
+  workHoursDefaultFor,
+  workHoursError,
   workHoursTypeOf,
   withWorkHoursType,
 } from 'src/composables/utils/contractTerms'
@@ -63,6 +66,10 @@ export function useAdminContractTypes() {
     (newVal) => {
       if (newVal === 'monthly') {
         form.value.work_hours_per_week = null
+      } else if (newVal === 'hourly' && !form.value.work_hours_per_week) {
+        // An hourly plan opens on its 8-hour default rather than blank,
+        // matching what the employee assign form seeds for the same pay type.
+        form.value.work_hours_per_week = workHoursDefaultFor(newVal)
       }
     },
   )
@@ -260,6 +267,20 @@ export function useAdminContractTypes() {
     if (!form.value.name) {
       toast.error('Contract type name is required')
       return
+    }
+
+    // The q-input rule only paints an error; it does not block this write. An
+    // hourly type has to sit inside the 8–48 week, so refuse a value outside
+    // that span here — daily stays optional up to 48 as it always was, and an
+    // empty hourly value is allowed because assigning it seeds 8.
+    if (form.value.pay_type === 'hourly') {
+      const raw = form.value.work_hours_per_week
+      const hours = raw === '' || raw === null || raw === undefined ? null : Number(raw)
+      const { min, max } = WORK_HOURS_BOUNDS
+      if (hours !== null && !Number.isNaN(hours) && (hours < min || hours > max)) {
+        toast.error(workHoursError())
+        return
+      }
     }
 
     // Resolve and validate multipliers
