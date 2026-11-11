@@ -6,6 +6,11 @@ import { useCompanyStore } from 'src/stores/company'
 import { BASE } from 'src/composables/utils/http'
 import { useToast } from 'src/composables/useToast'
 import { safeParseJson } from 'src/composables/utils/storage'
+import {
+  WORK_HOURS_BOUNDS,
+  normaliseWorkHours,
+  workHoursError,
+} from 'src/composables/utils/contractTerms'
 
 // Philippines Labor Code default multipliers
 export const PHILIPPINES_DEFAULT_MULTIPLIERS = {
@@ -411,7 +416,12 @@ export function useAdminContracts() {
       activeContract.value = existing
       assignForm.value.pay_type = existing.pay_type ?? null
       assignForm.value.rate = existing.rate ?? ''
-      assignForm.value.work_hours_per_week = existing.work_hours_per_week ?? null
+      // Same rule as the edit form: a stored 8 (or blank) under a monthly/hourly
+      // profile is the old default, not a part-time week.
+      assignForm.value.work_hours_per_week = normaliseWorkHours(
+        existing.pay_type,
+        existing.work_hours_per_week ?? null,
+      )
       assignForm.value.position = existing.position ?? null
       assignForm.value.department = existing.department ?? null
       assignForm.value.payroll_group_id = existing.payroll_group_id ?? null
@@ -464,8 +474,9 @@ export function useAdminContracts() {
       }
       if (assignForm.value.work_hours_per_week) {
         const hoursNum = Number(assignForm.value.work_hours_per_week)
-        if (hoursNum < 8 || hoursNum > 48) {
-          toast.error('Work hours must be between 8 and 48')
+        const { min, max } = WORK_HOURS_BOUNDS
+        if (hoursNum < min || hoursNum > max) {
+          toast.error(workHoursError())
           return
         }
       }
@@ -491,8 +502,9 @@ export function useAdminContracts() {
       const hoursNum = assignForm.value.work_hours_per_week
         ? Number(assignForm.value.work_hours_per_week)
         : null
-      if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
-        toast.error('Work hours must be between 8 and 48')
+      const { min, max } = WORK_HOURS_BOUNDS
+      if (hoursNum !== null && (hoursNum < min || hoursNum > max)) {
+        toast.error(workHoursError())
         return
       }
       if (!assignForm.value.department) {
@@ -645,8 +657,9 @@ export function useAdminContracts() {
     const hoursNum = assignForm.value.work_hours_per_week
       ? Number(assignForm.value.work_hours_per_week)
       : null
-    if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
-      toast.error('Work hours must be between 8 and 48')
+    const { min, max } = WORK_HOURS_BOUNDS
+    if (hoursNum !== null && (hoursNum < min || hoursNum > max)) {
+      toast.error(workHoursError())
       return { successCount: 0, failCount: 0 }
     }
 
