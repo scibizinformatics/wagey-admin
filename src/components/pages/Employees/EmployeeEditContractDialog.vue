@@ -63,10 +63,8 @@
               type="number"
               outlined
               dense
-              :hint="'Min 8, max 48 hours per week'"
-              :rules="[
-                (val) => !val || (val >= 8 && val <= 48) || 'Must be between 8 and 48 hours',
-              ]"
+              :hint="workHoursHint()"
+              :rules="[workHoursRule]"
               class="dash-field dash-modal__span-2"
               hide-bottom-space
             />
@@ -148,7 +146,7 @@
                 prefix="₱"
                 @wheel.prevent
                 :rules="[(val) => !val || val >= 100 || 'Minimum rate is ₱100']"
-                :hint="form.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate (min ₱100)'"
+                :hint="rateHintFor(form.pay_type)"
                 hide-bottom-space
                 class="dash-field"
               />
@@ -349,11 +347,15 @@
 import { computed } from 'vue'
 import {
   PAY_TYPE_OPTIONS,
+  WORK_HOURS_BOUNDS,
   WORK_HOURS_ELIGIBILITY_NAMES,
   WORK_HOURS_TYPE_OPTIONS,
   hasEligibility,
   hasWorkHoursEligibilities,
+  rateHintFor,
   withoutEligibility,
+  workHoursError,
+  workHoursHint,
 } from '@/composables/utils/contractTerms'
 
 const emit = defineEmits(['update:modelValue', 'update:field', 'submit'])
@@ -372,6 +374,12 @@ const props = defineProps({
 })
 
 const payTypeSelectOptions = PAY_TYPE_OPTIONS
+
+// Every pay type shares the 8–48 span; only the default differs.
+const workHoursRule = (val) => {
+  const { min, max } = WORK_HOURS_BOUNDS
+  return !val || (val >= min && val <= max) || workHoursError()
+}
 
 const employeeName = computed(() => {
   if (!props.employee) return ''
