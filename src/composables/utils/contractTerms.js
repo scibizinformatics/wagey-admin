@@ -11,16 +11,18 @@
  */
 
 /**
- * Options for the pay-type select. The backend writes exactly `monthly` and
- * `daily` (the contract endpoints' `pay_type` enum), and Admin Settings gives
- * the same pair, so the selects offer nothing else. `label` is what the UI
- * shows, everywhere. A pre-existing contract with another value still
- * *display* — `payTypeLabel` prints the raw text rather than blanking — but
- * re-saving it now means picking one of these.
+ * Options for the pay-type select. The contract endpoints' `pay_type` enum is
+ * `monthly | daily | hourly` (`PayTypeEaaEnum` / `ContractRenewPayTypeEnum`),
+ * and Admin Settings offers the same list, so every surface reads this one
+ * source rather than keeping a copy that can drift. `label` is what the UI
+ * shows, everywhere. A pre-existing contract with a value not in this list
+ * still *displays* — `payTypeLabel` prints the raw text rather than blanking —
+ * but re-saving it now means picking one of these.
  */
 export const PAY_TYPE_OPTIONS = [
   { label: 'Monthly', value: 'monthly' },
   { label: 'Daily', value: 'daily' },
+  { label: 'Hourly', value: 'hourly' },
 ]
 
 export const MONTH_OPTIONS = [
@@ -47,6 +49,63 @@ export function payTypeLabel(value) {
   if (value === null || value === undefined || value === '') return ''
   const match = PAY_TYPE_OPTIONS.find((o) => o.value === value)
   return match ? match.label : String(value)
+}
+
+/**
+ * The hint under the rate input. The rate means a different thing per pay type
+ * — a monthly salary, a daily rate, an hourly rate — so the noun follows the
+ * select. The ₱100 floor itself is the same for all of them; only the wording
+ * changes, and it lives here so the two dialogs cannot describe one value two
+ * ways.
+ */
+export function rateHintFor(payType) {
+  if (payType === 'monthly') return 'Monthly salary'
+  if (payType === 'hourly') return 'Hourly rate (min ₱100)'
+  return 'Daily rate (min ₱100)'
+}
+
+/**
+ * Work-hours-per-week. All three pay types share the same 8–48 span; only the
+ * value the field is pre-filled with differs (hourly opens at 8, daily and
+ * monthly at 48). The span lives here rather than in each form so a value
+ * accepted on one surface cannot be rejected by another.
+ */
+export const WORK_HOURS_BOUNDS = { min: 8, max: 48 }
+
+/** What the hours field is pre-filled with when a person picks a pay type. */
+export function workHoursDefaultFor(payType) {
+  return payType === 'hourly' ? 8 : 48
+}
+
+/** The input hint, spelled with the same numbers the rule enforces. */
+export function workHoursHint() {
+  const { min, max } = WORK_HOURS_BOUNDS
+  return `Min ${min}, max ${max} hours per week`
+}
+
+/** The validation message, spelled with the same numbers the rule enforces. */
+export function workHoursError() {
+  const { min, max } = WORK_HOURS_BOUNDS
+  return `Work hours must be between ${min} and ${max}`
+}
+
+/**
+ * The hours a saved contract is shown with when a form is prefilled from it.
+ *
+ * A stored value that is just a previous default is not an admin's decision, so
+ * it is replaced with the current one: daily and monthly used to open on 8 and
+ * now open on 48, while hourly used to open on 48 and now opens on 8. Blank
+ * means the same thing — show the default for the type. Any other stored value
+ * is a real entry and is returned untouched (a 24- or 40-hour week is an
+ * arrangement, not a default).
+ */
+export function normaliseWorkHours(payType, hours) {
+  const fallback = workHoursDefaultFor(payType)
+  const num = hours === '' || hours === null || hours === undefined ? NaN : Number(hours)
+  if (Number.isNaN(num)) return fallback
+  const previousDefault = payType === 'hourly' ? 48 : 8
+  if (num === previousDefault) return fallback
+  return hours
 }
 
 /** Month number (1-12) to its name. Blank when absent or out of range. */
