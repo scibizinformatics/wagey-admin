@@ -409,10 +409,14 @@ import { useEmployeePayoutGroup } from '@/composables/page/useEmployeePayoutGrou
 import { useCompany } from '@/composables/page/useCompany'
 import { extractErrorMessage } from '@/composables/utils/http'
 import {
+  WORK_HOURS_BOUNDS,
   WORK_HOURS_ELIGIBILITY_NAMES,
   eligibilitiesForPayType,
   hasEligibility,
+  normaliseWorkHours,
   withWorkHoursType,
+  workHoursDefaultFor,
+  workHoursError,
   workHoursTypeOf,
 } from '@/composables/utils/contractTerms'
 import { useAdminContracts } from '@/composables/admin/useAdminContracts'
@@ -607,11 +611,7 @@ function onContractTypeChange(contractTypeId) {
     workHoursType,
     eligibilityOptions.value,
   )
-  if (assignForm.value.pay_type === 'daily') {
-    assignForm.value.work_hours_per_week = 8
-  } else {
-    assignForm.value.work_hours_per_week = 48
-  }
+  assignForm.value.work_hours_per_week = workHoursDefaultFor(assignForm.value.pay_type)
   if (!assignForm.value.rate || assignForm.value.rate < 100) {
     assignForm.value.rate = 100
   }
@@ -1295,6 +1295,10 @@ const updateEditContractField = ({ field, value }) => {
       value,
       eligibilityOptions.value,
     )
+    // A newly picked type owns the starting weekly hours: daily is an eight-hour
+    // day, monthly and hourly start full-time. Only a person's pick does this —
+    // prefilling from the contract must not overwrite a stored 40.
+    if (value) editContractForm.value.work_hours_per_week = workHoursDefaultFor(value)
   }
   // The work-hours select is the only writer of that mode. Both ids are removed
   // and the chosen one put back, so `eligibilities` cannot end up carrying a
@@ -1381,7 +1385,12 @@ async function handleOpenEditContract(employee) {
   editContractForm.value = {
     pay_type: contract.pay_type ?? null,
     rate: contract.rate ?? '',
-    work_hours_per_week: contract.work_hours_per_week ?? null,
+    // A stored 8 (or blank) under a monthly/hourly profile is the old default,
+    // not a part-time week; the form opens on the real 48-hour default.
+    work_hours_per_week: normaliseWorkHours(
+      contract.pay_type,
+      contract.work_hours_per_week ?? null,
+    ),
     position: contract.position ?? null,
     department: contract.department ?? null,
     payroll_group: contract.payroll_group_id ?? contract.payroll_group ?? null,
@@ -1416,8 +1425,9 @@ function handleEditContractSubmit() {
     return
   }
   const hoursNum = f.work_hours_per_week ? Number(f.work_hours_per_week) : null
-  if (hoursNum !== null && (hoursNum < 8 || hoursNum > 48)) {
-    toast.error('Work hours must be between 8 and 48')
+  const { min: minHours, max: maxHours } = WORK_HOURS_BOUNDS
+  if (hoursNum !== null && (hoursNum < minHours || hoursNum > maxHours)) {
+    toast.error(workHoursError())
     return
   }
   if (!f.department) {
@@ -2287,10 +2297,9 @@ const updateAssignField = ({ field, value }) => {
       value,
       eligibilityOptions.value,
     )
-    if (value === 'daily') {
-      assignForm.value.work_hours_per_week = 8
-    } else if (value === 'monthly') {
-      assignForm.value.work_hours_per_week = 48
+    if (value) {
+      // Daily is an eight-hour day; monthly and hourly start full-time.
+      assignForm.value.work_hours_per_week = workHoursDefaultFor(value)
     }
     if (!assignForm.value.rate || assignForm.value.rate < 100) {
       assignForm.value.rate = 100
