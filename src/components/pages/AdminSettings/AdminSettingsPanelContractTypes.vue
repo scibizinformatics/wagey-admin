@@ -195,10 +195,7 @@
             <span class="dash-modal__field-label">Pay type</span>
             <q-select
               v-model="contractTypeForm.pay_type"
-              :options="[
-                { label: 'Monthly', value: 'monthly' },
-                { label: 'Daily', value: 'daily' },
-              ]"
+              :options="PAY_TYPE_OPTIONS"
               outlined
               dense
               emit-value
@@ -208,16 +205,17 @@
               popup-content-class="dash-popup dash-popup--modal"
             />
           </label>
-          <label v-if="contractTypeForm.pay_type === 'daily'" class="dash-modal__field">
+          <label v-if="contractTypeForm.pay_type !== 'monthly'" class="dash-modal__field">
             <span class="dash-modal__field-label">Work hours per week</span>
             <q-input
               v-model.number="contractTypeForm.work_hours_per_week"
               outlined
               dense
               type="number"
-              min="0"
-              max="48"
-              :rules="[(val) => !val || val <= 48 || 'Maximum is 48 hours']"
+              :min="contractTypeForm.pay_type === 'hourly' ? WORK_HOURS_BOUNDS.min : 0"
+              :max="WORK_HOURS_BOUNDS.max"
+              :hint="contractTypeForm.pay_type === 'hourly' ? workHoursHint() : ''"
+              :rules="[workHoursRule]"
               class="dash-field"
               hide-bottom-space
             />
@@ -446,10 +444,14 @@ import { ref, computed, onMounted, watch } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useAdminContractTypes } from '@/composables/admin/useAdminContractTypes'
 import {
+  PAY_TYPE_OPTIONS,
+  WORK_HOURS_BOUNDS,
   WORK_HOURS_ELIGIBILITY_NAMES,
   WORK_HOURS_TYPE_OPTIONS,
   hasEligibility,
   withoutEligibility,
+  workHoursError,
+  workHoursHint,
 } from '@/composables/utils/contractTerms'
 
 const {
@@ -855,6 +857,17 @@ const visibleMultiplierFields = computed(() =>
   multiplierFields.filter((f) => isMultiplierVisible(f.key)),
 )
 
+// An hourly type must sit inside the 8–48 week; a daily type's hours stay
+// optional up to 48 exactly as before. The numbers come from `contractTerms`
+// so the contract-type form and the employee dialogs cannot disagree.
+const workHoursRule = (val) => {
+  const { min, max } = WORK_HOURS_BOUNDS
+  if (contractTypeForm.value.pay_type === 'hourly') {
+    return !val || (val >= min && val <= max) || workHoursError()
+  }
+  return !val || val <= max || `Maximum is ${max} hours`
+}
+
 const getStandardDisplay = (fieldKey) => {
   const companyValue = companyMultipliers?.value?.[`${fieldKey}_multiplier`]
   return companyValue ?? PHILIPPINES_DEFAULT_MULTIPLIERS[fieldKey]
@@ -887,8 +900,9 @@ watch(
   (newVal) => {
     if (!ctoId.value) return
     const current = contractTypeForm.value.eligibilities
-    // If switched to daily, remove CTO from eligibilities
-    if (newVal === 'daily') {
+    // If switched away from monthly, remove CTO from eligibilities: CTO is a
+    // monthly-only term, so daily and hourly both have to drop a hidden id.
+    if (newVal !== 'monthly') {
       if (hasEligibility(current, ctoId.value)) {
         contractTypeForm.value.eligibilities = withoutEligibility(current, ctoId.value)
       }
