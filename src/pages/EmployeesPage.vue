@@ -204,6 +204,7 @@
           @add-leave-balance="openLeaveBalanceModal"
           @add-cto-balance="openCtoBalanceModal"
           @assign-allowance="openAllowanceModal"
+          @identity-documents="openIdentityDocumentsModal"
         />
         <EmployeeTable
           v-else
@@ -229,6 +230,7 @@
           @add-leave-balance="openLeaveBalanceModal"
           @add-cto-balance="openCtoBalanceModal"
           @assign-allowance="openAllowanceModal"
+          @identity-documents="openIdentityDocumentsModal"
         />
 
         <footer v-if="filteredEmployees.length > 0" class="emp-foot">
@@ -396,6 +398,11 @@
     />
 
     <EmployeeAllowanceModal v-model="showAllowanceModal" :employee="selectedAllowanceEmployee" />
+
+    <EmployeeIdentityDocumentsDialog
+      v-model="showIdentityDocumentsModal"
+      :employee="selectedIdentityDocumentsEmployee"
+    />
   </PageShell>
 </template>
 
@@ -444,6 +451,7 @@ import AttendanceEmployeePhotoViewer from '@/components/pages/Attendance/Attenda
 import EmployeeLeaveBalanceModal from '@/components/pages/Employees/EmployeeLeaveBalanceModal.vue'
 import EmployeeCtoBalanceModal from '@/components/pages/Employees/EmployeeCtoBalanceModal.vue'
 import EmployeeAllowanceModal from '@/components/pages/Employees/EmployeeAllowanceModal.vue'
+import EmployeeIdentityDocumentsDialog from '@/components/pages/Employees/EmployeeIdentityDocumentsDialog.vue'
 
 import { useToast } from '@/composables/useToast'
 
@@ -767,6 +775,8 @@ const selectedBalanceEmployee = ref(null)
 // Allowance modal
 const showAllowanceModal = ref(false)
 const selectedAllowanceEmployee = ref(null)
+const showIdentityDocumentsModal = ref(false)
+const selectedIdentityDocumentsEmployee = ref(null)
 
 /**
  * What the picked employee currently holds, so the balance modal can show a
@@ -2201,6 +2211,11 @@ const openCtoBalanceModal = (emp) => {
 const openAllowanceModal = (emp) => {
   selectedAllowanceEmployee.value = emp
   showAllowanceModal.value = true
+}
+
+const openIdentityDocumentsModal = (emp) => {
+  selectedIdentityDocumentsEmployee.value = emp
+  showIdentityDocumentsModal.value = true
 }
 
 /**
