@@ -129,6 +129,11 @@
             <q-tab-panel name="contract-types" class="q-pa-none">
               <AdminSettingsPanelContractTypes />
             </q-tab-panel>
+            <!-- The document *types* only. Filing a document needs an employee
+                 id, so that half lives in the Employees page's row menu. -->
+            <q-tab-panel name="identity-documents" class="q-pa-none">
+              <AdminSettingsPanelIdentityDocuments :search-query="searchQuery || ''" />
+            </q-tab-panel>
             <q-tab-panel name="shifts" class="q-pa-none">
               <AdminSettingsPanelShifts />
             </q-tab-panel>
@@ -177,6 +182,7 @@ import AdminSettingsPanelShifts from '@/components/pages/AdminSettings/AdminSett
 import AdminSettingsPanelDepartments from '@/components/pages/AdminSettings/AdminSettingsPanelDepartments.vue'
 import AdminSettingsPanelPositions from '@/components/pages/AdminSettings/AdminSettingsPanelPositions.vue'
 import AdminSettingsPanelContractTypes from '@/components/pages/AdminSettings/AdminSettingsPanelContractTypes.vue'
+import AdminSettingsPanelIdentityDocuments from '@/components/pages/AdminSettings/AdminSettingsPanelIdentityDocuments.vue'
 import AdminSettingsPanelCustomMultipliers from '@/components/pages/AdminSettings/AdminSettingsPanelCustomMultipliers.vue'
 import AdminSettingsPanelCostCenters from '@/components/pages/AdminSettings/AdminSettingsPanelCostCenters.vue'
 import AdminSettingsPanelPayrollGroups from '@/components/pages/AdminSettings/AdminSettingsPanelPayrollGroups.vue'
@@ -246,6 +252,15 @@ const sectionGroups = [
         icon: 'o_description',
         searchable: false,
         blurb: 'Contract templates and their pay rules',
+      },
+      {
+        // Types are company configuration; the documents filed against them are
+        // per-employee data, offered from the employee row's Actions menu.
+        name: 'identity-documents',
+        label: 'Identity documents',
+        icon: 'o_contact_page',
+        searchable: true,
+        blurb: 'The kinds of ID an employee can file',
       },
     ],
   },
