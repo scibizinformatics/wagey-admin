@@ -156,6 +156,7 @@
                 @add-leave-balance="$emit('add-leave-balance', props.row)"
                 @add-cto-balance="$emit('add-cto-balance', props.row)"
                 @assign-allowance="$emit('assign-allowance', props.row)"
+                @identity-documents="$emit('identity-documents', props.row)"
               />
             </q-btn>
           </q-td>
@@ -275,6 +276,7 @@ defineEmits([
   'add-leave-balance',
   'add-cto-balance',
   'assign-allowance',
+  'identity-documents',
   'clear-filters',
   'add',
 ])
