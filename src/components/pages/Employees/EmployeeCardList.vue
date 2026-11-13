@@ -112,6 +112,7 @@
               @add-leave-balance="$emit('add-leave-balance', emp)"
               @add-cto-balance="$emit('add-cto-balance', emp)"
               @assign-allowance="$emit('assign-allowance', emp)"
+              @identity-documents="$emit('identity-documents', emp)"
             />
           </q-btn>
         </div>
@@ -225,6 +226,7 @@ const emit = defineEmits([
   'add-leave-balance',
   'add-cto-balance',
   'assign-allowance',
+  'identity-documents',
   'clear-filters',
   'add',
 ])
