@@ -62,6 +62,18 @@
           <q-item-section>Assign allowance</q-item-section>
         </q-item>
 
+        <!-- The document list is keyed by this row's employee id, which is why
+             the action sits here rather than in Admin settings. -->
+        <q-item
+          v-close-popup
+          clickable
+          class="row-menu__item"
+          @click="$emit('identity-documents', employee)"
+        >
+          <q-item-section avatar><q-icon name="o_contact_page" size="17px" /></q-item-section>
+          <q-item-section>Identity documents</q-item-section>
+        </q-item>
+
         <q-separator class="row-menu__sep" />
 
         <q-item
@@ -121,6 +133,7 @@ defineEmits([
   'add-leave-balance',
   'add-cto-balance',
   'assign-allowance',
+  'identity-documents',
 ])
 
 const terminated = computed(() => getStatus(props.employee) === 'Terminated')
