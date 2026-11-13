@@ -147,6 +147,57 @@ export function buildReviewOneConfirm({
  *   facts: Array<{label: string, value: string}>, sentence: string, note: string,
  *   actionLabel: string, buttonClass: string, cancelable: boolean}}
  */
+/**
+ * Confirmation for undoing the review-to-ready transition.
+ *
+ * The undo is whole-run (`reset-review` targets every EPI unless it is handed
+ * ids), and this page cannot know how many are currently reviewed — the endpoint
+ * answers `epis_reset` afterwards — so the subject is the run, and the count is
+ * reported by the toast rather than guessed at here.
+ *
+ * `payslip_status` and the claim fields are untouched by this endpoint, which is
+ * the one thing a reader cannot tell from a button labelled "undo review".
+ */
+export function buildResetReviewConfirm({ groupName = '' }) {
+  return {
+    title: 'Undo the review?',
+    name: groupName || 'This payout group',
+    sub: 'Payslips keep their current state',
+    icon: 'o_undo',
+    tone: 'warn',
+    sentence:
+      'will send every reviewed employee back to needs attention, so their payslips can be reviewed again.',
+    note: 'Only the review decision is undone — payslips, acknowledgements and claims are left as they are. A run that has moved past review is refused.',
+    actionLabel: 'Undo review',
+    buttonClass: 'dash-modal__submit',
+    cancelable: true,
+  }
+}
+
+/**
+ * Confirmation for undoing the payslip release.
+ *
+ * This one clears what employees have done — acknowledgements, claims — so it
+ * says so before the click rather than after. The endpoint refuses a run whose
+ * employees have already acted, and that refusal is worded by the backend when
+ * it happens.
+ */
+export function buildResetReleaseConfirm({ groupName = '' }) {
+  return {
+    title: 'Undo the payslip release?',
+    name: groupName || 'This payout group',
+    sub: 'Released payslips return to in progress',
+    icon: 'o_settings_backup_restore',
+    tone: 'danger',
+    sentence:
+      'will pull back every released payslip and clear the acknowledgement and claim fields it carries.',
+    note: 'Refused once an employee has acknowledged a payslip, filed a dispute, or been paid — resolve those first.',
+    actionLabel: 'Undo release',
+    buttonClass: 'dash-modal__danger',
+    cancelable: true,
+  }
+}
+
 export function buildReleaseConfirm({ going = 0, staying = 0, groupName = '' }) {
   return {
     title: 'Release payslips?',
