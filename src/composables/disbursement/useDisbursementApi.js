@@ -382,6 +382,44 @@ export function useDisbursementApi() {
     return data
   }
 
+  /**
+   * The body both recalibration endpoints take.
+   *
+   * `epi_ids` is optional on each and, when omitted, means "every EPI in the
+   * PGI". An empty list is a different statement — no employee at all — so the
+   * key is left out rather than sent empty.
+   */
+  const epiResetBody = (epiIds = []) => (epiIds.length ? { epi_ids: epiIds } : {})
+
+  /**
+   * Undo the payslip release: released EPIs go back to `in_progress` and the
+   * acknowledgement/claim fields they carry are cleared.
+   *
+   * Refused once employees have acted — an acknowledged payslip, a pending or
+   * claimed advance, a dispute, on-chain funding — so a 4xx here describes the
+   * run's state, and the backend's sentence names what is in the way.
+   */
+  async function resetRelease(pgiId, epiIds = []) {
+    const { data } = await api.post(
+      `${BASE}/payroll/admin/pgi/${pgiId}/reset-release/`,
+      epiResetBody(epiIds),
+    )
+    return data
+  }
+
+  /**
+   * Undo the review-to-ready transition: every targeted EPI is set back to
+   * `review_status: 'needs_attention'`, while payslip status and claim fields
+   * are left exactly as they are.
+   */
+  async function resetReview(pgiId, epiIds = []) {
+    const { data } = await api.post(
+      `${BASE}/payroll/admin/pgi/${pgiId}/reset-review/`,
+      epiResetBody(epiIds),
+    )
+    return data
+  }
+
   // ── Phase 2: Employee Payslip Operations ──
   async function fetchEmployeePayslipDetail(epiId) {
     const { data } = await api.get(`${BASE}/payroll/employee/payslips/${epiId}/`)
@@ -494,6 +532,8 @@ export function useDisbursementApi() {
     // Phase 1
     reviewToReady,
     releasePayslips,
+    resetReview,
+    resetRelease,
     // Phase 2 - Employee
     fetchEmployeePayslipDetail,
     acknowledgePayslip,
