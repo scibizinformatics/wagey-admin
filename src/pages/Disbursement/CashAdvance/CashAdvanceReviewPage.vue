@@ -9,6 +9,25 @@
       :subtitle="subtitle"
       :stepper-key="stepperKey"
     >
+      <!-- The run's own actions, beside its status rather than in the table
+           toolbar: they undo a payroll transition (review, payslip release) and
+           apply to the whole group, whereas everything in the row menus decides
+           one employee's requests. Quiet 3-dot, the same trigger the rows use. -->
+      <template #header-actions>
+        <q-btn
+          flat
+          dense
+          icon="more_horiz"
+          size="12px"
+          class="run-menu-btn"
+          :class="{ 'run-menu-btn--busy': submitting }"
+          :disable="submitting"
+          aria-label="Run actions"
+        >
+          <RowMenu :actions="runActions" @select="onRunAction" />
+        </q-btn>
+      </template>
+
       <DisbursementStatRow :tiles="statTiles" :loading="loading" />
 
       <DisbursementTableCard
@@ -177,6 +196,10 @@ import CashAdvanceStepShell from 'src/components/pages/CashAdvance/CashAdvanceSt
 import DisbursementStatRow from 'src/components/pages/Payroll/DisbursementStatRow.vue'
 import DisbursementTableCard from 'src/components/pages/Payroll/DisbursementTableCard.vue'
 import { buildCashAdvanceBulkDecisionConfirm } from 'src/components/pages/CashAdvance/cashAdvanceConfirm'
+import {
+  buildResetReleaseConfirm,
+  buildResetReviewConfirm,
+} from 'src/components/pages/Payroll/reviewConfirm'
 import { useCashAdvanceApi } from 'src/composables/disbursement/useCashAdvanceApi'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
@@ -202,7 +225,7 @@ const { notifyLoaded } = useLoadedToast()
 const pgiId = route.params.id
 const { identity, resolveQuietly } = usePayoutGroupIdentity()
 const { fetchCashAdvanceReviewEmployees, actOnCashAdvanceRequest } = useCashAdvanceApi()
-const { invalidateCache } = useDisbursementApi()
+const { invalidateCache, resetReview, resetRelease } = useDisbursementApi()
 const { employees, fetchEmployees } = useEmployees()
 
 const employeeIndex = computed(() => buildEmployeeNameIndex(employees.value))
@@ -474,6 +497,46 @@ function requestBulkDecision(employee, status) {
   showConfirm.value = true
 }
 
+/**
+ * The run's 3-dot menu, in the page header.
+ *
+ * Both items undo a payroll transition the run has already made, which is why
+ * they are here and not on a row: `reset-review` and `reset-release` act on the
+ * PGI and its employee payroll items, never on one employee's advance requests.
+ * They stay listed whatever the current stage — the endpoints are idempotent, and
+ * each is the one action that fits a run stuck one step too far along — and a
+ * refusal (a dispute, a claim, on-chain funding) is reported in the backend's own
+ * words when it happens.
+ */
+const runActions = [
+  {
+    key: 'resetReview',
+    label: 'Undo review',
+    icon: 'o_undo',
+    tone: 'warn',
+    caption: 'Send reviewed employees back to needs attention',
+  },
+  {
+    key: 'resetRelease',
+    label: 'Undo payslip release',
+    icon: 'o_settings_backup_restore',
+    tone: 'danger',
+    caption: 'Return released payslips to in progress',
+    separatorBefore: true,
+  },
+]
+
+function onRunAction(key) {
+  if (submitting.value || showConfirm.value) return
+  if (key !== 'resetReview' && key !== 'resetRelease') return
+  pendingAction.value = { type: key }
+  confirm.value =
+    key === 'resetReview'
+      ? buildResetReviewConfirm({ groupName: groupName.value })
+      : buildResetReleaseConfirm({ groupName: groupName.value })
+  showConfirm.value = true
+}
+
 async function refresh() {
   const token = guard.next()
   loading.value = true
@@ -493,11 +556,56 @@ async function refresh() {
 function onConfirm() {
   const action = pendingAction.value
   if (!action || submitting.value) return
-  commit(action)
+  if (action.type === 'bulk') commitBulk(action)
+  else commitReset(action)
 }
 
-async function commit(action) {
-  if (action.type !== 'bulk') return
+/**
+ * Undo one of the two payroll transitions, then refetch.
+ *
+ * The run's own status changes underneath this page, so the fetch and the
+ * stepper's key both follow the write — the stage, badge and "moved on" notice
+ * are all derived from what comes back. `epis_reset` is what the toast quotes
+ * when the backend sends it: a partial reset reports the number that actually
+ * moved rather than the size of the group.
+ */
+async function commitReset(action) {
+  const undoReview = action.type === 'resetReview'
+  submitting.value = true
+  try {
+    const response = undoReview ? await resetReview(pgiId) : await resetRelease(pgiId)
+    const body = response?.data ?? response ?? {}
+    const reset = Number(body.epis_reset)
+
+    showConfirm.value = false
+    stepperKey.value++
+    await refresh()
+    invalidateCache()
+    invalidateEmployeeBalances()
+
+    if (Number.isFinite(reset) && reset > 0) {
+      const verb = undoReview ? 'Review reopened' : 'Release undone'
+      toast.success(`${verb} for ${reset} employee${reset === 1 ? '' : 's'}.`)
+      return
+    }
+    toast.success(body.message || (undoReview ? 'Review reopened.' : 'Payslip release undone.'))
+  } catch (error) {
+    // Refusing is a real answer here — the endpoint will not pull a payslip back
+    // from an employee who has already acted — so the backend's sentence, which
+    // names the thing in the way, leads the toast.
+    console.error('[CashAdvanceReviewPage] reset ✖ error', error)
+    toast.error(
+      extractErrorMessage(
+        error,
+        undoReview ? 'Could not undo the review.' : 'Could not undo the payslip release.',
+      ),
+    )
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function commitBulk(action) {
   submitting.value = true
   try {
     // Bulk decisions are one request per row, so a failure belongs to a single
@@ -639,6 +747,25 @@ onMounted(async () => {
 .row-btn:hover {
   color: var(--dash-ink);
   background: var(--dash-n-100);
+}
+
+/* The run's own menu sits beside the status chip, so it wears the same bordered
+   weight as the controls around it instead of reading as a fourth table button. */
+.run-menu-btn {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  color: var(--dash-ink-3);
+  background: var(--dash-surface);
+}
+.run-menu-btn:hover {
+  color: var(--dash-ink);
+  background: var(--dash-n-50);
+}
+.run-menu-btn--busy {
+  opacity: 0.55;
 }
 
 @media (max-width: 1023px) {
