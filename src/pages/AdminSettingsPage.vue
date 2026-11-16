@@ -129,6 +129,9 @@
             <q-tab-panel name="contract-types" class="q-pa-none">
               <AdminSettingsPanelContractTypes />
             </q-tab-panel>
+            <q-tab-panel name="employment-statuses" class="q-pa-none">
+              <AdminSettingsPanelEmploymentStatuses :search-query="searchQuery || ''" />
+            </q-tab-panel>
             <!-- The document *types* only. Filing a document needs an employee
                  id, so that half lives in the Employees page's row menu. -->
             <q-tab-panel name="identity-documents" class="q-pa-none">
@@ -182,6 +185,7 @@ import AdminSettingsPanelShifts from '@/components/pages/AdminSettings/AdminSett
 import AdminSettingsPanelDepartments from '@/components/pages/AdminSettings/AdminSettingsPanelDepartments.vue'
 import AdminSettingsPanelPositions from '@/components/pages/AdminSettings/AdminSettingsPanelPositions.vue'
 import AdminSettingsPanelContractTypes from '@/components/pages/AdminSettings/AdminSettingsPanelContractTypes.vue'
+import AdminSettingsPanelEmploymentStatuses from '@/components/pages/AdminSettings/AdminSettingsPanelEmploymentStatuses.vue'
 import AdminSettingsPanelIdentityDocuments from '@/components/pages/AdminSettings/AdminSettingsPanelIdentityDocuments.vue'
 import AdminSettingsPanelCustomMultipliers from '@/components/pages/AdminSettings/AdminSettingsPanelCustomMultipliers.vue'
 import AdminSettingsPanelCostCenters from '@/components/pages/AdminSettings/AdminSettingsPanelCostCenters.vue'
@@ -252,6 +256,16 @@ const sectionGroups = [
         icon: 'o_description',
         searchable: false,
         blurb: 'Contract templates and their pay rules',
+      },
+      {
+        // Which statuses an employee can be moved between. Retiring one keeps
+        // the employees already on it, so the list is configuration rather than
+        // a record of an employee's current state.
+        name: 'employment-statuses',
+        label: 'Employment statuses',
+        icon: 'o_how_to_reg',
+        searchable: true,
+        blurb: 'The statuses an employee can be moved between',
       },
       {
         // Types are company configuration; the documents filed against them are
