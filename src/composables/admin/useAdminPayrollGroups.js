@@ -1,12 +1,10 @@
 import { ref } from 'vue'
 import { api } from 'src/boot/axios'
-import { useQuasar } from 'quasar'
 import { useCompany } from 'src/composables/page/useCompany'
-import { BASE } from 'src/composables/utils/http'
+import { BASE, extractErrorMessage } from 'src/composables/utils/http'
 import { useToast } from 'src/composables/useToast'
 
 export function useAdminPayrollGroups() {
-  const $q = useQuasar()
   const toast = useToast()
   const { companyId } = useCompany()
 
@@ -127,23 +125,34 @@ export function useAdminPayrollGroups() {
     }
   }
 
-  async function deletePayrollGroup(group) {
-    $q.dialog({
-      title: 'Delete this payroll group?',
-      message: `"${group.name}" is removed and its cutoff no longer applies. This cannot be undone.`,
-      cancel: { label: 'Cancel', flat: true },
-      ok: { label: 'Delete', color: 'negative', unelevated: true },
-      persistent: true,
-    }).onOk(async () => {
-      try {
-        await api.delete(`${BASE}/payroll/payroll-groups/${group.id}/`)
-        toast.success('Payroll group deleted successfully')
-        await fetchPayrollGroups()
-      } catch (error) {
-        console.error('Error deleting payroll group:', error)
-        toast.error(error.response?.data?.message || 'Failed to delete payroll group')
-      }
-    })
+  /**
+   * Switch whether a payroll group is used for processing.
+   *
+   * A partial PATCH rather than the full body the edit dialog sends: `is_active`
+   * is the only field this intends to change, and a full write would re-send a
+   * name and payment method the admin did not open.
+   */
+  async function setPayrollGroupActive(group, isActive) {
+    if (group?.id == null) {
+      toast.error('That payroll group could not be found any more')
+      return false
+    }
+
+    saving.value = true
+    try {
+      await api.patch(`${BASE}/payroll/payroll-groups/${group.id}/`, {
+        is_active: Boolean(isActive),
+      })
+      toast.success(isActive ? 'Payroll group activated' : 'Payroll group deactivated')
+      await fetchPayrollGroups()
+      return true
+    } catch (error) {
+      console.error('Error updating payroll group status:', error)
+      toast.error(extractErrorMessage(error, 'Failed to update payroll group status'))
+      return false
+    } finally {
+      saving.value = false
+    }
   }
 
   return {
@@ -159,6 +168,6 @@ export function useAdminPayrollGroups() {
     openDialog,
     openEditDialog,
     savePayrollGroup,
-    deletePayrollGroup,
+    setPayrollGroupActive,
   }
 }

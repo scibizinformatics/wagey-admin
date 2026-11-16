@@ -87,16 +87,32 @@
                         <q-item-section side><q-icon name="edit" size="16px" /></q-item-section>
                         <q-item-section>Edit payroll group</q-item-section>
                       </q-item>
+                      <!-- One status item, and it flips with the row: a
+                           deactivated group has to be reachable back to active
+                           now that the edit dialog no longer carries a toggle. -->
                       <q-item
+                        v-if="props.row.is_active"
                         clickable
                         v-close-popup
                         class="dropdown-item dropdown-item-danger"
-                        @click="deletePayrollGroup(props.row)"
+                        @click="openDeactivate(props.row)"
                       >
                         <q-item-section side
-                          ><q-icon name="delete" size="16px" color="negative"
+                          ><q-icon name="o_block" size="16px" color="negative"
                         /></q-item-section>
-                        <q-item-section>Delete</q-item-section>
+                        <q-item-section>Deactivate</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-else
+                        clickable
+                        v-close-popup
+                        class="dropdown-item"
+                        @click="activatePayrollGroup(props.row)"
+                      >
+                        <q-item-section side
+                          ><q-icon name="o_check_circle" size="16px"
+                        /></q-item-section>
+                        <q-item-section>Activate</q-item-section>
                       </q-item>
                     </q-list>
                   </q-menu>
@@ -153,13 +169,10 @@
             </q-select>
           </label>
 
-          <div class="q-mt-md toggle-item">
-            <q-toggle v-model="form.is_active" color="primary" size="md" class="brand-toggle" />
-            <div class="toggle-label-group">
-              <div class="toggle-label">Active</div>
-              <div class="toggle-hint">Enable this payroll group for processing</div>
-            </div>
-          </div>
+          <!-- The Active switch that used to sit here is gone: status is now the
+               row menu's Activate / Deactivate, next to the group it applies to.
+               `form.is_active` is still carried on save so an edit cannot reset
+               a deactivated group back to active. -->
         </q-card-section>
         <q-card-actions class="dash-modal__foot">
           <q-btn flat no-caps label="Cancel" class="dash-modal__cancel" v-close-popup />
@@ -173,12 +186,24 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Deactivate gate. Reached only from the row menu's Deactivate, and the
+         write itself lives in `commitDeactivate`, so `:loading` blocks a second
+         click. Activating back is not gated: nothing is lost by it. -->
+    <ConfirmDialog
+      v-model="showDeactivateConfirm"
+      :confirm="deactivateConfirm"
+      :loading="isDeactivating"
+      @confirm="commitDeactivate"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { buildPayrollGroupDeactivateConfirm } from './payrollGroupConfirm.js'
 import { useAdminPayrollGroups } from '@/composables/admin/useAdminPayrollGroups'
 
 const props = defineProps({
@@ -198,7 +223,7 @@ const {
   openDialog,
   openEditDialog,
   savePayrollGroup,
-  deletePayrollGroup,
+  setPayrollGroupActive,
 } = useAdminPayrollGroups()
 
 const loadingPayrollGroups = computed(() => loading.value)
@@ -232,6 +257,56 @@ function getPaymentMethodName(id) {
 
 function editPayrollGroup(group) {
   openEditDialog(group)
+}
+
+// ─── Deactivate / activate ───────────────────────────────────────────────────
+
+/** The row the question was asked about, frozen — the list under the dialog is
+ * live, so a confirm that re-read its subject could describe one group while
+ * writing another. */
+const showDeactivateConfirm = ref(false)
+const pendingDeactivate = ref(null)
+const isDeactivating = ref(false)
+
+const deactivateConfirm = computed(() =>
+  pendingDeactivate.value
+    ? buildPayrollGroupDeactivateConfirm({
+        name: pendingDeactivate.value.name,
+        paymentMethodLabel: getPaymentMethodName(pendingDeactivate.value.payment_method),
+      })
+    : null,
+)
+
+// Cancel clears nothing by itself, so the frozen row is dropped on the close
+// rather than on the write — never while the write is in flight.
+watch(showDeactivateConfirm, (open) => {
+  if (open || isDeactivating.value) return
+  pendingDeactivate.value = null
+})
+
+/** Opens the question. The write lives in `commitDeactivate`, below. */
+function openDeactivate(group) {
+  pendingDeactivate.value = group
+  showDeactivateConfirm.value = true
+}
+
+async function commitDeactivate() {
+  const pending = pendingDeactivate.value
+  if (!pending || isDeactivating.value) return
+
+  isDeactivating.value = true
+  try {
+    await setPayrollGroupActive(pending, false)
+  } finally {
+    isDeactivating.value = false
+    showDeactivateConfirm.value = false
+    pendingDeactivate.value = null
+  }
+}
+
+/** Switching a group back on loses nothing, so it takes effect straight away. */
+function activatePayrollGroup(group) {
+  setPayrollGroupActive(group, true)
 }
 
 onMounted(async () => {
