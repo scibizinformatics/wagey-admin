@@ -92,7 +92,7 @@
           </q-td>
 
           <q-td key="status" :props="props" class="emp-table__td">
-            <span class="dash-chip" :class="isTerminated(props.row) ? '' : 'dash-chip--good'">
+            <span class="dash-chip" :class="getStatus(props.row) === 'Active' ? 'dash-chip--good' : ''">
               <span class="dash-chip__dot" />
               {{ getStatus(props.row) }}
             </span>
@@ -151,7 +151,7 @@
                 @edit="$emit('edit', props.row)"
                 @assign="$emit('assign', props.row)"
                 @edit-contract="$emit('edit-contract', props.row)"
-                @terminate="$emit('terminate', props.row)"
+                @change-status="$emit('change-status', props.row)"
                 @restore="$emit('restore', props.row)"
                 @add-leave-balance="$emit('add-leave-balance', props.row)"
                 @add-cto-balance="$emit('add-cto-balance', props.row)"
@@ -270,7 +270,7 @@ defineEmits([
   'edit',
   'assign',
   'edit-contract',
-  'terminate',
+  'change-status',
   'restore',
   'view-photo',
   'add-leave-balance',

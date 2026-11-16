@@ -82,16 +82,60 @@ export function getRole(employee) {
 }
 
 /**
+ * A status *code* in lowercase. The same field can hold a pk instead (see
+ * `employmentStatusIdOf`), and a number has no `.toLowerCase`, so every code
+ * comparison goes through here rather than reading the field directly.
+ */
+function statusCode(value) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+/**
  * Termination can be recorded in three places, and any one of them counts.
  * Anything else is treated as active.
  */
 export function getStatus(employee) {
   if (!employee) return 'N/A'
-  if (employee.status?.toLowerCase() === 'terminated') return 'Terminated'
+  // A company can name its own statuses ("Resigned", "On leave"), and the row
+  // carries the label once one has been applied. Reading it first keeps a status
+  // the code fallbacks below have never heard of from rendering as "Active".
+  const label = employee.status_name ?? employee.companies?.[0]?.status_name
+  if (typeof label === 'string' && label.trim()) return label.trim()
+  if (statusCode(employee.status) === 'terminated') return 'Terminated'
   if (employee.is_active === false) return 'Terminated'
-  const empStatus = employee.companies?.[0]?.employment_status
-  if (empStatus?.toLowerCase() === 'terminated') return 'Terminated'
+  if (statusCode(employee.companies?.[0]?.employment_status) === 'terminated') return 'Terminated'
   return 'Active'
+}
+
+/**
+ * The employment-status pk the employee is on, or `null` when the row carries
+ * only a code.
+ *
+ * `companies[0].employment_status` is the status **id**, not its code — the
+ * backend's schema types the whole `companies` block as a plain string because
+ * it is a serializer method field, so nothing documents that, and a label can
+ * only be recovered by reading the status itself
+ * (`GET …/employment-statuses/{pk}/`). `status` is the id on payloads written
+ * by the status-change endpoints, with `status_code` beside it. An object form
+ * ({ id }) is accepted too, because the block's shape is undocumented.
+ *
+ * `null` means "no pk here", never "active": callers keep their code/name
+ * fallbacks rather than inventing a status.
+ */
+export function employmentStatusIdOf(employee) {
+  if (!employee) return null
+
+  const block = employee.companies?.[0]
+  for (const raw of [block?.employment_status, employee.status]) {
+    if (raw && typeof raw === 'object') {
+      if (raw.id != null && /^\d+$/.test(String(raw.id).trim())) return Number(raw.id)
+      continue
+    }
+    const text = raw == null ? '' : String(raw).trim()
+    if (/^\d+$/.test(text)) return Number(text)
+  }
+
+  return null
 }
 
 export function isTerminated(employee) {

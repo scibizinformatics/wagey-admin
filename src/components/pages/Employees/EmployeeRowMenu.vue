@@ -76,14 +76,17 @@
 
         <q-separator class="row-menu__sep" />
 
+        <!-- Named "Cancel" because it no longer terminates: it opens the
+             company's own employment statuses and applies whichever one is
+             picked, of which "Terminated" is only one. -->
         <q-item
           v-close-popup
           clickable
           class="row-menu__item row-menu__item--danger"
-          @click="$emit('terminate', employee)"
+          @click="$emit('change-status', employee)"
         >
-          <q-item-section avatar><q-icon name="o_block" size="17px" /></q-item-section>
-          <q-item-section>Terminate</q-item-section>
+          <q-item-section avatar><q-icon name="o_swap_horiz" size="17px" /></q-item-section>
+          <q-item-section>Cancel</q-item-section>
         </q-item>
       </template>
 
@@ -128,7 +131,7 @@ defineEmits([
   'edit',
   'assign',
   'edit-contract',
-  'terminate',
+  'change-status',
   'restore',
   'add-leave-balance',
   'add-cto-balance',

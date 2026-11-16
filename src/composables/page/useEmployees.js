@@ -167,6 +167,35 @@ export function useEmployees() {
     return response.data
   }
 
+  /**
+   * Move an employee to another employment status.
+   *
+   * Two endpoints, and the chosen status's category picks which. A `separated`
+   * status goes through `/separate/`, which is the one that ends their active
+   * contracts, deactivates their devices and their company-scoped faces; sending
+   * the same id through the generic endpoint would change the label and leave a
+   * resigned employee holding a running contract. Everything else — Active,
+   * Inactive, and any status a company adds in another category — is a plain
+   * status change.
+   *
+   * `effective_date` and `reason` are optional on both endpoints and default to
+   * today / empty; the dialog collects only the status, so neither is invented
+   * here on the employee's behalf.
+   */
+  async function setEmployeeStatus(employeeId, status) {
+    if (!companyId.value) throw new Error('Company ID not found')
+    if (employeeId == null || status?.id == null) throw new Error('Employment status not found')
+
+    const separated = String(status.category ?? '').toLowerCase() === 'separated'
+    const path = separated ? 'separate' : 'employment-status'
+    const response = await api.patch(
+      `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/${path}/`,
+      { status: status.id },
+    )
+    invalidateCache()
+    return response.data
+  }
+
   async function restoreEmployee(employeeId, payload = {}) {
     const response = await api.patch(
       `${BASE}/user/companies/${companyId.value}/employees/${employeeId}/`,
@@ -208,6 +237,7 @@ export function useEmployees() {
     updateUser,
     uploadEmployeeAvatar,
     terminateEmployee,
+    setEmployeeStatus,
     restoreEmployee,
     invalidateCache,
   }

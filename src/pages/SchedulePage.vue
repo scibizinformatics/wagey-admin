@@ -459,9 +459,11 @@ const usersWithAvatars = computed(() =>
 )
 
 const isEmployeeTerminated = (emp) => {
-  if (emp.status?.toLowerCase() === 'terminated') return true
+  if (typeof emp.status === 'string' && emp.status.toLowerCase() === 'terminated') return true
+  // The company block's `employment_status` can be the status pk, which has no
+  // `.toLowerCase` — read it as a code only when it actually is one.
   const empStatus = emp.companies?.[0]?.employment_status
-  if (empStatus?.toLowerCase() === 'terminated') return true
+  if (typeof empStatus === 'string' && empStatus.toLowerCase() === 'terminated') return true
   return false
 }
 

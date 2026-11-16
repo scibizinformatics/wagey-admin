@@ -132,6 +132,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { getStatus } from '@/composables/utils/employee'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -173,11 +174,10 @@ const role = computed(() => {
 
 const status = computed(() => {
   if (!props.employee) return 'N/A'
-  if (props.employee.status?.toLowerCase() === 'terminated') return 'Terminated'
-  if (props.employee.is_active === false) return 'Terminated'
-  const empStatus = props.employee.companies?.[0]?.employment_status
-  if (empStatus?.toLowerCase() === 'terminated') return 'Terminated'
-  return 'Active'
+  // The dialog and the table read the same record through the same accessor —
+  // a second copy of this ladder drifted once already, and the code-vs-pk fields
+  // it reads are exactly where a bare `.toLowerCase()` throws.
+  return getStatus(props.employee)
 })
 
 const statusClass = computed(() => {

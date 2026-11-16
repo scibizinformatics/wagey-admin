@@ -94,7 +94,7 @@
         </div>
 
         <div class="card__top-right">
-          <span class="dash-chip" :class="isTerminated(emp) ? '' : 'dash-chip--good'">
+          <span class="dash-chip" :class="getStatus(emp) === 'Active' ? 'dash-chip--good' : ''">
             <span class="dash-chip__dot" />
             {{ getStatus(emp) }}
           </span>
@@ -107,7 +107,7 @@
               @edit="$emit('edit', emp)"
               @assign="$emit('assign', emp)"
               @edit-contract="$emit('edit-contract', emp)"
-              @terminate="$emit('terminate', emp)"
+              @change-status="$emit('change-status', emp)"
               @restore="$emit('restore', emp)"
               @add-leave-balance="$emit('add-leave-balance', emp)"
               @add-cto-balance="$emit('add-cto-balance', emp)"
@@ -220,7 +220,7 @@ const emit = defineEmits([
   'edit',
   'assign',
   'edit-contract',
-  'terminate',
+  'change-status',
   'restore',
   'view-photo',
   'add-leave-balance',

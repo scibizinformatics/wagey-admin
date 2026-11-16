@@ -198,7 +198,7 @@
           @edit="editEmployee"
           @assign="handleOpenAssignDialog"
           @edit-contract="handleOpenEditContract"
-          @terminate="confirmTerminate"
+          @change-status="openStatusDialog"
           @restore="confirmRestore"
           @view-photo="viewEmployeePhoto"
           @add-leave-balance="openLeaveBalanceModal"
@@ -224,7 +224,7 @@
           @edit="editEmployee"
           @assign="handleOpenAssignDialog"
           @edit-contract="handleOpenEditContract"
-          @terminate="confirmTerminate"
+          @change-status="openStatusDialog"
           @restore="confirmRestore"
           @view-photo="viewEmployeePhoto"
           @add-leave-balance="openLeaveBalanceModal"
@@ -298,15 +298,22 @@
 
     <EmployeeViewModal v-model="showViewModal" :employee="selectedEmployee" />
 
-    <EmployeeTerminateDialog
-      v-model="showTerminateDialog"
-      :employee="employeeToTerminate"
-      :loading="terminating"
-      @confirm="terminateEmployee"
+    <!-- The row menu's Cancel action. A bespoke input dialog rather than
+         ConfirmDialog, because the decision is *which* status to apply and the
+         confirm chrome cannot collect one. -->
+    <EmployeeStatusDialog
+      v-model="showStatusDialog"
+      :employee="employeeStatusTarget"
+      :statuses="employmentStatuses"
+      :loading-statuses="loadingEmploymentStatuses"
+      :current-status="currentEmploymentStatus"
+      :loading-current-status="loadingCurrentStatus"
+      :loading="updatingStatus"
+      @confirm="updateEmployeeStatus"
     />
 
-    <!-- Bulk terminate. Same chrome as the single-employee dialog above, worded
-         for the batch; `bulkTerminateConfirm` being null is what closes it. -->
+    <!-- Bulk terminate. The shared confirm chrome, worded for the batch;
+         `bulkTerminateConfirm` being null is what closes it. -->
     <ConfirmDialog
       :model-value="Boolean(bulkTerminateConfirm)"
       :confirm="bulkTerminateConfirm"
@@ -441,7 +448,7 @@ import EmployeeEditModal from '@/components/pages/Employees/EmployeeEditModal.vu
 import EmployeeViewModal from '@/components/pages/Employees/EmployeeViewModal.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { buildTerminateConfirm } from 'src/composables/utils/confirmWording'
-import EmployeeTerminateDialog from '@/components/pages/Employees/EmployeeTerminateDialog.vue'
+import EmployeeStatusDialog from '@/components/pages/Employees/EmployeeStatusDialog.vue'
 import EmployeeRestoreDialog from '@/components/pages/Employees/EmployeeRestoreDialog.vue'
 import EmployeeAssignContractDialog from '@/components/pages/Employees/EmployeeAssignContractDialog.vue'
 import EmployeeEditContractDialog from '@/components/pages/Employees/EmployeeEditContractDialog.vue'
@@ -454,6 +461,7 @@ import EmployeeAllowanceModal from '@/components/pages/Employees/EmployeeAllowan
 import EmployeeIdentityDocumentsDialog from '@/components/pages/Employees/EmployeeIdentityDocumentsDialog.vue'
 
 import { useToast } from '@/composables/useToast'
+import { useEmploymentStatuses } from '@/composables/page/useEmploymentStatuses'
 
 // Shared accessors — these were duplicated verbatim between this page and
 // EmployeeTable, which meant the two could disagree about the same record.
@@ -464,7 +472,9 @@ import {
   getStatus,
   getPhoneNumber,
   isTerminated,
+  employmentStatusIdOf,
 } from '@/composables/utils/employee'
+import { createRequestToken } from '@/composables/utils/requestToken'
 
 const $q = useQuasar()
 const toast = useToast()
@@ -481,8 +491,20 @@ const {
   updateEmployee,
   uploadEmployeeAvatar,
   terminateEmployee: terminateEmployeeApi,
+  setEmployeeStatus: setEmployeeStatusApi,
   restoreEmployee: restoreEmployeeApi,
 } = useEmployees()
+
+// The row menu's Cancel action offers the company's own employment statuses, so
+// the list is fetched when that dialog opens rather than with the page. The
+// employee's current status is a separate single-record read: the row carries
+// it as a pk, which only that endpoint can turn into a label.
+const {
+  statuses: employmentStatuses,
+  loading: loadingEmploymentStatuses,
+  fetchEmploymentStatuses,
+  fetchEmploymentStatus,
+} = useEmploymentStatuses()
 
 const { userRoles, fetchUserRoles } = useRolesAndPositions()
 // Payout group comes from each employee's active contract. The cache is shared
@@ -757,13 +779,18 @@ const canAddEmployee = false
 const showAddModal = ref(false)
 const showViewModal = ref(false)
 const showEditModal = ref(false)
-const showTerminateDialog = ref(false)
+const showStatusDialog = ref(false)
 const showRestoreDialog = ref(false)
 const selectedEmployee = ref({})
-const employeeToTerminate = ref({})
+const employeeStatusTarget = ref({})
+const currentEmploymentStatus = ref(null)
+const loadingCurrentStatus = ref(false)
 const employeeToRestore = ref({})
-const terminating = ref(false)
+const updatingStatus = ref(false)
 const restoring = ref(false)
+// One guard for the dialog's current-status read: opening a second employee
+// before the first answer lands must not paint the wrong name.
+const statusDetailGuard = createRequestToken()
 const showPhotoViewer = ref(false)
 const selectedPhotoUrl = ref('')
 
@@ -1880,31 +1907,34 @@ const cancelEdit = () => {
   }
 }
 
-const terminateEmployee = async () => {
+/**
+ * The row menu's Cancel action, committed.
+ *
+ * The status is chosen in the dialog; this is the write behind its `confirm`,
+ * reachable only from there, so the button's `:loading` covers the request.
+ * Which endpoint runs is `setEmployeeStatus`'s call — a separated status takes
+ * the separation path (contracts ended, devices deactivated), anything else is
+ * a plain status change.
+ *
+ * The row is re-read rather than patched in place: the status that comes back
+ * carries its own name, and the list's `status` field arrives in more than one
+ * shape, so guessing what to write into the row would be guessing.
+ */
+const updateEmployeeStatus = async (status) => {
+  const employee = employeeStatusTarget.value
+  if (!employee?.id || !status?.id) return
+
   try {
-    terminating.value = true
-    const cid = employeeToTerminate.value.companies?.[0]?.company_id
-    const payload = {
-      companies: [{ company_id: cid, employment_status: 'terminated' }],
-    }
-    const response = await terminateEmployeeApi(employeeToTerminate.value.id, payload)
-
-    // Optimistic patch so the row updates before the refetch lands; the
-    // authoritative re-read happens below.
-    const employeeIndex = employees.value.findIndex((e) => e.id === employeeToTerminate.value.id)
-    if (employeeIndex !== -1) {
-      employees.value[employeeIndex] = { ...response, is_active: false, status: 'terminated' }
-    }
-    filterEmployees()
-
-    toast.success(`Employee ${getFullName(employeeToTerminate.value)} has been terminated`)
-    showTerminateDialog.value = false
-    employeeToTerminate.value = {}
+    updatingStatus.value = true
+    await setEmployeeStatusApi(employee.id, status)
+    toast.success(`Employee ${getFullName(employee)} is now ${status.name}`)
+    showStatusDialog.value = false
+    employeeStatusTarget.value = {}
     await refreshEmployees()
   } catch (error) {
-    toast.error(extractErrorMessage(error, 'Failed to terminate employee'))
+    toast.error(extractErrorMessage(error, 'Failed to update employment status'))
   } finally {
-    terminating.value = false
+    updatingStatus.value = false
   }
 }
 
@@ -2166,9 +2196,32 @@ const editEmployee = async (emp) => {
   showEditModal.value = true
 }
 
-const confirmTerminate = (emp) => {
-  employeeToTerminate.value = emp
-  showTerminateDialog.value = true
+/** Opens the status dialog. The write lives in `updateEmployeeStatus`, above. */
+const openStatusDialog = async (emp) => {
+  employeeStatusTarget.value = emp
+  currentEmploymentStatus.value = null
+  loadingCurrentStatus.value = false
+  showStatusDialog.value = true
+  // A fresh cache answers at once; only a cold or aged-out one costs a request.
+  fetchEmploymentStatuses()
+
+  // Claimed on every open, including the no-pk one, so a read still in flight
+  // for the previous employee can never land on this one.
+  const token = statusDetailGuard.next()
+
+  // The employee's own status, by pk. No pk on the row (a code-only payload) is
+  // normal rather than exceptional: the dialog keeps its code/name fallbacks.
+  const statusId = employmentStatusIdOf(emp)
+  if (statusId == null) return
+
+  loadingCurrentStatus.value = true
+  try {
+    const status = await fetchEmploymentStatus(statusId)
+    if (!statusDetailGuard.isCurrent(token)) return
+    currentEmploymentStatus.value = status
+  } finally {
+    if (statusDetailGuard.isCurrent(token)) loadingCurrentStatus.value = false
+  }
 }
 
 const confirmRestore = (emp) => {
