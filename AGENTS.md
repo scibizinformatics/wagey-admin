@@ -255,6 +255,12 @@ These are live and not covered by the long-form doc — treat them as current, n
   (Admin Settings > Allowances; `/app/allowances` redirects there) — `CardTapsPage.vue`/`useCardTaps.js`/
   `utils/cardTaps.js`, `AdminSettingsPanelAllowances.vue`/`useAllowances.js`/`useEmployeeAllowances.js`/
   `utils/allowances.js`.
+- **Employment statuses** are company configuration at Admin settings > Employment statuses
+  (`useAdminEmploymentStatuses.js`, `utils/employmentStatuses.js`). `DELETE` retires
+  (`is_selectable: false`), keeping the row, its `employee_count` and the employees on it;
+  `PATCH { is_selectable: true }` restores it. The default cannot be retired and is changed only
+  from the row menu (`{ is_default: true }`) because the API refuses to unset it. Writes invalidate
+  the Employees row menu's `useEmploymentStatuses` cache.
 - **Half-day leave** — `/attendance/leave-list/` reports a half day as `total_days: 1` with
   `total_day_value: "0.50"`; render the _value_, not the count, via `leaveRequestDurationLabel` in
   `utils/leaveRequests.js` (it keeps the `total_days`/`hours`/`N/A` fallbacks). The write side of the
