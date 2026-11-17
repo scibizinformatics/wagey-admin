@@ -25,13 +25,12 @@
  * print the scheme's name without the type list beside it. `typeId` stays the raw
  * id so a form can send back exactly what it was given.
  *
- * Third, **`fixed_amount` is the employer share** and `employee_fixed` /
- * `employee_percent` are the employee's — the endpoint documents only the
- * employee side, but the field is present on every row and this panel names it
- * for what it is rather than leaving an unlabelled figure in a payroll table.
- * The newer schema also carries `employer_fixed` / `employer_percent`; a row
- * may report the employer share under either name, so the normaliser reads the
- * newer field first and falls back to `fixed_amount`.
+ * Third, **the employer share travels as `employer_fixed`** (the newer schema's
+ * field, and the one the payroll reads), while `employee_fixed` /
+ * `employee_percent` are the employee's. Older rows may still report the
+ * employer share under the legacy `fixed_amount`, so the normaliser reads
+ * `employer_fixed` first and falls back to `fixed_amount`; the write body sends
+ * only `employer_fixed`.
  *
  * Fourth, **`name` is read-only on the API.** The server derives it from the
  * type and the band, so the form never offers it and the write body never sends
@@ -134,8 +133,9 @@ export function normalizeContributionBracket(raw) {
     employeePercent: toAmount(raw?.employee_percent),
     incomeFrom: toAmount(raw?.income_from),
     incomeTo: toAmount(raw?.income_to),
-    // The employer share answers to two names; prefer the newer field and fall
-    // back to `fixed_amount`, which is the one the form writes.
+    // The employer share answers to two names. `employer_fixed` is what the
+    // form writes and what payroll reads; `fixed_amount` is the legacy field,
+    // kept as a read fallback for rows saved before the rename.
     employerFixed: toAmount(raw?.employer_fixed) ?? toAmount(raw?.fixed_amount),
     effectiveDate: String(raw?.effective_date ?? ''),
     isActive: raw?.is_active ?? true,
@@ -146,6 +146,34 @@ export function normalizeContributionBrackets(payload) {
   return rowsFrom(payload)
     .map(normalizeContributionBracket)
     .filter((bracket) => bracket.id != null)
+}
+
+/**
+ * Whether a `components` payload is actually the employee-account resource.
+ *
+ * The two collections sit under sibling paths — `components` for the bands and
+ * `accounts` for the per-employee scheme numbers — and share no field: an
+ * account row names a person and a membership number, a bracket names an income
+ * band and its shares. If the wrong one is served (a repurposed endpoint, a
+ * routing mistake), every bracket renderer would show blank bands, which looks
+ * exactly like "no components configured" and hides the real fault. This is the
+ * reading the composable uses to say so instead.
+ */
+export function looksLikeEmployeeAccountRows(payload) {
+  const rows = rowsFrom(payload)
+  if (!rows.length) return false
+  const accountish = rows.filter(
+    (row) => row && (row.account_number !== undefined || row.component_type_name !== undefined),
+  )
+  const bracketish = rows.filter(
+    (row) =>
+      row &&
+      (row.income_from !== undefined ||
+        row.employee_fixed !== undefined ||
+        row.employee_percent !== undefined ||
+        row.employer_fixed !== undefined),
+  )
+  return accountish.length > 0 && bracketish.length === 0
 }
 
 // ─── Labels ────────────────────────────────────────────────────────────────
@@ -252,7 +280,7 @@ export function emptyBracketForm(typeId = null) {
     employee_percent: '',
     income_from: '',
     income_to: '',
-    fixed_amount: '',
+    employer_fixed: '',
     effective_date: todayIso(),
     is_active: true,
   }
@@ -267,7 +295,7 @@ export function bracketToForm(bracket) {
     employee_percent: text(bracket?.employeePercent),
     income_from: text(bracket?.incomeFrom),
     income_to: text(bracket?.incomeTo),
-    fixed_amount: text(bracket?.employerFixed),
+    employer_fixed: text(bracket?.employerFixed),
     effective_date: bracket?.effectiveDate || todayIso(),
     is_active: bracket?.isActive ?? true,
   }
@@ -306,7 +334,7 @@ export function validateBracketForm(form) {
     ['income_to', 'Income to'],
     ['employee_fixed', 'Employee fixed amount'],
     ['employee_percent', 'Employee percentage'],
-    ['fixed_amount', 'Employer share'],
+    ['employer_fixed', 'Employer share'],
   ]) {
     const value = toAmount(form?.[field])
     if (value != null && value < 0) return `${label} cannot be negative`
@@ -337,7 +365,7 @@ export function bracketPayload(form, { companyId = null } = {}) {
     employee_percent: decimalOrNull(form?.employee_percent),
     income_from: decimalOrNull(form?.income_from),
     income_to: decimalOrNull(form?.income_to),
-    fixed_amount: decimalOrNull(form?.fixed_amount),
+    employer_fixed: decimalOrNull(form?.employer_fixed),
     effective_date: String(form?.effective_date ?? '').trim(),
     is_active: form?.is_active ?? true,
   }
