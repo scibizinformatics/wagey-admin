@@ -29,10 +29,12 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   skip-formatting). The legacy root `.eslintrc.js` is ignored (lint passes `-c ./eslint.config.js`)
   — editing it changes nothing.
 - No test framework exists. Verify changes with `npm run lint` (and a dev-server check if UI).
+- `npm run build` can exit 0 with `mini-css-extract-plugin` `Conflicting order` CSS warnings. They
+  are pre-existing noise, not a gate; don't chase them unless you changed CSS import order.
 - **Prettier is repo-wide dirty — do not run `npm run format` for a focused change.** `npm run format`
   is `prettier --write "**/*.{js,vue,scss,html,md,json}" --ignore-path .gitignore`, and that same glob
-  with `--list-different` reports **~130 unformatted files, ~115 of them under `src/`** (the exact
-  count drifts as files land), plus `package-lock.json`, `package.json`, `quasar.config.js`,
+  with `--list-different` currently reports **~150 unformatted files, most of them under `src/`** (the
+  exact count drifts as files land), plus `package-lock.json`, `package.json`, `quasar.config.js`,
   `index.html`, `README.md`, `CLAUDE.md`, `eslint.config.js`, `jsconfig.json`, `.prettierrc.json`,
   `.vscode/*`, `src-electron/*` and `.opencode/plans/*`. `--ignore-path .gitignore` keeps
   `node_modules`/`dist`/`venv` out, but every other tracked file is in scope and rewriting
@@ -45,10 +47,16 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 
 ## Env / build-time config
 
-- `@quasar/app-webpack` does **not** auto-load `.env`. `API_BASE_URL` and `VITE_WS_URL` are baked in
-  at **build time** via `webpack.DefinePlugin`, read from real `process.env.*` on the build machine.
-  Editing `.env` (or `.env.example`) changes nothing — set real env vars, or edit the fallback in
-  `quasar.config.js`. `.env.example` is the committed reference; `.env` is git-ignored.
+- **`.env` is loaded, despite what `.env` / `.env.example` say.** The installed
+  `@quasar/app-webpack` (4.4.x) reads `.env`, `.env.local`, `.env.[dev|prod]` and friends — a build
+  logs `Using .env files: ...`. It injects those values as `process.env.*`, which collides with the
+  custom `webpack.DefinePlugin` in `quasar.config.js` for `API_BASE_URL` / `VITE_WS_URL`: the build
+  warns `DefinePlugin Conflicting values for ...`, and the **file value wins** in the bundle (verified
+  with a sentinel `.env.local`). Edit `.env` locally; on a build machine with no `.env` (it is
+  git-ignored), real env vars feed the `quasar.config.js` fallback. Treat the "changes nothing"
+  comment in `.env.example` as wrong.
+- The dev proxy target is the exception: it is computed inside `quasar.config.js`, **before** Quasar
+  parses `.env`, so a `.env` `API_BASE_URL` does not move the proxy — export it on the shell instead.
 - Only three places read those defines: `baseURL` in `boot/axios.js`, the **deprecated** `BASE`
   re-export in `composables/utils/http.js` (import `api` instead), and `composables/useWebSocket.js`.
 - In **dev** `baseURL` is `''` and every request goes through the proxy; the absolute base is
@@ -67,8 +75,8 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   toast before errorHandler, which raises a toast of its own.
 - `quasar.config.js` `extras` includes `material-icons-outlined`, which backs the `o_*` icon prefix.
   Dropping it blanks every outlined icon with no build error — the nav rail goes blank first.
-- Adding a route to `src/router/routes.js` does **not** add a sidebar entry. The nav groups in
-  `src/layouts/MainLayout.vue:403` are a hand-maintained array. Every route _page_ component is lazy
+- Adding a route to `src/router/routes.js` does **not** add a sidebar entry. The `navGroups` array in
+  `src/layouts/MainLayout.vue` is hand-maintained. Every route _page_ component is lazy
   `() => import(...)` except `AdminSettingsPage`, which is static and therefore lands in the initial
   bundle; both layouts, `AuthLayout` and `MainLayout`, are eager too.
 - The live SPA template is the **root `index.html`**, not `src/index.template.html` — v4 of
@@ -76,9 +84,10 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   redirect script. Editing `src/index.template.html` is a silent no-op.
 - Superseded/dead modules remain on disk, and plans name files that no longer exist — this is the main
   source of false leads here. Grep for importers (`git grep -l ComponentName src`) before treating a
-  name as current. Confirmed unreferenced: the nine `components/pages/Dashboard/*Panel.vue` +
-  `QuickActionsBar.vue` files from the old dashboard (Announcements, NeedsYourAttention, Notifications,
-  PayrollReadiness, PayrollStatus, PendingSwaps, RecentActivity, SiteStatus),
+  name as current. `components/pages/Dashboard/` now holds 43 files, and exactly nine are dead:
+  `AnnouncementsPanel`, `NeedsYourAttentionPanel`, `NotificationsPanel`, `PayrollReadinessPanel`,
+  `PayrollStatusPanel`, `PendingSwapsPanel`, `RecentActivityPanel`, `SiteStatusPanel` and
+  `QuickActionsBar`; every other Dashboard component is live. Also unreferenced:
   `composables/disbursement/stubData.js`, `composables/payroll/usePayoutData.js` (the whole
   `composables/payroll/` dir is this one dead file), `composables/page/useSwapRequests.js` (the live
   path is `composables/utils/swapRequests.js`), `constants/payoutSteps.js` (live stepper source is
@@ -118,12 +127,13 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 - **Dev proxy: `quasar.config.js` has three entries, and the split is deliberate.** (1) The general
   array holds every plain HTTP top-level prefix — `/api`, `/user`, `/organization`,
   `/communication`, `/attendance`, `/cash_advance`, `/contracts`, `/access`, `/admin`, `/audit`,
-  `/allowance`. Add a **new top-level prefix to that array**; do not add a fourth proxy object —
-  http-proxy-middleware registers a `close` listener per entry, and one-per-prefix put twelve
-  listeners on one emitter, past Node's default of ten, so `npm run dev` opened with a spurious
-  `MaxListenersExceededWarning`. (2) `/payroll/*` is a **narrow enumerated allowlist**, separate so
-  refreshing the bare `/app/payroll` SPA route isn't forwarded to Django — a new `/payroll/<subpath>`
-  endpoint **must be added to that list explicitly** or it 404s in dev and works in prod.
+  `/allowance`, `/compensable_time`. Add a **new top-level prefix to that array**; do not add a
+  fourth proxy object — http-proxy-middleware registers a `close` listener per entry, and
+  one-per-prefix put twelve listeners on one emitter, past Node's default of ten, so `npm run dev`
+  opened with a spurious `MaxListenersExceededWarning`. (2) `/payroll/*` is a **narrow enumerated
+  allowlist**, separate so refreshing the bare `/app/payroll` SPA route isn't forwarded to Django — a
+  new `/payroll/<subpath>` endpoint **must be added to that list explicitly** or it 404s in dev and
+  works in prod.
   (3) `/ws/notifications` is separate only for `ws: true`.
 - Two paths are in neither the general array nor the payroll allowlist, so they fail **in dev only**:
   `/payroll/employee/payslips/*` (the `fetchEmployeePayslipDetail` / `acknowledgePayslip` /
@@ -131,12 +141,15 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   and `/employee/payslips/` (`composables/page/usePayroll.js`). All of those functions are exported
   with no caller and are shadowed by the `/payroll/admin/employee-payslips/` versions the pages
   actually use (`PayslipsPage.vue`, `FundingPage.vue`) — which is why nothing has noticed.
-- Deep links are consumed **once, before the first fetch**: `applyDeepLink()` in `AttendancePage.vue`
-  and `Disbursement/DisbursementListPage.vue` runs ahead of it, the value must land in a control the
-  reader can see and clear, and the page then `router.replace({ query: {} })` — left in the URL, a
-  reload re-applies a narrowing the reader had cleared. The payroll step pages are the opposite: the
-  query is **carried**, not consumed (`PayoutGroupStepperHeader.vue`'s `carriedQuery`), because no
-  step endpoint returns the run's name/cutoff/status.
+- Deep links are consumed **once, before the first fetch**: `applyDeepLink()` in `AttendancePage`,
+  `DisbursementListPage`, `AccessCardsPage`, `AdminSettingsPage`, `ManningPage` and `RequestPage` runs
+  ahead of it, the value must land in a control the reader can see and clear, and the page then
+  `router.replace({ query: {} })` — left in the URL, a reload re-applies a narrowing the reader had
+  cleared. `AdminSettingsPage` also watches `route.query`, because the router reuses that page and
+  `onMounted` alone misses a link aimed at an already-open settings tab. The payroll **and
+  cash-advance** step pages are the opposite: the query is **carried**, not consumed
+  (`useCarriedRunQuery()` in the step shells), because no step endpoint returns the run's
+  name/cutoff/status.
 
 ## Data-fetching conventions
 
@@ -146,8 +159,7 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   module-level cache by company — a bare string key served the previous workspace's data after a
   switch (this bit the disbursement cutoff cache in `useDisbursementApi.js`).
 - Guard stale responses: take a token from `createRequestToken()` and check `isCurrent(token)`
-  before committing — one guard per published ref, in every fetcher that writes into shared state
-  (12 composables plus `RequestPage.vue`, `DisbursementListPage.vue` and `PayslipsPage.vue`).
+  before committing — one guard per published ref, in every fetcher that writes into shared state.
   `usePayroll.js` uses a per-key `AbortController` instead; prefer that when cancelling is worth it,
   the token when the response is cheap or shared through a cache (cancelling a shared request strands
   a second caller).
@@ -164,7 +176,8 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   example; `utils/` also splits into generic formatters (`format`, `locale`, `timezone`,
   `calendarDate`, `statusColors`) versus per-feature derivation modules — don't blur the two.
 - `composables/payroll/` and `composables/disbursement/` are different: the disbursement subtree is
-  live and every `pages/Disbursement/*.vue` page calls `useDisbursementApi.js` unconditionally.
+  live (`useDisbursementApi`, `useCashAdvanceApi`, `usePayoutGroupIdentity`, `useCarriedRunQuery`), and
+  the step pages call it unconditionally; only `stubData.js` there is dead.
 
 ## UI conventions
 
@@ -200,15 +213,15 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   composables that have no template. (`ConfirmCard.vue`'s own header already describes that second host
   as `openConfirm()` in `composables/utils/confirmAction.js`; that file is not on disk, so the comment
   is a statement of intent, not an import path.) A page with a confirm should use `ConfirmDialog`; don't
-  re-type the head/footer. **16 decision-confirms still use bare
-  `$q.dialog({ title, message, ok, cancel })`** —
-  14 in `composables/admin/`, plus `AdminSettingsPanelHolidayTypes` and `EmployeeContributionsDialog`.
-   That is the exception now, not the norm; converting one needs the imperative host, and that path
-   is **unproven at runtime**. `ReviewPage` was the third and left the list by the *other* route: it has
-   a template, so it took `ConfirmDialog` and a `reviewConfirm.js` exactly as Funding and Disburse did —
-   the imperative host is only the answer for a composable with no template of its own. `note` is
-   optional in the confirm object — `EmployeeTerminateDialog` has none because terminate is reversible,
-   and the irreversible note would be a lie.
+  re-type the head/footer. **13 decision-confirms still use bare
+  `$q.dialog({ title, message, ok, cancel })`** — 12 across ten `composables/admin/` files
+  (`useAdminShifts.js` has three) plus `EmployeeContributionsDialog`. That is the exception now, not
+  the norm; converting one needs the imperative host, and that path is **unproven at runtime**.
+  `ReviewPage` was the third and left the list by the *other* route: it has a template, so it took
+  `ConfirmDialog` and a `reviewConfirm.js` exactly as Funding and Disburse did — the imperative host is
+  only the answer for a composable with no template of its own. `note` is optional in the confirm
+  object — `EmployeeTerminateDialog` has none because terminate is reversible, and the irreversible
+  note would be a lie.
 - **`dash-page-body` marks a list region; it has no rule of its own.** A page-level list region
   carries it so the empty-state rules can find it by context (`.dash-page-body .dash-empty` and
   `.dash-page-body .grid-empty` take `--dash-body-min`, 580px). It exists purely as a selector prefix —
@@ -217,8 +230,8 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   empty-state vocabularies exist, so the rules are split: `.dash-empty` for most, `.grid-empty` for the
   Request tabs (`requestGrid.css`), and `.modern-table-container > .dash-empty` for the Admin Settings
   panels, which are not marked `dash-page-body`. `TableSkeleton`'s `rows` default (16) is sized to that
-  same floor, which is why all 29 call sites pass no literal `:rows` — the only two still setting one
-  (`PayoutTable`, `CashAdvanceTable`) pass a local `SKELETON_ROWS` const.
+  same floor, which is why almost every call site passes no literal `:rows` — the only two still
+  setting one (`PayoutTable`, `CashAdvanceTable`) pass a local `SKELETON_ROWS` const.
 - **Money is ₱, not ₦, and there is no `₦` anywhere in the tree.**
   `composables/utils/format.js` hardcodes **₱** and is the app's formatter.
   `composables/utils/locale.js` has a second `formatCurrency` that takes a `countryCode` and is used
@@ -243,8 +256,9 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
 ## Naming / structure drift
 
 - `pages/Disbursement/*` is reached at `/app/payroll`, but its components live under
-  `components/pages/Payroll/`. `DeductionsPage.vue` renders a page titled **Contributions** (helpers in
-  `composables/utils/contributions.js`). Search both names. Page-specific components go in
+  `components/pages/Payroll/`, and the parallel cash-advance flow's under
+  `components/pages/CashAdvance/`. `DeductionsPage.vue` renders a page titled **Contributions** (helpers
+  in `composables/utils/contributions.js`). Search all three names. Page-specific components go in
   `components/pages/<PageName>/`; shared ones in `components/common/` and `components/layout/PageShell.vue`.
 
 ## Newer than CLAUDE.md
@@ -261,6 +275,31 @@ These are live and not covered by the long-form doc — treat them as current, n
   `PATCH { is_selectable: true }` restores it. The default cannot be retired and is changed only
   from the row menu (`{ is_default: true }`) because the API refuses to unset it. Writes invalidate
   the Employees row menu's `useEmploymentStatuses` cache.
+- **Identity documents** — company-level types
+  (`/user/companies/{id}/identity-document-types/`, `AdminSettingsPanelIdentityDocuments.vue`) and
+  per-employee documents (`…/employees/{id}/identity-documents/`,
+  `EmployeeIdentityDocumentsDialog.vue`). Types have no `DELETE`: retire with `is_active: false`.
+  The employee `POST` is an **upsert keyed by `document_type`** (201 `replaced: true`, 200
+  `unchanged: true`), and its `PATCH` carries only `is_verified` / `is_active` — changing a number is
+  another POST. `utils/identityDocuments.js` owns the normalisers and the JSON-unless-there-is-a-file
+  body; an absent `is_active` means active.
+- **Compensable time** — categories and subcategories are configured in Admin Settings
+  (`AdminSettingsPanelCompensable.vue` + `CompensableSubcategoriesDialog.vue`) over
+  `/compensable_time/...`; `utils/compensableTime.js` is the shared reading for the panel, the dialog
+  and the Request page's compensable tab. `default_allowance_types` is a **list of ids, not objects**,
+  a missing `is_active` means active, and ids compare as strings (`sameId`).
+- **Hourly contracts and work hours** — `pay_type` is `monthly | daily | hourly` and all three share
+  the 8–48 hours-per-week span; `utils/contractTerms.js` is the single source (`PAY_TYPE_OPTIONS`,
+  `WORK_HOURS_BOUNDS`, `workHoursDefaultFor`, `normaliseWorkHours`). Work-hours *mode* is not a field
+  but one of two payroll eligibilities (`Work Hours Flexible/Strict`). CTO eligibility is
+  **monthly-only**: `eligibilitiesForPayType()` strips it — plus ids the catalogue cannot resolve —
+  from any non-monthly write, because a hidden checkbox otherwise sends an id the user cannot see and
+  the backend rejects.
+- **Payroll groups are deactivated, not deleted** — the row menu `PATCH`es `is_active` (confirm
+  wording in `AdminSettings/payrollGroupConfirm.js`), and the edit form still carries `is_active` so
+  saving an edit cannot silently reactivate one. `resetReview` / `resetRelease` in
+  `useDisbursementApi.js` are the undo verbs: whole-run unless given `epi_ids`, offered in the
+  cash-advance run menu behind `reviewConfirm.js`, and refused once the run has moved past that stage.
 - **Half-day leave** — `/attendance/leave-list/` reports a half day as `total_days: 1` with
   `total_day_value: "0.50"`; render the _value_, not the count, via `leaveRequestDurationLabel` in
   `utils/leaveRequests.js` (it keeps the `total_days`/`hours`/`N/A` fallbacks). The write side of the
@@ -273,8 +312,9 @@ These are live and not covered by the long-form doc — treat them as current, n
   not in the handler that opens the dialog, so `:loading` can cover it and block a second click. Each
   has a **wording source** returning a plain confirm object: the per-feature modules
   `Request/decisionConfirm.js`, `AccessCards/statusConfirm.js`, `Schedule/dayOffConfirm.js`,
-  `Payroll/fundingConfirm.js`, `Payroll/disburseConfirm.js`, `Payroll/issueDecisionConfirm.js` — where
-  the wording is computed from live reactive state — or the
+  `Payroll/fundingConfirm.js`, `Payroll/disburseConfirm.js`, `Payroll/issueDecisionConfirm.js`, plus
+  the newer `AdminSettings/*Confirm.js` siblings (`payrollGroupConfirm`, `employmentStatusConfirm`,
+  `holidayConfirm`, …) — where the wording is computed from live reactive state — or the
   fixed-shape builders in `composables/utils/confirmWording.js` (`buildDeleteConfirm`,
   `buildTerminateConfirm`, `buildNotice`) where it is not. All render through the shared
   `components/common/ConfirmDialog.vue`, which has **no slot and no branch**: every word comes from the
@@ -397,8 +437,8 @@ These are live and not covered by the long-form doc — treat them as current, n
   is created but never called, so opening the page still costs one request.
 - **Manning** (`useManning.js`, `GET /organization/sites/manning/{company_id}/`) and **the audit trail**
   (`useAuditLogs.js` for the cross-module write log, `useAssignmentHistory.js` /
-  `useContractHistory.js` for the two trails) are the newest composables and carry their traps in
-  their header comments — read those before trusting a field.
+  `useContractHistory.js` for the two trails) are recent composables and carry their traps in their
+  header comments — read those before trusting a field.
 - **Devices** `/app/devices` (`DevicesPage.vue`/`useDevices.js`/`utils/devices.js`).
   `GET /user/companies/{company_id}/devices/` answers a bare array of the phones/browsers employees
   sign in to the app on. The deactivate route keys on the **employee's uuid** — the backend's
