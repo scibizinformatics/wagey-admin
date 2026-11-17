@@ -6,6 +6,7 @@ import { extractErrorMessage } from 'src/composables/utils/http'
 import { createRequestToken } from 'src/composables/utils/requestToken'
 import {
   bracketPayload,
+  looksLikeEmployeeAccountRows,
   normalizeContributionBrackets,
   sameId,
   validateBracketForm,
@@ -23,8 +24,9 @@ import {
  * component may carry no type — companies set their bands up before the schemes
  * exist — so `type` is nullable and the Type column is where the first type is
  * created. `employee_fixed` / `employee_percent` are the employee's share and
- * `fixed_amount` the employer's; the normaliser in `utils/contributionSettings`
- * is the only place the two vocabularies meet.
+ * `employer_fixed` is the employer's share; the normaliser in
+ * `utils/contributionSettings` reads it with a `fixed_amount` fallback for rows
+ * written before the field was renamed.
  *
  * `is_active` is the reversible way to stop a bracket applying, which is why the
  * row menu offers it beside the delete: a bracket is often retired for one
@@ -69,6 +71,22 @@ export function useAdminContributionBrackets() {
     try {
       const response = await api.get(collectionPath())
       if (!listGuard.isCurrent(token)) return brackets.value
+
+      // The wrong resource here would render as a table of blank bands, which
+      // reads as "nothing configured". Say what actually arrived instead.
+      if (looksLikeEmployeeAccountRows(response.data)) {
+        console.warn(
+          '[useAdminContributionBrackets] /payroll/contributions/components/ answered employee-account rows; ' +
+            'the components view expects PayrollComponent rows (type, income_from, shares).',
+        )
+        brackets.value = []
+        toast.error(
+          'Contribution components could not be read: the endpoint returned employee accounts instead. Check the API route.',
+          { timeout: 8000 },
+        )
+        return []
+      }
+
       brackets.value = normalizeContributionBrackets(response.data).filter(
         (bracket) => bracket.companyId == null || String(bracket.companyId) === askedFor,
       )
