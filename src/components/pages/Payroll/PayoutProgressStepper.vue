@@ -60,22 +60,20 @@
  * frozen at wherever payroll was (work done behind, the held step locked) and the
  * caption says Paused, because "Payslips · Step 2 of 5" over a run nobody may
  * work on is a claim the row click then contradicts by opening the advances.
- * The list row has no `current_progress`, so the pause is inferred from the two
- * statuses it does have — see `isPayrollPausedByStatus`.
+ * The list row carries the run's `progress` but no `current_progress`, so the
+ * pause is still inferred from the two statuses it has — see
+ * `isPayrollPausedByStatus`.
  */
-import { ref, computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import {
   computeStepsFromPgiStatus,
   currentStepIndexForPgiStatus,
-  PGI_STATUS_MAP,
   PGI_STEP_ROUTES,
 } from 'src/constants/pgiStatus'
 import { isPayrollPausedByStatus } from 'src/composables/utils/payoutProgress'
 
 const router = useRouter()
-const { fetchPayoutGroupProgress } = useDisbursementApi()
 
 const props = defineProps({
   groupId: { type: [Number, String], required: true },
@@ -85,6 +83,13 @@ const props = defineProps({
   /** Passed through to the step page's header, which no step endpoint returns. */
   groupName: { type: String, default: '' },
   cutoffName: { type: String, default: '' },
+  /**
+   * The run's own progress steps, straight off `payout-group-instances`
+   * (`{ step, name, status }` each). The list already holds them, so a status
+   * this app cannot place renders from these instead of asking
+   * `payout-group-progress` once per row.
+   */
+  progress: { type: Array, default: () => [] },
 })
 
 const ROUTES = PGI_STEP_ROUTES
@@ -92,7 +97,6 @@ const STEP_LABELS = ['Review', 'Payslips', 'Funding', 'Disbursement', 'Complete'
 const STATE_WORDS = { done: 'done', active: 'in progress', pending: 'locked' }
 
 const stepDefs = ROUTES.map((r) => ({ name: r }))
-const progressData = ref(null)
 
 const baseSteps = computed(() => {
   if (props.pgiStatus) {
@@ -106,9 +110,9 @@ const baseSteps = computed(() => {
     }
   }
 
-  if (!progressData.value) return []
+  if (!props.progress?.length) return []
 
-  return progressData.value.progress.map((p) => ({
+  return props.progress.map((p) => ({
     ...p,
     state: p.status === 'in_progress' ? 'active' : p.status === 'completed' ? 'done' : 'pending',
   }))
@@ -158,16 +162,6 @@ const ariaLabel = computed(() => {
   if (paused.value) return 'Progress: paused, payroll waiting on cash advances to finish'
   if (allDone.value) return 'Progress: complete, all 5 steps done'
   return `Progress: step ${currentIndex.value + 1} of ${steps.value.length}, ${currentLabel.value}`
-})
-
-onMounted(async () => {
-  // Only the backend can resolve a status outside the known map.
-  if (!props.pgiStatus || PGI_STATUS_MAP[props.pgiStatus]) return
-  try {
-    progressData.value = await fetchPayoutGroupProgress(props.groupId)
-  } catch (err) {
-    console.error('[PayoutProgressStepper] fetch failed:', err)
-  }
 })
 
 function goToStep(index) {
