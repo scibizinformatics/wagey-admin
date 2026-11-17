@@ -182,7 +182,7 @@
 
 <script setup>
 import PageShell from '@/components/layout/PageShell.vue'
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useEmployees } from '@/composables/page/useEmployees'
 import { useAttendance } from '@/composables/page/useAttendance'
 import { usePayroll } from '@/composables/page/usePayroll'
@@ -367,12 +367,41 @@ const statsCards = computed(() => {
 })
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
+/**
+ * A module's real-time updates, coalesced.
+ *
+ * `onDataUpdate` fires once per socket message. A burst — an approval fan-out, a
+ * reconnect replay, a payroll run's rows all changing at once — used to mean one
+ * full refetch per message, and the dashboard looked like it was reloading in a
+ * loop. Debounced per module, the whole burst costs one request.
+ */
+const dataUpdateTimers = new Map()
+
+function onCoalescedDataUpdate(module, refetch, wait = 400) {
+  onDataUpdate(module, () => {
+    const pending = dataUpdateTimers.get(module)
+    if (pending) clearTimeout(pending)
+    dataUpdateTimers.set(
+      module,
+      setTimeout(() => {
+        dataUpdateTimers.delete(module)
+        refetch()
+      }, wait),
+    )
+  })
+}
+
+onUnmounted(() => {
+  for (const timer of dataUpdateTimers.values()) clearTimeout(timer)
+  dataUpdateTimers.clear()
+})
+
 onMounted(async () => {
   const cid = resolvedCompanyId()
 
-  onDataUpdate('attendance', () => fetchAttendanceByDate(todayIso()))
-  onDataUpdate('leave', () => fetchLeaveRequests())
-  onDataUpdate('overtime', () => fetchOvertimeRequests())
+  onCoalescedDataUpdate('attendance', () => fetchAttendanceByDate(todayIso()))
+  onCoalescedDataUpdate('leave', () => fetchLeaveRequests())
+  onCoalescedDataUpdate('overtime', () => fetchOvertimeRequests())
 
   await fetchDashboardSummary({ company_id: cid })
 
