@@ -79,6 +79,7 @@
               :ca-status="props.row.cashAdvanceStatus"
               :group-name="props.row.group"
               :cutoff-name="props.row.cutoff"
+              :progress="props.row.progress"
             />
           </q-td>
 
