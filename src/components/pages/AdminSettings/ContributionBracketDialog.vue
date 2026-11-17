@@ -148,7 +148,7 @@
               <label class="dash-modal__field dash-modal__span-2">
                 <span class="dash-modal__field-label">Employer share</span>
                 <q-input
-                  v-model="draft.fixed_amount"
+                  v-model="draft.employer_fixed"
                   type="number"
                   step="0.01"
                   min="0"
