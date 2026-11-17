@@ -57,8 +57,28 @@
               {{ employeeName || 'this employee' }} until a tax month is set for
               {{ cutoffName || 'this period' }}.
             </p>
+            <!-- The server's own line, so a 404 that is not really about a tax
+                 month cannot hide behind the wording above. -->
+            <span v-if="unconfiguredDetail" class="contrib-state__detail">{{
+              unconfiguredDetail
+            }}</span>
           </div>
 
+          <div v-else-if="missingItem" class="contrib-state contrib-state--unconfigured">
+            <!-- The other 404: this item is not in this run. Retry is offered
+                 because, unlike a missing tax month, the data can catch up (a
+                 transfer, a refreshed roster) without anyone changing config. -->
+            <p class="contrib-empty__title">Nothing found for this employee</p>
+            <p class="contrib-empty__sub">
+              This run has no payroll item for
+              {{ employeeName || 'this employee' }} to show contributions
+              against. It may have been moved to another run.
+            </p>
+            <span v-if="unconfiguredDetail" class="contrib-state__detail">{{
+              unconfiguredDetail
+            }}</span>
+            <q-btn flat dense no-caps label="Try again" class="contrib-retry" @click="load" />
+          </div>
           <div v-if="error" class="contrib-state contrib-state--error">
             <q-icon name="o_error_outline" size="20px" />
             <span>Could not load contributions for this employee.</span>
@@ -134,7 +154,7 @@
                   >
                 </p>
                 <q-btn
-                  v-if="selectable.length > 1"
+                  v-if="contributions.length > 1"
                   flat
                   dense
                   no-caps
@@ -152,27 +172,18 @@
                   class="contrib-row"
                   :class="{
                     'contrib-row--selected': selected.includes(row.id),
-                    'contrib-row--reverting': selected.includes(row.id) && isComplete,
+                    'contrib-row--reverting': selected.includes(row.id) && row.deducted,
                   }"
                 >
-                  <!-- A row is selectable when there is an action for it: pending
-                     rows can be deducted, and once the item is complete the
-                     deducted rows can be reverted. Unselectable deducted rows
-                     keep the same slot so names stay on one vertical line. -->
+                  <!-- Every row has an action — pending rows are deducted, deducted
+                     rows are reverted — so the checkbox is always offered. -->
                   <span class="contrib-row__pick">
                     <q-checkbox
-                      v-if="isSelectable(row)"
                       :model-value="selected.includes(row.id)"
                       dense
                       size="xs"
                       :disable="busy"
                       @update:model-value="toggle(row.id)"
-                    />
-                    <q-icon
-                      v-else
-                      :name="row.deducted ? 'o_check_circle' : 'o_radio_button_unchecked'"
-                      size="17px"
-                      :class="row.deducted ? 'contrib-row__done' : 'contrib-row__waiting'"
                     />
                   </span>
 
@@ -180,8 +191,8 @@
                     <span class="contrib-row__name">{{ row.name }}</span>
                     <span class="contrib-row__meta">
                       <template v-if="row.deducted">
-                        <!-- With the tick replaced by a checkbox on a complete
-                           item, this line carries the deducted state alone. -->
+                        <!-- The checkbox above already marks selection; this line
+                           carries the deducted state alone. -->
                         <q-icon name="check" size="13px" class="contrib-row__meta-tick" />
                         Deducted<template v-if="row.deducted_from">
                           from {{ row.deducted_from }}</template
@@ -462,14 +473,30 @@
           <template v-else>All contributions deducted</template>
         </span>
         <q-btn flat no-caps label="Close" class="dash-modal__cancel" @click="close" />
-        <!-- A complete item has nothing left to deduct, so the same slot turns
-             into the way back out: revert everything, or only the rows picked. -->
+        <!-- Both directions stay available when an item is only partly deducted.
+             The slot used to swap between them on the overall status, which left
+             an `incomplete` item holding deducted rows with no way to undo them. -->
         <q-btn
-          v-if="isComplete"
+          v-if="canDeduct"
+          unelevated
+          no-caps
+          icon="o_playlist_add_check"
+          :label="selectedPending.length ? `Deduct ${selectedPending.length}` : 'Deduct'"
+          class="dash-modal__submit"
+          :loading="deducting"
+          :disable="!selectedPending.length || busy"
+          @click="deduct"
+        >
+          <q-tooltip v-if="!selectedPending.length">
+            Select a pending contribution to deduct
+          </q-tooltip>
+        </q-btn>
+        <q-btn
+          v-if="canRevert"
           unelevated
           no-caps
           icon="o_undo"
-          :label="selected.length ? `Revert ${selected.length}` : 'Revert all'"
+          :label="selectedDeducted.length ? `Revert ${selectedDeducted.length}` : 'Revert all'"
           class="contrib-revert"
           :loading="reverting"
           :disable="busy"
@@ -477,24 +504,11 @@
         >
           <q-tooltip>
             {{
-              selected.length
+              selectedDeducted.length
                 ? 'Put the selected contributions back to pending'
                 : 'Put every deducted contribution back to pending'
             }}
           </q-tooltip>
-        </q-btn>
-        <q-btn
-          v-else-if="pending.length"
-          unelevated
-          no-caps
-          icon="o_playlist_add_check"
-          :label="selected.length ? `Deduct ${selected.length}` : 'Deduct'"
-          class="dash-modal__submit"
-          :loading="deducting"
-          :disable="!selected.length || busy"
-          @click="deduct"
-        >
-          <q-tooltip v-if="!selected.length">Select a contribution to deduct</q-tooltip>
         </q-btn>
       </q-card-actions>
     </q-card>
@@ -607,10 +621,23 @@ const MONTHS = [
   'December',
 ]
 
-const COMPLETE_STATUSES = ['complete', 'completed']
+const NO_TAX_MONTH = /tax month/i
 
 const loading = ref(false)
 const error = ref(false)
+/**
+ * A 404 that is *not* the documented "no tax month" answer — the payroll item is
+ * not in this payout group, or belongs to another workspace. Every 404 used to
+ * land in `noTaxMonth`, which reported a missing item as a tax-month
+ * configuration the reader could neither cause nor fix.
+ */
+const missingItem = ref(false)
+/**
+ * The server's own line for a 404, kept so the two cases are distinguishable on
+ * screen. `noTaxMonth` deliberately has no retry — pressing one cannot conjure a
+ * tax month — but "no such item in this run" can change, so that block offers it.
+ */
+const unconfiguredDetail = ref('')
 /**
  * What the server actually said, kept for the dialog to show.
  *
@@ -631,11 +658,10 @@ const errorDetail = ref('')
  * is told is what has to happen next (a tax month gets set on the backend), not
  * what went wrong, because nothing went wrong.
  *
- * Every 404 from the endpoint lands here, which is deliberate: the other 404s it
- * can answer — an employee payroll item that is not in this payout group — mean
- * the same thing to this screen, that there is nothing configured here to show.
- * Reading the server's message to tell them apart would mean a third hand-rolled
- * `data.detail || ...` chain for no gain a reader could act on.
+ * Only the documented 404 lands here. The route's other 404 — an employee payroll
+ * item that is not in this payout group — is `missingItem` below: it means the
+ * row is stale or moved, not that anything needs configuring, and telling a
+ * reader to go set a tax month for it sent them to the wrong place.
  */
 const noTaxMonth = ref(false)
 const deducting = ref(false)
@@ -706,28 +732,16 @@ const pending = computed(() => contributions.value.filter((row) => !row.deducted
 const deductedRows = computed(() => contributions.value.filter((row) => row.deducted))
 
 /**
- * Reverting is offered only on a complete item, matching the backend's model of
- * the action: it undoes a settled contribution status, not a half-finished one.
- * The status string is the authority rather than the row flags, since the server
- * can hold an item short of complete for reasons the rows do not show.
+ * The two actions are decided per row, not by the item's overall status.
+ *
+ * They used to swap in one footer slot gated on `epi_contribution_status` being
+ * `complete`, which left a partly deducted item — the normal state after a manual
+ * deduction, and one the server reports as `incomplete` — with a Deduct button
+ * and no way to undo what had already come off. A deducted row can be reverted
+ * whenever it exists; a pending one can be deducted whenever it exists.
  */
-const isComplete = computed(() => {
-  const status = String(data.value?.epi_contribution_status || '')
-    .trim()
-    .toLowerCase()
-  return COMPLETE_STATUSES.includes(status) && deductedRows.value.length > 0
-})
-
-/**
- * A row is selectable only when the mode's action applies to it: reverting acts
- * on deducted rows, deducting on pending ones. Keeping these disjoint is what
- * stops the footer count from including rows the request would drop.
- */
-function isSelectable(row) {
-  return isComplete.value ? Boolean(row.deducted) : !row.deducted
-}
-
-const selectable = computed(() => contributions.value.filter((row) => isSelectable(row)))
+const canDeduct = computed(() => pending.value.length > 0)
+const canRevert = computed(() => deductedRows.value.length > 0)
 
 const totalAmount = computed(() =>
   contributions.value.reduce((sum, row) => sum + amount(row.amount), 0),
@@ -740,22 +754,28 @@ const deductedAmount = computed(() =>
 const pendingAmount = computed(() =>
   pending.value.reduce((sum, row) => sum + amount(row.amount), 0),
 )
+
+// One selection, split by what each action can do with it. A mixed selection is
+// legitimate: the checkboxes pick rows, and each button counts only the half it
+// will act on, so neither request can carry an id the other endpoint expects.
+const selectedRows = computed(() =>
+  contributions.value.filter((row) => selected.value.includes(row.id)),
+)
+const selectedPending = computed(() => selectedRows.value.filter((row) => !row.deducted))
+const selectedDeducted = computed(() => selectedRows.value.filter((row) => row.deducted))
 const selectedAmount = computed(() =>
-  contributions.value
-    .filter((row) => selected.value.includes(row.id))
-    .reduce((sum, row) => sum + amount(row.amount), 0),
+  selectedRows.value.reduce((sum, row) => sum + amount(row.amount), 0),
 )
 
 const allSelectableSelected = computed(
   () =>
-    selectable.value.length > 0 && selectable.value.every((row) => selected.value.includes(row.id)),
+    contributions.value.length > 0 &&
+    contributions.value.every((row) => selected.value.includes(row.id)),
 )
 
 const selectAllLabel = computed(() => {
   if (allSelectableSelected.value) return 'Clear selection'
-  return isComplete.value
-    ? `Select all ${selectable.value.length}`
-    : `Select all ${selectable.value.length} pending`
+  return `Select all ${contributions.value.length}`
 })
 
 /**
@@ -900,15 +920,26 @@ function toggle(id) {
 }
 
 function toggleAllSelectable() {
-  selected.value = allSelectableSelected.value ? [] : selectable.value.map((row) => row.id)
+  selected.value = allSelectableSelected.value ? [] : contributions.value.map((row) => row.id)
 }
 
 async function load() {
-  if (!props.pgiId || !props.epiId) return
+  if (!props.pgiId || !props.epiId) {
+    // Opening with a missing id used to render an empty body: `load()` bailed
+    // before `loading` ever flipped, so no state at all matched. Say so instead
+    // — a review row without `epi_id` is a payload fault, and a silent dialog
+    // sent the reader to the network tab to find that out.
+    error.value = true
+    errorDetail.value = 'Missing payout group instance or employee payroll item id.'
+    data.value = null
+    return
+  }
   loading.value = true
   error.value = false
   errorDetail.value = ''
   noTaxMonth.value = false
+  missingItem.value = false
+  unconfiguredDetail.value = ''
   selected.value = []
   try {
     data.value = await fetchEpiContributions(props.pgiId, props.epiId)
@@ -918,7 +949,20 @@ async function load() {
       // Nothing is wrong, so nothing is reported as wrong. The endpoint's own
       // console line is silenced by `expectedStatuses` on the request; this
       // catch is where the answer becomes a screen state.
-      noTaxMonth.value = true
+      //
+      // Which of the two 404s it is decides the wording: the documented one is a
+      // configuration state ("No tax month found for this cutoff."), the other is
+      // an item that is not in this run. A 404 that carries no quotable message
+      // keeps the tax-month reading, the one the route documents.
+      //
+      // `extractErrorMessage` with an empty fallback still fabricates `(404)`
+      // when the body has nothing quotable, so that token — not an empty string —
+      // is what "nothing was named" looks like here.
+      const serverMessage = extractErrorMessage(err, '').trim()
+      const named = Boolean(serverMessage) && serverMessage !== '(404)'
+      noTaxMonth.value = !named || NO_TAX_MONTH.test(serverMessage)
+      missingItem.value = !noTaxMonth.value
+      unconfiguredDetail.value = describeFetchFailure(err)
     } else {
       error.value = true
       errorDetail.value = describeFetchFailure(err)
@@ -1231,14 +1275,17 @@ function reportTaxRevert(response, written, reason) {
 }
 
 async function deduct() {
-  if (!selected.value.length || busy.value) return
-  const count = selected.value.length
+  // Only the pending half of the selection: a mixed selection is legitimate now,
+  // and a deducted id sent here is an id the endpoint has nothing to deduct for.
+  const rows = selectedPending.value
+  if (!rows.length || busy.value) return
+  const count = rows.length
   // Held before the refetch, which clears `selected` — read afterwards it would
   // be 0, and the toast would claim nothing was deducted.
-  const written = selectedAmount.value
+  const written = rows.reduce((sum, row) => sum + amount(row.amount), 0)
   deducting.value = true
   try {
-    await deductContributions(props.epiId, [...selected.value])
+    await deductContributions(props.epiId, rows.map((row) => row.id))
     // Refetched rather than patched locally: deducting sets `deducted_from` and
     // can move the item's overall status, neither of which is knowable here.
     await load()
@@ -1263,9 +1310,10 @@ async function deduct() {
  */
 function confirmRevert() {
   if (busy.value) return
-  const rows = selected.value.length
-    ? deductedRows.value.filter((row) => selected.value.includes(row.id))
-    : deductedRows.value
+  // Keyed to the deducted half of the selection, exactly as the button's label
+  // is: selecting only pending rows must still read "Revert all" and act on
+  // every deducted row rather than becoming a no-op.
+  const rows = selectedDeducted.value.length ? selectedDeducted.value : deductedRows.value
   if (!rows.length) return
 
   const names = rows.map((row) => row.name).join(', ')
@@ -1322,6 +1370,8 @@ watch(
       error.value = false
       errorDetail.value = ''
       noTaxMonth.value = false
+      missingItem.value = false
+      unconfiguredDetail.value = ''
       taxData.value = null
       taxError.value = false
       taxErrorDetail.value = ''
@@ -1367,6 +1417,19 @@ watch(
 .contrib-retry {
   color: var(--dash-accent);
   font-weight: 600;
+}
+
+/* The server's own line under a 404 headline: the headline is the reading, this
+   is the evidence. Same shape as `.contrib-error__detail` above, in quiet ink
+   because neither 404 is an error — it just has to be possible to tell which of
+   the two the backend actually answered. */
+.contrib-state__detail {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dash-ink-4);
+  overflow-wrap: anywhere;
 }
 
 /* ── Summary ───────────────────────────────────────────────────────────────── */
@@ -1478,14 +1541,6 @@ watch(
   place-items: center;
   flex: none;
   width: 22px;
-}
-
-.contrib-row__done {
-  color: var(--dash-good-mark);
-}
-
-.contrib-row__waiting {
-  color: var(--dash-ink-4);
 }
 
 .contrib-row__body {
