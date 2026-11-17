@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "posthog": {
+        "type": "remote",
+        "url": "https://mcp.posthog.com/mcp?tools=query-funnel,query-funnel-actors,query-trends,execute-sql,query-session-recordings-list,session-recording-get"
+      }
+    }
+  }
+}
