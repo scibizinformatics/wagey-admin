@@ -164,7 +164,24 @@ export function useDisbursementApi() {
       `${BASE}/payroll/admin/epi-contributions/${payoutGroupInstanceId}/${epiId}/`,
       { expectedStatuses: [404] },
     )
-    return data
+    // This route's body is undocumented — the schema declares `No response body`
+    // — so read the containers this payroll family is known to answer with
+    // rather than trusting one. `{ data: ... }` is the wrapper several sibling
+    // endpoints use, and a bare array of the same rows `DeductContributionItem`
+    // documents (id / name / amount / deducted / deducted_from) is the other.
+    //
+    // Getting this wrong is not a visible failure: the dialog's
+    // `data.contributions` reads `undefined`, the list renders empty, and the
+    // dialog says "nothing is due from this employee" — the one reading a reader
+    // cannot tell apart from a genuinely empty period.
+    const payload = data?.data ?? data
+    if (Array.isArray(payload)) {
+      console.warn(
+        '[useDisbursementApi] epi-contributions answered a bare array; cutoff and status travel with the object shape only.',
+      )
+      return { contributions: payload }
+    }
+    return payload
   }
 
   /**
