@@ -414,6 +414,14 @@ These are live and not covered by the long-form doc — treat them as current, n
   inside the contributions section, and still shows the tax section. Do not turn that 404 into a
   body-wide takeover again, and note that **no endpoint in the API writes a tax month** (the schema
   exposes `tax_month` only on the read-only `EPITaxDetailResponse`), so it cannot be fixed from this app.
+  Two different states wear that 404 and the panel separates them. **A mid-month cutoff never carries a
+  tax month** — observed on every company-5 run (Sep, Oct, Nov 2026): 16–30 has `2026-09` / `2026-10` /
+  `2026-11`, 1–15 has `null` — because contributions settle on the run that *closes* the month (the
+  rows carry `deducted_from: "Cut off #2"`). So a 1st–15th cutoff says "contributions settle on the
+  closing cutoff" and drops the server's 404 line, while a **closing** cutoff with `tax_month: null`
+  keeps the configuration wording: that one really is unset. The split is read from `epi-tax`'s own
+  `cutoff.start_date` / `cutoff.end_date` (`isMidMonthCutoff`), never by parsing `cutoffName`, and it
+  falls back to the configuration reading whenever the tax payload did not load.
 - **Manual payroll adjustments: totals are the server's, never a re-sum.** `utils/payrollAdjustments.js`
   reads `manual_additions` / `manual_deductions` / `total_deductions` / `net_pay` straight off the
   payload and only _labels_ the rows. A client that re-added the rows would eventually disagree with the

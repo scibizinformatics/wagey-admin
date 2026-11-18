@@ -100,23 +100,47 @@
             />
           </div>
 
-          <!-- The run has no tax month configured, so the endpoint answers 404
-               for the whole item and there are no rows to list. A note inside
-               the section rather than a block that replaced the body: the
-               status above and the tax section below are still real answers,
-               and the takeover hid both. Deliberately no retry — pressing one
-               cannot conjure a tax month onto a cutoff. The server's own line
-               rides under it, so a 404 that is not really about a tax month
-               cannot hide behind this wording. -->
+          <!-- The run has no tax month, so the endpoint answers 404 for the whole
+               item and there are no rows to list. A note inside the section
+               rather than a block that replaced the body: the status above and
+               the tax section below are still real answers, and the takeover hid
+               both. Deliberately no retry — pressing one cannot conjure a tax
+               month onto a cutoff.
+
+               There are two reasons for that 404 and only one of them is a
+               missing setting. A mid-month cutoff never carries a tax month:
+               contributions settle on the run that closes the month, which is
+               where the deducted rows live (`deducted_from: "Cut off #2"`). So
+               the first half of a month says "nothing happens here", not "ask
+               someone to configure this" — and the server's own line is dropped
+               in that state, because a 404 is the expected answer there. A
+               closing cutoff with no tax month keeps the configuration wording
+               and its server line: that one really is unset. -->
           <div v-if="noTaxMonth" class="contrib-unset">
-            <p class="contrib-unset__title">No tax month for this cutoff</p>
-            <p class="contrib-unset__sub">
-              Contributions cannot be listed for {{ employeeName || 'this employee' }} until a tax
-              month is set for {{ cutoffName || 'this period' }}.
+            <p class="contrib-unset__title">
+              {{
+                settlesOnClosingCutoff
+                  ? 'Contributions settle on the closing cutoff'
+                  : 'No tax month for this cutoff'
+              }}
             </p>
-            <span v-if="unconfiguredDetail" class="contrib-unset__detail">{{
-              unconfiguredDetail
-            }}</span>
+            <p class="contrib-unset__sub">
+              <template v-if="settlesOnClosingCutoff">
+                Statutory contributions{{ cutoffMonthLabel ? ` for ${cutoffMonthLabel}` : '' }}
+                are settled on the run that closes the month.
+                {{ cutoffName || 'This cutoff' }} ends before that, so there is nothing to list or
+                deduct here.
+              </template>
+              <template v-else>
+                Contributions cannot be listed for {{ employeeName || 'this employee' }} until a tax
+                month is set for {{ cutoffName || 'this period' }}.
+              </template>
+            </p>
+            <span
+              v-if="unconfiguredDetail && !settlesOnClosingCutoff"
+              class="contrib-unset__detail"
+              >{{ unconfiguredDetail }}</span
+            >
           </div>
 
           <ul v-else-if="contributions.length" class="contrib-list">
@@ -277,6 +301,13 @@
           </p>
           <p v-else-if="taxExempt" class="contrib-tax__note">
             This payroll item is exempt from withholding tax, so nothing is taken.
+          </p>
+          <!-- Before the missing-setting line below: a mid-month cutoff has no
+               tax month by design, so naming it as unset would send the reader
+               looking for a switch that does not exist. -->
+          <p v-else-if="!taxHasMonth && isMidMonthCutoff" class="contrib-tax__note">
+            Withholding tax{{ cutoffMonthLabel ? ` for ${cutoffMonthLabel}` : '' }}
+            is settled on the run that closes the month, so there is nothing to apply here.
           </p>
           <p v-else-if="!taxHasMonth && !noTaxMonth" class="contrib-tax__note">
             A tax month has not been set for this cutoff, so nothing can be calculated yet.
@@ -576,6 +607,58 @@ function monthLabelOf(taxMonth) {
 const taxMonthLabel = computed(() => monthLabelOf(data.value?.tax_month))
 const taxPeriodLabel = computed(() => monthLabelOf(taxData.value?.tax_month))
 
+/**
+ * The cutoff this item belongs to, as the tax payload reports it — the only
+ * place the panel is told the run's real dates.
+ *
+ * `epi-contributions` 404s with no cutoff in the body, and `cutoffName` is a
+ * display string ("November 1 - November 15, 2026 (Semi-Monthly)") that would
+ * have to be parsed to learn anything. `epi-tax` answers these two fields even
+ * when it has no tax month, so they are read rather than guessed.
+ */
+const cutoffSpan = computed(() => {
+  const span = taxData.value?.cutoff
+  if (!span?.end_date) return null
+  return { start: String(span.start_date || ''), end: String(span.end_date || '') }
+})
+
+/**
+ * Whether this run closes before the 16th of its month, i.e. it is the first of
+ * two semi-monthly cutoffs rather than the one that closes the month.
+ *
+ * Observed across every company-5 run on staging (Sep, Oct and Nov 2026): the
+ * tax month is carried only by the cutoff that *closes* the month — 16–30 gets
+ * `2026-09` / `2026-10` / `2026-11`, while 1–15 gets `null`. So a 404 in the
+ * first half of a month is the documented answer for a period that is not
+ * supposed to have one, not a setting somebody forgot.
+ *
+ * Read from the payload's own dates rather than from the cutoff's name, and
+ * `false` whenever the tax payload did not load: without evidence the panel
+ * keeps the configuration wording, which is the safe reading.
+ */
+const isMidMonthCutoff = computed(() => {
+  const end = cutoffSpan.value?.end
+  if (!end) return false
+  const day = Number(end.slice(8, 10))
+  return Number.isFinite(day) && day < 16
+})
+
+/** The month the run belongs to, as "November 2026", from the cutoff's own dates. */
+const cutoffMonthLabel = computed(() => {
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(cutoffSpan.value?.start || '')
+  if (!match) return ''
+  return `${MONTHS[Number(match[2]) - 1] || ''} ${match[1]}`.trim()
+})
+
+/**
+ * The 404 read as "not this cutoff's job" rather than "not configured".
+ *
+ * Both conditions: the endpoint answered the tax-month 404 *and* the run is the
+ * mid-month cutoff, where no tax month is ever expected. A closing cutoff keeps
+ * `false` and its configuration wording.
+ */
+const settlesOnClosingCutoff = computed(() => noTaxMonth.value && isMidMonthCutoff.value)
+
 // ── Withholding tax ────────────────────────────────────────────────────────
 
 /**
@@ -646,6 +729,9 @@ const taxStatusLabel = computed(() => {
   if (taxReverted.value) return 'Reverted'
   if (taxHas.value) return 'Applied'
   if (taxExempt.value) return 'Exempt'
+  // A mid-month cutoff has no tax month by design, so the pill says where the
+  // tax lives instead of naming a setting that is not missing.
+  if (!taxHasMonth.value && isMidMonthCutoff.value) return 'Closing cutoff'
   if (!taxHasMonth.value) return 'No tax month'
   return 'Not applied'
 })
