@@ -25,12 +25,12 @@
  * print the scheme's name without the type list beside it. `typeId` stays the raw
  * id so a form can send back exactly what it was given.
  *
- * Third, **the employer share travels as `employer_fixed`** (the newer schema's
- * field, and the one the payroll reads), while `employee_fixed` /
- * `employee_percent` are the employee's. Older rows may still report the
- * employer share under the legacy `fixed_amount`, so the normaliser reads
- * `employer_fixed` first and falls back to `fixed_amount`; the write body sends
- * only `employer_fixed`.
+ * Third, **the employer share travels as `employer_fixed` and
+ * `employer_percent`** (the newer schema's fields, and the ones payroll reads),
+ * while `employee_fixed` / `employee_percent` are the employee's. Older rows may
+ * still report the employer's flat share under the legacy `fixed_amount`, so the
+ * normaliser reads `employer_fixed` first and falls back to `fixed_amount`; the
+ * write body sends only the two `employer_*` fields.
  *
  * Fourth, **`name` is read-only on the API.** The server derives it from the
  * type and the band, so the form never offers it and the write body never sends
@@ -137,6 +137,7 @@ export function normalizeContributionBracket(raw) {
     // form writes and what payroll reads; `fixed_amount` is the legacy field,
     // kept as a read fallback for rows saved before the rename.
     employerFixed: toAmount(raw?.employer_fixed) ?? toAmount(raw?.fixed_amount),
+    employerPercent: toAmount(raw?.employer_percent),
     effectiveDate: String(raw?.effective_date ?? ''),
     isActive: raw?.is_active ?? true,
   }
@@ -171,7 +172,8 @@ export function looksLikeEmployeeAccountRows(payload) {
       (row.income_from !== undefined ||
         row.employee_fixed !== undefined ||
         row.employee_percent !== undefined ||
-        row.employer_fixed !== undefined),
+        row.employer_fixed !== undefined ||
+        row.employer_percent !== undefined),
   )
   return accountish.length > 0 && bracketish.length === 0
 }
@@ -221,10 +223,14 @@ export function employeeShareLabel(bracket) {
   return parts.length ? parts.join(' + ') : '—'
 }
 
-/** The employer's share of this band; blank when the row carries none. */
+/** The employer's share of this band: a flat amount, a rate, or both. */
 export function employerShareLabel(bracket) {
-  const amount = toAmount(bracket?.employerFixed)
-  return amount == null ? '—' : formatCurrencyPrecise(amount)
+  const parts = []
+  const fixed = toAmount(bracket?.employerFixed)
+  const percent = toAmount(bracket?.employerPercent)
+  if (fixed) parts.push(formatCurrencyPrecise(fixed))
+  if (percent) parts.push(percentLabel(percent))
+  return parts.length ? parts.join(' + ') : '—'
 }
 
 /** The row's own title: its name, or the band when it was never named. */
@@ -281,6 +287,7 @@ export function emptyBracketForm(typeId = null) {
     income_from: '',
     income_to: '',
     employer_fixed: '',
+    employer_percent: '',
     effective_date: todayIso(),
     is_active: true,
   }
@@ -296,6 +303,7 @@ export function bracketToForm(bracket) {
     income_from: text(bracket?.incomeFrom),
     income_to: text(bracket?.incomeTo),
     employer_fixed: text(bracket?.employerFixed),
+    employer_percent: text(bracket?.employerPercent),
     effective_date: bracket?.effectiveDate || todayIso(),
     is_active: bracket?.isActive ?? true,
   }
@@ -334,7 +342,8 @@ export function validateBracketForm(form) {
     ['income_to', 'Income to'],
     ['employee_fixed', 'Employee fixed amount'],
     ['employee_percent', 'Employee percentage'],
-    ['employer_fixed', 'Employer share'],
+    ['employer_fixed', 'Employer fixed amount'],
+    ['employer_percent', 'Employer percentage'],
   ]) {
     const value = toAmount(form?.[field])
     if (value != null && value < 0) return `${label} cannot be negative`
@@ -345,6 +354,11 @@ export function validateBracketForm(form) {
 
   const percent = toAmount(form?.employee_percent)
   if (percent != null && percent > 100) return 'Employee percentage cannot be more than 100'
+
+  const employerPercent = toAmount(form?.employer_percent)
+  if (employerPercent != null && employerPercent > 100) {
+    return 'Employer percentage cannot be more than 100'
+  }
 
   if (!String(form?.effective_date ?? '').trim()) return 'The effective date is required'
   return null
@@ -366,6 +380,7 @@ export function bracketPayload(form, { companyId = null } = {}) {
     income_from: decimalOrNull(form?.income_from),
     income_to: decimalOrNull(form?.income_to),
     employer_fixed: decimalOrNull(form?.employer_fixed),
+    employer_percent: decimalOrNull(form?.employer_percent),
     effective_date: String(form?.effective_date ?? '').trim(),
     is_active: form?.is_active ?? true,
   }

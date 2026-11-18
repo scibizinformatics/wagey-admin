@@ -1,0 +1,292 @@
+/**
+ * Shared chrome for the two money panels inside the employee dialog —
+ * `EmployeeContributionsPanel` and `EmployeeAdjustmentsPanel`.
+ *
+ * Both are lists of money on one employee payroll item: a bordered summary
+ * block, a section head with its own action, a row list with an amount on the
+ * right, and one vocabulary for an empty state or a scoped failure. Only the
+ * vocabulary is shared — each panel still owns its state, its API service and
+ * its handlers, so this file is presentation and nothing else.
+ *
+ * Contribution rows and adjustment rows are different kinds of money and stay
+ * visibly apart (the adjustment list greys a reverted entry and keeps it), but
+ * they must not be laid out differently enough that a reader has to re-learn the
+ * list between two tabs of the same dialog.
+ */
+
+/* ── Page-level states ─────────────────────────────────────────────────────── */
+.contrib-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 34px 0;
+  font-size: 13px;
+  color: var(--dash-ink-3);
+}
+
+.contrib-state--error {
+  color: var(--dash-critical);
+  /* Only the error state needs it: the detail below is given a full-width basis
+     so it drops to its own line, and wrapping is what lets that happen. */
+  flex-wrap: wrap;
+}
+
+/* The status and the server's words, under the message they belong to. Its own
+   line and a quieter ink rather than more of the same red: the message above is
+   the reader-facing part, this is the evidence they would otherwise have to open
+   devtools to get. A long sentence from the server wraps instead of being
+   truncated — it is the only copy of what went wrong anywhere on screen. */
+.contrib-error__detail {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dash-ink-4);
+  overflow-wrap: anywhere;
+}
+
+.contrib-retry {
+  color: var(--dash-accent);
+  font-weight: 600;
+}
+
+/* The server's own line under a 404 headline: the headline is the reading, this
+   is the evidence. Same shape as `.contrib-error__detail` above, in quiet ink
+   because neither 404 is an error — it just has to be possible to tell which of
+   the two the backend actually answered. */
+.contrib-state__detail {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dash-ink-4);
+  overflow-wrap: anywhere;
+}
+
+/* The takeover state that still replaces the body: "this run has no payroll item
+   for this employee" — the one 404 that leaves nothing at all to show, because
+   the item itself is missing rather than merely unconfigured.
+
+   A column, because `.contrib-state` is a row and these two lines have to stack
+   to read as a sentence and its explanation. The title's own `10px` top margin
+   is dropped here — the gap below already separates it from the body's edge, and
+   together they opened a hole above the text. */
+.contrib-state--unconfigured {
+  flex-direction: column;
+  gap: 3px;
+  padding: 26px 24px;
+  text-align: center;
+}
+
+.contrib-state--unconfigured .contrib-empty__title {
+  margin: 0;
+  color: var(--dash-ink-2);
+}
+
+/* ── Summary ───────────────────────────────────────────────────────────────── */
+.contrib-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  background: var(--dash-sunken);
+}
+
+.contrib-summary__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.contrib-summary__label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--dash-ink-4);
+}
+
+.contrib-summary__figures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--dash-line-soft);
+}
+
+.contrib-summary__figures dt {
+  font-size: 11.5px;
+  color: var(--dash-ink-4);
+}
+
+.contrib-summary__figures dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dash-ink);
+}
+
+/* Pending money is the reason to open this dialog, so it is the one figure that
+   changes colour when it is non-zero. */
+.contrib-pending {
+  color: var(--dash-warn);
+}
+
+/* ── Sections and list ─────────────────────────────────────────────────────── */
+.contrib-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.contrib-section__label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--dash-ink-4);
+}
+
+.contrib-selectall {
+  color: var(--dash-accent);
+  font-weight: 600;
+}
+
+.contrib-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  overflow: hidden;
+}
+
+.contrib-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dash-line-soft);
+  transition: background 0.12s ease;
+}
+
+.contrib-row:last-child {
+  border-bottom: none;
+}
+
+.contrib-row--selected {
+  background: var(--dash-accent-bg);
+}
+
+/* A selected row about to be reverted reads as a warning, not as progress. */
+.contrib-row--reverting {
+  background: var(--dash-warn-bg);
+}
+
+.contrib-row__pick {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+}
+
+.contrib-row__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.contrib-row__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-ink);
+  line-height: 1.35;
+}
+
+.contrib-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  color: var(--dash-ink-4);
+}
+
+.contrib-row__meta-tick {
+  color: var(--dash-good-mark);
+}
+
+.contrib-row__amount {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dash-ink);
+}
+
+.contrib-section + .contrib-section {
+  margin-top: 18px;
+}
+
+.contrib-add {
+  color: var(--dash-accent);
+  font-weight: 600;
+}
+
+/* A failure confined to one section. It never replaces the section beside it. */
+.contrib-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--dash-critical-line);
+  border-radius: var(--dash-r-md);
+  background: var(--dash-critical-bg);
+  font-size: 12.5px;
+  color: var(--dash-critical);
+}
+
+/* A reverted adjustment stays in the list — it is why a figure is not on this
+   payslip — but it is greyed, and its sign is dropped so it reads as spent rather
+   than as money still moving. */
+.contrib-row--reverted {
+  background: var(--dash-n-25);
+}
+.contrib-row--reverted .contrib-row__name,
+.contrib-row--reverted .contrib-row__amount {
+  color: var(--dash-ink-4);
+  text-decoration: line-through;
+  text-decoration-color: var(--dash-n-300);
+}
+.contrib-row__reverted-mark {
+  color: var(--dash-ink-4);
+}
+
+.adj-mark--good {
+  color: var(--dash-good-mark);
+}
+.adj-mark--danger {
+  color: var(--dash-critical-mark);
+}
+
+.contrib-empty {
+  padding: 26px 0;
+  text-align: center;
+}
+
+.contrib-empty__title {
+  margin: 10px 0 2px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--dash-ink-2);
+}
+
+.contrib-empty__sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--dash-ink-4);
+}

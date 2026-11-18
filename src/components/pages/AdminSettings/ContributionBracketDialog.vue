@@ -145,8 +145,8 @@
                 </span>
               </label>
 
-              <label class="dash-modal__field dash-modal__span-2">
-                <span class="dash-modal__field-label">Employer share</span>
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Employer fixed</span>
                 <q-input
                   v-model="draft.employer_fixed"
                   type="number"
@@ -159,12 +159,36 @@
                   placeholder="0.00"
                 >
                   <template v-slot:prepend>
+                    <q-icon name="o_business" size="18px" />
                     <span class="cb-currency">₱</span>
                   </template>
                 </q-input>
                 <span class="dash-modal__field-hint">
-                  What the company contributes for this band. It is recorded beside the employee's
-                  share, never added to it.
+                  A flat amount the company contributes in this band. It is recorded beside the
+                  employee's share, never added to it.
+                </span>
+              </label>
+
+              <label class="dash-modal__field">
+                <span class="dash-modal__field-label">Employer percentage</span>
+                <q-input
+                  v-model="draft.employer_percent"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  outlined
+                  dense
+                  hide-bottom-space
+                  class="dash-field cb-number"
+                  placeholder="0"
+                >
+                  <template v-slot:append>
+                    <span class="cb-currency">%</span>
+                  </template>
+                </q-input>
+                <span class="dash-modal__field-hint">
+                  What the company contributes over the fixed amount, on top of it.
                 </span>
               </label>
             </div>

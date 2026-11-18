@@ -215,7 +215,7 @@ docker compose -f docker-compose.prod.yml up --build -d   # serves on 8000 via s
   is a statement of intent, not an import path.) A page with a confirm should use `ConfirmDialog`; don't
   re-type the head/footer. **13 decision-confirms still use bare
   `$q.dialog({ title, message, ok, cancel })`** — 12 across ten `composables/admin/` files
-  (`useAdminShifts.js` has three) plus `EmployeeContributionsDialog`. That is the exception now, not
+  (`useAdminShifts.js` has three) plus `EmployeeContributionsPanel`. That is the exception now, not
   the norm; converting one needs the imperative host, and that path is **unproven at runtime**.
   `ReviewPage` was the third and left the list by the *other* route: it has a template, so it took
   `ConfirmDialog` and a `reviewConfirm.js` exactly as Funding and Disburse did — the imperative host is
@@ -398,6 +398,22 @@ These are live and not covered by the long-form doc — treat them as current, n
   keep-alive, so the signal has to outlive whichever one raised it. Cheap and idempotent: over-reporting
   costs a refetch, under-reporting costs a stale figure. Same read, different transport, as the
   `companyId`-keyed caches. Its leave-type lookup filters on `uses_balance`, not `is_paid`.
+- **Contribution and adjustment are separate implementations behind one dialog shell.**
+  `EmployeeContributionsDialog.vue` is chrome only (frame, employee identity, active tab); the work lives
+  in `EmployeeContributionsPanel.vue` (statutory contributions + withholding tax) and
+  `EmployeeAdjustmentsPanel.vue`, each with its own API service — `useEmployeeContributions.js` /
+  `useEmployeeAdjustments.js` — after both were pulled out of `useDisbursementApi.js`. The review row menu
+  opens either tab; both panels emit `changed`, which is one page refresh. Do not merge them: they are
+  different payroll components with different endpoints, and the combination is what made contributions
+  look broken. The contribution writes read the documented response (`success`, `message`,
+  `updated_contribution_ids` / `reverted_contribution_ids`, `skipped_contribution_ids`, `net_pay`) and
+  report a refusal or a skip instead of toasting success unconditionally. A run whose cutoff has **no tax
+  month** is a normal state, not a failure: `epi-contributions` answers 404 for the whole item, while
+  `epi-tax` answers 200 with `tax_month: null` — so the panel keeps the row's own figure and status
+  (passed down from `ReviewPage` as `contributionAmount` / `contributionStatus`), says so in a note
+  inside the contributions section, and still shows the tax section. Do not turn that 404 into a
+  body-wide takeover again, and note that **no endpoint in the API writes a tax month** (the schema
+  exposes `tax_month` only on the read-only `EPITaxDetailResponse`), so it cannot be fixed from this app.
 - **Manual payroll adjustments: totals are the server's, never a re-sum.** `utils/payrollAdjustments.js`
   reads `manual_additions` / `manual_deductions` / `total_deductions` / `net_pay` straight off the
   payload and only _labels_ the rows. A client that re-added the rows would eventually disagree with the

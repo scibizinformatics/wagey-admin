@@ -719,6 +719,7 @@ const filteredBrackets = computed(() => {
         type?.code,
         bracketRangeLabel(bracket),
         employeeShareLabel(bracket),
+        employerShareLabel(bracket),
       ].some((value) => (value || '').toLowerCase().includes(query))
     })
   }

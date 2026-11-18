@@ -145,55 +145,15 @@ export function useDisbursementApi() {
   }
 
   /**
-   * One employee's statutory contributions for a run: the cutoff and tax month
-   * they fall in, the item's overall `epi_contribution_status`, and a row per
-   * contribution carrying whether it has been deducted and from which cutoff.
-   *
-   * Scoped by both ids because a contribution is a fact about an employee
-   * payroll item *within* a payout group instance, not about the employee alone.
-   *
-   * `expectedStatuses: [404]` because this endpoint answers a question rather
-   * than failing when the run has no tax month configured — the answer is a 404
-   * reading "No tax month found for this cutoff." Every employee on such a cutoff
-   * asks this, so without it the console filled with one red line per row and
-   * buried the genuine failures. The promise still rejects, so
-   * `EmployeeContributionsDialog` gets to read the 404 as the empty state it is.
-   */
-  async function fetchEpiContributions(payoutGroupInstanceId, epiId) {
-    const { data } = await api.get(
-      `${BASE}/payroll/admin/epi-contributions/${payoutGroupInstanceId}/${epiId}/`,
-      { expectedStatuses: [404] },
-    )
-    // This route's body is undocumented — the schema declares `No response body`
-    // — so read the containers this payroll family is known to answer with
-    // rather than trusting one. `{ data: ... }` is the wrapper several sibling
-    // endpoints use, and a bare array of the same rows `DeductContributionItem`
-    // documents (id / name / amount / deducted / deducted_from) is the other.
-    //
-    // Getting this wrong is not a visible failure: the dialog's
-    // `data.contributions` reads `undefined`, the list renders empty, and the
-    // dialog says "nothing is due from this employee" — the one reading a reader
-    // cannot tell apart from a genuinely empty period.
-    const payload = data?.data ?? data
-    if (Array.isArray(payload)) {
-      console.warn(
-        '[useDisbursementApi] epi-contributions answered a bare array; cutoff and status travel with the object shape only.',
-      )
-      return { contributions: payload }
-    }
-    return payload
-  }
-
-  /**
    * One employee's withholding tax for a run: the cutoff and tax month they
    * fall in, whether the tax is applied or has been reverted, and — when it is
    * applied — the bracket it was computed from and the monthly tax row behind
    * it.
    *
-   * A sibling of `fetchEpiContributions`, read apart from it on purpose: tax is
-   * applied or reverted as a whole against the payroll item, while contributions
-   * are row-by-row, and the contributions endpoint carries neither the tax
-   * figure nor its bracket.
+   * Read apart from `fetchEpiContributions` on purpose: tax is applied or
+   * reverted as a whole against the payroll item, while contributions are
+   * row-by-row, and the contributions endpoint carries neither the tax figure nor
+   * its bracket.
    *
    * No `expectedStatuses`: the no-tax-month case is an answer in the body, not
    * a 404 (`tax_month` comes back `null` and `tax.details` empty), so a reject
@@ -235,74 +195,6 @@ export function useDisbursementApi() {
     const { data } = await api.post(`${BASE}/payroll/admin/revert-tax/`, {
       epi_ids: epiIds,
       reason,
-    })
-    return data
-  }
-
-  /**
-   * Deducts the named contributions from an employee payroll item by hand — the
-   * fallback when a contribution did not come off automatically. Returns the
-   * server's response; callers should refetch, since deducting changes both the
-   * item's contribution status and the run's review figures.
-   */
-  async function deductContributions(epiId, contributionIds = []) {
-    const { data } = await api.post(`${BASE}/payroll/admin/deduct-contributions/`, {
-      epi_id: epiId,
-      contribution_ids: contributionIds,
-    })
-    return data
-  }
-
-  /**
-   * Undoes a manual or automatic deduction, putting the named contributions
-   * back to pending. The mirror of `deductContributions` and the way out of a
-   * contribution deducted from the wrong cutoff; same refetch obligation, since
-   * reverting moves the item's contribution status back off complete.
-   */
-  async function revertContributions(epiId, contributionIds = []) {
-    const { data } = await api.post(`${BASE}/payroll/admin/revert-contributions/`, {
-      epi_id: epiId,
-      contribution_ids: contributionIds,
-    })
-    return data
-  }
-
-  /**
-   * Every manual addition and deduction on one employee payroll item.
-   *
-   * Distinct from `fetchEpiContributions` on purpose: contributions are what the
-   * law requires, adjustments are what a person decided — a bonus, a loan
-   * repayment, a correction. Different kinds of money, and they are read apart so
-   * the dialog that shows both is merging them deliberately rather than because
-   * one endpoint happened to return both.
-   *
-   * Answers the item's own totals as well as the rows, so a client never has to
-   * sum its way to `total_deductions` and disagree with the server about it.
-   */
-  async function fetchEpiAdjustments(epiId) {
-    const { data } = await api.get(`${BASE}/payroll/admin/epi-adjustments/${epiId}/`)
-    return data
-  }
-
-  /**
-   * Records one manual addition or deduction against an employee payroll item.
-   *
-   * Returns the server's response; callers should refetch, since applying moves
-   * `net_pay` and both manual totals.
-   */
-  async function applyAdjustment(payload) {
-    const { data } = await api.post(`${BASE}/payroll/admin/apply-adjustment/`, payload)
-    return data
-  }
-
-  /**
-   * Undoes one applied adjustment. Takes the adjustment's own id rather than the
-   * payroll item's, because several can be open on one item and a revert is
-   * always about one of them.
-   */
-  async function revertAdjustment(adjustmentId) {
-    const { data } = await api.post(`${BASE}/payroll/admin/revert-adjustment/`, {
-      adjustment_id: adjustmentId,
     })
     return data
   }
@@ -526,15 +418,9 @@ export function useDisbursementApi() {
     fetchReviewOverview,
     fetchAttendanceSummary,
     fetchEmployeeReviewSummary,
-    fetchEpiContributions,
     fetchEpiTax,
     applyTax,
     revertTax,
-    deductContributions,
-    revertContributions,
-    fetchEpiAdjustments,
-    applyAdjustment,
-    revertAdjustment,
     fetchEmployeePayrollItem,
     fetchEmployeePayrollItemEarnings,
     transferEmployeePayrollItem,

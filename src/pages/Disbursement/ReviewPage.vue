@@ -494,6 +494,23 @@
                       <q-item-section>Contributions</q-item-section>
                     </q-item>
 
+                    <!-- The same dialog aimed at its Adjustments tab. The two
+                         panels behind it are separate implementations with
+                         separate endpoints; this item exists so manual
+                         adjustments have their own way in instead of being
+                         buried inside the contributions view. -->
+                    <q-item
+                      v-close-popup
+                      clickable
+                      class="disb-menu__item"
+                      @click="viewAdjustments(props.row)"
+                    >
+                      <q-item-section avatar>
+                        <q-icon name="o_tune" size="17px" />
+                      </q-item-section>
+                      <q-item-section>Adjustments</q-item-section>
+                    </q-item>
+
                     <q-item
                       v-close-popup
                       clickable
@@ -532,16 +549,25 @@
       :employee-index="employeeIndex"
     />
 
-    <!-- Deducting a contribution moves the row's contribution figures and can
-         move its status, so the table refetches when the dialog reports one. -->
+    <!-- Deducting a contribution, adding an adjustment or settling the tax moves
+         the row's figures and can move its status, so the table refetches when
+         the dialog reports a change. One event covers both tabs.
+
+         The row's own contribution figure and status travel with it because a run
+         whose cutoff has no tax month answers the contributions endpoint 404 —
+         the table still lists this employee at a figure, and the dialog must not
+         contradict it. -->
     <EmployeeContributionsDialog
-      v-model="contributionsDialogOpen"
+      v-model="moneyDialogOpen"
       :pgi-id="groupId"
       :epi-id="selectedEpiId"
       :employee-name="selectedEmployeeName"
       :employee-index="employeeIndex"
       :cutoff-name="summary?.cutoff_name || ''"
-      @deducted="refreshAfterDeduct"
+      :contribution-amount="selectedContribution"
+      :contribution-status="selectedContributionStatus"
+      :initial-tab="moneyDialogTab"
+      @changed="refreshAfterMoneyChange"
     />
 
     <!-- How the net pay in this row was arrived at, day by day. Read-only, and the
@@ -706,9 +732,19 @@ const { restoreScroll } = useDisbursementViewState(`review:${groupId}`, {
 })
 const detailDialogOpen = ref(false)
 const selectedEmployeeId = ref(null)
-const contributionsDialogOpen = ref(false)
+// One dialog, two tabs: the row's Contribution cell opens the contributions
+// tab, the row menu's Adjustments item opens the adjustments tab. The tab is a
+// suggestion read once on open; the panels themselves share no state.
+const moneyDialogOpen = ref(false)
+const moneyDialogTab = ref('contributions')
 const selectedEpiId = ref(null)
 const selectedEmployeeName = ref('')
+// The row's own contribution figure and status, snapshotted at open like the id
+// and name. Only read when the cutoff has no tax month and the contributions
+// endpoint answers 404 — then this is the only figure available, and it is the
+// same one the table is showing in the cell that was clicked.
+const selectedContribution = ref(null)
+const selectedContributionStatus = ref('')
 // The breakdown's own open flag and the one figure it reconciles against. The id
 // and name are shared with the contributions dialog rather than duplicated: both
 // are read only at open, and each opener writes them before opening, so a second
@@ -1359,10 +1395,29 @@ function viewEmployee(row) {
   detailDialogOpen.value = true
 }
 
-function viewContributions(row) {
+/**
+ * Opens the employee-money dialog on one of its tabs.
+ *
+ * The id and name are written before the dialog opens, and each entry point
+ * writes them, so the tab never describes a different row from the one that was
+ * clicked. The contribution figure and status ride along for the one state the
+ * dialog cannot fetch them in (a cutoff with no tax month).
+ */
+function openMoney(row, tab) {
   selectedEpiId.value = row.epi_id
   selectedEmployeeName.value = row.employee || ''
-  contributionsDialogOpen.value = true
+  selectedContribution.value = row.contribution ?? null
+  selectedContributionStatus.value = row.contribution_status || ''
+  moneyDialogTab.value = tab
+  moneyDialogOpen.value = true
+}
+
+function viewContributions(row) {
+  openMoney(row, 'contributions')
+}
+
+function viewAdjustments(row) {
+  openMoney(row, 'adjustments')
 }
 
 /**
@@ -1375,7 +1430,7 @@ function viewContributions(row) {
  *
  * `net_pay` travels with it so the dialog can reconcile the days against the
  * figure this row was listed at. Two of the three fields are already on the page
- * for the contributions dialog, which is why it does not get its own selection.
+ * for the employee-money dialog, which is why it does not get its own selection.
  */
 function viewBreakdown(row) {
   selectedEpiId.value = row?.epi_id ?? null
@@ -1384,8 +1439,8 @@ function viewBreakdown(row) {
   breakdownDialogOpen.value = true
 }
 
-/** A deduction moves the row's contribution status and the run's figures. */
-async function refreshAfterDeduct() {
+/** A money write moves the row's net pay, its contribution status and the run. */
+async function refreshAfterMoneyChange() {
   await refresh()
 }
 

@@ -122,11 +122,11 @@
 /**
  * The form behind one manual addition or deduction.
  *
- * Separate from `EmployeeContributionsDialog` rather than inline in it: four
- * fields with their own validation and their own busy state, and a nested form
- * inside a list that is itself being clicked on and selected from is a mess to
- * read. It commits nothing — it hands a body up and the parent decides when to
- * write, so the dialog that owns the data owns the refetch too.
+ * Separate from `EmployeeAdjustmentsPanel`, which owns the list, rather than
+ * inline in it: four fields with their own validation and their own busy state,
+ * and a nested form inside a list that is itself being clicked on and selected
+ * from is a mess to read. It commits nothing — it hands a body up and the parent
+ * decides when to write, so the panel that owns the data owns the refetch too.
  *
  * The type picker leads the form because it is what everything else means. A
  * deduction is money leaving the payslip and an addition is money arriving, and
