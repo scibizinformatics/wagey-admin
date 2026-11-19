@@ -422,6 +422,49 @@ These are live and not covered by the long-form doc — treat them as current, n
   keeps the configuration wording: that one really is unset. The split is read from `epi-tax`'s own
   `cutoff.start_date` / `cutoff.end_date` (`isMidMonthCutoff`), never by parsing `cutoffName`, and it
   falls back to the configuration reading whenever the tax payload did not load.
+  **A cutoff with no tax month also asks for its own month.** Before accepting the 404, the panel calls
+  the same route with the run's month (`?year=&month=`, taken from `cutoff.end_date` — the month the run
+  closes in, so Apr 28 – May 4 asks for May) and renders the rows it answers through the ordinary list:
+  selectable, deductible, revertable, with `deducted_from` naming the cutoff they came off. A month
+  with no rows is an empty state, not a note. If the request 404s again — a route without month scoping, or a
+  month that has not been computed — the closing-cutoff note stands exactly as before, which is why the
+  feature degrades to the old behaviour instead of erroring.
+  **Until that route ships, a read-only month report stands in.** On the second 404 the panel reads
+  `GET /payroll/employee-contributions/{company_id}/{year}/{month}/` — the Contributions page's report,
+  through `useDeductions` — and finds this employee by uuid when a row carries one, otherwise by exact
+  name. **That route sends no `employee_id`** (only `employee_name` / `department_name`), so the name is
+  the real path and a name held by two rows is refused rather than guessed. Its shape is
+  `{ employee_name, department_name, contributions: [{ name, amount }], monthly_contribution_total,
+  total_deducted, balance, deducted_from, status }` — **not** the `..._employee_share` spellings the
+  annual and department summaries use — so the reading lives in `contributionDueOf` /
+  `contributionDeductedOf` / `contributionBalanceOf` / `contributionComponentsOf` in
+  `composables/utils/contributions.js`, shared by this dialog, the Contributions page's cards and its
+  employee table (reading the `_employee_share` names directly showed ₱0.00 for every figure). Component
+  rows carry only a due amount, so per-row deduction text renders only when a richer payload supplies
+  it; the month's state is the aggregate. `deducted_from` is the literal `"N/A"` until a cutoff takes
+  the money and then names it, which is what the closing note reports. **Display only**: those rows
+  carry no contribution ids and no per-row deduction state, so nothing there can be selected or
+  deducted; a failed or empty report leaves the note untouched. The report's three totals render in the
+  dialog's summary row and the component list below it, so a 1–15 dialog never shows the review row's
+  figure beside the month's. **The review table's Contribution column is not this payload**:
+  `EmployeeReviewSummaryItem` carries `contribution` / `contribution_status` for every run (the backend
+  computes them per item), but it has **no tax field at all** — so a tax figure on a first-half cutoff
+  cannot be read from the table either, only from a month-scoped `epi-tax`.
+  **Withholding tax asks the same question, and applies/reverts against that month.** `epi-tax` also
+  accepts the optional `?year=&month=` (`fetchEpiTax(epiId, period)`), reads the month's `monthly_tax` row
+  and its `details`, and — because the first-half item owns no tax month of its own — `apply-tax` /
+  `revert-tax` carry `year`/`month` alongside `epi_ids` when the panel had to name one. A payload that
+  brings no month back (empty `monthly_tax`, no marker) leaves `taxScopedMonth` null, so the note and the
+  buttons stay exactly as they were. Ownership is read from the payload, not assumed: `tax` populated
+  means the money is on this item, while a month-level `has_tax`, a populated `monthly_tax`, a marker
+  (`applied_to` / `applied_cutoff` / `settled_on` / `deducted_from`) or a foreign `epi_id` all mean the
+  month is settled on another run — that run reads **Applied**, names the cutoff, and offers neither
+  Apply nor Revert. The double-tax guarantee is still the server's; the UI only stops inviting it.
+  **"Never applied" is a placeholder, not an empty object**: `tax` comes back as
+  `{ total: "0.00", details: {}, monthly_gross_for_tax: null }` beside `has_tax: false` and
+  `monthly_tax: null`. So `total` is a non-null string on every untouched item — read it as evidence only
+  when a bracket, a gross figure or a non-zero total accompanies it (`taxHeldHere`), and never let `??`
+  prefer that `"0.00"` over the month row's real `tax_amount`.
 - **Manual payroll adjustments: totals are the server's, never a re-sum.** `utils/payrollAdjustments.js`
   reads `manual_additions` / `manual_deductions` / `total_deductions` / `net_pay` straight off the
   payload and only _labels_ the rows. A client that re-added the rows would eventually disagree with the
