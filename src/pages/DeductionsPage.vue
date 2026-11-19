@@ -279,6 +279,10 @@ import {
   balanceOf,
   collectedPct,
   collectedTone,
+  contributionBalanceOf,
+  contributionComponentsOf,
+  contributionDeductedOf,
+  contributionDueOf,
   deductedOf,
   dueOf,
   formatPesoRounded,
@@ -519,21 +523,30 @@ const employeeCards = computed(() =>
     subtitle: `${num(row.no_of_payroll_deduction_cases).toLocaleString('en-PH')} deduction cases · ${periodLabel.value}`,
     avatar: row.avatar,
     rate: rateFor(row),
+    // Read through the shared readers: the employee summary names the month's
+    // money `monthly_contribution_total` / `total_deducted` / `balance`, not the
+    // `..._employee_share` spellings the annual and department summaries use. A
+    // direct read of either name showed ₱0.00 for this payload's figures.
     metrics: [
       {
         label: 'Employee share due',
-        value: formatCurrency(row.total_contribution_due_employee_share),
+        value: formatCurrency(contributionDueOf(row)),
         strong: true,
       },
-      { label: 'Deducted', value: formatCurrency(row.total_deduction_employee_share) },
-      { label: 'Undeducted', value: formatCurrency(row.undeducted_balance_employee_share) },
-      { label: 'Total due (all)', value: formatCurrency(row.total_contributions_due) },
+      { label: 'Deducted', value: formatCurrency(contributionDeductedOf(row)) },
+      { label: 'Undeducted', value: formatCurrency(contributionBalanceOf(row)) },
+      {
+        label: 'Total due (all)',
+        // This summary reports no separate employer share, so the month's total
+        // is the only figure there is — it is not a re-sum of the components.
+        value: formatCurrency(row.total_contributions_due ?? contributionDueOf(row)),
+      },
     ],
-    details: (row.breakdown_data || row.details || row.contributions || []).map((d) => ({
-      name: d.contribution_name || d.name || '—',
-      due: formatCurrency(d.employee_share_due),
-      deducted: formatCurrency(d.employee_share_deducted),
-      undeducted: formatCurrency(d.undeducted_balance),
+    details: contributionComponentsOf(row).map((d) => ({
+      name: d.name,
+      due: formatCurrency(d.due),
+      deducted: formatCurrency(d.deducted),
+      undeducted: formatCurrency(d.undeducted),
     })),
   })),
 )
