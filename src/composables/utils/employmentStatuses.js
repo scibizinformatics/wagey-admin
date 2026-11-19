@@ -1,6 +1,9 @@
 /**
  * Employment statuses: the company-defined list an employee can be moved
- * between. Admin settings owns the list; the Employees row menu consumes it.
+ * between. Admin settings owns the list; the Employees page consumes it — the
+ * row menu offers it as the Cancel action's choices, and the table, card list and
+ * detail modal read it to label each employee's current status and colour it by
+ * category.
  *
  *   GET    /user/companies/{company_id}/employment-statuses/
  *   POST   /user/companies/{company_id}/employment-statuses/
@@ -17,6 +20,8 @@
  * decision so the panel, the Employees dialog and any later caller cannot
  * disagree about a label or about what an absent flag means.
  */
+
+import { employmentStatusIdOf, getStatus, nameKey } from '@/composables/utils/employee'
 
 const asText = (value) => (value == null ? '' : String(value).trim())
 
@@ -43,6 +48,25 @@ const CATEGORY_VALUES = new Set(EMPLOYMENT_STATUS_CATEGORIES.map((category) => c
  * because it would need a label nobody has defined.
  */
 export const EMPLOYEE_MOVE_STATUS_CATEGORIES = ['inactive', 'separated']
+
+/**
+ * The three categories as the Employees page names them. `separated` is the
+ * API's own word for the end of employment; the page has always called that
+ * "Terminated", and so does the row menu, so the filter keeps that vocabulary
+ * rather than surfacing a fourth word for the same state.
+ */
+export const EMPLOYEE_STATUS_CATEGORY_FILTERS = [
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+  { value: 'separated', label: 'Terminated' },
+]
+
+/** Category → `.dash-chip--*` modifier, shared by the table, cards and modal. */
+const CHIP_CLASS_BY_CATEGORY = {
+  active: 'dash-chip--good',
+  inactive: 'dash-chip--warn',
+  separated: 'dash-chip--critical',
+}
 
 /** The code format the endpoint documents: lowercase, digits, underscores. */
 export const EMPLOYMENT_STATUS_CODE_PATTERN = /^[a-z0-9][a-z0-9_]*$/
@@ -88,6 +112,142 @@ export function normaliseEmploymentStatus(raw) {
 /** `sort_order` first, then name — the order the API's own field asks for. */
 export function sortEmploymentStatuses(rows = []) {
   return [...rows].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+}
+
+/**
+ * Index a company's statuses for the employee list.
+ *
+ * The employee row carries its status as a **pk** (`companies[0].employment_status`
+ * — see `employmentStatusIdOf`), and some payloads carry only a code or a name.
+ * All three are indexed so a row can be resolved without a request per employee,
+ * and retired statuses are deliberately included: an employee still sitting on a
+ * retired status must keep reading that status, not fall back to "Active".
+ *
+ * @param {Array} rows  raw or already-normalised employment statuses
+ * @returns {{ byId: Map<string, object>, byCode: Map<string, object>, byName: Map<string, object> }}
+ */
+export function buildEmploymentStatusIndex(rows = []) {
+  const byId = new Map()
+  const byCode = new Map()
+  const byName = new Map()
+
+  for (const raw of Array.isArray(rows) ? rows : []) {
+    const status = normaliseEmploymentStatus(raw)
+    if (status.id != null) byId.set(String(status.id), status)
+    if (status.code) byCode.set(status.code.toLowerCase(), status)
+    if (status.name) byName.set(nameKey(status.name), status)
+  }
+
+  return { byId, byCode, byName }
+}
+
+/**
+ * A status *code* from a row, or '' when the row carries only a pk.
+ *
+ * `companies[0].employment_status` is the pk on the employee list, but a code on
+ * payloads written by the status-change endpoints. A numeric string is a pk, not
+ * a code, so it is skipped here rather than looked up in `byCode`.
+ */
+function statusCodeOf(employee) {
+  if (!employee) return ''
+  const block = employee.companies?.[0]
+
+  for (const raw of [employee.status_code, block?.employment_status, employee.status]) {
+    if (raw && typeof raw === 'object') {
+      const nested = asText(raw.code).toLowerCase()
+      if (nested) return nested
+      continue
+    }
+    const text = asText(raw).toLowerCase()
+    if (text && !/^\d+$/.test(text)) return text
+  }
+
+  return ''
+}
+
+/**
+ * The catalogue record an employee row is on, or `null`.
+ *
+ * Id first (the authoritative field), then code, then display name. Name is the
+ * last resort for a payload that carries `status_name` but no pk — without it
+ * such a row would show the right label with the wrong chip colour.
+ */
+export function resolveEmploymentStatus(employee, index) {
+  if (!employee || !index) return null
+
+  const id = employmentStatusIdOf(employee)
+  if (id != null) {
+    const match = index.byId?.get(String(id))
+    if (match) return match
+  }
+
+  const code = statusCodeOf(employee)
+  if (code) {
+    const match = index.byCode?.get(code)
+    if (match) return match
+  }
+
+  const label = asText(employee.status_name ?? employee.companies?.[0]?.status_name)
+  if (label) {
+    const match = index.byName?.get(nameKey(label))
+    if (match) return match
+  }
+
+  return null
+}
+
+/**
+ * The employee's category: `active` | `inactive` | `separated`.
+ *
+ * A resolved catalogue row wins. When the catalogue has not loaded (or the row
+ * carries no resolvable status) this degrades to the same signals `getStatus`
+ * has always read — an inline `employment_status_category` if the payload has
+ * one, then the code/flag heuristics — so the page still renders sensibly and
+ * the chip colour never depends on a request having succeeded.
+ */
+export function employmentStatusCategoryOf(employee, index) {
+  if (!employee) return 'active'
+
+  const resolved = asText(resolveEmploymentStatus(employee, index)?.category).toLowerCase()
+  if (isKnownEmploymentStatusCategory(resolved)) return resolved
+
+  const inline = asText(
+    employee.employment_status_category ?? employee.companies?.[0]?.employment_status_category,
+  ).toLowerCase()
+  if (isKnownEmploymentStatusCategory(inline)) return inline
+
+  const code = statusCodeOf(employee)
+  if (code === 'terminated' || code === 'separated') return 'separated'
+  if (code === 'inactive') return 'inactive'
+
+  const label = employmentStatusLabelOf(employee, index).toLowerCase()
+  if (label === 'terminated' || label === 'separated') return 'separated'
+  if (label === 'inactive') return 'inactive'
+
+  if (employee.is_active === false) return 'separated'
+
+  return 'active'
+}
+
+/**
+ * The label to print: the company's own status name where it can be resolved,
+ * otherwise the same fallback ladder the rest of the app uses (`getStatus`).
+ */
+export function employmentStatusLabelOf(employee, index) {
+  if (!employee) return 'N/A'
+  return resolveEmploymentStatus(employee, index)?.name || getStatus(employee)
+}
+
+/** The category's display word — "Terminated" for `separated`, as the page says it. */
+export function employmentStatusCategoryLabel(value) {
+  const raw = asText(value).toLowerCase()
+  const match = EMPLOYEE_STATUS_CATEGORY_FILTERS.find((category) => category.value === raw)
+  return match?.label ?? categoryLabel(raw)
+}
+
+/** The chip tone for a category; '' lets the base `.dash-chip` styling apply. */
+export function employmentStatusChipClass(category) {
+  return CHIP_CLASS_BY_CATEGORY[asText(category).toLowerCase()] || ''
 }
 
 /**
