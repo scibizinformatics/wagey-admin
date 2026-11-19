@@ -132,11 +132,20 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { getStatus } from '@/composables/utils/employee'
+import {
+  employmentStatusCategoryOf,
+  employmentStatusChipClass,
+  employmentStatusLabelOf,
+} from '@/composables/utils/employmentStatuses'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   employee: { type: Object, default: () => ({}) },
+  /** Id/code/name index of the company's employment statuses, retired included. */
+  statusLookup: {
+    type: Object,
+    default: () => ({ byId: new Map(), byCode: new Map(), byName: new Map() }),
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -174,17 +183,15 @@ const role = computed(() => {
 
 const status = computed(() => {
   if (!props.employee) return 'N/A'
-  // The dialog and the table read the same record through the same accessor —
-  // a second copy of this ladder drifted once already, and the code-vs-pk fields
-  // it reads are exactly where a bare `.toLowerCase()` throws.
-  return getStatus(props.employee)
+  // The dialog and the table read the same record through the same helpers —
+  // a second ladder here drifted once already. The label stays the company's own
+  // status name; the category is what colours the chip.
+  return employmentStatusLabelOf(props.employee, props.statusLookup)
 })
 
-const statusClass = computed(() => {
-  if (status.value === 'Active') return 'dash-chip--good'
-  if (status.value === 'Terminated') return 'dash-chip--critical'
-  return ''
-})
+const statusClass = computed(() =>
+  employmentStatusChipClass(employmentStatusCategoryOf(props.employee, props.statusLookup)),
+)
 
 const initials = computed(() => {
   const name = fullName.value
