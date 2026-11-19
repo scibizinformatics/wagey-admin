@@ -41,7 +41,7 @@
       <template v-slot:body="props">
         <q-tr
           class="dash-qtable__row emp-table__row"
-          :class="{ 'dash-qtable__row--muted': isTerminated(props.row) }"
+          :class="{ 'dash-qtable__row--muted': statusCategory(props.row) === 'separated' }"
         >
           <q-td auto-width class="emp-table__td">
             <q-checkbox
@@ -92,9 +92,9 @@
           </q-td>
 
           <q-td key="status" :props="props" class="emp-table__td">
-            <span class="dash-chip" :class="getStatus(props.row) === 'Active' ? 'dash-chip--good' : ''">
+            <span class="dash-chip" :class="statusChipClass(props.row)">
               <span class="dash-chip__dot" />
-              {{ getStatus(props.row) }}
+              {{ statusLabel(props.row) }}
             </span>
           </q-td>
 
@@ -147,6 +147,7 @@
               <EmployeeRowMenu
                 :employee="props.row"
                 :has-contract="hasContract(props.row, contracts, companyId)"
+                :status-lookup="statusLookup"
                 @view="$emit('view', props.row)"
                 @edit="$emit('edit', props.row)"
                 @assign="$emit('assign', props.row)"
@@ -227,7 +228,6 @@ import {
   getFullName,
   getEmail,
   getRole,
-  getStatus,
   getInitials,
   getContract,
   hasContract,
@@ -235,8 +235,12 @@ import {
   getCtoBalance,
   rankLeaveTypesByUse,
   getAvatarColor,
-  isTerminated,
 } from '@/composables/utils/employee'
+import {
+  employmentStatusCategoryOf,
+  employmentStatusChipClass,
+  employmentStatusLabelOf,
+} from '@/composables/utils/employmentStatuses'
 
 const $q = useQuasar()
 
@@ -245,6 +249,11 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   contracts: { type: Object, default: () => ({}) },
   companyId: { type: [Number, String], default: null },
+  /** Id/code/name index of the company's employment statuses, retired included. */
+  statusLookup: {
+    type: Object,
+    default: () => ({ byId: new Map(), byCode: new Map(), byName: new Map() }),
+  },
   selected: { type: Array, default: () => [] },
   leaveTypes: { type: Array, default: () => [] },
   loadingContractIds: { type: Object, default: () => new Set() },
@@ -263,6 +272,14 @@ const emptySubtitle = computed(() => {
     ? 'Add your first employee to start tracking attendance and payroll.'
     : 'No one has been added to this company yet.'
 })
+
+// Status is read through the shared category helpers so this table, the card
+// list, the row menu and the detail modal cannot disagree about a row. The
+// lookup is a prop because the catalogue belongs to the page (one fetch per
+// company), not to each cell.
+const statusCategory = (employee) => employmentStatusCategoryOf(employee, props.statusLookup)
+const statusLabel = (employee) => employmentStatusLabelOf(employee, props.statusLookup)
+const statusChipClass = (employee) => employmentStatusChipClass(statusCategory(employee))
 
 defineEmits([
   'update:selected',
@@ -323,7 +340,7 @@ const columns = computed(() => [
   {
     name: 'status',
     label: 'Status',
-    field: (row) => getStatus(row),
+    field: (row) => statusLabel(row),
     align: 'left',
     style: 'width: 104px',
   },
