@@ -126,6 +126,15 @@
   color: var(--dash-ink-4);
   align-self: center;
 }
+/* The read-only half/full reading, where the apply dialogs put `DayPartToggle`.
+   Words rather than a disabled control: this list is a record of what was
+   requested, and a switch nobody can move invites a click that does nothing. */
+.day-list__part {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--dash-ink-2);
+  white-space: nowrap;
+}
 /* The Full/Half control is no longer here. It is `DayPartToggle.vue`, a
    component in its own right now that it carries a marker per option and is
    shared by both apply dialogs — and a rule left behind for a class nothing
