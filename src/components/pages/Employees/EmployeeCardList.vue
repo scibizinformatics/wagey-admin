@@ -57,7 +57,7 @@
       v-else
       :key="emp.id"
       class="card"
-      :class="{ 'card--selected': isSelected(emp), 'card--inactive': isTerminated(emp) }"
+      :class="{ 'card--selected': isSelected(emp), 'card--inactive': statusCategory(emp) === 'separated' }"
     >
       <div class="card__top">
         <q-checkbox
@@ -94,15 +94,16 @@
         </div>
 
         <div class="card__top-right">
-          <span class="dash-chip" :class="getStatus(emp) === 'Active' ? 'dash-chip--good' : ''">
+          <span class="dash-chip" :class="statusChipClass(emp)">
             <span class="dash-chip__dot" />
-            {{ getStatus(emp) }}
+            {{ statusLabel(emp) }}
           </span>
 
           <q-btn flat round dense icon="more_horiz" size="12px" class="card__menu-btn">
             <EmployeeRowMenu
               :employee="emp"
               :has-contract="hasContract(emp, contracts, companyId)"
+              :status-lookup="statusLookup"
               @view="$emit('view', emp)"
               @edit="$emit('edit', emp)"
               @assign="$emit('assign', emp)"
@@ -180,21 +181,29 @@ import {
   getFullName,
   getEmail,
   getRole,
-  getStatus,
   getInitials,
   getContract,
   hasContract,
   getLeaveBalanceForType,
   getCtoBalance,
   getAvatarColor,
-  isTerminated,
 } from '@/composables/utils/employee'
+import {
+  employmentStatusCategoryOf,
+  employmentStatusChipClass,
+  employmentStatusLabelOf,
+} from '@/composables/utils/employmentStatuses'
 
 const props = defineProps({
   employees: { type: Array, required: true },
   loading: { type: Boolean, default: false },
   contracts: { type: Object, default: () => ({}) },
   companyId: { type: [Number, String], default: null },
+  /** Id/code/name index of the company's employment statuses, retired included. */
+  statusLookup: {
+    type: Object,
+    default: () => ({ byId: new Map(), byCode: new Map(), byName: new Map() }),
+  },
   selected: { type: Array, default: () => [] },
   leaveTypes: { type: Array, default: () => [] },
   loadingContractIds: { type: Object, default: () => new Set() },
@@ -213,6 +222,12 @@ const emptySubtitle = computed(() => {
     ? 'Add your first employee to start tracking attendance and payroll.'
     : 'No one has been added to this company yet.'
 })
+
+// Shared with EmployeeTable: the category decides the chip tone and whether the
+// card reads as inactive; the label stays the company's own status name.
+const statusCategory = (employee) => employmentStatusCategoryOf(employee, props.statusLookup)
+const statusLabel = (employee) => employmentStatusLabelOf(employee, props.statusLookup)
+const statusChipClass = (employee) => employmentStatusChipClass(statusCategory(employee))
 
 const emit = defineEmits([
   'update:selected',
