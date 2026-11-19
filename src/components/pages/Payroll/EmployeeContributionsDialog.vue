@@ -55,6 +55,7 @@
         :pgi-id="pgiId"
         :epi-id="epiId"
         :employee-name="employeeName"
+        :employee-id="employeeId"
         :cutoff-name="cutoffName"
         :contribution-amount="contributionAmount"
         :contribution-status="contributionStatus"
@@ -112,6 +113,12 @@ const props = defineProps({
   /** Employee payroll item id. */
   epiId: { type: [Number, String], default: null },
   employeeName: { type: String, default: '' },
+  /**
+   * The employee's uuid, passed straight through to the contributions panel.
+   * Its month fallback looks the person up in a company-wide report, where the
+   * uuid is the only safe join key.
+   */
+  employeeId: { type: String, default: '' },
   /**
    * The cutoff the run belongs to, for the header and for the "no tax month"
    * state. Taken from the review payload the page already holds — nothing extra
