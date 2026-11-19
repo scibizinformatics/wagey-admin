@@ -562,6 +562,7 @@
       :pgi-id="groupId"
       :epi-id="selectedEpiId"
       :employee-name="selectedEmployeeName"
+      :employee-id="selectedEmployeeUuid"
       :employee-index="employeeIndex"
       :cutoff-name="summary?.cutoff_name || ''"
       :contribution-amount="selectedContribution"
@@ -739,6 +740,11 @@ const moneyDialogOpen = ref(false)
 const moneyDialogTab = ref('contributions')
 const selectedEpiId = ref(null)
 const selectedEmployeeName = ref('')
+// The employee's own uuid, for the one dialog that has to look them up in a
+// company-wide report (the contributions panel's month fallback). The review row
+// carries it (`employee_id`); `selectedEmployeeId` above is the detail dialog's
+// epi id and is not this.
+const selectedEmployeeUuid = ref('')
 // The row's own contribution figure and status, snapshotted at open like the id
 // and name. Only read when the cutoff has no tax month and the contributions
 // endpoint answers 404 — then this is the only figure available, and it is the
@@ -1406,6 +1412,7 @@ function viewEmployee(row) {
 function openMoney(row, tab) {
   selectedEpiId.value = row.epi_id
   selectedEmployeeName.value = row.employee || ''
+  selectedEmployeeUuid.value = row.employee_id || ''
   selectedContribution.value = row.contribution ?? null
   selectedContributionStatus.value = row.contribution_status || ''
   moneyDialogTab.value = tab
