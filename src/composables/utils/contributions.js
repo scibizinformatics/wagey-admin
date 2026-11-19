@@ -6,21 +6,82 @@
  * and both the tables and the tablet card list need to derive the collected
  * share from them the same way. Keeping the ratio and its thresholds here stops
  * the page, its three tables and its card list from each inventing their own.
+ *
+ * The **employee** summary answers one shape only the backend knows: components
+ * under `contributions` as `{ name, amount }`, the month's money under
+ * `monthly_contribution_total` / `total_deducted` / `balance`, and no
+ * `employee_id` at all. The readers below list every spelling in circulation so
+ * one payload cannot be read one way here and another way in the review dialog,
+ * which imports the same functions.
  */
+
+/** The first of `keys` that carries a readable number, or null. */
+function firstAmount(source, keys) {
+  if (!source || typeof source !== 'object') return null
+  for (const key of keys) {
+    const value = source[key]
+    if (value === null || value === undefined || value === '') continue
+    const n = Number(value)
+    if (Number.isFinite(n)) return n
+  }
+  return null
+}
+
+/**
+ * What the row was due, in employee-share terms, or null when the payload did
+ * not say. `null` is not `0`: an unreadable figure must never print as a
+ * confident zero, which is why the dialog reads these and the page wraps them.
+ */
+export function contributionDueOf(row) {
+  return firstAmount(row, [
+    'monthly_contribution_total',
+    'total_contribution_due_employee_share',
+    'total_contributions_due',
+  ])
+}
+
+/** What was actually deducted from the employee, or null. */
+export function contributionDeductedOf(row) {
+  return firstAmount(row, ['total_deducted', 'total_deduction_employee_share', 'total_deduction'])
+}
+
+/** What is still outstanding, or null. */
+export function contributionBalanceOf(row) {
+  return firstAmount(row, ['balance', 'undeducted_balance_employee_share'])
+}
+
+/**
+ * The row's per-component breakdown, normalised to one shape.
+ *
+ * `contributions` is what the employee summary sends, with `amount` as the only
+ * figure; `breakdown_data` / `details` carry the richer per-component deducted
+ * and outstanding figures where a caller has them. Absent stays `null` so a
+ * renderer can tell "nothing deducted" from "the payload does not track this".
+ */
+export function contributionComponentsOf(row) {
+  const list = row?.contributions || row?.breakdown_data || row?.details
+  if (!Array.isArray(list)) return []
+  return list.map((entry) => ({
+    name: String(entry?.contribution_name || entry?.name || 'Contribution'),
+    due: firstAmount(entry, ['amount', 'employee_share_due']),
+    deducted: firstAmount(entry, ['employee_share_deducted']),
+    undeducted: firstAmount(entry, ['undeducted_balance']),
+  }))
+}
 
 /** What the row was due, in employee-share terms, across the three payloads. */
 export function dueOf(row) {
-  return num(row?.total_contribution_due_employee_share ?? row?.total_contributions_due)
+  return num(contributionDueOf(row))
 }
 
 /** What was actually deducted from the employee. */
 export function deductedOf(row) {
-  return num(row?.total_deduction_employee_share ?? row?.total_deduction)
+  return num(contributionDeductedOf(row))
 }
 
 /** What is still outstanding. */
 export function balanceOf(row) {
-  return num(row?.undeducted_balance_employee_share ?? row?.balance)
+  return num(contributionBalanceOf(row))
 }
 
 export function num(val) {
