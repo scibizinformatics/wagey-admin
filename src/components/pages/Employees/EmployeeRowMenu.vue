@@ -114,16 +114,18 @@
 /**
  * Per-row action menu, shared by EmployeeTable (desktop) and EmployeeCardList
  * (tablet) so the two presentations cannot offer different actions.
- *
- * A terminated employee gets a different menu, not a menu of disabled items:
- * the actions that no longer apply are absent rather than greyed out.
  */
 import { computed } from 'vue'
-import { getStatus } from '@/composables/utils/employee'
+import { employmentStatusCategoryOf } from '@/composables/utils/employmentStatuses'
 
 const props = defineProps({
   employee: { type: Object, required: true },
   hasContract: { type: Boolean, default: false },
+  /** Id/code/name index of the company's employment statuses, retired included. */
+  statusLookup: {
+    type: Object,
+    default: () => ({ byId: new Map(), byCode: new Map(), byName: new Map() }),
+  },
 })
 
 defineEmits([
@@ -139,7 +141,16 @@ defineEmits([
   'identity-documents',
 ])
 
-const terminated = computed(() => getStatus(props.employee) === 'Terminated')
+/**
+ * A separated employee gets a different menu, not a menu of disabled items: the
+ * actions that no longer apply are absent rather than greyed out. `separated` is
+ * the API's category for the end of employment, so a company status named
+ * "Resigned" or "Retired" gets the restore menu too — not just the literal
+ * "Terminated" one.
+ */
+const terminated = computed(
+  () => employmentStatusCategoryOf(props.employee, props.statusLookup) === 'separated',
+)
 </script>
 
 <style scoped>
