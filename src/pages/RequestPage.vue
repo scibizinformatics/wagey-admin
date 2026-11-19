@@ -427,6 +427,7 @@ import {
   bulkLeaveOutcome,
   bulkLeaveOutcomeToast,
   leaveRequestDurationLabel,
+  readLeaveDays,
 } from 'src/composables/utils/leaveRequests'
 import {
   buildLeaveCutoffOptions,
@@ -1262,6 +1263,11 @@ const fetchLeaveRequests = async () => {
       // former reads a half day as a full one. Stringify once, here, so the
       // row and the details modal stay in step.
       duration: leaveRequestDurationLabel(item),
+      // The same request as its individual dates, for the details modal: the
+      // span above cannot say which days inside it were applied for, nor which
+      // of them are halves. Read through the shared reader because the field
+      // arrives as an array on some responses and a serialized string on others.
+      days: readLeaveDays(item.days),
       reason: item.reason,
       // The list echoes both recommendation fields, so the row marker and the
       // menu's recommend/remove wording are read from the server rather than
