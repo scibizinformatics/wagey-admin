@@ -187,6 +187,7 @@
           :loading="loading || resolvingGroups"
           :contracts="employeeContracts"
           :company-id="companyId"
+          :status-lookup="employmentStatusLookup"
           :leave-types="leaveTypes"
           :loading-contract-ids="loadingContractIds"
           :loading-balance-ids="loadingBalanceIds"
@@ -213,6 +214,7 @@
           :loading="loading || resolvingGroups"
           :contracts="employeeContracts"
           :company-id="companyId"
+          :status-lookup="employmentStatusLookup"
           :leave-types="leaveTypes"
           :loading-contract-ids="loadingContractIds"
           :loading-balance-ids="loadingBalanceIds"
@@ -296,7 +298,11 @@
       @avatar-remove="removeEditAvatar"
     />
 
-    <EmployeeViewModal v-model="showViewModal" :employee="selectedEmployee" />
+    <EmployeeViewModal
+      v-model="showViewModal"
+      :employee="selectedEmployee"
+      :status-lookup="employmentStatusLookup"
+    />
 
     <!-- The row menu's Cancel action. A bespoke input dialog rather than
          ConfirmDialog, because the decision is *which* status to apply and the
@@ -305,6 +311,7 @@
       v-model="showStatusDialog"
       :employee="employeeStatusTarget"
       :statuses="employmentStatuses"
+      :status-lookup="employmentStatusLookup"
       :loading-statuses="loadingEmploymentStatuses"
       :current-status="currentEmploymentStatus"
       :loading-current-status="loadingCurrentStatus"
@@ -469,11 +476,15 @@ import {
   getFullName,
   getEmail,
   getRole,
-  getStatus,
   getPhoneNumber,
-  isTerminated,
   employmentStatusIdOf,
 } from '@/composables/utils/employee'
+import {
+  EMPLOYEE_STATUS_CATEGORY_FILTERS,
+  employmentStatusCategoryLabel,
+  employmentStatusCategoryOf,
+  employmentStatusLabelOf,
+} from '@/composables/utils/employmentStatuses'
 import { createRequestToken } from '@/composables/utils/requestToken'
 
 const $q = useQuasar()
@@ -495,16 +506,33 @@ const {
   restoreEmployee: restoreEmployeeApi,
 } = useEmployees()
 
-// The row menu's Cancel action offers the company's own employment statuses, so
-// the list is fetched when that dialog opens rather than with the page. The
-// employee's current status is a separate single-record read: the row carries
-// it as a pk, which only that endpoint can turn into a label.
+// The row menu's Cancel action offers the company's own employment statuses, and
+// the list also labels every row: the employee payload carries the status as a
+// pk, which only the catalogue can turn into a name and a category. It is read
+// once per visit (five-minute cache) rather than per row. The employee's current
+// status is still a separate single-record read for the dialog.
 const {
   statuses: employmentStatuses,
+  statusLookup: employmentStatusLookup,
   loading: loadingEmploymentStatuses,
   fetchEmploymentStatuses,
   fetchEmploymentStatus,
 } = useEmploymentStatuses()
+
+/**
+ * Category-aware status readings for this page.
+ *
+ * The table, card list, row menu and view modal all receive `statusLookup` and
+ * call the same helpers, so a label, its chip tone and the actions it allows
+ * cannot disagree. Before the catalogue lands (or if it fails) both helpers fall
+ * back to the code/flag heuristics in `getStatus`, which is what the page used
+ * before it knew about categories.
+ */
+const statusCategoryOf = (employee) =>
+  employmentStatusCategoryOf(employee, employmentStatusLookup.value)
+const statusLabelOf = (employee) =>
+  employmentStatusLabelOf(employee, employmentStatusLookup.value)
+const isSeparated = (employee) => statusCategoryOf(employee) === 'separated'
 
 const { userRoles, fetchUserRoles } = useRolesAndPositions()
 // Payout group comes from each employee's active contract. The cache is shared
@@ -856,7 +884,7 @@ const roleOptions = computed(() => userRoles.value)
 // the whole list on every recompute.
 const employeeStats = computed(() => {
   const total = employees.value.length
-  const active = employees.value.filter((emp) => getStatus(emp) === 'Active').length
+  const active = employees.value.filter((emp) => statusCategoryOf(emp) === 'active').length
   return { total, active }
 })
 
@@ -871,7 +899,7 @@ const paginatedEmployees = computed(() => {
 })
 
 const selectedActiveEmployees = computed(() =>
-  selectedEmployees.value.filter((emp) => getStatus(emp) === 'Active'),
+  selectedEmployees.value.filter((emp) => statusCategoryOf(emp) === 'active'),
 )
 
 const hasSelection = computed(() => selectedEmployees.value.length > 0)
@@ -881,10 +909,13 @@ const hasSelection = computed(() => selectedEmployees.value.length > 0)
 // it was unreachable until these options exposed it. The site filter it sat
 // beside has since been replaced by payout group, which is the grouping this
 // page is actually asked about.
+// One option per employment-status category. `separated` is shown as
+// "Terminated", which is the word the rest of this page uses for the end of
+// employment; matching is by category, so a company status named "Resigned"
+// still falls under it.
 const statusOptions = [
   { label: 'All statuses', value: 'all' },
-  { label: 'Active', value: 'Active' },
-  { label: 'Terminated', value: 'Terminated' },
+  ...EMPLOYEE_STATUS_CATEGORY_FILTERS,
 ]
 
 const sortOptions = [
@@ -918,7 +949,7 @@ const activeFilters = computed(() => {
     out.push({ key: 'search', label: `“${searchTerm.value.trim()}”` })
   }
   if (statusFilter.value !== 'all') {
-    out.push({ key: 'status', label: statusFilter.value })
+    out.push({ key: 'status', label: employmentStatusCategoryLabel(statusFilter.value) })
   }
   if (payrollGroupFilter.value !== null) {
     const group = payrollGroupOptions.value.find((g) => g.value === payrollGroupFilter.value)
@@ -2054,13 +2085,16 @@ const filterEmployees = ({ resetPage = false } = {}) => {
         (getEmail(emp) || '').toLowerCase().includes(term) ||
         (getPhoneNumber(emp) || '').toLowerCase().includes(term) ||
         (getRole(emp) || '').toLowerCase().includes(term) ||
-        (getStatus(emp) || '').toLowerCase().includes(term)
+        (statusLabelOf(emp) || '').toLowerCase().includes(term) ||
+        // The category word too, so searching "inactive" finds somebody whose
+        // company calls the status "On leave".
+        employmentStatusCategoryLabel(statusCategoryOf(emp)).toLowerCase().includes(term)
       )
     })
   }
 
   if (statusFilter.value !== 'all') {
-    filtered = filtered.filter((emp) => getStatus(emp) === statusFilter.value)
+    filtered = filtered.filter((emp) => statusCategoryOf(emp) === statusFilter.value)
   }
 
   // An employee whose group cannot be resolved is excluded while a group is
@@ -2088,32 +2122,32 @@ const sortEmployees = () => {
   switch (sortBy.value) {
     case 'Newest':
       sorted.sort((a, b) => {
-        const aTerm = isTerminated(a) ? 1 : 0
-        const bTerm = isTerminated(b) ? 1 : 0
+        const aTerm = isSeparated(a) ? 1 : 0
+        const bTerm = isSeparated(b) ? 1 : 0
         if (aTerm !== bTerm) return aTerm - bTerm
         return new Date(b.last_date_updated || 0) - new Date(a.last_date_updated || 0)
       })
       break
     case 'Oldest':
       sorted.sort((a, b) => {
-        const aTerm = isTerminated(a) ? 1 : 0
-        const bTerm = isTerminated(b) ? 1 : 0
+        const aTerm = isSeparated(a) ? 1 : 0
+        const bTerm = isSeparated(b) ? 1 : 0
         if (aTerm !== bTerm) return aTerm - bTerm
         return new Date(a.last_date_updated || 0) - new Date(b.last_date_updated || 0)
       })
       break
     case 'A-Z':
       sorted.sort((a, b) => {
-        const aTerm = isTerminated(a) ? 1 : 0
-        const bTerm = isTerminated(b) ? 1 : 0
+        const aTerm = isSeparated(a) ? 1 : 0
+        const bTerm = isSeparated(b) ? 1 : 0
         if (aTerm !== bTerm) return aTerm - bTerm
         return getFullName(a).toLowerCase().localeCompare(getFullName(b).toLowerCase())
       })
       break
     case 'Z-A':
       sorted.sort((a, b) => {
-        const aTerm = isTerminated(a) ? 1 : 0
-        const bTerm = isTerminated(b) ? 1 : 0
+        const aTerm = isSeparated(a) ? 1 : 0
+        const bTerm = isSeparated(b) ? 1 : 0
         if (aTerm !== bTerm) return aTerm - bTerm
         return getFullName(b).toLowerCase().localeCompare(getFullName(a).toLowerCase())
       })
@@ -2385,6 +2419,14 @@ watch([statusFilter, payrollGroupFilter], () => {
   filterEmployees({ resetPage: true })
 })
 
+// The status catalogue can land after the first render (or after a company
+// switch), and it is what turns a row's status pk into a category. Re-apply the
+// active filter and sort once it arrives so an Inactive employee cannot sit in an
+// "Active" result set that was computed while the catalogue was still empty.
+watch(employmentStatusLookup, () => {
+  filterEmployees()
+})
+
 // Contracts are only fetched once a payout group is actually selected, then
 // cached (module-level, shared with the Schedule and Attendance pages).
 watch(payrollGroupFilter, async (groupId) => {
@@ -2463,6 +2505,9 @@ watch(
       fetchPositions(),
       fetchHolidayTypes(),
       fetchContributions(),
+      // Labels every row's status and gives the filter its three categories.
+      // Cached per company, so a revisit costs nothing.
+      fetchEmploymentStatuses(),
     ])
     await fetchEmployees()
   },
