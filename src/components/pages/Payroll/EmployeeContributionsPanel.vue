@@ -70,6 +70,29 @@
               </dd>
             </div>
           </dl>
+          <!-- No row list, but the month report named this employee. Its three
+               figures replace the single borrowed one rather than sitting beside
+               it: two amounts under two labels for the same month's money is the
+               disagreement this dialog exists to avoid. -->
+          <dl v-else-if="hasMonthSummary" class="contrib-summary__figures">
+            <div>
+              <dt>Due</dt>
+              <dd class="dash-num">{{ moneyOrDash(monthSummaryTotals.due) }}</dd>
+            </div>
+            <div>
+              <dt>Deducted</dt>
+              <dd class="dash-num">{{ moneyOrDash(monthSummaryTotals.deducted) }}</dd>
+            </div>
+            <div>
+              <dt>Outstanding</dt>
+              <dd
+                class="dash-num"
+                :class="{ 'contrib-pending': monthSummaryTotals.undeducted > 0 }"
+              >
+                {{ moneyOrDash(monthSummaryTotals.undeducted) }}
+              </dd>
+            </div>
+          </dl>
           <dl v-else class="contrib-summary__figures contrib-summary__figures--single">
             <div>
               <dt>Contribution</dt>
@@ -101,22 +124,72 @@
           </div>
 
           <!-- The run has no tax month, so the endpoint answers 404 for the whole
-               item and there are no rows to list. A note inside the section
-               rather than a block that replaced the body: the status above and
-               the tax section below are still real answers, and the takeover hid
-               both. Deliberately no retry — pressing one cannot conjure a tax
-               month onto a cutoff.
+               item and there are no rows to list. A cutoff without a tax month
+               still sits inside a calendar month, though, and that month's
+               contributions are posted: the company's month report can say what
+               each component is due, what has been withheld and what is still
+               outstanding. Read-only by nature — those rows carry no contribution
+               ids, so there is nothing here to select or deduct. This block is
+               the stand-in until `epi-contributions` takes the month as a
+               parameter; the real list then renders instead and this is never
+               reached. -->
+          <div v-if="noTaxMonth && hasMonthSummary" class="contrib-month">
+            <p class="contrib-month__title">{{ runMonthLabel || 'Month' }} contributions</p>
+            <ul v-if="monthSummaryRows.length" class="contrib-list">
+              <li v-for="row in monthSummaryRows" :key="row.name" class="contrib-row">
+                <span class="contrib-row__body">
+                  <span class="contrib-row__name">{{ row.name }}</span>
+                  <!-- This payload tracks the month's deduction, not each
+                       component's, so the per-row state is rendered only when a
+                       richer breakdown supplied it. -->
+                  <span
+                    v-if="row.deducted != null || row.undeducted != null"
+                    class="contrib-row__meta"
+                  >
+                    <template v-if="row.undeducted != null && row.undeducted > 0">
+                      {{ moneyOrDash(row.undeducted) }} outstanding
+                    </template>
+                    <template v-else-if="row.undeducted === 0">Deducted</template>
+                    <template v-else-if="row.deducted != null && row.deducted > 0">
+                      {{ moneyOrDash(row.deducted) }} deducted
+                    </template>
+                  </span>
+                </span>
+                <span class="contrib-row__amount dash-num">{{ moneyOrDash(row.due) }}</span>
+              </li>
+            </ul>
+            <p v-if="monthDeductedFrom" class="contrib-month__note">
+              Deducted from {{ monthDeductedFrom }}.
+            </p>
+            <p v-else class="contrib-month__note">
+              Not yet deducted. The run that closes {{ runMonthLabel || 'the month' }} is where it
+              is taken.
+            </p>
+          </div>
 
-               There are two reasons for that 404 and only one of them is a
-               missing setting. A mid-month cutoff never carries a tax month:
-               contributions settle on the run that closes the month, which is
-               where the deducted rows live (`deducted_from: "Cut off #2"`). So
-               the first half of a month says "nothing happens here", not "ask
-               someone to configure this" — and the server's own line is dropped
-               in that state, because a 404 is the expected answer there. A
-               closing cutoff with no tax month keeps the configuration wording
-               and its server line: that one really is unset. -->
-          <div v-if="noTaxMonth" class="contrib-unset">
+          <!-- The month report is being read; the note below is what shows if it
+               answers with no row for this employee. -->
+          <div v-else-if="noTaxMonth && monthSummaryLoading" class="contrib-note">
+            <q-spinner size="15px" />
+            <span>Loading {{ runMonthLabel || 'month' }} contributions…</span>
+          </div>
+
+          <!-- Nothing usable came back: no scoped rows and no row for this employee
+               in the month report. A note inside the section rather than a block
+               that replaced the body: the status above and the tax section below
+               are still real answers, and the takeover hid both. Deliberately no
+               retry — pressing one cannot conjure a tax month onto a cutoff.
+
+               There are two reasons for the 404 and only one of them is a missing
+               setting. A mid-month cutoff never carries a tax month: contributions
+               settle on the run that closes the month, which is where the deducted
+               rows live (`deducted_from: "Cut off #2"`). So the first half of a
+               month says "nothing happens here", not "ask someone to configure
+               this" — and the server's own line is dropped in that state, because
+               a 404 is the expected answer there. A closing cutoff with no tax
+               month keeps the configuration wording and its server line: that one
+               really is unset. -->
+          <div v-else-if="noTaxMonth" class="contrib-unset">
             <p class="contrib-unset__title">
               {{
                 settlesOnClosingCutoff
@@ -192,7 +265,8 @@
             </span>
             <p class="contrib-empty__title">No contributions</p>
             <p class="contrib-empty__sub">
-              Nothing is due from this employee for {{ taxMonthLabel || 'this period' }}.
+              Nothing is due from this employee for
+              {{ taxMonthLabel || runMonthLabel || 'this period' }}.
             </p>
           </div>
         </div>
@@ -268,7 +342,7 @@
                none: its evidence is the reason below, and a row reading
                "Tax ₱0.00" beside it would claim the endpoint said zero. -->
           <dl v-if="hasTaxFacts" class="contrib-tax__facts">
-            <div v-if="taxHas">
+            <div v-if="showTaxAmount">
               <dt>Tax</dt>
               <dd class="dash-num">{{ moneyOrDash(taxAmount) }}</dd>
             </div>
@@ -302,14 +376,21 @@
           <p v-else-if="taxExempt" class="contrib-tax__note">
             This payroll item is exempt from withholding tax, so nothing is taken.
           </p>
-          <!-- Before the missing-setting line below: a mid-month cutoff has no
-               tax month by design, so naming it as unset would send the reader
-               looking for a switch that does not exist. -->
-          <p v-else-if="!taxHasMonth && isMidMonthCutoff" class="contrib-tax__note">
+          <!-- The month is settled, but not by this run: its money is on another
+               cutoff's item, so neither action here could be honest. -->
+          <p v-else-if="taxSettledElsewhere" class="contrib-tax__note">
+            This month's withholding tax was applied on
+            {{ taxSettledOnLabel || 'the run that closes the month' }}, so it cannot be applied or
+            reverted from here.
+          </p>
+          <!-- Before the missing-setting line below: a mid-month cutoff with no
+               month to show has no tax month by design, so naming it as unset
+               would send the reader looking for a switch that does not exist. -->
+          <p v-else-if="!taxMonthKnown && isMidMonthCutoff" class="contrib-tax__note">
             Withholding tax{{ cutoffMonthLabel ? ` for ${cutoffMonthLabel}` : '' }}
             is settled on the run that closes the month, so there is nothing to apply here.
           </p>
-          <p v-else-if="!taxHasMonth && !noTaxMonth" class="contrib-tax__note">
+          <p v-else-if="!taxMonthKnown && !noTaxMonth" class="contrib-tax__note">
             A tax month has not been set for this cutoff, so nothing can be calculated yet.
           </p>
           <p v-else-if="!taxHas" class="contrib-tax__note">
@@ -407,6 +488,14 @@ import StatusPill from 'src/components/common/StatusPill.vue'
 import TaxRevertDialog from 'src/components/pages/Payroll/TaxRevertDialog.vue'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { useEmployeeContributions } from 'src/composables/disbursement/useEmployeeContributions'
+import { useCompany } from 'src/composables/page/useCompany'
+import { useDeductions } from 'src/composables/page/useDeductions'
+import {
+  contributionBalanceOf,
+  contributionComponentsOf,
+  contributionDeductedOf,
+  contributionDueOf,
+} from 'src/composables/utils/contributions'
 import { formatCurrencyPrecise, formatDateTime } from 'src/composables/utils/format'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { useToast } from 'src/composables/useToast'
@@ -416,6 +505,8 @@ const toast = useToast()
 const { fetchEpiTax, applyTax: applyTaxRequest, revertTax: revertTaxRequest } = useDisbursementApi()
 const { fetchEpiContributions, deductContributions, revertContributions } =
   useEmployeeContributions()
+const { companyId } = useCompany()
+const { fetchEmployeeContributions } = useDeductions()
 
 const props = defineProps({
   /** Payout group instance the employee payroll item belongs to. */
@@ -423,6 +514,16 @@ const props = defineProps({
   /** Employee payroll item id. */
   epiId: { type: [Number, String], default: null },
   employeeName: { type: String, default: '' },
+  /**
+   * The employee's own uuid, when the page has it.
+   *
+   * Only the month report needs it: that endpoint answers every active employee
+   * in the company for the month, so the row is picked by id rather than by name
+   * — two colleagues can share a name, and one person's contribution figures
+   * beside another's name is the worse mistake. Without it the panel falls back
+   * to an exact name match, and refuses a name held by more than one row.
+   */
+  employeeId: { type: String, default: '' },
   /**
    * The cutoff the run belongs to, so the "no tax month" state can name the
    * period that is unconfigured instead of saying "this cutoff" to a reader who
@@ -496,6 +597,18 @@ const errorDetail = ref('')
  * than the red error and a "Try again" that could never succeed.
  */
 const noTaxMonth = ref(false)
+/**
+ * This employee's row from the company's month report, shown only where the real
+ * row list cannot be.
+ *
+ * `epi-contributions` resolves its rows through the EPI's tax month, which a 1–15
+ * run does not own; the month report resolves through the calendar month, so it
+ * can tell the reader what November owes even when the deduction itself belongs
+ * to the closing cutoff. It carries no row ids and no per-row deduction state, so
+ * it is display only — no checkbox, no Deduct.
+ */
+const monthSummary = ref(null)
+const monthSummaryLoading = ref(false)
 const deducting = ref(false)
 const reverting = ref(false)
 const data = ref(null)
@@ -514,6 +627,16 @@ const taxLoading = ref(false)
 const taxApplying = ref(false)
 const taxReverting = ref(false)
 const showTaxRevert = ref(false)
+/**
+ * The month this payload was asked for, when the item carried no tax month of its
+ * own and the panel named one (`?year=&month=`).
+ *
+ * Only set when the scoped answer actually brought a month back, so it doubles as
+ * the evidence that the month is addressable: it makes the card render, it is the
+ * period sent with apply/revert, and a payload that came back empty leaves it
+ * null so the "settles on the closing cutoff" note stands.
+ */
+const taxScopedMonth = ref(null)
 
 const busy = computed(
   () => deducting.value || reverting.value || taxApplying.value || taxReverting.value,
@@ -541,9 +664,13 @@ const deductedRows = computed(() => contributions.value.filter((row) => row.dedu
  * month), so the dialog says what the review table said rather than showing an
  * empty pill beside a real figure.
  */
-const summaryStatus = computed(
-  () => data.value?.epi_contribution_status || props.contributionStatus || '',
-)
+const summaryStatus = computed(() => {
+  // Whenever the endpoint answers, its own status wins — including an empty one,
+  // which renders as "—" rather than borrowing the row's. The fallback exists only
+  // for the state where nothing answered.
+  if (data.value) return data.value.epi_contribution_status || ''
+  return props.contributionStatus || ''
+})
 
 /**
  * The two actions are decided per row, not by the item's overall status.
@@ -605,7 +732,9 @@ function monthLabelOf(taxMonth) {
 }
 
 const taxMonthLabel = computed(() => monthLabelOf(data.value?.tax_month))
-const taxPeriodLabel = computed(() => monthLabelOf(taxData.value?.tax_month))
+const taxPeriodLabel = computed(
+  () => monthLabelOf(taxData.value?.tax_month) || monthLabelOf(taxScopedMonth.value),
+)
 
 /**
  * The cutoff this item belongs to, as the tax payload reports it — the only
@@ -651,6 +780,27 @@ const cutoffMonthLabel = computed(() => {
 })
 
 /**
+ * The calendar month this run belongs to, as `{ year, month }`.
+ *
+ * Read from the cutoff's **end** date, not its start: the month's contribution
+ * rows are named after the month the run closes in, so a week that straddles a
+ * boundary (Apr 28 – May 4) belongs to May, and the first half of November
+ * belongs to November. This is the period the panel asks for when the EPI has no
+ * tax month to resolve one from.
+ */
+const runMonth = computed(() => {
+  const match = /^(\d{4})-(\d{2})/.exec(cutoffSpan.value?.end || '')
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (!Number.isFinite(year) || month < 1 || month > 12) return null
+  return { year, month }
+})
+
+/** The run's own month, as "November 2026". */
+const runMonthLabel = computed(() => monthLabelOf(runMonth.value))
+
+/**
  * The 404 read as "not this cutoff's job" rather than "not configured".
  *
  * Both conditions: the endpoint answered the tax-month 404 *and* the run is the
@@ -658,6 +808,56 @@ const cutoffMonthLabel = computed(() => {
  * `false` and its configuration wording.
  */
 const settlesOnClosingCutoff = computed(() => noTaxMonth.value && isMidMonthCutoff.value)
+
+/**
+ * The month report's component rows, normalised to one shape.
+ *
+ * `contributionComponentsOf` is the one reading of this payload: the employee
+ * summary sends `contributions` as `{ name, amount }`, while a richer payload
+ * carries per-component deducted and outstanding figures under other names. A
+ * missing figure stays `null` — the row then shows only what it knows rather
+ * than a confident zero.
+ */
+const monthSummaryRows = computed(() => contributionComponentsOf(monthSummary.value))
+
+/**
+ * The month's own totals, read off the report's aggregate fields — never re-summed
+ * from the breakdown, which can be abbreviated or absent.
+ */
+const monthSummaryTotals = computed(() => ({
+  due: contributionDueOf(monthSummary.value),
+  deducted: contributionDeductedOf(monthSummary.value),
+  undeducted: contributionBalanceOf(monthSummary.value),
+}))
+
+/**
+ * Whether the month report has anything worth showing.
+ *
+ * Either half counts on its own: a report row that names its components is a
+ * breakdown, and one that only carries the three totals is still the month's
+ * money. Requiring `breakdown_data` was the earlier reading, and it sent a
+ * populated row back to the note whenever the backend abbreviated the breakdown.
+ */
+const hasMonthSummary = computed(() => {
+  if (!monthSummary.value) return false
+  if (monthSummaryRows.value.length) return true
+  const totals = monthSummaryTotals.value
+  return totals.due != null || totals.deducted != null || totals.undeducted != null
+})
+
+/**
+ * The cutoff that actually took the month's contributions, when one has.
+ *
+ * The report sends `deducted_from: "N/A"` until something is deducted, then the
+ * cutoff's name. Read rather than assumed: the dialog used to state that the run
+ * closing the month takes them, which is wrong for a month already settled on an
+ * earlier one.
+ */
+const monthDeductedFrom = computed(() => {
+  const value = String(monthSummary.value?.deducted_from ?? '').trim()
+  if (!value || /^n\/?a$/i.test(value)) return ''
+  return value
+})
 
 // ── Withholding tax ────────────────────────────────────────────────────────
 
@@ -667,13 +867,119 @@ const settlesOnClosingCutoff = computed(() => noTaxMonth.value && isMidMonthCuto
  */
 const taxHas = computed(() => Boolean(taxData.value?.has_tax))
 const taxReverted = computed(() => Boolean(taxData.value?.tax_reverted))
+/** The item's own tax month, exactly as the endpoint reports it (null on a 1–15 run). */
 const taxHasMonth = computed(() => Boolean(taxData.value?.tax_month))
+/** The month behind the figures: the item's own, or the one the panel asked for by name. */
+const taxMonthKnown = computed(() => taxHasMonth.value || Boolean(taxScopedMonth.value))
 
-/** The bracket breakdown; `.details` differs grossly by state (see below). */
-const taxDetails = computed(() => taxData.value?.tax?.details || {})
-const taxAmount = computed(
-  () => taxData.value?.tax?.total ?? taxData.value?.monthly_tax?.tax_amount ?? null,
+/** The month row behind the figures, when the endpoint sends one beside `tax`. */
+const monthlyTax = computed(() => {
+  const row = taxData.value?.monthly_tax
+  return row && typeof row === 'object' ? row : null
+})
+
+/**
+ * The bracket breakdown.
+ *
+ * Two shapes wear it: an applied tax carries `tax.details`, while a month read
+ * before it is applied — or read from the cutoff that did not settle it — carries
+ * the same fields under `monthly_tax.details`. The applied object wins when it
+ * has anything in it, because that is the row the money was actually taken from;
+ * an empty one would otherwise hide a perfectly good bracket behind it.
+ */
+const taxDetails = computed(() => {
+  const applied = taxData.value?.tax?.details
+  if (applied && typeof applied === 'object' && Object.keys(applied).length) return applied
+  const monthly = monthlyTax.value?.details
+  if (monthly && typeof monthly === 'object') return monthly
+  return {}
+})
+
+/** The first readable string among the values, for markers whose spelling varies. */
+function firstText(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+/**
+ * The cutoff the month's tax was taken on, when the payload names one.
+ *
+ * The endpoint's applied state lives on one EPI, so a first-half run needs to be
+ * told that the month is already settled — otherwise it reads "Not applied" over
+ * money that has been withheld. No endpoint documents this field yet; the names
+ * below are the shapes a month-settlement marker is expected to take, and an
+ * absent one simply keeps the older behaviour.
+ */
+const taxSettledOnLabel = computed(() =>
+  firstText(
+    monthlyTax.value?.applied_to,
+    monthlyTax.value?.applied_cutoff,
+    monthlyTax.value?.settled_on,
+    monthlyTax.value?.deducted_from,
+    taxDetails.value?.applied_to,
+  ),
 )
+
+/**
+ * Whether the tax this item reports is actually held by this item.
+ *
+ * The documented applied state puts the figures on `tax`; a month read from the
+ * cutoff that did not settle it carries them on `monthly_tax` instead, with `tax`
+ * left at its placeholder. That difference is the ownership evidence — a marker
+ * naming the cutoff is a bonus, not the only proof.
+ *
+ * "Never applied" is not an empty object: the endpoint answers
+ * `tax: { total: "0.00", details: {}, monthly_gross_for_tax: null }`. Testing
+ * `total != null` therefore counted every untouched item as holding its tax — and
+ * `"0.00"` is a non-null string — which would have defeated the check below and
+ * offered Apply over a month another cutoff had already settled. A non-zero
+ * total, a populated bracket, or a gross figure are the real signs; a zero with
+ * nothing else is the placeholder.
+ */
+const taxHeldHere = computed(() => {
+  const tax = taxData.value?.tax
+  if (!tax || typeof tax !== 'object') return false
+  if (tax.monthly_gross_for_tax != null) return true
+  if (tax.details && Object.keys(tax.details).length) return true
+  const total = Number(tax.total)
+  return Number.isFinite(total) && total !== 0
+})
+
+/**
+ * Whether the month's tax is settled somewhere this run cannot act on it.
+ *
+ * Only ever true for a run without its own tax month: the cutoff that closes the
+ * month owns the tax and always acts on it. Beyond that it takes evidence — an
+ * applied record on this item means the money is here, while a month-level
+ * `has_tax`, a populated `monthly_tax` row, or a marker naming the cutoff that
+ * took it all mean the money is elsewhere. Guessing "not applied" over withheld
+ * tax is the mistake that matters, so the ambiguous cases read as settled.
+ */
+const taxSettledElsewhere = computed(() => {
+  if (taxHasMonth.value || taxReverted.value || taxExempt.value) return false
+  if (taxHeldHere.value) return false
+  if (taxSettledOnLabel.value) return true
+  if (taxHas.value) return true
+  const owner = monthlyTax.value?.epi_id ?? monthlyTax.value?.applied_epi_id
+  return owner != null && props.epiId != null && !sameId(owner, props.epiId)
+})
+
+/**
+ * The figure to show, preferring the money the item actually holds.
+ *
+ * `tax.total` is the applied figure, but on an item that never applied tax it is
+ * the placeholder `"0.00"` — non-null, so `??` would keep it and print zero over
+ * a month row that carries the real amount. The month's `tax_amount` is the
+ * fallback whenever this item is not the one holding the tax.
+ */
+const taxAmount = computed(() => {
+  const applied = taxData.value?.tax?.total ?? null
+  const monthly = taxData.value?.monthly_tax?.tax_amount ?? null
+  if (taxHeldHere.value && applied != null) return applied
+  return monthly ?? applied
+})
 
 /**
  * The income the tax was computed from. The applied state names it
@@ -727,40 +1033,69 @@ const taxExempt = computed(() => Boolean(taxDetails.value?.is_exempt) && !taxRev
 const taxStatusLabel = computed(() => {
   if (!taxData.value) return ''
   if (taxReverted.value) return 'Reverted'
-  if (taxHas.value) return 'Applied'
+  // A month settled by another run reads as applied here too: the money has been
+  // withheld, and "Not applied" beside it would invite a second deduction.
+  if (taxHas.value || taxSettledElsewhere.value) return 'Applied'
   if (taxExempt.value) return 'Exempt'
-  // A mid-month cutoff has no tax month by design, so the pill says where the
-  // tax lives instead of naming a setting that is not missing.
-  if (!taxHasMonth.value && isMidMonthCutoff.value) return 'Closing cutoff'
-  if (!taxHasMonth.value) return 'No tax month'
+  // A mid-month cutoff with nothing to show for its month has no tax month by
+  // design, so the pill says where the tax lives instead of naming a setting that
+  // is not missing.
+  if (!taxMonthKnown.value && isMidMonthCutoff.value) return 'Closing cutoff'
+  if (!taxMonthKnown.value) return 'No tax month'
   return 'Not applied'
 })
 
 const taxPillStatus = computed(() => {
   if (taxReverted.value) return 'needs_attention'
-  if (taxHas.value) return 'complete'
-  if (!taxHasMonth.value || taxExempt.value) return 'not_applicable'
+  if (taxHas.value || taxSettledElsewhere.value) return 'complete'
+  if (!taxMonthKnown.value || taxExempt.value) return 'not_applicable'
   return 'pending'
 })
 
 /**
- * Whether the section can offer a write at all. Apply is only real where the
- * cutoff has a tax month to calculate against and the item is not exempt;
- * revert is only real where a tax is applied. Both go quiet while the section
- * is loading or reporting its own failure.
+ * Whether the section can offer a write at all. Apply is only real where there is
+ * a month to calculate against — the item's own, or the one asked for by name —
+ * the item is not exempt, and the month is not already settled on another run;
+ * revert is only real where this run holds the tax. Both go quiet while the
+ * section is loading or reporting its own failure.
  */
 const taxActionReady = computed(
   () => Boolean(taxData.value) && !taxLoading.value && !taxError.value,
 )
 const canApplyTax = computed(
-  () => taxActionReady.value && taxHasMonth.value && !taxHas.value && !taxExempt.value,
+  () =>
+    taxActionReady.value &&
+    taxMonthKnown.value &&
+    !taxHas.value &&
+    !taxExempt.value &&
+    !taxSettledElsewhere.value,
 )
-const canRevertTax = computed(() => taxActionReady.value && taxHas.value)
+const canRevertTax = computed(
+  () => taxActionReady.value && taxHas.value && !taxSettledElsewhere.value,
+)
+
+/** The month to write against: only a run that had to name one sends it. */
+const taxWritePeriod = computed(() => taxScopedMonth.value)
+
+/**
+ * Whether the "Tax" figure is evidence rather than a hopeful zero.
+ *
+ * A month read before it is applied still carries the amount that will be taken,
+ * so it is shown beside the figures — but never over an exempt or reverted state,
+ * where a `₱0.00` would claim the endpoint answered zero.
+ */
+const showTaxAmount = computed(
+  () =>
+    taxAmount.value != null &&
+    (taxHas.value || taxMonthKnown.value) &&
+    !taxExempt.value &&
+    !taxReverted.value,
+)
 
 /** Whether the facts below the status have anything to say, so the `<dl>` and its rule never render empty. */
 const hasTaxFacts = computed(
   () =>
-    taxHas.value ||
+    showTaxAmount.value ||
     taxTaxableIncome.value != null ||
     taxBracket.value !== '' ||
     taxFixed.value != null ||
@@ -794,7 +1129,15 @@ async function load() {
   noTaxMonth.value = false
   missingItem.value = false
   unconfiguredDetail.value = ''
+  monthSummary.value = null
   selected.value = []
+
+  // Started before the contributions read rather than after it: the cutoff's own
+  // dates are what name the run's month, and the 404 below needs them. The same
+  // promise is awaited again at the end, so the happy path still overlaps the two
+  // requests instead of serialising them.
+  const taxPromise = loadTax()
+
   try {
     data.value = await fetchEpiContributions(props.pgiId, props.epiId)
   } catch (err) {
@@ -816,21 +1159,153 @@ async function load() {
       // is what "nothing was named" looks like here.
       const serverMessage = extractErrorMessage(err, '').trim()
       const named = Boolean(serverMessage) && serverMessage !== '(404)'
-      noTaxMonth.value = !named || NO_TAX_MONTH.test(serverMessage)
-      missingItem.value = !noTaxMonth.value
-      unconfiguredDetail.value = describeFetchFailure(err)
+      if (!named || NO_TAX_MONTH.test(serverMessage)) {
+        await readContributionsForRunMonth(err, taxPromise)
+      } else {
+        missingItem.value = true
+        unconfiguredDetail.value = describeFetchFailure(err)
+        data.value = null
+      }
     } else {
       console.error('[EmployeeContributionsPanel] fetch failed:', err)
       error.value = true
       errorDetail.value = describeFetchFailure(err)
+      data.value = null
     }
-    data.value = null
   } finally {
     loading.value = false
   }
   // Tax is read independently of the contributions above, so a 404 here cannot
   // hide the tax section and an error there cannot blank the list.
-  await loadTax()
+  await taxPromise
+}
+
+/**
+ * The second question asked of the contributions route: what does this run's own
+ * month owe, when the EPI carries no tax month for the route to resolve?
+ *
+ * A cutoff without a tax month still sits inside a calendar month, and the month's
+ * rows exist whichever cutoff settles them. Asking for the month by name is what
+ * lets the first half of a month show — and deduct — the rows the closing cutoff
+ * would otherwise own. Until the route answers for a month (`?year=&month=`), the
+ * second request 404s as well and the note stands, which is the earlier behaviour.
+ *
+ * An answer with no rows is still an answer: the month is addressable and this
+ * employee owes nothing on it, so the empty state is what renders.
+ */
+async function readContributionsForRunMonth(originalError, taxPromise) {
+  await taxPromise
+  const period = runMonth.value
+  if (!period) {
+    markNoTaxMonth(originalError)
+    return
+  }
+  try {
+    // A 200 with no body is still an answer, and an empty payload would render the
+    // whole body blank; the empty state is the honest reading of it.
+    const scoped = await fetchEpiContributions(props.pgiId, props.epiId, period)
+    data.value = scoped ?? { contributions: [] }
+  } catch (err) {
+    if (err?.response?.status === 404) {
+      markNoTaxMonth(originalError)
+      // The route cannot name a month; the company's month report can still say
+      // what the month owes, read-only, so the note is not the whole answer.
+      await loadMonthSummary()
+      return
+    }
+    console.error('[EmployeeContributionsPanel] month contributions fetch failed:', err)
+    error.value = true
+    errorDetail.value = describeFetchFailure(err)
+    data.value = null
+  }
+}
+
+/** The tax-month 404, rendered as the note it is rather than as a failure. */
+function markNoTaxMonth(err) {
+  noTaxMonth.value = true
+  missingItem.value = false
+  unconfiguredDetail.value = describeFetchFailure(err)
+  data.value = null
+}
+
+/**
+ * Picks this employee's row out of the company's month report.
+ *
+ * The uuid is tried first, because an id is the only key that can separate two
+ * colleagues who share a name — but the employee summary this reads does **not**
+ * send `employee_id`, so in practice the exact name is the path taken. A name
+ * held by more than one row is refused rather than guessed: one person's
+ * contribution figures under another's heading is the worse mistake, the same
+ * rule `buildEmployeeNameIndex` follows for photographs.
+ */
+function pickMonthSummaryRow(rows, employeeId, employeeName) {
+  if (!Array.isArray(rows)) return null
+  if (employeeId) {
+    const byId = rows.filter((row) => sameId(row.employee_id, employeeId))
+    if (byId.length === 1) return byId[0]
+    if (byId.length > 1) return null
+  }
+  const name = String(employeeName || '')
+    .trim()
+    .toLowerCase()
+  if (!name) return null
+  const byName = rows.filter(
+    (row) =>
+      String(row.employee_name || '')
+        .trim()
+        .toLowerCase() === name,
+  )
+  return byName.length === 1 ? byName[0] : null
+}
+
+/**
+ * The fallback that still answers the question: what does this run's month owe?
+ *
+ * `epi-contributions` cannot be asked without a tax month, but the Contributions
+ * page's month report is keyed by company/year/month and knows the figures for
+ * every employee. It is display only: the rows carry no contribution ids and no
+ * per-row deduction state, so nothing here can be selected or deducted. A failure
+ * is quiet — the note above the section already explains the state, and a report
+ * that cannot be read must not turn a normal 1–15 cutoff into an error.
+ */
+async function loadMonthSummary() {
+  monthSummary.value = null
+  const period = runMonth.value
+  // A uuid identifies the row; without one an exact name is the only option, so
+  // a payload with neither is not worth the request.
+  const identifiable = Boolean(props.employeeId || props.employeeName)
+  if (!period || !companyId.value || !identifiable) return
+  monthSummaryLoading.value = true
+  try {
+    const rows = await fetchEmployeeContributions(companyId.value, period.year, period.month)
+    monthSummary.value = pickMonthSummaryRow(rows, props.employeeId, props.employeeName)
+  } catch (err) {
+    console.warn('[EmployeeContributionsPanel] month report fetch failed:', err)
+    monthSummary.value = null
+  } finally {
+    monthSummaryLoading.value = false
+  }
+}
+
+/**
+ * Whether a tax payload brings a month back with it.
+ *
+ * The route resolves the month from the EPI, so a month-scoped answer is only
+ * worth keeping when it actually carries one: the month itself, an applied tax, a
+ * `monthly_tax` row with a figure or a bracket, or a settlement marker. An empty
+ * `monthly_tax: {}` is what a route that ignores the parameter answers — reading
+ * that as a month would draw a card over nothing and hide the note that explains
+ * why there is nothing.
+ */
+function taxPayloadHasMonth(payload) {
+  if (!payload) return false
+  if (payload.tax_month) return true
+  if (payload.has_tax) return true
+  const row = payload.monthly_tax
+  if (!row || typeof row !== 'object') return false
+  if (row.tax_amount != null || row.taxable_income != null) return true
+  if (row.details && typeof row.details === 'object' && Object.keys(row.details).length) return true
+  return Boolean(row.applied_to || row.applied_cutoff || row.settled_on || row.deducted_from)
 }
 
 /**
@@ -838,14 +1313,42 @@ async function load() {
  * the section's own, and — unlike the contributions — an item with no tax month
  * still answers, so a reject here is never the unconfigured state the top of the
  * body handles. Never throws.
+ *
+ * A cutoff that closes a month owns that month, and the endpoint resolves it from
+ * the EPI. The first half of a month does not, so it is asked for by name after
+ * the documented answer comes back — the same month row the closing cutoff
+ * settles, which is what lets the card show on a 1–15 run. The second request is
+ * an extra: a route that does not answer it leaves the documented payload, and
+ * the note, exactly as before.
  */
 async function loadTax() {
   if (!props.epiId) return
   taxError.value = false
   taxErrorDetail.value = ''
   taxLoading.value = true
+  taxScopedMonth.value = null
   try {
-    taxData.value = await fetchEpiTax(props.epiId)
+    const own = await fetchEpiTax(props.epiId)
+    taxData.value = own
+    if (!own?.tax_month) {
+      const period = runMonth.value
+      if (period) {
+        try {
+          const scoped = await fetchEpiTax(props.epiId, period)
+          if (taxPayloadHasMonth(scoped)) {
+            taxData.value = scoped
+            taxScopedMonth.value = period
+          }
+        } catch (err) {
+          // The documented payload above is already a real answer, so a month
+          // question the route cannot answer is not the section's failure. A 404
+          // is the expected shape of that refusal; anything else is worth a line.
+          if (err?.response?.status !== 404) {
+            console.warn('[EmployeeContributionsPanel] month tax fetch failed:', err)
+          }
+        }
+      }
+    }
   } catch (err) {
     console.error('[EmployeeContributionsPanel] tax fetch failed:', err)
     taxError.value = true
@@ -1087,7 +1590,10 @@ async function applyWithholdingTax() {
   if (!props.epiId || busy.value) return
   taxApplying.value = true
   try {
-    const response = await applyTaxRequest([props.epiId], { force: false })
+    const response = await applyTaxRequest([props.epiId], {
+      force: false,
+      period: taxWritePeriod.value,
+    })
     await loadTax()
     emit('changed')
     reportTaxApply(response)
@@ -1157,7 +1663,7 @@ async function commitRevertTax(reason) {
   const written = taxAmount.value
   taxReverting.value = true
   try {
-    const response = await revertTaxRequest([props.epiId], reason)
+    const response = await revertTaxRequest([props.epiId], reason, taxWritePeriod.value)
     showTaxRevert.value = false
     await loadTax()
     emit('changed')
@@ -1292,6 +1798,30 @@ onMounted(load)
    Left-aligned and boxed on the sunken ground rather than centred in the body's
    space, because it is now one section's message rather than the whole panel's.
    It carries no retry: pressing one cannot conjure a tax month onto a cutoff. */
+
+/* The month report shown where the real row list cannot be. No box of its own:
+   it is evidence rather than a message, and the list and figure grid bring their
+   own chrome — only the heading and the closing sentence are its own. */
+.contrib-month {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.contrib-month__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dash-ink-2);
+}
+
+.contrib-month__note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--dash-ink-3);
+}
+
 .contrib-unset {
   display: flex;
   flex-direction: column;
