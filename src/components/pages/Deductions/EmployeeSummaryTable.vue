@@ -87,20 +87,20 @@
           </q-td>
 
           <q-td v-if="showTotalDue" key="total_contributions_due" :props="props" class="num">
-            {{ formatCurrency(props.row.total_contributions_due) }}
+            {{ formatCurrency(props.row.total_contributions_due ?? contributionDueOf(props.row)) }}
           </q-td>
 
           <q-td key="employee_share_due" :props="props" class="num strong">
-            {{ formatCurrency(props.row.total_contribution_due_employee_share) }}
+            {{ formatCurrency(contributionDueOf(props.row)) }}
           </q-td>
 
           <q-td key="deducted" :props="props" class="num">
-            {{ formatCurrency(props.row.total_deduction_employee_share) }}
+            {{ formatCurrency(contributionDeductedOf(props.row)) }}
           </q-td>
 
           <q-td key="undeducted" :props="props" class="num">
             <span :class="{ 'is-owed': balanceOf(props.row) > 0 }">
-              {{ formatCurrency(props.row.undeducted_balance_employee_share) }}
+              {{ formatCurrency(contributionBalanceOf(props.row)) }}
             </span>
           </q-td>
 
@@ -124,19 +124,9 @@
                 <span class="brk__title">Contribution breakdown</span>
                 <span v-if="periodLabel" class="brk__period">{{ periodLabel }}</span>
                 <span class="brk__spacer" />
-                <span
-                  class="dash-chip brk__verdict"
-                  :class="openBreakdown.outstanding > 0 ? 'dash-chip--warn' : 'dash-chip--good'"
-                >
-                  <q-icon
-                    :name="openBreakdown.outstanding > 0 ? 'o_pending_actions' : 'o_task_alt'"
-                    size="13px"
-                  />
-                  {{
-                    openBreakdown.outstanding > 0
-                      ? `${formatCurrency(openBreakdown.outstanding)} outstanding`
-                      : 'Fully collected'
-                  }}
+                <span class="dash-chip brk__verdict" :class="openBreakdown.chipClass">
+                  <q-icon :name="openBreakdown.chipIcon" size="13px" />
+                  {{ openBreakdown.verdict }}
                 </span>
               </div>
 
@@ -154,10 +144,15 @@
                     <span class="dash-swatch brk__swatch" :style="{ background: item.mark }" />
                     <span class="brk__name-text">{{ item.name }}</span>
                   </span>
-                  <span class="brk__num">{{ formatCurrency(item.due) }}</span>
-                  <span class="brk__num">{{ formatCurrency(item.deducted) }}</span>
-                  <span class="brk__num" :class="item.undeducted > 0 ? 'is-owed' : 'is-settled'">
-                    {{ formatCurrency(item.undeducted) }}
+                  <span class="brk__num">{{ amountOrDash(item.due) }}</span>
+                  <span class="brk__num">{{ amountOrDash(item.deducted) }}</span>
+                  <span
+                    class="brk__num"
+                    :class="
+                      item.undeducted == null ? '' : item.undeducted > 0 ? 'is-owed' : 'is-settled'
+                    "
+                  >
+                    {{ amountOrDash(item.undeducted) }}
                   </span>
                   <ContributionRateBar :pct="item.pct" />
                 </div>
@@ -166,13 +161,19 @@
                      read against each other without adding the column up. -->
                 <div class="brk__grid brk__grid--total">
                   <span>All contributions</span>
-                  <span class="brk__num">{{ formatCurrency(openBreakdown.due) }}</span>
-                  <span class="brk__num">{{ formatCurrency(openBreakdown.deducted) }}</span>
+                  <span class="brk__num">{{ amountOrDash(openBreakdown.due) }}</span>
+                  <span class="brk__num">{{ amountOrDash(openBreakdown.deducted) }}</span>
                   <span
                     class="brk__num"
-                    :class="openBreakdown.outstanding > 0 ? 'is-owed' : 'is-settled'"
+                    :class="
+                      openBreakdown.outstanding == null
+                        ? ''
+                        : openBreakdown.outstanding > 0
+                          ? 'is-owed'
+                          : 'is-settled'
+                    "
                   >
-                    {{ formatCurrency(openBreakdown.outstanding) }}
+                    {{ amountOrDash(openBreakdown.outstanding) }}
                   </span>
                   <ContributionRateBar :pct="openBreakdown.pct" />
                 </div>
@@ -244,6 +245,10 @@ import { avatarFor } from 'src/composables/utils/employee'
 import {
   balanceOf,
   collectedPct,
+  contributionBalanceOf,
+  contributionComponentsOf,
+  contributionDeductedOf,
+  contributionDueOf,
   deductedOf,
   dueOf,
   markForName,
@@ -291,7 +296,7 @@ const columns = computed(() => {
     cols.push({
       name: 'total_contributions_due',
       label: 'Total due',
-      field: 'total_contributions_due',
+      field: (row) => row.total_contributions_due ?? contributionDueOf(row),
       align: 'right',
       hint: 'Employer and employee share combined',
       sortable: true,
@@ -302,7 +307,7 @@ const columns = computed(() => {
     {
       name: 'employee_share_due',
       label: 'Employee share',
-      field: 'total_contribution_due_employee_share',
+      field: (row) => contributionDueOf(row),
       align: 'right',
       hint: 'The employee’s share of what was due this month',
       sortable: true,
@@ -310,7 +315,7 @@ const columns = computed(() => {
     {
       name: 'deducted',
       label: 'Deducted',
-      field: 'total_deduction_employee_share',
+      field: (row) => contributionDeductedOf(row),
       align: 'right',
       hint: 'Employee share actually withheld through payroll',
       sortable: true,
@@ -318,7 +323,7 @@ const columns = computed(() => {
     {
       name: 'undeducted',
       label: 'Undeducted',
-      field: 'undeducted_balance_employee_share',
+      field: (row) => contributionBalanceOf(row),
       align: 'right',
       hint: 'Employee share still outstanding',
       sortable: true,
@@ -412,43 +417,64 @@ watch(
   },
 )
 
-function detailsOf(row) {
-  return row.breakdown_data || row.details || row.contributions || []
-}
-
 /**
  * The open employee's breakdown, normalised and totalled once per render rather
  * than re-derived by every cell in the panel. Only one row is ever open, so the
  * open row is resolved from `rows` instead of being threaded out of the body slot.
+ *
+ * The employee summary tracks deduction at the **month's** level, not per
+ * component: its rows are `{ name, amount }` and nothing else. When that is the
+ * payload, the per-component deduction columns have nothing to say and the
+ * totals come from the row's own aggregates — re-summing absent per-item figures
+ * would report 0 outstanding on a month still fully owed.
  */
 const openBreakdown = computed(() => {
   if (openKey.value === null) return null
   const row = props.rows.find((r) => keyOf(r) === openKey.value)
   if (!row) return null
 
-  const items = detailsOf(row).map((item, i) => {
-    const name = item.contribution_name || item.name || 'Unnamed contribution'
-    const due = num(item.employee_share_due)
-    const deducted = num(item.employee_share_deducted)
-    return {
-      key: `${name}-${i}`,
-      name,
-      mark: markForName(name),
-      due,
-      deducted,
-      undeducted: num(item.undeducted_balance),
-      pct: collectedPct(deducted, due),
-    }
-  })
+  const items = contributionComponentsOf(row).map((item, i) => ({
+    key: `${item.name}-${i}`,
+    name: item.name,
+    mark: markForName(item.name),
+    due: item.due,
+    deducted: item.deducted,
+    undeducted: item.undeducted,
+    pct: item.deducted != null && item.due != null ? collectedPct(item.deducted, item.due) : null,
+  }))
 
-  // Totalled from the breakdown itself, so a mismatch with the employee's own
-  // row is visible rather than papered over by reusing the row's figures.
-  const due = items.reduce((t, d) => t + d.due, 0)
-  const deducted = items.reduce((t, d) => t + d.deducted, 0)
-  const outstanding = items.reduce((t, d) => t + d.undeducted, 0)
+  const hasPerItemState =
+    items.length > 0 && items.every((item) => item.deducted != null || item.undeducted != null)
+  const sumOf = (pick) => items.reduce((total, item) => total + (pick(item) ?? 0), 0)
 
-  return { items, due, deducted, outstanding, pct: collectedPct(deducted, due) }
+  const due = hasPerItemState ? sumOf((item) => item.due) : contributionDueOf(row)
+  const deducted = hasPerItemState ? sumOf((item) => item.deducted) : contributionDeductedOf(row)
+  const outstanding = hasPerItemState
+    ? sumOf((item) => item.undeducted)
+    : contributionBalanceOf(row)
+
+  const owed = outstanding != null && outstanding > 0
+  return {
+    items,
+    due,
+    deducted,
+    outstanding,
+    pct: collectedPct(deducted, due),
+    owed,
+    verdict: owed
+      ? `${formatCurrency(outstanding)} outstanding`
+      : outstanding == null
+        ? 'Balance not reported'
+        : 'Fully collected',
+    chipClass: owed ? 'dash-chip--warn' : outstanding == null ? '' : 'dash-chip--good',
+    chipIcon: owed ? 'o_pending_actions' : outstanding == null ? 'o_info' : 'o_task_alt',
+  }
 })
+
+/** A figure, or a dash when the payload did not carry one. */
+function amountOrDash(value) {
+  return value == null ? '—' : formatCurrency(value)
+}
 
 function pctOf(row) {
   return collectedPct(deductedOf(row), dueOf(row))
