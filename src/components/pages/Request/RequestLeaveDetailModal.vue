@@ -73,6 +73,26 @@
                 <span class="dash-modal__value">{{ formatDateTime(request.submittedDate) }}</span>
               </div>
             </div>
+            <!--
+              The days one at a time. Start/End say the span; this says which
+              dates inside it the request actually covers and which are halves,
+              which a span cannot express. Read from the payload's `days` array,
+              the same list the apply dialog writes — never re-derived from the
+              span, because a weekend or a mixed half-day week would then be
+              guessed at instead of reported.
+            -->
+            <div v-if="request.days?.length" class="info-content">
+              <div class="dash-modal__field-label">Days</div>
+              <div class="day-list">
+                <div v-for="day in request.days" :key="day.date" class="day-list__row">
+                  <div class="day-list__date">
+                    <q-icon name="event" size="16px" class="day-list__date-icon" />
+                    <span>{{ longLabel(day.date) }}</span>
+                  </div>
+                  <span class="day-list__part">{{ day.isHalfDay ? 'Half day' : 'Full day' }}</span>
+                </div>
+              </div>
+            </div>
           </div>
           <div v-if="request.reason" class="dash-modal__section">
             <div class="dash-modal__section-title">Reason</div>
@@ -142,6 +162,7 @@
 </template>
 
 <script setup>
+import { longLabel } from 'src/composables/utils/calendarDate'
 import { avatarFor } from 'src/composables/utils/employee'
 
 const props = defineProps({
