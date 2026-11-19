@@ -28,6 +28,14 @@ export function useEmployeeContributions() {
    * Scoped by both ids because a contribution is a fact about an employee
    * payroll item *within* a payout group instance, not about the employee alone.
    *
+   * `period` is the second question the route can answer. Without it the endpoint
+   * resolves the rows through the EPI's tax month, and a cutoff that carries none
+   * — the first half of a semi-monthly period — answers 404. A cutoff still sits
+   * inside a calendar month, so the caller that gets that 404 passes the run's own
+   * `{ year, month }` and asks again; the rows are the same ones the cutoff that
+   * closes the month settles. `data.tax_month` is null in that answer, which is
+   * why nothing here derives the period from the response.
+   *
    * `expectedStatuses: [404]` because this endpoint answers a question rather
    * than failing when the run has no tax month configured — the answer is a 404
    * reading "No tax month found for this cutoff." Every employee on such a cutoff
@@ -35,10 +43,14 @@ export function useEmployeeContributions() {
    * buried the genuine failures. The promise still rejects, so the panel gets to
    * read the 404 as the empty state it is.
    */
-  async function fetchEpiContributions(payoutGroupInstanceId, epiId) {
+  async function fetchEpiContributions(payoutGroupInstanceId, epiId, period = null) {
+    const config = { expectedStatuses: [404] }
+    if (period?.year && period?.month) {
+      config.params = { year: period.year, month: period.month }
+    }
     const { data } = await api.get(
       `${BASE}/payroll/admin/epi-contributions/${payoutGroupInstanceId}/${epiId}/`,
-      { expectedStatuses: [404] },
+      config,
     )
     // This route's body is undocumented — the schema declares `No response body`
     // — so read the containers this payroll family is known to answer with
