@@ -106,8 +106,11 @@
  * the request and a second click cannot land.
  */
 import { computed, ref, watch } from 'vue'
-import { getFullName, getStatus } from '@/composables/utils/employee'
-import { EMPLOYEE_MOVE_STATUS_CATEGORIES } from '@/composables/utils/employmentStatuses'
+import { getFullName } from '@/composables/utils/employee'
+import {
+  EMPLOYEE_MOVE_STATUS_CATEGORIES,
+  employmentStatusLabelOf,
+} from '@/composables/utils/employmentStatuses'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -115,6 +118,11 @@ const props = defineProps({
   employee: { type: Object, default: () => ({}) },
   /** Selectable statuses for the active company, from `useEmploymentStatuses`. */
   statuses: { type: Array, default: () => [] },
+  /** Id/code/name index of every status, so the fallback label can be resolved. */
+  statusLookup: {
+    type: Object,
+    default: () => ({ byId: new Map(), byCode: new Map(), byName: new Map() }),
+  },
   loadingStatuses: { type: Boolean, default: false },
   /**
    * The employee's current status, read by pk from
@@ -160,7 +168,11 @@ const resolvedCurrentStatus = computed(() => {
   return null
 })
 
-const currentLabel = computed(() => resolvedCurrentStatus.value?.name || getStatus(props.employee))
+const currentLabel = computed(
+  () =>
+    resolvedCurrentStatus.value?.name ||
+    employmentStatusLabelOf(props.employee, props.statusLookup),
+)
 
 /**
  * The categories this action may move somebody to — see
