@@ -88,6 +88,60 @@ export function leaveDayValueLabel(days) {
   return `${formatDays(value)} day(s)`
 }
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * The `days` field as a list, whatever shape it arrived in.
+ *
+ * The list endpoint documents the field as a string, the write endpoint takes a
+ * real array, and a bare ISO day is a third form — so all three are read here
+ * and nothing downstream has to know which one the backend chose today. A
+ * payload this code has not seen degrades to no days rather than throwing: a
+ * `JSON.parse` that escaped would take out the whole queue for one odd row.
+ */
+function dayListFrom(value) {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string') return []
+  const text = value.trim()
+  if (!text) return []
+  if (ISO_DAY.test(text)) return [text]
+  try {
+    const parsed = JSON.parse(text)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * The days a leave request covers, in date order.
+ *
+ * De-duplicated rather than counted twice, and unparseable entries dropped: the
+ * list is what an admin reads to see which dates were applied for, so a row that
+ * names no valid day has nothing to say on it.
+ *
+ * @param {string|Array} value the raw `days` field
+ * @returns {Array<{date: string, isHalfDay: boolean}>}
+ */
+export function readLeaveDays(value) {
+  const seen = new Map()
+  for (const entry of dayListFrom(value)) {
+    if (typeof entry === 'string') {
+      const day = entry.trim()
+      if (ISO_DAY.test(day) && !seen.has(day)) seen.set(day, { date: day, isHalfDay: false })
+      continue
+    }
+    const day = typeof entry?.date === 'string' ? entry.date.trim() : ''
+    if (!ISO_DAY.test(day) || seen.has(day)) continue
+    // Both spellings of true, and nothing else: a stored request can carry the
+    // string some serializers produce, while a plain truthy test would read the
+    // string "false" as a half day.
+    const half = entry.is_half_day === true || entry.is_half_day === 'true'
+    seen.set(day, { date: day, isHalfDay: half })
+  }
+  return [...seen.values()].sort((a, b) => a.date.localeCompare(b.date))
+}
+
 /** Nothing the endpoint can be said to have reported. */
 const UNREADABLE_OUTCOME = { updated: 0, skipped: 0, failed: 0, skipMessage: '', readable: false }
 
