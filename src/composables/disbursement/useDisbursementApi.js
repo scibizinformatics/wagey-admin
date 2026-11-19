@@ -158,9 +158,21 @@ export function useDisbursementApi() {
    * No `expectedStatuses`: the no-tax-month case is an answer in the body, not
    * a 404 (`tax_month` comes back `null` and `tax.details` empty), so a reject
    * here is a genuine failure.
+   *
+   * `period` is the optional second question, the tax twin of the one
+   * `fetchEpiContributions` takes: the EPI resolves the tax through its own tax
+   * month, which the cutoff that closes the month owns. A first-half cutoff asks
+   * for its calendar month instead (`?year=&month=`), and reads the same
+   * `monthly_tax` row the closing run settles. Until the route answers that
+   * parameter the request is an ordinary unanswered one — the caller keeps the
+   * documented payload it already had.
    */
-  async function fetchEpiTax(epiId) {
-    const { data } = await api.get(`${BASE}/payroll/admin/epi-tax/${epiId}/`)
+  async function fetchEpiTax(epiId, period = null) {
+    const config = {}
+    if (period?.year && period?.month) {
+      config.params = { year: period.year, month: period.month }
+    }
+    const { data } = await api.get(`${BASE}/payroll/admin/epi-tax/${epiId}/`, config)
     return data
   }
 
@@ -173,12 +185,20 @@ export function useDisbursementApi() {
    * is worth reporting as `skipped` with its own reason, not overwritten.
    * Returns the per-item response; callers should refetch, since applying
    * moves the item's money and the run's figures.
+   *
+   * `period` names the month to settle when the item itself carries no tax month
+   * — the first half of a semi-monthly period. It is sent only when the caller
+   * has one, so a closing cutoff's request is byte-for-byte what it was; a
+   * backend that does not read the field ignores it, and the endpoint's own
+   * double-apply guard still answers `skipped`.
    */
-  async function applyTax(epiIds = [], { force = false } = {}) {
-    const { data } = await api.post(`${BASE}/payroll/admin/apply-tax/`, {
-      epi_ids: epiIds,
-      force,
-    })
+  async function applyTax(epiIds = [], { force = false, period = null } = {}) {
+    const body = { epi_ids: epiIds, force }
+    if (period?.year && period?.month) {
+      body.year = period.year
+      body.month = period.month
+    }
+    const { data } = await api.post(`${BASE}/payroll/admin/apply-tax/`, body)
     return data
   }
 
@@ -190,12 +210,18 @@ export function useDisbursementApi() {
    *
    * Returns the per-item response; callers should refetch, and `skipped` here is
    * "this item had nothing applied to revert", not a failure.
+   *
+   * `period` is the mirror of `applyTax`'s: a first-half cutoff can only name the
+   * month it wants reverted, because the tax is held by the run that settled it.
+   * Omitted when the item owns its own tax month.
    */
-  async function revertTax(epiIds = [], reason = '') {
-    const { data } = await api.post(`${BASE}/payroll/admin/revert-tax/`, {
-      epi_ids: epiIds,
-      reason,
-    })
+  async function revertTax(epiIds = [], reason = '', period = null) {
+    const body = { epi_ids: epiIds, reason }
+    if (period?.year && period?.month) {
+      body.year = period.year
+      body.month = period.month
+    }
+    const { data } = await api.post(`${BASE}/payroll/admin/revert-tax/`, body)
     return data
   }
 
