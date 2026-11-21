@@ -1,20 +1,41 @@
 <template>
   <q-page class="login">
-    <LoginStage />
+    <!-- ═══ Brand panel ═══════════════════════════════════════════════════ -->
+    <!--
+      The only dark surface left on this screen. It carries the product
+      identity and the ambient stage; the form sits on white beside it. On
+      narrow screens the panel is dropped entirely and the card's own mark
+      carries the brand.
+    -->
+    <aside class="login__brand">
+      <LoginStage />
 
-    <div class="login__content">
-      <header class="topbar">
-        <div class="topbar__brand">
-          <img :src="markWhite" alt="Wagey" class="topbar__mark" />
-          <span class="topbar__name">Wagey</span>
-          <span class="topbar__rule"></span>
-          <span class="topbar__product">Admin console</span>
+      <div class="login__brand-inner">
+        <header class="topbar">
+          <div class="topbar__brand">
+            <img :src="markWhite" alt="Wagey" class="topbar__mark" />
+            <span class="topbar__name">Wagey</span>
+            <span class="topbar__rule"></span>
+            <span class="topbar__product">Admin console</span>
+          </div>
+        </header>
+
+        <div class="brand-copy">
+          <p class="brand-copy__eyebrow">Payroll &amp; HR operations</p>
+          <h2 class="brand-copy__title">Everything your workforce runs on, in one console.</h2>
+          <p class="brand-copy__body">
+            Schedules, attendance, contracts and disbursement — reviewed and released from a
+            single place.
+          </p>
         </div>
-      </header>
+      </div>
+    </aside>
 
-      <main class="login__main">
+    <!-- ═══ Form panel ════════════════════════════════════════════════════ -->
+    <main class="login__panel">
+      <div class="login__main">
         <LoginForm />
-      </main>
+      </div>
 
       <footer class="footbar">
         <!-- Only claims what the page can actually verify about itself. -->
@@ -27,7 +48,7 @@
         </template>
         <span>© {{ year }} Wagey</span>
       </footer>
-    </div>
+    </main>
   </q-page>
 </template>
 
@@ -47,42 +68,38 @@ const secureConnection = computed(
 
 <style lang="scss" scoped>
 // ─── Tokens ──────────────────────────────────────────────────────────────────
-// Scoped to the login screen, because this is the one dark surface in the app.
-// The ground is deliberately deeper and cooler than the navigation rail's navy:
-// a full screen of #101f2d reads as a heavy slab, while a near-black ground
-// with the rail's navy lifted out of it for the card gives the card somewhere
-// to sit. The hues are still the app's own — --dash-accent (#2e4fd4) and the
-// rail navy — just re-levelled for a full-bleed dark surface.
+// The form panel is a light surface, so its ink ramp is the dashboard's own
+// neutral ramp and its hairlines are the app's borders. These are the tokens
+// LoginForm.vue reads, so the two files cannot drift apart.
+//
+// The brand panel keeps a dark palette locally (below), because it is the only
+// dark surface left on this screen — the ambient stage lives there, and the
+// form does not need to know about it.
 .login {
-  --lg-void: #070d15;
+  --lg-canvas: #ffffff;
+  --lg-ink: #101828;
+  --lg-ink-2: #344054;
+  --lg-ink-3: #667085;
+  --lg-ink-4: #98a2b3;
+  --lg-line: #eaecf0;
+  --lg-line-strong: #d0d5dd;
   --lg-accent: #2e4fd4;
-  --lg-accent-soft: #5878ff;
+  --lg-accent-soft: #2e4fd4;
 
-  --lg-ink: #ffffff;
-  --lg-ink-2: rgba(255, 255, 255, 0.7);
-  --lg-ink-3: rgba(255, 255, 255, 0.46);
-  --lg-ink-4: rgba(255, 255, 255, 0.3);
-
-  --lg-line: rgba(255, 255, 255, 0.09);
-  --lg-line-strong: rgba(255, 255, 255, 0.16);
-
-  // Solid surfaces, never glass. The card is the navigation rail's navy, so the
-  // first surface you meet is the colour of the chrome you land in; the ground
-  // behind it is darker, which is what separates the two without a blur.
-  --lg-card: #101f2d;
-  --lg-card-line: rgba(255, 255, 255, 0.1);
-  --lg-field: #16273a;
-  --lg-field-hover: #1a2e44;
+  --lg-card: #ffffff;
+  --lg-card-line: #eaecf0;
+  --lg-field: #f9fafb;
+  --lg-field-hover: #f2f4f7;
 
   --lg-r: 14px;
   --lg-ease: cubic-bezier(0.2, 0.8, 0.3, 1);
   --lg-fast: 0.14s;
   --lg-slow: 0.26s;
 
-  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
   min-height: 100vh;
-  overflow: hidden;
-  background: var(--lg-void);
+  background: var(--lg-canvas);
   color: var(--lg-ink);
 }
 
@@ -93,28 +110,25 @@ const secureConnection = computed(
   }
 }
 
-// ─── Content column ──────────────────────────────────────────────────────────
-.login__content {
+// ─── Brand panel ─────────────────────────────────────────────────────────────
+// The stage is absolute inside this panel, so the light, grid and rings are
+// composed against the panel rather than the whole viewport.
+.login__brand {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  background: #070d15;
+  color: #ffffff;
+  isolation: isolate;
+}
+
+.login__brand-inner {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  padding: 24px 28px 22px;
-
-  @media (max-width: 600px) {
-    padding: 18px 16px 16px;
-  }
-}
-
-.login__main {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  // Slightly less below than above: an optically centred card sits a touch
-  // above the true middle, which is where the eye expects it.
-  padding: 28px 0 40px;
+  width: 100%;
+  padding: 34px 44px 34px;
 }
 
 // ─── Top bar ─────────────────────────────────────────────────────────────────
@@ -142,19 +156,84 @@ const secureConnection = computed(
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--lg-ink);
+  color: #ffffff;
 }
 
 .topbar__rule {
   width: 1px;
   height: 13px;
-  background: var(--lg-line-strong);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .topbar__product {
   font-size: 12.5px;
-  color: var(--lg-ink-3);
+  color: rgba(255, 255, 255, 0.46);
   white-space: nowrap;
+}
+
+// ─── Brand copy ──────────────────────────────────────────────────────────────
+// Sits at the foot of the panel: identity at the top, the claim at the bottom,
+// and the stage holds the middle. Reading order stays top-down.
+.brand-copy {
+  max-width: 460px;
+  margin-top: auto;
+  padding-bottom: 4px;
+  animation: fadeUp 0.7s var(--lg-ease) 0.12s both;
+}
+
+.brand-copy__eyebrow {
+  margin: 0 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: rgba(150, 178, 255, 0.9);
+}
+
+.brand-copy__title {
+  margin: 0 0 14px;
+  // Declared, not inherited: Quasar gives `h2` a 3.75rem line height, which
+  // would open a huge line box on a 32px headline.
+  font-size: clamp(24px, 2.2vw, 32px);
+  line-height: 1.18;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+}
+
+.brand-copy__body {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+// ─── Form panel ──────────────────────────────────────────────────────────────
+.login__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 24px 28px 22px;
+  // White, with one very low-contrast wash of the brand hue in the top corner.
+  // It keeps the surface from reading as a blank sheet without tinting the card.
+  background:
+    radial-gradient(760px 460px at 82% -12%, rgba(46, 79, 212, 0.055), transparent 72%),
+    var(--lg-canvas);
+
+  @media (max-width: 600px) {
+    padding: 18px 16px 16px;
+  }
+}
+
+.login__main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // Slightly less below than above: an optically centred card sits a touch
+  // above the true middle, which is where the eye expects it.
+  padding: 28px 0 40px;
 }
 
 // ─── Foot bar ────────────────────────────────────────────────────────────────
@@ -164,7 +243,7 @@ const secureConnection = computed(
   justify-content: center;
   gap: 9px;
   font-size: 11.5px;
-  color: var(--lg-ink-4);
+  color: var(--lg-ink-3);
   animation: fadeUp 0.55s var(--lg-ease) 0.34s both;
 }
 
@@ -206,8 +285,55 @@ const secureConnection = computed(
   }
 }
 
+// ─── Wide screens ────────────────────────────────────────────────────────────
+// The even split is the 1440px design width. The two edges below are where the
+// proportions stop working on their own, so each gets an explicit column set.
+
+// 1024px: at an even split the form panel leaves the card ~30px on each side,
+// which reads as cramped. The brand column gives some of its width back.
+@media (min-width: 901px) and (max-width: 1199px) {
+  .login {
+    grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+  }
+
+  .login__brand-inner {
+    padding: 26px 28px;
+  }
+}
+
+// 2560px: past this the even split turns the brand panel into a very wide dark
+// slab and leaves the card floating in a 1200px white field. The brand column
+// stops growing and the form side takes the rest.
+@media (min-width: 1800px) {
+  .login {
+    grid-template-columns: 860px minmax(0, 1fr);
+  }
+
+  .login__brand-inner {
+    padding: 48px 64px;
+  }
+
+  .brand-copy {
+    max-width: 520px;
+  }
+}
+
+// ─── Narrow screens ──────────────────────────────────────────────────────────
+// One column, and the brand panel goes: a half-width dark slab above a form is
+// worse than no slab at all. The card's mark carries the identity instead.
+@media (max-width: 900px) {
+  .login {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .login__brand {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .topbar,
+  .brand-copy,
   .footbar {
     animation: none;
   }
