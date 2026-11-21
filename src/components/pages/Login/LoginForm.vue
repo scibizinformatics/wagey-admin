@@ -1,7 +1,9 @@
 <template>
   <section class="card" :class="{ 'card--shake': shake, 'card--done': signedIn }">
     <header class="card__head">
-      <img :src="markWhite" alt="Wagey" class="brandmark" :class="{ 'brandmark--lit': signedIn }" />
+      <span class="brandmark" :class="{ 'brandmark--lit': signedIn }">
+        <img :src="markWhite" alt="Wagey" class="brandmark__img" />
+      </span>
       <h1 class="card__title">{{ heading.title }}</h1>
       <p class="card__sub">{{ heading.sub }}</p>
     </header>
@@ -757,65 +759,53 @@ const handleLogin = async () => {
 // ── Card ────────────────────────────────────────────────────────────────────
 .card {
   // Status tints for the reset flow. The app's own --dash-good-mark (#17b26a)
-  // and --dash-critical-mark (#f04438) are tuned for white surfaces and go
-  // muddy on this navy, so these are the same hues re-levelled for a dark
-  // ground — the same adjustment --nav-accent makes for the navigation rail.
-  --lg-ok: #5fdca0;
-  --lg-bad: #ff9f97;
+  // and --dash-critical-mark (#f04438) are tuned for white surfaces, and the
+  // card is a white surface again — so they are used as they are.
+  --lg-ok: #17b26a;
+  --lg-bad: #f04438;
 
   position: relative;
   width: 100%;
   max-width: 392px;
   padding: 30px 30px 24px;
   border-radius: var(--lg-r);
-  // Opaque panel, no backdrop blur: a solid surface sitting on the stage, not a
-  // pane of glass in front of it. Depth is a hairline border, one top-edge
-  // highlight, and a single deep shadow — nothing else.
+  // A white card on a white page, so the edge and the shadow are what give it
+  // a shape: one hairline border, a tight seat and a wide soft lift. On a light
+  // ground the shadow has to be much lighter than it was on the dark stage, or
+  // the card reads as hovering.
   background: var(--lg-card);
   border: 1px solid var(--lg-card-line);
-  // Two shadows, doing different jobs: a tight one that seats the card on the
-  // ground, and a wide soft one that gives it real distance from it. On a dark
-  // surface a single shadow is nearly invisible, which is what leaves a card
-  // looking pasted flat onto the background.
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 2px 8px rgba(0, 0, 0, 0.4),
-    0 34px 80px -28px rgba(0, 0, 0, 0.95);
+    0 1px 2px rgba(16, 24, 40, 0.05),
+    0 18px 44px -16px rgba(16, 24, 40, 0.16);
   animation: cardIn 0.6s var(--lg-ease) both;
   transition:
     box-shadow var(--lg-slow) var(--lg-ease),
     border-color var(--lg-slow) var(--lg-ease);
 
-  // The light in the stage arrives from above, so the card's top edge catches
-  // it: a hairline that fades out towards both corners. One inset highlight
-  // alone is uniform across the whole width, which is not how an edge behaves
-  // under a point source.
-  &::before {
-    content: '';
-    position: absolute;
-    top: -1px;
-    left: 16px;
-    right: 16px;
-    height: 1px;
-    border-radius: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34) 50%, transparent);
-    pointer-events: none;
-  }
-
   @media (max-width: 480px) {
     padding: 26px 22px 22px;
   }
 
+  // A rejected sign-in shakes the card and rings it red. The colour rides the
+  // card's own border/shadow transition, so it fades in with the shake and back
+  // out when `shake` clears 480ms later. With reduced motion the shake is
+  // suppressed but the red ring still shows, so the failure is never silent.
   &--shake {
     animation: shake 0.44s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+    border-color: rgba(240, 68, 56, 0.5);
+    box-shadow:
+      0 0 0 5px rgba(240, 68, 56, 0.11),
+      0 18px 44px -16px rgba(16, 24, 40, 0.16);
   }
 
+  // The successful state: a green ring on the card, matching the green button
+  // and the green brand tile.
   &--done {
-    border-color: rgba(23, 178, 106, 0.4);
+    border-color: rgba(23, 178, 106, 0.55);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.07),
-      0 0 0 4px rgba(23, 178, 106, 0.1),
-      0 34px 80px -28px rgba(0, 0, 0, 0.95);
+      0 0 0 5px rgba(23, 178, 106, 0.13),
+      0 18px 44px -16px rgba(16, 24, 40, 0.14);
   }
 }
 
@@ -864,24 +854,41 @@ const handleLogin = async () => {
   text-align: center;
 }
 
-// The bare mark, with no plate or ring behind it. The size here is the mark's
-// real visual size because `wagey_mark.png` is trimmed to the glyph — the
-// untrimmed asset carries ~69% transparent padding, so a 46px box of it drew a
-// 14px logo.
+// The mark sits on a brand tile rather than bare on the card. On the old dark
+// card a white glyph with a glow was the whole treatment; on white it needs a
+// plate to hold it, and the tile gives the card a focal point without a second
+// logo. The image inside is sized to the glyph's real visual size, because
+// `wagey_mark.png` is trimmed to the glyph.
 .brandmark {
-  display: block;
-  width: 26px;
-  height: auto;
-  margin: 0 auto 16px;
-  // With no plate, the glow is what makes the mark read as lit rather than
-  // pasted on.
-  filter: drop-shadow(0 0 10px rgba(126, 158, 255, 0.4));
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 18px;
+  border-radius: 13px;
+  // The rail's navy, not the action blue: the tile is brand furniture, and the
+  // submit button is the only blue action on the card.
+  background: linear-gradient(180deg, #192e45 0%, #101f2d 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    0 8px 18px -8px rgba(16, 31, 45, 0.55);
   animation: markIn 0.7s var(--lg-ease) 0.06s both;
-  transition: filter var(--lg-slow) var(--lg-ease);
+  transition:
+    background var(--lg-slow) var(--lg-ease),
+    box-shadow var(--lg-slow) var(--lg-ease);
 
   &--lit {
-    filter: drop-shadow(0 0 13px rgba(23, 178, 106, 0.5));
+    background: linear-gradient(180deg, #17b26a 0%, #0f9155 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.24),
+      0 8px 18px -8px rgba(23, 178, 106, 0.65);
   }
+}
+
+.brandmark__img {
+  display: block;
+  width: 22px;
+  height: auto;
 }
 
 @keyframes markIn {
@@ -964,13 +971,15 @@ const handleLogin = async () => {
   }
 
   // A soft halo rather than a hard outline, so it doesn't fight the hairlines.
+  // The field lifts to white on focus: the tinted resting fill is what marks it
+  // as a control, and the white plate is what marks it as active.
   &:focus-within {
-    background: var(--lg-field-hover);
-    border-color: rgba(120, 150, 255, 0.7);
-    box-shadow: 0 0 0 4px rgba(88, 120, 255, 0.15);
+    background: var(--lg-card);
+    border-color: var(--lg-accent);
+    box-shadow: 0 0 0 4px rgba(46, 79, 212, 0.12);
 
     .input__icon {
-      color: rgba(160, 185, 255, 0.95);
+      color: var(--lg-accent);
     }
   }
 
@@ -1017,12 +1026,12 @@ const handleLogin = async () => {
   }
 
   &::placeholder {
-    color: rgba(255, 255, 255, 0.24);
+    color: #b4bcc8;
   }
 
   // The browser default selection blue is a different blue from the product's.
   &::selection {
-    background: rgba(88, 120, 255, 0.34);
+    background: rgba(46, 79, 212, 0.2);
   }
 
   &:disabled {
@@ -1030,13 +1039,13 @@ const handleLogin = async () => {
   }
 
   // Chrome paints its own yellow autofill plate over the field. The inset
-  // shadow trick repaints it in the card's own colour.
+  // shadow trick repaints it in the field's own colour.
   &:-webkit-autofill,
   &:-webkit-autofill:hover,
   &:-webkit-autofill:focus {
-    -webkit-text-fill-color: #ffffff;
-    -webkit-box-shadow: 0 0 0 100px #16273a inset;
-    caret-color: #ffffff;
+    -webkit-text-fill-color: var(--lg-ink);
+    -webkit-box-shadow: 0 0 0 100px #f9fafb inset;
+    caret-color: var(--lg-ink);
   }
 }
 
@@ -1059,13 +1068,13 @@ const handleLogin = async () => {
 
   &:hover {
     color: var(--lg-ink);
-    background: rgba(255, 255, 255, 0.07);
+    background: rgba(16, 24, 40, 0.06);
   }
 
   &:focus-visible {
     outline: none;
     color: var(--lg-ink);
-    box-shadow: 0 0 0 3px rgba(88, 120, 255, 0.22);
+    box-shadow: 0 0 0 3px rgba(46, 79, 212, 0.2);
   }
 }
 
@@ -1075,7 +1084,7 @@ const handleLogin = async () => {
   gap: 5px;
   margin: 7px 0 0;
   font-size: 11.5px;
-  color: #fdb022;
+  color: #b54708;
 }
 
 .hint-enter-active,
@@ -1100,17 +1109,19 @@ const handleLogin = async () => {
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 500;
-  color: rgba(150, 178, 255, 0.92);
+  // The rail navy, matching the brand tile. It is a dark link rather than the
+  // action blue, so the only blue on the card is the submit button.
+  color: #101f2d;
   text-decoration: none;
   cursor: pointer;
   transition: color var(--lg-fast) var(--lg-ease);
 
   &:hover:not(:disabled) {
-    color: #ffffff;
+    color: #1a3a5c;
   }
 
   &:focus-visible {
-    outline: 2px solid rgba(120, 150, 255, 0.75);
+    outline: 2px solid rgba(16, 31, 45, 0.5);
     outline-offset: 3px;
     border-radius: 3px;
   }
@@ -1147,7 +1158,7 @@ const handleLogin = async () => {
   height: 16px;
   border-radius: 5px;
   border: 1px solid var(--lg-line-strong);
-  background: var(--lg-field);
+  background: var(--lg-card);
   color: transparent;
   transition:
     background var(--lg-fast) var(--lg-ease),
@@ -1156,7 +1167,7 @@ const handleLogin = async () => {
 }
 
 .check:hover .check__box {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: var(--lg-ink-4);
 }
 
 .check__input:checked + .check__box {
@@ -1166,7 +1177,7 @@ const handleLogin = async () => {
 }
 
 .check__input:focus-visible + .check__box {
-  box-shadow: 0 0 0 4px rgba(88, 120, 255, 0.22);
+  box-shadow: 0 0 0 4px rgba(46, 79, 212, 0.2);
 }
 
 .check__label {
@@ -1182,7 +1193,7 @@ const handleLogin = async () => {
   position: relative;
   height: 44px;
   margin-top: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(16, 24, 40, 0.06);
   border-radius: 8px;
   background: linear-gradient(180deg, #3c5ee4 0%, #2a45c4 100%);
   color: #ffffff;
@@ -1215,13 +1226,16 @@ const handleLogin = async () => {
     outline: none;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      0 0 0 4px rgba(88, 120, 255, 0.3);
+      0 0 0 4px rgba(46, 79, 212, 0.22);
   }
 
-  &:disabled {
+  // `:not(.submit--done)` matters: a successful sign-in disables the button for
+  // the confirmation hold, and without this the disabled rule out-specifies
+  // `--done` and paints the green confirmation grey.
+  &:disabled:not(.submit--done) {
     cursor: not-allowed;
     color: var(--lg-ink-4);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--lg-field);
     border-color: var(--lg-line);
     box-shadow: none;
   }
@@ -1231,8 +1245,13 @@ const handleLogin = async () => {
   }
 
   &--done {
+    cursor: default;
+    color: #ffffff;
     background: linear-gradient(180deg, #17b26a 0%, #0f9155 100%);
-    opacity: 1;
+    // Chromium dims every disabled `<button>` to 0.6 at `!important` level, and
+    // `signedIn` keeps the button disabled through the confirmation hold. Only
+    // an `!important` declaration can paint the green at full strength.
+    opacity: 1 !important;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.22),
       0 6px 20px -8px rgba(23, 178, 106, 0.7);
@@ -1262,7 +1281,7 @@ const handleLogin = async () => {
   margin: 0;
   font-size: 11.5px;
   line-height: 1.6;
-  color: var(--lg-ink-4);
+  color: var(--lg-ink-3);
 }
 
 // ── Back out of the reset flow ──────────────────────────────────────────────
@@ -1285,7 +1304,7 @@ const handleLogin = async () => {
   }
 
   &:focus-visible {
-    outline: 2px solid rgba(120, 150, 255, 0.75);
+    outline: 2px solid rgba(46, 79, 212, 0.6);
     outline-offset: 3px;
     border-radius: 3px;
   }
@@ -1337,7 +1356,7 @@ const handleLogin = async () => {
   border-radius: 50%;
   border: 1px solid var(--lg-line-strong);
   background: transparent;
-  color: var(--lg-ink-4);
+  color: var(--lg-ink-3);
   font-size: 10.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1348,7 +1367,7 @@ const handleLogin = async () => {
 }
 
 .step__label {
-  color: var(--lg-ink-4);
+  color: var(--lg-ink-3);
   white-space: nowrap;
   transition: color var(--lg-fast) var(--lg-ease);
 }
@@ -1356,9 +1375,9 @@ const handleLogin = async () => {
 // A soft tint, not a saturated fill — three of these sit in one short row.
 .step--now {
   .step__mark {
-    border-color: rgba(120, 150, 255, 0.8);
-    background: rgba(88, 120, 255, 0.16);
-    color: #ffffff;
+    border-color: var(--lg-accent);
+    background: rgba(46, 79, 212, 0.1);
+    color: var(--lg-accent);
   }
 
   .step__label {
@@ -1369,8 +1388,8 @@ const handleLogin = async () => {
 
 .step--done {
   .step__mark {
-    border-color: rgba(95, 220, 160, 0.5);
-    background: rgba(95, 220, 160, 0.14);
+    border-color: rgba(23, 178, 106, 0.45);
+    background: rgba(23, 178, 106, 0.1);
     color: var(--lg-ok);
   }
 
@@ -1388,7 +1407,7 @@ const handleLogin = async () => {
   padding: 9px 11px;
   border-radius: 8px;
   border: 1px solid var(--lg-line);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--lg-field);
   font-size: 12.5px;
   color: var(--lg-ink-2);
   animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
@@ -1432,7 +1451,7 @@ const handleLogin = async () => {
 .resend {
   margin: 0;
   font-size: 11.5px;
-  color: var(--lg-ink-4);
+  color: var(--lg-ink-3);
   animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
 }
 
@@ -1440,16 +1459,16 @@ const handleLogin = async () => {
 // Tinted, not outlined: it is a state the person is mid-way through fixing,
 // not an error they have committed.
 .input--mismatch {
-  border-color: rgba(255, 159, 151, 0.55);
-  background: rgba(255, 159, 151, 0.07);
+  border-color: rgba(240, 68, 56, 0.5);
+  background: rgba(240, 68, 56, 0.06);
 
   .input__icon {
     color: var(--lg-bad);
   }
 
   &:focus-within {
-    border-color: rgba(255, 159, 151, 0.8);
-    box-shadow: 0 0 0 4px rgba(255, 159, 151, 0.14);
+    border-color: rgba(240, 68, 56, 0.75);
+    box-shadow: 0 0 0 4px rgba(240, 68, 56, 0.12);
   }
 }
 
@@ -1469,13 +1488,13 @@ const handleLogin = async () => {
   align-items: center;
   gap: 7px;
   font-size: 11.5px;
-  color: var(--lg-ink-4);
+  color: var(--lg-ink-3);
   transition: color var(--lg-fast) var(--lg-ease);
 }
 
 .rule__mark {
   flex-shrink: 0;
-  color: var(--lg-ink-4);
+  color: var(--lg-ink-3);
   transition: color var(--lg-fast) var(--lg-ease);
 }
 
@@ -1498,7 +1517,7 @@ const handleLogin = async () => {
 // A hint that is guidance rather than a warning, so it does not borrow the
 // amber that `.field__hint` uses for Caps Lock.
 .field__hint--quiet {
-  color: var(--lg-ink-4);
+  color: var(--lg-ink-3);
 }
 
 @keyframes riseIn {
