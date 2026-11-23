@@ -47,6 +47,7 @@ import { normalizeCutoffInstance } from 'src/composables/utils/leaveCutoffs'
 import {
   companyCutoffShapes as companyCutoffShapesShared,
   cutoffShape,
+  formatCutoffWindow,
 } from 'src/composables/utils/cutoffState'
 import { countCutoffStages, normalizeCutoffStage } from 'src/composables/utils/cutoffStatus'
 
@@ -995,9 +996,20 @@ export function useDashboardSummary() {
   // Every cutoff the company has, oldest first, so the picker reads as a
   // timeline. `allCutoffs` rather than `cutoffs`, because a cutoff nobody has run
   // payroll for is still a cutoff an owner may want to ask about.
+  //
+  // Options are labelled by their window (`Sep 16–30, 2026`), not by
+  // `period_label`: the names are not usable in a list — a company running a
+  // semi-monthly cutoff calls every one of them the same thing — and a full month
+  // name overflows the 190px control. `formatCutoffWindow` is the same short form
+  // the Disbursement list's cutoff picker uses, so the two screens agree. Only the
+  // label changes; `value` stays the id (or the raw label) the rest of this module
+  // matches on.
   const cutoffOptions = computed(() =>
     allCutoffs.value.map((c) => ({
-      label: c.period_label || `${c.start_date} – ${c.end_date}`,
+      label:
+        formatCutoffWindow(c.start_date, c.end_date) ||
+        c.period_label ||
+        `${c.start_date} – ${c.end_date}`,
       value: c.id ?? c.period_label,
       cutoff: c,
     })),
