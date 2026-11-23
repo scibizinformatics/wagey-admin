@@ -1,9 +1,6 @@
 <template>
   <section class="card" :class="{ 'card--shake': shake, 'card--done': signedIn }">
     <header class="card__head">
-      <span class="brandmark" :class="{ 'brandmark--lit': signedIn }">
-        <img :src="markWhite" alt="Wagey" class="brandmark__img" />
-      </span>
       <h1 class="card__title">{{ heading.title }}</h1>
       <p class="card__sub">{{ heading.sub }}</p>
     </header>
@@ -363,7 +360,6 @@ import { useAuth } from '@/composables/page/useAuth'
 import { useToast } from 'src/composables/useToast'
 import { writeStored } from 'src/composables/utils/storage'
 import { extractErrorMessage } from 'src/composables/utils/http'
-import markWhite from '@/assets/wagey_mark.png'
 
 const router = useRouter()
 const route = useRoute()
@@ -770,14 +766,15 @@ const handleLogin = async () => {
   padding: 30px 30px 24px;
   border-radius: var(--lg-r);
   // A white card on a white page, so the edge and the shadow are what give it
-  // a shape: one hairline border, a tight seat and a wide soft lift. On a light
-  // ground the shadow has to be much lighter than it was on the dark stage, or
-  // the card reads as hovering.
+  // a shape: one hairline border, a tight seat and a deeper, wider lift. The
+  // lift is what separates the form from the ground — with the field of marks
+  // floating around it, the card has to read as a surface in front of them, not
+  // as another pale shape on the page.
   background: var(--lg-card);
   border: 1px solid var(--lg-card-line);
   box-shadow:
-    0 1px 2px rgba(16, 24, 40, 0.05),
-    0 18px 44px -16px rgba(16, 24, 40, 0.16);
+    0 2px 4px rgba(16, 24, 40, 0.08),
+    0 20px 48px -8px rgba(16, 24, 40, 0.18);
   animation: cardIn 0.6s var(--lg-ease) both;
   transition:
     box-shadow var(--lg-slow) var(--lg-ease),
@@ -796,7 +793,7 @@ const handleLogin = async () => {
     border-color: rgba(240, 68, 56, 0.5);
     box-shadow:
       0 0 0 5px rgba(240, 68, 56, 0.11),
-      0 18px 44px -16px rgba(16, 24, 40, 0.16);
+      0 20px 48px -8px rgba(16, 24, 40, 0.18);
   }
 
   // The successful state: a green ring on the card, matching the green button
@@ -805,7 +802,7 @@ const handleLogin = async () => {
     border-color: rgba(23, 178, 106, 0.55);
     box-shadow:
       0 0 0 5px rgba(23, 178, 106, 0.13),
-      0 18px 44px -16px rgba(16, 24, 40, 0.14);
+      0 20px 48px -8px rgba(16, 24, 40, 0.16);
   }
 }
 
@@ -845,62 +842,16 @@ const handleLogin = async () => {
 }
 
 // ── Head ────────────────────────────────────────────────────────────────────
-// Centred: the mark, the title and the subtitle share the card's vertical axis,
-// and the fields below keep their own left edge. The subtitle is held to a
-// narrower measure than the card so it breaks into balanced lines instead of
-// running the full width and leaving a short orphan on the second line.
+// Centred: the title and the subtitle share the card's vertical axis, and the
+// fields below keep their own left edge. The subtitle is held to a narrower
+// measure than the card so it breaks into balanced lines instead of running the
+// full width and leaving a short orphan on the second line.
+//
+// No logo here: the page's own topbar carries the brand, so a second mark at the
+// top of the card would only repeat it.
 .card__head {
   margin-bottom: 24px;
   text-align: center;
-}
-
-// The mark sits on a brand tile rather than bare on the card. On the old dark
-// card a white glyph with a glow was the whole treatment; on white it needs a
-// plate to hold it, and the tile gives the card a focal point without a second
-// logo. The image inside is sized to the glyph's real visual size, because
-// `wagey_mark.png` is trimmed to the glyph.
-.brandmark {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  margin: 0 auto 18px;
-  border-radius: 13px;
-  // The rail's navy, not the action blue: the tile is brand furniture, and the
-  // submit button is the only blue action on the card.
-  background: linear-gradient(180deg, #192e45 0%, #101f2d 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.11),
-    0 8px 18px -8px rgba(16, 31, 45, 0.55);
-  animation: markIn 0.7s var(--lg-ease) 0.06s both;
-  transition:
-    background var(--lg-slow) var(--lg-ease),
-    box-shadow var(--lg-slow) var(--lg-ease);
-
-  &--lit {
-    background: linear-gradient(180deg, #17b26a 0%, #0f9155 100%);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.24),
-      0 8px 18px -8px rgba(23, 178, 106, 0.65);
-  }
-}
-
-.brandmark__img {
-  display: block;
-  width: 22px;
-  height: auto;
-}
-
-@keyframes markIn {
-  from {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.82);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 .card__title {
@@ -1195,7 +1146,11 @@ const handleLogin = async () => {
   margin-top: 5px;
   border: 1px solid rgba(16, 24, 40, 0.06);
   border-radius: 8px;
-  background: linear-gradient(180deg, #3c5ee4 0%, #2a45c4 100%);
+  // The app's filled action, flat: `--lg-brand` is `$brand-dark` (#102335), the
+  // colour every primary button on the other pages wears. No gradient — this is
+  // the one button on the screen, and it should match them rather than invent a
+  // second treatment.
+  background: var(--lg-brand);
   color: #ffffff;
   font-family: inherit;
   font-size: 14px;
@@ -1204,29 +1159,31 @@ const handleLogin = async () => {
   cursor: pointer;
   animation: riseIn 0.55s var(--lg-ease) var(--d, 0ms) both;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 6px 18px -8px rgba(46, 79, 212, 0.7);
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 6px 18px -8px rgba(16, 35, 53, 0.45);
   transition:
     background var(--lg-fast) var(--lg-ease),
     box-shadow var(--lg-slow) var(--lg-ease),
     opacity var(--lg-fast) var(--lg-ease);
 
   &:hover:not(:disabled) {
-    background: linear-gradient(180deg, #4667ef 0%, #2f4cd2 100%);
+    background: var(--lg-brand-hover);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.26),
-      0 10px 24px -8px rgba(46, 79, 212, 0.8);
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 10px 24px -8px rgba(16, 35, 53, 0.55);
 
     .submit__arrow {
       transform: translateX(3px);
     }
   }
 
+  // The ring follows the button's own ink: a blue halo around a navy fill reads
+  // as a leftover from the accent palette.
   &:focus-visible {
     outline: none;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      0 0 0 4px rgba(46, 79, 212, 0.22);
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      0 0 0 4px rgba(16, 35, 53, 0.22);
   }
 
   // `:not(.submit--done)` matters: a successful sign-in disables the button for
@@ -1536,7 +1493,6 @@ const handleLogin = async () => {
   .card,
   .card__title,
   .card__sub,
-  .brandmark,
   .field,
   .check,
   .submit,
