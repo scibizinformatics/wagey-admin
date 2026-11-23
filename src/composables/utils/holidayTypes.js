@@ -73,8 +73,10 @@ export function normalizeHolidayPolicy(raw) {
     // The list endpoints send the name; a freshly assigned row may not, and the
     // caller resolves it against the company's leave types instead.
     leaveTypeName: raw?.leave_type_name || '',
-    // Null rather than 0: an unsent order means "the server will assign one",
-    // and 0 would sort it ahead of the chain it is meant to join the end of.
+    // Null rather than 0: an unsent order means the row carries no position of
+    // its own, and 0 would sort it ahead of the chain. Note the *server* does
+    // not choose the end of the chain for a missing order — it defaults to 1,
+    // which is why `useAdminHolidayPolicies.assignPolicy` sends one explicitly.
     order: raw?.order ?? null,
     isEnabled: raw?.is_enabled ?? true,
   }
@@ -241,7 +243,13 @@ export function holidayTypePayload(form, companyId) {
   return payload
 }
 
-/** A policy draft as the API takes it. An absent order is left to the server. */
+/**
+ * A policy draft as the API takes it.
+ *
+ * An absent order is left out rather than sent as null — but the server's own
+ * default for it is 1, not "the end of the chain", so a caller that wants the
+ * position after an existing chain must compute it (`nextOrder`) and pass it.
+ */
 export function holidayPolicyPayload(draft) {
   const payload = {
     leave_type: Number(draft.leave_type),
