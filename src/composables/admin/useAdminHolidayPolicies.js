@@ -6,6 +6,7 @@ import { extractErrorMessage } from 'src/composables/utils/http'
 import { createRequestToken } from 'src/composables/utils/requestToken'
 import {
   holidayPolicyPayload,
+  nextOrder,
   normalizeHolidayPolicy,
   parkingOrder,
   sortHolidayPolicies,
@@ -32,6 +33,14 @@ import {
  * left part-moved rather than silently wrong, so the list is re-read and the
  * failure says so out loud; the alternative — reporting success on a partial
  * write — would leave an admin believing a priority they cannot see is in force.
+ *
+ * **Assign sends the position explicitly.** `order` is unique per holiday type
+ * *and the endpoint defaults it to 1*, which is exactly where a chain starts —
+ * so omitting it is not "add me at the end", it is a guaranteed
+ * `The fields holiday_type, order must make a unique set` on every type that
+ * already has a source. The end of the chain is computed here, and a collision
+ * (another admin added a source since this chain was read) is retried once
+ * against a freshly read chain.
  */
 export function useAdminHolidayPolicies() {
   const { companyId } = useCompany()
@@ -90,6 +99,23 @@ export function useAdminHolidayPolicies() {
 
   // ─── Assign ────────────────────────────────────────────────────────────────
 
+  /**
+   * A 400 from the unique-together rule on `(holiday_type, order)`.
+   *
+   * That message is the only assign failure worth a second attempt: it means
+   * the position computed from the chain we hold is already taken, and the
+   * request created nothing, so retrying cannot duplicate a row.
+   */
+  function isOrderCollision(error) {
+    if (error?.response?.status !== 400) return false
+    const data = error.response.data
+    if (!data || typeof data !== 'object') return false
+    const messages = [data.non_field_errors, data.order]
+      .flat()
+      .filter((message) => typeof message === 'string')
+    return messages.some((message) => /unique set/i.test(message))
+  }
+
   /** @returns {Promise<boolean>} whether it was saved. */
   async function assignPolicy(holidayTypeId, draft) {
     if (holidayTypeId == null) {
@@ -97,7 +123,11 @@ export function useAdminHolidayPolicies() {
       return false
     }
 
-    const invalid = validateHolidayPolicyDraft(draft, policies.value)
+    // The chain position the dialog advertises, sent as-is. Leaving `order` off
+    // makes the server use its default of 1, which collides with the first
+    // source of any chain that already has one.
+    const positioned = { ...draft, order: nextOrder(policies.value) }
+    const invalid = validateHolidayPolicyDraft(positioned, policies.value)
     if (invalid) {
       toast.warning(invalid)
       return false
@@ -105,10 +135,22 @@ export function useAdminHolidayPolicies() {
 
     saving.value = true
     try {
-      await api.post('/attendance/holiday-policies/assign/', {
-        holiday_type: Number(holidayTypeId),
-        ...holidayPolicyPayload(draft),
-      })
+      try {
+        await api.post('/attendance/holiday-policies/assign/', {
+          holiday_type: Number(holidayTypeId),
+          ...holidayPolicyPayload(positioned),
+        })
+      } catch (error) {
+        if (!isOrderCollision(error)) throw error
+        // The chain moved under us — read it again and take the position after
+        // whatever landed. One retry only: a second collision means someone
+        // else is still writing, and the error is the honest answer then.
+        await fetchPolicies(holidayTypeId)
+        await api.post('/attendance/holiday-policies/assign/', {
+          holiday_type: Number(holidayTypeId),
+          ...holidayPolicyPayload({ ...draft, order: nextOrder(policies.value) }),
+        })
+      }
       toast.success('Leave source added')
       await fetchPolicies(holidayTypeId)
       return true
