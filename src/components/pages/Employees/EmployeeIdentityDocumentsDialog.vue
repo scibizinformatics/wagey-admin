@@ -63,7 +63,7 @@
                       <a
                         :href="doc.attachment"
                         target="_blank"
-                        rel="noopener"
+                        rel="noopener noreferrer"
                         class="docs-row__link"
                         >Attachment</a
                       >
