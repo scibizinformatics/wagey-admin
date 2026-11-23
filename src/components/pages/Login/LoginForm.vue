@@ -736,7 +736,13 @@ const handleLogin = async () => {
 
     // Let the button land on its confirmed state before the route swaps out.
     signedIn.value = true
-    const redirectPath = route.query.redirect || '/app'
+    // `redirect` is whatever was in the address bar, so it is not trusted: only
+    // an in-app path is followed. A protocol-relative `//evil.com`, a
+    // `javascript:` string or anything else falls back to the dashboard —
+    // Vue Router will not leave the app on its own, but it should not be the
+    // thing standing between a crafted link and a navigation either.
+    const wanted = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    const redirectPath = /^\/(?!\/)/.test(wanted) ? wanted : '/app'
     setTimeout(() => router.push(redirectPath), 420)
   } catch (error) {
     console.error('Login error:', error)
