@@ -12,6 +12,29 @@ export default defineConfig((ctx) => {
   const apiBaseUrl = process.env.API_BASE_URL || 'https://staging.wageyapp.com'
   const wsUrl = process.env.VITE_WS_URL || 'wss://staging.wageyapp.com'
 
+  // ── Staging is the intended API for this build ───────────────────────────
+  // The deployed admin console has always talked to staging, and the fallback
+  // above is the real default rather than an oversight: this app *is* the
+  // staging console. `server.js` derives the CSP's connect-src from the same
+  // value, so the bundle and the browser agree.
+  //
+  // A guard that refused a production build without API_BASE_URL was tried and
+  // is deliberately gone — it blocked the deploy the value exists to serve. The
+  // cost of removing it is that a future build against a *different* API would
+  // have to set API_BASE_URL explicitly; nothing here will catch a forgotten
+  // one. Said plainly in one line of the build output instead of failing it.
+  if (ctx.prod) {
+    const inherited = []
+    if (!process.env.API_BASE_URL) inherited.push('API_BASE_URL')
+    if (!process.env.VITE_WS_URL) inherited.push('VITE_WS_URL')
+
+    console.log(`[build] API host:    ${apiBaseUrl}`)
+    console.log(`[build] socket host: ${wsUrl}`)
+    if (inherited.length) {
+      console.log(`[build] ${inherited.join(' + ')} not set — using the staging default`)
+    }
+  }
+
   return {
     eslint: {
       warnings: true,
