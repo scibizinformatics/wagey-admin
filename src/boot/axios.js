@@ -29,9 +29,64 @@ const PUBLIC_PATHS = [
   '/user/reset-password/',
 ]
 
+/**
+ * The path component of a request URL, with or without an origin.
+ *
+ * `config.url` is normally a leading-slash path, but a caller may pass a full
+ * URL, and `baseURL` is applied by axios separately. Parsing against a dummy
+ * origin handles both; the split fallback covers a value `URL` rejects.
+ */
+function pathnameOf(url) {
+  if (!url) return ''
+  try {
+    return new URL(url, 'http://relative.invalid').pathname
+  } catch {
+    return String(url).split(/[?#]/)[0]
+  }
+}
+
+/**
+ * Is this request allowed to go out with no session?
+ *
+ * The **pathname** must end with one of `PUBLIC_PATHS`, and the query string is
+ * not part of what is matched.
+ *
+ * This used to be `PUBLIC_PATHS.some((path) => url.includes(path))`, run against
+ * the raw URL. Two things were wrong with that: a request whose *query* happened
+ * to carry a public path (`?next=/api/employee/login/`) was classified as public
+ * — skipping both the no-session guard below and the 401-refresh branch, i.e.
+ * steering the one code path that decides whether a person is still signed in
+ * from a URL somebody else can write — and any path anywhere in the URL matched.
+ *
+ * A suffix, not an equality, on purpose: callers reach these endpoints through
+ * the deprecated `BASE` re-export in `composables/utils/http.js`, which is the
+ * full API origin in a production build, so `config.url` may be an absolute URL
+ * (handled by parsing) and may carry a proxy prefix or a doubled slash if
+ * `API_BASE_URL` has a trailing one. Equality would make `…//user/forgot-password/`
+ * public-in-name-only and then reject the request locally with `ERR_NO_SESSION`
+ * — a password reset that cannot be attempted.
+ */
 function isPublicRequest(config) {
-  const url = config?.url || ''
-  return PUBLIC_PATHS.some((path) => url.includes(path))
+  const pathname = pathnameOf(config?.url)
+  return pathname ? PUBLIC_PATHS.some((path) => pathname.endsWith(path)) : false
+}
+
+/**
+ * The human-readable part of an error body, if it has one.
+ *
+ * Accepts a bare string too (Django's own 404 page, a plain-text refusal) but
+ * truncates it: the point is to name the failure, not to paste a response body
+ * into a console somebody is about to screenshot.
+ */
+function messageFrom(data) {
+  if (typeof data === 'string') return data.slice(0, 200)
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null
+  const message = data.detail ?? data.message ?? data.error
+  if (typeof message === 'string') return message.slice(0, 200)
+  // A DRF validation body is an object of field → [errors]. The field names are
+  // enough to place the failure; the values are exactly what must not be logged.
+  const fields = Object.keys(data)
+  return fields.length ? `fields: ${fields.join(', ')}` : null
 }
 
 // Axios v1 hands the interceptor an AxiosHeaders instance on the way out but a
@@ -180,10 +235,15 @@ api.interceptors.response.use(
   async (error) => {
     const req = error.config || {}
     const res = error.response || {}
-    let dataPreview = res.data
-    if (typeof dataPreview === 'string' && dataPreview.length > 200) {
-      dataPreview = dataPreview.slice(0, 200) + '...[truncated]'
-    }
+    // Only the server's own error text is logged, never `res.data`.
+    //
+    // A failing response body is whatever the endpoint was returning, and on
+    // this product that means review rows carrying salary, contributions and
+    // employee names. `console.error` is deliberately kept in the production
+    // bundle, so the old line put that body into the console of a real signed-in
+    // session and into every screenshot attached to a bug report. `detail` /
+    // `message` / `error` is the part the server wrote for a person to read.
+    const serverMessage = messageFrom(res.data)
     // Some endpoints answer a question rather than fail: `active-contract`
     // returns 404 for "this employee has no active contract", and the attendance
     // audit trail returns 404 for "nothing recorded against this punch yet".
@@ -194,16 +254,16 @@ api.interceptors.response.use(
     const expected = req.expectedStatuses
     const isExpected = Array.isArray(expected) && expected.includes(res.status)
     if (!isExpected) {
-      console.error(
+      const parts = [
         '[axios error] status:',
         res.status,
         '| url:',
         req.url,
         '| method:',
         req.method,
-        '\ndata:',
-        dataPreview,
-      )
+      ]
+      if (serverMessage) parts.push(`\nmessage: ${serverMessage}`)
+      console.error(...parts)
     }
 
     if (res.status === 401 && !isPublicRequest(req) && !req._retriedAfterRefresh) {
