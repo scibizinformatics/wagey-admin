@@ -8,6 +8,17 @@
       :status="pgiStatus"
       :stepper-key="stepperKey"
     >
+      <ReviewBlockersNotice
+        v-if="!releaseClosed"
+        :counts="blockerCounts"
+        :held-count="serverOnlyHeldCount"
+        :message="serverBlockerMessage"
+        :warning="blockerWarning"
+        :checking="approvalsChecking"
+        :loading="approvalsLoading"
+        @recheck="recheckApprovals"
+      />
+
       <DisbursementStatRow :tiles="statTiles" :loading="loading" />
 
       <DisbursementTableCard
@@ -32,9 +43,10 @@
           <!-- Reviewing the rest in one go, beside reviewing them one at a time
                from the row menu. It disappears once there is nobody left to
                review rather than sitting there disabled. Both routes ask first —
-               see `ConfirmDialog` at the end of the template. -->
+               see `ConfirmDialog` at the end of the template. Employees still
+               waiting on a leave or overtime decision are not in this batch. -->
           <q-btn
-            v-if="!reviewClosed && unreviewedIds.length"
+            v-if="!reviewClosed && reviewableUnreviewedIds.length"
             outline
             no-caps
             dense
@@ -42,14 +54,23 @@
             :label="reviewedIds.length ? 'Review the rest' : 'Review all'"
             class="btn-outline"
             :loading="reviewingAll"
-            :disable="reviewingAll"
+            :disable="reviewingAll || approvalsChecking"
             @click="requestReviewAll"
           >
             <q-tooltip>
-              Reviews the {{ unreviewedIds.length }} employee{{
-                unreviewedIds.length === 1 ? '' : 's'
-              }}
-              not reviewed yet
+              <div v-if="approvalsChecking">Checking pending approvals…</div>
+              <template v-else>
+                <div>
+                  Reviews the {{ reviewableUnreviewedIds.length }} employee{{
+                    reviewableUnreviewedIds.length === 1 ? '' : 's'
+                  }}
+                  not reviewed yet
+                </div>
+                <div v-if="onHoldUnreviewedCount">
+                  {{ onHoldUnreviewedCount }} with pending leave or overtime
+                  {{ onHoldUnreviewedCount === 1 ? 'stays' : 'stay' }} on hold
+                </div>
+              </template>
             </q-tooltip>
           </q-btn>
 
@@ -61,20 +82,24 @@
             label="Release payslips"
             class="btn-primary"
             :loading="releasing"
-            :disable="!releasableIds.length || releasing"
+            :disable="!releasableIds.length || releasing || approvalsChecking"
             @click="requestReleaseAll"
           >
-            <q-tooltip v-if="releaseClosed">
+            <q-tooltip v-if="approvalsChecking">Checking pending approvals…</q-tooltip>
+            <q-tooltip v-else-if="releaseClosed">
               Payslips for this run have already been released
+            </q-tooltip>
+            <q-tooltip v-else-if="!releasableIds.length && onHoldReviewedCount">
+              {{ onHoldReviewedCount }} reviewed employee{{
+                onHoldReviewedCount === 1 ? ' is' : 's are'
+              }}
+              on hold until their leave or overtime requests are approved
             </q-tooltip>
             <q-tooltip v-else-if="!releasableIds.length">
               Review at least one employee first
             </q-tooltip>
-            <q-tooltip v-else-if="unreviewedIds.length">
-              Releases the {{ releasableIds.length }} reviewed employee{{
-                releasableIds.length === 1 ? '' : 's'
-              }}; the {{ unreviewedIds.length }} still unreviewed
-              {{ unreviewedIds.length === 1 ? 'is' : 'are' }} left out
+            <q-tooltip v-else-if="unreviewedIds.length || onHoldReviewedCount">
+              {{ releaseHoldNote }}
             </q-tooltip>
           </q-btn>
         </template>
@@ -148,6 +173,16 @@
                   <span class="identity-initials">{{ avatarOf(props.row.employee).initials }}</span>
                 </q-avatar>
                 <span class="identity-name">{{ props.row.employee }}</span>
+                <q-icon
+                  v-if="isBlocked(props.row.epi_id)"
+                  name="o_hourglass_top"
+                  size="15px"
+                  class="hold-icon"
+                >
+                  <q-tooltip
+                    >A leave or overtime request for this employee still needs approval</q-tooltip
+                  >
+                </q-icon>
               </div>
             </q-td>
           </template>
@@ -419,6 +454,8 @@
                       :disable="
                         reviewedIds.includes(props.row.epi_id) ||
                         reviewClosed ||
+                        approvalsChecking ||
+                        isBlocked(props.row.epi_id) ||
                         reviewingId === props.row.epi_id
                       "
                       @click="requestReviewOne(props.row)"
@@ -430,7 +467,17 @@
                       <q-item-section>
                         {{ reviewLabel(props.row) }}
                       </q-item-section>
-                      <q-tooltip v-if="reviewClosed && !reviewedIds.includes(props.row.epi_id)">
+                      <q-tooltip v-if="approvalsChecking">Checking pending approvals…</q-tooltip>
+                      <q-tooltip
+                        v-else-if="
+                          !reviewedIds.includes(props.row.epi_id) && isBlocked(props.row.epi_id)
+                        "
+                      >
+                        A leave or overtime request for this employee still needs approval
+                      </q-tooltip>
+                      <q-tooltip
+                        v-else-if="reviewClosed && !reviewedIds.includes(props.row.epi_id)"
+                      >
                         Review closed when the run moved on — payslips are the next step
                       </q-tooltip>
                       <q-tooltip v-else-if="isReviewedEarlier(props.row)">
@@ -445,7 +492,11 @@
                       v-close-popup
                       clickable
                       class="disb-menu__item"
-                      :disable="releasingId === props.row.epi_id"
+                      :disable="
+                        releasingId === props.row.epi_id ||
+                        approvalsChecking ||
+                        isBlocked(props.row.epi_id)
+                      "
                       @click="releaseEmployee(props.row)"
                     >
                       <q-item-section avatar>
@@ -453,6 +504,10 @@
                         <q-icon v-else name="o_send" size="17px" />
                       </q-item-section>
                       <q-item-section>Release payslip</q-item-section>
+                      <q-tooltip v-if="approvalsChecking">Checking pending approvals…</q-tooltip>
+                      <q-tooltip v-else-if="isBlocked(props.row.epi_id)">
+                        On hold until this employee's leave or overtime request is approved
+                      </q-tooltip>
                     </q-item>
 
                     <!-- A write, like review and release above it, so it sits
@@ -626,6 +681,7 @@ import EmployeeDetailDialog from 'src/components/pages/Payroll/EmployeeDetailDia
 import EmployeeContributionsDialog from 'src/components/pages/Payroll/EmployeeContributionsDialog.vue'
 import SalaryBreakdownDialog from 'src/components/pages/Payroll/SalaryBreakdownDialog.vue'
 import TransferPayoutGroupDialog from 'src/components/pages/Payroll/TransferPayoutGroupDialog.vue'
+import ReviewBlockersNotice from 'src/components/pages/Payroll/ReviewBlockersNotice.vue'
 import {
   buildReleaseConfirm,
   buildReviewAllConfirm,
@@ -633,9 +689,17 @@ import {
 } from 'src/components/pages/Payroll/reviewConfirm'
 import { useDisbursementApi } from 'src/composables/disbursement/useDisbursementApi'
 import { usePayoutGroupIdentity } from 'src/composables/disbursement/usePayoutGroupIdentity'
+import { useCutoffApprovalQueue } from 'src/composables/disbursement/useCutoffApprovalQueue'
 import { useDisbursementViewState } from 'src/composables/page/useDisbursementViewState'
 import { useAdminPayrollGroups } from 'src/composables/admin/useAdminPayrollGroups'
 import { extractErrorMessage } from 'src/composables/utils/http'
+import {
+  blockedEpiIds,
+  mergeServerBlockers,
+  pendingApprovalsForRun,
+  reviewCutoffFrom,
+  serverBlockersFrom,
+} from 'src/composables/utils/reviewBlockers'
 import { PGI_STATUS_MAP } from 'src/constants/pgiStatus'
 import {
   formatCurrency,
@@ -719,6 +783,32 @@ const reviewedIds = ref([])
 const overview = ref(null)
 const summary = ref(null)
 const reviewData = ref([])
+
+// ── The leave/overtime hold ──
+//
+// The backend refuses both review-to-ready and release-payslips while an
+// employee on the run has a request still awaiting a decision inside the cutoff,
+// and answers 400 with the exact EPIs. This page reads the two queues ahead of
+// the click so the affected rows are disabled rather than discovering the block
+// on the write, and pins the server's own refusals when they name blockers the
+// pre-emptive check does not cover (cash advances, compensable time, swaps,
+// unfinished attendance).
+const {
+  leaveRows: approvalLeaveRows,
+  overtimeRows: approvalOvertimeRows,
+  loading: approvalsLoading,
+  loaded: approvalsLoaded,
+  error: approvalsError,
+  fetchQueues: fetchApprovalQueues,
+} = useCutoffApprovalQueue()
+// Employee payroll items the server refused a write for, and the counts/message
+// it explained the refusal with. Cleared by every `load()` (and by an explicit
+// recheck), then re-pinned by whichever handler was refused — so a fixed blocker
+// does not linger, but a refusal is not wiped by the refresh that follows it.
+const serverBlockedEpiIds = ref([])
+const serverBlockerCounts = ref([])
+const serverBlockerMessage = ref('')
+
 const searchTerm = ref('')
 const page = ref(1)
 const pageSize = ref(10)
@@ -1108,6 +1198,110 @@ const unreviewedIds = computed(() =>
   reviewData.value.filter((e) => !reviewedIds.value.includes(e.epi_id)).map((e) => e.epi_id),
 )
 
+// ── The leave/overtime hold, as the page reads it ──
+
+/**
+ * The cutoff this run covers, from the review summary's own start and end dates
+ * (both required by the endpoint). Two dates and a name are all
+ * `normalizeCutoffInstance` needs, and going through it keeps the date parsing
+ * and the overlap rule identical to the Request page's cutoff filter.
+ */
+const approvalCutoff = computed(() => reviewCutoffFrom(summary.value))
+
+/**
+ * True only until the first queue answer lands. The actions are held while it is
+ * true: the guard cannot block a row it has not read yet, and
+ * `review-to-ready` force-reviews the EPIs it is given even when the transition
+ * is later refused — so a click in that window would sign off exactly the
+ * employee the check exists to protect. A failed check is not "still checking":
+ * `error` clears it and the write is left to the server.
+ */
+const approvalsChecking = computed(() => !approvalsLoaded.value && !approvalsError.value)
+
+/**
+ * The requests still awaiting a person, narrowed to this run's employees. Names
+ * are the join because that is what the two queues carry; a name held by two
+ * employees blocks both, which is the safe direction for a hold.
+ */
+const pendingApprovals = computed(() =>
+  pendingApprovalsForRun({
+    leaveRows: approvalLeaveRows.value,
+    overtimeRows: approvalOvertimeRows.value,
+    cutoff: approvalCutoff.value,
+    employeeNames: reviewData.value.map((row) => row.employee),
+  }),
+)
+
+/** The rows the queues put on hold. */
+const derivedBlockedIds = computed(() =>
+  blockedEpiIds(reviewData.value, pendingApprovals.value.blockedKeys),
+)
+
+/**
+ * Both sources of a hold, as one set of string keys: what the queues found now,
+ * and what the server refused a write for. Ids are compared as strings because
+ * the server's `epi_ids` and the review rows' `epi_id` are the same integers but
+ * not the same type across every payload.
+ */
+const blockedIdSet = computed(
+  () => new Set([...derivedBlockedIds.value, ...serverBlockedEpiIds.value].map(String)),
+)
+
+const isBlocked = (epiId) => blockedIdSet.value.has(String(epiId))
+
+/** Unreviewed employees who may be signed off — the only batch "review all" covers. */
+const reviewableUnreviewedIds = computed(() => unreviewedIds.value.filter((id) => !isBlocked(id)))
+
+const onHoldUnreviewedCount = computed(
+  () => unreviewedIds.value.length - reviewableUnreviewedIds.value.length,
+)
+const onHoldReviewedCount = computed(() => reviewedIds.value.filter((id) => isBlocked(id)).length)
+
+/**
+ * What the strip above the table counts. Leave and overtime come from the queues;
+ * other blocker types only arrive on a refusal. The server repeats leave and
+ * overtime in its own payload, so those are dropped there — one request must not
+ * read as two.
+ */
+const blockerCounts = computed(() => {
+  const counts = pendingApprovals.value.counts
+  const merged = new Map()
+  if (counts.leave)
+    merged.set('leave', { key: 'leave', label: 'leave request', count: counts.leave })
+  if (counts.overtime) {
+    merged.set('overtime', { key: 'overtime', label: 'overtime request', count: counts.overtime })
+  }
+  for (const entry of serverBlockerCounts.value) {
+    if (!entry.count) continue
+    const current = merged.get(entry.key)
+    // The queues read the request rows and the server reads its own blocker
+    // list; where both have a figure for one kind, the larger is the honest
+    // count — neither source has seen fewer requests than the other.
+    if (current) current.count = Math.max(current.count, entry.count)
+    else merged.set(entry.key, { ...entry })
+  }
+  return [...merged.values()]
+})
+
+/** Employees the server pinned that the queue counts do not explain. */
+const serverOnlyHeldCount = computed(() => {
+  const derived = new Set(derivedBlockedIds.value.map(String))
+  return serverBlockedEpiIds.value.filter((id) => !derived.has(String(id))).length
+})
+
+/**
+ * A failed or impossible check, worded so it never reads as an all-clear. The
+ * cutoff dates are required on the summary, so a missing window is a payload
+ * problem worth saying out loud rather than silently checking nothing.
+ */
+const blockerWarning = computed(() => {
+  if (approvalsError.value) return approvalsError.value
+  if (approvalsLoaded.value && summary.value && !approvalCutoff.value) {
+    return "Could not read this cutoff's dates, so pending approvals were not checked here."
+  }
+  return ''
+})
+
 /**
  * The reviewed rows that were signed off before this visit, narrowed to the rows
  * still on screen and to those this visit did not review.
@@ -1148,9 +1342,10 @@ const REVIEWED_EARLIER_HINT =
  * as work the reader just did, on a run they have only just opened.
  */
 const reviewedNote = computed(() => {
-  const tally = `${reviewedIds.value.length}/${reviewData.value.length} reviewed`
-  if (!reviewedEarlierIds.value.length) return tally
-  return `${tally} · ${reviewedEarlierIds.value.length} earlier`
+  const parts = [`${reviewedIds.value.length}/${reviewData.value.length} reviewed`]
+  if (onHoldReviewedCount.value) parts.push(`${onHoldReviewedCount.value} on hold`)
+  if (reviewedEarlierIds.value.length) parts.push(`${reviewedEarlierIds.value.length} earlier`)
+  return parts.join(' · ')
 })
 
 function reviewLabel(row) {
@@ -1174,8 +1369,25 @@ const releaseClosed = computed(() => {
  * An unreviewed employee is one whose requests and deductions nobody has
  * settled, so their payslip is not a document to send — they stay in this step
  * until they are reviewed, rather than riding along with the batch.
+ *
+ * A reviewed employee whose leave or overtime is still awaiting approval is in
+ * the same position for a different reason: the amount behind that payslip is
+ * not final yet, so the batch leaves them out and the notice says why.
  */
-const releasableIds = computed(() => (releaseClosed.value ? [] : reviewedIds.value))
+const releasableIds = computed(() =>
+  releaseClosed.value ? [] : reviewedIds.value.filter((id) => !isBlocked(id)),
+)
+
+/** The partial batch spelled out, so a zero in either exclusion does not read as a count. */
+const releaseHoldNote = computed(() => {
+  const going = `Releases the ${releasableIds.value.length} reviewed employee${
+    releasableIds.value.length === 1 ? '' : 's'
+  }`
+  const left = []
+  if (unreviewedIds.value.length) left.push(`${unreviewedIds.value.length} still unreviewed`)
+  if (onHoldReviewedCount.value) left.push(`${onHoldReviewedCount.value} on hold`)
+  return left.length ? `${going}; ${left.join(' and ')} left out` : going
+})
 
 /**
  * The run's own status, only when it is one this app knows how to place.
@@ -1304,12 +1516,62 @@ watch(
 let loadToken = 0
 
 /**
+ * Drop the server's pinned refusals.
+ *
+ * Called whenever the page re-reads the run and by an explicit recheck, so a
+ * blocker somebody has since fixed stops disabling rows. The write handlers that
+ * receive a fresh refusal pin it *after* their refresh — which is why the
+ * clearing belongs here and not in the error path.
+ */
+function clearServerBlockers() {
+  serverBlockedEpiIds.value = []
+  serverBlockerCounts.value = []
+  serverBlockerMessage.value = ''
+}
+
+/**
+ * Hold the employees a refused write named, and keep the server's own explanation
+ * for the strip. Ids this run no longer lists are dropped: a pinned EPI that has
+ * moved to another group must not keep a row disabled here.
+ */
+function pinServerBlockers(blockers) {
+  if (!blockers) return
+  const present = new Set(reviewData.value.map((row) => String(row.epi_id)))
+  const ids = blockers.epiIds.map(String).filter((id) => present.has(id))
+  serverBlockedEpiIds.value = [...new Set([...serverBlockedEpiIds.value.map(String), ...ids])]
+  serverBlockerCounts.value = blockers.counts
+  serverBlockerMessage.value = blockers.message
+}
+
+/** A 400 that named cutoff blockers, or null for the refusals the page already words. */
+function blockerRefusal(err) {
+  return err?.response?.status === 400 ? serverBlockersFrom(err) : null
+}
+
+/** Re-read the run and the queues, forgetting any server refusal — the explicit way to unlock. */
+async function recheckApprovals() {
+  clearServerBlockers()
+  await refresh()
+}
+
+/**
  * Rows are keyed by `epi_id` — the employee payroll item — which is the id that
  * review, release and the detail dialog all address, so no translation is needed
  * between the table and the actions taken on it.
  */
 async function load() {
   const token = ++loadToken
+  clearServerBlockers()
+
+  // The hold's join is by employee name, and the overtime queue names people by
+  // id alone, so the roster is read before the queues are normalized. It runs
+  // beside the step's own fetches rather than ahead of them: a slow roster must
+  // not delay the table, and `useEmployees` dedupes this against the mount call.
+  fetchEmployees()
+    .catch(() => employees.value || [])
+    .then((roster) => fetchApprovalQueues({ employees: roster }))
+    .catch((err) => console.error('[ReviewPage] approval queue load failed:', err))
+
   const [ov, rev, progress] = await Promise.all([
     fetchReviewOverview(groupId),
     fetchEmployeeReviewSummary(groupId),
@@ -1666,24 +1928,44 @@ function reportReviewError(err, { quiet = false } = {}) {
  * payroll items, so one employee is a list of one and the run is a list of all.
  */
 async function sendReview(epiIds, describe) {
-  if (!epiIds.length || reviewClosed.value) return false
+  // Defensive: every caller already filters the hold, but a menu opened before a
+  // recheck could still name a held employee.
+  const allowed = (Array.isArray(epiIds) ? epiIds : []).filter((id) => !isBlocked(id))
+  if (!allowed.length || reviewClosed.value) return false
   try {
-    await reviewToReady(groupId, epiIds)
-    markRowsReviewed(epiIds)
-    toast.success(describe(epiIds.length))
+    await reviewToReady(groupId, allowed)
+    markRowsReviewed(allowed)
+    toast.success(describe(allowed.length))
     await refresh()
     return true
   } catch (err) {
+    // The server names the employees a pending request is holding before it
+    // reports how many are left to review, so this is checked first: a body can
+    // carry both, and "reviewed, but on hold" is the true story then.
+    const blockers = blockerRefusal(err)
+    if (blockers) {
+      const reviewedLabel = `${allowed.length} employee${allowed.length === 1 ? '' : 's'}`
+      markRowsReviewed(allowed)
+      await refresh()
+      pinServerBlockers(blockers)
+      toast.warning(`${reviewedLabel} reviewed, but this run is on hold.`, {
+        caption:
+          blockers.message || 'Pending requests must be approved before payslips can go out.',
+      })
+      return true
+    }
+
     // The review landed; the run just is not ready to move yet.
     const progress = err?.response?.status === 400 ? reviewProgress(err) : null
     if (progress) {
-      markRowsReviewed(epiIds)
-      toast.success(describe(epiIds.length), {
+      markRowsReviewed(allowed)
+      toast.success(describe(allowed.length), {
         caption: remainingNote(progress.unreviewed) || undefined,
       })
       await refresh()
       return true
     }
+
     if (reportReviewError(err) === 'run') await refresh()
     return false
   }
@@ -1700,7 +1982,15 @@ function requestReviewOne(row) {
   // A second open while one is already up would leave the snapshot describing a row
   // the reader has since moved on from.
   if (showConfirm.value || confirmBusy.value) return
-  if (!row?.epi_id || reviewClosed.value || reviewedIds.value.includes(row.epi_id)) return
+  if (
+    approvalsChecking.value ||
+    !row?.epi_id ||
+    reviewClosed.value ||
+    reviewedIds.value.includes(row.epi_id) ||
+    isBlocked(row.epi_id)
+  ) {
+    return
+  }
   pendingEmployee.value = row
   pendingIds.value = [row.epi_id]
   confirm.value = buildReviewOneConfirm({
@@ -1724,14 +2014,15 @@ function requestReviewOne(row) {
  * Writes nothing. The wording, including that warning, lives in `reviewConfirm.js`.
  */
 function requestReviewAll() {
-  if (showConfirm.value || confirmBusy.value) return
-  const epiIds = [...unreviewedIds.value]
+  if (showConfirm.value || confirmBusy.value || approvalsChecking.value) return
+  const epiIds = [...reviewableUnreviewedIds.value]
   if (!epiIds.length || reviewClosed.value) return
   pendingIds.value = epiIds
   pendingEmployee.value = null
   confirm.value = buildReviewAllConfirm({
     count: epiIds.length,
     alreadyReviewed: reviewedIds.value.length,
+    onHold: onHoldUnreviewedCount.value,
     groupName: groupName.value,
   })
   pendingAction.value = 'reviewAll'
@@ -1765,6 +2056,14 @@ watch(showConfirm, (open) => {
 async function commitReviewOne() {
   const row = pendingEmployee.value
   if (!row || reviewClosed.value || reviewedIds.value.includes(row.epi_id)) return
+  if (isBlocked(row.epi_id)) {
+    // A recheck can land between opening the dialog and confirming it.
+    showConfirm.value = false
+    toast.warning(
+      `${row.employee || 'This employee'} is on hold until their leave or overtime request is approved.`,
+    )
+    return
+  }
   showConfirm.value = false
   reviewingId.value = row.epi_id
   try {
@@ -1784,10 +2083,23 @@ async function commitReviewOne() {
  */
 async function commitReviewAll() {
   // Snapshotted before the dialog closes, because the close is what clears it.
-  const epiIds = pendingIds.value
-  if (!epiIds.length || reviewClosed.value) return
+  // The hold is re-checked here as well: a recheck can land between opening the
+  // dialog and confirming it.
+  const snapshot = pendingIds.value
+  const epiIds = snapshot.filter((id) => !isBlocked(id))
+  if (!epiIds.length) {
+    if (snapshot.length) {
+      showConfirm.value = false
+      toast.warning('Everyone in this batch is on hold until their requests are approved.')
+    }
+    return
+  }
+  if (reviewClosed.value) return
   showConfirm.value = false
   reviewingAll.value = true
+  // A refusal the server explained with cutoff blockers, accumulated across the
+  // per-employee fallback so the last answer's counts are what the strip shows.
+  let refusal = null
   try {
     try {
       await reviewToReady(groupId, epiIds)
@@ -1796,6 +2108,23 @@ async function commitReviewAll() {
       await refresh()
       return
     } catch (err) {
+      // A blocker refusal can also carry `unreviewed_count`; the hold is the
+      // more useful reading, so it is checked first.
+      refusal = blockerRefusal(err)
+      if (refusal) {
+        // The force-review half landed; the transition is what was refused.
+        markRowsReviewed(epiIds)
+        await refresh()
+        pinServerBlockers(refusal)
+        toast.warning(
+          `${epiIds.length} employee${epiIds.length === 1 ? '' : 's'} reviewed, but this run is on hold.`,
+          {
+            caption:
+              refusal.message || 'Pending requests must be approved before payslips can go out.',
+          },
+        )
+        return
+      }
       const progress = err?.response?.status === 400 ? reviewProgress(err) : null
       if (progress) {
         markRowsReviewed(epiIds)
@@ -1818,6 +2147,13 @@ async function commitReviewAll() {
         await reviewToReady(groupId, [epiId])
         reviewed.push(epiId)
       } catch (err) {
+        const blockers = blockerRefusal(err)
+        if (blockers) {
+          // Reviewed; somebody else's pending request is what holds the run.
+          reviewed.push(epiId)
+          refusal = mergeServerBlockers(refusal, blockers)
+          continue
+        }
         if (err?.response?.status === 400 && reviewProgress(err)) {
           // Reviewed; the run is still short of others. Keep going.
           reviewed.push(epiId)
@@ -1830,16 +2166,21 @@ async function commitReviewAll() {
 
     const blocked = epiIds.length - reviewed.length
     if (reviewed.length) markRowsReviewed(reviewed)
+    await refresh()
+    if (refusal) pinServerBlockers(refusal)
     if (reviewed.length && blocked) {
       toast.warning(`${reviewed.length} reviewed, ${blocked} could not be.`, {
-        caption: reason || undefined,
+        caption: reason || refusal?.message || undefined,
       })
     } else if (reviewed.length) {
-      toast.success(`${reviewed.length} employee${reviewed.length === 1 ? '' : 's'} reviewed.`)
+      toast.success(`${reviewed.length} employee${reviewed.length === 1 ? '' : 's'} reviewed.`, {
+        caption: refusal
+          ? refusal.message || 'This run stays on hold until pending requests are approved.'
+          : undefined,
+      })
     } else {
       toast.error(reason || 'None of these employees could be reviewed.')
     }
-    await refresh()
   } finally {
     reviewingAll.value = false
   }
@@ -1857,9 +2198,10 @@ async function commitReviewAll() {
 function requestReleaseAll() {
   const going = releasableIds.value.length
   const staying = unreviewedIds.value.length
-  if (showConfirm.value || confirmBusy.value) return
+  const onHold = onHoldReviewedCount.value
+  if (showConfirm.value || confirmBusy.value || approvalsChecking.value) return
   if (!going) return
-  if (!staying) {
+  if (!staying && !onHold) {
     // Nothing to warn about, so no dialog — but the batch is still snapshotted,
     // because this is the one route into the release that does not go through one.
     pendingIds.value = releasableIds.value
@@ -1868,7 +2210,7 @@ function requestReleaseAll() {
   }
   pendingIds.value = releasableIds.value
   pendingEmployee.value = null
-  confirm.value = buildReleaseConfirm({ going, staying, groupName: groupName.value })
+  confirm.value = buildReleaseConfirm({ going, staying, onHold, groupName: groupName.value })
   pendingAction.value = 'releaseAll'
   showConfirm.value = true
 }
@@ -1880,7 +2222,12 @@ async function commitReleaseAll() {
   showConfirm.value = false
   releasing.value = true
   try {
-    const epiIds = reviewData.value.filter((e) => releasable.has(e.epi_id)).map((e) => e.epi_id)
+    // The hold is re-checked at write time: a recheck can land while the dialog
+    // is open, and a reviewed employee whose request reappeared must not ride
+    // along with the batch.
+    const epiIds = reviewData.value
+      .filter((e) => releasable.has(e.epi_id) && !isBlocked(e.epi_id))
+      .map((e) => e.epi_id)
     if (!epiIds.length) {
       toast.warning('No reviewed employees to release.')
       return
@@ -1899,6 +2246,16 @@ async function commitReleaseAll() {
     await refresh()
   } catch (err) {
     console.error('[ReviewPage] commitReleaseAll ✖ error:', err)
+    // The server names every employee it refused and why; pin them so the strip
+    // explains the run, and word the toast as a hold rather than a crash.
+    const blockers = blockerRefusal(err)
+    if (blockers) {
+      pinServerBlockers(blockers)
+      toast.warning('Payslips were not released — this run is on hold.', {
+        caption: blockers.message || 'Pending requests must be approved first.',
+      })
+      return
+    }
     toast.error(serverMessage(err) || 'Failed to release payslips.')
   } finally {
     releasing.value = false
@@ -1906,6 +2263,9 @@ async function commitReleaseAll() {
 }
 
 async function releaseEmployee(row) {
+  // The row menu disables this for a held employee; a menu opened before a
+  // recheck could still reach it.
+  if (approvalsChecking.value || isBlocked(row.epi_id)) return
   releasingId.value = row.epi_id
   try {
     await releasePayslips(groupId, [row.epi_id])
@@ -1913,6 +2273,14 @@ async function releaseEmployee(row) {
     await refresh()
   } catch (err) {
     console.error('[ReviewPage] releaseEmployee ✖ error:', err)
+    const blockers = blockerRefusal(err)
+    if (blockers) {
+      pinServerBlockers(blockers)
+      toast.warning(`Payslip for ${row.employee} was not released — still on hold.`, {
+        caption: blockers.message || 'Pending requests must be approved first.',
+      })
+      return
+    }
     toast.error(serverMessage(err) || 'Failed to release payslip.')
   } finally {
     releasingId.value = null
@@ -2134,6 +2502,13 @@ async function releaseEmployee(row) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A held employee is still legible as a row, but the hold is visible without
+   opening the menu: the name is where the reader looks first. */
+.hold-icon {
+  flex-shrink: 0;
+  color: var(--dash-warn-mark);
 }
 </style>
 
