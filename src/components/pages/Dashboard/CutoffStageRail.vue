@@ -1,58 +1,51 @@
 <template>
   <div class="rail">
     <div v-if="loading" class="rail__skeleton">
-      <span class="dash-shimmer rail__skeleton-bar" />
-      <div class="rail__skeleton-legend">
-        <span v-for="n in 4" :key="n" class="dash-shimmer rail__skeleton-chip" />
-      </div>
+      <span v-for="n in 6" :key="n" class="dash-shimmer rail__skeleton-row" />
     </div>
 
     <template v-else-if="total > 0">
-      <!-- The rail itself. Ordered left to right in the direction payroll
-           actually moves, so the widest early segment is the bottleneck. -->
-      <div
-        class="rail__track"
-        role="img"
-        :aria-label="ariaSummary"
-      >
-        <button
-          v-for="seg in segments"
-          :key="seg.status"
-          type="button"
-          class="rail__seg dash-focusable"
-          :class="{ 'rail__seg--active': active === seg.status }"
-          :style="{ flexGrow: seg.count, background: seg.color }"
-          :title="`${seg.label}: ${seg.count} of ${total}`"
-          @click="toggle(seg.status)"
-        >
-          <span v-if="seg.share >= 0.1" class="rail__seg-count dash-num">{{ seg.count }}</span>
-        </button>
-      </div>
-
-      <!-- Identity is never colour-alone: every segment is also named here with
-           its count, so the rail is readable without distinguishing the hues. -->
-      <ul class="rail__legend">
-        <li
-          v-for="seg in segments"
-          :key="seg.status"
-          class="rail__legend-item"
-          :class="{ 'rail__legend-item--dim': active && active !== seg.status }"
-        >
-          <button type="button" class="rail__legend-btn dash-focusable" @click="toggle(seg.status)">
-            <span class="dash-swatch" :style="{ background: seg.color }" />
-            <span class="rail__legend-label">{{ seg.label }}</span>
-            <span class="rail__legend-count dash-num">{{ seg.count }}</span>
+      <!-- Every stage is drawn, every time, in the order payroll moves through
+           them. A stage holding no work still gets its row: the seven tracks are
+           the axis a bar is read against, and a rail that only drew the stages
+           with work in them collapsed to one full-width block the moment a cutoff
+           sat entirely in a single stage — which is exactly when the reader most
+           needs to see how far it still has to go. -->
+      <ul class="rail__rows" :aria-label="ariaSummary">
+        <li v-for="s in stages" :key="s.status">
+          <button
+            type="button"
+            class="rail__row dash-focusable"
+            :class="{ 'rail__row--active': active === s.status, 'rail__row--empty': !s.count }"
+            :disabled="!s.count"
+            :aria-pressed="active === s.status"
+            :aria-label="rowAria(s)"
+            @click="toggle(s.status)"
+          >
+            <span class="rail__row-label">{{ s.label }}</span>
+            <span class="rail__row-track">
+              <span class="rail__row-bar" :style="{ width: `${s.pct}%`, background: s.color }" />
+            </span>
+            <span class="rail__row-value dash-num">{{ s.count }}</span>
+            <span v-if="s.sub" class="rail__row-sub">{{ s.sub }}</span>
           </button>
         </li>
       </ul>
 
-      <p v-if="bottleneck" class="rail__note">
+      <!-- One statement, not three. The bar's own datum is on its row, so the
+           note only adds what a row cannot say: where the cutoff is blocked, how
+           far through the seven stages that is, and how much has cleared. -->
+      <p class="rail__note">
         <q-icon name="filter_alt" size="13px" />
-        <span>
+        <span v-if="bottleneck">
           <strong>{{ bottleneck.count }}</strong>
           {{ bottleneck.count === 1 ? 'group is' : 'groups are' }} held at
-          <strong>{{ bottleneck.label }}</strong> — the earliest stage still holding work.
+          <strong>{{ bottleneck.label }}</strong> — stage {{ bottleneck.stageNo }} of
+          {{ stages.length }}<template v-if="bottleneckMoney">, {{ bottleneckMoney }}</template>.
+          <strong>{{ cleared }}</strong> of {{ total }}
+          {{ cleared === 1 ? 'has' : 'have' }} cleared the pipeline.
         </span>
+        <span v-else>All {{ total }} groups are through the pipeline.</span>
       </p>
     </template>
 
@@ -80,14 +73,24 @@
 /**
  * The cutoff stage rail — the Current Cutoff tab's lead element.
  *
- * Replaces a vertical list of status/count pairs. A list tells you the counts;
- * the rail tells you the *shape* of the cutoff: stages run left to right in the
- * order payroll actually moves through them, each segment sized by how many
- * payout groups are sitting in it. A fat segment on the left is a bottleneck, a
- * rail weighted to the right is a cutoff about to close — neither of which the
- * list made visible.
+ * One row per stage, seven rows always, in the order payroll moves through them.
+ * What this replaced encoded *share of the whole*, which is the wrong statistic
+ * for a pipeline: with every group in one stage the "chart" was a single
+ * 100%-wide block and the other six stages were not drawn at all, so the render
+ * carried no information beyond its own label. Bars scaled to the largest stage
+ * and drawn on a continuous seven-row axis say where work is, how much of it, and
+ * how much has already moved past — and keep their meaning when only one stage
+ * holds anything.
  *
- * Clicking a segment emits `filter` so the payout table below can narrow to it.
+ * Clicking a populated row emits `filter` so the payout table below narrows to
+ * that stage. An empty row is inert: filtering to a stage nobody is at would
+ * empty the table for no reason, and there is a real filter under it to lose.
+ *
+ * `data` is the endpoint's stage counts and stays authoritative — the table
+ * below and this rail must not disagree about how many groups exist. `totals`
+ * carries money and headcount per stage, summed client-side from the payout group
+ * rows the page already fetched, so it is informational and never labelled a
+ * total.
  */
 import { computed, ref } from 'vue'
 
@@ -105,6 +108,9 @@ const STAGES = [
 // what is actually blocking the cutoff.
 const BLOCKING = ['needs_attention', 'under_review', 'awaiting_acknowledgment']
 
+/** A payload figure, or 0 — a missing count is no groups, never NaN. */
+const num = (value) => Number(value) || 0
+
 const props = defineProps({
   data: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
@@ -114,32 +120,82 @@ const props = defineProps({
    * should not be told its pipeline is unreadable.
    */
   loaded: { type: Boolean, default: true },
+  /**
+   * Money and headcount per stage, keyed by the same stage names as `data`:
+   * `{ under_review: { employees: 240, amount: 1240000 } }`. Optional; without it
+   * the rail renders counts only.
+   */
+  totals: { type: Object, default: () => ({}) },
+  /** The app's money formatter. Optional, for the same reason as `totals`. */
+  fmtCurrency: { type: Function, default: null },
 })
 
 const emit = defineEmits(['filter'])
 
 const active = ref(null)
 
-const segments = computed(() => {
-  const rows = STAGES.map((s) => ({ ...s, count: Number(props.data?.[s.status] ?? 0) })).filter(
-    (s) => s.count > 0,
-  )
-  const sum = rows.reduce((acc, s) => acc + s.count, 0) || 1
-  return rows.map((s) => ({ ...s, share: s.count / sum }))
+function subLine(row) {
+  const parts = []
+  if (props.fmtCurrency && row.amount > 0) parts.push(props.fmtCurrency(row.amount))
+  if (row.employees > 0) {
+    parts.push(`${row.employees} ${row.employees === 1 ? 'employee' : 'employees'}`)
+  }
+  return parts.join(' · ')
+}
+
+const stages = computed(() => {
+  const rows = STAGES.map((s, i) => {
+    const totals = props.totals?.[s.status]
+    return {
+      ...s,
+      stageNo: i + 1,
+      count: num(props.data?.[s.status]),
+      employees: num(totals?.employees),
+      amount: num(totals?.amount),
+    }
+  })
+  // Scaled to the largest bar, not to the total. Bars are read by comparing
+  // lengths against a shared axis, and a share-of-total scale would leave every
+  // empty stage at zero width with nothing to compare the populated one against.
+  // The exact count is always printed at the end of the row.
+  const max = Math.max(...rows.map((r) => r.count), 1)
+  return rows.map((r) => ({
+    ...r,
+    pct: (r.count / max) * 100,
+    sub: r.count ? subLine(r) : '',
+  }))
 })
 
-const total = computed(() => segments.value.reduce((acc, s) => acc + s.count, 0))
+const total = computed(() => stages.value.reduce((sum, s) => sum + s.count, 0))
 
-const bottleneck = computed(() =>
-  segments.value.find((s) => BLOCKING.includes(s.status)) ?? null,
+const cleared = computed(() => stages.value.find((s) => s.status === 'complete')?.count ?? 0)
+
+const bottleneck = computed(
+  () => stages.value.find((s) => BLOCKING.includes(s.status) && s.count > 0) ?? null,
 )
 
-const ariaSummary = computed(
-  () =>
-    `Payout groups by stage: ${segments.value
-      .map((s) => `${s.label} ${s.count}`)
-      .join(', ')}. ${total.value} total.`,
-)
+// Only when there is money to name. A stage whose rows carried no amount says
+// nothing rather than "₱0", which would read as "worthless", not "unknown".
+const bottleneckMoney = computed(() => {
+  const b = bottleneck.value
+  if (!b || !props.fmtCurrency || b.amount <= 0) return ''
+  return props.fmtCurrency(b.amount)
+})
+
+const ariaSummary = computed(() => {
+  const parts = stages.value.map((s) => `${s.label} ${s.count}`).join(', ')
+  const where = bottleneck.value
+    ? `Stage ${bottleneck.value.stageNo} of ${stages.value.length}, ${cleared.value} of ${total.value} cleared.`
+    : `All ${total.value} cleared.`
+  return `${total.value} payout ${total.value === 1 ? 'group' : 'groups'} in this cutoff: ${parts}. ${where}`
+})
+
+function rowAria(row) {
+  const parts = [`${row.label}: ${row.count} of ${total.value} groups`]
+  if (props.fmtCurrency && row.amount > 0) parts.push(props.fmtCurrency(row.amount))
+  if (row.employees > 0) parts.push(`${row.employees} employees`)
+  return parts.join(', ')
+}
 
 function toggle(status) {
   active.value = active.value === status ? null : status
@@ -165,83 +221,100 @@ defineExpose({ reset })
   flex: 1;
 }
 
-/* ── Track ──
-   Individually rounded segments separated by a real gap, rather than one bar
-   sliced by hairlines. Each stage reads as its own object, which is what it is. */
-.rail__track {
-  display: flex;
-  gap: 3px;
-  height: 36px;
-}
-
-.rail__seg {
-  position: relative;
-  flex-basis: 0;
-  min-width: 10px;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--dash-r-sm);
-  transition: opacity var(--dash-fast) var(--dash-ease),
-    flex-grow var(--dash-slow) var(--dash-ease);
-}
-.rail__seg:hover {
-  opacity: 0.85;
-}
-/* A white inner ring plus a dark outer one, so the selected segment reads as
-   selected against any of the seven stage colours. */
-.rail__seg--active {
-  box-shadow: 0 0 0 2px var(--dash-surface), 0 0 0 4px var(--dash-ink);
-  z-index: 1;
-}
-
-/* Direct label, but only where the segment is actually wide enough to hold it —
-   a number crammed into a 6px sliver is noise. The rest are named in the legend. */
-.rail__seg-count {
-  font-size: 12px;
-  font-weight: 700;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(15, 32, 51, 0.35);
-  pointer-events: none;
-}
-
-/* ── Legend ── */
-.rail__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
+/* ── Stage rows ──
+   A fixed label column so all seven tracks share both edges, and one row per
+   stage whether or not it holds work. The empty track is the axis the filled one
+   is read against — take it away and a single-stage cutoff becomes a block. */
+.rail__rows {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-.rail__legend-item {
-  transition: opacity var(--dash-fast) var(--dash-ease);
-}
-.rail__legend-item--dim {
-  opacity: 0.4;
-}
-.rail__legend-btn {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  padding: 2px 0;
-  cursor: pointer;
-  font: inherit;
+  flex-direction: column;
+  gap: 2px;
 }
-.rail__legend-label {
+
+.rail__row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr) 36px;
+  grid-template-areas:
+    'label track value'
+    '.     sub   sub';
+  align-items: center;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 5px 6px;
+  border: none;
+  border-radius: var(--dash-r-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dash-fast) var(--dash-ease);
+}
+.rail__row:hover {
+  background: var(--dash-n-50);
+}
+.rail__row:disabled {
+  cursor: default;
+}
+.rail__row:disabled:hover {
+  background: none;
+}
+.rail__row--active {
+  background: var(--dash-n-50);
+  box-shadow: inset 0 0 0 1px var(--dash-line);
+}
+
+.rail__row-label {
+  grid-area: label;
   font-size: 12.5px;
   color: var(--dash-ink-3);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.rail__legend-count {
+
+.rail__row-track {
+  grid-area: track;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--dash-n-100);
+  overflow: hidden;
+}
+.rail__row-bar {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 999px;
+  transition: width var(--dash-slow) var(--dash-ease);
+}
+
+.rail__row-value {
+  grid-area: value;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--dash-ink);
+  text-align: right;
+}
+
+.rail__row-sub {
+  grid-area: sub;
+  font-size: 11px;
+  color: var(--dash-ink-4);
+}
+
+/* An empty stage keeps its row: a hairline track and a muted zero, so the axis
+   stays continuous and the empty rows read as "nothing here" rather than
+   "not counted". */
+.rail__row--empty .rail__row-value {
+  color: var(--dash-ink-4);
+  font-weight: 400;
+}
+.rail__row--empty .rail__row-track {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--dash-line);
 }
 
 /* ── Bottleneck note ── */
@@ -272,33 +345,22 @@ defineExpose({ reset })
 .rail__skeleton {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
-.rail__skeleton-bar {
-  height: 36px;
+.rail__skeleton-row {
+  height: 22px;
   border-radius: var(--dash-r-sm);
-}
-.rail__skeleton-legend {
-  display: flex;
-  gap: 14px;
-}
-.rail__skeleton-chip {
-  height: 11px;
-  width: 84px;
 }
 
 @media (max-width: 1024px) {
-  .rail__track {
-    height: 34px;
-  }
-  .rail__legend {
-    gap: 4px 10px;
+  .rail__row {
+    grid-template-columns: 96px minmax(0, 1fr) 32px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rail__seg:hover {
-    transform: none;
+  .rail__row-bar {
+    transition: none;
   }
 }
 </style>
