@@ -74,10 +74,10 @@
 /**
  * Monthly Summary tab layout.
  *
- * Ordered so the month is understood before it is dissected: the trend places
- * the month in context and the donut says what it is made of, then the two
- * splits (by cutoff, by channel) explain it, then the two supporting ledgers
- * close the tab.
+ * Ordered so the month is understood before it is dissected: the six-month trend
+ * places the selected month in context and the donut says what it is made of,
+ * then the two splits (by cutoff, by channel) explain it, then the two supporting
+ * ledgers close the tab.
  */
 import { computed } from 'vue'
 import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
