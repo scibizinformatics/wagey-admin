@@ -16,6 +16,44 @@ function readStoredString(key) {
   }
 }
 
+/**
+ * Where the refresh token is read from.
+ *
+ * Not localStorage, unlike the access token and the user object. The refresh
+ * token is the half that outlives the access token by hours and the half that
+ * turns one momentary XSS — or one browser extension with storage access — into
+ * a durable account takeover, so it is scoped to this tab's session and dies
+ * with the browser. The access token keeps its old key: it expires on its own,
+ * every reload needs it, and moving it would sign every existing session out
+ * for no gain.
+ *
+ * The legacy localStorage key is consumed on read: a session that signed in
+ * before this change is migrated rather than trusted in place, so no copy of a
+ * refresh token is left behind in the long-lived store.
+ */
+function readRefreshToken() {
+  try {
+    const legacy = localStorage.getItem(REFRESH_KEY)
+    if (legacy) {
+      localStorage.removeItem(REFRESH_KEY)
+      try {
+        sessionStorage.setItem(REFRESH_KEY, legacy)
+      } catch {
+        // Storage blocked: the in-memory session still refreshes this tab.
+      }
+      return legacy
+    }
+  } catch {
+    // localStorage unavailable — fall through to the session copy.
+  }
+
+  try {
+    return sessionStorage.getItem(REFRESH_KEY) || null
+  } catch {
+    return null
+  }
+}
+
 export const useAuthStore = defineStore('auth', {
   /**
    * Rehydrated from localStorage, defensively.
@@ -37,13 +75,12 @@ export const useAuthStore = defineStore('auth', {
     token: readStoredString(TOKEN_KEY),
     /**
      * The long-lived half of the SimpleJWT pair. It lives here rather than in a
-     * loose localStorage key because it is credential material and the rest of
-     * the app is forbidden from reading storage for credentials — the axios
-     * response interceptor spends it, and nothing else should touch it. The key
-     * name is unchanged from when `LoginForm` wrote it directly, so sessions
-     * that predate the store keep working.
+     * loose storage key because it is credential material and the rest of the
+     * app is forbidden from reading storage for credentials — the axios
+     * response interceptor spends it, and nothing else should touch it. It is
+     * kept in **session** storage, not localStorage: see `readRefreshToken`.
      */
-    refreshToken: readStoredString(REFRESH_KEY),
+    refreshToken: readRefreshToken(),
     user: readStoredObject(USER_KEY),
   }),
 
@@ -94,9 +131,6 @@ export const useAuthStore = defineStore('auth', {
         if (this.token) localStorage.setItem(TOKEN_KEY, this.token)
         else localStorage.removeItem(TOKEN_KEY)
 
-        if (this.refreshToken) localStorage.setItem(REFRESH_KEY, this.refreshToken)
-        else localStorage.removeItem(REFRESH_KEY)
-
         if (this.user && typeof this.user === 'object') {
           localStorage.setItem(USER_KEY, JSON.stringify(this.user))
         } else {
@@ -106,6 +140,19 @@ export const useAuthStore = defineStore('auth', {
         // Storage full, or blocked by policy. The in-memory session still works
         // for this tab; it just will not survive a reload.
         console.warn('[auth] could not persist the session:', error)
+      }
+
+      // The refresh token has its own store and its own failure mode, so it gets
+      // its own try/catch: a browser that blocks sessionStorage must not stop
+      // the rest of the session from persisting, and vice versa. The
+      // localStorage key is cleared on every write, so the old location cannot
+      // accumulate a stale copy of credential material.
+      try {
+        if (this.refreshToken) sessionStorage.setItem(REFRESH_KEY, this.refreshToken)
+        else sessionStorage.removeItem(REFRESH_KEY)
+        localStorage.removeItem(REFRESH_KEY)
+      } catch (error) {
+        console.warn('[auth] could not persist the refresh token:', error)
       }
     },
 
