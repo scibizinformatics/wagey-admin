@@ -594,11 +594,11 @@ onMounted(async () => {
    <button class="q-btn"> children outside this component's template, so scoped
    CSS cannot reach them without :deep() on every rule.
 
-   A recessed grey track with a raised white pill for the active tab — the
-   segmented control every current SaaS product uses, and a straight swap for
-   the solid navy pill this replaced. Navy-on-grey read as a filled button
-   sitting in a bar; white-on-grey reads as one surface lifted out of another,
-   which is what a tab actually is. */
+   A recessed grey track carrying the app's primary-button navy on the active
+   segment, so the tab a reader is on reads as the same solid action surface as
+   the buttons in the header beside it (`--dash-brand` is the token form of
+   app.scss's `$brand-dark`, which fills every `.q-btn--primary`). The inactive
+   segments stay quiet text on the track, so only one segment wears the fill. */
 .view-toggle {
   background: var(--dash-n-100);
   border: 1px solid var(--dash-line);
@@ -629,10 +629,16 @@ onMounted(async () => {
 }
 
 .view-toggle .q-btn.bg-primary {
-  background: var(--dash-surface) !important;
-  color: var(--dash-ink) !important;
+  background: var(--dash-brand) !important;
+  color: #ffffff !important;
   font-weight: 600;
   box-shadow: var(--dash-shadow-xs) !important;
+}
+
+/* The active segment darkens on hover by the same step a Quasar primary button
+   takes (`--dash-brand-hover` mirrors `$brand-dark-hover`). */
+.view-toggle .q-btn.bg-primary:hover {
+  background: var(--dash-brand-hover) !important;
 }
 
 .view-toggle .q-btn.bg-white {
@@ -641,6 +647,7 @@ onMounted(async () => {
 }
 
 .view-toggle .q-btn.bg-white:hover {
+  background: rgba(255, 255, 255, 0.6) !important;
   color: var(--dash-ink-2) !important;
 }
 
