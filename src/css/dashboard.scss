@@ -69,6 +69,11 @@
 
   // ── Brand + interactive ───────────────────────────────────────────────────
   --dash-brand: #102335;
+  // The brand's hover step. `app.scss` fills every primary button with
+  // `$brand-dark` / `$brand-dark-hover`; these two mirror that pair so a
+  // control painted in the token system (the dashboard's tab rail) darkens by
+  // the same amount as a Quasar button beside it instead of inventing a shade.
+  --dash-brand-hover: #193d5c;
   --dash-accent: #2e4fd4;
   --dash-accent-hover: #2743b4;
   --dash-accent-bg: #eef2ff;
