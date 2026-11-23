@@ -37,12 +37,13 @@ const props = defineProps({
 
 // The change between the two most recent periods that actually have a figure.
 //
-// Not the last two slots in the series: the Monthly tab's window runs forward
-// from the selected month, so it routinely ends in months payroll has not reached
-// yet. Comparing those would report a collapse to zero — "down 100% on December"
-// for a December that has not happened — and a figure the reader acts on. Only a
-// month carrying money can take part, so empty ones are skipped rather than
-// treated as a value of zero.
+// Not the last two slots in the series: the Monthly tab's window ends at the
+// selected month, which may still be open — its payroll may not have run, or may
+// not be fully funded — so the final slots routinely carry nothing. Comparing
+// those would report a collapse to zero — "down 100% on November" for a November
+// nobody has been paid in — and a figure the reader acts on. Only a month
+// carrying money can take part, so empty ones are skipped rather than treated as
+// a value of zero.
 const subtitle = computed(() => {
   if (props.loading || props.values.length < 2) return ''
   const pairs = props.labels.map((label, i) => ({ label, value: Number(props.values[i]) }))
