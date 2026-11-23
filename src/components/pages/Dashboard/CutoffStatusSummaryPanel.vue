@@ -21,12 +21,14 @@
     </template>
 
     <CutoffStageRail
-    ref="railRef"
-    :data="data"
-    :loaded="loaded"
-    :loading="loading"
-    @filter="onFilter"
-  />
+      ref="railRef"
+      :data="data"
+      :loaded="loaded"
+      :loading="loading"
+      :totals="totals"
+      :fmt-currency="fmtCurrency"
+      @filter="onFilter"
+    />
   </DashPanel>
 </template>
 
@@ -34,10 +36,11 @@
 /**
  * Hosts the cutoff stage rail — the Current Cutoff tab's lead element.
  *
- * This was a vertical list of status badges with counts. The list gave the
- * numbers but not the shape: which stage is holding the most groups, and how
- * far the cutoff has moved overall. The rail encodes both, and doubles as a
- * filter for the payout table below it.
+ * This was a vertical list of status badges with counts, then a proportional bar
+ * that folded to a single full-width block whenever one stage held the whole
+ * cutoff. The rail now draws one row per stage, always seven, so the reader sees
+ * where the cutoff is stuck, how much is stuck there, and how far it has to go.
+ * It doubles as a filter for the payout table below it.
  */
 import { computed, ref } from 'vue'
 import DashPanel from '@/components/pages/Dashboard/DashPanel.vue'
@@ -53,6 +56,13 @@ const props = defineProps({
    * summary and a failed fetch look identical here and mean opposite things.
    */
   loaded: { type: Boolean, default: true },
+  /**
+   * Money and headcount per stage, keyed like `data`. Forwarded untouched; the
+   * rail decides whether it can render it.
+   */
+  totals: { type: Object, default: () => ({}) },
+  /** The app's money formatter, for the per-stage amount under a row. */
+  fmtCurrency: { type: Function, default: null },
 })
 
 const emit = defineEmits(['filter'])
