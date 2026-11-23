@@ -49,15 +49,30 @@ const REVIEW_GATE_NOTE =
  * people. It is left out entirely on a run nobody has reviewed yet, where it would
  * be a row reading "Already reviewed 0".
  *
+ * `onHold` is the part of the run the batch deliberately leaves out: an employee
+ * with a leave or overtime request still awaiting approval cannot be signed off,
+ * and a dialog that only said "6 employees" would claim a completeness it does not
+ * have. The count is dropped at zero, like the other facts.
+ *
  * @param {object} params
  * @param {number} params.count employees about to be marked reviewed
  * @param {number} [params.alreadyReviewed] how many are reviewed already
+ * @param {number} [params.onHold] employees left out for pending approvals
  * @param {string} [params.groupName] the run's name
  * @returns {{title: string, name: string, sub: string, icon: string, tone: string,
  *   facts: Array<{label: string, value: string}>, sentence: string, note: string,
  *   actionLabel: string, buttonClass: string, cancelable: boolean}}
  */
-export function buildReviewAllConfirm({ count = 0, alreadyReviewed = 0, groupName = '' }) {
+export function buildReviewAllConfirm({
+  count = 0,
+  alreadyReviewed = 0,
+  onHold = 0,
+  groupName = '',
+}) {
+  const holdNote =
+    onHold > 0
+      ? `${onHold} employee${onHold === 1 ? '' : 's'} ${onHold === 1 ? 'stays' : 'stay'} on hold until their leave or overtime requests are approved.`
+      : ''
   return {
     title: 'Mark all employees reviewed?',
     name: `${count} employee${count === 1 ? '' : 's'}`,
@@ -72,8 +87,9 @@ export function buildReviewAllConfirm({ count = 0, alreadyReviewed = 0, groupNam
     facts: facts(
       ['Employees', String(count)],
       alreadyReviewed > 0 ? ['Already reviewed', String(alreadyReviewed)] : null,
+      onHold > 0 ? ['On hold', String(onHold)] : null,
     ),
-    note: REVIEW_GATE_NOTE,
+    note: [holdNote, REVIEW_GATE_NOTE].filter(Boolean).join(' '),
     actionLabel: 'Mark reviewed',
     buttonClass: 'dash-modal__approve',
     cancelable: true,
@@ -137,11 +153,15 @@ export function buildReviewOneConfirm({
  *
  * The caller only opens this when someone *is* left out, so `staying` is normally
  * non-zero; the other branch is here so the builder cannot claim a warning that is
- * not true if a caller ever changes that.
+ * not true if a caller ever changes that. `onHold` is the second kind of exclusion:
+ * a reviewed employee whose leave or overtime is still awaiting approval. They are
+ * neither in the batch nor "unreviewed", so without their own fact the dialog would
+ * quietly lose them.
  *
  * @param {object} params
  * @param {number} params.going reviewed employees whose payslips are being sent
  * @param {number} [params.staying] unreviewed employees excluded from it
+ * @param {number} [params.onHold] reviewed employees excluded for pending approvals
  * @param {string} [params.groupName] the run's name
  * @returns {{title: string, name: string, sub: string, icon: string, tone: string,
  *   facts: Array<{label: string, value: string}>, sentence: string, note: string,
@@ -198,7 +218,18 @@ export function buildResetReleaseConfirm({ groupName = '' }) {
   }
 }
 
-export function buildReleaseConfirm({ going = 0, staying = 0, groupName = '' }) {
+export function buildReleaseConfirm({ going = 0, staying = 0, onHold = 0, groupName = '' }) {
+  const notes = []
+  if (staying > 0) {
+    notes.push(
+      `The ${staying} still unreviewed ${staying === 1 ? 'is' : 'are'} left out, and can be released once reviewed.`,
+    )
+  }
+  if (onHold > 0) {
+    notes.push(
+      `${onHold} reviewed employee${onHold === 1 ? '' : 's'} ${onHold === 1 ? 'stays' : 'stay'} on hold until their leave or overtime requests are approved.`,
+    )
+  }
   return {
     title: 'Release payslips?',
     name: `${going} reviewed employee${going === 1 ? '' : 's'}`,
@@ -209,11 +240,11 @@ export function buildReleaseConfirm({ going = 0, staying = 0, groupName = '' }) 
     facts: facts(
       ['Employees', String(going)],
       staying > 0 ? ['Left out', `${staying} unreviewed`] : null,
+      onHold > 0 ? ['On hold', String(onHold)] : null,
     ),
-    note:
-      staying > 0
-        ? `The ${staying} still unreviewed ${staying === 1 ? 'is' : 'are'} left out, and can be released once reviewed.`
-        : 'Their payslips go to the employees, and this cannot be undone from this screen.',
+    note: notes.length
+      ? notes.join(' ')
+      : 'Their payslips go to the employees, and this cannot be undone from this screen.',
     actionLabel: 'Release payslips',
     buttonClass: 'dash-modal__approve',
     cancelable: true,
