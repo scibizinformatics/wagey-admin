@@ -1,14 +1,17 @@
 <template>
   <!--
     A depth field of drifting Wagey marks. Decorative and pointer-transparent;
-    it sits inside the stage, so the sign-in card always occludes it.
+    it sits behind the sign-in card, which always occludes it.
+
+    The ground is now the white page itself, so the field carries the whole
+    ambience: these marks are the only thing on the screen besides the card.
 
     What keeps this from looking like clip-art scattered on a page:
 
-    1. Three depth tiers. Size, opacity, blur and glow all move together — small
-       + faint + blurred reads as far away, large + brighter + sharp + glowing
-       reads as near. That single correlation is what turns a dozen copies of
-       one glyph into a space rather than a rash of stickers.
+    1. Three depth tiers. Size, opacity, blur and shadow all move together —
+       small + faint + blurred reads as far away, large + darker + sharp reads as
+       near. That single correlation is what turns a dozen copies of one glyph
+       into a space rather than a rash of stickers.
     2. No two glyphs share a rhythm. Every one carries its own duration, and a
        NEGATIVE delay so it starts mid-phase. Without that they all rise and
        fall on the same beat and the field pulses like one object.
@@ -18,7 +21,9 @@
     4. Positions are hand-placed, not random — they frame the card and stay out
        of the centre column, because a mark crossing the form is noise. Random
        placement clumps, and re-randomising on each mount would make the page
-       look different every visit for no reason.
+       look different every visit for no reason. The clear band is the card's own
+       width (`max-width: 392px`), so nothing is placed between ~30% and ~70%
+       across, except straight above and below it.
     5. Restraint. Fewer marks and lower opacity than a full field would take:
        the marks are meant to be noticed second, after the form.
   -->
@@ -43,35 +48,48 @@
 </template>
 
 <script setup>
-// Trimmed to the glyph, so `size` below is the mark's real on-screen size.
+// The white, trimmed-to-the-glyph asset. It is still the right source on a white
+// page: `brightness(0)` in the style block turns the glyph's white pixels to the
+// card's ink and leaves every transparent pixel alone, so there is no second
+// logo to keep in sync. The dark asset cannot be used here — it carries ~87%
+// transparent padding, which at these sizes would draw a near-invisible speck.
 import markWhite from '@/assets/wagey_mark.png'
 
-// `tier` drives blur and glow (see the style block); `motion` picks the
+// `tier` drives blur and shadow (see the style block); `motion` picks the
 // keyframe path. `rise` glyphs ignore `y` — they cross the full viewport.
+// Opacities are set for a WHITE ground, which is the opposite trade from the old
+// dark stage: white-on-dark at 7% was a faint but definite mark, while
+// black-on-white at 7% is nearly nothing, because the ink has only 255 levels to
+// travel instead of 15. These run roughly double the old ramp so the glyphs read
+// as dark marks rather than as smudges — still under the form in importance.
 const glyphs = [
   // ── far: small, soft, barely there ─────────────────────────────────────────
-  { x: '9%', y: '15%', size: 8, op: 0.075, tier: 'far', motion: 'bob', dur: 13, delay: 2 },
-  { x: '25%', y: '68%', size: 8, op: 0.07, tier: 'far', motion: 'sway', dur: 16, delay: 7 },
-  { x: '74%', y: '19%', size: 8, op: 0.075, tier: 'far', motion: 'bob', dur: 14, delay: 11 },
-  { x: '90%', y: '73%', size: 8, op: 0.07, tier: 'far', motion: 'sway', dur: 18, delay: 4 },
-  { x: '47%', y: '7%', size: 7, op: 0.065, tier: 'far', motion: 'bob', dur: 15, delay: 13 },
-  { x: '58%', y: '92%', size: 8, op: 0.07, tier: 'far', motion: 'sway', dur: 17, delay: 6 },
+  { x: '9%', y: '15%', size: 8, op: 0.11, tier: 'far', motion: 'bob', dur: 13, delay: 2 },
+  { x: '25%', y: '68%', size: 8, op: 0.1, tier: 'far', motion: 'sway', dur: 16, delay: 7 },
+  { x: '74%', y: '19%', size: 8, op: 0.11, tier: 'far', motion: 'bob', dur: 14, delay: 11 },
+  { x: '90%', y: '73%', size: 8, op: 0.1, tier: 'far', motion: 'sway', dur: 18, delay: 4 },
+  { x: '96%', y: '38%', size: 8, op: 0.1, tier: 'far', motion: 'bob', dur: 17, delay: 12 },
+  { x: '4%', y: '46%', size: 7, op: 0.09, tier: 'far', motion: 'sway', dur: 19, delay: 9 },
+  // Above and below the card: the band its width reserves is clear, but its
+  // height is not, and these two sit outside it.
+  { x: '52%', y: '4%', size: 7, op: 0.09, tier: 'far', motion: 'bob', dur: 15, delay: 13 },
+  { x: '43%', y: '95%', size: 8, op: 0.1, tier: 'far', motion: 'sway', dur: 17, delay: 6 },
 
   // ── mid ───────────────────────────────────────────────────────────────────
-  { x: '16%', y: '41%', size: 12, op: 0.12, tier: 'mid', motion: 'sway', dur: 20, delay: 9 },
-  { x: '33%', y: '13%', size: 11, op: 0.11, tier: 'mid', motion: 'bob', dur: 18, delay: 15 },
-  { x: '84%', y: '45%', size: 13, op: 0.13, tier: 'mid', motion: 'bob', dur: 22, delay: 5 },
-  { x: '71%', y: '81%', size: 11, op: 0.11, tier: 'mid', motion: 'sway', dur: 24, delay: 17 },
-  { x: '6%', y: '86%', size: 11, op: 0.11, tier: 'mid', motion: 'bob', dur: 21, delay: 20 },
+  { x: '16%', y: '41%', size: 12, op: 0.17, tier: 'mid', motion: 'sway', dur: 20, delay: 9 },
+  { x: '27%', y: '12%', size: 11, op: 0.15, tier: 'mid', motion: 'bob', dur: 18, delay: 15 },
+  { x: '84%', y: '45%', size: 13, op: 0.18, tier: 'mid', motion: 'bob', dur: 22, delay: 5 },
+  { x: '78%', y: '70%', size: 11, op: 0.15, tier: 'mid', motion: 'sway', dur: 24, delay: 17 },
+  { x: '6%', y: '86%', size: 11, op: 0.15, tier: 'mid', motion: 'bob', dur: 21, delay: 20 },
 
-  // ── near: larger, brighter, glowing ───────────────────────────────────────
-  { x: '21%', y: '80%', size: 18, op: 0.17, tier: 'near', motion: 'sway', dur: 26, delay: 10 },
-  { x: '89%', y: '11%', size: 16, op: 0.15, tier: 'near', motion: 'bob', dur: 23, delay: 19 },
-  { x: '80%', y: '89%', size: 15, op: 0.14, tier: 'near', motion: 'sway', dur: 28, delay: 3 },
+  // ── near: larger, darker, sharpest ────────────────────────────────────────
+  { x: '21%', y: '80%', size: 18, op: 0.24, tier: 'near', motion: 'sway', dur: 26, delay: 10 },
+  { x: '89%', y: '11%', size: 16, op: 0.21, tier: 'near', motion: 'bob', dur: 23, delay: 19 },
+  { x: '80%', y: '89%', size: 15, op: 0.2, tier: 'near', motion: 'sway', dur: 28, delay: 3 },
 
   // ── rising through the scene ──────────────────────────────────────────────
-  { x: '13%', y: '50%', size: 14, op: 0.14, tier: 'near', motion: 'rise', dur: 34, delay: 6 },
-  { x: '92%', y: '50%', size: 10, op: 0.1, tier: 'mid', motion: 'rise', dur: 41, delay: 23 },
+  { x: '13%', y: '50%', size: 14, op: 0.2, tier: 'near', motion: 'rise', dur: 34, delay: 6 },
+  { x: '92%', y: '50%', size: 10, op: 0.14, tier: 'mid', motion: 'rise', dur: 41, delay: 23 },
 ]
 </script>
 
@@ -79,6 +97,7 @@ const glyphs = [
 .field {
   position: absolute;
   inset: 0;
+  z-index: 0;
   overflow: hidden;
   pointer-events: none;
 }
@@ -94,18 +113,23 @@ const glyphs = [
 }
 
 // ── Depth tiers ─────────────────────────────────────────────────────────────
-// Only the near tier pays for a drop-shadow; at far and mid sizes the glow is
-// invisible and it is the most expensive part of the filter to composite.
+// `brightness(0)` is the ink: it collapses the glyph's white to black so one
+// asset serves both surfaces, and it reads as `--lg-ink` at these opacities.
+//
+// Only the near tier pays for a drop-shadow; at far and mid sizes the shadow is
+// invisible and it is the most expensive part of the filter to composite. The
+// shadow is neutral, not the old blue glow — a coloured halo on a white ground
+// reads as a candy artefact rather than as depth.
 .glyph--far {
-  filter: blur(0.7px);
+  filter: brightness(0) blur(0.7px);
 }
 
 .glyph--mid {
-  filter: blur(0.3px);
+  filter: brightness(0) blur(0.3px);
 }
 
 .glyph--near {
-  filter: drop-shadow(0 0 9px rgba(126, 158, 255, 0.5));
+  filter: brightness(0) drop-shadow(0 0 8px rgba(16, 24, 40, 0.12));
 }
 
 // ── Motion ──────────────────────────────────────────────────────────────────
