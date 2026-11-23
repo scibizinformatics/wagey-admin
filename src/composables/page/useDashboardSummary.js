@@ -469,16 +469,41 @@ export function useDashboardSummary() {
     { immediate: true },
   )
 
-  // The Monthly tab's six-month window runs FORWARD from the selected month, so
-  // the selection is the left-hand point rather than the last one. A month near
-  // the end of the year therefore shows months ahead of it that nothing has
-  // happened in yet — which is the honest answer, and why the panel's subtitle
-  // skips empty months rather than reporting a fall to zero.
+  // The Monthly tab's six-month window ends at the month being viewed: the
+  // selected month and the five before it, so November reads June through
+  // November and picking June reads January through June. The picker therefore
+  // scopes both the panels below and the trend above them.
+  //
+  // Built from calendar arithmetic rather than `yearMonths`, which only ever holds
+  // the current calendar year: a January–May window has to reach back into the
+  // previous year, and slicing the year list would silently shorten it to the
+  // months that happen to fall in January.
+  //
+  // The anchor falls back to the present month until the picker's watch has
+  // settled, which covers the first render and a company with no cutoffs at all.
+  //
+  // A slot with no cutoffs stays in the series at zero rather than being dropped,
+  // so the axis keeps naming the real six months; the panel's subtitle is what
+  // skips money-less months when it computes the up/down figure.
   const monthlyTrendWindow = computed(() => {
-    const list = yearMonths.value
-    const found = list.findIndex((m) => m.month === selectedMonth.value)
-    const start = found >= 0 ? found : Math.max(0, list.length - 1)
-    return list.slice(start, start + 6)
+    const anchor =
+      selectedMonth.value ??
+      `${today.value.getFullYear()}-${String(today.value.getMonth() + 1).padStart(2, '0')}`
+    const [year, month] = anchor.split('-').map(Number)
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(year, month - 1 - (5 - i), 1)
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const list = cutoffsByMonth.value.get(ym) ?? []
+      const agg = aggregateCutoffs(list)
+      return {
+        month: ym,
+        label: MONTH_LABEL(ym),
+        cutoffs: list,
+        hasData: list.length > 0,
+        closed: list.length > 0 && list.every(isCutoffDone),
+        ...agg,
+      }
+    })
   })
 
   const monthlyTrendSeries = computed(() =>
