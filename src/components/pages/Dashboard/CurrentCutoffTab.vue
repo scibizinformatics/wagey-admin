@@ -14,6 +14,8 @@
         :data="cutoffStatusSummary"
         :loaded="cutoffStatusLoaded"
         :loading="loading"
+        :totals="stageTotals"
+        :fmt-currency="fmtCurrency"
         @filter="onStageFilter"
       />
       <CutoffSummaryPanel
@@ -117,6 +119,26 @@ const props = defineProps({
 const router = useRouter()
 
 const stageFilter = ref(null)
+
+/**
+ * Money and headcount per stage, for the pipeline's sub-lines.
+ *
+ * Summed from the payout group rows this page already fetched, so it costs no
+ * request. It is informational, never authoritative: a group whose row carries no
+ * `payroll_amount` contributes nothing, which is why the rail labels the figure
+ * as held rather than as a total, and why the group *count* still comes from the
+ * endpoint's own stage summary rather than from this sum.
+ */
+const stageTotals = computed(() => {
+  const totals = {}
+  for (const group of props.payoutGroupDetails) {
+    if (!group.status) continue
+    const row = (totals[group.status] ??= { employees: 0, amount: 0 })
+    row.employees += Number(group.employees) || 0
+    row.amount += Number(group.payroll_amount) || 0
+  }
+  return totals
+})
 
 const tableSubtitle = computed(() => {
   if (props.loading) return ''
