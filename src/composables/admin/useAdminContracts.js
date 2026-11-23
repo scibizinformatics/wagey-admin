@@ -345,7 +345,10 @@ export function useAdminContracts() {
   }
 
   function viewContractPDF(contract) {
-    if (contract.pdf_url) window.open(contract.pdf_url, '_blank')
+    // `noopener` is the point of the third argument: `pdf_url` is supplied by
+    // the backend, not by this app, and without it the opened document gets
+    // `window.opener` and can navigate this tab somewhere else.
+    if (contract.pdf_url) window.open(contract.pdf_url, '_blank', 'noopener,noreferrer')
   }
 
   // ─── Save ──────────────────────────────────────────────────────────────────
