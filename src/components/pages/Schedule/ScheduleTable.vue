@@ -570,9 +570,10 @@ const dayHolidayNames = computed(() =>
  * The chips a cell draws in its leave/day-off area.
  *
  * On a holiday date the leave rows are dropped. They exist *because* the holiday
- * granted them — `auto_generate_leave` — so the holiday chip the cell already
- * draws names the actual reason, and a chip reading "On leave" beside it is the
- * same fact in less useful words. A day off is kept: that one a person filed.
+ * granted them — the type's `leave_type` auto-generation mode — so the holiday
+ * chip the cell already draws names the actual reason, and a chip reading "On
+ * leave" beside it is the same fact in less useful words. A day off is kept:
+ * that one a person filed.
  *
  * This is the **render** list only, and `cellHasOtherContent` deliberately still
  * counts those rows. Testing the filtered list there would make a cell whose
