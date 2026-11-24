@@ -3,7 +3,7 @@
     <div class="table-header">
       <div class="table-title-section">
         <h2 class="table-title">Holiday types</h2>
-        <p class="table-subtitle">Kinds of holiday, and the leave they apply automatically</p>
+        <p class="table-subtitle">Kinds of holiday, and how each one is covered automatically</p>
       </div>
       <div class="table-actions">
         <q-btn
@@ -59,7 +59,7 @@
             <q-tr class="table-header-row">
               <q-th class="table-header-cell">Holiday type</q-th>
               <q-th class="table-header-cell">Code</q-th>
-              <q-th class="table-header-cell">Auto-apply</q-th>
+              <q-th class="table-header-cell">Auto generation</q-th>
               <q-th class="table-header-cell">Leave sources</q-th>
               <q-th class="table-header-cell actions-header">Actions</q-th>
             </q-tr>
@@ -247,49 +247,60 @@
             </div>
 
             <div class="dash-modal__group">
-              <p class="dash-modal__group-label">Automatic leave</p>
-              <div class="toggle-item">
-                <q-toggle
-                  v-model="form.auto_generate_leave"
-                  color="primary"
-                  size="md"
-                  class="brand-toggle"
-                  aria-label="Apply leave automatically"
-                />
-                <div class="toggle-label-group">
-                  <div class="toggle-label">Apply leave automatically</div>
-                  <div class="toggle-hint">
-                    When a holiday of this type is created, eligible employees are granted approved
-                    leave from the first source that can cover it.
-                  </div>
-                </div>
+              <p class="dash-modal__group-label">Auto generation</p>
+              <p class="ht-mode-intro">
+                What a holiday of this kind creates when it is added to the calendar.
+              </p>
+
+              <!-- One card per mode, each carrying its own sentence. The three
+                   differ in what they do to an employee's balance, and a label
+                   alone ("Attendance"? "Leave type"?) does not say that. -->
+              <div class="ht-mode" role="radiogroup" aria-label="Auto generation mode">
+                <label
+                  v-for="mode in autoGenerationModes"
+                  :key="mode.value"
+                  class="ht-mode__option"
+                  :class="{ 'ht-mode__option--on': form.auto_generation_mode === mode.value }"
+                >
+                  <input
+                    v-model="form.auto_generation_mode"
+                    type="radio"
+                    name="holiday-auto-generation-mode"
+                    :value="mode.value"
+                    class="ht-mode__radio"
+                  />
+                  <span class="ht-mode__main">
+                    <span class="ht-mode__label">{{ mode.label }}</span>
+                    <span class="ht-mode__desc">{{ mode.description }}</span>
+                  </span>
+                </label>
               </div>
+
+              <!-- Editing cannot fix an empty chain from here — the sources live
+                   in their own dialog — so the problem is named rather than the
+                   save refused. -->
+              <p v-if="editingWithoutSources" class="ht-mode__warning">
+                <q-icon name="o_warning" size="15px" />
+                <span>
+                  This type has no enabled leave source, so holidays of it will grant nothing. Add
+                  one from <strong>Leave sources</strong> in the row menu.
+                </span>
+              </p>
             </div>
 
             <!-- ── First source, on create only ───────────────────────────────
                  The create endpoint saves the type and its policies in one
-                 atomic call. Editing goes through the leave-sources dialog,
-                 which has the whole chain in front of it — adding here would
-                 append a duplicate rather than change what is already set. -->
+                 atomic call, so `leave_type` has to carry its first source here.
+                 Editing goes through the leave-sources dialog, which has the
+                 whole chain in front of it — adding here would append a
+                 duplicate rather than change what is already set. -->
             <div v-if="!editing" class="dash-modal__group">
-              <div class="dash-modal__group-head">
-                <p class="dash-modal__group-label">First leave source</p>
-                <q-toggle
-                  v-model="includeFirstPolicy"
-                  color="primary"
-                  size="sm"
-                  class="brand-toggle"
-                  label="Add one now"
-                  aria-label="Add a leave source with this holiday type"
-                />
-              </div>
-
-              <p v-if="!includeFirstPolicy" class="ht-hint">
-                Without a source, a holiday of this type applies nothing even with automatic leave
-                switched on. You can build the chain any time from the row menu.
+              <p class="dash-modal__group-label">
+                First leave source
+                <span v-if="needsFirstSource" class="dash-modal__req">*</span>
               </p>
 
-              <label v-else class="dash-modal__field">
+              <label v-if="needsFirstSource" class="dash-modal__field">
                 <span class="dash-modal__field-label">Leave type</span>
                 <q-select
                   v-model="policyDraft.leave_type"
@@ -319,6 +330,8 @@
                   It becomes the first link in the chain. Add the rest from the row menu.
                 </span>
               </label>
+
+              <p v-else class="ht-hint">{{ sourceNotNeededNote }}</p>
             </div>
           </q-card-section>
 
@@ -398,12 +411,14 @@ import { useAdminHolidayPolicies } from '@/composables/admin/useAdminHolidayPoli
 import { useAdminLeaveTypes } from '@/composables/admin/useAdminLeaveTypes'
 import { useCompany } from '@/composables/page/useCompany'
 import {
+  HOLIDAY_AUTO_GENERATION_MODES,
   HOLIDAY_CODE_SUGGESTIONS,
   autoApplyState,
   emptyHolidayPolicyDraft,
   policyChainLabel,
   slugifyCode,
   summarizeHolidayPolicies,
+  usesLeaveSources,
 } from '@/composables/utils/holidayTypes'
 
 const props = defineProps({
@@ -419,7 +434,6 @@ const {
   dialog,
   editing,
   form,
-  includeFirstPolicy,
   fetchHolidayTypes,
   holidayTypeById,
   openDialog,
@@ -449,7 +463,7 @@ const codeSuggestions = HOLIDAY_CODE_SUGGESTIONS
 const columns = [
   { name: 'name', label: 'Holiday type', field: 'name', align: 'left' },
   { name: 'code', label: 'Code', field: 'code', align: 'left' },
-  { name: 'auto', label: 'Auto-apply', field: 'auto', align: 'left' },
+  { name: 'auto', label: 'Auto generation', field: 'auto', align: 'left' },
   { name: 'sources', label: 'Leave sources', field: 'sources', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
 ]
@@ -482,6 +496,12 @@ function chainLabelFor(type) {
 
 function chainDetailFor(type) {
   const summary = summaryFor(type)
+  // The chain is reported under every mode, but "Grants nothing" beside an
+  // Attendance badge reads as a contradiction — it is the chain that grants
+  // nothing, not the type.
+  if (!usesLeaveSources(type.autoGenerationMode)) {
+    return summary.hasAny ? 'Not used by this mode' : 'Not used'
+  }
   if (!summary.hasAny) return 'Grants nothing'
   const parts = [`${summary.enabled} enabled`]
   if (summary.disabled) parts.push(`${summary.disabled} off`)
@@ -495,6 +515,34 @@ const policyDraft = ref(emptyHolidayPolicyDraft())
 watch(dialog, (open) => {
   if (open) policyDraft.value = emptyHolidayPolicyDraft()
 })
+
+// The three modes and their sentences, from the derivation module — the table
+// badge and this chooser read the same descriptors, so they cannot disagree.
+const autoGenerationModes = HOLIDAY_AUTO_GENERATION_MODES
+
+/** `leave_type` is the only mode whose create body carries a leave source. */
+const needsFirstSource = computed(
+  () => !editing.value && usesLeaveSources(form.value.auto_generation_mode),
+)
+
+/**
+ * A type being edited into `leave_type` while its chain is empty.
+ *
+ * Named rather than refused: the chain is edited in another dialog, and a form
+ * that could not be saved until the reader left it would be the worse trade.
+ */
+const editingWithoutSources = computed(() => {
+  if (!editing.value || !usesLeaveSources(form.value.auto_generation_mode)) return false
+  const type = form.value.id == null ? null : holidayTypeById(form.value.id)
+  return summarizeHolidayPolicies(type?.policies).enabled === 0
+})
+
+/** What the source section says when the chosen mode does not use it. */
+const sourceNotNeededNote = computed(() =>
+  form.value.auto_generation_mode === 'attendance'
+    ? 'No leave source is needed — the day is marked as paid attendance for monthly employees instead.'
+    : 'No leave source is needed — holidays of this type generate nothing.',
+)
 
 const leaveTypeOptions = computed(() =>
   leaveTypes.value.map((type) => ({ value: type.id, label: type.name })),
@@ -523,11 +571,12 @@ function useSuggestedCode(code) {
 }
 
 async function submit() {
-  // The draft is passed whenever the toggle is on, incomplete or not:
+  // The draft is passed whenever the mode reads the chain, incomplete or not:
   // `saveHolidayType` validates it and says what is missing. Dropping it here
   // for a missing leave type is what used to report "Holiday type created"
-  // about a type with no source attached.
-  const draft = !editing.value && includeFirstPolicy.value ? policyDraft.value : null
+  // about a type with no source attached, and the other two modes must not
+  // carry a source at all.
+  const draft = needsFirstSource.value ? policyDraft.value : null
   await saveHolidayType(draft)
 }
 
@@ -658,9 +707,14 @@ async function ensureLeaveTypes() {
   return fetchLeaveTypes()
 }
 
-watch(includeFirstPolicy, (on) => {
-  if (on) ensureLeaveTypes()
-})
+// Picking leave-type generation is what reveals the first-source picker, so
+// that is the moment to load its options. Editing never shows the picker.
+watch(
+  () => form.value.auto_generation_mode,
+  (mode) => {
+    if (!editing.value && usesLeaveSources(mode)) ensureLeaveTypes()
+  },
+)
 
 // Ids from the previous workspace mean nothing in the next one.
 watch(companyId, () => {
@@ -702,12 +756,20 @@ onMounted(fetchHolidayTypes)
   color: var(--dash-ink-2);
 }
 
-/* Three states, and only the middle one is a warning: a type with the gate on
-   and nothing behind it looks configured and does nothing. */
+/* Four states now, and only the warn one is a warning: a type set to
+   leave-type generation with nothing behind it looks configured and does
+   nothing. Attendance is a real, working mode that moves no leave credits, so
+   it takes the info tone rather than the good one. */
 .ht-auto--on {
   background: var(--dash-good-bg);
   border-color: var(--dash-good-line);
   color: var(--dash-good);
+}
+
+.ht-auto--attendance {
+  background: var(--dash-info-bg);
+  border-color: var(--dash-info-line);
+  color: var(--dash-info);
 }
 
 .ht-auto--no-source {
@@ -765,6 +827,102 @@ onMounted(fetchHolidayTypes)
 
 .ht-code-field :deep(.q-field__native) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ── Auto generation mode ─────────────────────────────────────────────────── */
+.ht-mode-intro {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dash-ink-4);
+}
+
+/* One card per mode rather than a select, because each mode has a sentence to
+   carry and a select would hide two of them behind a popup. The sentence is the
+   point: the modes differ in what they do to a leave balance. */
+.ht-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ht-mode__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-r-md);
+  cursor: pointer;
+  transition:
+    background var(--dash-fast) var(--dash-ease),
+    border-color var(--dash-fast) var(--dash-ease);
+}
+
+.ht-mode__option:hover {
+  background: var(--dash-n-25);
+}
+
+.ht-mode__option--on {
+  border-color: var(--dash-accent);
+  background: var(--dash-accent-bg);
+}
+
+.ht-mode__option:focus-within {
+  box-shadow: 0 0 0 3px var(--dash-accent-ring);
+}
+
+.ht-mode__radio {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 2px 0 0;
+  accent-color: var(--dash-accent);
+  cursor: pointer;
+}
+
+.ht-mode__main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ht-mode__label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--dash-ink);
+}
+
+.ht-mode__desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dash-ink-3);
+}
+
+.ht-mode__option--on .ht-mode__desc {
+  color: var(--dash-ink-2);
+}
+
+.ht-mode__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 8px 0 0;
+  padding: 9px 11px;
+  background: var(--dash-warn-bg);
+  border: 1px solid var(--dash-warn-line);
+  border-radius: var(--dash-r-md);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dash-warn);
+}
+
+.ht-mode__warning .q-icon {
+  flex: none;
+  margin-top: 1px;
 }
 
 .ht-suggestions {

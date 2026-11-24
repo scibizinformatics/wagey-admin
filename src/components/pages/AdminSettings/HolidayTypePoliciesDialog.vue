@@ -15,14 +15,36 @@
       </q-card-section>
 
       <q-card-section class="dash-modal__body">
-        <!-- The gate sits on the type, not on these rows, so a chain that is
+        <!-- The mode sits on the type, not on these rows, so a chain that is
              fully configured and completely inert is otherwise invisible from
-             in here. -->
-        <p v-if="holidayType && !holidayType.autoGenerateLeave" class="htp-banner">
+             in here. Two modes ignore the chain altogether; the third is the
+             only one that reads it. -->
+        <p v-if="holidayType && holidayTypeMode === 'none'" class="htp-banner htp-banner--info">
           <q-icon name="o_info" size="16px" />
           <span>
-            Auto-apply is off for this holiday type, so none of these sources are used. Turn it on
-            from <strong>Edit holiday type</strong>.
+            This holiday type has no auto generation, so none of these sources are used. Turn on
+            <strong>Auto-leave using leave type</strong> from <strong>Edit holiday type</strong>.
+          </span>
+        </p>
+        <p
+          v-else-if="holidayType && holidayTypeMode === 'attendance'"
+          class="htp-banner htp-banner--info"
+        >
+          <q-icon name="o_info" size="16px" />
+          <span>
+            This holiday type generates paid holiday attendance instead, so none of these sources
+            are used. Switch it to <strong>Auto-leave using leave type</strong> from
+            <strong>Edit holiday type</strong>.
+          </span>
+        </p>
+        <p
+          v-else-if="holidayTypeMode === 'leave_type' && summary.hasAny && !summary.enabled"
+          class="htp-banner"
+        >
+          <q-icon name="o_warning" size="16px" />
+          <span>
+            Every leave source is switched off, so holidays of this type grant nothing. Switch one
+            back on below.
           </span>
         </p>
 
@@ -96,9 +118,9 @@
           </div>
 
           <p class="htp-note">
-            When a holiday of this type is created, each enabled source is tried in this order for
-            every eligible employee — the first whose leave type approves wins, and an employee
-            whose every source fails is skipped.
+            With <strong>Auto-leave using leave type</strong> selected on the type, each enabled
+            source is tried in this order for every eligible employee — the first whose leave type
+            approves wins, and an employee whose every source fails is skipped.
           </p>
 
           <div v-if="loading" class="htp-state">
@@ -193,6 +215,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import {
+  autoGenerationModeOf,
   emptyHolidayPolicyDraft,
   nextOrder,
   summarizeHolidayPolicies,
@@ -218,6 +241,15 @@ const emit = defineEmits(['update:modelValue', 'assign', 'toggle', 'move', 'remo
 const draft = ref(emptyHolidayPolicyDraft())
 
 const summary = computed(() => summarizeHolidayPolicies(props.policies))
+
+/**
+ * The type's own auto-generation mode.
+ *
+ * Read here because it decides whether this whole dialog matters: two of the
+ * three modes never touch the chain, so a fully configured one can be completely
+ * inert and nothing on this screen would say so.
+ */
+const holidayTypeMode = computed(() => autoGenerationModeOf(props.holidayType))
 
 const summaryLine = computed(() => {
   const parts = [`${summary.value.enabled} enabled`]
@@ -310,6 +342,14 @@ defineExpose({
 .htp-banner .q-icon {
   flex: none;
   margin-top: 1px;
+}
+
+/* The neutral reading: the chain is not used at all, which is a state rather
+   than a fault. Only the leave-type-with-no-source banner is a warning. */
+.htp-banner--info {
+  background: var(--dash-info-bg);
+  border-color: var(--dash-info-line);
+  color: var(--dash-info);
 }
 
 .htp-add-row {

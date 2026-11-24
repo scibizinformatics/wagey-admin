@@ -5,6 +5,7 @@ import { useToast } from 'src/composables/useToast'
 import { extractErrorMessage } from 'src/composables/utils/http'
 import { createRequestToken } from 'src/composables/utils/requestToken'
 import {
+  autoGenerationProblem,
   emptyHolidayTypeForm,
   holidayPolicyPayload,
   holidayTypePayload,
@@ -46,8 +47,6 @@ export function useAdminHolidayTypes() {
   const dialog = ref(false)
   const editing = ref(false)
   const form = ref(emptyHolidayTypeForm())
-  /** The optional first leave source, offered on create only. */
-  const includeFirstPolicy = ref(false)
 
   const listGuard = createRequestToken()
 
@@ -104,14 +103,12 @@ export function useAdminHolidayTypes() {
     }
     editing.value = false
     form.value = emptyHolidayTypeForm()
-    includeFirstPolicy.value = false
     dialog.value = true
   }
 
   function openEditDialog(type) {
     editing.value = true
     form.value = holidayTypeToForm(type)
-    includeFirstPolicy.value = false
     dialog.value = true
   }
 
@@ -119,12 +116,13 @@ export function useAdminHolidayTypes() {
 
   /**
    * @param {object|null} policyDraft a first leave source to create alongside
-   *   the type, or null. Ignored when editing — the chain has its own endpoints
-   *   by then, and sending it here would add a duplicate rather than edit one.
-   *   It is validated here rather than dropped or left to the server: the
-   *   create body is atomic, so a source the endpoint rejects takes the holiday
-   *   type down with it, and a source quietly discarded for being incomplete
-   *   leaves an admin believing a chain is in place that is actually empty.
+   *   the type, or null. Passed only on create with the `leave_type` mode, and
+   *   ignored when editing — the chain has its own endpoints by then, and
+   *   sending it here would add a duplicate rather than edit one. It is
+   *   validated here rather than dropped or left to the server: the create body
+   *   is atomic, so a source the endpoint rejects takes the holiday type down
+   *   with it, and a source quietly discarded for being incomplete leaves an
+   *   admin believing a chain is in place that is actually empty.
    */
   async function saveHolidayType(policyDraft = null) {
     const invalid = validateHolidayTypeForm(form.value)
@@ -137,13 +135,22 @@ export function useAdminHolidayTypes() {
       return false
     }
 
-    if (!editing.value && policyDraft) {
-      // No existing chain to collide with on create, so the default empty list
-      // is the right second argument.
-      const invalidPolicy = validateHolidayPolicyDraft(policyDraft)
-      if (invalidPolicy) {
-        toast.warning(invalidPolicy)
+    if (!editing.value) {
+      // A `leave_type` type draws on the chain it is created with, so the first
+      // source is part of the same decision, not an optional extra.
+      const invalidMode = autoGenerationProblem(form.value, policyDraft)
+      if (invalidMode) {
+        toast.warning(invalidMode)
         return false
+      }
+      if (policyDraft) {
+        // No existing chain to collide with on create, so the default empty
+        // list is the right second argument.
+        const invalidPolicy = validateHolidayPolicyDraft(policyDraft)
+        if (invalidPolicy) {
+          toast.warning(invalidPolicy)
+          return false
+        }
       }
     }
 
@@ -217,7 +224,6 @@ export function useAdminHolidayTypes() {
     dialog,
     editing,
     form,
-    includeFirstPolicy,
     fetchHolidayTypes,
     holidayTypeById,
     openDialog,
