@@ -263,11 +263,12 @@ watch(showLeaveWarning, (open) => {
 /**
  * The gate. Opens the question only when credits are really about to move.
  *
- * `autoApplyState` already separates the three states worth telling apart, and
- * only its `on` key means a source will actually pay out: with the gate off
- * nothing is granted, and with the gate on but no enabled source it is configured,
- * listed, and does nothing. A warning printed for either would be about money
- * that never moves, which is how people learn to click through warnings.
+ * `autoApplyState` separates the four states worth telling apart, and only its
+ * `on` key means a leave source will actually pay out: with `none` nothing is
+ * created, `attendance` marks the day paid without touching a balance, and
+ * `leave_type` with no enabled source is configured, listed, and grants nothing.
+ * A warning printed for any of those would be about money that never moves,
+ * which is how people learn to click through warnings.
  */
 async function requestSubmit(form) {
   const type = holidayTypes.value.find((row) => row.code === form.holiday_type) || null
